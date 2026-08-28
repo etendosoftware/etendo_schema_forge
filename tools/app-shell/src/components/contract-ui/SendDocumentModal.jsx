@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { hasClientPdf, buildClientPdfBlob } from '@/windows/custom/shared/documentPdfRegistry.js';
 import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
@@ -63,6 +64,7 @@ async function sendDocumentFromModal({
   onClose,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
@@ -74,6 +76,10 @@ async function sendDocumentFromModal({
     pdfBlobUrl: cachePreviewBeforeSend ? pdfBlobUrl : null,
     recipientEdits,
     messageEdits,
+    // ETP-5003 — the caller passed this all along and it was dropped right here, so every send
+    // reached the module with no language and rendered its catalog copy in Spanish while the
+    // operator was reading English on screen. The module logs a WARN when it arrives empty.
+    language,
   });
 
   if (data.status === 'SENT' || data.status === 'DUPLICATE') {
@@ -329,7 +335,8 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  * - pdfBlobUrl: object URL created from a pre-rendered PDF blob.
  * - pdfBlob: pre-rendered PDF blob to cache before sending.
  * - pdfBlobLoading: disables send while a cacheable preview is still loading.
- * - cachePreviewBeforeSend: caches pdfBlob/pdfBlobUrl through /preview-file before sending.
+ * - cachePreviewBeforeSend: uploads pdfBlob/pdfBlobUrl as the record's marked
+ *   "main" attachment (see documentEmailSend.js's WINDOW_ATTACHMENT_TABLE) before sending.
  * When pdfBlobUrl is provided, preview and download use it directly and bypass
  * the /api/reports render endpoint.
  *
@@ -340,6 +347,36 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  */
 export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
+
+  // ETP-4912 — most callers hand over the PDF their own useXxxPdf hook produced. The
+  // generic one (ListView's fallback modal) has no hook, so it used to leave this empty
+  // and the modal both PREVIEWED and ATTACHED the print-* artifact — a different document
+  // than the one on screen. When the window can render itself (documentPdfRegistry), build
+  // that same PDF here instead. Windows outside the registry keep the old behaviour.
+  const [ownPdfUrl, setOwnPdfUrl] = useState(null);
+  const [ownPdfLoading, setOwnPdfLoading] = useState(false);
+  useEffect(() => {
+    if (pdfBlobUrl || pdfBlob || !documentId || !token) return undefined;
+    if (!hasClientPdf(windowName)) return undefined;
+    let cancelled = false;
+    let url = null;
+    setOwnPdfLoading(true);
+    buildClientPdfBlob({ windowName, documentId, apiBaseUrl, token, ui })
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setOwnPdfUrl(url);
+      })
+      .catch((err) => console.warn('[SendDocumentModal] client PDF failed:', err?.message))
+      .finally(() => { if (!cancelled) setOwnPdfLoading(false); });
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowName, documentId, apiBaseUrl, token, pdfBlobUrl, pdfBlob]);
+
+  const effectivePdfUrl = pdfBlobUrl || ownPdfUrl;
+  const effectivePdfLoading = pdfBlobLoading || ownPdfLoading;
+
   const policy = useMemo(() => ({ ...DEFAULT_SEND_POLICY, ...(sendPolicy || {}) }), [sendPolicy]);
   const editableRecipients = policy.editableRecipients !== false;
   const initialEmail = resolveInitialEmail(bpEmail);
@@ -402,15 +439,33 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   // kept around so handleSend can tell whether the operator actually changed
   // either one; an untouched send must stay byte-identical to the legacy
   // payload (no `messageEdits` key at all).
+  // ETP-5003 — the operator must read exactly what the customer will receive, so both fields start
+  // filled with the copy the backend composes when nothing is edited.
+  //
+  // ⚠ KEEP IN SYNC with the module's message catalog, which owns the same two sentences for a send
+  // that carries no edits:
+  //   com.etendoerp.go/.../email/render/messages/emails_*.properties
+  //   → document.subject.withRecipient  and  document.body
+  // They are composed here rather than fetched, to save the round trip. That trade only holds while
+  // both sides say the same thing — they diverged once already, and the operator read one subject
+  // while the customer received another. `defaultCopyInSync.test.js` fails when they drift; fix the
+  // mismatch rather than relaxing the test.
   const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
+  // ETP-5003 — the greeting is part of the editable message, not something the backend adds
+  // afterwards: the operator has to be able to read and change how the customer is addressed.
+  // The module skips its own greeting whenever a message is supplied, so this is the only one.
+  const defaultMessage = [
+    bpName ? ui('sendModalDefaultGreeting', { bpName }) : null,
+    ui('sendModalDefaultMessage', { documentType, documentNo }),
+  ].filter(Boolean).join('\n\n');
   const [subject, setSubject] = useState(defaultSubject);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(!pdfBlobUrl);
+  const [pdfLoading, setPdfLoading] = useState(!effectivePdfUrl);
   // True while the parent is still generating the blob via useInvoicePdf — suppress
   // the fallback report-render fetch and show a spinner instead of the error card.
-  const waitingForBlob = pdfBlobLoading && !pdfBlobUrl;
+  const waitingForBlob = effectivePdfLoading && !effectivePdfUrl;
   const [pdfError, setPdfError] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -420,22 +475,22 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     if (!node) return;
     renderPdfPreviewNode({
       node,
-      pdfBlobUrl,
-      pdfBlobLoading,
+      pdfBlobUrl: effectivePdfUrl,
+      pdfBlobLoading: effectivePdfLoading,
       documentId,
       token,
       reportId,
       setPdfError,
       setPdfLoading,
     });
-  }, [documentId, token, reportId, pdfBlobUrl, pdfBlobLoading]);
+  }, [documentId, token, reportId, effectivePdfUrl, effectivePdfLoading]);
 
   const handleDownload = async () => {
     if (downloading) return;
 
     // If a blob URL is already available, download it directly
-    if (pdfBlobUrl) {
-      downloadExistingPdfBlobUrl(pdfBlobUrl, windowName, documentNo);
+    if (effectivePdfUrl) {
+      downloadExistingPdfBlobUrl(effectivePdfUrl, windowName, documentNo);
       return;
     }
 
@@ -458,11 +513,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       const recipientEdits = editableRecipients
         ? buildRecipientEdits(baseRecipientsRef.current, { to: toRecipients, cc: ccRecipients })
         : null;
-      // Untouched subject/message yield null here, keeping the command
-      // byte-identical to the legacy one (mirrors recipientEdits above).
-      const messageEdits = (subject !== defaultSubject || message !== '')
-        ? { subject, message }
-        : null;
+      // ETP-5003 — subject and message always travel, edited or not. They used to be omitted when
+      // untouched, leaving the module to recompose them from its own catalog in whatever language
+      // the command carried: a command with no language rebuilt them in Spanish while the operator
+      // had just read them in English on this very screen. Sending what is on screen removes the
+      // whole class of divergence — there is no second copy left to drift.
+      const messageEdits = { subject, message };
       await sendDocumentFromModal({
         apiBaseUrl,
         token,
@@ -470,13 +526,18 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         windowName,
         documentNo,
         pdfBlob,
-        pdfBlobUrl,
+        // The attached PDF must be the one the modal is showing — including when it was
+        // built here from the registry rather than handed in (ETP-4912). This value is
+        // what cacheDocumentPreviewFile uploads as the record's marked attachment, i.e.
+        // it IS the file the customer receives.
+        pdfBlobUrl: effectivePdfUrl,
         cachePreviewBeforeSend,
         documentType,
         ui,
         setSendFeedback,
         onClose,
         recipientEdits,
+        language: locale,
         messageEdits,
       });
     } catch {

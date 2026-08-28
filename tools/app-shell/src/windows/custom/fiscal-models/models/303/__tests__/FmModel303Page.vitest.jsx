@@ -3,9 +3,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
+const navigateMock = vi.fn();
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -21,6 +25,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -45,17 +50,28 @@ vi.mock('../../../FmCommon.jsx', () => ({
 vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
-  FilesTab: () => null,
-  HistoryTab: () => null,
 }));
 vi.mock('../FmBoxes303.jsx', () => ({
-  default: () => React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes'),
+  // Surfaces the `readOnly` prop as a data attribute so tests can assert
+  // CasillasTab correctly threads readOnly={isSubmitted} down to FmBoxes303.
+  default: ({ readOnly }) => React.createElement(
+    'div', { 'data-testid': 'fm-boxes-303', 'data-readonly': String(!!readOnly) }, 'boxes'
+  ),
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => null,
-  FileGenModal303: () => null,
-  ConfigDrawer: () => null,
-  CompareDrawer: () => null,
+  // Exposes an "invoke onConfirm" button so tests can drive `handleGenerate`
+  // (and thus the `generating` state) without depending on the modal's own UI.
+  FileGenModal303: ({ onConfirm }) => React.createElement(
+    'div',
+    { 'data-testid': 'FileGenModal303-mock' },
+    'filegen-modal',
+    React.createElement(
+      'button',
+      { 'data-testid': 'filegen303-confirm', onClick: () => onConfirm?.({ filename: undefined }) },
+      'confirm-filegen',
+    ),
+  ),
 }));
 vi.mock('lucide-react', () => ({
   Settings: () => null, Download: () => null, OctagonAlert: () => null,
@@ -112,6 +128,17 @@ describe('FmModel303Page — rendering', () => {
     expect(screen.getByTestId('fm-boxes-303')).toBeTruthy();
   });
 
+  it('passes readOnly=false to FmBoxes303 for a non-submitted status (draft)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('fm-boxes-303').getAttribute('data-readonly')).toBe('false');
+  });
+
+  it('passes readOnly=true to FmBoxes303 for a submitted status', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    expect(screen.getByTestId('fm-boxes-303').getAttribute('data-readonly')).toBe('true');
+  });
+
   it('renders the tab bar', () => {
     const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     expect(container.querySelector('[role="tablist"]')).toBeTruthy();
@@ -158,6 +185,37 @@ describe('FmModel303Page — action bar', () => {
     const submitBtn = btns.find(b => b.textContent.includes('fm.action.submit'));
     expect(submitBtn).toBeUndefined();
   });
+
+  it('renders the Compute (Calcular) button for a non-submitted status (draft)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    expect(computeBtn).toBeTruthy();
+  });
+
+  it('hides the Compute (Calcular) button for a submitted status, while Cancelar and Generar fichero 303 remain', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(computeBtn).toBeUndefined();
+    expect(cancelBtn).toBeTruthy();
+    expect(genBtn).toBeTruthy();
+  });
+
+  it('hides the Compute (Calcular) button for a submitted_ack status, while Cancelar and Generar fichero 303 remain', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted_ack' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(computeBtn).toBeUndefined();
+    expect(cancelBtn).toBeTruthy();
+    expect(genBtn).toBeTruthy();
+  });
 });
 
 // ── KPI bar ──────────────────────────────────────────────────────────────────
@@ -202,13 +260,27 @@ describe('FmModel303Page — tab navigation', () => {
     expect(screen.getByTestId('fm-boxes-303')).toBeTruthy();
   });
 
-  it('renders tab buttons for boxes, sources, incidents, files, history', () => {
+  it('renders tab buttons for boxes, sources, incidents', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     const tabs = screen.getAllByRole('tab');
     const tabLabels = tabs.map(t => t.textContent);
     expect(tabLabels.some(t => t.includes('fm.tab.boxes'))).toBe(true);
     expect(tabLabels.some(t => t.includes('fm.tab.sources'))).toBe(true);
     expect(tabLabels.some(t => t.includes('fm.tab.incidents'))).toBe(true);
+  });
+
+  it('does not render a "Historial" tab', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const tabs = screen.getAllByRole('tab');
+    const tabLabels = tabs.map(t => t.textContent);
+    expect(tabLabels.some(t => t.includes('fm.tab.history'))).toBe(false);
+  });
+
+  it('does not render a "Ficheros" tab', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const tabs = screen.getAllByRole('tab');
+    const tabLabels = tabs.map(t => t.textContent);
+    expect(tabLabels.some(t => t.includes('fm.tab.files'))).toBe(false);
   });
 });
 
@@ -243,20 +315,6 @@ describe('FmModel303Page — tab click switching', () => {
     expect(screen.queryByTestId('fm-boxes-303')).toBeNull();
   });
 
-  it('hides FmBoxes303 when files tab is clicked', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    const tabs = screen.getAllByRole('tab');
-    fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.files')));
-    expect(screen.queryByTestId('fm-boxes-303')).toBeNull();
-  });
-
-  it('hides FmBoxes303 when history tab is clicked', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    const tabs = screen.getAllByRole('tab');
-    fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.history')));
-    expect(screen.queryByTestId('fm-boxes-303')).toBeNull();
-  });
-
   it('shows FmBoxes303 again when boxes tab is re-clicked after switching', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     const tabs = screen.getAllByRole('tab');
@@ -266,76 +324,67 @@ describe('FmModel303Page — tab click switching', () => {
   });
 });
 
-// ── MoreOptionsMenu ───────────────────────────────────────────────────────────
+// ── Kebab / MoreOptionsMenu ────────────────────────────────────────────────
+// The old MoreOptionsMenu349-style dropdown (Comparar / Configuración / Generar)
+// was removed from this page — Comparar and Configuración are gone entirely;
+// Generar fichero moved to a standalone action-bar button (see describe block
+// below). A NEW, functional MoreOptionsMenu (favorites + help) was added later
+// (ETP-4755) — since FmCommon.jsx is mocked wholesale at the top of this file,
+// its real behavior is covered directly in FmCommon.vitest.jsx instead.
 
-describe('FmModel303Page — MoreOptionsMenu', () => {
-  it('renders the kebab menu trigger button', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(container.querySelector('button[aria-label="Más opciones"]')).toBeTruthy();
-  });
+// ── Standalone "Generar fichero" action-bar button ────────────────────────────
 
-  it('opens menu when kebab button is clicked', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    expect(document.querySelector('[role="menu"]')).toBeTruthy();
-  });
-
-  it('menu is closed initially', () => {
+describe('FmModel303Page — standalone Generar fichero button', () => {
+  it('renders a "Generar fichero" button in the action bar (not just inside Files tab)', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.gen303'))).toBe(true);
   });
 
-  it('closes menu when clicking outside (mousedown on body)', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    expect(document.querySelector('[role="menu"]')).toBeTruthy();
-    fireEvent.mouseDown(document.body);
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+  it('clicking it opens the file-gen modal', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(screen.queryByTestId('FileGenModal303-mock')).toBeNull();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeTruthy();
   });
 
-  it('shows Comparar, Configuración, and Generar menu items when open', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
-    expect(items.length).toBeGreaterThanOrEqual(3);
-    expect(items.some(i => i.textContent.includes('fm.action.compare'))).toBe(true);
-    expect(items.some(i => i.textContent.includes('fm.config.title'))).toBe(true);
-    expect(items.some(i => i.textContent.includes('fm.action.gen303'))).toBe(true);
-  });
-
-  it('closes menu after clicking Comparar item', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
-    fireEvent.click(items.find(i => i.textContent.includes('fm.action.compare')));
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-  });
-
-  it('closes menu after clicking Configuración item', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
-    fireEvent.click(items.find(i => i.textContent.includes('fm.config.title')));
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-  });
-
-  it('closes menu after clicking Generar item', () => {
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
-    fireEvent.click(items.find(i => i.textContent.includes('fm.action.gen303')));
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-  });
-
-  it('Generar button is disabled when generating is true', async () => {
-    // Start a compute cycle to indirectly drive generating state via generate (mocked)
-    // We verify the disabled prop by directly checking after triggering generate
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    // Just verify the menu renders the Generar button without errors
-    fireEvent.click(container.querySelector('button[aria-label="Más opciones"]'));
-    const genBtn = Array.from(document.querySelectorAll('[role="menuitem"]'))
-      .find(i => i.textContent.includes('fm.action.gen303'));
+  it('is visible and functional when the declaration is already submitted', () => {
+    const decl = { ...BASE_DECL, status: 'submitted' };
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
     expect(genBtn).toBeTruthy();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeTruthy();
+  });
+
+  it('is visible and functional when the declaration is not submitted (draft)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(genBtn).toBeTruthy();
+    fireEvent.click(genBtn);
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeTruthy();
+  });
+
+  it('disables the standalone "Generar fichero" button while generation is in flight, re-enables after it settles', async () => {
+    let resolveGenerate;
+    const { generate303File } = await import('../../../fiscalModelsUtils.js');
+    generate303File.mockImplementation(() => new Promise((resolve) => { resolveGenerate = resolve; }));
+
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const genBtn = () => Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.gen303'));
+    fireEvent.click(genBtn());
+    expect(genBtn().disabled).toBe(false);
+
+    fireEvent.click(screen.getByTestId('filegen303-confirm'));
+    await waitFor(() => expect(genBtn().disabled).toBe(true));
+
+    await act(async () => { resolveGenerate({ ok: true }); await Promise.resolve(); });
+    await waitFor(() => expect(genBtn().disabled).toBe(false));
   });
 });
 

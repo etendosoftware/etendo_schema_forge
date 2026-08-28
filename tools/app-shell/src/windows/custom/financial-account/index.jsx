@@ -103,14 +103,19 @@ export function FinancialAccountDetail({ recordId }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'movements');
   // Edit modal (ETP-4530): reachable from the detail view too, not just the accounts-list kebab.
-  const [editOpen, setEditOpen] = useState(false);
+  // ETP-4891 added the `?edit=true` deep link, used by the payment modal's "PSD2 inactive" warning
+  // to send the user straight to where Reconectar lives.
+  const [editOpen, setEditOpen] = useState(() => searchParams.get('edit') === 'true');
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  // The automatch modal opens whenever the user enters the Reconciliation tab — either via the
-  // accounts-list pill (autoMatch=true), a deep link to the tab, or by clicking the tab here.
-  const [autoMatchOpen, setAutoMatchOpen] = useState(
+  // ETP-4922: entering the Reconciliation tab ARMS the automatch check — via the accounts-list
+  // pill (autoMatch=true), a deep link to the tab, or clicking the tab here — but the modal itself
+  // only opens once a fresh `useAutoMatch` response confirms there is at least one suggestion. An
+  // empty result never pops the modal; see the "armed" effect below.
+  const [autoMatchArmed, setAutoMatchArmed] = useState(
     () => searchParams.get('autoMatch') === 'true' || searchParams.get('tab') === 'reconciliation',
   );
+  const [autoMatchOpen, setAutoMatchOpen] = useState(false);
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
   const [highlightTxnId, setHighlightTxnId] = useState(() => searchParams.get('txn') || null);
   // Auto-open the New-movement modal (deep-link from the accounts-grid row kebab).
@@ -118,16 +123,15 @@ export function FinancialAccountDetail({ recordId }) {
     () => searchParams.get('newMovement') === 'true',
   );
 
-  // Switching INTO the Reconciliation tab opens the automatch modal first.
+  // Switching INTO the Reconciliation tab arms the automatch check (ETP-4922); switching away
+  // disarms it so a stale response from the previous visit can't pop the modal later.
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     setHighlightTxnId(null);
-    if (tab === 'reconciliation') {
-      setAutoMatchOpen(true);
-    }
+    setAutoMatchArmed(tab === 'reconciliation');
   }, []);
 
-  // Apply deep-link params (tab / autoMatch / txn) and clear them. Reacts to searchParams changes
+  // Apply deep-link params (tab / autoMatch / txn / newMovement / edit) and clear them. Reacts to searchParams changes
   // — not just mount — because navigating within the SAME account (e.g. from the reconciled-txns
   // modal to the Movements tab) updates the URL without remounting this window.
   useEffect(() => {
@@ -135,11 +139,13 @@ export function FinancialAccountDetail({ recordId }) {
     const txn = searchParams.get('txn');
     const autoMatch = searchParams.get('autoMatch');
     const newMovement = searchParams.get('newMovement');
-    if (!tab && !txn && !autoMatch && !newMovement) return;
+    const edit = searchParams.get('edit');
+    if (!tab && !txn && !autoMatch && !newMovement && !edit) return;
     if (tab) setActiveTab(tab);
     if (txn) setHighlightTxnId(txn);
-    if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchOpen(true);
+    if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchArmed(true);
     if (newMovement === 'true') setAutoOpenNewMovement(true);
+    if (edit === 'true') setEditOpen(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const { account, reload: reloadAccount } = useFinancialAccount(recordId);
@@ -170,10 +176,30 @@ export function FinancialAccountDetail({ recordId }) {
   // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccount });
   // Automatch matches bank-statement lines against movements — a cash account has no statements,
-  // so the engine is never queried and its modal never opens for one (ETP-4795).
-  const { groups: autoMatchGroups, kpis: autoMatchKpis, reload: reloadAutoMatch } = useAutoMatch(
-    autoMatchOpen && !isCashAccount ? recordId : null,
-  );
+  // so the engine is never queried and its modal never opens for one (ETP-4795). Queried whenever
+  // the Reconciliation tab is active (not just while the modal is open) so the ETP-4922 "armed"
+  // effect below can decide whether to open it as soon as a fresh response lands.
+  const {
+    groups: autoMatchGroups, kpis: autoMatchKpis, loading: autoMatchLoading, reload: reloadAutoMatch,
+  } = useAutoMatch(activeTab === 'reconciliation' && !isCashAccount ? recordId : null);
+  // ETP-4922: opens the modal only once a FRESH autoMatch response (not last visit's stale data —
+  // `useNeoResource` doesn't clear `data` when `path` goes back to null) confirms there is at least
+  // one suggestion. `autoMatchFetchedRef` tracks whether the in-flight/last-seen load happened while
+  // armed, so a request that resolves after the user left the tab is ignored.
+  const autoMatchFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!autoMatchArmed) {
+      autoMatchFetchedRef.current = false;
+      return;
+    }
+    if (autoMatchLoading) {
+      autoMatchFetchedRef.current = true;
+      return;
+    }
+    if (!autoMatchFetchedRef.current) return;
+    setAutoMatchArmed(false);
+    if (autoMatchGroups.length > 0) setAutoMatchOpen(true);
+  }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
   // Bumped after an automatch apply so the reconciliation panel remounts and re-runs the matching
   // algorithms (fresh pending lines + suggestions), keeping the view in sync after each reconcile.
@@ -189,7 +215,7 @@ export function FinancialAccountDetail({ recordId }) {
   // mounted — and without a second fetch of the same endpoint. Idle (`null`) on non-cash accounts,
   // which never render that tab.
   const {
-    reconciliations, loading: reconciliationsLoading,
+    reconciliations, loading: reconciliationsLoading, reload: reloadReconciliations,
   } = useReconciliations(isCashAccount ? recordId : null);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
@@ -380,7 +406,10 @@ export function FinancialAccountDetail({ recordId }) {
             <CashCloseTab
               key={reconciliationRefreshKey}
               account={account}
-              onCloseSuccess={() => { reloadAccount(); reloadMovements(); }}
+              // The confirmed close becomes a new row of the Reconciliations tab and bumps its
+              // badge count, and that list is fetched here (not inside the tab), so it has to be
+              // reloaded too — otherwise the close only shows up after a manual page refresh.
+              onCloseSuccess={() => { reloadAccount(); reloadMovements(); reloadReconciliations(); }}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
             <ReconciliationTab

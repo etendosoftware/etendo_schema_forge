@@ -10,6 +10,11 @@ vi.mock('../SupportChatContext.jsx', () => ({
   useSupportChat: () => mockUseSupportChat(),
 }));
 
+const mockUseCopilot = vi.fn(() => ({ isOpen: false }));
+vi.mock('@/components/CopilotContext', () => ({
+  useCopilot: () => mockUseCopilot(),
+}));
+
 // The fuller mocks below expose the callback props as clickable buttons so
 // tests can exercise SupportChatWidget's wiring logic (handleSend,
 // handleSubmitRating, onBack, etc.) without rendering the real subcomponents.
@@ -83,6 +88,7 @@ function mockChat(stateOverrides = {}, actionOverrides = {}) {
     reopenConversation: vi.fn(),
     addPendingFile: vi.fn(),
     removePendingFile: vi.fn(),
+    dismissFab: vi.fn(),
     ...actionOverrides,
   };
   mockUseSupportChat.mockReturnValue({ state: { ...BASE_STATE, ...stateOverrides }, actions });
@@ -92,6 +98,7 @@ function mockChat(stateOverrides = {}, actionOverrides = {}) {
 describe('SupportChatWidget', () => {
   beforeEach(() => {
     fetchHelpDocs.mockResolvedValue([]);
+    mockUseCopilot.mockReturnValue({ isOpen: false });
   });
 
   it('renders a closed FAB with no badge when there is nothing unread', () => {
@@ -174,6 +181,21 @@ describe('SupportChatWidget', () => {
     mockChat({ isOpen: true, activeTab: 'inicio', unreadCount: 2 });
     const { container } = render(<SupportChatWidget />);
     expect(container.querySelector('.sc-ind-dot')).toBeInTheDocument();
+  });
+
+  it('shifts the panel clear of Copilot\'s own panel when Copilot is open, so the two floating '
+      + 'windows do not stack on top of each other', () => {
+    mockChat({ isOpen: true, activeTab: 'inicio' });
+    mockUseCopilot.mockReturnValue({ isOpen: true });
+    const { container } = render(<SupportChatWidget />);
+    expect(container.querySelector('.sc-panel--copilot-open')).toBeInTheDocument();
+  });
+
+  it('does not shift the panel when Copilot is closed', () => {
+    mockChat({ isOpen: true, activeTab: 'inicio' });
+    mockUseCopilot.mockReturnValue({ isOpen: false });
+    const { container } = render(<SupportChatWidget />);
+    expect(container.querySelector('.sc-panel--copilot-open')).not.toBeInTheDocument();
   });
 
   it('loads conversations when the Mensajes tab becomes active', () => {
@@ -313,6 +335,33 @@ describe('SupportChatWidget', () => {
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('false');
     await user.click(screen.getByText('conv-toggle-expand'));
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('true');
+  });
+
+  describe('FAB dismiss state (in-memory only — resets on remount/refresh)', () => {
+    it('hides the FAB when state.fabDismissed is true', () => {
+      mockChat({ isOpen: false, fabDismissed: true });
+      render(<SupportChatWidget />);
+      expect(screen.queryByLabelText('supportOpenAria')).not.toBeInTheDocument();
+    });
+
+    it('clicking the FAB dismiss control calls actions.dismissFab', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({ isOpen: false, fabDismissed: false });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByLabelText('supportDismissFab'));
+      expect(actions.dismissFab).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the FAB again on a fresh mount after a previous mount had it dismissed — fabDismissed is in-memory only and is never persisted, so a real page refresh (a brand-new SupportChatProvider) always starts undismissed (see SupportChatContext.vitest.jsx for the no-localStorage-persistence coverage)', () => {
+      mockChat({ isOpen: false, fabDismissed: true });
+      const { unmount } = render(<SupportChatWidget />);
+      expect(screen.queryByLabelText('supportOpenAria')).not.toBeInTheDocument();
+      unmount();
+
+      mockChat({ isOpen: false, fabDismissed: false });
+      render(<SupportChatWidget />);
+      expect(screen.getByLabelText('supportOpenAria')).toBeInTheDocument();
+    });
   });
 
   describe('additional coverage', () => {

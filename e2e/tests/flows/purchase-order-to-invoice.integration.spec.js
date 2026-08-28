@@ -4,6 +4,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   dismissSuccessModal, safeReload, readDocumentTotals, verifyTotalsConsistency,
+  derivedFieldLocator,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -60,21 +61,27 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     await test.step('Select vendor BP and verify callout fields', async () => {
       await selectVendorBP(page);
 
-      // [Plan 2.2] Verify BP callout populated dependent fields
-      const addressChip = page.getByTestId('field-partnerAddress-chip')
-        .or(page.locator('[data-testid*="partnerAddress"] .truncate, [data-testid*="partnerAddress"]'));
-      const addressValue = await addressChip.first().textContent().catch(() => '');
-      expect(addressValue,
+      // [Plan 2.2] Verify BP callout populated dependent fields.
+      // partnerAddress (column C_BPartner_Location_ID) is special-cased in
+      // DependentFkField (EntityForm.jsx) to render via PartnerAddressPicker →
+      // CreatableSearchSelect, which shows the value as a `-chip` (SelectorChip)
+      // once selected, or the plain `field-partnerAddress` search input
+      // otherwise — never both, and never a generic `.truncate` CSS class (the
+      // previous CSS fallback here matched an empty node instead). Use a
+      // retrying assertion, not a one-shot textContent() sample — selectVendorBP
+      // already waits for this field to settle, but that wait covers the modal
+      // click above; re-asserting here also guards against future changes to
+      // that helper regressing this check silently.
+      const addressField = derivedFieldLocator(page, 'partnerAddress');
+      await expect(addressField,
         '[Plan 2.2] Address should be auto-filled after selecting the vendor (callout)',
-      ).toBeTruthy();
+      ).not.toHaveText(/^$|buscar|search|seleccionar|select/i, { timeout: 15_000 });
 
       // [Plan 2.6] Verify purchase price list was inherited
-      const priceListField = page.getByTestId('field-priceList')
-        .or(page.locator('[data-testid*="priceList"]')).first();
-      const priceListValue = await priceListField.textContent().catch(() => '');
-      expect(priceListValue,
+      const priceListField = derivedFieldLocator(page, 'priceList');
+      await expect(priceListField,
         '[Plan 2.6] Price list should be inherited from the vendor',
-      ).toBeTruthy();
+      ).not.toHaveText(/^$|buscar|search|seleccionar|select/i, { timeout: 15_000 });
 
       // [Plan 2.5] Verify "Fecha de entrega esperada" is present (PO-exclusive required field)
       await expect(page.getByText(/fecha de entrega esperada|expected delivery/i),
@@ -148,6 +155,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     });
 
     let poDocNo;
+    let invoiceId;
 
     await test.step('Verify PO is Completed and capture document number', async () => {
       await safeReload(page);
@@ -213,6 +221,12 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         'After saving draft, URL should include the invoice record ID',
       ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });
       await waitForDetailReady(page);
+
+      // Captured so the post-confirmation check can target THIS invoice's row
+      // (`row-{id}`) instead of "the first Completed row", which any leftover
+      // invoice from an earlier run also satisfies.
+      invoiceId = (page.url().match(/\/purchase-invoice\/([^/?]+)/) || [])[1];
+      expect(invoiceId, 'Should have captured the invoice record id from the URL').toBeTruthy();
 
       await expectStatusPill(page, /borrador|draft/i,
         'Invoice should be in Draft status after saving');
@@ -313,11 +327,24 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (!onDetailView) {
+        // Confirming navigated back to the list. Wait for the list itself before
+        // asserting on a row — safeReload() only awaits domcontentloaded, so the
+        // row query used to race the list's own data fetch.
         await safeReload(page);
-        const completedRow = page.locator('tbody tr').filter({ hasText: /completado|completed/i }).first();
-        await expect(completedRow,
+        await expect(page.getByTestId('list-view'),
+          'Reloading after confirmation should land on the purchase-invoice list',
+        ).toBeVisible({ timeout: 20_000 });
+
+        // Target THIS invoice by record id, and read its status from the
+        // language-independent `data-row-status` attribute (DataTable) rather
+        // than from translated cell text.
+        const invoiceRow = page.getByTestId(`row-${invoiceId}`);
+        await expect(invoiceRow,
+          'The confirmed invoice should appear in the list view',
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(invoiceRow,
           'Invoice should appear as Completed in the list view',
-        ).toBeVisible({ timeout: 10_000 });
+        ).toHaveAttribute('data-row-status', 'CO', { timeout: 10_000 });
       } else {
         await waitForDetailReady(page);
         await expectStatusPill(page, /completado|registrado|booked|completed/i,

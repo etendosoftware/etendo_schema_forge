@@ -207,6 +207,21 @@ true` was already set in `decisions.json`, and `GoodsReceiptActions.jsx` (the `t
 component) has never rendered a print button of its own. Documented here only so the audit
 trail for ETP-4714 is complete across every window it named.
 
+## Related Documents auto-refresh — ETP-4779
+
+Generating a Purchase Invoice or a return-to-vendor shipment from `GoodsReceiptActions.jsx`
+(the `topbarRight` component) used to close the result modal with a full
+`window.location.reload()` — a visible flash, slower than a data refetch, and it discarded any
+other in-memory client state (scroll position, other open panels). `GoodsReceiptActions` now
+accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
+hook.fetchById(recordId)`) and calls that instead, in both `ConfirmResultModal.onClose` handlers
+(invoice creation and purchase-return creation) — only when the user closed the modal without
+navigating to the new document (`resultNavigatedRef.current === false`). The **Related
+Documents** tab (`tools/app-shell/src/windows/custom/goods-receipt/RelatedDocuments.jsx`) needs
+no separate refetch of its own: it derives its chips straight from `data.linkedOrders` /
+`linkedInvoices` / `linkedReturns`, which `GoodsReceiptHeaderHandler.afterHandle` enriches on
+every header GET — so refreshing the header via `onRefresh` is sufficient to update it.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

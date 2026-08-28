@@ -10,6 +10,7 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
+import SifErrorBanner from '@/windows/custom/sales-invoice/SifErrorBanner';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
@@ -277,14 +278,6 @@ export const api = {
       "reference": "Costcenter",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/costcenter"
-    },
-    {
-      "entity": "header",
-      "field": "aeatsiiDescription",
-      "column": "EM_Aeatsii_Description_ID",
-      "reference": "aeatsii_description",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
     },
     {
       "entity": "header",
@@ -665,6 +658,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
+        formFooter={SifErrorBanner}
         hideDeleteWhenComplete
         hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
@@ -698,7 +692,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listViewOptions={{"hidePrint":true}}
       subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22notEqual%22%2C%22value%22%3Atrue%7D%5D","_note":"ETP-4737: plain invoices only. Excludes the new unified 'Factura Rectificativa' doc type, which shares the ARI category with plain invoices but is distinguished via the etsgIsRectificative flag on C_DocType (see rectificativeInvoicesTab below for the full discriminator rationale)."},{"label":"rectificativeInvoicesTab","filter":"criteria=%5B%7B%22_constructor%22%3A%22AdvancedCriteria%22%2C%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22transactionDocument%24etsgIsRectificative%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%2C%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D%7D%5D","_note":"ETP-4737: merges the former separate creditNotesTab (ARC) and returnsTab (ARI_RM) into one 'Facturas rectificativas' tab, OR'd with the new unified rectificative doc type. The new 'Factura Rectificativa' doc type (EM_Etsg_Isrectificative='Y' on C_DocType) shares the plain-invoice ARI category, so documentCategory alone cannot discriminate it — confirmed empirically against the dev DB (GOClient tenant): 3 active ARI-category doc types exist there ('AR Invoice', 'Reversed Sales Invoice', 'Factura Rectificativa'), only the last has etsgIsRectificative='Y'. etsgIsRectificative is a real Hibernate-mapped boolean property on DocumentType (confirmed via C_DocType.EM_Etsg_Isrectificative / DocumentType#isEtsgIsRectificative() in com.etendoerp.go), reached here via the same 'transactionDocument$<property>' nested-criteria mechanism already proven for documentCategory in this exact subsetFilters block — this is a plain backend list-query filter, not the GET-by-ID-only 'arInvoiceSubtype' enrichment, so it is expected to work at list-query time. No live invoice yet carries the new doc type in the dev DB to smoke-test end-to-end through the running app; recommend a manual list-view check once an invoice uses it."}]}
       dateFilterKey="invoiceDate"
       labelOverrides={labelOverrides}

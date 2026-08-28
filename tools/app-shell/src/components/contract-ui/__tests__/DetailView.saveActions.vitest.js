@@ -90,7 +90,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
-import { handlePostSaveNavigation, reportUnnavigableSave } from '../DetailView.jsx';
+import { handlePostSaveNavigation, reportUnnavigableSave } from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
   it('returns early without side effects when saved is null', async () => {
@@ -125,6 +125,65 @@ describe('handlePostSaveNavigation', () => {
       hook: { primeSaved: vi.fn() },
     });
     expect(onAfterCreate).toHaveBeenCalledWith(saved, { token: 'tok', apiBaseUrl: '/api' });
+  });
+
+  // ETP-4906 — onAfterExistingSave mirrors onAfterCreate's call shape, inverted to
+  // `!isNew` (fired only for an already-persisted record, never on creation). See
+  // windows/custom/user/index.jsx for the concrete consumer.
+  it('calls onAfterExistingSave with the saved record and api params when NOT isNew', async () => {
+    const navigate = vi.fn();
+    const onAfterExistingSave = vi.fn();
+    const saved = { id: 'rec-1' };
+    await handlePostSaveNavigation(saved, {
+      isNew: false,
+      onAfterCreate: null,
+      onAfterExistingSave,
+      onAfterSave: null,
+      navigate,
+      windowName: 'orders',
+      token: 'tok',
+      apiBaseUrl: '/api',
+      hook: {},
+    });
+    expect(onAfterExistingSave).toHaveBeenCalledWith(saved, { token: 'tok', apiBaseUrl: '/api' });
+  });
+
+  it('never calls onAfterExistingSave for a new (not-yet-persisted) record', async () => {
+    const navigate = vi.fn();
+    const onAfterExistingSave = vi.fn();
+    const saved = { id: 'new-id' };
+    await handlePostSaveNavigation(saved, {
+      isNew: true,
+      onAfterCreate: null,
+      onAfterExistingSave,
+      onAfterSave: null,
+      navigate,
+      windowName: 'orders',
+      token: 'tok',
+      apiBaseUrl: '/api',
+      hook: { primeSaved: vi.fn() },
+    });
+    expect(onAfterExistingSave).not.toHaveBeenCalled();
+  });
+
+  it('never calls onAfterCreate for an existing record, even when onAfterExistingSave is also set', async () => {
+    const navigate = vi.fn();
+    const onAfterCreate = vi.fn();
+    const onAfterExistingSave = vi.fn();
+    const saved = { id: 'rec-1' };
+    await handlePostSaveNavigation(saved, {
+      isNew: false,
+      onAfterCreate,
+      onAfterExistingSave,
+      onAfterSave: null,
+      navigate,
+      windowName: 'orders',
+      token: 'tok',
+      apiBaseUrl: '/api',
+      hook: {},
+    });
+    expect(onAfterCreate).not.toHaveBeenCalled();
+    expect(onAfterExistingSave).toHaveBeenCalledTimes(1);
   });
 
   it('navigates to the list route when onAfterSave is set', async () => {

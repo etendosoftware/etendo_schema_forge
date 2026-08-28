@@ -58,16 +58,16 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
-import { useMenuLabel, useUI } from '@/i18n';
+import { useLabel, useMenuLabel, useUI } from '@/i18n';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate } from './saveActions.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
-import LinesSelectionBar from './LinesSelectionBar.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
 import DetailSidePanel from './DetailSidePanel.jsx';
-import LinesBulkActionBar from './LinesBulkActionBar.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -94,17 +94,22 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
 
+// ETP-4933: frozen empty default for the gate-exclusion channel. Module-level so the
+// "no exclusions" state keeps a stable identity across renders — an inline `[]` would
+// be a new array every time and re-fire the memo that derives the gated field list.
+const NO_GATE_EXCLUSIONS = Object.freeze([]);
+
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
 export {
-  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
+  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
 } from './detailViewHelpers.jsx';
 
 /**
@@ -494,8 +499,6 @@ function secondaryAddLineBar(props) {
     return null;
   }
   return (
-    // Wrapper measured by the secondary selection bar — its
-    // `position: fixed` portal overlays exactly this region.
     // Mirrors the primary header-lines add-button wrapper (shared
     // getAddLineWrapperClassName/Style helpers) so both paths get the
     // same top border, vertical spacing and padding — keeps alignment
@@ -505,8 +508,8 @@ function secondaryAddLineBar(props) {
     // sticky bottom-0 variant is only correct for the tall PRIMARY
     // header-lines area — applying it here makes the button overlap the
     // last table row when the scroll container is resized.
+    // ETP-4972: no longer measured — SelectionToolbar below is viewport-fixed.
     <div
-      ref={props.secondaryAddLineWrapperRef}
       className="relative"
       // No borderTop: the child table already renders its own bottom
       // border, so the primary path's top divider would double up here.
@@ -528,20 +531,27 @@ function secondaryAddLineBar(props) {
           for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
           the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
       {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
-          <LinesSelectionBar
+          <SelectionToolbar
             visible={props.secondaryBarVisible[props.st.key] ?? false}
             closing={props.secondaryBarClosing[props.st.key] ?? false}
-            barRect={props.secondaryBarRects[props.st.key]}
-            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
-            selectedLabel={props.selectedLabel}
-            totalLabel={null}
-            deleting={props.secondaryDeleting[props.st.key] ?? false}
-            deleteTitle={props.deleteLabel}
-            closeTitle={props.closeTitle}
-            compact
-            onDelete={props.onDelete}
             onClose={props.onClose}
-            data-testid="LinesSelectionBar__fa3275" />
+            closeTitle={props.closeTitle}
+            data-testid="SelectionToolbar__fa3275">
+            <span className="text-sm font-medium">{props.selectedLabel}</span>
+            {/* ETP-4972 — icon-only, no border, no visible label: applied
+                Figma instance's own canvas render has no stroke around this
+                icon, just red icon color. */}
+            <button
+              type="button"
+              disabled={props.secondaryDeleting[props.st.key] ?? false}
+              title={props.deleteLabel}
+              aria-label={props.deleteLabel}
+              onClick={props.onDelete}
+              className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+            </button>
+          </SelectionToolbar>
       )}
     </div>
   );
@@ -922,6 +932,11 @@ export function isDeleteButtonVisible({
   // signal (e.g. Amortization) — it wins over everything else, including the
   // deleteAction lifecycle bypass below.
   if (hideDeleteButton) return false;
+  // Checked ahead of the deleteAction bypass below: that bypass exists because such a delete
+  // reactivates server-side first, which is exactly what must NOT happen to a payment whose bank
+  // transfer is live (ETP-4895). Same record-level flag RowQuickActions honours, so the grid and
+  // the form agree.
+  if (data?.pisLocked === true) return false;
   // ETP-4479 — a deleteAction-backed delete is safe at any lifecycle stage
   // (the action reactivates server-side before removing), so it ignores
   // hideDeleteWhenComplete/isProcessed and only hides for the voided status.
@@ -941,167 +956,6 @@ export function shouldShowLineActionButtons(hook, lineEdits, selectedLine) {
 
 export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) {
   return hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && canAddLines;
-}
-
-/**
- * Save / Confirm toolbar buttons for draftMode windows (Save Draft + Confirm).
- * Extracted from the DetailView footer IIFE to keep cognitive complexity low.
- * All identifiers are destructured with the SAME names used inside the component
- * so closure-equivalent logic and the dirty-state regression substrings stay intact.
- */
-function renderDraftModeSaveActions({
-  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal,
-}) {
-  return (
-    <>
-      <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        const saved = await hook.handleSave(data);
-        if (saved?.id && isNew) {
-          hook.primeSaved?.(saved);
-          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-        } else {
-          reportUnnavigableSave({ saved, isNew, windowName, ui });
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
-        {ui('save')}
-      </Button>
-      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0)} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
-        const showProcessing = Boolean(draftMode.processingModal);
-        if (showProcessing) setShowProcessingModal(true);
-        try {
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          if (saved) {
-            if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-            if (onAfterSave) {
-              navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-            } else if (saved.id && isNew) {
-              hook.primeSaved?.(saved);
-              navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-            } else if (saved.id) {
-              hook.fetchById?.(saved.id);
-            } else {
-              reportUnnavigableSave({ saved, isNew, windowName, ui });
-            }
-          }
-        } finally {
-          if (showProcessing) setShowProcessingModal(false);
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-        {ui(draftMode.label) || draftMode.label || ui('process')}
-      </Button>
-    </>
-  );
-}
-
-const UNNAVIGABLE_SAVE_MESSAGE_KEY = 'savedButCannotOpenRecord';
-
-/**
- * A NEW record that saves OK but whose response yields no derivable id (see
- * deriveRecordId in useEntity) used to skip the redirect with no signal at all,
- * leaving the user on /window/new. Surface it instead of failing silently.
- * Returns true when the failure was reported.
- */
-export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
-  if (!isNew || !saved || saved.id) return false;
-  console.error(
-    `[DetailView] Save succeeded for '${windowName}' but the response has no derivable record id — redirect skipped`,
-    saved,
-  );
-  toast.error(ui?.(UNNAVIGABLE_SAVE_MESSAGE_KEY) || UNNAVIGABLE_SAVE_MESSAGE_KEY);
-  return true;
-}
-
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
-  if (!saved) return;
-  if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-  if (onAfterSave) {
-    navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
-  } else if (saved.id && isNew) {
-    hook.primeSaved?.(saved);
-    navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-  } else {
-    reportUnnavigableSave({ saved, isNew, windowName, ui });
-  }
-}
-
-/**
- * Save (+ optional Confirm) toolbar buttons for a brand-new (unsaved) record.
- * Extracted from the DetailView footer IIFE. New-record Save is never gated by
- * !isDirty — only by isDocumentReadOnly, isSaving and blockSaveForBalance.
- */
-function renderNewRecordSaveActions({
-  hook, flushPendingLines, data, isNew, navigate, windowName,
-  ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-}) {
-  return (
-    <>
-      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-        if (!(await flushPendingLines())) return;
-        const saved = await hook.handleSave(data);
-        if (saved?.id && isNew) {
-          if (onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
-          hook.primeSaved?.(saved);
-          navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
-        } else {
-          reportUnnavigableSave({ saved, isNew, windowName, ui });
-        }
-      }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
-        {ui('save')}
-      </Button>
-      {!isProcessed && hook.children.length > 0 && (
-        <Button size="default" className={saveBtnCls} data-testid="action-complete" disabled={hook.isSaving || blockCompleteForBalance} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : undefined} onClick={async () => {
-          if (!(await flushPendingLines())) return;
-          const saved = await hook.handleSaveAndProcess(draftMode);
-          await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
-        }}>
-          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-          {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
-        </Button>
-      )}
-    </>
-  );
-}
-
-/**
- * Single Save toolbar button for an existing (already-persisted) record.
- * Extracted from the DetailView footer IIFE. Gated by isDocumentReadOnly,
- * isSaving, !isDirty and blockSaveForBalance.
- */
-function renderExistingRecordSaveAction({
-  hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-  ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
-  isDocumentReadOnly, blockSaveForBalance,
-}) {
-  return (
-    <Button variant="outline" size="default" className={`${saveBtnCls} bg-card border-[hsl(var(--border-control))] text-[hsl(var(--foreground))]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
-      if (!(await flushPendingLines())) return;
-      const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
-    }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
-      {ui('save')}
-    </Button>
-  );
-}
-
-/**
- * Dispatches the footer Save/Confirm action block by record state. Extracted to
- * module level so the branch logic does not count toward DetailView's cognitive
- * complexity. All values arrive via the `params` object built in DetailView.
- */
-function renderSaveActions(params) {
-  if (params.draftMode?.enabled) return renderDraftModeSaveActions(params);
-  if (params.isNew) return renderNewRecordSaveActions(params);
-  return renderExistingRecordSaveAction(params);
 }
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
@@ -1149,25 +1003,6 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   } finally {
     setExecutingDetailProcess(false);
   }
-}
-
-/**
- * ETP-4542: opt-in "save before running a process" gate. Only windows that pass
- * `saveBeforeProcesses` participate; every other window keeps the previous behavior
- * (returns true immediately, no save). When the form has pending changes (`isDirty`,
- * the same signal that drives the Save button), the changes are persisted silently
- * (`{ silent: true }` suppresses the success toast) BEFORE the process flow opens, so
- * the process runs on fresh data. On save failure — required missing, ETP-4542 numeric
- * violation, or a backend error — `handleSave` has already surfaced the error and returns
- * a record without an id; this returns false so the caller aborts without opening the
- * confirm modal, param dialog, or firing the process POST.
- *
- * @returns {Promise<boolean>} true → proceed with the process; false → abort silently.
- */
-export async function maybeSaveBeforeProcess({ saveBeforeProcesses, isDirty, handleSave }) {
-  if (!saveBeforeProcesses || !isDirty) return true;
-  const saved = await handleSave?.({ silent: true });
-  return !!saved?.id;
 }
 
 // Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
@@ -1274,6 +1109,10 @@ export function DetailView({
   linesEmptyState = null,
   topbarExtra = null,
   topbarRight = null,
+  // ETP-4933: opt-in for windows that render their own primary action next to Save
+  // (the return windows put a Confirm button in the topbarRight slot). Save then takes
+  // the secondary/outline look instead of competing as a second primary button.
+  hasExternalPrimaryAction = false,
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
@@ -1287,7 +1126,7 @@ export function DetailView({
   requiredHeaderFields = null,
   showDetailFooterTotals = undefined,
   onAfterSave,
-  onAfterCreate,
+  onAfterCreate, onAfterExistingSave,
   additionalDirtyState = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
@@ -1306,6 +1145,11 @@ export function DetailView({
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
   saveBeforeProcesses = false,
+  // Toolbar order only: when true, Save renders to the LEFT of the process buttons, so the
+  // primary action (Confirm) is the right-most button. `saveBeforeProcesses` implies it — that
+  // flag has always reordered as a side effect — but a window can ask for the order alone,
+  // without opting into the save-before-process behavior.
+  saveActionsFirst = saveBeforeProcesses,
   // ETP-4542: opt-in per window. When true, a header process button whose action is
   // currently running shows a spinner + "Generating..." label and is disabled to
   // prevent duplicate executions. Windows that don't pass it keep the current behavior
@@ -1313,8 +1157,7 @@ export function DetailView({
   showProcessLoadingState = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
-  formScrollPaddingB = 'pb-6',
-  secondaryTabContentPaddingT = 'pt-3',
+  formScrollPaddingB = 'pb-6', secondaryTabContentPaddingT = 'pt-3',
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
@@ -1327,14 +1170,40 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [],
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
   // in memory from the other hook instance). On a direct URL hit `items` is empty anyway and
   // the effect falls through to fetchById. Skipping the list fetch unconditionally drops one
   // wasted GET per direct-URL navigation.
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName });
+  // ETP-4933: contractFields comes from the generator's `Form.fields` static, so the
+  // required-field gate sees the whole header form — including the "Others" tab, which
+  // is only mounted while active and therefore invisible to the registry.
+  //
+  // The contract is a SUPERSET of what a custom form may choose to render: `contacts`
+  // hides `name` for a person and first/last name for a company, all three required.
+  // Left unchecked, the gate demands a field that is not on screen and Save can never
+  // be enabled. `registerGateExclusions` is the opt-in channel for those windows —
+  // a form declares which of its own fields it did not render, and the gate ignores
+  // them. Subtractive only: the worst case is a briefly stricter gate, never a
+  // permissive one, so a window that forgets to declare still fails safe (blocked and
+  // visible) rather than silently letting an incomplete record through.
+  const [gateExclusions, setGateExclusions] = useState(NO_GATE_EXCLUSIONS);
+  const registerGateExclusions = useCallback((keys) => {
+    const next = Array.isArray(keys) && keys.length > 0 ? keys : NO_GATE_EXCLUSIONS;
+    // Identity-preserving update: several sections render the same Form and all report
+    // the same exclusions, so returning `prev` on an equal value is what stops the
+    // re-render loop (same guard as syncRegisteredFields in useEntity).
+    setGateExclusions(prev => (prev.length === next.length && prev.every((k, i) => k === next[i]) ? prev : next));
+  }, []);
+  const gateFields = useMemo(
+    () => (gateExclusions.length === 0
+      ? Form?.fields
+      : (Form?.fields ?? []).filter(f => !gateExclusions.includes(f.key))),
+    [Form, gateExclusions]
+  );
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1542,7 +1411,18 @@ export function DetailView({
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
+  // ETP-4933: AD-column label resolver, for naming the missing fields in the
+  // Save tooltip. Same override chain EntityForm uses for its own field labels.
+  const tField = useLabel(labelOverrides ?? api?.labelOverrides);
   const ui = useUI();
+  // ETP-4933: the required-field gate every primary persist button honours. Declared
+  // HERE, among the other hooks, and NOT next to saveActionParams where it is consumed:
+  // an early `return` for the record-loading state sits between the two, so a useMemo
+  // below it runs on some renders and not others — "Rendered fewer hooks than expected".
+  const saveGate = useMemo(
+    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
+    [hook.isValid, hook.missingRequiredFields, tField, ui],
+  );
   // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
   const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
@@ -1565,16 +1445,6 @@ export function DetailView({
       secondaryAddRowRefs.current[key] = { current: null };
     }
     return secondaryAddRowRefs.current[key];
-  }, []);
-  // Per-tab refs powering the selection bar in secondary inline-editable tabs.
-  // Mirrors `addLineWrapperRef` + `inlineLinesRef` from the primary lines flow,
-  // one entry per tab key so each tab measures and clears independently.
-  const secondaryAddLineWrapperRefs = useRef({});
-  const getSecondaryAddLineWrapperRef = useCallback((key) => {
-    if (!secondaryAddLineWrapperRefs.current[key]) {
-      secondaryAddLineWrapperRefs.current[key] = { current: null };
-    }
-    return secondaryAddLineWrapperRefs.current[key];
   }, []);
   const secondaryInlineLinesRefs = useRef({});
   const getSecondaryInlineLinesRef = useCallback((key) => {
@@ -1715,37 +1585,7 @@ export function DetailView({
   const [secondarySelectedRows, setSecondarySelectedRows] = useState({});
   const [secondaryBarVisible, setSecondaryBarVisible] = useState({});
   const [secondaryBarClosing, setSecondaryBarClosing] = useState({});
-  const [secondaryBarRects, setSecondaryBarRects] = useState({});
   const [secondaryDeleting, setSecondaryDeleting] = useState({});
-  // Position of the AddLineButton wrapper in viewport coordinates. Drives the
-  // portal-rendered selection bar so its downward shadow always renders OUTSIDE
-  // the linesScrollRef's overflow-auto clipping boundary, regardless of how
-  // many rows are in the table.
-  const addLineWrapperRef = useRef(null);
-  const [barRect, setBarRect] = useState(null);
-  useEffect(() => {
-    if (!selectionBarVisible) return;
-    const el = addLineWrapperRef.current;
-    const scrollEl = linesScrollRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-      if (scrollEl) ro.observe(scrollEl);
-    }
-    const events = ['scroll', 'resize'];
-    events.forEach(e => window.addEventListener(e, measure, true));
-    return () => {
-      ro?.disconnect();
-      events.forEach(e => window.removeEventListener(e, measure, true));
-    };
-  }, [selectionBarVisible, linesLayout]);
   // When the bottom section (Docs/Notes/Totals) grows because the user expanded
   // an inner block (e.g., "Añadir descuento total"), the lines area shrinks via
   // flex-1, and rows previously at the bottom of the visible scroll get covered.
@@ -1870,38 +1710,6 @@ export function DetailView({
       }
     };
   }, []);
-  // Measure each visible secondary tab's add-line wrapper so its bar can be
-  // portaled with `position: fixed`. Only the active tab actually mounts its
-  // wrapper (inactive tabs unmount their content), so refs from other tabs
-  // resolve to null and are skipped naturally.
-  useEffect(() => {
-    const cleanups = [];
-    for (const st of secondaryTabs) {
-      if (!secondaryBarVisible[st.key]) continue;
-      const el = secondaryAddLineWrapperRefs.current[st.key]?.current;
-      if (!el) continue;
-      const measure = () => {
-        const r = el.getBoundingClientRect();
-        setSecondaryBarRects(prev => ({
-          ...prev,
-          [st.key]: { top: r.top, left: r.left, width: r.width, height: r.height },
-        }));
-      };
-      measure();
-      let ro = null;
-      if (typeof ResizeObserver !== 'undefined') {
-        ro = new ResizeObserver(measure);
-        ro.observe(el);
-      }
-      const events = ['scroll', 'resize'];
-      events.forEach(e => window.addEventListener(e, measure, true));
-      cleanups.push(() => {
-        ro?.disconnect();
-        events.forEach(e => window.removeEventListener(e, measure, true));
-      });
-    }
-    return () => cleanups.forEach(fn => fn());
-  }, [secondaryBarVisible, secondaryTabs]);
   // Clear secondary-tab selection state when the active tab changes. The
   // InlineLinesPanel resets its internal checkboxes on unmount, so we mirror
   // that here so the bar doesn't outlive the row checks.
@@ -2129,11 +1937,9 @@ export function DetailView({
     return hook.items.find(item => String(item.id) === String(recordId)) || null;
   }, [hook.items, recordId, isNew]);
 
-  useEffect(() => {
-    if (isNew && !hook.editing) {
-      hook.handleNew();
-    }
-  }, [isNew, hook.editing, hook.handleNew]);
+  // ETP-4830 clears a stale OTHER record's `editing`; ETP-5002 keeps it from firing
+  // mid-save and duplicating the record. Full reasoning in the helper.
+  useNewRouteEditingReset({ isNew, recordId, editing: hook.editing, handleNew: hook.handleNew });
 
   // Auto-open add-line form after header auto-save navigation (openAddLine flag in route state).
   useEffect(() => {
@@ -2918,9 +2724,9 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal,
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction,
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2967,22 +2773,6 @@ export function DetailView({
           </div>
 
             <div className="flex items-center gap-2">
-              {/* Topbar right slot (e.g. payment status badge) */}
-              {topbarRight && (() => {
-                const TopbarRightComponent = topbarRight;
-                return (
-                  <TopbarRightComponent
-                    data={data}
-                    recordId={data?.id || recordId}
-                    token={token}
-                    apiBaseUrl={apiBaseUrl}
-                    api={api}
-                    onProcess={hook.handleProcess}
-                    onRefresh={() => hook.fetchById?.(data?.id || recordId)}
-                    onSave={() => hook.handleSave({ silent: true })}
-                    data-testid="TopbarRightComponent__fa3275" />
-                );
-              })()}
               {/* Send / Print document — uses DocumentPrintDrawer.
                   Icon unified with RowQuickActions (envelope/Mail) so the same
                   "send document" affordance looks identical in detail and list views. */}
@@ -3048,8 +2838,8 @@ export function DetailView({
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
-              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
-              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
+              {saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
@@ -3135,8 +2925,40 @@ export function DetailView({
                   );
                 })}
 
-              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
+              {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
+                 Both live in this one flex row, so source order is visual order, and the
+                 slot used to come first — which put a window's Confirm button to the LEFT
+                 of Save (the return-shipment windows). Orders never showed it because their
+                 slot content is all gated on isCompleted, so in draft only Save/Confirm from
+                 renderSaveActions were visible, already in the right order. Verified before
+                 moving: of the 8 windows using this slot, none renders inline content while
+                 in draft except the two return windows, and none sets saveBeforeProcesses
+                 (which would render Save at the earlier call site instead). */}
+              {topbarRight && (() => {
+                const TopbarRightComponent = topbarRight;
+                return (
+                  <TopbarRightComponent
+                    data={data}
+                    recordId={data?.id || recordId}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    api={api}
+                    onProcess={hook.handleProcess}
+                    onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
+                    // ETP-4933: a topbarRight action that PERSISTS (ConfirmWithCredit calls
+                    // maybeSaveBeforeConfirm, which saves) must honour the required-field gate
+                    // too, or it is a hole straight through it — Save blocked, Confirm saves
+                    // the incomplete record anyway. Only `blocked`/`title` are meant to be
+                    // consumed: the slot inherits the required-field rule, NOT the rest of
+                    // Save's disabled condition (notably `!isDirty` — confirming an already
+                    // saved, unmodified document is the normal path).
+                    saveGate={saveGate}
+                    data-testid="TopbarRightComponent__fa3275" />
+                );
+              })()}
             </div>
           </div>
         )}
@@ -3167,6 +2989,8 @@ export function DetailView({
           async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
+          apiBaseUrl,
+          () => hook.fetchById?.(data?.id || recordId),
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3327,6 +3151,7 @@ export function DetailView({
                               </div>
                             )}
                             <Form
+                              registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
                               data={data}
@@ -3353,6 +3178,7 @@ export function DetailView({
                             <CollapsibleSection title={ui('moreDetails')} data-testid="CollapsibleSection__fa3275">
                               <div className={`px-6 pb-6${embedded ? ' pointer-events-none' : ''}`}>
                                 <Form
+                                  registerGateExclusions={registerGateExclusions}
                                   entity={entity}
                                   windowName={windowName}
                                   data={data}
@@ -3472,33 +3298,18 @@ export function DetailView({
                             <div className={getLinesContainerClassName(linesLayout, embedded)}>
                               {/* Table + add button */}
                               <div className="flex-1 min-w-0">
-                                {/* Bulk action bar: delete + detail processes (classic only) */}
-                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <LinesBulkActionBar
-                                    linesLayout={linesLayout}
-                                    api={api}
-                                    detailEntity={detailEntity}
-                                    isDocumentReadOnly={isDocumentReadOnly}
-                                    selectedChildRows={selectedChildRows}
-                                    detailProcesses={detailProcesses}
-                                    ui={ui}
-                                    executingDetailProcess={executingDetailProcess}
-                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
-                                    executeDetailProcessImpl={executeDetailProcessImpl}
-                                    detailProcessDeps={detailProcessDeps}
-                                    tMenu={tMenu}
-                                    deletingChildren={deletingChildren}
-                                    setDeletingChildren={setDeletingChildren}
-                                    confirmDelete={confirmDelete}
-                                    apiBaseUrl={apiBaseUrl}
-                                    token={token}
-                                    hook={hook}
-                                    selectedLine={selectedLine}
-                                    setSelectedLine={setSelectedLine}
-                                    setSelectedChildRows={setSelectedChildRows}
-                                    data-testid="LinesBulkActionBar__7c75ad"
-                                  />
-                                )}
+                                {/* Bulk action bar: delete + detail processes (classic only).
+                                    ETP-4972 — floating SelectionToolbar, reuses the primary
+                                    selectionBarVisible/Closing lifecycle (mutually exclusive
+                                    with the inlineEditable bar below by linesLayout). */}
+                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && renderDetailBulkActionBar({
+                                  visible: selectionBarVisible, closing: selectionBarClosing,
+                                  linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+                                  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess,
+                                  executeDetailProcessImpl, detailProcessDeps, tMenu, deletingChildren,
+                                  setDeletingChildren, confirmDelete, apiBaseUrl, token, hook,
+                                  selectedLine, setSelectedLine, setSelectedChildRows,
+                                })}
                                 <DetailTable
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
@@ -3513,7 +3324,7 @@ export function DetailView({
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
-                                  hiddenColumns={lineHiddenColumns}
+                                  hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
                                   onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
@@ -3655,7 +3466,6 @@ export function DetailView({
 
                                 {canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) && (
                                   <div
-                                    ref={addLineWrapperRef}
                                     className={getAddLineWrapperClassName(linesLayout)}
                                     style={getAddLineWrapperStyle(linesLayout)}
                                   >
@@ -3688,51 +3498,63 @@ export function DetailView({
                                         onForceOpenHandled={() => setForceOpenImport(false)}
                                         data-testid="DetailExtraActions__fa3275" />
                                     )}
-                                    {/* Selection toolbar — portaled to document.body so the
-                              downward shadow renders OUTSIDE the linesScrollRef's
-                              overflow-auto clipping boundary even when scroll is
-                              engaged (many rows). Positioned via fixed coords from
-                              `barRect`, measured off `addLineWrapperRef`. */}
+                                    {/* Selection toolbar — portaled to document.body, TRUE
+                              viewport-fixed (ETP-4972), not anchored to this wrapper. */}
                                     {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
-                                      <LinesSelectionBar
+                                      <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}
-                                        barRect={barRect}
-                                        count={selectedChildRows.length}
-                                        selectedLabel={ui('selected', { count: selectedChildRows.length })}
-                                        totalLabel={getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data)}
-                                        deleting={deletingChildren}
-                                        deleteTitle={ui('delete')}
-                                        closeTitle={ui('close')}
-                                        onDelete={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setDeletingChildren(true);
-                                          try {
-                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                            // batchDelete.js); replaces the old two-independent-if
-                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                            // pattern this bar predates.
-                                            const { succeeded, failed } = await deleteSelectedChildRows({
-                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                                            });
-                                            for (const row of succeeded) {
-                                              hook.handleDeleteChild(row.id);
-                                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                                            }
-                                            inlineLinesRef.current?.clearSelection?.();
-                                            setSelectedChildRows([]);
-                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                          } catch (err) {
-                                            toast.error(err.message || ui('networkError'));
-                                          } finally {
-                                            setDeletingChildren(false);
-                                          }
-                                        }}
                                         onClose={() => {
                                           inlineLinesRef.current?.clearSelection?.();
                                           setSelectedChildRows([]);
                                         }}
-                                        data-testid="LinesSelectionBar__fa3275" />
+                                        closeTitle={ui('close')}
+                                        data-testid="SelectionToolbar__fa3275">
+                                        {/* ETP-4972 — no amount subtitle here: the Figma "Floating
+                                            Toolbar | Dark" spec shows only the plain "N Seleccionados"
+                                            counter, nothing else in that segment. The previous
+                                            LinesSelectionBar carried an optional totalLabel line (the
+                                            selected-rows subtotal) that Figma doesn't have — dropped to
+                                            match. getSelectedLinesTotalLabel() itself is kept (still
+                                            covered by its own tests) in case a future design brings
+                                            the total back, just not called from here. */}
+                                        <span className="text-sm font-medium">
+                                          {ui('selected', { count: selectedChildRows.length })}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          disabled={deletingChildren}
+                                          title={ui('delete')}
+                                          onClick={async () => {
+                                            if (!(await confirmDelete())) return;
+                                            setDeletingChildren(true);
+                                            try {
+                                              // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                              // batchDelete.js); replaces the old two-independent-if
+                                              // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                              // pattern this bar predates.
+                                              const { succeeded, failed } = await deleteSelectedChildRows({
+                                                selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                                              });
+                                              for (const row of succeeded) {
+                                                hook.handleDeleteChild(row.id);
+                                                if (selectedLine?.id === row.id) setSelectedLine(null);
+                                              }
+                                              inlineLinesRef.current?.clearSelection?.();
+                                              setSelectedChildRows([]);
+                                              toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
+                                            } catch (err) {
+                                              toast.error(err.message || ui('networkError'));
+                                            } finally {
+                                              setDeletingChildren(false);
+                                            }
+                                          }}
+                                          aria-label={ui('delete')}
+                                          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+                                        </button>
+                                      </SelectionToolbar>
                                     )}
                                   </div>
                                 )}
@@ -4001,11 +3823,9 @@ export function DetailView({
                                 secondaryAddRowRef={getSecondaryAddRowRef(st.key)}
                                 secondaryAddRowSeed={secondaryAddRowSeed}
                                 secondaryChildDefaults={secondaryHooks[stIdx]?.childDefaults}
-                                secondaryAddLineWrapperRef={getSecondaryAddLineWrapperRef(st.key)}
                                 hideChevron={hideAddLineChevron}
                                 secondaryBarVisible={secondaryBarVisible}
                                 secondaryBarClosing={secondaryBarClosing}
-                                secondaryBarRects={secondaryBarRects}
                                 secondaryDeleting={secondaryDeleting}
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}
@@ -4054,6 +3874,7 @@ export function DetailView({
                         {tabs[activeTab]?.key === 'others' && (
                           <div className={getOthersTabClassName(embedded)}>
                             <Form
+                              registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
                               data={data}
@@ -4088,6 +3909,7 @@ export function DetailView({
                   {showOthers === null && (
                     <div ref={othersRef} className="hidden">
                       <Form
+                        registerGateExclusions={registerGateExclusions}
                         entity={entity}
                         windowName={windowName}
                         data={data}
@@ -4254,6 +4076,7 @@ export function DetailView({
         windowName={windowName}
         documentIds={getDocumentIds(recordId)}
         token={token}
+        apiBaseUrl={apiBaseUrl}
         data-testid="DocumentPrintDrawer__fa3275" />
       {deleteConfirmModal ? (
         showDeleteConfirm && (
@@ -4436,4 +4259,3 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
     }
   }
 }
-

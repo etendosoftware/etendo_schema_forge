@@ -10,9 +10,11 @@
 // The cell COMPONENTS stay hand-written (they are bespoke: bank avatars, PSD2
 // affordances, chunked IBANs, posting dots). What `cellType` makes declarative is
 // the BINDING — which column gets which renderer — not the rendering itself.
-// Runtime-injected columns that have no AD column behind them (e.g. the accounts
-// list's `pendingCount`, produced by a NeoHandler's afterHandle) are declared as
-// `entities.<e>.virtualFields[]` in decisions.json and arrive here like any other.
+// Runtime-injected columns that have no AD column behind them (produced by a
+// NeoHandler's afterHandle) are declared as `entities.<e>.virtualFields[]` in
+// decisions.json and arrive here like any other. This window no longer has one:
+// its last virtual field, the accounts list's "Por conciliar", became the
+// EM_ETGO_Pending_Count stored computed column so the grid can sort on it.
 import contract from '@generated/financial-account/contract.json';
 
 /**
@@ -27,7 +29,7 @@ import contract from '@generated/financial-account/contract.json';
  *
  * @param {string} entityName - contract entity key (e.g. 'transaction')
  * @returns {Array<{ name: string, column?: string, label: string, type?: string,
- *   gridLabelKey?: string, cellType?: string, columnType?: string }>}
+ *   gridLabelKey?: string, cellType?: string, columnType?: string, multiField?: object }>}
  */
 export function getContractGridColumns(entityName) {
   const fields = contract?.frontendContract?.entities?.[entityName]?.fields ?? [];
@@ -42,5 +44,35 @@ export function getContractGridColumns(entityName) {
       gridLabelKey: f.gridLabelKey,
       cellType: f.cellType,
       columnType: f.columnType,
+      // ETP-4921 — the multiField decorator, forwarded so a host column can turn its
+      // header into N independently sortable segments. Only the Tipo column uses it here
+      // (type + iBAN); every other column leaves it undefined.
+      multiField: f.multiField,
+    }));
+}
+
+/**
+ * Fields an entity declares for the expandable "more info" panel (the row a
+ * table expands to show extra read-only detail, e.g. the account movements'
+ * accounting dimensions): fields with `dimensionsPanel: true`, sorted by
+ * `seq`. Same decisions-driven contract as `getContractGridColumns` — a field
+ * is added to, removed from, reordered, or relabelled in the panel via a
+ * `decisions.json` edit + regen, no JSX change.
+ *
+ * @param {string} entityName - contract entity key (e.g. 'transaction')
+ * @returns {Array<{ name: string, column?: string, label: string, type?: string,
+ *   gridLabelKey?: string }>}
+ */
+export function getContractPanelFields(entityName) {
+  const fields = contract?.frontendContract?.entities?.[entityName]?.fields ?? [];
+  return fields
+    .filter((f) => f.dimensionsPanel === true)
+    .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+    .map((f) => ({
+      name: f.name,
+      column: f.column,
+      label: f.label ?? f.name,
+      type: f.type,
+      gridLabelKey: f.gridLabelKey,
     }));
 }

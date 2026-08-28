@@ -26,7 +26,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
@@ -42,18 +44,16 @@ const STEP = {
 /** Stable keys for the bank-picker loading skeleton (avoids array-index keys, Sonar S6479). */
 const BANK_SKELETON_KEYS = Array.from({ length: 9 }, (_, i) => `bank-skeleton-${i}`);
 
-/** Curated country list for the bank picker dropdown (Salt Edge providers are fetched per country). */
+/**
+ * Countries the bank picker offers (Salt Edge providers are fetched per country).
+ *
+ * Spain only for now. The list used to carry ten countries, which put a country selector in front
+ * of every user even though only Spain is actually supported. Kept as a list, and the picker still
+ * renders a dropdown as soon as it holds more than one entry, so widening it later is a one-line
+ * change here and nothing else.
+ */
 const BANK_COUNTRIES = [
   { code: 'ES', flag: '🇪🇸' },
-  { code: 'IT', flag: '🇮🇹' },
-  { code: 'FR', flag: '🇫🇷' },
-  { code: 'DE', flag: '🇩🇪' },
-  { code: 'PT', flag: '🇵🇹' },
-  { code: 'GB', flag: '🇬🇧' },
-  { code: 'NL', flag: '🇳🇱' },
-  { code: 'BE', flag: '🇧🇪' },
-  { code: 'IE', flag: '🇮🇪' },
-  { code: 'AT', flag: '🇦🇹' },
 ];
 
 function resolveContentWidth(step) {
@@ -95,6 +95,7 @@ function resolveFormMode(accountType) {
  */
 export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreation }) {
   const ui = useUI();
+  const { token } = useAuth();
   const { createAccount, fetchDefaults } = useAccountMutations();
 
   const [step, setStep] = useState(STEP.TYPE);
@@ -103,6 +104,12 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
   const [bankQuery, setBankQuery] = useState('');
   const [currencies, setCurrencies] = useState([]);
   const [defaultCurrencyId, setDefaultCurrencyId] = useState('');
+  // ETP-4896: the country the BankPicker's flag dropdown is filtering Salt Edge providers by,
+  // lifted up from that component so a chosen bank's country can seed the FORM step's Country
+  // field (Flujo A of the ticket) instead of resetting to the org default every time.
+  const [bankCountryIso, setBankCountryIso] = useState(BANK_COUNTRIES[0].code);
+  const [defaultCountryId, setDefaultCountryId] = useState('');
+  const [countryIbanRules, setCountryIbanRules] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -112,6 +119,7 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     setAccountType(null);
     setSelectedBank(null);
     setBankQuery('');
+    setBankCountryIso(BANK_COUNTRIES[0].code);
     setSubmitting(false);
     setFormError(null);
     let cancelled = false;
@@ -120,6 +128,8 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
         if (cancelled) return;
         setCurrencies(Array.isArray(data.currencies) ? data.currencies : []);
         setDefaultCurrencyId(data.defaultCurrencyId || '');
+        setDefaultCountryId(data.defaultCountryId || '');
+        setCountryIbanRules(Array.isArray(data.countryIbanRules) ? data.countryIbanRules : []);
       })
       .catch(() => {
         if (!cancelled) toast.error(ui('financeAccountsNewCreateError'));
@@ -131,6 +141,13 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     // the catch but must not retrigger the reset/refetch and wipe wizard progress.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fetchDefaults]);
+
+  // ETP-4896: resolve the BankPicker's ISO code (BANK_COUNTRIES is a curated static list — its
+  // codes aren't C_Country ids, which are per-instance UUIDs) against the IBAN-rules catalog,
+  // which is the only country list already loaded here. A code with no active match (e.g. a
+  // deactivated country row) yields '', and AccountFormStep falls back to the org default via its
+  // own `defaultCountryId || ''` guard — never a hard error.
+  const seededCountryId = countryIbanRules.find((c) => c.iso === bankCountryIso)?.id ?? '';
 
   const goBack = () => {
     setFormError(null);
@@ -170,7 +187,9 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       if (err.status === 409) {
         setFormError(ui('financeAccountsNewNameExists'));
       } else {
-        toast.error(err.message || ui('financeAccountsNewCreateError'));
+        // ETP-4896 QA follow-up: this used to show the backend's raw English literal. Routed
+        // through the shared translator so the create flow matches the edit modal.
+        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsNewCreateError'));
       }
     } finally {
       setSubmitting(false);
@@ -270,6 +289,8 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
             ui={ui}
             query={bankQuery}
             onQueryChange={setBankQuery}
+            country={bankCountryIso}
+            onCountryChange={setBankCountryIso}
             onPick={pickBank}
             onSkip={() => { setSelectedBank(null); setStep(STEP.FORM); }}
             data-testid="BankPicker__24760b" />
@@ -290,6 +311,13 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
             bankName={selectedBank?.name}
             currencies={currencies}
             defaultCurrencyId={defaultCurrencyId}
+            countryIbanRules={countryIbanRules}
+            // ETP-4896: the bank the user picked in the BankPicker step (Flujo A) wins over the
+            // org default — `seededCountryId` is '' when Cash skipped the picker entirely or the
+            // BankPicker's country has no active C_Country match, in which case this falls back to
+            // the org default exactly like before this ticket.
+            defaultCountryId={seededCountryId || defaultCountryId}
+            token={token}
             // Pre-fill the account name with the chosen bank's name so the user only tweaks it
             // (e.g. "Santander" → "Santander nóminas"). Empty when no bank was selected (skip / cash).
             initialValues={{ name: selectedBank?.name ?? '' }}
@@ -341,9 +369,8 @@ function TypePicker({ ui, onPick }) {
   );
 }
 
-function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
+function BankPicker({ ui, query, onQueryChange, country, onCountryChange, onPick, onSkip }) {
   const { fetchProviders } = useBankConnectionActions();
-  const [country, setCountry] = useState(BANK_COUNTRIES[0].code);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -374,36 +401,49 @@ function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium leading-6 text-[hsl(var(--foreground))]">{ui('financeAccountsNewBankLabel')}</p>
         <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
-          <DropdownMenu data-testid="DropdownMenu__24760b">
-            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
-              <button
-                type="button"
-                data-testid="new-account-bank-country"
-                aria-label={ui('financeAccountsNewBankCountry')}
-                className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
-              >
-                <span className="text-base leading-none">{selectedFlag}</span>
-                <ChevronDown
-                  className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
-                  data-testid="ChevronDown__24760b" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-[260px] overflow-y-auto"
-              data-testid="DropdownMenuContent__24760b">
-              {BANK_COUNTRIES.map((c) => (
-                <DropdownMenuItem
-                  key={c.code}
-                  onClick={() => setCountry(c.code)}
-                  data-testid={`new-account-bank-country-${c.code}`}
+          {/* With a single supported country there is nothing to choose, so the flag is shown as a
+              plain label rather than a dropdown that only ever offers one option. The dropdown
+              comes back on its own the moment BANK_COUNTRIES holds more than one entry. */}
+          {BANK_COUNTRIES.length === 1 ? (
+            <span
+              data-testid="new-account-bank-country"
+              aria-label={ui('financeAccountsNewBankCountry')}
+              className="flex h-full w-[60px] shrink-0 items-center justify-center border-r border-[hsl(var(--border-subtle))] text-base leading-none"
+            >
+              {selectedFlag}
+            </span>
+          ) : (
+            <DropdownMenu data-testid="DropdownMenu__24760b">
+              <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
+                <button
+                  type="button"
+                  data-testid="new-account-bank-country"
+                  aria-label={ui('financeAccountsNewBankCountry')}
+                  className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))] focus:outline-none"
                 >
-                  <span className="text-base leading-none">{c.flag}</span>
-                  <span className="text-sm text-[hsl(var(--foreground))]">{c.code}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <span className="text-base leading-none">{selectedFlag}</span>
+                  <ChevronDown
+                    className="h-4 w-4 shrink-0 text-[hsl(var(--text-disabled))]"
+                    data-testid="ChevronDown__24760b" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-[260px] overflow-y-auto"
+                data-testid="DropdownMenuContent__24760b">
+                {BANK_COUNTRIES.map((c) => (
+                  <DropdownMenuItem
+                    key={c.code}
+                    onClick={() => onCountryChange(c.code)}
+                    data-testid={`new-account-bank-country-${c.code}`}
+                  >
+                    <span className="text-base leading-none">{c.flag}</span>
+                    <span className="text-sm text-[hsl(var(--foreground))]">{c.code}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}

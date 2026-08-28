@@ -11,11 +11,22 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { resolve, join } from 'node:path';
-import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, buildJsreportHelpersString, computeDocumentQrDataUrl } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { REPORT_UI_STRINGS, pickLabel, buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+import { resolveGrouping, buildNestedGroups, buildAccountReportTree }
+  from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
+import { applyPlaceholders } from '@etendosoftware/schema-forge-cli/src/report-sql.js';
+import { hydrateDocumentBranding } from './report-branding.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
+const REPORT_PARTIALS_DIR = resolve(ROOT, 'templates', 'reports');
+
+function expandReportPartials(templateContent) {
+  const brandingPartial = readFileSync(join(REPORT_PARTIALS_DIR, 'document-branding.hbs'), 'utf8');
+  return templateContent.replace(/\{\{>\s*document-branding\s*\}\}/g, brandingPartial);
+}
 
 // ETP-4314 — instance-wide currency separators, fetched once from the same
 // NEO Headless config endpoint the browser reads (currencyFormatConfig.js),
@@ -73,6 +84,30 @@ function parseGradleProps(path) {
   return props;
 }
 
+// ---------------------------------------------------------------------------
+// Rendered-report i18n (ETP-4898) now lives in @etendosoftware/schema-forge-cli
+// (cli/src/report-i18n.js) and is imported above. It used to be defined right
+// here, which is exactly why the production report-server never had it: code
+// written inline in this plugin does not reach the server, only shared modules
+// do. Do not re-add a local copy — extend the shared module instead.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Row grouping, opening balances and account trees now live in
+// @etendosoftware/schema-forge-cli (cli/src/report-grouping.js) and are imported
+// above. They used to be defined right here, which is exactly why the production
+// report-server never had them: code written inline in this plugin does not
+// reach the server, only shared modules do. The re-export below keeps the
+// existing `import { ... } from '../vite-plugins/report-api.js'` test entry
+// points working. Do not re-add local copies — extend the shared module.
+// ---------------------------------------------------------------------------
+export { buildNestedGroups, buildAccountReportTree };
+export {
+  foldOpeningBalance,
+  foldAggregateRows,
+} from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
+
+
 /**
  * List all artifact dirs that have a report-contract.json
  */
@@ -84,7 +119,11 @@ function listReports() {
     if (existsSync(contractPath)) {
       try {
         const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
-        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
+        // 'custom' contracts (ETP-4901) are internal NEO endpoints backing a specific
+        // page's own data needs (e.g. financial-accounts-page powers the Cuentas
+        // landing page's sidebar widgets) — real, still-served endpoints, just never
+        // meant to show up as a runnable report a user picks from this catalog.
+        if (contract.reportId && contract.outputs?.length > 0 && contract.type !== 'document' && contract.type !== 'custom' && (contract.source === 'jasper-migration' || contract.source === 'manual' || contract.source === 'sql' || contract.source === 'neo' || contract.mockDataFile)) {
           reports.push({
             id: contract.reportId,
             title: contract.title,
@@ -93,6 +132,7 @@ function listReports() {
             orientation: contract.orientation,
             outputs: contract.outputs,
             parameters: contract.parameters || [],
+            sections: contract.sections || [],
           });
         }
       } catch { /* skip malformed */ }
@@ -196,10 +236,21 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       }
 
       const headerSql = replacePlaceholders(contract.sql.header);
+      // Keep branding generic for document contracts: existing reports use
+      // `org` as the organization alias, while newer contracts may expose
+      // `org_logo_id` explicitly. The fallback lets older print artifacts opt
+      // into the shared branding partial without duplicating this subquery.
+      const brandedHeaderSql = headerSql.includes('org_logo_id')
+        ? headerSql
+        : headerSql.replace(/^SELECT\s+/i,
+          'SELECT (SELECT oi.your_company_document_image FROM ad_orginfo oi WHERE oi.ad_org_id = org.ad_org_id) AS org_logo_id, ');
       const linesSql = replacePlaceholders(contract.sql.lines);
 
-      const headerResult = await pool.query(headerSql);
-      const header = headerResult.rows[0] || {};
+      const headerResult = await pool.query(brandedHeaderSql);
+      const header = await hydrateDocumentBranding(headerResult.rows[0] || {}, {
+        authToken,
+        etendoBase: process.env.ETENDO_URL || 'http://localhost:8080/etendo',
+      });
 
       const linesResult = await pool.query(linesSql);
       const lines = linesResult.rows;
@@ -257,38 +308,15 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     max: 3,
   });
 
+  // __PLACEHOLDER__ substitution and SQL scoping live in the shared module
+  // (report-sql.js) so the production report-server applies the IDENTICAL
+  // rules — the optional-clause stripper used to be fixed here only, which
+  // broke Balance Sheet and Profit & Loss on every server.
+
   try {
     const clientId = getClientIdFromRequest({ headers: { authorization: authToken ? `Bearer ${authToken}` : '' } }) || '0';
 
-    // Parameterize query — support both Jasper-style hardcoded IDs and __PLACEHOLDER__ tokens
-    sql = sql.replace(/__CLIENT_ID__/g, clientId);
-    // Replace user parameter placeholders (__PARAM_NAME__ format)
-    // For multi-select values (comma-separated IDs), convert = 'id1,id2' to IN ('id1','id2')
-    for (const [key, value] of Object.entries(params)) {
-      if (key.startsWith('_display_')) continue; // Skip display-only params
-      if (value !== undefined && value !== null && value !== '') {
-        const escaped = String(value).replace(/'/g, "''");
-        sql = sql.replace(new RegExp(`__${key.toUpperCase()}__`, 'g'), escaped);
-      }
-    }
-    // Apply contract defaults for any remaining unreplaced tokens (e.g. number params cleared by user)
-    for (const p of (contract.parameters || [])) {
-      if (p.default !== undefined && p.default !== null && p.default !== '') {
-        sql = sql.replace(new RegExp(`__${p.name.toUpperCase()}__`, 'g'), String(p.default));
-      }
-    }
-    // Convert equality checks with comma-separated values to IN clauses
-    sql = sql.replace(/=\s*'([^']*,[^']*)'/g, (match, ids) => {
-      const inList = ids.split(',').map(id => `'${id.trim()}'`).join(',');
-      return `IN (${inList})`;
-    });
-    // Remove optional filter clauses where params were not provided
-    // Pattern: AND ('__X__' = '' OR ...) — handles nested parens like GREATEST(a,b)
-    sql = sql.replace(/AND\s*\('__\w+__'\s*=\s*''\s*OR\s*[\s\S]*?'__\w+__'[^)]*\)/gi, '');
-    sql = sql.replace(/AD_CLIENT_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi, `AD_CLIENT_ID IN ('${clientId}')`);
-    sql = sql.replace(/AD_ORG_ID\s+IN\s*\(\s*'[^']+'\s*\)/gi,
-      `AD_ORG_ID IN (SELECT AD_ORG_ID FROM AD_ORG WHERE AD_CLIENT_ID = '${clientId}' AND ISACTIVE = 'Y')`);
-    sql = sql.replace(/AD_LANGUAGE\s*=\s*'[^']+'/gi, `AD_LANGUAGE = 'en_US'`);
+    sql = applyPlaceholders(sql, { clientId, params, contract });
 
     // Inject date filters for Jasper SQL queries that don't have __PLACEHOLDER__ tokens.
     // The contract can specify a dateColumn (e.g., "dateColumn": "DATEACCT" or "O.DATEORDERED").
@@ -327,7 +355,25 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     if (limit) sql = sql.replace(/;\s*$/, '') + ` LIMIT ${parseInt(limit, 10)}`;
 
     const { rows } = await pool.query(sql);
-    return { rows, contract };
+
+    // Optional opening-balance query (ETP-4898 — Libro Mayor's "Initial Balance"/Saldo inicial).
+    // Same placeholder rules as the main query, just no LIMIT — it's already pre-aggregated.
+    let openingRows = null;
+    if (contract.sql?.openingQuery) {
+      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract });
+      openingRows = (await pool.query(openingSql)).rows;
+    }
+
+    // Optional formula-operand query (ETP-4899 — Profit & Loss's computed nodes,
+    // e.g. "A) RESULTADO DE EXPLOTACIÓN (1+2+...+12)"). Same placeholder rules;
+    // consumed by buildAccountReportTree(), never rendered directly.
+    let operandRows = null;
+    if (contract.sql?.operandsQuery) {
+      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract });
+      operandRows = (await pool.query(operandsSql)).rows;
+    }
+
+    return { rows, contract, openingRows, operandRows };
   } finally {
     await pool.end();
   }
@@ -375,7 +421,11 @@ export default function reportApiPlugin() {
                   select: `SELECT c_bpartner_id AS id, name, name AS label`
                 },
                 'product': {
-                  fromWhere: `FROM m_product WHERE isactive='Y' ${byClient('ad_client_id')} AND (name ILIKE $1 OR value ILIKE $1)`,
+                  // ETP-4967: excludes products under a category flagged EM_Etgo_IsSystemCategory='Y'
+                  // (e.g. ETGO_DTO, category "Discounts") — mirrors ReportSelectorsServlet.buildProductQuery
+                  // (com.etendoerp.go). This dev-only mock hits Postgres directly, so the real Java
+                  // fix never runs against it; keep both in sync.
+                  fromWhere: `FROM m_product WHERE isactive='Y' ${byClient('ad_client_id')} AND (name ILIKE $1 OR value ILIKE $1) AND NOT EXISTS (SELECT 1 FROM m_product_category mpc WHERE mpc.m_product_category_id = m_product.m_product_category_id AND mpc.em_etgo_issystemcategory = 'Y')`,
                   orderBy: 'ORDER BY value, name',
                   select: `SELECT m_product_id AS id, value AS "searchKey", name, value || ' - ' || name AS label`
                 },
@@ -383,6 +433,12 @@ export default function reportApiPlugin() {
                   fromWhere: `FROM m_warehouse WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
                   orderBy: 'ORDER BY name',
                   select: `SELECT m_warehouse_id AS id, name, name AS label`
+                },
+                'product-category': {
+                  // ETP-4967: mirrors ReportSelectorsServlet.buildProductCategoryQuery (see note above).
+                  fromWhere: `FROM m_product_category WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1 AND COALESCE(em_etgo_issystemcategory, 'N') <> 'Y'`,
+                  orderBy: 'ORDER BY name',
+                  select: `SELECT m_product_category_id AS id, name, name AS label`
                 },
                 'project': {
                   fromWhere: `FROM c_project WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
@@ -415,9 +471,35 @@ export default function reportApiPlugin() {
                   select: `SELECT y.c_year_id AS id, y.year || ' (' || c.name || ')' AS name, y.year || ' (' || c.name || ')' AS label`
                 },
                 'currency': {
-                  fromWhere: `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
+                  // Unlike every other selector above, this used to skip byClient(...) entirely
+                  // and return the full ~150-row ISO currency table. Scoped down to mirror
+                  // /sales-order's CurrencyRatePicker (client's base currency + anything with an
+                  // active C_Conversion_Rate row for this client, either direction) — without its
+                  // date-validity check, since a report has a dateFrom/dateTo range, not one single
+                  // document date to convert against.
+                  //
+                  // The DEFAULT/first-choice currency prefers the ACTIVE ORGANIZATION's own
+                  // currency (ad_org.c_currency_id — the same field /organization's "Moneda" shows),
+                  // not just the client's base currency: a multi-org client can have organizations
+                  // in different currencies. Falls back to the client's base currency when no
+                  // selectedOrgId is passed (matches every other org-scoped selector's fallback).
+                  fromWhere: clientId
+                    ? `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)
+                        AND (
+                          c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}')
+                          ${selectedOrgId ? `OR c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}')` : ''}
+                          OR EXISTS (
+                            SELECT 1 FROM c_conversion_rate cr
+                             WHERE cr.isactive = 'Y'
+                               AND cr.ad_client_id IN ('${clientId}', '0')
+                               AND (cr.c_currency_id = c_currency.c_currency_id OR cr.c_currency_id_to = c_currency.c_currency_id)
+                          )
+                        )`
+                    : `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
                   orderBy: clientId
-                    ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`
+                    ? (selectedOrgId
+                        ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}') THEN 0 ELSE 1 END), iso_code`
+                        : `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`)
                     : 'ORDER BY iso_code',
                   select: `SELECT c_currency_id AS id, iso_code AS name, iso_code || ' - ' || description AS label`
                 },
@@ -541,33 +623,37 @@ export default function reportApiPlugin() {
           const reportId = renderMatch[1];
           let body = '';
           for await (const chunk of req) body += chunk;
-          const { format = 'html', limit, params = {} } = JSON.parse(body || '{}');
+          const { format = 'html', limit, params = {}, locale = 'en_US' } = JSON.parse(body || '{}');
 
           try {
             const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
             const result = await fetchReportData(reportId, { limit, authToken, params });
-            let { rows, contract, documentData, neoMeta = {} } = result;
+            let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows } = result;
 
-            // Handle groupBy parameter: find the dimension param whose groupByValue matches,
-            // re-sort rows by that field, then remap 'name' so the template group-break logic works.
-            let groupLabel = contract.groups?.[0]?.label?.en_US || 'Account';
-            let descriptionLabel = (contract.columns || []).find(c => c.field === 'groupbyname')?.label?.en_US || 'Description';
-            if (params.groupBy && rows) {
-              const dimensionParam = (contract.parameters || []).find(
-                p => p.groupByValue === params.groupBy && p.groupByField
-              );
-              if (dimensionParam) {
-                const sourceField = dimensionParam.groupByField;
-                groupLabel = dimensionParam.label?.en_US || params.groupBy;
-                descriptionLabel = dimensionParam.label?.en_US || descriptionLabel;
-                rows = [...rows].sort((a, b) => {
-                  const va = (a[sourceField] || '').toLowerCase();
-                  const vb = (b[sourceField] || '').toLowerCase();
-                  return va < vb ? -1 : va > vb ? 1 : 0;
-                });
-                rows = rows.map(r => ({ ...r, name: r[sourceField] || '', value: '' }));
-              }
+            // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
+            // the FLAT node list, and the indented tree (roll-up, formula nodes,
+            // account-level cutoff) is assembled here, replacing `rows` so
+            // recordCount/totals and the Excel/CSV templates keep working unchanged.
+            if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
+              rows = buildAccountReportTree(rows, operandRows, {
+                accountLevel: params.accountLevel || 'S',
+                showOnlyWithValue: params.showOnlyAccountsWithValue === 'true',
+              });
             }
+
+            // Handle groupBy parameter: find the dimension param whose groupByValue matches and
+            // re-sort rows by that field. `groupLabel` ("Account"/"Cuenta") and `descriptionLabel`
+            // ("Description") stay FIXED — they must never be overwritten by the chosen dimension,
+            // because grouping by a dimension nests inside Account, it doesn't replace it (ETP-4898:
+            // "no perder la Cuenta al agrupar"). `name`/`value` (the row's account name/code) are
+            // never touched either, for the same reason — the template needs them intact to keep
+            // rendering the Account band nested under the dimension's own band.
+            // Band labels, the grouped-by field, the dimension-folded rows and tbGroups —
+            // all resolved by the module the report-server shares, so both engines group
+            // identically instead of almost-identically.
+            let groupLabel; let descriptionLabel; let dimensionLabel; let dimensionField; let tbGroups;
+            ({ groupLabel, descriptionLabel, dimensionLabel, dimensionField, tbGroups, rows } =
+              resolveGrouping(contract, params, rows, locale));
             const activeFilters = Object.entries(params)
               .filter(([k, v]) => v && v !== '' && !k.startsWith('_display_'))
               .map(([k, v]) => {
@@ -577,7 +663,13 @@ export default function reportApiPlugin() {
                 // For groupBy: resolve the stored key ('bpartner', 'product') to its human label
                 if (k === 'groupBy') {
                   const dimParam = (contract.parameters || []).find(p => p.groupByValue === v);
-                  displayValue = dimParam?.label?.en_US || v;
+                  displayValue = pickLabel(dimParam?.label, locale, v);
+                } else if (paramDef?.options) {
+                  // Any select with a literal `options` list stores the raw option value
+                  // ('S', 'acct', 'B'…). Resolve it to the human label so the filter chip
+                  // reads "Account Level: Heading", not "Account Level: E".
+                  const opt = paramDef.options.find(o => String(o.value) === String(v));
+                  if (opt) displayValue = pickLabel(opt.label, locale, v);
                 }
                 if (typeof displayValue === 'string' && displayValue.includes(' | ')) {
                   displayValue = displayValue.split(' | ').filter(Boolean).join(', ');
@@ -587,10 +679,23 @@ export default function reportApiPlugin() {
                   const [y, m, d] = displayValue.split('-');
                   displayValue = `${d}/${m}/${y}`;
                 }
-                return { label: paramDef?.label?.en_US || k, value: displayValue };
+                return { label: pickLabel(paramDef?.label, locale, k), value: displayValue };
               });
             const artifactDir = join(ARTIFACTS_DIR, reportId);
-            const templateContent = readFileSync(join(artifactDir, 'template.hbs'), 'utf8');
+            // Excel/CSV get their own flat, calculation-friendly template when the report
+            // declares one (ETP-4898). Both recipes render whatever markup/text they're given —
+            // reusing the HTML/PDF template (grouped bands, formatted amounts, full <style>
+            // block) makes a .xlsx that can't be summed/pivoted, and for CSV (recipe 'text',
+            // which streams the compiled template output byte-for-byte) it means the ENTIRE
+            // rendered HTML page — <style>, <div>s and all — gets dumped verbatim into a .csv
+            // file. Falls back to the shared template.hbs otherwise — reports without a
+            // per-format template are unaffected.
+            const perFormatTemplateFile = { xlsx: 'template-excel.hbs', csv: 'template-csv.hbs' }[format];
+            const perFormatTemplatePath = perFormatTemplateFile ? join(artifactDir, perFormatTemplateFile) : null;
+            const templatePath = (perFormatTemplatePath && existsSync(perFormatTemplatePath))
+              ? perFormatTemplatePath
+              : join(artifactDir, 'template.hbs');
+            const templateContent = expandReportPartials(readFileSync(templatePath, 'utf8'));
             const helpersPath = join(artifactDir, 'helpers.js');
             const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
             const cssPath = join(ROOT, 'templates', 'reports', 'base.css');
@@ -598,21 +703,45 @@ export default function reportApiPlugin() {
 
             const recipeMap = { html: 'html', pdf: 'chrome-pdf', xlsx: 'html-to-xlsx', csv: 'text' };
             const recipe = recipeMap[format] || 'html';
-            const title = contract.title?.en_US || reportId;
+            const title = pickLabel(contract.title, locale, reportId);
+            const ui = REPORT_UI_STRINGS[locale] || REPORT_UI_STRINGS.en_US;
+            const labels = buildContractLabels(contract, locale);
 
             // Document type: structured data (header + lines + taxes)
             // Listing type: flat rows
             const amountCols = (contract.columns || []).filter(c => c.type === 'amount');
+            const recordCount = Array.isArray(rows) ? rows.length : undefined;
+            // Always built (ETP-4898): every account — grouped by a dimension or not — needs
+            // its opening balance / running balance / subtotal / total, so both the flat and
+            // nested-card templates read the same `meta.groups` shape. Without a dimension,
+            // `dimensionField` is undefined and buildNestedGroups folds everything into one
+            // implicit group (`dimensionValue: null`).
+            const groups = (!documentData && Array.isArray(rows))
+              ? buildNestedGroups(rows, dimensionField, openingRows)
+              : null;
             const totals = {};
             if (!documentData && amountCols.length && Array.isArray(rows)) {
               for (const col of amountCols) {
                 totals[col.field] = rows.reduce((sum, r) => sum + (Number(r[col.field]) || 0), 0);
               }
             }
-            const recordCount = Array.isArray(rows) ? rows.length : undefined;
             const templateData = documentData
-              ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, totals, groupLabel, descriptionLabel, ...neoMeta }, rows };
+              ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, ...neoMeta }, rows };
+
+            // Document (print-*) reports render a QR of the header. QRCode.toDataURL
+            // is async while Handlebars.compile is sync, so the QR cannot be a helper
+            // on the HTML path — precompute it once here, before the format branch, so
+            // both the local HTML render and the jsreport PDF/XLSX payload see the same
+            // {{header.qrDataUrl}}. A QR failure degrades to a report without QR
+            // instead of failing the whole render.
+            if (documentData?.header && templateData.header) {
+              try {
+                templateData.header.qrDataUrl = await computeDocumentQrDataUrl(documentData.header, { qrcode: _require('qrcode') });
+              } catch (qrErr) {
+                console.warn('[report-api] QR generation failed:', qrErr.message);
+              }
+            }
 
             // Direct HTML render — no jsreport needed for preview
             if (format === 'html') {
@@ -620,26 +749,9 @@ export default function reportApiPlugin() {
 
               // Register the trusted in-repo helper set — no dynamic code execution.
               // helpersCode is read (not executed) only to preserve a report's
-              // formatNumber decimals.
+              // formatNumber decimals. Document QR codes are precomputed as data
+              // (header.qrDataUrl) above — never as a helper.
               registerReportHelpers(Handlebars, helpersCode);
-
-              // qrCode is report-specific (only document-type reports reference it)
-              // and async (QRCode.toDataURL returns a Promise) — Handlebars.compile()
-              // is synchronous, so it can't be registered as a per-report extra like
-              // the jsreport path does below. Precompute it once here (generic content
-              // — doc type/number/partner/status — good enough for an on-screen
-              // preview) and register a plain sync helper returning the resolved value.
-              if (documentData?.header) {
-                const QRCode = _require('qrcode');
-                const header = documentData.header;
-                const parts = [];
-                if (header.doc_type) parts.push('T:' + header.doc_type);
-                if (header.documentno) parts.push('N:' + header.documentno);
-                if (header.bp_name) parts.push('BP:' + header.bp_name);
-                if (header.status) parts.push('S:' + header.status);
-                const qrDataUrl = await QRCode.toDataURL(parts.length ? parts.join('|') : 'empty', { width: 120, margin: 1 });
-                Handlebars.registerHelper('qrCode', () => qrDataUrl);
-              }
 
               const template = Handlebars.compile(templateContent);
               const html = template(templateData);
@@ -649,7 +761,7 @@ export default function reportApiPlugin() {
             }
 
             // Serialize the same canonical helpers used above for the HTML preview,
-            // plus only this report's specific extras (e.g. qrCode) — a single
+            // plus only this report's specific extras — a single
             // source of truth for both render paths instead of a hand-maintained
             // copy per report. See buildJsreportHelpersString() for why jsreport
             // (a separate Docker container, reachable only over HTTP) can't just

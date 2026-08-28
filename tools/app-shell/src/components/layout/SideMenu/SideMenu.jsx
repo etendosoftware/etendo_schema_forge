@@ -37,6 +37,9 @@ import {
   ChevronDown,
   Headphones,
   FileJson,
+  HelpCircle,
+  MessageCircle,
+  ExternalLink,
   Loader2,
 } from 'lucide-react';
 import {
@@ -63,11 +66,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import {
-  useFeatureFlag,
-  PROOF_OF_CONCEPT_MENU,
-  TENANT_UPGRADE,
-} from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
@@ -361,33 +360,28 @@ function UnreadBadge({ unreadCount, expanded }) {
   );
 }
 
-function HelpEntryPoint({ expanded, onClick, unreadCount, ui }) {
-  if (!expanded) {
-    return (
-      <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
-        <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-          <button
-            type="button"
-            onClick={onClick}
-            aria-label={ui('helpAndSupport')}
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
-            <UnreadBadge
-              unreadCount={unreadCount}
-              expanded={false}
-              data-testid="UnreadBadge__247c75" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('helpAndSupport')}</TooltipContent>
-      </Tooltip>
-    );
-  }
-  return (
+// Customer portal for filing a bug report directly (bypasses the AI chat entirely) —
+// a separate, more formal channel from the conversational support flow.
+const REPORT_BUG_URL = 'https://etendoproject.atlassian.net/servicedesk/customer/portals';
+
+function HelpEntryPoint({ expanded, onOpenChat, unreadCount, ui }) {
+  const trigger = !expanded ? (
     <button
       type="button"
-      onClick={onClick}
-      className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
+      aria-label={ui('helpAndSupport')}
+      title={ui('helpAndSupport')}
+      className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
+      <UnreadBadge
+        unreadCount={unreadCount}
+        expanded={false}
+        data-testid="UnreadBadge__247c75" />
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
     >
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
@@ -400,6 +394,33 @@ function HelpEntryPoint({ expanded, onClick, unreadCount, ui }) {
           data-testid="ChevronRight__247c75" />
       )}
     </button>
+  );
+
+  return (
+    <DropdownMenu data-testid="HelpMenu__247c75">
+      <DropdownMenuTrigger asChild data-testid="HelpMenuTrigger__247c75">
+        {expanded ? <div className="w-full">{trigger}</div> : trigger}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={12}
+        className="w-60"
+        data-testid="HelpMenuContent__247c75"
+      >
+        <DropdownMenuItem asChild className="py-2.5 px-3 text-[15px]" data-testid="help-menu-report-bug">
+          <a href={REPORT_BUG_URL} target="_blank" rel="noopener noreferrer">
+            <HelpCircle className="h-[18px] w-[18px] mr-2" data-testid="HelpCircle__247c75" />
+            {ui('helpReportBug')}
+            <ExternalLink className="h-3.5 w-3.5 ml-auto text-muted-foreground" data-testid="ExternalLink__247c75" />
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onOpenChat} className="py-2.5 px-3 text-[15px]" data-testid="help-menu-open-chat">
+          <MessageCircle className="h-[18px] w-[18px] mr-2" data-testid="MessageCircle__247c75" />
+          {ui('helpOpenChat')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -445,7 +466,7 @@ function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsAct
       <div className={cn('border-t border-[hsl(var(--border-subtle))] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
       <HelpEntryPoint
         expanded={expanded}
-        onClick={onHelpClick}
+        onOpenChat={onHelpClick}
         unreadCount={unreadCount}
         ui={ui}
         data-testid="HelpEntryPoint__247c75" />
@@ -475,16 +496,14 @@ export default function SideMenu({
   const location = useLocation();
   const currentPath = location.pathname.replace(/^\//, '');
   const { favorites } = useFavorites();
-  // Switching between tenants only means something once an account can own more
-  // than one, so the switcher rides the same flag as the upgrade flow. With the
-  // flag off this renders exactly what it did before: the current company alone.
-  const multiTenantEnabled = useFeatureFlag(TENANT_UPGRADE);
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
-  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch({
-    enabled: multiTenantEnabled,
-  });
+  // Unconditional since ETP-4966: owning more than one environment is a shipped
+  // capability, so the switcher is always available. The hook already returns an
+  // empty list for a session that cannot list environments, which is what keeps
+  // an account with a single company showing that company alone.
+  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
   const currentEnvironment = environments.find(env => env.clientId === currentClientId);
 
   const favNameMap = useMemo(() => {
@@ -559,10 +578,14 @@ export default function SideMenu({
         {expanded ? (
           <div className="relative flex shrink-0 items-center h-[62px] px-3 gap-2">
             <DropdownMenu data-testid="DropdownMenu__247c75">
+              {/* data-testid="company-switcher" is the stable E2E hook for this button.
+                  aria-label is ui('switchCompany') -> the TRANSLATED string ("Cambiar
+                  empresa"), so it cannot serve as a language-independent selector. */}
               <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__247c75">
                 <button
                   type="button"
                   aria-label={ui('switchCompany')}
+                  data-testid="company-switcher"
                   className="flex flex-1 min-w-0 items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted/60 transition-colors"
                 >
                   <img
@@ -573,7 +596,11 @@ export default function SideMenu({
                   <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
                     {selectedOrg?.name || ui('yourCompany')}
                   </span>
-                  {multiTenantEnabled && (
+                  {/* Guarded on having resolved the environment, not on a flag: a session that
+                      cannot list environments (no platform token) has no plan to report, and
+                      environmentPlanLabelKey would otherwise label it "Demo" from a missing value
+                      rather than from a known free plan. */}
+                  {currentEnvironment && (
                     <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>

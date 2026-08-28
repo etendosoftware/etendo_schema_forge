@@ -272,8 +272,9 @@
           "reason": "ETP-4529 — accounting dimension, config-gated (raw AD: @$Element_PJ@='Y' & @IsDepreciated@='Y'). Moved from \"other\" to \"principal\" — the config-gated dimension field was rendering in the secondary/collapsed area instead of the main visible form."
         },
         "eTADASCostCenter": {
-          "visibility": "discarded",
-          "reason": "ETP-4529 — Centro de costo is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4914 — correction to the accounting-dimension matrix: Centro de costo is 'Por config' (not 'Nunca') for Activo (Amortizaciones) Cabecera. Config-gated, same as project (raw AD: @$Element_CC@='Y' & @IsDepreciated@='Y')."
         },
         "businessPartner": {
           "visibility": "discarded",
@@ -312,6 +313,7 @@
     },
     "assetAmortization": {
       "name": "amortizationLine",
+      "javaQualifier": "amortizationLineHandler",
       "fields": {
         "sEQNoAsset": {
           "visibility": "readOnly",

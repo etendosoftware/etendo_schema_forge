@@ -8,14 +8,16 @@
  * exposing unfinished work.
  */
 
-/** Gates the paid upgrade flow that creates a second, productive tenant. */
-export const TENANT_UPGRADE = 'tenant-upgrade';
+// `tenant-upgrade` was retired in ETP-4966. The paid productive-environment flow is permanent and
+// cannot be switched off: this end evaluated the key through ConfigCat while the backend evaluated
+// it through local properties that were unset in every deployed environment, so the browser offered
+// a Stripe checkout the backend did not honour and paying accounts got a demo environment. Do not
+// reintroduce a client-only gate over a capability the backend charges for.
 
 /** Reveals the internal Proof of Concept section in the side menu. */
 export const PROOF_OF_CONCEPT_MENU = 'proof-of-concept-menu';
 
 export const FLAG_DEFAULTS = Object.freeze({
-  [TENANT_UPGRADE]: false,
   [PROOF_OF_CONCEPT_MENU]: false,
 });
 

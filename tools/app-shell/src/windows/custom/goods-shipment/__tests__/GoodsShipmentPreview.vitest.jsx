@@ -93,6 +93,7 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import GoodsShipmentPreview from '../GoodsShipmentPreview.jsx';
+import GenericPreviewModal from '../../shared/GenericPreviewModal.jsx';
 import { useShipmentPdf } from '../useShipmentPdf.js';
 import {
   expectPresenceGatedByStatus,
@@ -375,6 +376,70 @@ describe('GoodsShipmentPreview', () => {
       expect(specs[1].type).toBe('sales-invoice');
       expect(specs[2].key).toBe('returns');
       expect(specs[2].type).toBe('return-material-receipt');
+    });
+  });
+
+  // ── ETP-4315: attachmentConfig wiring (real Attachment, M_InOut table) ────
+  describe('attachmentConfig wiring (ETP-4315 — real Attachment, tableName M_InOut)', () => {
+    function lastAttachmentConfig() {
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    it('includes tableName M_InOut, useMainAttachment true and the shipment documentId', () => {
+      renderGSPreview();
+      const cfg = lastAttachmentConfig();
+      expect(cfg.tableName).toBe('M_InOut');
+      expect(cfg.useMainAttachment).toBe(true);
+      expect(cfg.documentId).toBe(defaultShipment.id);
+    });
+
+    it('sets storeCondition: false when shipment.documentStatus is DR (draft)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(false);
+    });
+
+    it('sets storeCondition: true and sourceBlob=pdfBlob when shipment.documentStatus is CO (non-draft)', () => {
+      const pdfBlob = new Blob(['%PDF'], { type: 'application/pdf' });
+      useShipmentPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob, loading: false, error: null });
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
+      const cfg = lastAttachmentConfig();
+      expect(cfg.storeCondition).toBe(true);
+      expect(cfg.sourceBlob).toBe(pdfBlob);
+      expect(cfg.autoFetch).toBe(true);
+    });
+  });
+
+  // ── ETP-4315 follow-up (2026-08-18): pdfCacheConfig wiring into useShipmentPdf
+  // — same tableName as attachmentConfig above (M_InOut), storeCondition gated on
+  // documentStatus !== 'DR'. This window never cached its rendered PDF before
+  // ETP-4315 (new wiring, not a migration from an older cache shape).
+  describe('pdfCacheConfig wiring into useShipmentPdf (ETP-4315 follow-up)', () => {
+    function lastShipmentPdfCacheConfig() {
+      const calls = vi.mocked(useShipmentPdf).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][3];
+    }
+
+    it('passes { tableName: "M_InOut", storeCondition: false } when shipment.documentStatus is DR (draft)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: false, recordUpdated: null });
+    });
+
+    it('passes { tableName: "M_InOut", storeCondition: true } when shipment.documentStatus is CO (non-draft)', () => {
+      renderGSPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
+      expect(lastShipmentPdfCacheConfig()).toEqual({ tableName: 'M_InOut', storeCondition: true, recordUpdated: null });
+    });
+
+    // ETP-4787 — the record's own `updated` rides along so usePdfGenerator can discard a
+    // cached attachment older than the last edit.
+    it("forwards the shipment's `updated` as recordUpdated", () => {
+      renderGSPreview({
+        shipment: { ...defaultShipment, documentStatus: 'CO', updated: '2026-08-24T12:15:30+02:00' },
+      });
+      expect(lastShipmentPdfCacheConfig().recordUpdated).toBe('2026-08-24T12:15:30+02:00');
     });
   });
 });

@@ -1,19 +1,25 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+// uiMock is a vi.fn() (not a plain arrow) so a single test below can override its
+// implementation to prove the ETP-4891 translateBackendError wiring on the sync-result toast,
+// while every other test keeps the default key-echoing behavior.
+const uiMock = vi.fn((key) => key);
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => uiMock,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 const toastWarning = vi.fn();
+const toastInfo = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
     success: (...a) => toastSuccess(...a),
     error: (...a) => toastError(...a),
     warning: (...a) => toastWarning(...a),
+    info: (...a) => toastInfo(...a),
   },
 }));
 
@@ -121,6 +127,10 @@ vi.mock('../StatementsTable', () => ({
       ))}
     </div>
   ),
+  // The tab builds these from the table module (the sort state lives in the tab since
+  // ETP-4921, so its toolbar can host the "Ordenar por" popover).
+  buildStatementSortAccessors: () => ({}),
+  buildStatementSortColumns: () => [],
 }));
 
 vi.mock('../StatementLinesView', () => ({
@@ -206,6 +216,9 @@ describe('ImportedStatementsTab', () => {
     toastSuccess.mockReset();
     toastError.mockReset();
     toastWarning.mockReset();
+    toastInfo.mockReset();
+    uiMock.mockReset();
+    uiMock.mockImplementation((key) => key);
   });
 
   it('forwards bankConnectionSynced=false for a non-connected account', () => {
@@ -220,6 +233,26 @@ describe('ImportedStatementsTab', () => {
     await user.click(screen.getByTestId('toolbar-sync'));
     await waitFor(() => expect(bankSync).toHaveBeenCalledWith('acc-1'));
     await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+  });
+
+  // ETP-4891 follow-up: com.etendoerp.psd2's AD_MESSAGE for this toast has no real es_ES
+  // translation (Core resolves the same English text regardless of session locale — see
+  // backendErrors.js), so the raw sync-result message must be run through translateBackendError
+  // before it reaches the toast, not passed straight through like an unmapped string.
+  it('translates the "Transactions obtained" sync toast instead of showing the raw English', async () => {
+    uiMock.mockImplementation((key, params) => (key === 'backendError.transactionsObtainedForAccount'
+      ? `Movimientos obtenidos para la cuenta: ${params.account}.`
+      : key));
+    bankSync.mockResolvedValue({
+      status: 'OK',
+      message: 'Transactions obtained for the account: Cuenta pais españa .',
+    });
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', bankConnected: true }} />);
+    await user.click(screen.getByTestId('toolbar-sync'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(
+      'Movimientos obtenidos para la cuenta: Cuenta pais españa.',
+    ));
   });
 
   it('exposes the filtered headers and current selection via ref (for the export button)', async () => {
@@ -463,7 +496,10 @@ describe('ImportedStatementsTab', () => {
       expect(toastWarning).not.toHaveBeenCalled();
       expect(toastError).not.toHaveBeenCalled();
       await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
-      expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+      // ETP-4972 — the bar now renders through SelectionToolbar (portaled), which
+      // doesn't forward an arbitrary data-testid prop onto its DOM; assert via
+      // the count span's own testid instead (see BulkDeleteSelectionBar.jsx).
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
     });
 
     it('all fail: does not reload, fires a single error toast, and leaves the bar showing the same selection', async () => {
@@ -479,7 +515,7 @@ describe('ImportedStatementsTab', () => {
       expect(toastSuccess).not.toHaveBeenCalled();
       expect(toastWarning).not.toHaveBeenCalled();
       expect(reloadFn).not.toHaveBeenCalled();
-      expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
       expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
     });
   });

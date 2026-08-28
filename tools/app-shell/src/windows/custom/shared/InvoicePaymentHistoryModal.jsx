@@ -6,6 +6,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { openCenteredPopup } from '@/lib/popupWindow.js';
+import { isPaymentProcessed, paymentDisplayState } from './paymentStatuses';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
 function fmtDate(raw) {
@@ -22,21 +24,66 @@ function fmtAmount(val, currency) {
   return formatCurrency(currency, n);
 }
 
-// Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
-// Execution") are the processed states for payments-out / deferred accounts —
-// without them a confirmed purchase payment was mislabeled as "Borrador".
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
-
-/** True when a listed payment is processed/deposited (backend flag is source of truth). */
-function isProcessed(p) {
-  return p?.processed === true || PAID_STATUSES.has(p?.status || '');
+/**
+ * True for the one rejection that leaves a payment behind: the bank committed to the transfer — so
+ * the payment was created — and then refused it. A rejection before that point creates nothing at
+ * all and is reported in the payment modal in place, so it never reaches a row here.
+ *
+ * The same state drives the retry action below, and its twin on the payment window (ETP-4895).
+ */
+function isFailedTransfer(p) {
+  return paymentDisplayState(p) === 'error';
 }
 
-function PaymentStateTag({ status, processed, isSales, ui }) {
-  // The `processed` flag from the backend is the source of truth; the status
-  // whitelist is a fallback for rows that don't carry it.
-  const isDeposited = processed === true || PAID_STATUSES.has(status);
-  if (isDeposited) {
+/** Shared pill shape; only the tone and copy differ between states. */
+function StatePill({ testid, bg, fg, dot, children }) {
+  return (
+    <span
+      data-testid={testid}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '2px 10px', borderRadius: 6,
+        background: bg, color: fg,
+        fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      {children}
+    </span>
+  );
+}
+
+function PaymentStateTag({ status, processed, isSales, ui, payment }) {
+  const state = paymentDisplayState(payment ?? { status, processed });
+  // A rejected bank transfer wins over everything else: the row is unprocessed, so without this it
+  // would read as an ordinary editable draft and the user could not tell the transfer had failed.
+  if (state === 'error') {
+    return (
+      <StatePill
+        testid="PaymentStateTag__error"
+        bg="var(--status-destructive-bg)"
+        fg="var(--status-destructive-fg)"
+        dot="var(--status-destructive-fg)"
+        data-testid="StatePill__b82d4f">
+        {ui('cpPaymentStateError')}
+      </StatePill>
+    );
+  }
+  // Confirmed but not withdrawn from the account yet — for a PIS transfer, authorized at the bank
+  // with the funds still to land.
+  if (state === 'inProgress') {
+    return (
+      <StatePill
+        testid="PaymentStateTag__inProgress"
+        bg="var(--status-warning-bg)"
+        fg="var(--status-warning-fg)"
+        dot="var(--status-warning-fg)"
+        data-testid="StatePill__b82d4f">
+        {ui('cpPaymentStateInProgress')}
+      </StatePill>
+    );
+  }
+  if (state === 'deposited') {
     return (
       <span
         data-testid="PaymentStateTag__deposited"
@@ -95,6 +142,28 @@ function DeleteDraftButton({ onClick, ui }) {
       <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
         <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * Relaunches a bank transfer the bank rejected. Shown only on a failed payment, which is the only
+ * row that carries the original request needed to retry it.
+ */
+function RetryTransferButton({ onClick, ui }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ui('cpRetryTransfer')}
+      title={ui('cpRetryTransfer')}
+      data-testid="InvoicePaymentHistoryModal__retry-btn"
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: 'none', background: 'none', color: 'hsl(var(--foreground))', cursor: 'pointer', flexShrink: 0 }}
+    >
+      <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
       </svg>
     </button>
   );
@@ -210,6 +279,7 @@ function PaymentHistoryBody({
   isSales,
   handleRowClick,
   handleDeleteClick,
+  handleRetryClick,
   isCreditInstrument,
   currency,
 }) {
@@ -310,13 +380,20 @@ function PaymentHistoryBody({
                   processed={payment.processed}
                   isSales={isSales}
                   ui={ui}
+                  payment={payment}
                   data-testid="PaymentStateTag__b82d4f" />
               </div>
               <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: amountColor, whiteSpace: 'nowrap' }}>
                 {amountSign}<MoneyAmount value={rowValue} currency={currency} tone="neutral" className={amountClassName} currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-history-row" />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                {!isProcessed(payment) && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                {isFailedTransfer(payment) && (
+                  <RetryTransferButton
+                    onClick={(e) => handleRetryClick(e, payment)}
+                    ui={ui}
+                    data-testid="RetryTransferButton__b82d4f" />
+                )}
+                {!isPaymentProcessed(payment) && (
                   <DeleteDraftButton onClick={(e) => handleDeleteClick(e, payment)} ui={ui} data-testid="DeleteDraftButton__b82d4f" />
                 )}
               </div>
@@ -362,7 +439,7 @@ export default function InvoicePaymentHistoryModal({
   // Draft rows re-open the editable modal (the payment/collection windows are
   // read-only); processed rows navigate to that read-only window to view them.
   const handleRowClick = useCallback((p) => {
-    if (!isProcessed(p)) {
+    if (!isPaymentProcessed(p)) {
       setEditingPayment(p);
       setShowPaymentModal(true);
       return;
@@ -398,6 +475,8 @@ export default function InvoicePaymentHistoryModal({
   // The draft being edited (null = "add new"); drives the modal's edit mode.
   const [editingPayment, setEditingPayment] = useState(null);
   // Draft pending delete confirmation (null = no confirm dialog open).
+  const [retryingId, setRetryingId] = useState(null);
+  const [retryError, setRetryError] = useState(null);
   const [deletingPayment, setDeletingPayment] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -430,6 +509,36 @@ export default function InvoicePaymentHistoryModal({
     setLoading(true);
     fetchData();
   }, [fetchData]);
+
+  /**
+   * Relaunches a rejected bank transfer. The backend rebuilds the request from the failed attempt,
+   * drops the errored payment and starts a fresh transfer, so all this has to do is reopen the
+   * bank window with the URL it returns and refresh the list.
+   */
+  const handleRetryClick = useCallback(async (e, p) => {
+    e.stopPropagation();
+    if (retryingId) return;
+    setRetryingId(p.id);
+    setRetryError(null);
+    try {
+      const res = await apiFetch(`/${specName}/header/${invoiceId}/action/retryPisPayment`, {
+        method: 'POST', body: JSON.stringify({ pisPaymentId: p.pisPaymentId || p.id }),
+      });
+      const json = res?.ok ? await res.json().catch(() => null) : null;
+      const url = json?.response?.data?.pisPaymentUrl;
+      if (!res?.ok || !url) {
+        setRetryError(ui('cpRetryTransferFailed'));
+        return;
+      }
+      openCenteredPopup(url, 'saltEdgePisWidget', 'popup=yes,resizable=yes,scrollbars=yes');
+      setLoading(true);
+      fetchData();
+    } catch {
+      setRetryError(ui('cpRetryTransferFailed'));
+    } finally {
+      setRetryingId(null);
+    }
+  }, [apiFetch, specName, invoiceId, retryingId, ui, fetchData]);
 
   // Draft-only deletion (row click already routes drafts to edit, never here for deposited rows).
   const handleDeleteClick = useCallback((e, p) => {
@@ -474,14 +583,44 @@ export default function InvoicePaymentHistoryModal({
 
   const title = isSales ? ui('invoiceReceipts') : ui('invoicePaymentsTitle');
   const partyLabel = isSales ? ui('customer') : ui('vendor');
+  /**
+   * What is left to allocate once the drafts already sitting on this invoice are taken into account.
+   *
+   * A draft does not reduce the invoice's outstanding — it is not applied until it is confirmed — so
+   * an invoice fully covered by one still reads "Saldo pendiente 26,62". Adding a second payment
+   * there would over-cover it the moment both are confirmed. Drafts are reserved instead: the
+   * amount they hold is not offered again.
+   *
+   * `excludeId` is the draft being edited, whose own amount must not count against itself.
+   */
+  const freeToAllocate = useCallback((excludeId) => {
+    const reserved = payments
+      .filter((p) => !isPaymentProcessed(p) && p.id !== excludeId)
+      .reduce((sum, p) => sum + Math.abs(Number(p.amount) || 0), 0);
+    return outstandingAmt - reserved;
+  }, [payments, outstandingAmt]);
+
   // A credit note's remaining balance is consumed FROM other payments, never paid into.
-  const canAddPayment = !isCreditInstrument && outstandingAmt > 0 && isCompleted;
+  const invoiceTakesPayments = !isCreditInstrument && isCompleted && outstandingAmt > 0;
+  const canAddPayment = invoiceTakesPayments && freeToAllocate(null) > 0;
+  // Shown but disabled, rather than hidden, when the only thing in the way is a draft already
+  // covering the invoice: the user needs to know the button exists and what unblocks it. An invoice
+  // that genuinely takes no payment (settled, a credit note, still in draft) keeps hiding it.
+  const addPaymentBlockedByDraft = invoiceTakesPayments && !canAddPayment;
 
   // Table layout: Nº documento · Fecha · Método · Estado · Importe (right) · trash (draft-only).
   // 760px modal − 48px side padding − 60px column gaps (5 gaps) = 652px to distribute.
   // Fixed columns: Fecha 110 + Método 170 + Estado 150 + Importe 110 + trash 28 = 568px.
   // 1fr (Nº documento) = 652 − 568 = 84px — enough for typical doc numbers.
-  const GRID = '1fr 110px 170px 150px 110px 28px';
+  // The actions column has to fit its WIDEST content, not its most common: two 26px icon buttons
+  // plus their 4px gap. At the old 28px — sized for the delete icon alone — a row that also offered
+  // Retry overflowed leftwards and covered the amount's currency symbol (ETP-4895).
+  //
+  // The document number gets a floor rather than plain `1fr`: as the leftover column it absorbed
+  // every widening of the others, and at 760px of modal it had collapsed to ~56px — enough to
+  // ellipsize both the value AND its own "Nº documento" header. A minmax keeps it readable no
+  // matter what the fixed columns do, and the modal is wide enough that the floor never binds.
+  const GRID = 'minmax(120px, 1fr) 110px 170px 150px 110px 56px';
   const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
   return (
@@ -493,7 +632,7 @@ export default function InvoicePaymentHistoryModal({
     >
       <div
         className="bg-card flex flex-col"
-        style={{ width: 760, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px hsl(var(--foreground) / 0.1), 0 24px 48px hsl(var(--foreground) / 0.03), 0 10px 18px hsl(var(--foreground) / 0.03), 0 5px 8px hsl(var(--foreground) / 0.04), 0 2px 4px hsl(var(--foreground) / 0.04)', overflow: 'hidden' }}
+        style={{ width: 900, maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 0 1px hsl(var(--foreground) / 0.1), 0 24px 48px hsl(var(--foreground) / 0.03), 0 10px 18px hsl(var(--foreground) / 0.03), 0 5px 8px hsl(var(--foreground) / 0.04), 0 2px 4px hsl(var(--foreground) / 0.04)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__panel"
       >
@@ -548,6 +687,14 @@ export default function InvoicePaymentHistoryModal({
 
         {/* Payment history table */}
         <div className="flex-1 overflow-y-auto">
+          {retryError && (
+            <div
+              data-testid="InvoicePaymentHistoryModal__retry-error"
+              style={{ margin: '8px 24px 0', padding: '8px 12px', borderRadius: 6, background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)', fontSize: 13, lineHeight: '18px' }}
+            >
+              {retryError}
+            </div>
+          )}
           <PaymentHistoryBody
             loading={loading}
             payments={payments}
@@ -557,6 +704,7 @@ export default function InvoicePaymentHistoryModal({
             isSales={isSales}
             handleRowClick={handleRowClick}
             handleDeleteClick={handleDeleteClick}
+            handleRetryClick={handleRetryClick}
             isCreditInstrument={isCreditInstrument}
             currency={currency}
             data-testid="PaymentHistoryBody__b82d4f" />
@@ -577,13 +725,17 @@ export default function InvoicePaymentHistoryModal({
             >
               {ui('cancel')}
             </button>
-            {canAddPayment && (
+            {(canAddPayment || addPaymentBlockedByDraft) && (
               <button
                 type="button"
+                disabled={addPaymentBlockedByDraft}
+                title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
                 onClick={() => { setEditingPayment(null); setShowPaymentModal(true); }}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
+                className={addPaymentBlockedByDraft
+                  ? 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+                  : 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors'}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: addPaymentBlockedByDraft ? 'not-allowed' : 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 {isSales ? ui('addCobro') : ui('addPago')}
@@ -599,7 +751,7 @@ export default function InvoicePaymentHistoryModal({
           specName={specName}
           invoiceId={invoiceId}
           invoiceData={invoiceData}
-          outstanding={outstandingAmt}
+          outstanding={freeToAllocate(editingPayment?.id || null)}
           apiBaseUrl={apiBaseUrl}
           payment={editingPayment}
           onClose={() => { setShowPaymentModal(false); setEditingPayment(null); }}

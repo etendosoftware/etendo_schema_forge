@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
+import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
 
 /**
  * Per-row kebab menu. Shows every action available on a financial account so
@@ -155,7 +156,12 @@ export function AccountRowMenu({
               </>
             ) : null}
 
-            {!bankConnected && !bankReconnectable ? (
+            {/* ETP-4896: Salt Edge is contracted for Spain only, so a non-ES account is never
+                offered the connect action. Hidden rather than disabled, matching how every other
+                item in this menu handles inapplicability (conditional render — the menu has no
+                disabled-item styling); the edit modal is where the rule gets explained, since
+                that is where the Country field lives. Rule owned by saltEdgeEligibility.js. */}
+            {!bankConnected && !bankReconnectable && canConnectToSaltEdge(account) ? (
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('connect', account)}
                 data-testid={`account-row-menu-connect-${account.id}`}

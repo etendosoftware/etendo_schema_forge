@@ -15,8 +15,10 @@ vi.mock('@/i18n', () => ({
 
 import { AccountRowActions } from '../AccountRowActions.jsx';
 
-const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', bankConnected: true };
-const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', bankConnected: false };
+// countryIso ES on purpose: "Conectar banco" is Spain-only since ETP-4896
+// (see saltEdgeEligibility.js), so a fixture without it would hide that action.
+const CONNECTED = { id: 'acc-1', name: 'BBVA', type: 'B', countryIso: 'ES', bankConnected: true };
+const OFFLINE = { id: 'acc-2', name: 'Sabadell', type: 'B', countryIso: 'ES', bankConnected: false };
 const CASH = { id: 'acc-3', name: 'Caja', type: 'C' };
 
 /** Opens the kebab so its menu items mount (Radix renders the content on demand). */

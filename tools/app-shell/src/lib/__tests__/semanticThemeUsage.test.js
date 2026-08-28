@@ -20,6 +20,7 @@ const COLOR_LITERAL_EXCEPTIONS = new Map([
   ['windows/custom/product/ProductSidebar.jsx', 'warehouse data-series identity'],
   ['windows/custom/shared/documentPdf.js', 'PDF document contract'],
   ['windows/custom/shared/pdfUtils.js', 'PDF document contract'],
+  ['windows/custom/user/UserDebugPanel.jsx', 'developer diagnostic palette'],
   // Landed via an unrelated epic branch after this enforcement test was written —
   // not yet migrated. Tracked as a follow-up, not in scope for the branch that
   // brought this test in.
@@ -39,6 +40,11 @@ const DATA_COLOR_LITERALS = new Map([
   // purple). Proposed: --status-corrective-bg/-fg, pending design confirmation.
   ['windows/custom/sales-invoice/ReversedInvoicesPanel.jsx', new Set([
     'text-purple-700', '#f4f1fd', '#c6b6f7',
+  ])],
+  // Model-tag colors for the fiscal models list (303 blue / 349 purple), no
+  // existing semantic precedent — same rationale as ReversedInvoicesPanel above.
+  ['windows/custom/fiscal-models/fiscal-models.css', new Set([
+    '#f0faff', '#0075ad', '#ade4ff', '#f4f1fd', '#4316ca', '#c6b6f7',
   ])],
   // ETP-4797: activity-timeline dots restored to their pre-ETP-4554 literal colors after the
   // migration mapped both to a token from the wrong lightness range (draft: a much darker amber

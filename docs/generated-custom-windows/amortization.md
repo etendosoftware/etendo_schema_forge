@@ -73,7 +73,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
    - **Confirmar** button is black/primary on the far right; **Guardar** is grey.
 4. Click the pencil icon on an existing line and confirm the Asset, %, and Amount fields become editable inline within the same row. Edit the amount and click outside (blur) — confirm the value saves without pressing a confirm button. Verify the sidebar total updates to reflect the new sum.
 4a. Hover a line row and confirm a `Layers` icon ("Edit dimensions" tooltip) appears in the hover-action strip, ahead of the pencil/trash icons, whenever the entity has at least one visible dimension field — the same icon and tooltip regardless of whether the line already has dimension values set. Click it (or the circular chevron at the start of the row — both open the same panel) — confirm it rotates and a white panel expands below (no section title, no filled-count counter). The panel shows the Organisation field (read-only) and 3 dimension selectors: **Project**, **Cost Center**, and **Contact**. Hover a selector — confirm the background changes to `#F5F7F9`. Select a value in one selector (e.g., Cost Center) and confirm it auto-saves immediately without a Save button. On a processed document, confirm the hover-action strip (Edit dimensions, pencil, trash) is entirely hidden — dimensions are still viewable via the always-visible chevron, read-only.
-4b. Select one or more rows using the row checkboxes — confirm the shared `LinesSelectionBar` appears at the bottom with the count and a red trash button. Click × to clear the selection. In processed/read-only state, confirm the checkboxes are visible but disabled.
+4b. Select one or more rows using the row checkboxes — confirm the shared floating `SelectionToolbar` (ETP-4972; formerly `LinesSelectionBar`) appears as a viewport-fixed pill at the bottom-center of the screen with the count and a red trash button, regardless of scroll position. Click × to clear the selection. In processed/read-only state, confirm the checkboxes are visible but disabled.
 4c. Click "+ Añadir línea" — confirm an inline draft row appears aligned to the table columns (asset buscador, % and amount inputs with column-name placeholders). The "+ Añadir línea" button must remain visible. Type a value, press Enter — confirm the line saves and the draft row stays open. Press Esc — confirm the draft row closes. Click outside with a value entered — confirm it saves and closes.
 4d. Add the first line to a new draft record and confirm the **Confirmar** button becomes enabled immediately (without page reload).
 5. Press **Confirmar** with no lines and confirm the button is disabled.
@@ -112,7 +112,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `processed` header field: `grid: true`, `columnType: "status"` — renders as the "Status" (`Processed` → `Estado`/`Status` via `labelOverrides`) badge column between "Total Amortization" and "Posted", and feeds the status dropdown filter (ETP-4549).
   - Accounting entity excluded. Line dimensions kept: `project`, `costcenter`, `eTADASBpartner` (editable); all other line dimensions discarded.
 - `tools/app-shell/src/lib/statusBadge.js` — `getStatusTone` maps `'y'`/`'yes'` → `'success'`; `statusLabel` MAP includes `Y: 'statusProcessed'` and `N: 'statusDraft'` so `DocumentStatusPill` resolves tones and labels for `processed` field values.
-- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset | Amortization % | Amount | Accounting dimensions columns. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 3 dimension selectors — **Project**, **Cost Center**, **Contact** (`DIMENSION_FIELDS`) — auto-saving on `onChange`. `DimSummary` returns `null` (hides the "+ Add dimensions" affordance) when the document is processed and the line has no dimensions; when dimensions exist it always renders read-only "Label: Value" chips. Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy.
+- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset | Amortization % | Amount | Accounting dimensions columns. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared floating `SelectionToolbar` (ETP-4972) for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 3 dimension selectors — **Project**, **Cost Center**, **Contact** (`DIMENSION_FIELDS`) — auto-saving on `onChange`. `DimSummary` returns `null` (hides the "+ Add dimensions" affordance) when the document is processed and the line has no dimensions; when dimensions exist it always renders read-only "Label: Value" chips. Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy.
 - `artifacts/amortization/custom/AmortizationConfirmModal.jsx` — confirmation modal. Fetches lines to calculate current total independently. Calls `POST /action/Processed` on confirm. On success calls `onClose(true)` which triggers `window.location.reload()`. Blocks confirmation when any line has a zero/negative amount (`amortizationErrorLineAmountInvalid`) or a missing percentage (`amortizationErrorLinePercentageMissing`). Both i18n keys are in `packages/app-shell-core/src/locales/`. Headers include `Accept-Language: getStoredLocale()` so backend process errors (e.g. closed accounting period) are returned in the user's UI language.
 
 ## ETP-4103 changes
@@ -140,7 +140,7 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplificati
 
 - `customLinesComponent: "AmortizationLinesTable"` in `decisions.json` — the standard InlineLinesPanel is replaced by a custom component at `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`.
 - Table shows columns: Asset | Amortization % | Amount | Accounting dimensions. _(Superseded by ETP-4610: the "Accounting dimensions" column was removed — see the ETP-4610 section below.)_
-- **Multi-select checkboxes**: every row has a checkbox; the header has a select-all checkbox (indeterminate when partially selected). In read-only/processed mode checkboxes remain visible but are disabled (matching Sales Order behaviour). Selecting ≥1 row shows the shared `LinesSelectionBar` (same as Sales Order) — a floating bottom bar with the selection count, a red trash/delete button, and an × cancel button. Bulk delete issues concurrent DELETE requests via `Promise.all`.
+- **Multi-select checkboxes**: every row has a checkbox; the header has a select-all checkbox (indeterminate when partially selected). In read-only/processed mode checkboxes remain visible but are disabled (matching Sales Order behaviour). Selecting ≥1 row shows the shared `SelectionToolbar` (same as Sales Order; ETP-4972 — a true viewport-fixed portal, not anchored to a scrolled element) — a floating bar pinned bottom-center of the screen with the selection count, a red icon-only trash/delete button, and an × cancel button. Bulk delete issues concurrent DELETE requests via `Promise.all`.
 - **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded. _(Still current — ETP-4610 added a second, equivalent entry point next to it; see below.)_
 - **Inline editing** (pencil icon): clicking the pencil on a row makes the 3 core fields (Asset, %, Amount) editable inline within the same row. Save happens on blur — no confirm button needed. Same pattern as Sales Order.
 - **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and dimension selectors. Selectors have a hover background (`#F5F7F9`) on pointer-over. _(Superseded by ETP-4429: the selector set was trimmed to Project, Cost Center, and Contact — see the ETP-4429 section below.)_
@@ -285,16 +285,24 @@ shape into a reusable mechanism rather than special-casing it:
   expand-panel consistently.
 - **`project`**: raw AD `displayLogic` = `@ACCT_DIMENSION_DISPLAY@` — now genuinely
   config-gated for the first time in this window's history.
-- **`costcenter` / `eTADASBpartner`**: raw AD `displayLogic` on the amortization-line tab is
-  still **empty** for both (`AD_Field.DisplayLogic` was never wired to
-  `@ACCT_DIMENSION_DISPLAY@` at the Application Dictionary level) — a separate, already-tracked
-  gap explicitly **deferred** per product direction (to be fixed by a different, already-existing
-  ticket that populates the AD_Field and regenerates the contract). Per that direction, this hook
-  is wired to *read* whatever `displayLogic.raw` the AD eventually provides rather than hardcoding
-  a value — it fails open (stays visible) for both today, exactly like
-  `NeoDisplayLogicHelper.evaluateExpression()`'s own fail-open behavior server-side. Once the AD
-  change lands and the contract is regenerated, both fields start being correctly gated with
-  **zero further changes** needed in `AmortizationLinesTable.jsx` or the hook.
+- **`costcenter` / `eTADASBpartner`** (ETP-4914 update — this section previously described both
+  fields as having an empty, deferred `AD_Field.DisplayLogic`; that is now stale): direct DB
+  verification confirms both are now correctly wired at the AD level. `Cost Center`
+  (`C_Costcenter_ID`) on the Amortización Lines tab now carries
+  `AD_Field.DisplayLogic = @ACCT_DIMENSION_DISPLAY@` — the same macro `project` uses — AND a
+  matching `AD_Dimension_Mapping` row now exists for `A_Amortizationline` (dimension `CC`,
+  docbasetype `AMZ`, level `L`, active), which is what makes the macro resolve to real,
+  non-empty JS instead of falling back to fail-open (this table did not have that mapping row
+  before). `Business Partner` (`EM_Etadas_C_Bpartner_ID`) carries `AD_Field.DisplayLogic =
+  @$Element_BP@='Y'`. Both changes were made entirely on the AD/DB side — **zero code changes**
+  were needed in `AmortizationLinesTable.jsx` or `useAccountingDimensionFields`, confirming the
+  original design note above: the hook reads whatever `displayLogic.raw` the AD provides with no
+  hardcoding, so it started respecting both fields automatically once the AD metadata landed.
+  Empirically confirmed: `make regen ONLY=amortization` produces a **zero diff** against the
+  committed artifacts — this dimension-gating fix is resolved live via the
+  `evaluate-display`/`NeoDisplayLogicHelper` server-side evaluator, not baked into
+  `contract.json`, so no regeneration step was required for this specific fix. This closes the
+  gap that was previously tracked here as deferred.
 - **`product`**: no product dimension field exists on the amortization-line tab — matrix's
   "Nunca" is already trivially satisfied.
 
@@ -369,7 +377,7 @@ is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike
 `DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`, `addRow`, hidden-column
 visibility, selection state) into `InlineLinesPanel`. `AmortizationLinesTable` instead owns *all*
 of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
-`{apiBaseUrl}/lines[/…]`, its own multi-select + `LinesSelectionBar` wiring, and — critically — its
+`{apiBaseUrl}/lines[/…]`, its own multi-select + `SelectionToolbar` wiring, and — critically — its
 own inline "add line" draft row (Sales-Order-style: Enter-to-save-and-reopen, Esc-to-cancel,
 click-outside-to-save), a flow `InlineLinesPanel` has no equivalent for at all (that pattern lives
 entirely outside the component, in the generated-window wiring). Rebuilding all of that around

@@ -171,6 +171,69 @@ describe('useFiscalMonitor — tbai profile', () => {
   });
 });
 
+describe('useFiscalMonitor — tbaiValidationResults (resultadoValidación join)', () => {
+  it('exposes the resultadoValidación rows returned by the API', async () => {
+    detectProfile.mockReturnValue('tbai');
+    const VALIDATION_ROWS = [
+      { id: 'tv1', tbaiSyncinvoiceID: 't4', codigo: '5040', descripcion: 'reason 1' },
+      { id: 'tv2', tbaiSyncinvoiceID: 't4', codigo: '1001', descripcion: 'reason 2' },
+    ];
+    // Route only the resultadoValidación URL to the validation rows; everything
+    // else in fetchTbaiData (run in parallel via Promise.all, order not guaranteed)
+    // falls through to COUNT_5_RESP.
+    mockApiFetch.mockImplementation((url) => {
+      if (url.includes('resultadoValidaci')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: VALIDATION_ROWS } }) });
+      }
+      // Config fetches (sii-config/tbai-config/verifactu-config) — detectProfile is
+      // mocked above, so its actual payload doesn't matter, just that it resolves ok.
+      if (url.includes('-config/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(COUNT_5_RESP) });
+    });
+
+    const { result } = renderHook(() => useFiscalMonitor(ORG, API));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.profile).toBe('tbai');
+    expect(result.current.tbaiValidationResults).toEqual(VALIDATION_ROWS);
+  });
+
+  it('resolves to an empty array when resultadoValidación is not installed (404)', async () => {
+    detectProfile.mockReturnValue('tbai');
+    mockApiFetch.mockImplementation((url) => {
+      if (url.includes('resultadoValidaci')) {
+        return Promise.resolve({ ok: false, status: 404 });
+      }
+      if (url.includes('-config/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(COUNT_5_RESP) });
+    });
+
+    const { result } = renderHook(() => useFiscalMonitor(ORG, API));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.tbaiValidationResults).toEqual([]);
+    // A missing resultadoValidación entity must not fail the whole profile load.
+    expect(result.current.profile).toBe('tbai');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('defaults tbaiValidationResults to [] for non-tbai profiles', async () => {
+    detectProfile.mockReturnValue('sii');
+    mockApiFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SII_CFG_RESP) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(TBAI_CFG_RESP) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(VF_CFG_RESP) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(SII_ORG_RESP) })
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(COUNT_10_RESP) });
+
+    const { result } = renderHook(() => useFiscalMonitor(ORG, API));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.tbaiValidationResults).toEqual([]);
+  });
+});
+
 describe('useFiscalMonitor — error handling', () => {
   it('treats config fetch failure as unconfigured (errors are silenced per design)', async () => {
     // fetchConfigRecord catches all errors and returns null — missing modules must not

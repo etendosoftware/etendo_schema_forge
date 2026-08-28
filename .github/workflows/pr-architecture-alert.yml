@@ -2,7 +2,7 @@ name: Copilot PR Review
 
 on:
   pull_request:
-    branches: [develop, epic/ETP-3504]
+    branches: [develop]
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
@@ -15,11 +15,11 @@ jobs:
   architecture-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://npm.pkg.github.com

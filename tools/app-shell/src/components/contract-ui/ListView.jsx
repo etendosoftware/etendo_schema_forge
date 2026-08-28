@@ -6,7 +6,7 @@ import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -14,6 +14,8 @@ import ReportDrawer from './ReportDrawer.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { ListSortPopover } from './ListSortPopover.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -192,23 +194,6 @@ function ListTableRegion({
         </div>
       )}
     </ScrollPane>
-  );
-}
-
-function SortToggleButton({ SortIconComponent, isDefaultSort, iconButtonHover, onToggle }) {
-  const SortEl = SortIconComponent || ArrowUpDown;
-  return (
-    <button
-      onClick={onToggle}
-      className={[
-        'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors',
-        isDefaultSort
-          ? `border-border text-muted-foreground ${iconButtonHover}`
-          : 'border-primary/40 bg-primary/10 text-primary',
-      ].join(' ')}
-    >
-      <SortEl className="h-4 w-4" data-testid="SortEl__620cbc" />
-    </button>
   );
 }
 
@@ -760,29 +745,36 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
-  // ETP-4656 — grid multi-select "Delete selected". Outcome handling per the
-  // standardized delete UX:
+  // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
+  // (succeeded, failed) rows, per the standardized delete UX:
   //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
   //   - partial failure → refetch (succeeded rows disappear) + keep only the
   //     failed rows selected, both in our own state and in DataTable's
   //     internal checkbox Set (via deselectTrigger/deselectRowIds).
   //   - all failed      → no refetch, selection untouched.
+  // Extracted so it can be reused both by the generic "Delete selected" button
+  // below (via useBulkRowDelete's onSuccess) AND by a custom
+  // selectionBarRightActions consumer that runs its own delete loop but still
+  // wants the same reselect-only-the-failed-rows behavior (see
+  // `reselectFailed` passed into selectionBarRightActions further down).
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
+    if (succeeded.length > 0) hook.refresh();
+    if (failed.length === 0) {
+      clearSelection();
+    } else {
+      setSelectedRows(failed);
+      if (succeeded.length > 0) {
+        setDeselectRowIds(succeeded.map((r) => r.id));
+        setDeselectTrigger((c) => c + 1);
+      }
+    }
+  }, [hook.refresh, clearSelection]);
+
   const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
     apiBaseUrl,
     entity: entity || 'header',
     token,
-    onSuccess: (succeeded, failed) => {
-      if (succeeded.length > 0) hook.refresh();
-      if (failed.length === 0) {
-        clearSelection();
-      } else {
-        setSelectedRows(failed);
-        if (succeeded.length > 0) {
-          setDeselectRowIds(succeeded.map((r) => r.id));
-          setDeselectTrigger((c) => c + 1);
-        }
-      }
-    },
+    onSuccess: applyBulkDeleteOutcome,
   });
 
   // Register this list view with the current-window context so the Copilot
@@ -796,7 +788,6 @@ export function ListView({
     isFormEditing: false,
   }), [windowName, label, selectedRows]);
   useRegisterWindowContext(windowContextInfo);
-  const [showSortPopover, setShowSortPopover] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(`viewMode:${entity}`) || 'list'
@@ -807,21 +798,8 @@ export function ListView({
     localStorage.setItem(`viewMode:${entity}`, mode);
   };
 
-  const sortBtnRef = useRef(null);
 
   const isDefaultSort = isDefaultSortActive(hook, initialSortColumn, initialSortDirection);
-
-  // Close sort popover on outside click
-  useEffect(() => {
-    if (!showSortPopover) return;
-    const handleClick = (e) => {
-      if (sortBtnRef.current && !sortBtnRef.current.contains(e.target)) {
-        setShowSortPopover(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showSortPopover]);
 
   const handleSortSelect = useCallback((colKey) => {
     if (hook.sortColumn === colKey) {
@@ -831,10 +809,14 @@ export function ListView({
       hook.setSortColumn(colKey);
       hook.setSortDirection('asc');
     }
-    setShowSortPopover(false);
   }, [hook.sortColumn, hook.setSortColumn, hook.setSortDirection]);
 
-  // Header click: none → asc → desc → clear
+  // Header click: none → asc → desc → back to this window's own default.
+  // The reset arm used to hardcode `creationDate desc`, which is only the default for a
+  // window that declares no `listSortBy`. For one that does, the third click silently
+  // switched to a DIFFERENT order than the one the list opened in — and any slot that keys
+  // off "is the sort still at rest" (AccountsHeaderTable's two-key resting order) could
+  // never return to it.
   const handleColumnSort = useCallback((colKey) => {
     if (hook.sortColumn !== colKey) {
       hook.setSortColumn(colKey);
@@ -842,16 +824,16 @@ export function ListView({
     } else if (hook.sortDirection === 'asc') {
       hook.setSortDirection('desc');
     } else {
-      hook.setSortColumn('creationDate');
-      hook.setSortDirection('desc');
+      hook.setSortColumn(initialSortColumn);
+      hook.setSortDirection(initialSortDirection);
     }
-  }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection]);
+  }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection,
+    initialSortColumn, initialSortDirection]);
 
   const handleClearSort = useCallback(() => {
-    hook.setSortColumn('creationDate');
-    hook.setSortDirection('desc');
-    setShowSortPopover(false);
-  }, [hook.setSortColumn, hook.setSortDirection]);
+    hook.setSortColumn(initialSortColumn);
+    hook.setSortDirection(initialSortDirection);
+  }, [hook.setSortColumn, hook.setSortDirection, initialSortColumn, initialSortDirection]);
 
   const handleReachBottom = useCallback(() => {
     if (hook.hasMore && !hook.loadingMore) hook.loadMore();
@@ -890,6 +872,15 @@ export function ListView({
     sortColumn: hook.sortColumn,
     sortDirection: hook.sortDirection,
     onSort: handleColumnSort,
+    // The other two thirds of the sort API, forwarded so a window that REPLACES the idle bar
+    // (financial-account, via `hideListBar`) can still render `ListSortPopover` in its own
+    // toolbar instead of losing the control. `onSort` alone is not enough: the popover needs
+    // pick-a-column (which must not silently clear the sort the way the header's third click
+    // does) and back-to-default, and it needs to know whether it is AT the default to decide
+    // whether to offer that at all.
+    onSortSelect: handleSortSelect,
+    onClearSort: handleClearSort,
+    isDefaultSort,
     onColumnsReady: setTableColumns,
     api,
     token,
@@ -920,10 +911,17 @@ export function ListView({
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
-          {/* Selection bar or filter bar */}
-          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
-              ternary whose alternate is a plain `&&`: nesting one ternary inside
-              another here is what Sonar S3358 flags.
+          {/* Selection toolbar AND filter/idle bar — rendered independently, not as
+              either/or branches of one ternary (ETP-4972 Finding 4). Before ETP-4972
+              the selection bar occupied this same DOM slot as the idle bar (an inline
+              "replace the toolbar" design), so a ternary made sense. Now that
+              SelectionToolbar is a viewport-fixed portal to document.body, the two
+              no longer compete for the same space — and per ETP-4972's own "Floating
+              Toolbar vs Gmail/Drive-style replace" decision, the floating pill is
+              explicitly ADDITIVE: the idle bar (Filtros, ViewToggle, Nuevo, etc.) must
+              stay visible while rows are selected, not disappear behind the pill.
+              Rendering both as independent `&&` expressions below achieves that with
+              no nested-ternary risk (Sonar S3358 doesn't apply to two siblings).
 
               ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
               selection bar. The flag exists because a custom headerTable draws the
@@ -937,31 +935,42 @@ export function ListView({
               unreachable unless the grid is selectable, so a custom headerTable that
               wants no selection at all simply keeps `selectable={false}` on its own
               DataTable and never renders rows that can be picked. */}
-          {selectedRows.length > 0 ? (
-            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
+          {selectedRows.length > 0 && (
+            <SelectionToolbar
+              visible={selectedRows.length > 0}
+              onClose={clearSelection}
+              closeTitle={ui('close')}
+              data-testid="SelectionToolbar__620cbc">
               <div className="flex items-center gap-3 h-10">
-                <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
+                <span role="status" className="text-sm font-medium" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
+                {/* ETP-4972 — ghost variant, icon-only (title tooltip, no visible
+                    label, no border/box): Figma's floating pill keeps only the
+                    destructive "Eliminar" action bordered; secondary actions like
+                    this one sit directly on the pill background and only highlight
+                    on hover. Nothing is hidden behind a menu — just narrower and
+                    borderless. */}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
-                    size={selectionBarSize}
-                    className="gap-1.5"
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui)}
+                    variant="ghost"
+                    size="icon"
+                    title={ui('print')}
+                    aria-label={ui('print')}
+                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
-                    {ui('print')} ({selectedRows.length})
                   </Button>
                 )}
                 {onCloneRow && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('cloneOrderBtn')}
+                    aria-label={ui('cloneOrderBtn')}
                     onClick={() => onCloneRow(selectedRows)}
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
-                    {ui('cloneOrderBtn')} ({selectedRows.length})
                   </Button>
                 )}
                 {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
@@ -974,19 +983,24 @@ export function ListView({
                     ETP-4871 — additionally disabled (with an explanatory tooltip) once the
                     selection includes a row the host's `isRowDeletable` rejects; absent, this
                     never differs from the pre-existing behavior. */}
+                {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
+                    zoomed straight into the applied Figma instance's canvas
+                    render (not just the Dev Mode property panel) and confirmed
+                    no stroke/box around the trash icon at all — ghost, same as
+                    every other secondary action, distinguished only by its red
+                    icon color. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
                     disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
                     title={blockedDeleteCount > 0
                       ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : undefined}
+                      : ui('delete')}
+                    aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
-                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
@@ -996,10 +1010,19 @@ export function ListView({
                   token,
                   apiBaseUrl,
                   onDataMutated: hook.refresh,
+                  // ETP-4656 — additive only: gives a custom
+                  // selectionBarRightActions consumer running its OWN delete
+                  // loop (e.g. Contacts) the same "reselect only the failed
+                  // rows" outcome handling the generic "Delete selected"
+                  // button gets for free via useBulkRowDelete's onSuccess.
+                  // No existing consumer reads this field, so this changes
+                  // nothing for any other window.
+                  reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
-            </div>
-          ) : !listBarHidden && (
+            </SelectionToolbar>
+          )}
+          {!listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
@@ -1074,53 +1097,16 @@ export function ListView({
                     <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
                   </button>
                 )}
-                <div className="relative" ref={sortBtnRef}>
-                  <SortToggleButton
-                    SortIconComponent={SortIconComponent}
-                    isDefaultSort={isDefaultSort}
-                    iconButtonHover={iconButtonHover}
-                    onToggle={() => setShowSortPopover(v => !v)}
-                    data-testid="SortToggleButton__620cbc" />
-                  {showSortPopover && tableColumns.length > 0 && (
-                    <div
-                      className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground tracking-wide">
-                        {ui('sortBy')}
-                      </div>
-                      {tableColumns.filter(col => col.sortable !== false).map(col => {
-                        const colLabel = t(col.column) ?? col.label ?? col.key;
-                        const isActive = hook.sortColumn === col.key;
-                        return (
-                          <button
-                            key={col.key}
-                            onClick={() => handleSortSelect(col.key)}
-                            className={[
-                              'w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors',
-                              isActive ? 'bg-primary/5 text-foreground font-medium' : 'text-foreground hover:bg-muted/50',
-                            ].join(' ')}
-                          >
-                            <span className="w-4 text-center text-xs">
-                              {isActive ? (hook.sortDirection === 'asc' ? '\u25B2' : '\u25BC') : ''}
-                            </span>
-                            <span className="flex-1 text-left">{colLabel}</span>
-                          </button>
-                        );
-                      })}
-                      {!isDefaultSort && (
-                        <>
-                          <div className="border-t border-border/50 my-1" />
-                          <button
-                            onClick={handleClearSort}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                          >
-                            <span className="w-4" />
-                            <span className="flex-1 text-left">{ui('clearSort')}</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <ListSortPopover
+                  columns={tableColumns}
+                  sortColumn={hook.sortColumn}
+                  sortDirection={hook.sortDirection}
+                  onSelect={handleSortSelect}
+                  onClear={handleClearSort}
+                  isDefaultSort={isDefaultSort}
+                  SortIconComponent={SortIconComponent}
+                  iconButtonHover={iconButtonHover}
+                  data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
                   iconButtonHover={iconButtonHover}

@@ -141,8 +141,12 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
     });
 
+    // The pair moved into its own ConversionFields component when the modal was brought under its
+    // cognitive-complexity limit (ETP-4895); the gate is now the `visible` prop it returns null on.
     it('renders the conversion fields only in the foreign case', () => {
-      assert.match(src, /\{isForeign && \(/);
+      assert.match(src, /<ConversionFields\s+visible=\{isForeign\}/);
+      assert.match(src, /function ConversionFields\(\{/);
+      assert.match(src, /if \(!visible\) return null;/);
       assert.match(src, /data-testid="cp-conversion-fields"/);
       assert.match(src, /data-testid="cp-conversion-rate-input"/);
       assert.match(src, /data-testid="cp-amount-in-account-input"/);
@@ -313,10 +317,12 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
     });
 
-    it('passes the ref value as the 3rd argument at both pickDefaultAccountId call sites', () => {
+    // The seeding call site reads the ref once and hands the value to seedMethodAndAccount
+    // (ETP-4895); the method-change one still reads it inline, where the ref is in scope.
+    it('passes the BP-preferred account as the 3rd argument at both pickDefaultAccountId call sites', () => {
       assert.match(
         src,
-        /setAccountId\(pickDefaultAccountId\(accList, defaultMethodId, bpPreferredAccountIdRef\.current\)\);/,
+        /setAccountId\(pickDefaultAccountId\(accList, defaultMethodId, bpPreferredAccountId\)\);/,
       );
       assert.match(
         src,
@@ -351,19 +357,28 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     });
   });
 
+  // The seeding moved to the module-level seedMethodAndAccount when the component was brought
+  // under its cognitive-complexity limit (ETP-4895). What these guard did not change: the defaults
+  // still come from the raw accJson, and the BP-preferred account is still resolved before the
+  // account is picked — it is now passed in rather than read from the ref inside the branch.
   describe('fetch effect resolves the default method/account from the invoice payload (ETP-4331)', () => {
     it('computes defaultMethodId via pickDefaultMethodId using the raw accJson', () => {
       assert.match(src, /const defaultMethodId = pickDefaultMethodId\(accJson, accList, methList\);/);
       assert.match(src, /setMethodId\(defaultMethodId\);/);
-      assert.match(src, /setAccountId\(pickDefaultAccountId\(accList, defaultMethodId, bpPreferredAccountIdRef\.current\)\);/);
+      assert.match(src, /setAccountId\(pickDefaultAccountId\(accList, defaultMethodId, bpPreferredAccountId\)\);/);
     });
 
-    it('sets bpPreferredAccountIdRef.current before computing the default account', () => {
+    it('sets bpPreferredAccountIdRef.current before handing it to the seeding', () => {
       const refAssignIdx = src.indexOf("bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';");
-      const accountPickIdx = src.indexOf('setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));');
+      const seedCallIdx = src.indexOf('bpPreferredAccountId: bpPreferredAccountIdRef.current,');
       assert.ok(refAssignIdx > -1, 'ref assignment must exist');
-      assert.ok(accountPickIdx > -1, 'account pick call must exist');
-      assert.ok(refAssignIdx < accountPickIdx, 'ref must be set before it is read by pickDefaultAccountId');
+      assert.ok(seedCallIdx > -1, 'the seeding must be handed the ref');
+      assert.ok(refAssignIdx < seedCallIdx, 'ref must be set before it is read by pickDefaultAccountId');
+    });
+
+    it('seeds method and account outside the effect, from a single entry point', () => {
+      assert.match(src, /function seedMethodAndAccount\(\{/);
+      assert.match(src, /seedMethodAndAccount\(\{/);
     });
   });
 
@@ -399,7 +414,13 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
         src,
         /const pisReady = !pisEligible \|\| pisFieldsComplete\(pisTemplate, \{\s*iban: pisIban,[\s\S]*?\}\);/,
       );
-      assert.match(src, /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling \|\| !pisReady;/);
+      // ETP-4891 wrapped the expression and appended `|| psd2Blocked` (a transfer aimed at an
+      // account whose PSD2 connection is inactive), so the whole chain is matched across lines
+      // rather than pinned to one.
+      assert.match(
+        src,
+        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
+      );
     });
 
     it('buildPisPaymentFields normalizes the creditor IBAN with normalizeIban before sending it', () => {

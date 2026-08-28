@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Home, MessageCircle, HelpCircle, ChevronRight, Search, X, ExternalLink } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useCopilot } from '@/components/CopilotContext';
 import { useSupportChat } from './SupportChatContext.jsx';
 import { ConversationView } from './ConversationView.jsx';
 import { TicketList } from './TicketList.jsx';
@@ -311,6 +312,9 @@ export function SupportChatWidget() {
     messages, input, isSending, isLoadingConversations,
     isLoadingMessages, pendingFiles, unreadCount,
   } = state;
+  // Copilot's own panel docks to the same bottom-right corner — shift ours clear of it
+  // while both are open instead of the two floating windows stacking on top of each other.
+  const { isOpen: copilotIsOpen } = useCopilot();
 
   const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -329,6 +333,10 @@ export function SupportChatWidget() {
   }, [isOpen, activeConversationId]);
 
   const handleStartChat = () => {
+    // Deliberately always a fresh conversation (own id, own ticket) — the user may have
+    // several open conversations at once, each pinned to a different Jira ticket. Continuity
+    // is handled by navigating to an EXISTING conversation from Mensajes (handleSelectTicket
+    // below), not by guessing which one to resume from here.
     actions.selectConversation('new');
     actions.setTab('mensajes');
   };
@@ -429,21 +437,37 @@ export function SupportChatWidget() {
   }
 
   if (!isOpen) {
+    // Once dismissed, stays hidden for this page load only (in-memory state — see
+    // SupportChatContext) since it can sit on top of another window's own buttons. Reloading
+    // the page or reopening the chat brings it back; "Ayuda y soporte" in the left nav is a
+    // second, always-reachable way into this same chat, so hiding it here strands no one.
+    if (state.fabDismissed) return null;
     return (
-      <button className="sc-fab" onClick={actions.open} aria-label={ui('supportOpenAria')}>
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        {unreadCount > 0 && (
-          <span className="sc-fab-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-        )}
-      </button>
+      <div className="sc-fab-wrap">
+        <button className="sc-fab" onClick={actions.open} aria-label={ui('supportOpenAria')}>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          {unreadCount > 0 && (
+            <span className="sc-fab-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className="sc-fab-dismiss"
+          onClick={actions.dismissFab}
+          aria-label={ui('supportDismissFab')}
+          title={ui('supportDismissFab')}
+        >
+          <X size={12} data-testid="X__4d85ab" />
+        </button>
+      </div>
     );
   }
 
   return (
     <div className="sc-overlay" aria-modal="true" role="dialog">
-      <div className={`sc-panel${isExpanded ? ' expanded' : ''}`}>
+      <div className={`sc-panel${isExpanded ? ' expanded' : ''}${copilotIsOpen ? ' sc-panel--copilot-open' : ''}`}>
         <div className="sc-scroll">
           {panelContent}
         </div>

@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
-  "generatedAt": "2026-07-31T14:37:14.155Z",
-  "updatedAt": "2026-08-11T14:14:14.274Z",
-  "contractChecksum": "0ec1af3e8cd9a13c",
+  "version": "0.31.0",
+  "generatedAt": "2026-08-21T16:17:27.627Z",
+  "updatedAt": "2026-08-21T16:25:24.001Z",
+  "contractChecksum": "c7e13c08b8720494",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -16,7 +16,10 @@
         "delete": true,
         "listUrl": "/sws/neo/accounts/account",
         "detailUrl": "/sws/neo/accounts/account/{id}",
-        "supportedFilters": []
+        "supportedFilters": [
+          "type",
+          "iBAN"
+        ]
       },
       "transaction": {
         "get": true,
@@ -76,13 +79,17 @@
       "clearedItems": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/clearedItems",
         "detailUrl": "/sws/neo/accounts/clearedItems/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -101,6 +108,14 @@
         "reference": "Glitem",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/account/selectors/aprmGlitemDiff"
+      },
+      {
+        "entity": "account",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/account/selectors/country"
       },
       {
         "entity": "account",
@@ -133,6 +148,14 @@
         "reference": "BPartner",
         "inputMode": "search",
         "url": "/sws/neo/accounts/transaction/selectors/businessPartner"
+      },
+      {
+        "entity": "transaction",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/product"
       },
       {
         "entity": "transaction",
@@ -189,6 +212,14 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/accounts/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "transaction",
+        "field": "eTGOFinaccTransDest",
+        "column": "EM_ETGO_Finacc_Trans_Dest",
+        "reference": "Finacc_Transaction",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/transaction/selectors/eTGOFinaccTransDest"
       },
       {
         "entity": "accountingConfiguration",
@@ -1041,14 +1072,6 @@
     },
     "window": {
       "category": "finance"
-    },
-    "labelOverrides": {
-      "en_US": {
-        "pendingCount": "Pending"
-      },
-      "es_ES": {
-        "pendingCount": "Por conciliar"
-      }
     }
   },
   "formState": {
@@ -1083,6 +1106,9 @@
           "aprmGlitemDiff": {},
           "iBAN": {},
           "swiftCode": {},
+          "country": {
+            "required": true
+          },
           "writeofflimit": {},
           "aPRMImportBankFile": {},
           "aPRMMatchTransactions": {},
@@ -1125,7 +1151,7 @@
           "eTGODateTolerance": {
             "defaultValue": "3"
           },
-          "pendingCount": {
+          "eTGOPendingCount": {
             "readOnly": true
           }
         }
@@ -1192,6 +1218,10 @@
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
           },
+          "product": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
           "project": {
             "readOnly": true,
             "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
@@ -1233,6 +1263,9 @@
           "etprRemoveTransaction": {
             "required": true,
             "defaultValue": "N"
+          },
+          "eTGOFinaccTransDest": {
+            "readOnly": true
           }
         }
       },
@@ -1421,7 +1454,8 @@
       "headerFields": [
         "name",
         "currency",
-        "type"
+        "type",
+        "country"
       ],
       "lineFields": [
         "etprReactivateTransaction",
@@ -1472,7 +1506,8 @@
         "fields": [
           "name",
           "currency",
-          "type"
+          "type",
+          "country"
         ]
       },
       {
@@ -1503,5 +1538,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b6736eb7c7cfd618"
+  "checksum": "b324f219805b85a4"
 }

@@ -564,6 +564,25 @@ describe('DetailView helper functions', () => {
   });
 
   describe('isDeleteButtonVisible', () => {
+    it('hides Delete for a lifecycle-locked record even with a deleteAction (ETP-4895)', () => {
+      // The deleteAction bypass exists because such a delete reactivates server-side first — which
+      // is precisely what must not happen to a payment whose bank transfer is live. So the flag has
+      // to be checked BEFORE that bypass, not inside the status gate it skips.
+      expect(isDeleteButtonVisible({
+        isNew: false, recordId: '123', data: { status: 'PPM', pisLocked: true },
+        statusField: 'status', hideDeleteWhenComplete: true, isProcessed: true,
+        deleteAction: { field: 'eTPRRemovePayment' },
+      })).toBeFalsy();
+    });
+
+    it('keeps the deleteAction bypass for a record that is not locked', () => {
+      expect(isDeleteButtonVisible({
+        isNew: false, recordId: '123', data: { status: 'PPM', pisLocked: false },
+        statusField: 'status', hideDeleteWhenComplete: true, isProcessed: true,
+        deleteAction: { field: 'eTPRRemovePayment' },
+      })).toBeTruthy();
+    });
+
     // Signature: ({ isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, deleteAction, hideDeleteButton })
     it('false for new records', () => {
       expect(isDeleteButtonVisible({ isNew: true, recordId: 'new', data: {}, statusField: null, hideDeleteWhenComplete: false, isProcessed: false })).toBeFalsy();
@@ -817,6 +836,72 @@ describe('DetailView helper functions', () => {
       const { container } = render(<>{result}</>);
       expect(screen.getByText('Show')).toBeInTheDocument();
       expect(screen.queryByText('Hide')).toBeNull();
+    });
+
+    // ETP-4999 — the function-form callback now receives a third `onRefresh`
+    // field (alongside `data`/`children`), mirroring `topbarExtra`'s own
+    // onRefresh, so an `extraActions` entry (e.g. resend-invitation) can
+    // refresh the record after a side-effecting action the same way a
+    // `topbarExtra` component already can.
+    it('passes onRefresh as a third field to the function-form callback', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn() };
+      const actionsFn = vi.fn(() => [{ key: 'x', label: 'X', onClick: vi.fn() }]);
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      expect(actionsFn).toHaveBeenCalledWith({
+        data,
+        children: hook.children,
+        onRefresh: expect.any(Function),
+      });
+    });
+
+    it('onRefresh invokes hook.fetchById with data?.id', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.fetchById).toHaveBeenCalledWith('rec-1');
+    });
+
+    it('onRefresh does not throw when hook.fetchById is not provided', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [] };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      expect(() => capturedOnRefresh()).not.toThrow();
+    });
+
+    // ETP-4999 — `renderExtraActionButtons` now also forwards `action.disabled`
+    // onto the rendered `<Button>`, needed for the resend-invitation action to
+    // disable itself while a request is in flight.
+    it('renders a disabled Button when action.disabled is true', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn(), disabled: true }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).toBeDisabled();
+    });
+
+    it('does not disable the Button when action.disabled is omitted', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn() }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).not.toBeDisabled();
+    });
+
+    it('does not disable the Button when action.disabled is false', () => {
+      const actions = [{ key: 'a', label: 'A', onClick: vi.fn(), disabled: false }];
+      const result = renderExtraActionButtons(actions, {}, { children: [] }, '');
+      render(<>{result}</>);
+      expect(screen.getByText('A')).not.toBeDisabled();
     });
   });
 

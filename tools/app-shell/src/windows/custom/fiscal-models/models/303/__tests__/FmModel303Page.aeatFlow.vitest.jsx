@@ -8,7 +8,11 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
+const navigateMock = vi.fn();
+
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -24,6 +28,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -33,7 +38,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
   KpiWidget: () => null,
 }));
 vi.mock('../../../FmTabContent.jsx', () => ({
-  SourcesTab: () => null, IncidentsTab: () => null, FilesTab: () => null, HistoryTab: () => null,
+  SourcesTab: () => null, IncidentsTab: () => null, HistoryTab: () => null,
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // Explicit per-icon mock (matching FmModel303Page.vitest.jsx's established pattern) rather
@@ -120,6 +125,8 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
     fireEvent.click(screen.getByTestId('aeat-flow-succeed'));
 
-    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack');
+    // AEAT telematic success never sends a submissionMethod from the frontend —
+    // it is set server-side by Fiscal303SubmissionSupport.persistSuccessfulSubmission.
+    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack', undefined);
   });
 });

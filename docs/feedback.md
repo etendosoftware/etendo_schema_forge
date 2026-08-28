@@ -791,6 +791,46 @@ separate piece of work.
 
 ---
 
+## `onPageHelp` — Dead Prop Plumbing on the Generic TopBar Kebab (app-wide)
+
+**Component:** `components/layout/TopBar/TopBar.jsx`, `layout/AppLayout.jsx`, `components/layout/PageMetaContext.jsx`
+
+**Symptom:** Every window whose kebab menu goes through the generic `TopBar` (i.e. any window that
+calls `useSetPageMeta`, including AD-generated windows like Sales/Purchase Invoice via
+`DetailView.jsx`/`ListView.jsx`) shows a "Ayuda de esta página" (page help) item in its 3-dot menu.
+Clicking it does nothing.
+
+**Root cause:** `TopBar` accepts an `onPageHelp` prop with a default value of `() => {}` (a no-op).
+`AppLayout.jsx` forwards `onPageHelp={meta?.onPageHelp}` from `PageMetaContext`, but **no window in
+the codebase ever sets `meta.onPageHelp`** — `DetailView.jsx`/`ListView.jsx` only populate
+`onAddToFavorites`/`isFavorite` via `useSetPageMeta`, never `onPageHelp`. Because a React default
+parameter applies whenever the prop resolves to `undefined` (whether omitted or explicitly passed as
+`undefined`), `TopBar`'s `hasMenu` check (`onAddToFavorites || onPageHelp || menuAction`) always
+sees a truthy no-op function for `onPageHelp`, so the "Ayuda de esta página" item renders
+unconditionally but is permanently disconnected from any real help surface.
+
+**What functioning "help" actually looks like in this app:** `SideMenu.jsx`'s own help button
+(`onHelpClick`) already opens the real help surface correctly — `useSupportChat()`'s
+`actions.open()` + `actions.setTab('ayuda')`, landing on `SupportChatWidget`'s "Ayuda" tab (real,
+live-fetched Etendo Go docs via `components/support/helpDocs.js`). That is the one genuinely working
+help mechanism in the app; `onPageHelp` was evidently meant to wire into the same thing per-page but
+never got connected.
+
+**Fix (this pass):** Not fixed at the generic `TopBar`/`DetailView` level (out of scope for a
+window-scoped task — would touch every AD-generated window). `fiscal-models`' own kebab menus
+(`FmCommon.jsx`'s `MoreOptionsMenu`) were wired directly to the real mechanism
+(`useSupportChat().actions.open()` + `setTab('ayuda')`) instead of replicating the dead
+`onPageHelp` prop. Sales/Purchase Invoice and every other window still show the same dead item today.
+
+**Lesson:** before wiring a new window's kebab menu to "the same items window X already has," verify
+each item is actually functional in window X, not just visually present — a prop can render a
+correctly-styled, correctly-labelled menu entry while being permanently disconnected from any
+handler. Grep for where the prop is actually *set* (not just where it's read/defaulted) before
+treating it as a working pattern to copy. A real fix for `onPageHelp` app-wide belongs in
+`schema_forge_core`/Schema Forge Developer territory (`DetailView.jsx`/`ListView.jsx`/`TopBar.jsx`
+are shared generic components, not window-specific config) — file as a follow-up task rather than
+scope-creeping it into a single window's fix.
+
 ## ETP-4773: Missing "Required" Error on `inputMode: dependent` Fields
 
 **Component:** `EntityForm.jsx` — `DependentFkField`, `renderDependentField`
@@ -948,3 +988,215 @@ into ETP-4841.
 **Lesson:** a passing test suite proves nothing about files the runner never collects. When
 adding tests under a directory that is not the runner's root, confirm they actually execute
 (`--reporter=verbose` and look for the filename) before treating them as coverage.
+
+---
+
+## [2026-08-14] ETP-4795 — First cash close read its cleared movements off a collection that is never populated
+
+**Component:** `CashCloseSupport.java` / `CashCloseHandler.java` (com.etendoerp.go) — cash close
+confirm flow
+
+**Symptom:** Confirming the FIRST close of a cash account was rejected with
+`There is a difference of <full counted amount> and this account has no accounting concept
+configured for it.` — even though the panel showed *La caja cuadra* and *Diferencia 0,00 €*.
+Pressing "Confirmar cierre de caja" a second time succeeded. On an account that DOES have a GL
+Item Difference configured the first attempt did not error at all: it silently posted an
+adjustment transaction for the entire counted amount and completed the reconciliation.
+
+**Root cause:** `clearedNet()` summed `draft.getFINFinaccTransactionList()`. When the draft was
+created earlier in the same request, it comes from `OBProvider.getInstance().get(...)` (inside
+`AdvPaymentMngtDao.getNewReconciliation`), so that one-to-many list is a plain in-memory
+collection that is **never** loaded from the database — while linking a movement sets the FK on the
+owning side (`trx.setReconciliation(draft)`), which never appears in it. The cleared net therefore
+read as 0 and the whole declared balance looked like a discrepancy. The second attempt worked
+because `findDraft()` then returned a draft loaded from the DB, whose collection is a real lazy
+proxy. `rewriteDatesAndSettleInvoices()` iterated the same list, so on a first close it also
+skipped pushing post-dated movements forward and settling the invoices of linked payments.
+
+**Why the test suites missed it:** the unit tests stubbed `getFINFinaccTransactionList()` directly,
+so they asserted the buggy read as if it were the contract; and QA's manual pass exercised
+"Guardar borrador" before confirming, which is exactly the path that reloads the draft from the DB.
+
+**Fix:** new `CashCloseHandler.linkedTransactions(rec)` seam that queries
+`FIN_FinaccTransaction where reconciliation.id = :id`. `clearedNet`,
+`rewriteDatesAndSettleInvoices` and `syncMarkedMovements` all read through it, so a freshly created
+and a reloaded draft behave identically. Covered by
+`CashCloseHandlerTest#testClearedNetIsReadFromTheLinkedTransactionsNotTheEntityList` (plus a
+counter-test that a genuine difference without a concept is still rejected) and end-to-end by
+`e2e/tests/flows/financial-account-cash-close.integration.spec.js`, which closes a freshly onboarded
+drawer and would have caught this on its first run.
+
+**Lesson:** never read an inverse (one-to-many) collection to make a decision about entities linked
+during the SAME request. Hibernate only populates it when the parent came from the database; an
+entity built by `OBProvider` carries an empty list that stays empty no matter how many owning-side
+FKs point at it. Query the owning side instead. The tell-tale symptom is "it works the second
+time".
+
+**Companion fix (same ticket):** the handler's rejections are hardcoded English literals with no
+`AD_Message` behind them, so they reached the toast untranslated. They are now mapped through
+`translateBackendError` (`backendError.cashClose*` keys in both locales). The difference amount is
+deliberately dropped rather than interpolated — the backend sends a raw
+`BigDecimal.toPlainString()`, and rendering that as money would break the repo's currency-format
+policy; the formatted figure is already on screen in the close summary.
+
+**Second companion fix (same ticket):** the Reconciliations tab did not refresh after a confirmed
+close — the user had to reload the page to see it, and its count badge stayed stale. That list is
+fetched by `windows/custom/financial-account/index.jsx` (lifted out of the tab so the badge can show
+a count without the tab being mounted), so `onCloseSuccess` has to call its `reload` alongside
+`reloadAccount`/`reloadMovements`. Guarded by
+`index.vitest.jsx` → "reloads the reconciliations list after a confirmed cash close", and asserted
+before any navigation in the E2E spec's step 8.
+**Lesson:** when a hook is lifted out of the
+component that owns the action, every mutation path has to reload it explicitly — the component
+that triggers the change no longer owns the query.
+
+---
+
+## [2026-08-14] ETP-4795 — No freshly onboarded tenant could reconcile: the dataset shipped no 'REC' document type
+
+**Component:** `modules/com.etendoerp.go/referencedata/sampledata/GOClient/` (onboarding dataset)
+
+**Symptom:** On a brand-new tenant, confirming a cash close returned HTTP 400 `No 'REC' document
+type configured for organization …`. The same flow worked on the GOClient sample tenant, which made
+it look like a cash-close bug. It is not: `CashCloseHandler.createDraft` resolves
+`FIN_Utility.getDocumentType(org, "REC")` before creating the draft, and there was no such document
+type for the new client.
+
+**Root cause:** the onboarding dataset shipped 48 document types covering 32 base types, and `REC`
+(Reconciliation) was not one of them — nor was its document-number sequence. The source GOClient
+client does have both records; they were simply never added to the exported XML. Document types are
+provisioned ONLY by this dataset since ETP-4428 removed the programmatic `CreateDocTypesStep`, so
+nothing else could compensate.
+
+**Blast radius, bigger than the cash close:** Core's `APRM_MatchingUtility
+.addNewDraftReconciliation` — the BANK reconciliation path — resolves the same document type through
+`AD_GET_DOCTYPE(..., 'REC')` and throws `APRM_NoDocTypeRec` when it is missing. So *no* reconciliation
+of any kind was possible on a new tenant, cash or bank.
+
+**Fix:** added the `REC` document type, its `Reconciliation` auto-sequence (starting at 1000000, not
+carrying the source instance's counter) and both translation rows to `C_DOCTYPE.xml` /
+`AD_SEQUENCE.xml` / `C_DOCTYPE_TRL.xml`, mirroring the ETP-4121 precedent that seeded `BSF` the same
+way. Guarded by `ReconciliationDocTypeSampleDataTest` (4 cases: the document type exists exactly
+once and is doc-no controlled; its sequence is shipped, auto, and starts from STARTNO; both tables
+are in `OnboardingDatasetDefinition.getIncludedTables()`; the type is translated in both languages).
+Verified end to end: a tenant onboarded after the change gets the document type, and the cash-close
+integration spec closes a drawer on it, producing reconciliation `1000000` in state `CO`.
+
+**Lesson:** a provisioning gap reads exactly like a feature bug, and the tell is that it reproduces
+on a NEW tenant but not on the sample one. When a flow works on GOClient and fails on a fresh
+client, compare the two clients' master data before reading any handler code — here, one
+`select docbasetype from c_doctype where ad_client_id = …` on both clients would have pointed at it
+immediately. The corollary for tests: only integration tests that run against a **freshly onboarded**
+tenant can catch this class of bug, which is precisely why the `integration` Playwright project
+depends on `onboarding-setup`.
+
+---
+
+## E2E flake: `addProductLine` waits on an over-broad response matcher (2026-08-18, ETP-4920)
+
+**Status:** open, deferred. Not blocking — the test recovers on retry.
+
+`purchase-order-full-flow.integration.spec.js` › "PO → receipt → invoice → payment" fails its first
+attempt and passes on retry #1, in `addProductLine` (`e2e/tests/helpers/purchase-helpers.js:670`):
+
+```
+TimeoutError: page.waitForResponse: Timeout 15000ms exceeded while waiting for event "response"
+  const addLinesResponse = page.waitForResponse(
+    (r) => r.url().includes('/sws/neo/') && r.status() < 400, { timeout: 15_000 });
+```
+
+**Why the matcher is the suspect, not the timeout:** it accepts *any* `/sws/neo/` response under
+status 400. Every window issues background traffic on that prefix (selector option fetches, and the
+debounced `evaluate-display` call from `useDisplayLogic.js`), so the wait can be satisfied by an
+unrelated response that lands first — or miss the real one if the add-line request resolves outside
+the window. This is the same class of defect as the one fixed in the cost-center/service-project
+mocked spec in this same task: a substring URL match standing in for "the request I actually care
+about". Raising the timeout would paper over it.
+
+**Suggested fix:** match the add-line request specifically (method + the line entity's own URL,
+scoped the way the create-POST listener now is in
+`cost-center-service-project-master-crud.mocked.spec.js`), instead of any `/sws/neo/` response.
+
+**Context:** surfaced while closing the `ensureVendorSetup` regression. Pre-existing — it is not
+caused by the vendor-fixture or derived-field changes, both of which were verified green in the same
+run (2 passed, 1 flaky, 0 failed).
+
+---
+
+## Latent CÓD. column bug still present in 3 shipment/return PDFs (2026-08-21, ETP-4941)
+
+**Status:** open, deferred. Out of scope for ETP-4941 — flagged for a follow-up ticket.
+
+**Component:** `useShipmentPdf.js` (goods-shipment), `useReturnToVendorPdf.js`
+(return-to-vendor-shipment), `useReturnReceiptPdf.js` (return-material-receipt).
+
+**Symptom:** ETP-4941 fixed the printable PDF's "CÓD." (product code) column for Sales Quotation,
+Sales Order, Sales Invoice, and Purchase Order, which were showing the line's 1-based position number
+instead of the product's SKU whenever the product had no search key. The same bug — same root
+cause, same fallback expression shape — is still present, unchanged, in these three other document
+PDFs, each of which builds its line's `productCode` independently instead of going through the
+shared helper:
+
+```js
+productCode: l.productCode || l['product$_value'] || String(idx + 1),
+```
+
+**Root cause:** each of these three hooks predates the shared `resolveProductCode(line)` helper added
+in `tools/app-shell/src/windows/custom/shared/documentPdf.js` by ETP-4941, and none of them were
+migrated to it — they still inline the old no-SKU fallback (`String(idx + 1)`), so a product with no
+SKU on a goods shipment, return-to-vendor shipment, or return-material-receipt still prints the
+line's position number where the SKU should be, indistinguishable from a real code.
+
+**Fix:** not applied here — deliberately out of scope for ETP-4941 (different tickets, different
+windows). The correct fix is the same pattern already shipped: replace the inline expression above
+with `resolveProductCode(l)` imported from `documentPdf.js` in each of the three files, so the
+fallback becomes `'—'` instead of the line position, matching the four documents already fixed.
+
+**Lesson:** when a shared helper is extracted to fix a bug (`resolveProductCode`), grep for the
+literal buggy pattern being replaced (`String(idx + 1)` fallback for a product-code column) across
+the whole `windows/custom/**` tree before closing the ticket — sibling files with the identical
+bug, one call short of using the new helper, are easy to miss when the fix only touches the windows
+named in the ticket's acceptance criteria.
+
+---
+
+## Mocking the Component Under Test (Invitation SSO Dead End)
+
+**Component:** `InviteAcceptancePage.vitest.jsx` — consumer test for the shared `LoginStep` (ETP-4960, follow-up to ETP-4958)
+
+**Symptom:** SSO login on the invitation page authenticated the user but never resumed the invitation acceptance flow — the login form stayed on screen and the token was never consumed. The whole test suite was green.
+
+**Root cause:** the page test replaced the entire `@etendosoftware/etendo-go-core/onboarding` barrel — including `LoginStep`, the component whose contract the page depends on — with hand-written stub forms:
+
+```js
+vi.mock('@etendosoftware/etendo-go-core/onboarding', () => ({
+  LoginStep: ({ initialEmail, onAuthenticated }) => (
+    <form onSubmit={…}>{/* always calls onAuthenticated(data) */}</form>
+  ),
+  …
+}));
+```
+
+The stub always invoked `onAuthenticated`, so the test asserted the page's reaction to a contract the real component was **not** honouring — its SSO branch never called the callback at all. Because the core package had no JSX test runner either, the real SSO branch was rendered in no test in either repo. Effective coverage of the flow was zero while it looked fully covered.
+
+**Fix:** render the real `LoginStep` / `RegisterStep` and stub only genuine external boundaries — the i18n dictionaries, the SSO provider SDK (no Google Identity script exists in jsdom), and `fetch`. Verified by reverting the ETP-4958 fix in the pinned core build and confirming the SSO test fails.
+
+**Lesson:** mock the *boundary*, never the collaborator whose contract the test exists to verify. A stub that hard-codes the happy path turns a consumer test into a test of the stub. The tell is a mock factory that reimplements behaviour (branching, callbacks, state) rather than returning canned data — if you find yourself writing an `onSubmit` handler inside `vi.mock`, the seam is in the wrong place.
+
+---
+
+## [2026-08-25] ETP-4717 — Unverified "the contract already exists" claim shipped a broken Enviar action (`return-to-vendor-shipment`)
+
+**Component:** `tools/app-shell/src/components/contract-ui/documentEmailSend.js` (`resolveDocumentEmailContract`) vs `com.etendoerp.go`'s `ReturnToVendorSendEmailContract`.
+
+**Symptom:** QA (Emilio Polliotti) rejected ETP-4717 (a prior QA cycle in the same epic) because the "Enviar" action on the "Return to Vendor Shipment" window failed with "Unknown email contract" every time it was clicked, from both the grid row-hover quick action and the row-preview panel.
+
+**Root cause:** the frontend derives the document-email contract name generically as `${windowName}-send` (`resolveDocumentEmailContract`), i.e. `return-to-vendor-shipment-send` for this window's spec name. The backend only registers `ReturnToVendorSendEmailContract.NAME = "return-to-vendor-send"` — no `-shipment` segment. This is a naming mismatch, not a missing feature: the backend contract exists, it's just named differently than the frontend's convention expects.
+
+**Why it shipped:** ETP-4718 (the ticket that wired the "Enviar" action for this window) documented in `docs/generated-custom-windows/return-to-vendor-shipment.md` that the backend contract "already existed in `com.etendoerp.go`" — but that claim was written from the contract's *existence*, not from actually calling it end-to-end with the frontend's derived name. Nobody diffed `resolveDocumentEmailContract`'s output against `ReturnToVendorSendEmailContract.NAME` before shipping.
+
+**Also worth flagging:** `window.sendDocument` auto-enables for any window whose header exposes `documentNo` (per `docs/decisions-reference.md`) — so a window can silently gain a live "Enviar" affordance the moment ANY change (in this case ETP-4718's preview-panel work) makes the eligibility heuristic true, with no explicit decision recorded in `decisions.json`. `return-to-vendor-shipment` never explicitly declared `sendDocument` either way until this ticket.
+
+**Fix (this ticket, ETP-4717):** QA asked to remove the action from this window rather than reconcile the contract name (out of scope). Fixed by re-declaring `decisions.json → window.sendDocument: { enabled: false }` (regenerated via `make regen`) plus removing the window-specific `emailAction`/`isSendable`/`onEmail` wiring that ETP-4718 had added directly in `index.jsx` and `ReturnToVendorShipmentPreview.jsx` (that wiring bypassed the generic `sendDocument` gate entirely on the grid surface — `documentPreview: true` is hardcoded in the shared `ReturnWindowShell.jsx`, so without the `sendDocument` prop threaded in, the row-hover icon would have kept showing regardless of the decisions.json flag). Full detail: `docs/generated-custom-windows/return-to-vendor-shipment.md` — Gap assessment, ETP-4717 bullet.
+
+**Recommendation:** if the backend contract name is ever reconciled (rename `ReturnToVendorSendEmailContract.NAME` to `return-to-vendor-shipment-send`, or special-case the frontend's derivation), re-enable via the same `decisions.json` flag and re-add the `onEmail`/`emailAction` wiring — do not assume "the backend contract exists" is sufficient evidence again; call it end-to-end (or at minimum diff the derived name against the registered `NAME` constant) before flipping `sendDocument.enabled` back to `true`/removing it.

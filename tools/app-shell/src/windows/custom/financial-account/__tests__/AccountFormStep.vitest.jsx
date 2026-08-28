@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -12,12 +12,30 @@ const CURRENCIES = [
   { id: '100', iso: 'USD' },
 ];
 
+// Spain, the only country these tests need metadata for — real ES IBAN prefix/length so the
+// default-country path (mirroring the currency default) exercises the actual validation rule.
+const COUNTRY_RULES = [
+  { id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 },
+  { id: '107', iso: 'IT', name: 'Italy', ibanPrefix: 'IT', ibanLength: 27 },
+];
+
+// The Country field (ETP-4896) is also a CreatableSearchSelect chip and, once a default
+// country resolves, carries its own "clear" (X) button — so `getByRole('button', {name:
+// 'clear'})` alone is ambiguous whenever both chips are filled. Scope to the currency chip's
+// own wrapper to disambiguate.
+function currencyClearButton() {
+  const chip = screen.getByTestId('field-account-form-currency-chip');
+  return within(chip.parentElement).getByRole('button', { name: 'clear' });
+}
+
 function renderForm(props = {}) {
   return render(
     <AccountFormStep
       mode="bank"
       currencies={CURRENCIES}
       defaultCurrencyId="102"
+      countryIbanRules={COUNTRY_RULES}
+      defaultCountryId="106"
       onSubmit={vi.fn()}
       {...props}
     />,
@@ -99,6 +117,7 @@ describe('AccountFormStep', () => {
       name: 'BBVA Main',
       type: 'B',
       currencyId: '102',
+      countryId: '106',
       iban: 'ES9121000418450200051332',
       swiftCode: 'BBVAESMM',
     });
@@ -117,6 +136,7 @@ describe('AccountFormStep', () => {
       name: 'Caja',
       type: 'C',
       currencyId: '102',
+      countryId: '106',
     });
   });
 
@@ -137,6 +157,7 @@ describe('AccountFormStep', () => {
       name: 'Visa Oro',
       type: 'CA',
       currencyId: '102',
+      countryId: '106',
     });
   });
 
@@ -276,7 +297,7 @@ describe('AccountFormStep', () => {
       expect(screen.getByTestId('field-account-form-currency-chip')).toHaveTextContent('EUR');
 
       // Clear via the chip's X — reopens the dropdown with all options visible (empty query).
-      await user.click(screen.getByRole('button', { name: 'clear' }));
+      await user.click(currencyClearButton());
       await user.click(await screen.findByTestId('option-account-form-currency-100'));
 
       expect(screen.getByTestId('field-account-form-currency-chip')).toHaveTextContent('USD');
@@ -295,10 +316,114 @@ describe('AccountFormStep', () => {
       await user.type(screen.getByTestId('account-form-name'), 'BBVA');
       expect(screen.getByTestId('account-form-submit')).toBeEnabled();
 
-      await user.click(screen.getByRole('button', { name: 'clear' }));
+      await user.click(currencyClearButton());
 
       expect(screen.queryByTestId('field-account-form-currency-chip')).not.toBeInTheDocument();
       expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+  });
+
+  describe('country field (ETP-4896)', () => {
+    it('renders Country as a required chip, pre-filled from defaultCountryId, in all three modes', () => {
+      ['bank', 'cash', 'card'].forEach((mode) => {
+        const { unmount } = renderForm({ mode });
+        expect(screen.getByTestId('field-account-form-country-chip')).toHaveTextContent('Spain');
+        unmount();
+      });
+    });
+
+    it('does not snap back to the default country after clearing the chip (one-shot guard)', async () => {
+      const user = userEvent.setup();
+      renderForm();
+
+      const chip = screen.getByTestId('field-account-form-country-chip');
+      await user.click(within(chip.parentElement).getByRole('button', { name: 'clear' }));
+
+      expect(screen.queryByTestId('field-account-form-country-chip')).not.toBeInTheDocument();
+      // Country required in every mode: clearing it disables submit even with everything else filled.
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+
+    it('requires a country to submit, independent of the IBAN', async () => {
+      renderForm({ defaultCountryId: undefined, mode: 'cash' });
+      const user = userEvent.setup();
+      await user.type(screen.getByTestId('account-form-name'), 'Caja');
+      expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+
+    it('shows a country-mismatch error for a Spanish IBAN when Italy is selected', async () => {
+      const user = userEvent.setup();
+      renderForm({ initialValues: { countryId: '107' } }); // Italy, seeded without a UI interaction
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+      await user.tab();
+
+      expect(screen.getByTestId('account-form-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanCountryMismatch');
+      expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+
+    it('shows a length-mismatch error when the IBAN prefix matches but the length does not', async () => {
+      const user = userEvent.setup();
+      // The real, mod-97-valid Spanish IBAN against a Spain row misconfigured to expect 20
+      // characters — prefix still matches, so only the length check can fire.
+      const wrongLength = COUNTRY_RULES.map((c) => (c.id === '106' ? { ...c, ibanLength: 20 } : c));
+      renderForm({ countryIbanRules: wrongLength });
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+      await user.tab();
+
+      expect(screen.getByTestId('account-form-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanLengthMismatch');
+    });
+
+    // ETP-4896 QA follow-up: this previously asserted the OPPOSITE (no error, submit enabled).
+    // That was the bug — a country absent from countryIbanRules has no IBAN metadata, which
+    // C_GET_IBAN_DISPLAYED_ACCOUNT rejects outright, so the "valid" save came back as an
+    // untranslated English 400 toast. Caught inline now.
+    it('rejects an IBAN when the selected country has no IBAN configuration', async () => {
+      const user = userEvent.setup();
+      // Argentina: reachable through the picker (it searches the full 243-country selector) but
+      // absent from countryIbanRules (only ~45 countries carry IBAN metadata).
+      renderForm({ initialValues: { countryId: 'ar-no-metadata' } });
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'GB82WEST12345698765432');
+      await user.tab();
+
+      expect(screen.getByTestId('account-form-iban-error'))
+        .toHaveTextContent('financeAccountsNewIbanCountryNoConfig');
+      expect(screen.getByTestId('account-form-submit')).toBeDisabled();
+    });
+
+    // The empty-catalog guard: /defaults can fail or still be in flight, and both consumers start
+    // from []. Blocking then would break every valid save for a transient reason.
+    it('does not block when the IBAN rules catalog is empty (unknown, defer to the backend)', async () => {
+      const user = userEvent.setup();
+      renderForm({ countryIbanRules: [], initialValues: { countryId: 'ar-no-metadata' } });
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'GB82WEST12345698765432');
+      await user.tab();
+
+      expect(screen.queryByTestId('account-form-iban-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-form-submit')).toBeEnabled();
+    });
+
+    // A country that IS in the catalog keeps behaving as before — the new check must not fire.
+    it('still accepts a matching IBAN for a country present in the catalog', async () => {
+      const user = userEvent.setup();
+      renderForm();
+
+      await user.type(screen.getByTestId('account-form-name'), 'BBVA');
+      await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+      await user.tab();
+
+      expect(screen.queryByTestId('account-form-iban-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-form-submit')).toBeEnabled();
     });
   });
 });

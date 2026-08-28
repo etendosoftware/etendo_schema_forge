@@ -72,7 +72,7 @@ The Assets window should let a finance user register fixed assets, define how ea
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
 4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Category regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
-4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a single **Project** selector only when the client's accounting-dimension configuration enables the Project dimension for this org's ledger, and disappears entirely otherwise. Open the selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a **Project** and/or **Cost Center** selector, each independently, only when the client's accounting-dimension configuration enables that dimension for this org's ledger (ETP-4914 — Cost Center is now also "Por config", not "Nunca"), and disappears entirely when both resolve to not-visible. Open each visible selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -392,7 +392,7 @@ handled zero correctly.
 ### Amortization Plan tab — row selection and bulk delete
 
 `AssetsAmortizationPanel.jsx` now supports full row selection on the "Plan de amortización"
-tab, using the same `LinesSelectionBar` portal pattern as Sales Order and Physical Inventory.
+tab, using the same shared `SelectionToolbar` component as Sales Order and Physical Inventory.
 
 **Select-all checkbox** — first column header contains a `Checkbox` with three states:
 unchecked (nothing selected), checked (all rows selected), and indeterminate (some rows
@@ -402,14 +402,21 @@ and the current `lines` array length.
 **Per-row checkbox** — each row has a `Checkbox` in the first column. Clicking toggles the
 row's id in `selectedRows`.
 
-**`LinesSelectionBar` floating bar** — rendered via portal (position tracked by a
-`ResizeObserver` on a `barAnchorRef` div inside the table container). Appears when
-`selectedRows.size > 0`, with a 250 ms exit animation when selection drops to zero. Displays
-selection count, a **Delete** button, and a **Close** button.
+**`SelectionToolbar` floating bar (ETP-4972)** — rendered via portal to `document.body` with
+true `position: fixed` coordinates (bottom-center of the viewport, `bottom: 24px; left: 50%;
+transform: translateX(-50%)`) — no rect-measuring, no `ResizeObserver`/`barAnchorRef`. (An
+earlier version of this component tracked the bar's position off a `ResizeObserver` on a
+`barAnchorRef` sentinel div in the table container — the same anchor-rect pattern the old,
+now-retired `LinesSelectionBar` used everywhere; it broke once the sentinel scrolled out of
+view on a long list. `SelectionToolbar` owns its position outright, so that bug class cannot
+recur here.) Appears when `selectedRows.size > 0`, with a 250 ms exit animation when
+selection drops to zero. Displays selection count, an icon-only red **Delete** button (no
+visible "Eliminar" label, `title` tooltip only — ETP-4972 Figma-driven restyle), and the
+shell's own built-in **Close** (×) button.
 
 **Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
 /amortizationLine/{id}` requests for every selected row id. On completion, selection is
-cleared and `fetchLines()` is called to refresh the table. The `LinesSelectionBar` shows a
+cleared and `fetchLines()` is called to refresh the table. The delete button shows a
 loading spinner (`deleting` flag) while requests are in flight.
 
 **Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`
@@ -574,6 +581,42 @@ does not join the "Dimensiones contables" panel at all — it is now always show
 - No backend change needed: `product`'s raw AD field already carries the
   `SL_Asset_Product` callout, so selecting a value fires the standard `/assets/callout`
   round-trip like any other field, same as before it was discarded.
+
+### Centro de costo corrected to Por config (ETP-4914)
+
+The accounting-dimension matrix was corrected again: `Activo (Amortizaciones) | Cabecera`
+now reads Contacto=**Por config** (deferred, see below), Producto=**Siempre**, Proyecto=
+**Por config**, Centro de costo=**Por config** (Centro de costo was previously, incorrectly,
+**Nunca** — the "Producto corrected to Siempre" section above and the original ETP-4529
+matrix both had it wrong). Direct DB verification confirmed `eTADASCostCenter`'s raw
+`AD_Field.DisplayLogic` on the Assets tab was already correctly wired all along
+(`@$Element_CC@='Y' & @IsDepreciated@='Y'`, the exact same pattern as `project`'s
+`@$Element_PJ@='Y' & @IsDepreciated@='Y'`) — this was a pure classification/decisions.json
+fix, no AD metadata change needed.
+
+- `decisions.json`: `assets.eTADASCostCenter.visibility` changed from `discarded` to
+  `editable` (`section: "principal"`), matching `project`'s shape.
+- `AssetsDetailPanel.jsx`: `eTADASCostCenter` added to `dimensionFieldCandidates` —
+  `{ key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section:
+  'principal', reference: 'Costcenter', inputMode: 'selector' }` — resolved through the same
+  `useAccountingDimensionFields('assets', d, dimensionFieldCandidates, { token, apiBaseUrl })`
+  call as `project`, so it is independently config-gated (visible only when the client's Cost
+  Center dimension is enabled for this org's ledger). Confirmed in the regenerated
+  `AssetsForm.jsx`: `eTADASCostCenter` now carries `visibilitySource: 'server'` and
+  `displayLogicReason: 'accounting-dimension'`, the same server-evaluated shape as `project`.
+- **Contacto remains out of scope for this pass**, even though the corrected matrix also
+  marks it "Por config": its raw `AD_Field.DisplayLogic` on the Assets tab is only
+  `@IsDepreciated@='Y'` — missing the `@$Element_BP@` dimension term that `project` and
+  `eTADASCostCenter` both carry — so fixing it properly requires an AD-level `DisplayLogic`
+  metadata edit first, tracked as a separate follow-up. `businessPartner` stays
+  `visibility: "discarded"` in `decisions.json` until that lands.
+- Regenerated via `make regen ONLY=assets`; the contract's auto-generated system-field test
+  entry for `eTADASCostCenter` (previously "should exist in backend but not frontend")
+  was replaced automatically by the standard editable-field test set (displaylogic-evaluable,
+  displaylogic-valid, field-presence, field-type, selector-endpoint) — no manual test-file
+  authoring needed for the contract itself. `AssetsDetailPanel.vitest.jsx` and
+  `AssetsDetailPanel.test.js` were updated to expect both `project` and `eTADASCostCenter`
+  as independently-gated dimension candidates.
 
 ## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
 

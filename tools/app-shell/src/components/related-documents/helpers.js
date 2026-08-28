@@ -41,3 +41,21 @@ export function fetchById(specName, entityName, id, token, apiBaseUrl) {
     .then(j => j?.response?.data?.[0] || null)
     .catch(() => null);
 }
+
+// Cross-spec PATCH-by-id — sibling of `fetchById` above. Mirrors useEntity.js's own
+// save shape (getUrl/getMethod: PATCH `${apiBaseUrl}/${entity}/${id}`, response parsed
+// via `response.data[0]`), but targeting a DIFFERENT spec/entity than the one the
+// current window renders (same segment-swap mechanism as `fetchById`/`neoBase`).
+// Unlike `fetchById`, errors are NOT swallowed — a failed write must surface to the
+// caller (toast) rather than silently resolve to null. First consumer: TaxSifModal.jsx
+// (ETP-4888), saving a tax record's SIF fields from an invoice-line quick-fix modal.
+export function patchById(specName, entityName, id, payload, token, apiBaseUrl) {
+  const base = neoBase(apiBaseUrl);
+  return fetch(`${base}/${specName}/${entityName}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => (r.ok ? r.json() : r.text().then(msg => Promise.reject(new Error(msg || `Request failed (${r.status})`)))))
+    .then(j => j?.response?.data?.[0] || null);
+}

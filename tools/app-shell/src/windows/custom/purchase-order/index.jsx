@@ -15,6 +15,13 @@ import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import { useMenuLabel } from '@/i18n';
 import { useOrderWindow } from '../shared/useOrderWindow.jsx';
 import { usePurchaseOrderPdf } from '../shared/usePurchaseOrderPdf.js';
+import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
+
+// Mirrors artifacts/purchase-order/decisions.json → window.lineTaxSifTrigger (ETP-4888
+// point 5 follow-up round). See sales-order/index.jsx's identical constant for the full
+// rationale — GeneratedApp/HeaderPage both spread props straight through to DetailView,
+// so lineCellBadges reaches the line grid unchanged. Keep in sync with decisions.json.
+const LINE_TAX_SIF_TRIGGER_ENABLED = true;
 
 const LIST_COLUMNS = [
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false, required: true },
@@ -110,6 +117,12 @@ export default function PurchaseOrderWindow(props) {
     documentType: tMenu('Purchase Order'),
   });
 
+  // ETP-4888 point 5 follow-up — see LINE_TAX_SIF_TRIGGER_ENABLED above for the
+  // decisions.json mirror note.
+  const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
+  });
+
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
@@ -133,8 +146,10 @@ export default function PurchaseOrderWindow(props) {
           {...props}
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
+          lineCellBadges={taxSifCellBadges}
           data-testid="GeneratedApp__b7ace5" />
         {contactPortal}
+        {taxSifModal}
       </CreateContactContext.Provider>
     );
   }
@@ -151,7 +166,6 @@ export default function PurchaseOrderWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         hideLink
-        listViewOptions={{ hidePrint: true }}
         bulkActions={PurchaseOrderBulkActions}
         dateFilterKey="orderDate"
         refreshTrigger={refreshKey}

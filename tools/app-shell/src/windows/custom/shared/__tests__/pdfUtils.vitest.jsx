@@ -10,7 +10,17 @@ vi.mock('react', async () => {
   return actual;
 });
 
-import { downloadBlobAsFile, buildReturnDocCommonFields, sortLinesByLineNo } from '../pdfUtils.js';
+// ETP-4315 follow-up (2026-08-18) — usePdfGenerator's cache-gating branch calls
+// these two before ever touching buildBlobFn/jsreport.
+const mockFetchMainAttachment = vi.fn();
+const mockFetchAttachmentBlob = vi.fn();
+vi.mock('@/components/copilot/ocr/listAttachments', () => ({
+  fetchMainAttachment: (...args) => mockFetchMainAttachment(...args),
+  fetchAttachmentBlob: (...args) => mockFetchAttachmentBlob(...args),
+}));
+
+import { renderHook, waitFor } from '@testing-library/react';
+import { downloadBlobAsFile, buildReturnDocCommonFields, sortLinesByLineNo, usePdfGenerator } from '../pdfUtils.js';
 
 describe('downloadBlobAsFile', () => {
   let createObjectURLMock;
@@ -151,5 +161,204 @@ describe('buildReturnDocCommonFields', () => {
   it('returns empty string for documentNo when missing', () => {
     const header = { issuerOrg: {} };
     expect(buildReturnDocCommonFields(header, null).documentNo).toBe('');
+  });
+});
+
+// ETP-4315 follow-up (2026-08-18): usePdfGenerator's jsreport-regeneration-skip
+// optimization. When cacheConfig.storeCondition && cacheConfig.tableName are both
+// truthy, it looks up the marked Attachment via fetchMainAttachment first and, on a
+// hit, fetches its blob via fetchAttachmentBlob — skipping buildBlobFn (and thus
+// jsreport) entirely. On a cache miss, or when cacheConfig doesn't opt in, it falls
+// back to the original buildBlobFn behavior.
+describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
+  let buildBlobFn;
+  let builtBlob;
+  let cachedBlob;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/generated');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    builtBlob = new Blob(['%PDF-built'], { type: 'application/pdf' });
+    cachedBlob = new Blob(['%PDF-cached'], { type: 'application/pdf' });
+    buildBlobFn = vi.fn(() => Promise.resolve(builtBlob));
+  });
+
+  it('cache hit: fetches the marked attachment blob and never calls buildBlobFn', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).toHaveBeenCalledWith({
+      token: 'tok', tableName: 'C_Order', recordId: 'rec-1', apiBaseUrl: '/api/sales-order',
+    });
+    expect(mockFetchAttachmentBlob).toHaveBeenCalledWith({
+      token: 'tok', attachmentId: 'att-1', apiBaseUrl: '/api/sales-order',
+    });
+    expect(buildBlobFn).not.toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(cachedBlob);
+    expect(result.current.pdfUrl).toBe('blob:http://localhost/generated');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('cache miss (no marked attachment): falls back to buildBlobFn', async () => {
+    mockFetchMainAttachment.mockResolvedValue(null);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).toHaveBeenCalled();
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    // buildBlobFn receives the trimmed base (apiBaseUrl with the last path
+    // segment stripped), not the raw apiBaseUrl — see usePdfGenerator's `base` local.
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('cache miss (marked attachment has no id): falls back to buildBlobFn', async () => {
+    mockFetchMainAttachment.mockResolvedValue({});
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  // ETP-4787 — the cache invalidates itself by comparing the marked attachment's
+  // uploadedAt against the record's own `updated`. Before this, a completed document
+  // kept serving the PDF rendered at first open forever, whatever changed afterwards.
+  it('stale cache: attachment older than the record is ignored and rebuilt', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2026-08-24T10:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+        recordUpdated: '2026-08-24T12:15:30+02:00',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // The blob of a stale attachment is never even downloaded.
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('fresh cache: attachment newer than the record is still served', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2026-08-24T11:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+        recordUpdated: '2026-08-24T12:15:30+02:00',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(buildBlobFn).not.toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(cachedBlob);
+  });
+
+  // A window that does not pass recordUpdated (or a backend without the `updated`
+  // exemption in NeoFieldFilter) must keep the old behaviour — cache on, never
+  // invalidated — rather than silently losing its cache.
+  it('no recordUpdated: cache is served regardless of how old the attachment is', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2001-01-01T00:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(buildBlobFn).not.toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(cachedBlob);
+  });
+
+  it('cacheConfig omitted (backward-compat): calls buildBlobFn and never attempts a cache lookup', async () => {
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).not.toHaveBeenCalled();
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('cacheConfig null (backward-compat): calls buildBlobFn and never attempts a cache lookup', async () => {
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, null),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).not.toHaveBeenCalled();
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('storeCondition: false skips the cache lookup even with a tableName present', async () => {
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: false,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).not.toHaveBeenCalled();
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalled();
+    expect(result.current.pdfBlob).toBe(builtBlob);
+  });
+
+  it('storeCondition: true but no tableName skips the cache lookup', async () => {
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        storeCondition: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchMainAttachment).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalled();
   });
 });

@@ -669,3 +669,320 @@ describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)'
     });
   });
 });
+
+describe('translateBackendError — cash close (ETP-4795)', () => {
+  describe('exact-match rejections', () => {
+    const CASES = [
+      { raw: 'The close date cannot be in the future.', key: 'backendError.cashCloseDateInFuture' },
+      {
+        raw: 'This reconciliation already has bank-statement lines linked to it; cash close and bank reconciliation cannot share the same document.',
+        key: 'backendError.cashCloseHasBankStatementLines',
+      },
+      {
+        raw: 'Cash close is only available for cash-type financial accounts',
+        key: 'backendError.cashCloseOnlyForCashAccount',
+      },
+    ];
+
+    for (const { raw, key } of CASES) {
+      it(`maps "${raw.slice(0, 40)}…" to ${key}`, () => {
+        const es = fakeUiTranslator({ [key]: 'mensaje en español' });
+        assert.equal(translateBackendError(raw, es), 'mensaje en español');
+      });
+
+      it(`returns "${raw.slice(0, 40)}…" unchanged when the key is missing (guard)`, () => {
+        assert.equal(translateBackendError(raw, (k) => k), raw);
+      });
+    }
+  });
+
+  describe('"There is a difference of <amount>…" parameterized match', () => {
+    // The amount is deliberately not interpolated — the backend sends a raw
+    // BigDecimal.toPlainString(), which must never be rendered as money in the UI.
+    const RAW = 'There is a difference of -162.05 and this account has no accounting concept'
+      + ' configured for it. Configure a GL Item Difference in Edit account before confirming the'
+      + ' close.';
+
+    it('translates to es_ES without echoing the unformatted amount', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseNoConcept': 'Esta cuenta no tiene concepto contable de diferencias.',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Esta cuenta no tiene concepto contable de diferencias.',
+      );
+    });
+
+    it('matches whatever the amount is, including a positive surplus', () => {
+      const es = fakeUiTranslator({ 'backendError.cashCloseNoConcept': 'Falta el concepto.' });
+      const surplus = RAW.replace('-162.05', '200');
+      assert.equal(translateBackendError(surplus, es), 'Falta el concepto.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The close date cannot be earlier than the last confirmed close (<date>)." match', () => {
+    const RAW = 'The close date cannot be earlier than the last confirmed close (2026-07-31).';
+
+    it('translates to es_ES, interpolating the last close date', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseDateBeforeLastClose':
+          'La fecha del cierre no puede ser anterior al último cierre confirmado ({date}).',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'La fecha del cierre no puede ser anterior al último cierre confirmado (2026-07-31).',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The movement <id> has an accounting date in a closed period." match', () => {
+    const RAW = 'The movement "1000381 - Transportes Vega" has an accounting date in a closed'
+      + ' period. Reopen that period or unmark the movement before confirming the close.';
+
+    it('translates to es_ES, interpolating the movement identifier', () => {
+      const es = fakeUiTranslator({
+        'backendError.cashCloseLineInClosedPeriod':
+          'El movimiento «{movement}» tiene fecha contable en un periodo cerrado.',
+      });
+      assert.equal(
+        translateBackendError(RAW, es),
+        'El movimiento «1000381 - Transportes Vega» tiene fecha contable en un periodo cerrado.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+});
+
+/* ETP-4896 QA follow-up: the country/IBAN family from FinancialAccountCountrySupport. The three
+ * String.format-interpolated ones are why the QA-reported "Argentina has no IBAN configuration…"
+ * reached the user as raw English — an exact-match table structurally cannot catch them. */
+
+describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
+  const es = fakeUiTranslator({
+    'backendError.countryNoIbanConfig':
+      '{country} no tiene configuración de IBAN, así que no puede usarse en una cuenta con IBAN',
+    'backendError.ibanPrefixCountryMismatch':
+      "El IBAN empieza con '{prefix}' pero el país seleccionado es {country} ({iso})",
+    'backendError.ibanCountryLengthMismatch':
+      'Un IBAN de {country} debe tener {expected} caracteres (recibidos {actual})',
+    'backendError.ibanTooShort': 'El IBAN es demasiado corto',
+    'backendError.ibanChecksumInvalid':
+      'El IBAN no es válido: los dígitos de control no coinciden',
+    'backendError.invalidCountry': 'País no válido',
+    'backendError.countryIban': 'Se necesita el País para una cuenta IBAN.',
+  });
+
+  describe('"<country> has no IBAN configuration…" match — the QA-reported message', () => {
+    const RAW = 'Argentina has no IBAN configuration, so it cannot be used on an account'
+      + ' with an IBAN.';
+
+    it('translates to es_ES, interpolating the country name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Argentina no tiene configuración de IBAN, así que no puede usarse en una cuenta con IBAN',
+      );
+    });
+
+    it('handles a multi-word country name', () => {
+      const raw = 'United States has no IBAN configuration, so it cannot be used on an account'
+        + ' with an IBAN.';
+      assert.match(translateBackendError(raw, es), /^United States no tiene/);
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+
+    // Guards the `return country ? { country } : null` branch: with nothing before the suffix
+    // there is no country to interpolate, so the matcher must decline and the original survive.
+    it('does not match when there is no country name before the suffix', () => {
+      const raw = 'has no IBAN configuration, so it cannot be used on an account with an IBAN.';
+      assert.equal(translateBackendError(raw, es), raw);
+    });
+  });
+
+  describe('"The IBAN starts with \'X\' but the selected country is Y (Z)." match', () => {
+    const RAW = "The IBAN starts with 'ES' but the selected country is Italy (IT).";
+
+    it('translates to es_ES, interpolating prefix, country and iso', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        "El IBAN empieza con 'ES' pero el país seleccionado es Italy (IT)",
+      );
+    });
+
+    // The country name is split on the LAST ' (' so a parenthesised name still resolves.
+    it('resolves the iso from the last parenthesised token', () => {
+      const raw = "The IBAN starts with 'ES' but the selected country is Bonaire (BQ) (BQ).";
+      assert.equal(
+        translateBackendError(raw, es),
+        "El IBAN empieza con 'ES' pero el país seleccionado es Bonaire (BQ) (BQ)",
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"An IBAN for X must have N characters (received M)." match', () => {
+    const RAW = 'An IBAN for Spain must have 24 characters (received 20).';
+
+    it('translates to es_ES, interpolating country, expected and actual', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Un IBAN de Spain debe tener 24 caracteres (recibidos 20)',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('exact-match entries', () => {
+    const CASES = [
+      ['The IBAN is too short.', 'El IBAN es demasiado corto'],
+      ['The IBAN is not valid: the check digits do not match.',
+        'El IBAN no es válido: los dígitos de control no coinciden'],
+      ['Invalid country', 'País no válido'],
+      // Reuses the DB message's key: same rule, one Spanish phrasing.
+      ['A bank account with an IBAN must have a country.',
+        'Se necesita el País para una cuenta IBAN.'],
+    ];
+
+    CASES.forEach(([raw, expected]) => {
+      it(`translates "${raw}"`, () => {
+        assert.equal(translateBackendError(raw, es), expected);
+      });
+    });
+  });
+
+  it('passes an unrelated message through untouched', () => {
+    const raw = 'Something else entirely went wrong';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+});
+
+// ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
+// AD_MESSAGE rows with no real es_ES AD_MESSAGE_TRL (the trl row is a verbatim copy of the
+// English text), so Core resolves the same English string regardless of session locale. `%0` is
+// substituted server-side with the IBAN before the message reaches the frontend, so this is a
+// fixed prefix/suffix around a dynamic IBAN — same shape as the other parameterized matchers.
+describe('translateBackendError — "IBAN could not be set automatically (<iban>)." parameterized match (ETP-4891)', () => {
+  const en = fakeUiTranslator({
+    'backendError.ibanAutoFillFailed': 'IBAN could not be set automatically ({iban}). Enter it manually in the Financial Account.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.ibanAutoFillFailed': 'No se pudo establecer el IBAN automáticamente ({iban}). Introduce el IBAN manualmente en la cuenta financiera.',
+  });
+  const RAW = 'IBAN could not be set automatically (DE89370400440532013000). '
+    + 'Please enter it manually in the Financial Account.';
+
+  it('translates the rendered backend message to es_ES, interpolating the IBAN', () => {
+    assert.equal(
+      translateBackendError(RAW, es),
+      'No se pudo establecer el IBAN automáticamente (DE89370400440532013000). '
+        + 'Introduce el IBAN manualmente en la cuenta financiera.',
+    );
+  });
+
+  it('translates the rendered backend message to en_US (differently worded, proving the matcher — not a passthrough)', () => {
+    assert.equal(
+      translateBackendError(RAW, en),
+      'IBAN could not be set automatically (DE89370400440532013000). '
+        + 'Enter it manually in the Financial Account.',
+    );
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    assert.equal(translateBackendError(RAW, (k) => k), RAW);
+  });
+
+  it('does not match a message with a blank IBAN (empty capture guard)', () => {
+    const blank = 'IBAN could not be set automatically (). Please enter it manually in the Financial Account.';
+    assert.equal(translateBackendError(blank, es), blank);
+  });
+
+  it('does not match an unrelated message that merely mentions IBAN', () => {
+    const unrelated = 'The IBAN format is invalid. Please check and enter a valid IBAN.';
+    assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+});
+
+// ETP-4891 follow-up: the "Sincronizar extractos" toast (ImportedStatementsTab.jsx and
+// EditAccountModal.jsx's notifySyncResult — same bridge, two UI entry points). Same root cause as
+// the IBAN-autofill matcher above: com.etendoerp.psd2 ships no real es_ES translation for these
+// AD_MESSAGEs. Note the literal " ." (space before the period) on the first two — genuinely what
+// the AD_MESSAGE template contains (verified against ad_message.msgtext), not a typo.
+describe('translateBackendError — bank-statement sync result (ETP-4891)', () => {
+  const es = fakeUiTranslator({
+    'backendError.transactionsObtainedForAccount': 'Movimientos obtenidos para la cuenta: {account}.',
+    'backendError.noNewTransactionsForAccount': 'No se encontraron movimientos nuevos para la cuenta: {account}.',
+    'backendError.syncFetchFailed': 'El banco reportó un error al sincronizar: {detail}.',
+  });
+
+  describe('"Transactions obtained for the account: <name> ." parameterized match', () => {
+    const RAW = 'Transactions obtained for the account: Cuenta pais españa .';
+
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Movimientos obtenidos para la cuenta: Cuenta pais españa.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"No new transactions found for the account: <name> ." parameterized match', () => {
+    const RAW = 'No new transactions found for the account: Cuenta pais españa .';
+
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'No se encontraron movimientos nuevos para la cuenta: Cuenta pais españa.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"The bank reported an error while synchronizing: <detail>." parameterized match', () => {
+    const RAW = 'The bank reported an error while synchronizing: connection timed out.';
+
+    it('translates to es_ES, interpolating the error detail', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'El banco reportó un error al sincronizar: connection timed out.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  it('does not cross-match between the three sync skeletons', () => {
+    const raw = 'Transactions obtained for the account: Cuenta pais españa .';
+    // Sanity: the "no new transactions" and "sync failed" translations must NOT appear.
+    const result = translateBackendError(raw, es);
+    assert.doesNotMatch(result, /No se encontraron/);
+    assert.doesNotMatch(result, /reportó un error/);
+  });
+});

@@ -5,7 +5,21 @@
     "category": "settings",
     "name": "User",
     "headerExtra": {
-      "customForm": "AssignRoleControl"
+      "customForm": "AssignTemplateRolesControl"
+    },
+    "customPanelTabs": [
+      {
+        "key": "roles",
+        "labelKey": "userRolesTabLabel",
+        "component": "UserRolesTab"
+      }
+    ],
+    "customComponents": {
+      "headerTable": "UserHeaderTable"
+    },
+    "hidePrint": true,
+    "listViewOptions": {
+      "hidePrint": true
     }
   },
   "discardPatterns": ["EM_*"],
@@ -27,14 +41,12 @@
           "reason": "ETP-4829: never shown or independently editable on the admin-facing form (create or edit) — always a direct copy of email, matching the convention EtendoGoJwtDalHelper/AD_User.username already relies on to link an AD_User row to its etgo_account row by matching value. Frontend never renders or sends this field; UserRoleAssignmentHandler.handle() enforces username=email server-side on POST (defense in depth, since generated code has no beforeSave derivation support per docs/possible-limitations.md L1)."
         },
         "firstName": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "principal"
+          "visibility": "discarded",
+          "reason": "ETP-4906: discarded to remove the duplicate 'Nombre' field on the form — Firstname's native AD dictionary label collides with Name's own label in Spanish (es_ES.json: both 'Nombre'), and no test user during manual QA ever used the first/last-name auto-compose path (name was always typed directly)."
         },
         "lastName": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "principal"
+          "visibility": "discarded",
+          "reason": "ETP-4906: discarded alongside firstName — keeping lastName alone would leave an orphaned 'Apellido' field with no paired 'Nombre' counterpart, which is more confusing than the original duplicate, not less."
         },
         "email": {
           "visibility": "editable",
@@ -42,13 +54,15 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it."
+          "readOnlyLogicJs": "!!record.id",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it. ETP-4830: locked read-only once the record is persisted (readOnlyLogicJs, same 'locks after first save' pattern as sales-invoice/purchase-invoice's transactionDocument) — email seeds username and the linked etgo_account row at creation time only; editing it afterward would desync the two."
         },
         "password": {
           "visibility": "editable",
           "section": "security",
           "displayLogic": null,
-          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4829: on create, this same field doubles as an optional temporary workaround — if an admin types a password here, com.etendoerp.go's UserRoleAssignmentHandler also uses it (hashed, validated against PasswordPolicy.isStrong) to create the linked etgo_account already active, instead of pending on ETP-4830's invite-email flow. AD_User.Password itself is unaffected (unrelated password store)."
+          "displayLogicJs": "!!record.id",
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave). ETP-4830: the create-time 'admin types a password, skips the invite email' bypass this field used to double as (ETP-4829) was removed server-side — com.etendoerp.go no longer reads a submitted password at creation, every new user now always goes through the invite-email flow (backend confirmed done: EtendoGoAccountProvisioning deleted entirely, pre-hook no longer reads password). The input is hidden on the CREATE form entirely via displayLogicJs (only rendered once record.id exists, i.e. on an already-persisted user) — not discarded outright, since resetting an existing user's password after creation is a separate, still-valid use of this same native AD_User.Password field."
         },
         "isPasswordExpired": {
           "visibility": "readOnly",
@@ -65,6 +79,15 @@
           "grid": true,
           "section": "security",
           "reason": "Account lock status, typically system-managed but visible for admin review"
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "inlineToggle": true,
+          "gridOrder": 5,
+          "section": "security",
+          "derivation": null,
+          "reason": "ETP-4830 — 'Activo' toggle, human-confirmed to match the ticket's reference screenshot (grid column + detail-header toggle next to the invitation pill). Raw AD default pins this field to visibility: system with derivation: {type: computed, source: true} (always hardcoded true, hidden) — overridden here to visibility: editable + an explicit derivation: null (same 'suppress the raw computed derivation on a system->editable transition' escape hatch resolve-curated.js already documents and purchase-order/sales-order/sales-quotation/purchase-invoice/sales-invoice's currency/transactionDocument fields already use; without it, resolve-curated.js's copyRawProps would still copy the raw computed derivation onto the curated field even after visibility flips, and NEO would keep overriding any admin-set value on save). inlineToggle: true renders it as a live-PATCHing Switch in the grid (generate-frontend.js's togglePart, no generator change needed — DataTable.cellRenderers.jsx's renderBooleanCell already handles col.toggle generically). De-activating a user does NOT delete the AD_User record or block admins from viewing/editing it — standard Etendo de-activation semantics (see this field's own AD help text: de-activated records stay available for reporting/auditing, just unavailable for new selection)."
         },
         "description": {
           "visibility": "editable",
@@ -94,11 +117,11 @@
           "reason": "Supervisor for escalation workflows"
         },
         "defaultRole": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
           "form": false,
           "section": "defaults",
-          "reason": "Editing moved to the AssignRoleControl headerExtra (ETP-4512), which writes this same field but sources its dropdown options from the unrestricted userRoles.role selector instead of this field's own EXISTS-restricted native selector (which only lists roles the user already has, useless for assigning a NEW one). Shown here as a read-only grid badge only; the AssignRoleControl.jsx headerExtra is the only editing surface. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
+          "reason": "Editing is handled by the AssignRoleControl headerExtra (ETP-4512), which writes this field while sourcing options from the unrestricted userRoles.role selector instead of this field's EXISTS-restricted native selector. Keep the field out of the generated form (form:false) but writable in the API so the custom control and UserRoleAssignmentHandler can persist the administrator's assignment. Still cascades defaultClient/defaultOrganization via dependsOn below, unaffected by this change. No columnType/enumValues override: a hardcoded value->name map assumed every tenant reuses GOClient's exact role ids (fixed 2026-07-27 — showed the raw AD_Role_ID for any other tenant's users, see SFRolesOverview.java's javadoc for the same class of bug). The default foreignKey grid renderer already resolves this field's own `$_identifier` companion value (the role's real, per-tenant name) via resolveIdentifier(), which is correct for every tenant without a static map."
         },
         "defaultLanguage": {
           "visibility": "editable",
@@ -165,109 +188,28 @@
         }
       }
     },
-    "userRoles": {
-      "hideDelete": true,
-      "fields": {
-        "role": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true,
-          "reason": "Role assignment now happens exclusively via the user header's AssignRoleControl (ETP-4512), which enforces a single active role and is the only writer of AD_User_Roles (via UserRoleAssignmentHandler in com.etendoerp.go). This grid becomes a read-only confirmation view; visibility:readOnly on every field in this entity empties addLineFields.entry so the Add-line button no longer renders."
-        },
-        "roleAdmin": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reason": "See role field above — locked read-only alongside it."
-        }
-      }
-    },
+    "userRoles": { "exclude": true },
     "emailConfiguration": {
-      "fields": {
-        "smtpServer": {
-          "visibility": "editable",
-          "grid": true,
-          "searchable": true,
-          "section": "server"
-        },
-        "sMTPAuthentification": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server",
-          "reason": "Controls whether auth fields are relevant"
-        },
-        "smtpServerAccount": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "auth"
-        },
-        "smtpServerPassword": {
-          "visibility": "editable",
-          "section": "auth"
-        },
-        "smtpServerSenderAddress": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "smtpConnectionSecurity": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server"
-        },
-        "smtpPort": {
-          "visibility": "editable",
-          "grid": true,
-          "section": "server"
-        },
-        "smtpConnectionTimeout": {
-          "visibility": "editable",
-          "section": "server",
-          "reason": "Advanced setting, form-only"
-        },
-        "fromName": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "replyToAddress": {
-          "visibility": "editable",
-          "section": "sender"
-        },
-        "testSuccessful": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reason": "Status flag from last SMTP test"
-        },
-        "lastTestDate": {
-          "visibility": "readOnly",
-          "reason": "Timestamp of last SMTP test"
-        },
-        "active": {
-          "visibility": "editable",
-          "grid": true
-        },
-        "defaultConfiguration": {
-          "visibility": "editable",
-          "grid": true,
-          "reason": "Marks this as the default SMTP config"
-        }
-      }
+      "exclude": true,
+      "reason": "ETP-4999 — 'Configuración del correo electrónico' removed from the Users window tab strip entirely (human-confirmed not relevant to this window). Same 'exclude the whole child entity' pattern userRoles already uses above (ETP-4906): closes the entity in NEO (ISINCLUDED='N') and stops the generator from emitting detailEntity/DetailTable/DetailForm/detailProcesses/addLineFields for it. The rule decisions below (EmailConfiguration_Port_Smtpconnectionsecurity, Test_SMTP_Connection) are left as historical documentation, unchanged, matching the precedent already set for userRoles' own AD_Role_of_Client rule."
     }
   },
   "rules": {
     "SL_User_Name_Lastname": {
       "type": "callout",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Auto-composes full Name from First Name and Last Name when Last Name changes",
-      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
-      "reason": "Simple name concatenation, core UX improvement"
+      "impactIfOmitted": "No impact since lastName is now discarded (ETP-4906) — there is nothing left to type into that would trigger this callout",
+      "reason": "lastName field discarded from the form in ETP-4906 (duplicate 'Nombre' field fix), so this callout has no trigger left"
     },
     "SL_User_Name_Firstname": {
       "type": "callout",
       "entity": "user",
-      "decision": "Keep",
+      "decision": "Omit",
       "description": "Auto-composes full Name from First Name and Last Name when First Name changes",
-      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
-      "reason": "Simple name concatenation, core UX improvement"
+      "impactIfOmitted": "No impact since firstName is now discarded (ETP-4906) — there is nothing left to type into that would trigger this callout",
+      "reason": "firstName field discarded from the form in ETP-4906 (duplicate 'Nombre' field fix), so this callout has no trigger left"
     },
     "SL_User_Name_Name": {
       "type": "callout",
@@ -346,8 +288,8 @@
       "entity": "user",
       "decision": "Omit",
       "description": "Shows password field only after record is saved (AD_USER_ID is not empty) or on autosave",
-      "impactIfOmitted": "Password field is always visible (simpler UX for admin config)",
-      "reason": "Suppressed via displayLogic: null in field decision, password is always visible in simplified UI"
+      "impactIfOmitted": "Raw AD displayLogic replaced by displayLogicJs: \"!!record.id\" on the field decision — password field is hidden entirely on the create form (invite-email is now the only account-provisioning path, ETP-4830) and only appears once the record is persisted, for the existing-user password-reset use case",
+      "reason": "Suppressed via displayLogic: null in field decision; visibility now driven purely by displayLogicJs (ETP-4830)"
     },
     "Display_EmailServerPassword": {
       "type": "displayLogic",

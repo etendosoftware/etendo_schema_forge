@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { waitForEmail, verificationTokenFromEmail } from '../helpers/email-sink.js';
 
 /**
  * Onboarding — Real integration E2E: register a new user, complete profile,
@@ -15,6 +16,28 @@ import { resolve } from 'node:path';
 
 const RUN_INTEGRATION = process.env.E2E_ONBOARDING_INTEGRATION === '1';
 const SLOW_MS = Number(process.env.E2E_SLOW_MS || 0);
+
+function loadOnboardingAccountCount() {
+  const configuredPath = process.env.E2E_ONBOARDING_ACCOUNTS_FILE
+    || resolve(import.meta.dirname, '../../onboarding-accounts.json');
+  let configuredValue = 1;
+
+  try {
+    configuredValue = JSON.parse(readFileSync(configuredPath, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  const count = Number(process.env.E2E_ONBOARDING_ACCOUNT_COUNT
+    || (typeof configuredValue === 'number' ? configuredValue : configuredValue?.count)
+    || 1);
+  if (!Number.isInteger(count) || count < 1 || count > 10) {
+    throw new Error(`E2E onboarding account count must be an integer between 1 and 10, got: ${count}`);
+  }
+  return count;
+}
+
+const ONBOARDING_ACCOUNT_COUNT = loadOnboardingAccountCount();
 
 function uniqueSuffix() {
   return randomBytes(4).toString('hex');
@@ -32,6 +55,66 @@ async function goToRegister(page) {
   await expect(page.locator('#reg-name')).toBeVisible({ timeout: 10_000 });
 }
 
+const EMAIL_SINK_URL = process.env.E2E_EMAIL_SINK_URL || 'http://127.0.0.1:8025';
+
+/**
+ * ETP-4798 — clears the confirm-your-email wall that now sits between registration and step 1.
+ *
+ * Waits for whichever screen actually appears, because BOTH are correct depending on the
+ * environment. The backend only leaves a confirmation pending when the welcome mail was accepted
+ * for delivery; with no email sink (or no provider) it drops the token and leaves the account
+ * ungated, and registration lands on the profile step exactly as it did before this feature. So
+ * the wall is asserted when it is there and skipped when it is not — this mirrors the backend's
+ * own fail-open rather than papering over it.
+ *
+ * When the wall IS shown, this confirms the address the way a user would: it reads the link out of
+ * the real welcome mail in the sink and follows it. That keeps the gate under test instead of
+ * disabling it for the E2E run.
+ */
+async function emailSinkIsReachable(request) {
+  try {
+    const response = await request.get(`${EMAIL_SINK_URL}/health`, { timeout: 2_000 });
+    return response.ok();
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves to true when registration stopped at the wall, false when it went straight to step 1. */
+async function registrationStoppedAtWall(page) {
+  const wall = page.getByTestId('verify-email-step');
+  const profile = page.getByText(/vamos a dejar todo listo/i);
+  await expect(wall.or(profile).first()).toBeVisible({ timeout: 15_000 });
+  return wall.isVisible();
+}
+
+async function passEmailConfirmationWall(page, request, email) {
+  if (!(await registrationStoppedAtWall(page))) {
+    return;
+  }
+
+  if (!(await emailSinkIsReachable(request))) {
+    throw new Error(
+      'Registration stopped at the ETP-4798 confirm-your-email wall, and there is no email sink at '
+      + `${EMAIL_SINK_URL} to read the confirmation link from. This environment needs one of:\n`
+      + '  - point etendo.go.email.provider.baseUrl at the local sink and run with '
+      + 'E2E_EMAIL_SINK=1 (keeps the gate under test), or\n'
+      + '  - set etendo.go.email.provider.enabled=false, so the backend cannot deliver the mail, '
+      + 'drops the token and leaves the account ungated (skips the gate).\n'
+      + 'See docs/e2e-testing-guide.md.',
+    );
+  }
+
+  const message = await waitForEmail(request, {
+    recipient: email,
+    template: 'custom',
+    baseURL: EMAIL_SINK_URL,
+  });
+  // Straight to the app's own route with the token: the flow reads it off the query string,
+  // confirms it, strips it from the address bar and drops into onboarding.
+  await page.goto(`/onboarding?verifyToken=${encodeURIComponent(verificationTokenFromEmail(message))}`);
+}
+
 test.describe('Onboarding — Register new user (integration)', () => {
   test.describe.configure({ timeout: 300_000 });
 
@@ -40,9 +123,10 @@ test.describe('Onboarding — Register new user (integration)', () => {
     'Set E2E_ONBOARDING_INTEGRATION=1 to run this live onboarding integration test.',
   );
 
-  test('registers a new user, selects Autónomo, and verifies greeting', async ({ page }) => {
+  test('registers new users from the configured account count', async ({ page, context, request }) => {
+    for (let accountNumber = 1; accountNumber <= ONBOARDING_ACCOUNT_COUNT; accountNumber += 1) {
     const suffix = uniqueSuffix();
-    const userName = `E2E User ${suffix}`;
+    const userName = `E2E User ${accountNumber} ${suffix}`;
     const userEmail = `e2e-${suffix}@test-onboarding.com`;
     const userPassword = `E2e-${suffix}-Pass!99`;
 
@@ -66,6 +150,12 @@ test.describe('Onboarding — Register new user (integration)', () => {
 
     await page.getByTestId('action-register-submit').click();
     await slow(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 2b: Confirm the email address (ETP-4798), when the wall is shown
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 3: Profile step — verify greeting contains the user name
@@ -163,9 +253,28 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/dashboard/);
 
-    // Save credentials so downstream integration tests (e.g. contacts) can reuse this user
-    const credentialsPath = resolve(import.meta.dirname, '../../.auth-credentials.json');
-    writeFileSync(credentialsPath, JSON.stringify({ email: userEmail, password: userPassword }, null, 2));
+    // Keep the first account in the legacy location for downstream integration tests.
+    // Numbered files make every generated admin available to cross-client E2E setup.
+    const credentials = { email: userEmail, password: userPassword };
+    const credentialsDir = resolve(import.meta.dirname, '../..');
+    writeFileSync(
+      resolve(credentialsDir, `.auth-credentials-${accountNumber}.json`),
+      JSON.stringify(credentials, null, 2),
+    );
+    if (accountNumber === 1) {
+      writeFileSync(
+        resolve(credentialsDir, '.auth-credentials.json'),
+        JSON.stringify(credentials, null, 2),
+      );
+    }
+
+    if (accountNumber < ONBOARDING_ACCOUNT_COUNT) {
+      // Each iteration must start as an anonymous visitor so the same
+      // onboarding flow provisions an independent account and tenant.
+      await context.clearCookies();
+      await page.evaluate(() => localStorage.clear());
+    }
+    }
   });
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -183,7 +292,10 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-email').fill(email);
     await page.locator('#reg-password').fill(password);
     await page.getByTestId('action-register-submit').click();
-    await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
+    // ETP-4798: this test is about the SECOND registration being refused, so it only needs the
+    // first one to have gone through. Either landing screen proves that, and accepting both keeps
+    // it from needing a mail round-trip it has no use for.
+    await registrationStoppedAtWall(page);
     await slow(page);
 
     // Clear session so we land on the register form again
@@ -274,14 +386,17 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // CORNER CASE 4: Empty name on profile step — Continuar disabled
   // ═════════════════════════════════════════════════════════════════════════
 
-  test('cannot continue on profile step with empty name', async ({ page }) => {
+  test('cannot continue on profile step with empty name', async ({ page, request }) => {
     const suffix = uniqueSuffix();
+    const userEmail = `e2e-profile-${suffix}@test-onboarding.com`;
     await goToRegister(page);
 
     await page.locator('#reg-name').fill(`Profile User ${suffix}`);
-    await page.locator('#reg-email').fill(`e2e-profile-${suffix}@test-onboarding.com`);
+    await page.locator('#reg-email').fill(userEmail);
     await page.locator('#reg-password').fill(`E2e-${suffix}-Pass!99`);
     await page.getByTestId('action-register-submit').click();
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
 
@@ -304,7 +419,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // CORNER CASE 5: Provisioning failure — backend error during environment creation
   // ═════════════════════════════════════════════════════════════════════════
 
-  test('shows error and stays on onboarding when provisioning fails', async ({ page }) => {
+  test('shows error and stays on onboarding when provisioning fails', async ({ page, request }) => {
     const suffix = uniqueSuffix();
     const userName = `E2E ProvFail ${suffix}`;
     const userEmail = `e2e-provfail-${suffix}@test-onboarding.com`;
@@ -318,6 +433,8 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-email').fill(userEmail);
     await page.locator('#reg-password').fill(userPassword);
     await page.getByTestId('action-register-submit').click();
+
+    await passEmailConfirmationWall(page, request, userEmail);
 
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 15_000 });
 

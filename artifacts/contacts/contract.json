@@ -1,8 +1,8 @@
 {
-  "version": "0.48.0",
-  "generatedAt": "2026-07-31T19:26:59.736Z",
-  "updatedAt": "2026-08-10T11:24:59.285Z",
-  "checksum": "cc53b8a90aa98594",
+  "version": "0.50.0",
+  "generatedAt": "2026-08-25T11:37:47.653Z",
+  "updatedAt": "2026-08-25T18:09:16.378Z",
+  "checksum": "397296243d877390",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -153,7 +153,7 @@
         "dedupe": {
           "scope": "file",
           "key": [
-            "etgoEmail"
+            "taxID"
           ]
         },
         "descriptor": "contacts",
@@ -162,19 +162,50 @@
             "target": "name",
             "aliases": [
               "nombre comercial",
-              "razon social"
+              "nombre",
+              "razon social",
+              "razón social"
             ],
             "label": "Commercial Name",
             "required": true,
             "type": "string"
           },
           {
+            "target": "etgoIsperson",
+            "aliases": [
+              "tipo",
+              "tipo de contacto",
+              "persona o empresa",
+              "tipo cliente"
+            ],
+            "label": "Contact Type (Person / Company)",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto",
+              "codigo categoria",
+              "código categoría",
+              "nombre categoria",
+              "nombre categoría"
+            ],
+            "label": "Contact Category"
+          },
+          {
             "target": "etgoFirstname",
             "aliases": [
-              "nombre"
+              "nombre de pila",
+              "nombre persona"
             ],
             "label": "First Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -184,7 +215,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -207,6 +238,47 @@
             ],
             "label": "Phone (Company)",
             "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoWeb",
+            "aliases": [
+              "web",
+              "website",
+              "sitio web",
+              "pagina web",
+              "página web"
+            ],
+            "label": "Website (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "oBTIKTaxIDKey",
+            "aliases": [
+              "clave nif pais residencia",
+              "clave nif país residencia",
+              "tipo identificacion fiscal",
+              "tipo identificación fiscal",
+              "tax id type"
+            ],
+            "label": "Tax ID Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "taxID",
+            "aliases": [
+              "cif/nif",
+              "cif",
+              "nif",
+              "tax id",
+              "taxid",
+              "identificacion fiscal",
+              "identificación fiscal"
+            ],
+            "label": "CIF/NIF",
+            "required": true,
             "type": "string"
           },
           {
@@ -926,6 +998,29 @@
             }
           },
           {
+            "name": "tbaiIssimplifiedinv",
+            "apiKey": "tbaiIssimplifiedinv",
+            "column": "EM_Tbai_Issimplifiedinv",
+            "label": "Simplified Invoice",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -1033,6 +1128,80 @@
               "raw": "record.customer",
               "evaluable": true,
               "js": "record.customer"
+            }
+          },
+          {
+            "name": "aeatsiiDefaultsiikey",
+            "apiKey": "aeatsiiDefaultsiikey",
+            "column": "EM_Aeatsii_Defaultsiikey",
+            "label": "SII Default Key",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "principal",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiSiikeylist",
+            "apiKey": "aeatsiiSiikeylist",
+            "column": "EM_Aeatsii_Siikeylist",
+            "label": "SII Key List",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
+            },
+            "enumValues": [
+              {
+                "value": "R",
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
+              },
+              {
+                "value": "F1",
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
+              },
+              {
+                "value": "F2",
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
+              },
+              {
+                "value": "F4",
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
+              }
+            ],
+            "defaultValue": "F1",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
             }
           },
           {
@@ -1359,6 +1528,13 @@
             }
           },
           {
+            "name": "tbaiIssimplifiedinv",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
             "name": "operator",
             "derivation": {
               "type": "computed",
@@ -1370,6 +1546,20 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiDefaultsiikey",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiSiikeylist",
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
             }
           },
           {
@@ -5145,7 +5335,7 @@
         "dedupe": {
           "scope": "file",
           "key": [
-            "etgoEmail"
+            "taxID"
           ]
         },
         "descriptor": "contacts",
@@ -5154,19 +5344,50 @@
             "target": "name",
             "aliases": [
               "nombre comercial",
-              "razon social"
+              "nombre",
+              "razon social",
+              "razón social"
             ],
             "label": "Commercial Name",
             "required": true,
             "type": "string"
           },
           {
+            "target": "etgoIsperson",
+            "aliases": [
+              "tipo",
+              "tipo de contacto",
+              "persona o empresa",
+              "tipo cliente"
+            ],
+            "label": "Contact Type (Person / Company)",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "category",
+            "aliases": [
+              "categoria",
+              "categoría",
+              "categoria de contacto",
+              "categoría de contacto",
+              "codigo categoria",
+              "código categoría",
+              "nombre categoria",
+              "nombre categoría"
+            ],
+            "label": "Contact Category"
+          },
+          {
             "target": "etgoFirstname",
             "aliases": [
-              "nombre"
+              "nombre de pila",
+              "nombre persona"
             ],
             "label": "First Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -5176,7 +5397,7 @@
               "apellidos"
             ],
             "label": "Last Name (Company)",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -5199,6 +5420,47 @@
             ],
             "label": "Phone (Company)",
             "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoWeb",
+            "aliases": [
+              "web",
+              "website",
+              "sitio web",
+              "pagina web",
+              "página web"
+            ],
+            "label": "Website (Company)",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "oBTIKTaxIDKey",
+            "aliases": [
+              "clave nif pais residencia",
+              "clave nif país residencia",
+              "tipo identificacion fiscal",
+              "tipo identificación fiscal",
+              "tax id type"
+            ],
+            "label": "Tax ID Type",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "target": "taxID",
+            "aliases": [
+              "cif/nif",
+              "cif",
+              "nif",
+              "tax id",
+              "taxid",
+              "identificacion fiscal",
+              "identificación fiscal"
+            ],
+            "label": "CIF/NIF",
+            "required": true,
             "type": "string"
           },
           {
@@ -5670,7 +5932,7 @@
             "apiKey": "tbaiIssimplifiedinv",
             "column": "EM_Tbai_Issimplifiedinv",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -5878,7 +6140,7 @@
             "apiKey": "aeatsiiDefaultsiikey",
             "column": "EM_Aeatsii_Defaultsiikey",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -5886,7 +6148,7 @@
             "apiKey": "aeatsiiSiikeylist",
             "column": "EM_Aeatsii_Siikeylist",
             "type": "enum",
-            "visibility": "system",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -11983,6 +12245,22 @@
         "description": "Default value for 'active' in businessPartner should be a string"
       },
       {
+        "id": "t-default-value-type-businessPartner-aeatsiiDefaultsiikey",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiDefaultsiikey' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-aeatsiiSiikeylist",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiSiikeylist' in businessPartner should be a string"
+      },
+      {
         "id": "t-default-value-type-businessPartner-businessPartnerCategory",
         "category": "default-value-type",
         "entity": "businessPartner",
@@ -12061,6 +12339,14 @@
         "field": "setNewCurrency",
         "runner": "node",
         "description": "Default value for 'setNewCurrency' in businessPartner should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartner-tbaiIssimplifiedinv",
+        "category": "default-value-type",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Default value for 'tbaiIssimplifiedinv' in businessPartner should be a string"
       },
       {
         "id": "t-default-value-type-businessPartner-vendorBlocking",
@@ -13351,6 +13637,22 @@
         "description": "Field 'active' should be present in businessPartner"
       },
       {
+        "id": "t-field-presence-businessPartner-aeatsiiDefaultsiikey",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Field 'aeatsiiDefaultsiikey' should be present in businessPartner"
+      },
+      {
+        "id": "t-field-presence-businessPartner-aeatsiiSiikeylist",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Field 'aeatsiiSiikeylist' should be present in businessPartner"
+      },
+      {
         "id": "t-field-presence-businessPartner-bPCurrencyID",
         "category": "field-presence",
         "entity": "businessPartner",
@@ -13645,6 +13947,14 @@
         "field": "taxID",
         "runner": "node",
         "description": "Field 'taxID' should be present in businessPartner"
+      },
+      {
+        "id": "t-field-presence-businessPartner-tbaiIssimplifiedinv",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Field 'tbaiIssimplifiedinv' should be present in businessPartner"
       },
       {
         "id": "t-field-presence-businessPartner-uRL",
@@ -14479,6 +14789,22 @@
         "description": "Field 'active' should have type 'boolean' in businessPartner"
       },
       {
+        "id": "t-field-type-businessPartner-aeatsiiDefaultsiikey",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiDefaultsiikey",
+        "runner": "node",
+        "description": "Field 'aeatsiiDefaultsiikey' should have type 'boolean' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-aeatsiiSiikeylist",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "aeatsiiSiikeylist",
+        "runner": "node",
+        "description": "Field 'aeatsiiSiikeylist' should have type 'string' in businessPartner"
+      },
+      {
         "id": "t-field-type-businessPartner-bPCurrencyID",
         "category": "field-type",
         "entity": "businessPartner",
@@ -14773,6 +15099,14 @@
         "field": "taxID",
         "runner": "node",
         "description": "Field 'taxID' should have type 'string' in businessPartner"
+      },
+      {
+        "id": "t-field-type-businessPartner-tbaiIssimplifiedinv",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "tbaiIssimplifiedinv",
+        "runner": "node",
+        "description": "Field 'tbaiIssimplifiedinv' should have type 'boolean' in businessPartner"
       },
       {
         "id": "t-field-type-businessPartner-uRL",
@@ -16831,14 +17165,6 @@
         "description": "System field 'acquisitionCost' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-system-field-businessPartner-aeatsiiDefaultsiikey",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "aeatsiiDefaultsiikey",
-        "runner": "node",
-        "description": "System field 'aeatsiiDefaultsiikey' should exist in backend but not frontend for businessPartner"
-      },
-      {
         "id": "t-system-field-businessPartner-aeatsiiMenor",
         "category": "system-field",
         "entity": "businessPartner",
@@ -16853,14 +17179,6 @@
         "field": "aeatsiiRepTaxid",
         "runner": "node",
         "description": "System field 'aeatsiiRepTaxid' should exist in backend but not frontend for businessPartner"
-      },
-      {
-        "id": "t-system-field-businessPartner-aeatsiiSiikeylist",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "aeatsiiSiikeylist",
-        "runner": "node",
-        "description": "System field 'aeatsiiSiikeylist' should exist in backend but not frontend for businessPartner"
       },
       {
         "id": "t-system-field-businessPartner-bankAccount",
@@ -17325,14 +17643,6 @@
         "field": "taxExempt",
         "runner": "node",
         "description": "System field 'taxExempt' should exist in backend but not frontend for businessPartner"
-      },
-      {
-        "id": "t-system-field-businessPartner-tbaiIssimplifiedinv",
-        "category": "system-field",
-        "entity": "businessPartner",
-        "field": "tbaiIssimplifiedinv",
-        "runner": "node",
-        "description": "System field 'tbaiIssimplifiedinv' should exist in backend but not frontend for businessPartner"
       },
       {
         "id": "t-system-field-businessPartner-transactionalBankAccount",
@@ -20809,23 +21119,23 @@
       }
     ],
     "summary": {
-      "total": 1147,
+      "total": 1153,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
-        "default-value-type": 47,
+        "default-value-type": 50,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 141,
-        "field-type": 141,
+        "field-presence": 144,
+        "field-type": 144,
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 519,
+        "system-field": 516,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1147,
+        "node": 1153,
         "junit": 0
       }
     }

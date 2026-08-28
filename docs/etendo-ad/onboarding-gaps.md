@@ -26,6 +26,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
+| L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -893,6 +894,13 @@ WHERE au.ad_client_id = '<NEW_CLIENT_ID>';
 > `neo-headless.md` §4.10–4.11) instead of the Webhooks module, so no grant is needed at all — this
 > whole gap class cannot recur for these 3 webhooks. Left below for historical context; the
 > corrective/preventive code this section describes has since been removed as dead weight.
+>
+> **Related leak (2026-08-21, ETP-4968):** stale `SMFWHE_DEFINEDWEBHOOK_ROLE` rows from this
+> already-superseded flow leaked from GOClient's sample data into the module's universal baseline
+> via an `export.database` run, breaking CI — see the "FOLLOW-UP" note at the top of
+> `cli/src/data-fixes/sql/20260727T114306Z__R16-tenant-roles-and-webhook-access.sql`. General risk:
+> `export.database` dumps a module-owned table's full live state regardless of client scope, so any
+> table with client-scoped rows plus a dev DB carrying sample-tenant data can leak the same way.
 
 **Symptom:** any authenticated role other than System Administrator (`AD_Role_ID = '0'`) gets a flat `404` from every Schema Forge webhook that requires a `SMFWHE_DEFINEDWEBHOOK_ROLE` grant — `SFListMenu`, `SFWindowAccessMap`, `SFRolesOverview`. Observable symptoms compound in a confusing way because the two callers fail in opposite directions: the sidebar shows the **full, unfiltered** menu (`useRoleMenu()`'s fetch fails → `AppLayout` fails **open** on a fetch error) while **every window** is denied (`fetchWindowAccess`'s fetch fails → `AuthContext`'s `windowAccess` map stays at its fail-**closed** `{}` default → `WindowAccessGuard` blocks everything).
 
@@ -1100,6 +1108,73 @@ also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, b
 checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
 the repo split) and is not on a branch related to this ticket — no changes were made there. If it
 needs reconciling with the current fix catalog, that is a separate task.
+
+---
+
+## L — Tenant Ownership
+
+### L1 — Pre-existing tenants have no `AD_User` flagged as owner (`EM_ETGO_Is_Owner`, ETP-4830)
+
+**Symptom:** `AD_User.EM_ETGO_Is_Owner` (`char(1)`, `NOT NULL DEFAULT 'N'`) is a new extension
+column on core's `AD_User` table (ETP-4830, added via the `/etendo:alter-db` webhook mechanism —
+same convention as `AD_Role.EM_ETGO_Show_Acct_Fields`) that flags the ONE user who completed
+self-service registration for a client, that client's "owner" — used to lock down PUT/PATCH and
+role-reassignment on that user's own `AD_User` record to the owner alone. Because the column
+defaults `'N'`, every tenant provisioned BEFORE this column shipped reads back with **zero**
+owner-flagged users, so both enforcement checks
+(`UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`,
+`UserRoleCompositionService#enforceOwnerProtection`) are silent no-ops for them — not a security
+hole (nothing is left more permissive than before this ticket), just a feature that has not yet
+reached tenants that already existed.
+
+**Root cause:** the column is only auto-set going forward, once, right after
+`EtendoGoJwtServlet#createClient` provisions a BRAND NEW client
+(`OwnerSupport#markAsOwnerIfNoneExists`, idempotent — a no-op once a client already has an owner).
+There is no equivalent write for a tenant that already existed before this shipped. This is the
+same "preventive-only, corrective not yet done" shape as **A2c**/**K1** above, not a design defect
+— the retroactive "who is the real owner" heuristic for an already-provisioned tenant is a data
+judgment call, not something safe to infer and apply silently.
+
+**Where it should be fixed:** consolidated into **ETP-4877** (the existing-tenant
+system-role-templates retrofit) rather than run as a separate, uncoordinated backfill — a
+same-session ETP-4830 follow-up found the two retrofits would otherwise disagree with each other,
+since ETP-4877 also needs to decide, per existing user, whether to mint a personal role (its own
+item 5.1) — and the owner is the one existing user who must NOT get one (5.2: an owner's role is
+the pre-existing, auto-granted `is_client_admin='Y'` "Company Admin" role, not a personal
+composition role). ETP-4877's Jira description was rewritten to own owner-detection and
+personal-role backfill as mutually-exclusive steps of the same script, resolving the owner FIRST
+and excluding them from the personal-role pass. This is still a one-time backfill data-fix
+(Remedy's domain, `cli/src/data-fixes/`) — **shipped 2026-08-26** as
+`20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit.sql`. The candidate owner-detection
+heuristic (earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED`
+ascending) is now confirmed and implemented: R26 Step 0 mirrors `OwnerSupport
+#markAsOwnerIfNoneExists`'s own atomic "UPDATE ... WHERE NOT EXISTS (already has an owner)" shape,
+just with the target resolved by this heuristic. Live-validated (2026-08-26, rolled-back
+transactions) across all 41 real tenants on the local dev DB: idempotent convergence confirmed for
+every tenant, including the one edge case found (`QA Testing` has ZERO `is_client_admin` holders —
+Step 0 is correctly a safe no-op there, surfaced via R26's own `@report` as `no_owner_candidate`
+rather than silently skipped). R26 also closes ETP-4877 items 1/3/4/5 (personal-role backfill from
+current access, org-access/defaults backfill for pre-existing personal-role holders, and
+`AD_User_Roles` single-active-row cleanup) in the same file, plus a mid-delivery scope addition
+(`AD_Role.EM_ETGO_Show_Acct_Fields` derived-flag sync, retroactive half in R26 Step 8, "going
+forward" half in `UserRoleCompositionService#syncShowAccountingFieldsFlag`, Java). The sibling
+`20260826T121500Z__R27-deactivate-r16-duplicate-roles.sql` closes item 6 (deactivates confirmed-
+unused R16-era per-client role clones); `R16` itself is retired permanently via the new
+`cli/src/data-fixes/retired.json` mechanism (item 7) — see `run.js`'s `loadRetiredList`/
+`verifyRetiredList`/`loadCatalogWithRetirement`. Full detail: `onboarding-and-datafixes-map.md`'s
+L1 row and `tenant-remediation-knowledge.md`'s ETP-4877 section.
+
+The full mechanism (assignment point, both enforcement paths, rollout/no-op-until-backfilled
+behavior) is documented in `com.etendoerp.go`'s `docs/neo-headless.md` §7 item 10 — deliberately
+not repeated here in full, to avoid a second copy that can drift; this entry exists only to route
+the still-open corrective half through the same catalog every other two-front gap in this document
+uses, per this repo's own root `CLAUDE.md` convention ("Etendo AD findings go in
+`docs/etendo-ad/`, NOT in per-window artifacts").
+
+**Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **SHIPPED**
+2026-08-26 under **ETP-4877** (`R26-tenant-owner-and-personal-role-retrofit.sql` +
+`R27-deactivate-r16-duplicate-roles.sql`, plus the R16 retirement mechanism and the
+`EM_ETGO_Show_Acct_Fields` derived-flag sync). Both fronts now closed.
 
 ---
 

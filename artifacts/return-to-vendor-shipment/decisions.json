@@ -3,6 +3,9 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
+    "sendDocument": {
+      "enabled": false
+    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -396,7 +399,8 @@
           "section": "other"
         },
         "storageBin": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "_note": "ETP-4863: included in the spec (IsIncluded=Y) so the header-warehouse locator injected by NeoHandlerUtils survives NeoFieldFilter.filterCreateRequest; hidden from the UI, derived backend-side."
         },
         "mConditionGoodsID": {
           "visibility": "discarded"

@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.46.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-08-11T19:52:33.007Z",
-  "checksum": "3cb3e09676655071",
+  "updatedAt": "2026-08-25T13:38:55.278Z",
+  "checksum": "03903b84bac83ab0",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -44,9 +44,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
@@ -1407,9 +1404,8 @@
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | (@IsSOTrx@='Y' & @ISLINKEDTOPRODUCT@='Y' & @PRODUCTTYPE@='S') | @UomManagement@='Y'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "evaluable": true,
+              "js": "record['processed'] === true || (record['salesTransaction'] === true && record['iSLINKEDTOPRODUCT'] === 'Y' && record['pRODUCTTYPE'] === 'S') || record['uomManagement'] === 'Y'"
             }
           },
           {
@@ -2688,6 +2684,13 @@
                 "labels": {
                   "es_ES": "Conciliado"
                 }
+              },
+              {
+                "value": "ETGOERR",
+                "name": "Payment Error",
+                "labels": {
+                  "es_ES": "Payment Error"
+                }
               }
             ],
             "validation": {
@@ -2742,9 +2745,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
@@ -4983,35 +4983,47 @@
       "lineTax": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/lineTax",
         "detailUrl": "/sws/neo/purchase-order/lineTax/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "reservedStock": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/reservedStock",
         "detailUrl": "/sws/neo/purchase-order/reservedStock/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "paymentDetails": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/purchase-order/paymentDetails",
         "detailUrl": "/sws/neo/purchase-order/paymentDetails/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [

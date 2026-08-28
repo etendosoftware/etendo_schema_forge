@@ -832,9 +832,12 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} />);
     selectRows();
 
-    await user.click(screen.getByText(/^print/).closest('button'));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('print'));
 
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function), 'http://localhost/api');
   });
 
   it('hands the selected rows to onCloneRow', async () => {
@@ -843,7 +846,8 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} onCloneRow={onCloneRow} />);
     selectRows();
 
-    await user.click(screen.getByText(/^cloneOrderBtn/).closest('button'));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('cloneOrderBtn'));
 
     expect(onCloneRow).toHaveBeenCalledWith(SELECTED);
   });
@@ -853,8 +857,11 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} />);
     act(() => { tableProps.onSelectionChange(['r1', 'r2']); });
 
-    await user.click(screen.getByText(/^print/).closest('button'));
-    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('print'));
+    // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
+    // client-rendered document (design A) instead of the print-* artifact.
+    expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function), 'http://localhost/api');
   });
 
   it('renders host-supplied bulkActions with the selection context', () => {

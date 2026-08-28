@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { X, Upload, Trash2, Loader2, Download } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { usePreviewAttachment, ACCEPTED_TYPES, ACCEPT_ATTR } from './usePreviewAttachment.js';
+import { useMainAttachment } from './useMainAttachment.js';
 import PdfViewer from './PdfViewer.jsx';
+import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 function getBackdropClass(animState) {
   if (animState === 'opening') return 'opacity-0';
@@ -20,22 +21,29 @@ function getCardClass(animState) {
 function ManagedLeftPanel({ cfg, leftPanel }) {
   const ui = useUI();
   const autoFetch = !!(cfg.autoFetch);
-  const attachment = usePreviewAttachment({
+  // ETP-4315 — backed by a real, marked `Attachment` row (shared with the
+  // sidebar/"Adjuntos" tab), identified by `tableName`. The retired
+  // ETGO_PREVIEW_FILE-backed `usePreviewAttachment` hook (specName-keyed) was
+  // removed once every caller had migrated to this one (Phase 9).
+  const attachment = useMainAttachment({
     documentId: cfg.documentId ?? null,
-    specName: cfg.specName ?? null,
+    tableName: cfg.tableName ?? null,
     storeCondition: cfg.storeCondition ?? false,
     token: cfg.token ?? null,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
-    tableName: cfg.tableName ?? null,
+    recordUpdated: cfg.recordUpdated ?? null,
   });
 
+  // ETP-4787 — a stale stored file is reported as no file at all. Consumers use this to
+  // decide whether to serve the cached bytes (InvoicePreview's Download does), and a
+  // rendering older than the record must not win over the freshly rendered one.
   useEffect(() => {
-    cfg.onFileChange?.(attachment.storedFile);
+    cfg.onFileChange?.(attachment.storedFileIsStale ? null : attachment.storedFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachment.storedFile]);
+  }, [attachment.storedFile, attachment.storedFileIsStale]);
 
   const autoStoreAttempted = useRef(false);
-  const autoStoreDocKey = `${cfg.documentId}::${cfg.specName}`;
+  const autoStoreDocKey = `${cfg.documentId}::${cfg.tableName}`;
   const prevAutoStoreKey = useRef(null);
   if (prevAutoStoreKey.current !== autoStoreDocKey) {
     prevAutoStoreKey.current = autoStoreDocKey;
@@ -46,7 +54,11 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     if (!cfg.storeCondition) return;
     const hasSource = cfg.sourceBlob || cfg.sourceUrl;
     if (!hasSource) return;
-    if (attachment.storedFile || attachment.isBusy) return;
+    // A stale stored file is treated as absent so the fresh rendering overwrites it —
+    // `uploadAndMark` deletes the previous marked attachment in the same transaction.
+    // Without this the staleness check would be permanent: every open re-renders and
+    // nothing ever refreshes the cache.
+    if ((attachment.storedFile && !attachment.storedFileIsStale) || attachment.isBusy) return;
     if (autoStoreAttempted.current) return;
     autoStoreAttempted.current = true;
     const fileName = `${cfg.documentId ?? 'preview'}.pdf`;
@@ -56,7 +68,8 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
       attachment.storeUrl(cfg.sourceUrl, fileName).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfg.storeCondition, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId, attachment.storedFile, attachment.isBusy]);
+  }, [cfg.storeCondition, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId,
+      attachment.storedFile, attachment.storedFileIsStale, attachment.isBusy]);
 
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -196,7 +209,8 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  * @param {Object}   [attachmentConfig] - Optional file persistence config:
  *   {
  *     documentId: string,       - PK of the source document
- *     specName: string,         - e.g. 'sales-invoice'
+ *     tableName: string,        - AD_Table.name, e.g. 'C_Invoice' — identifies the
+ *       record's marked "main" Attachment (shared with the sidebar/"Adjuntos" tab)
  *     storeCondition: boolean,  - false = no-op, caller's leftPanel is used as-is
  *     sourceBlob?: Blob,        - Blob to cache on first open (preferred over sourceUrl)
  *     sourceUrl?: string,       - URL to fetch and cache (fallback when sourceBlob absent)
@@ -207,6 +221,11 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  *                                 record's attachments, so it appears in the Attachments
  *                                 tab (ETP-4855). Omit it for generated-PDF caches —
  *                                 nobody attached those. See usePreviewAttachment.
+ *     recordUpdated?: string,   - the record's `updated` (ETP-4787). When the marked
+ *                                 attachment predates it, the cache is treated as absent:
+ *                                 the fresh sourceBlob overwrites it and onFileChange
+ *                                 reports null meanwhile. Omit it and the cache behaves
+ *                                 exactly as before — never invalidated.
  *     token: string,
  *     apiBaseUrl: string,
  *   }
@@ -256,14 +275,19 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
   const activeContent = tabs.find((t) => t.key === activeTab)?.content ?? null;
 
   const cfg = attachmentConfig ?? {};
-  const shouldManagePanel = !!(cfg.storeCondition && cfg.documentId && cfg.specName);
+  const shouldManagePanel = !!(cfg.storeCondition && cfg.documentId && cfg.tableName);
   const resolvedLeftPanel = shouldManagePanel
     ? <ManagedLeftPanel cfg={cfg} leftPanel={leftPanel} data-testid="ManagedLeftPanel__152ff6" />
     : leftPanel;
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-foreground/30 ${getBackdropClass(animState)}`}
+      // z-[60], above SelectionToolbar's z-50 (ETP-4972 live-QA finding):
+      // both portal to document.body, so equal z-index left paint order to
+      // decide the winner, and the floating selection pill was showing on
+      // top of this preview when opened with rows still selected in the
+      // list behind it.
+      className={`fixed inset-0 z-[60] bg-foreground/30 ${getBackdropClass(animState)}`}
       onClick={triggerClose}
     >
       <div

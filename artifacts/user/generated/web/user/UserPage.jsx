@@ -2,12 +2,11 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import UserTable from './UserTable';
+import UserTable from '@/windows/custom/user/UserHeaderTable';
 import UserForm from './UserForm';
-import UserRolesTable from './UserRolesTable';
-import UserRolesForm from './UserRolesForm';
-import AssignRoleControl from '@/windows/custom/user/AssignRoleControl';
+import AssignTemplateRolesControl from '@/windows/custom/user/AssignTemplateRolesControl';
 import { AttachmentsTab } from '@/components/attachments';
+import UserRolesTab from '@/windows/custom/user/UserRolesTab';
 import catalogs from './mockCatalogs';
 
 
@@ -41,22 +40,10 @@ const draftMode = null;
 // @sf-generated-end draftMode:user
 
 // @sf-generated-start requiredHeaderFields:user
-const requiredHeaderFields = ['name', 'email', 'locked', 'lastPasswordUpdate'];
+const requiredHeaderFields = ['name', 'active', 'email', 'locked', 'lastPasswordUpdate'];
 // @sf-generated-end requiredHeaderFields:user
 
-// @sf-generated-start addLineFields:userRoles
-const addLineFields = {
-  entry: [
 
-  ],
-  derived: [
-
-  ],
-  hidden: [
-
-  ],
-};
-// @sf-generated-end addLineFields:userRoles
 
 export const api = {
   "specName": "user",
@@ -74,32 +61,6 @@ export const api = {
       "supportedFilters": [
         "name",
         "email"
-      ]
-    },
-    "userRoles": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": false,
-      "listUrl": "/sws/neo/user/userRoles",
-      "detailUrl": "/sws/neo/user/userRoles/{id}",
-      "supportedFilters": [
-        "role"
-      ]
-    },
-    "emailConfiguration": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/user/emailConfiguration",
-      "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
-      "supportedFilters": [
-        "smtpServer"
       ]
     }
   },
@@ -186,14 +147,6 @@ export const api = {
           }
         ]
       }
-    },
-    {
-      "entity": "userRoles",
-      "field": "role",
-      "column": "AD_Role_ID",
-      "reference": "Role",
-      "inputMode": "selector",
-      "url": "/sws/neo/user/userRoles/selectors/role"
     }
   ],
   "actions": [
@@ -209,14 +162,6 @@ export const api = {
       "column": "Grant_Portal_Access",
       "url": "/sws/neo/user/user/{id}/action/grantPortalAccess",
       "processId": "97FFD59B991D49BFB5153C309B009272",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "emailConfiguration",
-      "field": "smtpconnectiontest",
-      "column": "Smtpconnectiontest",
-      "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
-      "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
       "processType": "obuiapp"
     }
   ],
@@ -252,24 +197,20 @@ export default function UserPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="user"
-        detailEntity="userRoles"
         Form={UserForm}
-        DetailTable={UserRolesTable}
-        DetailForm={UserRolesForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="User"
-        detailLabel="User Roles"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        formFooter={AssignRoleControl}
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
+        formFooter={AssignTemplateRolesControl}
+        hidePrint
+        customTabs={[{ key: 'roles', labelKey: 'userRolesTabLabel', Component: UserRolesTab, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_User", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
       />
@@ -285,6 +226,8 @@ export default function UserPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hidePrint":true}}
+      hidePrint
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

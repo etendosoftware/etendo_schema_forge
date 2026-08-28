@@ -36,7 +36,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000001',
     isDefault: true,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     bankConnected: false,
     active: true,
     // Zero dependent records anywhere — the row kebab and bulk-delete both treat it as deletable.
@@ -51,7 +51,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: 'ES1212340000000000000002',
     isDefault: false,
-    pendingCount: 3,
+    eTGOPendingCount: 3,
     bankConnected: false,
     active: true,
     // Has movements/reconciliations/etc. — not deletable.
@@ -66,7 +66,7 @@ const ACCOUNTS = [
     currencyIso: 'EUR',
     iban: '',
     isDefault: false,
-    pendingCount: 0,
+    eTGOPendingCount: 0,
     active: true,
     deletable: true,
   },
@@ -147,14 +147,17 @@ test.describe('Financial Accounts — bulk delete blocked by non-deletable rows 
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('selecting only deletable accounts leaves "Eliminar seleccionados" enabled with no tooltip', async ({ page }) => {
+  test('selecting only deletable accounts leaves "Eliminar seleccionados" enabled with the plain delete tooltip', async ({ page }) => {
     await rowCheckbox(page, 'acc-1').click();
     await rowCheckbox(page, 'acc-3').click();
 
     const bulkDelete = page.getByTestId('bulk-delete-selected');
     await expect(bulkDelete).toBeVisible();
     await expect(bulkDelete).toBeEnabled();
-    await expect(bulkDelete).not.toHaveAttribute('title');
+    // ETP-4972 made this button icon-only (no visible "Eliminar" label), so it now always
+    // carries a `title` for hover discoverability — "Eliminar" (es_ES, mock-mode default)
+    // when nothing blocks the delete, vs. the explanatory blocked-count tooltip below.
+    await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
   });
 
   test('selecting a mix that includes a non-deletable account disables the button with a tooltip', async ({ page }) => {
@@ -178,7 +181,8 @@ test.describe('Financial Accounts — bulk delete blocked by non-deletable rows 
     await rowCheckbox(page, 'acc-2').click();
 
     await expect(page.getByTestId('bulk-delete-selected')).toBeEnabled();
-    await expect(page.getByTestId('bulk-delete-selected')).not.toHaveAttribute('title');
+    // See the "plain delete tooltip" test above — icon-only button, always carries a title.
+    await expect(page.getByTestId('bulk-delete-selected')).toHaveAttribute('title', 'Eliminar');
   });
 });
 

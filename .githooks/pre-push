@@ -96,9 +96,22 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
     echo ""
     echo "   This means the git hooks were not active when those commits were made"
     echo "   (or the content changed afterwards)."
-    echo "   Fix: enable the hooks and re-create the commits, e.g."
+    # Resolve the exact base so the fix can be copy-pasted instead of derived by
+    # hand — reading it off the list above is the step people get wrong.
+    REBASE_BASE="$(hooks_rebase_base $UNVERIFIED || true)"
+    echo "   Fix: enable the hooks and re-create the commits:"
     echo "     npm install                     # sets core.hooksPath=.githooks"
-    echo "     git rebase --exec 'git commit --amend --no-edit' <base>"
+    if [ -n "$REBASE_BASE" ]; then
+      echo "     git rebase --exec 'git commit --amend --no-edit' $REBASE_BASE"
+      echo ""
+      echo "   That base is the parent of the oldest commit listed above. The rebase"
+      echo "   re-stamps every commit after it — content is untouched, but the hashes"
+      echo "   change, so only do it while the branch is unpushed or force-pushable."
+    else
+      echo "     git rebase --exec 'git commit --amend --no-edit' <base>"
+      echo "   (<base> = the parent of the oldest commit listed above; it could not be"
+      echo "    resolved automatically here.)"
+    fi
     echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
     exit 1
   fi
@@ -134,7 +147,7 @@ fi
 
 # Resolve base branch dynamically at the start
 BASE_REF=""
-for branch in "origin/epic/ETP-3504" "origin/develop" "origin/main"; do
+for branch in "origin/develop" "origin/main"; do
   if git rev-parse --verify --quiet "$branch" >/dev/null; then
     BASE_REF="$branch"
     break
@@ -413,9 +426,9 @@ run_domain_boundary_check() {
 check_base_conflicts() {
   echo "==> Checking for conflicts with base branch (fetch + merge-tree)..."
 
-  # Fetch the latest base branch (prefer epic/ETP-3504, then develop, then main).
+  # Fetch the latest base branch (prefer develop, then main).
   local base_branch=""
-  for b in "epic/ETP-3504" "develop" "main"; do
+  for b in "develop" "main"; do
     if git fetch --quiet origin "$b" 2>/dev/null; then
       base_branch="$b"
       break
@@ -463,8 +476,8 @@ check_base_conflicts() {
 
 # Check that the sibling com.etendoerp.go checkout (used as REGEN_CHECK_PREV_XML_DIR
 # below) has no local commits missing from origin. offline-regen-check.yml resolves
-# its own branch there (exact match, else hotfix/*->main, feature/*->epic/ETP-3504,
-# else->develop) and always fetches fresh — it only ever sees what's actually on
+# its own branch there (exact match, else hotfix/*->main, else->develop) and 
+# always fetches fresh — it only ever sees what's actually on
 # GitHub. If your local checkout is ahead of that (unpushed commits), this check
 # passes against YOUR state while CI compares against an older one — exactly the
 # kind of local-pass/CI-fail split this whole exercise is trying to close.
@@ -493,7 +506,6 @@ check_go_module_push_sync() {
   else
     case "$sf_branch" in
       hotfix/*)  expected_branch="main" ;;
-      feature/*) expected_branch="epic/ETP-3504" ;;
       *)         expected_branch="develop" ;;
     esac
   fi
@@ -551,9 +563,24 @@ check_go_module_push_sync() {
 # reported — same "collect everything, don't stop at the first problem"
 # contract as the rest of this hook.
 # Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
+# backend_url defaults to the LOCAL environment's own configured context (read from
+# ../config/Openbravo.properties' context.url) rather than a hardcoded /etendo — different
+# developer machines legitimately deploy under different context names (e.g. /etendogoclean).
+# E2E_BACKEND_URL always wins when set; falls back to the historical /etendo default when the
+# properties file is missing or has no context.url (CI, a fresh checkout, etc).
+resolve_backend_url() {
+  local etendo_root props_file url
+  etendo_root="$(git rev-parse --show-toplevel 2>/dev/null)/.."
+  props_file="$etendo_root/config/Openbravo.properties"
+  if [ -f "$props_file" ]; then
+    url="$(grep -E '^context\.url=' "$props_file" | tail -1 | sed 's/^context\.url=//; s/\\:/:/g')"
+  fi
+  echo "${url:-http://localhost:8080/etendo}"
+}
+
 run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
-  local backend_url="${E2E_BACKEND_URL:-http://localhost:8080/etendo}"
+  local backend_url="${E2E_BACKEND_URL:-$(resolve_backend_url)}"
 
   if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"

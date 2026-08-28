@@ -69,8 +69,14 @@ function trackSupportEvent(eventDefinition, properties = {}) {
 
 const SupportChatContext = React.createContext(null);
 
+// In-memory only (not persisted): once the user dismisses the floating launcher (it can sit
+// on top of another window's own buttons — e.g. an onboarding "Continuar", or the
+// reconciliation action bar), it stays hidden for the rest of this page load. Reloading the
+// page, or reopening the chat from anywhere (the FAB itself, "Ayuda y soporte" in the nav),
+// brings it back — a dismissal is a "hide it for now" gesture, not "hide it forever".
 const INITIAL_STATE = {
   isOpen: false,
+  fabDismissed: false,
   activeTab: 'inicio',
   conversations: [],
   activeConversationId: null,
@@ -87,7 +93,12 @@ const INITIAL_STATE = {
 function reducer(state, action) {
   switch (action.type) {
     case 'OPEN':
-      return { ...state, isOpen: true };
+      // Opening the chat — from the FAB, "Ayuda y soporte" in the nav, or anywhere else —
+      // un-dismisses the FAB: once the user has engaged with the chat again, closing it back
+      // should show the FAB normally, and it only hides again if they explicitly dismiss it.
+      return { ...state, isOpen: true, fabDismissed: false };
+    case 'DISMISS_FAB':
+      return { ...state, fabDismissed: true };
     case 'CLOSE':
       return { ...state, isOpen: false };
     case 'SET_TAB':
@@ -128,19 +139,39 @@ function reducer(state, action) {
             // rating, ...) snapshots that conversation's summary at the START of the
             // request. If it's slow (the AI/Jira round trip can take several seconds) and a
             // faster response — another request, or the 15s background poll — already
-            // landed a newer lastMessage/lastActivity in the meantime, this stale snapshot
-            // must not overwrite it. Every other field (status, rated, humanTakeover, ...)
-            // still applies unconditionally — those are authoritative regardless of timing.
-            const incomingIsStale = incoming.lastActivity && c.lastActivity &&
-              new Date(incoming.lastActivity) < new Date(c.lastActivity);
-            if (incomingIsStale) {
-              const { lastActivity, lastMessage, ...rest } = incoming;
-              return { ...c, ...rest };
-            }
-            return { ...c, ...incoming };
+            // landed newer server state in the meantime, this stale snapshot must not
+            // overwrite it. `updatedAt` is the entity's real audit timestamp (bumped by
+            // every server-side save, including the async human-takeover flip, which never
+            // touches lastActivity/lastMessage) — the only reliable way to tell which
+            // response actually reflects newer DB state, since network responses don't
+            // resolve in dispatch order. Confirmed bug without this: the "talk to a human"
+            // bar could flicker hidden→visible→hidden as a stale response landed after a
+            // fresher one and reverted assigneeKind back to 'ai'.
+            const incomingIsStale = incoming.updatedAt && c.updatedAt &&
+              new Date(incoming.updatedAt) < new Date(c.updatedAt);
+            return incomingIsStale ? c : { ...c, ...incoming };
           })
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
       };
+    case 'MERGE_CONVERSATIONS': {
+      // Used by the 15s background poll instead of SET_CONVERSATIONS: that poll's response
+      // can land out of order relative to another in-flight request for the same
+      // conversation (another poll tick, or a slow sendMessage/close/rating round trip).
+      // Same updatedAt-based staleness guard as UPDATE_CONVERSATION, applied per-item across
+      // the whole incoming list — see its comment for why arrival order can't be trusted.
+      const currentById = new Map(state.conversations.map((c) => [c.id, c]));
+      const merged = action.conversations.map((incoming) => {
+        const existing = currentById.get(incoming.id);
+        if (!existing) return incoming;
+        const incomingIsStale = incoming.updatedAt && existing.updatedAt &&
+          new Date(incoming.updatedAt) < new Date(existing.updatedAt);
+        return incomingIsStale ? existing : incoming;
+      });
+      return {
+        ...state,
+        conversations: merged.sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
+      };
+    }
     case 'DISMISS_RATING':
       return {
         ...state,
@@ -374,6 +405,10 @@ export function SupportChatProvider({ children }) {
     dispatch({ type: 'CLOSE' });
   }, []);
 
+  const dismissFab = React.useCallback(() => {
+    dispatch({ type: 'DISMISS_FAB' });
+  }, []);
+
   const setTab = React.useCallback((tab) => {
     dispatch({ type: 'SET_TAB', tab });
   }, []);
@@ -464,7 +499,12 @@ export function SupportChatProvider({ children }) {
               existing.unread !== c.unread ||
               existing.status !== c.status ||
               existing.rated !== c.rated ||
-              existing.lastActivity !== c.lastActivity
+              existing.lastActivity !== c.lastActivity ||
+              // Escalation to a human takes effect via a background webhook, asynchronous to
+              // the message-send response that triggered it (see _do_escalate on the ADK
+              // side) — this poll is what eventually picks up assigneeKind flipping to
+              // 'human' so the "talk to a human" bar hides once escalation actually lands.
+              existing.assigneeKind !== c.assigneeKind
             );
           });
         if (hasChange) {
@@ -483,7 +523,7 @@ export function SupportChatProvider({ children }) {
               playReceiveSound();
             }
           });
-          dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+          dispatch({ type: 'MERGE_CONVERSATIONS', conversations: incoming });
         }
       } catch (_) { /* silent */ }
     }, 15000);
@@ -497,6 +537,7 @@ export function SupportChatProvider({ children }) {
     actions: {
       open: openChat,
       close: closeChat,
+      dismissFab,
       setTab,
       loadConversations,
       loadMessages,
@@ -513,7 +554,7 @@ export function SupportChatProvider({ children }) {
       getLocalImageUrl,
     },
   }), [
-    state, unreadCount, openChat, closeChat, setTab,
+    state, unreadCount, openChat, closeChat, dismissFab, setTab,
     loadConversations, loadMessages, startConversation, sendMessage,
     closeConversation, reopenConversation,
     submitRating, dismissRating, selectConversation, setInput, addPendingFile, removePendingFile,
@@ -530,5 +571,39 @@ export function SupportChatProvider({ children }) {
 export function useSupportChat() {
   const ctx = React.useContext(SupportChatContext);
   if (!ctx) throw new Error('useSupportChat must be used inside SupportChatProvider');
+  return ctx;
+}
+
+// Same defensive-fallback shape as useFavorites() in FavoritesContext.jsx — for
+// callers (e.g. a page-level "help" menu item) that need to work whether or not
+// they're mounted under SupportChatProvider (unit tests that render a page in
+// isolation, Storybook, etc.), instead of hard-throwing like useSupportChat().
+// Real app usage always has the provider (see AppLayout.jsx), so production
+// behavior is unaffected — only the missing-provider case gets a safe no-op.
+export function useSupportChatSafe() {
+  const ctx = React.useContext(SupportChatContext);
+  if (!ctx) {
+    return {
+      state: { ...INITIAL_STATE, unreadCount: 0 },
+      actions: {
+        open: () => {},
+        close: () => {},
+        setTab: () => {},
+        loadConversations: () => {},
+        loadMessages: () => {},
+        startConversation: () => {},
+        sendMessage: () => {},
+        closeConversation: () => {},
+        reopenConversation: () => {},
+        submitRating: () => {},
+        dismissRating: () => {},
+        selectConversation: () => {},
+        setInput: () => {},
+        addPendingFile: () => {},
+        removePendingFile: () => {},
+        getLocalImageUrl: () => null,
+      },
+    };
+  }
   return ctx;
 }

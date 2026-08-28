@@ -1,12 +1,19 @@
 import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { StatementsToolbar } from './StatementsToolbar';
-import { StatementsTable } from './StatementsTable';
+import {
+  StatementsTable,
+  buildStatementSortAccessors,
+  buildStatementSortColumns,
+} from './StatementsTable';
+import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { useClientSort } from '@/hooks/useClientSort';
 import { StatementLinesView } from './StatementLinesView';
 import { ImportStatementModal } from './ImportStatementModal';
 import { ManualStatementModal } from './ManualStatementModal';
@@ -31,6 +38,10 @@ import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
  */
 export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account }, ref) {
   const ui = useUI();
+  const { locale: appLocale } = useLocaleSwitch();
+  // The `name` sort accessor formats a periodFrom–periodTo range for statements with no name,
+  // so it needs the same locale the cell uses.
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const accountId = account?.id ?? null;
   const currency = account?.currencyIso ?? 'EUR';
   // bank-synced accounts get their statements only from Salt Edge, so manual import / manual
@@ -106,7 +117,10 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     try {
       const res = await sync(accountId);
       reload();
-      const msg = res?.message;
+      // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
+      // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
+      // through the same frontend translation map every other untranslated backend message uses.
+      const msg = res?.message ? translateBackendError(res.message, ui) : res?.message;
       if (res?.status === 'ERROR') {
         toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
       } else if (res?.status === 'WARNING') {
@@ -182,6 +196,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     return applyAdvancedFilter(base, advancedFilter);
   }, [statements, search, dateRange, status, advancedFilter]);
 
+  // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in the toolbar,
+  // which is the table's sibling. Same split as ListView/DataTable. Client-side because this
+  // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
+  const sortAccessors = useMemo(() => buildStatementSortAccessors(bcpLocale), [bcpLocale]);
+  const sortColumns = useMemo(() => buildStatementSortColumns(ui), [ui]);
+  const {
+    sorted: sortedStatements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
+    isDefaultSort,
+  } = useClientSort(filteredStatements, { accessors: sortAccessors });
+
   // Latest filtered headers + current selection reachable via ref, so the
   // parent's Export button can read them on click without subscribing here.
   const filteredRef = useRef(filteredStatements);
@@ -206,16 +230,15 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {selectedIds.size > 0 && (
-        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
-          <BulkDeleteSelectionBar
-            count={selectedIds.size}
-            deleting={bulkDeleting}
-            onCancel={clearSelection}
-            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-            data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
-        </div>
-      )}
+      {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
+          viewport-fixed pill via SelectionToolbar; it no longer occupies a
+          slot in this flow. */}
+      <BulkDeleteSelectionBar
+        count={selectedIds.size}
+        deleting={bulkDeleting}
+        onCancel={clearSelection}
+        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+        data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -231,12 +254,25 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         bankConnectionSynced={bankConnectionSynced}
         onSyncClick={handleSyncStatements}
         syncing={syncing}
+        sortControl={(
+          <ListSortPopover
+            columns={sortColumns}
+            sortColumn={sortKey}
+            sortDirection={sortDirection}
+            onSelect={selectSort}
+            onClear={clearSort}
+            isDefaultSort={isDefaultSort}
+            data-testid="ListSortPopover__6f147a" />
+        )}
         data-testid="StatementsToolbar__6f147a" />
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <StatementsTable
-          statements={filteredStatements}
+          statements={sortedStatements}
           loading={loading}
           currency={currency}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={toggleSort}
           actions={rowActions}
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}

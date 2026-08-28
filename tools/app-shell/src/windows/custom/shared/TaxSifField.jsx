@@ -195,6 +195,42 @@ export function selectSifFields({ profile, verifactuRecord, data, ui }) {
   return [];
 }
 
+/**
+ * Given a compound/summary tax's candidate rate-component children (already filtered
+ * to the same `parentTaxRate`/`parentTaxId`, whichever key the caller's data source
+ * uses), picks the ONE that actually carries the TBAI/Verifactu régimen key.
+ *
+ * Mirrors the EXACT criterion Etendo Classic's own completion validation uses — the
+ * base-rate component, never the equivalence-charge ("Recargo de Equivalencia")
+ * component:
+ *   - `ETVFAC_ORDER_VFAC_VALIDATION.xml` (com.etendoerp.verifactu):
+ *     `WHERE ... AND t.em_obspti_isequivalentcharge = 'N'`
+ *   - `InvoiceDataMapper.java` / `RegisterInvoice.java` (same module):
+ *     `.filter(tax -> !tax.getTax().isOBSPTIEquivalentCharge())`
+ * (ETP-4888 point 5 follow-up — verified against both source files, not just restated
+ * from the ticket description.)
+ *
+ * A compound tax is expected to resolve to EXACTLY ONE such child (the observed
+ * real-world shape: one base-rate + one equivalence-charge child). Any other shape —
+ * zero non-equivalent-charge children, or more than one (an unanticipated compound
+ * structure) — is deliberately treated as UNRESOLVED: callers must fall back to
+ * editing the summary tax itself rather than guessing which child is "right", since a
+ * wrong guess would silently save the régimen key to the wrong record.
+ *
+ * @param {Array<object>} children candidate tax records sharing the same parent.
+ * @param {object} [opts]
+ * @param {string} [opts.isEquivalentChargeKey='oBSPTIEquivalentCharge'] the boolean
+ *   field's key on each child object — differs by data source: the tax CRUD spec's own
+ *   camelCase apiKey (`TaxSifModal.jsx`, fetched via `fetchByCriteria`) vs. the
+ *   invoice-lines tax-selector's enrichment key (`useTaxSifLineRowActions.jsx`, see
+ *   `isEquivalentCharge` in `InvoiceLineTaxSifSelectorPolicy`, com.etendoerp.go).
+ * @returns {object|null} the single resolved child, or `null` when unresolved.
+ */
+export function pickRegimeChild(children, { isEquivalentChargeKey = 'oBSPTIEquivalentCharge' } = {}) {
+  const candidates = (children || []).filter((child) => !isEtendoTrue(child?.[isEquivalentChargeKey]));
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function buildField(key, column, labelKey, optionsKey, ui) {
   return {
     key,
@@ -230,7 +266,14 @@ function buildOptions(optionsKey, ui) {
     return {
       value,
       // Prefix code so the AEAT key stays visible even before/without a translation.
+      // Consumed by TaxSifField's own EntityForm rendering (single concatenated string).
       label: `${value} — ${labelText}`,
+      // Code and description exposed SEPARATELY (additive, `label` above is unchanged)
+      // for consumers that render them as two distinct visual pieces instead of one
+      // concatenated string — see TaxSifModal.jsx's EnumSearchSelect, which renders the
+      // AEAT code and its description as two side-by-side pieces per option row.
+      code: value,
+      description: labelText,
     };
   });
 }

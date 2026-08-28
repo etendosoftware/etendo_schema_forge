@@ -31,11 +31,28 @@ vi.mock('@/components/ui/money-amount', () => ({
 vi.mock('@/components/financial-accounts/contractColumns', () => ({
   getContractGridColumns: () => [
     { name: 'documentNo', label: 'Doc' },
+    // Its registry entry declares header `parts`, so this is the column that exercises the
+    // multi-segment header branch (ETP-4921).
+    { name: 'transactionType', label: 'Type' },
     { name: 'reference', label: 'Reference' }, // no registry entry → fallback cell
+  ],
+  // Same panel fields as the real financial-account contract, in `seq` order: the
+  // funds-transfer counterpart link first, then the three fixed dimensions.
+  getContractPanelFields: () => [
+    { name: 'eTGOFinaccTransDest', label: 'Destination Financial Account' },
+    { name: 'project', label: 'Project' },
+    { name: 'costCenter', label: 'Cost Center' },
+    { name: 'product', label: 'Product' },
   ],
 }));
 
-import { MovementsTable } from '../MovementsTable.jsx';
+import * as React from 'react';
+import { useClientSort } from '@/hooks/useClientSort';
+import {
+  MovementsTable,
+  buildMovementSortCtx,
+  buildMovementSortAccessors,
+} from '../MovementsTable.jsx';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
@@ -53,17 +70,35 @@ const baseMovement = (over = {}) => ({
   ...over,
 });
 
-function renderTable(props = {}) {
-  return render(
+// The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
+// "Ordenar por" popover). This harness supplies that state with the same hook the tab uses, so
+// header clicks stay exercised end to end.
+function Harness(props) {
+  const accessors = React.useMemo(
+    () => buildMovementSortAccessors(buildMovementSortCtx((k) => k, (m) => m.trxType)),
+    [],
+  );
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(
+    props.movements ?? [baseMovement()],
+    { accessors },
+  );
+  return (
     <MovementsTable
-      movements={props.movements ?? [baseMovement()]}
+      movements={sorted}
       loading={props.loading ?? false}
       enabledDimensions={props.enabledDimensions ?? []}
       selectedIds={props.selectedIds ?? new Set()}
       onSelectionChange={props.onSelectionChange ?? vi.fn()}
       highlightTxnId={props.highlightTxnId}
-    />,
+      sortKey={sortKey}
+      sortDirection={sortDirection}
+      onSort={toggleSort}
+    />
   );
+}
+
+function renderTable(props = {}) {
+  return render(<Harness {...props} />);
 }
 
 describe('MovementsTable — payment link', () => {
@@ -168,6 +203,90 @@ describe('MovementsTable — expandable dimensions panel', () => {
       enabledDimensions: ['bpartner'],
       movements: [baseMovement({ dimensions: { product: 'Prod X' } })],
     });
+    expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
+  });
+});
+
+// The funds-transfer counterpart link (ETP-4882). One panel slot serves both directions:
+// the backend collapses em_etgo_finacc_trans_dest / em_aprm_finacc_trans_origin into the
+// same transfer* props and flags the side via transferDirection.
+describe('MovementsTable — funds-transfer counterpart link', () => {
+  const transferMovement = (over = {}) => baseMovement({
+    transferTxnId: 'txn-far',
+    transferAccountId: 'acct-far',
+    transferAccountName: 'Banco Santander',
+    transferDirection: 'out',
+    ...over,
+  });
+
+  it('labels the link "destination" on the source (BPW) leg', () => {
+    renderTable({ enabledDimensions: ['project'], movements: [transferMovement({ trxType: 'BPW' })] });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByText('financeAccountMovementsTransferTo')).toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferFrom')).not.toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-transfer-link-m1')).toHaveTextContent('Banco Santander');
+  });
+
+  it('labels the link "origin" on the destination (BPD) leg', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [transferMovement({ trxType: 'BPD', transferDirection: 'in' })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByText('financeAccountMovementsTransferFrom')).toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferTo')).not.toBeInTheDocument();
+  });
+
+  it('renders the link BEFORE the accounting dimensions', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [transferMovement({ dimensions: { project: 'Proj A' } })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    const labels = within(panel).getAllByText(/^financeAccountMovements(TransferTo|Dim)/).map((n) => n.textContent);
+    expect(labels[0]).toBe('financeAccountMovementsTransferTo');
+    expect(labels).toContain('financeAccountMovementsDimProject');
+  });
+
+  it('navigates to the counterpart transaction in the other account', () => {
+    renderTable({ enabledDimensions: ['project'], movements: [transferMovement()] });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-transfer-link-m1'));
+
+    expect(navigate).toHaveBeenCalledWith('/financial-account/acct-far?tab=movements&txn=txn-far');
+  });
+
+  it('omits the link on a movement that is not part of a transfer', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [baseMovement({ dimensions: { project: 'Proj A' } })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-transfer-link-m1')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsTransferTo')).not.toBeInTheDocument();
+  });
+
+  // Regression guard: expandability used to be a single global flag, so a client with no
+  // accounting dimension enabled got no chevron at all and the link was unreachable.
+  it('still exposes the expand control when NO accounting dimension is enabled', () => {
+    renderTable({ enabledDimensions: [], movements: [transferMovement()] });
+
+    const expand = screen.getByTestId('movement-expand-m1');
+    fireEvent.click(expand);
+    expect(within(screen.getByTestId('movement-moreinfo-m1'))
+      .getByTestId('movement-transfer-link-m1')).toBeInTheDocument();
+  });
+
+  it('keeps non-transfer rows unexpandable when no dimension is enabled', () => {
+    renderTable({ enabledDimensions: [], movements: [baseMovement()] });
     expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
   });
 });
@@ -327,5 +446,113 @@ describe('MovementsTable — highlightTxnId deep-link', () => {
     });
     expect(scrollSpy).not.toHaveBeenCalled();
     expect(screen.queryByTestId('movement-moreinfo-m1')).not.toBeInTheDocument();
+  });
+});
+
+describe('MovementsTable — column sorting (ETP-4921)', () => {
+  const ROWS = [
+    baseMovement({ id: 'm1', documentNo: 'DOC-003', amount: 300, balance: 900 }),
+    baseMovement({ id: 'm2', documentNo: 'DOC-001', amount: 100, balance: 700 }),
+    baseMovement({ id: 'm3', documentNo: 'DOC-002', amount: -50, balance: 800 }),
+  ];
+  const rowIds = () => [...document.querySelectorAll('[data-testid^="movement-row-"]')]
+    .map((el) => el.getAttribute('data-testid').replace('movement-row-', ''));
+
+  // Client-side, because the movements endpoint is a bespoke Java handler that takes no sort
+  // parameter and returns the whole unpaged list — see lib/clientSort.js.
+  it('sorts by a contract column, ascending then descending', () => {
+    renderTable({ movements: ROWS });
+    expect(rowIds()).toEqual(['m1', 'm2', 'm3']);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(rowIds()).toEqual(['m2', 'm3', 'm1']);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(rowIds()).toEqual(['m1', 'm3', 'm2']);
+  });
+
+  it('restores the backend order on the third click', () => {
+    renderTable({ movements: ROWS });
+
+    const header = screen.getByTestId('column-header-sort-documentNo');
+    fireEvent.click(header);
+    fireEvent.click(header);
+    fireEvent.click(header);
+
+    expect(rowIds()).toEqual(['m1', 'm2', 'm3']);
+  });
+
+  it('sorts Amount numerically, so a negative outflow leads', () => {
+    renderTable({ movements: ROWS });
+
+    fireEvent.click(screen.getByTestId('column-header-sort-amount'));
+    expect(rowIds()).toEqual(['m3', 'm2', 'm1']);
+  });
+
+  // Balance is a RUNNING balance, anchored to the account's current balance and computed as
+  // `currentbalance − SUM(subsequent)` over `statementdate ASC, line ASC`. It is order-dependent
+  // by construction, so offering to reorder by it would produce a meaningless column.
+  it('offers no sort control on the running-balance column', () => {
+    renderTable({ movements: ROWS });
+
+    expect(screen.queryByTestId('column-header-sort-balance')).not.toBeInTheDocument();
+    // ...while the header text itself is still there.
+    expect(screen.getByText('financeAccountMovementsColBalance')).toBeInTheDocument();
+  });
+
+  it('marks only the active column with a direction arrow', () => {
+    renderTable({ movements: ROWS });
+
+    const header = screen.getByTestId('column-header-sort-documentNo');
+    expect(header.textContent).not.toContain('\u25B2');
+
+    fireEvent.click(header);
+    expect(screen.getByTestId('column-header-sort-documentNo').textContent).toContain('\u25B2');
+    expect(screen.getByTestId('column-header-sort-amount').textContent).not.toContain('\u25B2');
+
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(screen.getByTestId('column-header-sort-documentNo').textContent).toContain('\u25BC');
+  });
+});
+
+describe('MovementsTable — Tipo header segments (ETP-4921)', () => {
+  const rowIds = () => [...document.querySelectorAll('[data-testid^="movement-row-"]')]
+    .map((el) => el.getAttribute('data-testid').replace('movement-row-', ''));
+
+  // The Tipo cell stacks the transaction type over the posting status, so a single header could
+  // only ever sort by one of them — the hand-rolled equivalent of the Cuentas list's multiField
+  // "Tipo & IBAN".
+  it('renders one sortable segment for the type and one for the posting status', () => {
+    renderTable({ movements: [baseMovement()] });
+
+    expect(screen.getByTestId('column-header-sort-transactionType')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-sort-posted')).toBeInTheDocument();
+  });
+
+  it('sorts by the posting status independently of the type', () => {
+    renderTable({
+      movements: [
+        baseMovement({ id: 'm1', trxType: 'BPD', posted: 'Y' }),
+        baseMovement({ id: 'm2', trxType: 'BPD', posted: 'N' }),
+        baseMovement({ id: 'm3', trxType: 'BPW', posted: 'Y' }),
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId('column-header-sort-posted'));
+    // Keys echo as labels, so 'financeAccountMovementsNotPosted' < 'financeAccountMovementsPosted'.
+    expect(rowIds()).toEqual(['m2', 'm1', 'm3']);
+
+    fireEvent.click(screen.getByTestId('column-header-sort-posted'));
+    expect(rowIds()).toEqual(['m1', 'm3', 'm2']);
+  });
+
+  it('arrows only the segment that is active', () => {
+    renderTable({ movements: [baseMovement()] });
+
+    fireEvent.click(screen.getByTestId('column-header-sort-posted'));
+
+    expect(screen.getByTestId('column-header-sort-posted').textContent).toContain('\u25B2');
+    expect(screen.getByTestId('column-header-sort-transactionType').textContent)
+      .not.toContain('\u25B2');
   });
 });

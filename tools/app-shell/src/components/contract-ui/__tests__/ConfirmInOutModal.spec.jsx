@@ -1,7 +1,31 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+// Radix Select cannot run in JSDOM — replace with a native <select> that
+// honours value/onValueChange and renders options via SelectItem. Only
+// exercised by the showPriceListPicker=true suite below; every other test in
+// this file never mounts a Select at all. Mirrors the mock in
+// CreateInvoiceConfirmModal.vitest.jsx / PriceListPicker.vitest.jsx.
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ children, value, onValueChange }) => (
+    <div>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+        data-testid="select-control"
+      >
+        {children}
+      </select>
+    </div>
+  ),
+  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
+  SelectValue: () => null,
+  SelectContent: ({ children }) => <>{children}</>,
+  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+}));
+
 import ConfirmInOutModal from '../ConfirmInOutModal.jsx';
+import * as backendErrorsModule from '@/lib/backendErrors.js';
 
 const BASE_PROPS = {
   base: '/sws/neo',
@@ -134,5 +158,176 @@ describe('ConfirmInOutModal', () => {
     render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
     fireEvent.click(screen.getByText('Confirm'));
     await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
+  });
+
+  // ── ETP-4848: invoiceAction gating + default-checked toggle ────────────────
+
+  it('does not render the invoice toggle or info row when invoiceAction is omitted', () => {
+    const { invoiceAction, ...propsWithoutInvoiceAction } = BASE_PROPS;
+    render(<ConfirmInOutModal {...propsWithoutInvoiceAction} />);
+    expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByText('You are about to confirm')).not.toBeInTheDocument();
+  });
+
+  it('does not render the invoice toggle when invoiceAction is undefined explicitly', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction={undefined} />);
+    expect(screen.queryByTestId('confirm-modal-invoice-toggle')).not.toBeInTheDocument();
+  });
+
+  it('confirm button still works and calls only documentAction (no invoice call) when invoiceAction is omitted', async () => {
+    const onConfirmed = vi.fn();
+    const { invoiceAction, ...propsWithoutInvoiceAction } = BASE_PROPS;
+    render(<ConfirmInOutModal {...propsWithoutInvoiceAction} onConfirmed={onConfirmed} />);
+    fireEvent.click(screen.getByText('Confirm'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ invoice: null }));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch.mock.calls[0][0]).toContain('/action/documentAction');
+  });
+
+  it('toggle renders checked (aria-checked="true") by default when invoiceAction is provided and defaultCreateInvoice=true', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createInvoice" defaultCreateInvoice={true} />);
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('toggle renders unchecked (aria-checked="false") by default when invoiceAction is provided and defaultCreateInvoice=false', () => {
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createInvoice" defaultCreateInvoice={false} />);
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  // ── ETP-4942 — showPriceListPicker ─────────────────────────────────────────
+
+  function mockFetchRouter({ priceLists = [], invoiceOk = true, invoiceErrorMessage } = {}) {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      const u = String(url);
+      if (u.includes('/price-list/priceList')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: priceLists } }) });
+      }
+      if (u.includes('/action/documentAction')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+      }
+      if (!invoiceOk) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ response: { message: invoiceErrorMessage || 'Error' } }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', grandTotalAmount: 500 } } }),
+      });
+    }));
+  }
+
+  const PRICE_LIST_PROPS = {
+    ...BASE_PROPS,
+    invoiceAction: 'createDraftInvoice',
+    defaultCreateInvoice: true,
+    showPriceListPicker: true,
+    isSOTrx: true,
+  };
+
+  it('does not render the price-list select when showPriceListPicker is false, even with the invoice toggle on', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-1', name: 'PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createDraftInvoice" defaultCreateInvoice={true}
+      showPriceListPicker={false} />);
+    await new Promise(r => setTimeout(r, 0));
+    expect(screen.queryByTestId('confirm-modal-price-list-select')).not.toBeInTheDocument();
+  });
+
+  it('does not render the price-list select when the invoice toggle is off, even with showPriceListPicker true', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-1', name: 'PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} defaultCreateInvoice={false} hasLinkedOrder={true} />);
+    await new Promise(r => setTimeout(r, 0));
+    expect(screen.queryByTestId('confirm-modal-price-list-select')).not.toBeInTheDocument();
+  });
+
+  it('renders the price-list select once the invoice toggle is switched on', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-1', name: 'PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} defaultCreateInvoice={false} hasLinkedOrder={true} />);
+    expect(screen.queryByTestId('confirm-modal-price-list-select')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the price-list select when showPriceListPicker=true and the toggle is on by default', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-1', name: 'PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={true} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+  });
+
+  it('blocks the confirm button when hasLinkedOrder=false and no price list has been chosen', async () => {
+    mockFetchRouter({ priceLists: [] }); // no match → priceListId stays ''
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+  });
+
+  it('does not block the confirm button when hasLinkedOrder=true, even with no price list chosen', async () => {
+    mockFetchRouter({ priceLists: [] }); // no match → priceListId stays ''
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={true} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+  });
+
+  it('enables the confirm button once a price list is auto-selected when hasLinkedOrder=false', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-default', name: 'Default PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+  });
+
+  it('sends the selected priceListId in the invoice action request body', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-selected', name: 'Selected PL', active: true, salesPriceList: true, default: true }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+    await waitFor(() => {
+      const invoiceCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/createDraftInvoice'));
+      expect(invoiceCall).toBeTruthy();
+      expect(invoiceCall[1].body).toBe(JSON.stringify({ priceListId: 'pl-selected' }));
+    });
+  });
+
+  it('does not include priceListId in the invoice action body when the picker is not active', async () => {
+    mockFetchRouter({});
+    render(<ConfirmInOutModal {...BASE_PROPS} invoiceAction="createDraftInvoice" defaultCreateInvoice={true}
+      showPriceListPicker={false} />);
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+    await waitFor(() => {
+      const invoiceCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/createDraftInvoice'));
+      expect(invoiceCall).toBeTruthy();
+      expect(invoiceCall[1].body).toBe(JSON.stringify({}));
+    });
+  });
+
+  it('translates the backend error via translateBackendError for the price-list-required error banner', async () => {
+    const priceListRequiredMsg = 'No Price List could be resolved for this invoice: select a tariff or '
+      + 'configure a default Price List for the Business Partner';
+    const spy = vi.spyOn(backendErrorsModule, 'translateBackendError');
+    mockFetchRouter({ priceLists: [], invoiceOk: false, invoiceErrorMessage: priceListRequiredMsg });
+    // hasLinkedOrder=true so the confirm button stays enabled without a manual selection —
+    // exercising the backend's own fail-fast guard (ETP-4942) rather than the frontend gate.
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={true} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+    await waitFor(() => {
+      expect(screen.getByText(priceListRequiredMsg)).toBeInTheDocument();
+    });
+    expect(spy).toHaveBeenCalledWith(priceListRequiredMsg, expect.any(Function));
+    spy.mockRestore();
   });
 });

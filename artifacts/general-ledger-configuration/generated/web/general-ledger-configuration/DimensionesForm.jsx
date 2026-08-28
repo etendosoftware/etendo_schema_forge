@@ -25,5 +25,6 @@ const fields = [
 export default function DimensionesForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+DimensionesForm.fields = fields;
 
 // @sf-generated-end component:DimensionesForm

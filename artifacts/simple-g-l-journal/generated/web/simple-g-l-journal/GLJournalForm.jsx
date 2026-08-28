@@ -19,5 +19,6 @@ const fields = [
 export default function GLJournalForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
+GLJournalForm.fields = fields;
 
 // @sf-generated-end component:GLJournalForm

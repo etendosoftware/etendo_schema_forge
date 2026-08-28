@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerResolveProductCodeHookTests } from './testUtils/resolveProductCodeAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'useInvoicePdf.js'), 'utf8');
@@ -17,8 +18,9 @@ describe('useInvoicePdf', () => {
     assert.match(src, /export function useInvoicePdf/);
   });
 
-  it('accepts invoiceId, apiBaseUrl and token parameters', () => {
-    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*token\)/);
+  it('accepts invoiceId, apiBaseUrl, token and optional cacheConfig parameters', () => {
+    // Signature updated in ETP-4315 to include cacheConfig for jsreport-regeneration-skip caching
+    assert.match(src, /useInvoicePdf\(invoiceId,\s*apiBaseUrl,\s*token,\s*cacheConfig\s*=\s*null\)/);
   });
 
   it('returns pdfUrl, pdfBlob, loading and error', () => {
@@ -204,6 +206,8 @@ describe('useInvoicePdf', () => {
       assert.match(src, /l\.invoicedQuantity \?\? l\.qtyInvoiced/);
       assert.doesNotMatch(src, /l\.orderedQuantity/);
     });
+
+    registerResolveProductCodeHookTests(assert, src, sharedSrc);
 
     it('includes subtotalWithoutDiscount label key in labels object', () => {
       assert.match(src, /buildDocumentPdfLabels/, 'hook delegates base labels to buildDocumentPdfLabels');

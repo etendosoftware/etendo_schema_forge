@@ -53,6 +53,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
 9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
+10. **ETP-4940 follow-up:** on a draft (`RPAP`) payment, edit the amount WITHOUT clicking Save, then go to the "Apply to Invoices" tab and click through to apply + process. Confirm the payment processes with the edited amount, not the original one.
 
 ## Automated evidence
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites A–D) provides browser-level E2E coverage for the Attachments tab: tab visibility in the `customTabsAfterBottom` strip, empty state, upload (valid file, file too large, invalid MIME, duplicate name), single delete with confirmation, Delete All, individual file download, and Download All (ZIP). All API calls are mocked; no real backend is required.
@@ -164,6 +165,28 @@ plain `make regen` (without `LOCAL_CORE=1`) picks it up for other windows. A `Ch
 added for any process button with `style: 'positive'` in `DetailView.jsx`, matching the checkmark
 already used by the `draftMode` Confirm button elsewhere in the app.
 
+**Draft banner gating (ETP-4895).** `PaymentDraftBanner.jsx` no longer keeps its own copy of the
+deposited-status list and no longer reasons by elimination ("not deposited, therefore a draft"),
+which announced "Borrador — sin impacto en caja" on a rejected `ETGOERR` payment. It gates on the
+shared `paymentDisplayState` rule instead, with `RPAE` kept as a draft here — as it already was, and
+as `PaymentDetailSidebarBase` reads it for collections. Collections cannot reach `ETGOERR` today
+(PIS is payments-out only), so this is alignment rather than a visible fix on this window; the
+behavior it corrects is documented in `payment-out.md`.
+
+**Toolbar order actually shipped (ETP-4895).** The `saveBeforeProcesses` key above never reached the
+UI: the published `schema_forge_core` still drops it in `resolve-curated.js`'s window-key whitelist,
+so it is absent from `contract.json` and from the generated page, and the toolbar kept rendering
+**Confirmar** to the left of **Guardar**. Rather than block on a core publish, `DetailView.jsx` now
+takes a presentational `saveActionsFirst` prop — order only, defaulting to `saveBeforeProcesses` so
+no existing window changes — and both payment windows pass it from a thin custom wrapper:
+`tools/app-shell/src/windows/custom/payment-out/index.jsx` and the new
+`tools/app-shell/src/windows/custom/payment-in/index.jsx` (registered in
+`tools/app-shell/src/windows/registry.js`; `payment-in` had no custom wrapper before). Save now
+renders to the left and **Confirmar** is the right-most button. The windows deliberately do NOT opt
+into `saveBeforeProcesses` itself — they only want the order, not the flush-pending-edits-before-
+running-the-process behavior. When the core key does land, it will imply the same order and the
+wrapper prop becomes redundant rather than conflicting.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the
@@ -239,3 +262,21 @@ The ETP-4314 sweep that centralized currency formatting missed this panel and it
 (`artifacts/payment-out/custom/PaymentOutBottomPanel.jsx`, fixed identically). The existing
 source-guard tests only asserted that a function named `fmtAmt` exists, never anything about
 currency, which is why it survived.
+
+## "Apply to invoices" tab silently discarded pending header edits — ETP-4940 follow-up
+
+The **Facturas Pendientes / Apply to Invoices** tab (`ApplyToInvoices.jsx`, the `customLines`
+component for this window) fires its own two-step request pair — `action/applyToInvoices` then
+`action/aPRMProcessPayment` — entirely bypassing `DetailView.jsx`'s guarded generic process button
+(the one the toolbar's "processConfirm" button uses, already protected since ETP-4542 via this
+window's `saveBeforeProcesses: true`). A header edit (e.g. `amount`, `currency`) made without
+clicking Save first was silently discarded: the apply/process calls ran server-side against the
+last-persisted value, and the client-side `totalAppliedExceedsPaymentAmount` validation even
+compared against the stale amount.
+
+Fixed the same way the sibling `topbarRight` fix did for `return-material-receipt`/
+`return-to-vendor-shipment`: `DetailView.jsx` now passes `isDirty` alongside its existing `onSave`
+prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
+`maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` at the top of `handleApplyAndProcess`,
+before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
+documentAction path is the already-guarded generic process button — so it needed no change.

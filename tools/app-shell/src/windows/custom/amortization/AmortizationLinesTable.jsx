@@ -1,14 +1,17 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ChevronDown, Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
+import { extractErrorMessage } from '@/hooks/useEntity';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Checkbox } from '@/components/ui/checkbox';
-import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 // ETP-4529 — DimBadge, DimSummary, and DimensionGrid (the "Dimensiones contables"
 // badge/summary/expand-grid pattern this file originated) were extracted to the
 // shared tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx, so
@@ -78,8 +81,6 @@ export default function AmortizationLinesTable({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectionBarVisible, setSelectionBarVisible] = useState(false);
   const [selectionBarClosing, setSelectionBarClosing] = useState(false);
-  const [barRect, setBarRect] = useState(null);
-  const addLineWrapperRef = useRef(null);
   const addRowRef = useRef(null);
   const recordId = recordIdProp ?? data?.id;
 
@@ -124,26 +125,6 @@ export default function AmortizationLinesTable({
     }
     return undefined;
   }, [selectedRows.size, selectionBarVisible]);
-
-  // Measure the footer wrapper so the bar floats over the "Add line" area.
-  useEffect(() => {
-    if (!selectionBarVisible) return undefined;
-    const el = addLineWrapperRef.current;
-    if (!el) return undefined;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
-    const events = ['scroll', 'resize'];
-    events.forEach(e => window.addEventListener(e, measure, true));
-    return () => {
-      ro?.disconnect();
-      events.forEach(e => window.removeEventListener(e, measure, true));
-    };
-  }, [selectionBarVisible]);
 
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
@@ -221,6 +202,11 @@ export default function AmortizationLinesTable({
     return () => document.removeEventListener('mousedown', handler);
   }, [editingLineId]);
 
+  // ETP-4981 — a failed DELETE (e.g. blocked server-side for a confirmed
+  // amortization line) must never be silent: no toast + no fetchLines()/
+  // onRefresh() meant the row visually reappeared after the optimistic-looking
+  // refresh with zero feedback about why. Mirrors DetailView's
+  // buildDeleteRowHandler (recordDeleted / extractErrorMessage / networkError).
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
@@ -228,24 +214,47 @@ export default function AmortizationLinesTable({
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) { fetchLines(); onRefresh?.(); }
+      if (res.ok) {
+        fetchLines();
+        onRefresh?.();
+        toast.success(ui('recordDeleted'));
+      } else {
+        toast.error(await extractErrorMessage(res, ui));
+      }
+    } catch (err) {
+      toast.error(err?.message || ui('networkError'));
     } finally { setDeleting(null); }
   }
 
+  // ETP-4981 — same silent-failure bug for the bulk path, plus it always
+  // cleared the whole selection and refetched even when every request failed
+  // (or was network-rejected via `.catch(() => null)`), so failed rows
+  // vanished from the selection with no way to retry and no explanation.
+  // Reuses the shared ETP-4656 triage/toast helpers (runBatchDelete +
+  // toastBatchDeleteOutcome) and follows the same onSuccess contract as
+  // useBulkRowDelete: all succeeded -> clear selection; partial -> keep only
+  // the failed ids selected; all failed -> leave selection untouched (and
+  // skip the refetch, since nothing changed server-side).
   async function bulkDelete() {
     const ids = [...selectedRows];
     if (ids.length === 0) return;
     setBulkDeleting(true);
     try {
-      await Promise.all(ids.map(id =>
+      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
         fetch(`${apiBaseUrl}/lines/${id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => null),
-      ));
-      setSelectedRows(new Set());
-      fetchLines();
-      onRefresh?.();
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          return id;
+        }),
+      );
+      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+      if (succeeded.length > 0) {
+        setSelectedRows(new Set(failed));
+        fetchLines();
+        onRefresh?.();
+      }
     } finally { setBulkDeleting(false); }
   }
 
@@ -581,8 +590,8 @@ export default function AmortizationLinesTable({
       {addingLine && (
         <p className="text-xs text-muted-foreground mt-1 text-center">{ui('inlineAddHint')}</p>
       )}
-      {/* ── Add line button (always visible; wrapper measured for the selection bar) ── */}
-      <div ref={addLineWrapperRef}>
+      {/* ── Add line button (always visible) ── */}
+      <div>
         {!isReadOnly && (
           <div className="px-2 py-2">
             <AddLineButton
@@ -605,19 +614,30 @@ export default function AmortizationLinesTable({
         </div>
       )}
       {/* ── shared floating selection bar (same as Sales Order) ── */}
-      <LinesSelectionBar
+      <SelectionToolbar
         visible={selectionBarVisible}
         closing={selectionBarClosing}
-        barRect={barRect}
-        count={selectedRows.size}
-        selectedLabel={ui('selected', { count: selectedRows.size })}
-        totalLabel={null}
-        deleting={bulkDeleting}
-        deleteTitle={ui('delete')}
-        closeTitle={ui('close')}
-        onDelete={bulkDelete}
         onClose={() => setSelectedRows(new Set())}
-        data-testid="LinesSelectionBar__fecdcf" />
+        closeTitle={ui('close')}
+        data-testid="SelectionToolbar__fecdcf">
+        <span className="text-sm font-medium">
+          {ui('selected', { count: selectedRows.size })}
+        </span>
+        {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label: the
+            applied Figma instance's own canvas render has no stroke around
+            this icon, just red icon color — ghost, like every other
+            secondary action. */}
+        <button
+          type="button"
+          disabled={bulkDeleting}
+          title={ui('delete')}
+          aria-label={ui('delete')}
+          onClick={bulkDelete}
+          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
+        </button>
+      </SelectionToolbar>
     </div>
   );
 }

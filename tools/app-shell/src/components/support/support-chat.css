@@ -47,11 +47,14 @@
 }
 
 /* ---- FAB launcher -------------------------------------------------------- */
-.sc-fab {
+.sc-fab-wrap {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 70;
+}
+.sc-fab {
+  position: relative;
   width: 52px;
   height: 52px;
   border-radius: 999px;
@@ -82,6 +85,30 @@
   justify-content: center;
   box-shadow: 0 0 0 2px hsl(var(--card));
 }
+/* Dismiss ("x"): hidden until the launcher is hovered/focused, so it doesn't clutter the
+   bubble's icon at rest — discoverable, not in-your-face. */
+.sc-fab-dismiss {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: var(--sc-fg-2);
+  border: 1px solid var(--sc-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+  box-shadow: 0 1px 4px hsl(var(--foreground) / .15);
+}
+.sc-fab-wrap:hover .sc-fab-dismiss,
+.sc-fab-dismiss:focus-visible {
+  opacity: 1;
+}
 
 /* ---- Panel overlay ------------------------------------------------------ */
 .sc-overlay {
@@ -105,9 +132,16 @@
   flex-direction: column;
   overflow: hidden;
   pointer-events: auto;
+  transition: right .22s cubic-bezier(.2,.8,.2,1), width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
   animation: sc-chat-in .22s cubic-bezier(.2,.8,.2,1);
   transform-origin: bottom right;
-  transition: width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
+}
+
+/* Copilot's own panel docks to the same bottom-right corner (right:24px, up to 448px wide) —
+   shift ours clear of it while both are open, instead of the two floating windows stacking on
+   top of each other. 448 (Copilot's max-w-md) + 24 (its right offset) + 20 (gap) = 492px. */
+.sc-panel.sc-panel--copilot-open {
+  right: 492px;
 }
 
 @keyframes sc-chat-in {
@@ -297,7 +331,6 @@
   color: var(--sc-fg-2);
 }
 .sc-avatars .sc-av:first-child { margin-left: 0; }
-.sc-avatars .sc-av.bot { background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary))); }
 
 .sc-inicio-search-card {
   background: hsl(var(--card));
@@ -398,7 +431,6 @@
   width: 36px;
   height: 36px;
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -592,18 +624,24 @@
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  position: relative;
   overflow: hidden;
 }
 .sc-conv-av.human {
   background: var(--sc-purple-100);
   color: var(--sc-purple-700);
   font: 600 12px/1 'Inter', sans-serif;
+}
+/* Wraps .sc-conv-av (which clips its content into a circle via overflow:hidden) so the status
+   dot below can sit in the corner and NOT get clipped along with it — the dot is a sibling
+   here, not a child of the clipped element. */
+.sc-conv-av-wrap {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
 }
 .sc-status-dot {
   position: absolute;
@@ -637,9 +675,9 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 180px;
-  background: var(--sc-bg);
-  border: 1px solid var(--sc-border);
+  min-width: 230px;
+  background: hsl(var(--card));
+  border: 1px solid var(--sc-border-1);
   border-radius: 8px;
   box-shadow: 0 4px 16px hsl(var(--foreground) / .12);
   z-index: 200;
@@ -656,6 +694,7 @@
   text-align: left;
   font-size: 13px;
   color: var(--sc-fg-1);
+  white-space: nowrap;
   cursor: pointer;
   transition: background .12s;
 }
@@ -696,7 +735,6 @@
   justify-content: center;
   overflow: hidden;
   align-self: flex-end;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
 }
 .sc-bub-av.human { background: var(--sc-purple-100); color: var(--sc-purple-700); font: 600 11px/1 'Inter', sans-serif; }
 .sc-msg.user .sc-bub-av { display: none; }
@@ -807,6 +845,60 @@
   color: var(--sc-fg-1);
 }
 .sc-quick-replies button:hover { background: var(--sc-bg-subtle); }
+
+/* "Talk to a human" bar — a fixed sibling between the header and the scrollable thread
+   (not part of the scroll itself), so once ValerIA has offered escalation the option stays
+   glued right under the header and visible at all times, with no scroll-position dependency. */
+.sc-escalate-bar {
+  display: flex;
+  justify-content: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--sc-border-1);
+  background: hsl(var(--card));
+  flex-shrink: 0;
+}
+.sc-escalate-bar-inner {
+  position: relative;
+  display: inline-flex;
+}
+/* Escalate CTA: Etendo brand yellow — same --accent-highlight token the "Inicio" nav item
+   uses when active, so this reuses an existing semantic precedent instead of a literal. */
+.sc-escalate-btn {
+  font: 600 12px/18px 'Inter', sans-serif;
+  color: hsl(var(--accent-highlight-foreground));
+  background: hsl(var(--accent-highlight));
+  border: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px hsl(var(--accent-highlight) / .32), 0 1px 2px hsl(var(--accent-highlight) / .2);
+}
+.sc-escalate-btn:hover { background: hsl(var(--accent-highlight) / .85); }
+/* Dismiss ("x"): same discoverable-on-hover pattern as the FAB's own dismiss — hidden until
+   the bar is hovered/focused, so the user who doesn't mind it sees a clean pill button. */
+.sc-escalate-dismiss {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: hsl(var(--card));
+  color: var(--sc-fg-2);
+  border: 1px solid var(--sc-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+  box-shadow: 0 1px 4px hsl(var(--foreground) / .15);
+}
+.sc-escalate-bar-inner:hover .sc-escalate-dismiss,
+.sc-escalate-dismiss:focus-visible {
+  opacity: 1;
+}
 
 /* Day divider */
 .sc-day-divider { display: flex; align-items: center; justify-content: center; margin: 8px 0 4px; }
