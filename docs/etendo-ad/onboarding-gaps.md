@@ -1041,6 +1041,19 @@ GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` ro
 
 **Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
 
+### J2 — Standard-cost tenants missing initial product costs (ETP-4706 QA follow-up, 2026-08-28)
+
+**Symptom:** Goods Receipt posting can surface core `InvalidCostWhichProduct` as the raw English text `There is no cost defined for the product: @Product@ on @Date@`. In Etendo Go this is treated as a transient cost-not-ready condition for the user, not as a request to understand or configure costing rules.
+
+**Root cause:** R18 only seeded Average-cost anchors (`M_Costing.CostType='AVA'`). After the Standard-cost direction landed, core posting looks for Standard cost definitions through `CostingUtils.getStandardCostDefinition`, which accepts `CostType='STA'` and then legacy `CostType='ST'`; an AVA row is invisible to that lookup.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/retired.json` retires `R18-stuck-average-cost-anchor` so new runs do not seed obsolete Average-cost anchors. `cli/src/data-fixes/sql/20260828T120000Z__R28-standard-cost-anchor.sql` inserts one manual `M_Costing` row with `CostType='STA'` for each product/cost organization found on unposted Goods Receipt / Goods Shipment lines under an active validated Standard rule, when no active Standard/legacy Standard cost covers the first needed accounting date. The row is open-ended unless a later Standard/legacy Standard cost definition already exists, in which case it is bounded to that next start date. Unit cost is resolved from purchase price, then sales price, then a non-zero placeholder `1`; that placeholder is only an unblocker and requires follow-up finance review/correction where used. |
+| **UX** | `tools/app-shell/src/lib/backendErrors.js` maps core `InvalidCostWhichProduct`'s unresolved-placeholder literal to the existing `backendError.costNotCalculated` copy, so Spanish sessions show "El costo del producto aún no ha sido calculado..." rather than raw English/costing-rule details. |
+
 ---
 
 ## K — Accounting Dimension Display Configuration
