@@ -16317,15 +16317,6 @@
     "Dashboard": {
       "label": "Panel"
     },
-    "Grouped Report": {
-      "label": "Informe agrupado"
-    },
-    "Listing Report": {
-      "label": "Informe de listado"
-    },
-    "Landscape": {
-      "label": "Horizontal"
-    },
     "Search": {
       "label": "Buscar"
     },
@@ -17524,9 +17515,6 @@
     "depreciatedValue": "Amortizado real",
     "depreciatedPlan": "Amortizado planificado",
     "depreciation": "Amortización",
-    "Grouped Report": "Informe agrupado",
-    "Listing Report": "Informe de listado",
-    "Landscape": "Horizontal",
     "Search": "Buscar",
     "loadingPreview": "Cargando vista previa...",
     "moreDetails": "Más detalles",
@@ -17837,6 +17825,7 @@
     "reportServiceUnavailable": "El servicio de reportes no está disponible. Intentalo de nuevo en un momento.",
     "pdfGenerationFailed": "No se pudo generar el PDF. Intentalo de nuevo.",
     "report": "Informe",
+    "format": "Formato",
     "records": "registros",
     "loadingAllRecords": "Cargando todos los registros...",
     "fetchingAllRecords": "Obteniendo todos los registros...",
@@ -17861,6 +17850,7 @@
     "displayOptions": "Opciones de Visualización",
     "runReport": "Generar informe",
     "running": "Ejecutando...",
+    "clearResult": "Limpiar resultado",
     "taxReportPurchases": "Compras / Pagos",
     "taxReportSales": "Ventas / Cobros",
     "taxReportDetail": "Detalle",
@@ -17874,7 +17864,7 @@
     "selectParentFirst": "Selecciona primero el campo padre",
     "recordsFound": "{count} registros encontrados",
     "reportReadyTitle": "Tu informe está listo",
-    "reportReadyHint": "Selecciona los filtros y haz clic en Ejecutar Informe",
+    "reportReadyHint": "Selecciona los filtros y haz clic en Generar Informe",
     "resetToDefaults": "Restablecer valores predeterminados",
     "filterHelpText": "Escriba para filtrar. Enter o Tab para aplicar.",
     "filterHelpDate": "Fecha: 15/04/2026, >15/04/2026, <=15/04/2026, 01/04/2026..15/04/2026, 2026",

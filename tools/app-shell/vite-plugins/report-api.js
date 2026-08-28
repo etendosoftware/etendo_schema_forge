@@ -16,7 +16,8 @@ import { REPORT_UI_STRINGS, pickLabel, buildContractLabels } from '@etendosoftwa
 import { resolveGrouping, buildNestedGroups, buildAccountReportTree }
   from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
 import { applyPlaceholders } from '@etendosoftware/schema-forge-cli/src/report-sql.js';
-import { hydrateDocumentBranding } from './report-branding.js';
+import { filterAndTransformParams } from '@etendosoftware/schema-forge-cli/src/report-filters.js';
+import { hydrateDocumentBranding, resolveCompanyLogoDataUrl } from '@etendosoftware/schema-forge-cli/src/report-branding.js';
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
@@ -147,7 +148,7 @@ function listReports() {
  *   VITE_MOCK=true  → use mock data files
  *   VITE_MOCK=false → use real data (NEO API or Jasper SQL)
  */
-async function fetchReportData(reportId, { limit, authToken, params = {} } = {}) {
+async function fetchReportData(reportId, { limit, authToken, params = {}, locale } = {}) {
   const contractPath = join(ARTIFACTS_DIR, reportId, 'report-contract.json');
   const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 
@@ -179,6 +180,16 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
+        // The render's own locale, so the backend translates row VALUES to the
+        // language the report was generated in — not to whatever the Etendo user's
+        // default_ad_language happens to be (ETP-5013: Tax Report's country column
+        // rendered "Spain" for one user and "España" for another, on the same
+        // report). NeoAuthenticator.applyRequestLanguage reads exactly this header
+        // and applies it to the OBContext, which is the same channel the window
+        // selectors already translate through (NeoLanguage/NeoTrl). Only well-formed
+        // active xx_YY codes are honoured server-side; anything else is ignored and
+        // the context default stands, so an unset locale is safe.
+        ...(locale ? { 'Accept-Language': locale } : {}),
       },
       body: JSON.stringify(neoBody),
     });
@@ -208,7 +219,39 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
       if (metaObj && typeof metaObj === 'object') neoMeta = metaObj;
     }
 
-    return { rows, contract, neoMeta };
+    // Company logo (ETP-5013) — missed in the first pass: this branch has no
+    // DB access at all (NEO does the data fetch remotely), so the SQL/Jasper
+    // branch's orgId-based lookup below never ran for the 4 NEO-sourced
+    // listing reports (Aging of Payables/Receivables, Tax Report, Inventory
+    // Stock Report) — the logo silently never resolved for any of them. Opens
+    // a short-lived pool just for this lookup, same per-request-Pool pattern
+    // every other branch already uses.
+    let companyLogoDataUrl;
+    {
+      const gradlePath = findGradleProps();
+      if (gradlePath) {
+        const gradle = parseGradleProps(gradlePath);
+        const pg = await import('pg');
+        const logoPool = new pg.default.Pool({
+          host: gradle['bbdd.host'] || 'localhost',
+          port: parseInt(gradle['bbdd.port']) || 5432,
+          user: gradle['bbdd.user'],
+          password: gradle['bbdd.password'],
+          database: gradle['bbdd.sid'],
+          max: 1,
+        });
+        try {
+          const clientId = getClientIdFromRequest({ headers: { authorization: `Bearer ${authToken}` } }) || '0';
+          companyLogoDataUrl = await resolveCompanyLogoDataUrl(logoPool, {
+            clientId, orgId: params.orgId, authToken, etendoBase,
+          });
+        } finally {
+          await logoPool.end();
+        }
+      }
+    }
+
+    return { rows, contract, neoMeta, companyLogoDataUrl };
   }
 
   // Document type: multiple queries (header + lines + taxes)
@@ -316,7 +359,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
   try {
     const clientId = getClientIdFromRequest({ headers: { authorization: authToken ? `Bearer ${authToken}` : '' } }) || '0';
 
-    sql = applyPlaceholders(sql, { clientId, params, contract });
+    sql = applyPlaceholders(sql, { clientId, params, contract, locale });
 
     // Inject date filters for Jasper SQL queries that don't have __PLACEHOLDER__ tokens.
     // The contract can specify a dateColumn (e.g., "dateColumn": "DATEACCT" or "O.DATEORDERED").
@@ -360,7 +403,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     // Same placeholder rules as the main query, just no LIMIT — it's already pre-aggregated.
     let openingRows = null;
     if (contract.sql?.openingQuery) {
-      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract });
+      const openingSql = applyPlaceholders(contract.sql.openingQuery, { clientId, params, contract, locale });
       openingRows = (await pool.query(openingSql)).rows;
     }
 
@@ -369,11 +412,22 @@ async function fetchReportData(reportId, { limit, authToken, params = {} } = {})
     // consumed by buildAccountReportTree(), never rendered directly.
     let operandRows = null;
     if (contract.sql?.operandsQuery) {
-      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract });
+      const operandsSql = applyPlaceholders(contract.sql.operandsQuery, { clientId, params, contract, locale });
       operandRows = (await pool.query(operandsSql)).rows;
     }
 
-    return { rows, contract, openingRows, operandRows };
+    // Company logo for listing reports (ETP-5013) — "document" contracts
+    // (print-*) resolve org_logo_id from their own header SQL row (see the
+    // `contract.type === 'document'` branch above); listing reports have no
+    // `header` at all, so this reuses the shared orgId/clientId lookup
+    // instead (falls back to the client's own logo when the report has no
+    // `orgId` filter, e.g. Inventory Stock Report, Order Not Shipped).
+    const companyLogoDataUrl = await resolveCompanyLogoDataUrl(pool, {
+      clientId, orgId: params.orgId, authToken,
+      etendoBase: process.env.ETENDO_URL || 'http://localhost:8080/etendo',
+    });
+
+    return { rows, contract, openingRows, operandRows, companyLogoDataUrl };
   } finally {
     await pool.end();
   }
@@ -444,6 +498,11 @@ export default function reportApiPlugin() {
                   fromWhere: `FROM c_project WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
                   orderBy: 'ORDER BY name',
                   select: `SELECT c_project_id AS id, name, name AS label`
+                },
+                'costcenter': {
+                  fromWhere: `FROM c_costcenter WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
+                  orderBy: 'ORDER BY name',
+                  select: `SELECT c_costcenter_id AS id, name, name AS label`
                 },
                 'org': {
                   fromWhere: `FROM ad_org WHERE isactive='Y' AND ad_org_id != '0' ${byClient('ad_client_id')} AND name ILIKE $1`,
@@ -627,8 +686,8 @@ export default function reportApiPlugin() {
 
           try {
             const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-            const result = await fetchReportData(reportId, { limit, authToken, params });
-            let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows } = result;
+            const result = await fetchReportData(reportId, { limit, authToken, params, locale });
+            let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows, companyLogoDataUrl } = result;
 
             // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns
             // the FLAT node list, and the indented tree (roll-up, formula nodes,
@@ -654,33 +713,7 @@ export default function reportApiPlugin() {
             let groupLabel; let descriptionLabel; let dimensionLabel; let dimensionField; let tbGroups;
             ({ groupLabel, descriptionLabel, dimensionLabel, dimensionField, tbGroups, rows } =
               resolveGrouping(contract, params, rows, locale));
-            const activeFilters = Object.entries(params)
-              .filter(([k, v]) => v && v !== '' && !k.startsWith('_display_'))
-              .map(([k, v]) => {
-                const paramDef = contract.parameters?.find(p => p.name === k);
-                // Use display name if available (for search selectors that send UUIDs)
-                let displayValue = params['_display_' + k] || v;
-                // For groupBy: resolve the stored key ('bpartner', 'product') to its human label
-                if (k === 'groupBy') {
-                  const dimParam = (contract.parameters || []).find(p => p.groupByValue === v);
-                  displayValue = pickLabel(dimParam?.label, locale, v);
-                } else if (paramDef?.options) {
-                  // Any select with a literal `options` list stores the raw option value
-                  // ('S', 'acct', 'B'…). Resolve it to the human label so the filter chip
-                  // reads "Account Level: Heading", not "Account Level: E".
-                  const opt = paramDef.options.find(o => String(o.value) === String(v));
-                  if (opt) displayValue = pickLabel(opt.label, locale, v);
-                }
-                if (typeof displayValue === 'string' && displayValue.includes(' | ')) {
-                  displayValue = displayValue.split(' | ').filter(Boolean).join(', ');
-                }
-                // Format date values from ISO (YYYY-MM-DD) to DD/MM/YYYY
-                if (paramDef?.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(displayValue)) {
-                  const [y, m, d] = displayValue.split('-');
-                  displayValue = `${d}/${m}/${y}`;
-                }
-                return { label: pickLabel(paramDef?.label, locale, k), value: displayValue };
-              });
+            const activeFilters = filterAndTransformParams(params, contract, locale);
             const artifactDir = join(ARTIFACTS_DIR, reportId);
             // Excel/CSV get their own flat, calculation-friendly template when the report
             // declares one (ETP-4898). Both recipes render whatever markup/text they're given —
@@ -725,9 +758,16 @@ export default function reportApiPlugin() {
                 totals[col.field] = rows.reduce((sum, r) => sum + (Number(r[col.field]) || 0), 0);
               }
             }
+            // isInteractive (ETP-5013) — true only for the on-screen preview
+            // (embedded in the app's iframe, where a drill-down `<span>`'s
+            // onclick postMessage actually reaches a listening parent window).
+            // PDF/Excel/CSV are static exports — the exact same onclick does
+            // nothing there, so a template rendering it blue+underlined was
+            // showing a false "this is clickable" affordance on a dead control.
+            const isInteractive = format === 'html' || format === 'preview';
             const templateData = documentData
-              ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, ...neoMeta }, rows };
+              ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels, isInteractive }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta }, rows };
 
             // Document (print-*) reports render a QR of the header. QRCode.toDataURL
             // is async while Handlebars.compile is sync, so the QR cannot be a helper
@@ -774,9 +814,28 @@ export default function reportApiPlugin() {
             };
 
             if (recipe === 'chrome-pdf') {
+              // "Printed on <date>" + "Page N" footer (ETP-5013), matching Classic's
+              // own JasperReports footer layout exactly (verified against a real
+              // Classic PDF export). headerTemplate/footerTemplate are plain Puppeteer
+              // HTML, NOT Handlebars — jsreport's chrome-pdf recipe forwards them
+              // straight to Chrome's page.pdf(), so the label/date text below is
+              // interpolated with plain JS BEFORE the request is built; only
+              // `pageNumber` is a live per-page value Chrome itself replaces (Classic
+              // doesn't show a page total either, so neither do we). headerTemplate is
+              // an empty span on purpose: displayHeaderFooter alone would otherwise
+              // show Chrome's default header (page URL + system date).
+              const printedOnDate = new Date(templateData.meta.generatedAt);
+              const printedOnStr = isNaN(printedOnDate.getTime()) ? '' :
+                new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(printedOnDate);
               payload.template.chrome = {
                 landscape: contract.orientation === 'landscape' || params.showLandscape === 'true',
-                format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm',
+                // marginBottom bumped from 10mm to 14mm (ETP-5013) to leave room for
+                // the footer below — otherwise Chrome's native footer can overlap the
+                // last table row on a full page.
+                format: 'A4', marginTop: '10mm', marginBottom: '14mm', marginLeft: '10mm', marginRight: '10mm',
+                displayHeaderFooter: true,
+                headerTemplate: '<span></span>',
+                footerTemplate: `<div style="width:100%;font-size:8px;color:#94a3b8;font-family:Arial,sans-serif;padding:0 10mm;display:flex;justify-content:space-between;box-sizing:border-box;"><span>${ui.printedOn} ${printedOnStr}</span><span>${ui.page} <span class="pageNumber"></span></span></div>`,
               };
             }
 
