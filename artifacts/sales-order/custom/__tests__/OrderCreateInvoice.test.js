@@ -308,4 +308,34 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
     });
   });
+
+  // ETP-4567 (QA finding 2): the confirmation modal's big grand-total amount showed a
+  // hardcoded '0,00' whenever the computed total was <= 0 (e.g. a fully-negative order),
+  // while the subtotal line a few lines below already called formatCurrency
+  // unconditionally and rendered the signed value correctly (e.g. -46,50 €). Both
+  // ConfirmModal and CreateDocsModal must render grandTotal through formatCurrency
+  // unconditionally, exactly like the working subtotal line already does.
+  describe('grand-total modal amount renders negative totals correctly (ETP-4567)', () => {
+    it('does not gate grandTotal behind a >0 ternary that falls back to a hardcoded 0,00 string', () => {
+      const gatedOccurrences = (
+        src.match(/\{grandTotal > 0 \? formatCurrency\(currency, grandTotal\) : '0,00'\}/g) || []
+      ).length;
+      assert.equal(
+        gatedOccurrences,
+        0,
+        'grandTotal must render unconditionally via formatCurrency, not fall back to a literal 0,00 for zero/negative totals',
+      );
+    });
+
+    it('renders grandTotal unconditionally via formatCurrency in both ConfirmModal and CreateDocsModal', () => {
+      const unconditionalOccurrences = (
+        src.match(/\{formatCurrency\(currency, grandTotal\)\}/g) || []
+      ).length;
+      assert.equal(
+        unconditionalOccurrences,
+        2,
+        'expected exactly 2 unconditional formatCurrency(currency, grandTotal) renders: ConfirmModal + CreateDocsModal',
+      );
+    });
+  });
 });
