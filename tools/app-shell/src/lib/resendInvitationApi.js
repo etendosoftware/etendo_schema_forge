@@ -23,11 +23,16 @@ const resendFallback = (data) => ('status' in data || 'error' in data ? data : n
  * `CompanyInvitationService#resendInvitation`'s own javadoc for the full rule.
  *
  * @param {string} userId - AD_User_ID of the invited user.
+ * @param {string} [language] - Operator locale (`es_ES`, `en_US`). ETP-5003 — without it the email
+ *   falls back to Spanish for every recipient instead of following the locale in use.
  * @returns {Promise<{status: 'success', invitation: {id: string, email: string, status: string,
  *   expiresAt?: string}}>}
  */
-export async function resendInvitation(userId) {
+export async function resendInvitation(userId, language) {
   const params = new URLSearchParams({ AdUserId: userId });
+  if (language) {
+    params.set('Language', language);
+  }
   const url = `${NEO_BASE}/resendinvitation?${params.toString()}`;
   const result = await fetchNeoWebhookJson(url, 'SFResendInvitation', resendFallback);
   if (result.error) {

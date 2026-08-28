@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,7 @@ function invitationErrorMessage(ui, code, message) {
  */
 export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -72,7 +73,10 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ email: trimmed }),
+        // ETP-5003 — without this the servlet reads an empty language, the contract's
+        // Spanish branch never matches and every invitation goes out in English, whatever
+        // locale the operator is working in.
+        body: JSON.stringify({ email: trimmed, language: locale }),
       });
 
       const data = await response.json().catch(() => ({}));
