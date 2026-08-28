@@ -498,11 +498,12 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
 
     fireEvent.click(screen.getByTestId('document-select-d1'));
     expect(screen.getByTestId('document-bulk-bar-p1')).toBeInTheDocument();
-    // The count suffix on the bulk button is a raw JSX literal (not routed through ui()), so
-    // it's a reliable assertion target regardless of whether a LocaleProvider is present —
-    // unlike `document-selection-count`, whose text comes entirely from ui('selected'), which
-    // falls back to the untranslated key (no {count} substitution) without a real dictionary.
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(1)');
+    // The bulk button itself carries no "(count)" suffix — deliberately removed (ETP-4972
+    // live-QA finding: redundant, the pill's own counter segment already shows it). This
+    // test file's `render()` wraps every call in a real `LocaleProvider` with real dictionaries
+    // (see the file-header comment), so `document-selection-count` reliably reflects the real
+    // `ui('selected')` translation, not a raw/untranslated fallback.
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('1 Selected');
   });
 
   it('tracks multiple selected rows and shows the correct count', async () => {
@@ -511,11 +512,11 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
     fireEvent.click(screen.getByTestId('document-select-d2'));
     fireEvent.click(screen.getByTestId('document-select-d3'));
 
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(3)');
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('3 Selected');
 
     // Unselecting one drops the count back down, not to zero.
     fireEvent.click(screen.getByTestId('document-select-d2'));
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(2)');
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('2 Selected');
   });
 
   it('clears the selection when the period is collapsed or a different period is expanded', async () => {
@@ -851,7 +852,16 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
     expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
   });
 
-  it('keeps the bulk action bar inside the same sticky wrapper as the period row once documents are selected', async () => {
+  // ETP-4972 — before this ticket, the bulk action bar was an in-flow
+  // element rendered as a child of this same sticky-positioned wrapper, so
+  // it inherited the row's own sticky/scroll behavior. It now renders
+  // through the shared `SelectionToolbar`, which portals straight to
+  // `document.body` with true viewport-fixed coordinates — it is no longer
+  // a DOM descendant of the wrapper at all, and doesn't need to be: it can
+  // never scroll away or be clipped regardless of where the period row
+  // ends up. This test now verifies that split explicitly, rather than
+  // asserting an ancestry relationship that no longer exists.
+  it('period row keeps its sticky positioning once documents are selected; the bulk action bar itself floats independently via the portaled SelectionToolbar', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Feb-2027'));
 
@@ -861,7 +871,12 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
 
     const p1Wrapper = stickyWrapperFor('p1');
     expect(p1Wrapper.className).toMatch(/\bsticky\b/);
-    expect(p1Wrapper.querySelector('[data-testid="document-bulk-bar-p1"]')).toBeInTheDocument();
+    // The bar is NOT nested inside the sticky wrapper anymore...
+    expect(p1Wrapper.querySelector('[data-testid="document-selection-count"]')).toBeNull();
+    // ...it lives in SelectionToolbar's own portaled, fixed-position pill.
+    const bar = screen.getByTestId('document-selection-count').closest('.selection-toolbar');
+    expect(bar).toBeTruthy();
+    expect(bar.closest('.fixed')).toBeTruthy();
   });
 
   it('moves the sticky unit to the newly expanded period, and the previous one is no longer sticky', async () => {

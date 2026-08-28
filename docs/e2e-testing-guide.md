@@ -785,6 +785,37 @@ Document-aware components expose status via `data-*` attributes for test asserti
 | `data-row-status` | List view rows (`data-testid="row-{id}"`) | Same as above |
 | `data-status` | Status badge (`data-testid="document-status-pill"`) | Same as above |
 
+### Gotcha: opening a record from a list that has a row preview
+
+Two facts make `row.dblclick()` the wrong way to reach a detail view, and both
+produce the same misleading symptom — a `getByTestId('detail-view')` timeout
+that looks like a slow page instead of a wrong click:
+
+1. **Row activation does not navigate on preview-enabled lists.** When a window
+   passes `renderPreview` to `ListView` (purchase-invoice, sales-invoice, …),
+   `buildRowNavigateHandler()` (`components/contract-ui/ListView.jsx`) swaps the
+   navigate handler for "open the row-preview overlay". Double-clicking a row
+   there opens `GenericPreviewModal`, never the detail.
+2. **`GenericPreviewModal` has no Escape handler.** Its only exits are the header
+   close button and a click on its full-viewport backdrop (the modal card's
+   parent element; the card is inset 8px, so a click at `y < 8` always lands on
+   the backdrop). `page.keyboard.press('Escape')` does *not* dismiss it — and
+   while it is up, its `fixed inset-0` backdrop swallows every pointer event
+   aimed at the list underneath.
+
+The reliable route into a record from a list is the row's own quick action:
+hover the row, then click `row-quick-action-edit` **scoped to that row**. That
+button is icon-only — its label lives in `aria-label`/`title` — so a
+`page.locator('button', { hasText: /editar|edit/i })` locator can never match
+it and silently resolves to some other button on the page.
+
+`e2e/tests/helpers/purchase-helpers.js` wraps all of this:
+`dismissPreviewModal(page)`, `openListRow(page, rowLocator)`,
+`openRowByStatus(page, { status })`, and `rowByDocumentStatus(page, status)`
+(which prefers `data-row-status` over translated cell text). Prefer
+`page.getByTestId('row-<id>')` whenever the test already knows the record id —
+"the first Completed row" also matches leftovers from earlier runs.
+
 ## Toast selectors
 
 Sonner v2 renders `data-type` on each toast element. Use these selectors in E2E tests:
