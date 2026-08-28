@@ -184,6 +184,8 @@ describe('document template render (print-sales-invoice, dev HTML path)', () => 
   const helpersPath = join(ARTIFACTS_DIR, 'print-sales-invoice', 'helpers.js');
   const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
 
+  // ETP-4912: the invoice contract SQL emits `qr_mode` as a constant, so a real
+  // print-sales-invoice header ALWAYS carries it. Tests use the same shape.
   const header = {
     doc_type: 'AR Invoice',
     documentno: 'INV-1001',
@@ -192,6 +194,10 @@ describe('document template render (print-sales-invoice, dev HTML path)', () => 
     grandtotal: '1210.00',
     currency: 'EUR',
     status: 'CO',
+    qr_mode: 'verifactu',
+    verifactu_qr_url:
+      'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR' +
+      '?nif=B12345678&numserie=INV-1001&fecha=10-08-2026&importe=1210.00',
   };
 
   it('renders an inline PNG QR without registering any qrCode helper', async () => {
@@ -218,5 +224,129 @@ describe('document template render (print-sales-invoice, dev HTML path)', () => 
     assert.doesNotThrow(() => {
       hb.compile(templateContent)({ css: '', meta: { filters: [] }, header: {}, lines: [], taxes: [] });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verifactu mode (ETP-4912) — mirrors schema_forge_core/cli/test/report-qr.test.js
+// ---------------------------------------------------------------------------
+
+const AEAT_URL =
+  'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR' +
+  '?nif=A39200019&numserie=10000014&fecha=16-04-2026&importe=1355.20';
+
+describe('buildDocumentQrText — Verifactu mode', () => {
+  it('returns the AEAT URL verbatim, with query params untouched', () => {
+    const text = buildDocumentQrText({ qr_mode: 'verifactu', verifactu_qr_url: AEAT_URL });
+    assert.equal(text, AEAT_URL);
+    assert.equal(text.split('&').length, 4);
+    assert.ok(text.includes('importe=1355.20'));
+  });
+
+  it('ignores the document fields entirely when the AEAT URL is present', () => {
+    const text = buildDocumentQrText({
+      qr_mode: 'verifactu',
+      verifactu_qr_url: AEAT_URL,
+      documentno: 'INV-1001',
+      grandtotal: '1210.00',
+    });
+    assert.equal(text, AEAT_URL);
+  });
+
+  it('returns empty (no QR) when the AEAT URL has not been issued yet', () => {
+    for (const value of [null, undefined, '', '   ']) {
+      assert.equal(buildDocumentQrText({ qr_mode: 'verifactu', verifactu_qr_url: value }), '');
+    }
+    assert.equal(buildDocumentQrText({ qr_mode: 'verifactu' }), '');
+  });
+
+  it('leaves every other printable on the internal pipe-string (regression guard)', () => {
+    assert.equal(
+      buildDocumentQrText({ documentno: 'SO-5', currency: 'EUR', verifactu_qr_url: AEAT_URL }),
+      'N:SO-5|C:EUR'
+    );
+  });
+});
+
+describe('computeDocumentQrDataUrl — Verifactu mode', () => {
+  it('encodes the AEAT URL at AEAT-compliant options (level M, 400px for 40mm)', async () => {
+    const calls = [];
+    const fakeQrcode = {
+      toDataURL: async (text, options) => {
+        calls.push({ text, options: { ...options } });
+        return 'data:image/png;base64,FAKE';
+      },
+    };
+    await computeDocumentQrDataUrl(
+      { qr_mode: 'verifactu', verifactu_qr_url: AEAT_URL },
+      { qrcode: fakeQrcode }
+    );
+    assert.equal(calls[0].text, AEAT_URL);
+    assert.equal(calls[0].options.errorCorrectionLevel, 'M');
+    assert.equal(calls[0].options.width, 400);
+  });
+
+  it('returns no data URL at all when there is nothing to encode', async () => {
+    assert.equal(await computeDocumentQrDataUrl({ qr_mode: 'verifactu' }), '');
+  });
+});
+
+describe('print-sales-invoice template — Verifactu QR block (ETP-4912)', () => {
+  const templateContent = expandDocumentPartials(
+    readFileSync(join(ARTIFACTS_DIR, 'print-sales-invoice', 'template.hbs'), 'utf8'),
+  );
+  const helpersPath = join(ARTIFACTS_DIR, 'print-sales-invoice', 'helpers.js');
+  const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
+
+  function render(header) {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, helpersCode);
+    return hb.compile(templateContent)({
+      css: '',
+      meta: { title: 'Sales Invoice', generatedAt: '2026-08-24T10:00:00.000Z', filters: [], params: {} },
+      header,
+      lines: [],
+      taxes: [],
+    });
+  }
+
+  it('renders the AEAT-mandated label and caption around the QR', async () => {
+    const header = { qr_mode: 'verifactu', verifactu_qr_url: AEAT_URL, documentno: 'INV-1' };
+    header.qrDataUrl = await computeDocumentQrDataUrl(header);
+    const html = render(header);
+    // art. 20.1.b + section 3: the label always precedes the QR, the phrase follows it.
+    assert.match(html, /QR Tributario:/);
+    assert.match(html, /Factura verificable en la sede electrónica de la AEAT/);
+    assert.match(html, /class="verifactu-qr-img"/);
+  });
+
+  it('places the QR block before the invoice content, not in the footer', async () => {
+    const header = { qr_mode: 'verifactu', verifactu_qr_url: AEAT_URL, documentno: 'INV-1' };
+    header.qrDataUrl = await computeDocumentQrDataUrl(header);
+    const html = render(header);
+    // Section 3: the QR goes at the start of the invoice and must be its FIRST QR.
+    // Compare the body markup, not the class names — those also appear in <style>.
+    assert.ok(
+      html.indexOf('<div class="verifactu-qr">') < html.indexOf('<div class="doc-header">'),
+      'the QR block must precede the invoice header markup'
+    );
+    assert.equal((html.match(/data:image\/png;base64,/g) || []).length, 1);
+  });
+
+  it('renders no QR at all when the AEAT URL has not been issued', async () => {
+    const header = { qr_mode: 'verifactu', documentno: 'INV-2' };
+    header.qrDataUrl = await computeDocumentQrDataUrl(header);
+    const html = render(header);
+    assert.ok(!html.includes('data:image/png;base64,'), 'no QR image should be rendered');
+    assert.ok(!html.includes('QR Tributario:'), 'no label without a QR');
+    assert.ok(!html.includes('<img src="" '), 'never an empty img src');
+  });
+
+  it('no longer renders the old internal footer QR', async () => {
+    const header = { qr_mode: 'verifactu', verifactu_qr_url: AEAT_URL, documentno: 'INV-3' };
+    header.qrDataUrl = await computeDocumentQrDataUrl(header);
+    const html = render(header);
+    // A second, non-AEAT QR on a fiscal document is what the spec warns against.
+    assert.ok(!html.includes('Scan to verify'));
   });
 });

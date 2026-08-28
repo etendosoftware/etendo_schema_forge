@@ -881,8 +881,8 @@
       "description": "Refresh SII Cash Receipts"
     },
     "EM_Aeatsii_Siikeylist": {
-      "label": "Invoice type key",
-      "description": "Invoice type key"
+      "label": "Clave tipo factura",
+      "description": "Clave tipo factura"
     },
     "CIF": {
       "label": "CIF",
@@ -1477,8 +1477,8 @@
       "description": "Invoice number"
     },
     "EM_Aeatsii_Defaultsiikey": {
-      "label": "Default Key",
-      "description": "Default Key"
+      "label": "Clave por Defecto",
+      "description": "Clave por Defecto"
     },
     "Navarra": {
       "label": "SII - Navarra Tax Agency",
@@ -16479,8 +16479,8 @@
     "Connections": {
       "label": "Conexiones"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Revenue this month": {
       "label": "Ingresos del mes"
@@ -16709,6 +16709,13 @@
     "importErrorDependentKeyConflict": "El código derivado \"{key}\" entra en conflicto con el registro existente \"{existing}\".",
     "importErrorInvalidPrice": "El precio \"{value}\" no es un número válido.",
     "importErrorNoPriceList": "No hay ninguna lista de precios de venta configurada, así que no se pudo importar el precio. Importa el producto sin precio o configura primero una lista de precios de venta.",
+    "importErrorInvalidCodedValue": "El valor \"{value}\" no es válido para \"{field}\". Valores aceptados: {accepted}.",
+    "importErrorMissingContactName": "Esta fila no tiene razón social ni nombre y apellido, así que no se puede crear el contacto.",
+    "importErrorUomUnresolved": "No se pudo asociar la unidad de medida \"{uom}\" con un registro existente.",
+    "importErrorNoPurchasePriceList": "No hay ninguna lista de precios de compra configurada, así que no se pudo importar el precio de compra. Importa el producto sin precio de compra o configura primero una lista de precios de compra.",
+    "importFieldTaxIdType": "Tipo de identificación fiscal",
+    "importFieldContactType": "Tipo de contacto",
+    "importFieldProductType": "Tipo de producto",
     "noAccessTitle": "Sin acceso",
     "noAccessMessage": "Contacta a tu administrador para obtener acceso.",
     "windowAccessDenied": "No tienes acceso a esta ventana",
@@ -17529,6 +17536,11 @@
     "pendingInvitationBadge": "Invitación pendiente",
     "invitationDeliveryFailedBadge": "Error al enviar la invitación",
     "invitationExpiredBadge": "Invitación caducada",
+    "invitationAcceptedBadge": "Invitación aceptada",
+    "pendingInvitationGridBadge": "Pendiente",
+    "invitationDeliveryFailedGridBadge": "Error al enviar",
+    "invitationExpiredGridBadge": "Caducada",
+    "invitationAcceptedGridBadge": "Aceptada",
     "resendInvitationAction": "Reenviar invitación",
     "resendInvitationSuccessToast": "Invitación reenviada",
     "resendInvitationErrorFallback": "No se pudo reenviar la invitación",
@@ -17568,6 +17580,8 @@
     "accessTierReadOnly": "Solo lectura",
     "rolesWindowCount": "{count} Ventanas",
     "rolesMatrixWindowColumn": "Ventana",
+    "rolesUserCount": "{count} Usuarios",
+    "rolesSummaryCardNavigateAria": "Ver usuarios con el rol {role}",
     "userRolesTabLabel": "Roles del usuario",
     "userRolesTabEmptyState": "Selecciona un rol para visualizar los permisos",
     "userRolesTabWindowColumn": "Ventana",
@@ -17575,6 +17589,8 @@
     "userRolesTabDashboardRow": "Inicio (Dashboard)",
     "userRolesTabFavoritesRow": "Favoritos",
     "userRolesTabCopilotRow": "Copilot (Asistente IA)",
+    "userRolesTabWinnerTooltipTitle": "Permiso efectivo",
+    "userRolesTabWinnerTooltipDescription": "Es el nivel de acceso más alto que tiene el usuario entre todos sus roles.",
     "usersGridRolesColumn": "Roles",
     "usersGridInvitationColumn": "Invitación",
     "ownerBadge": "Propietario",
@@ -18045,6 +18061,10 @@
     "billingPreferences": "Preferencias de facturación",
     "billingPreferencesDesc": "Configuración de facturación de cliente y proveedor.",
     "billingPreferencesAfterSave": "Guarda el contacto para configurar preferencias de facturación.",
+    "fiscalDefaults": "Valores por Defecto SIF",
+    "fiscalDefaultsDescription": "Se usan como valores por defecto al enviar las facturas de este cliente a SII/TicketBAI.",
+    "fiscalDefaultsSiiBlock": "SII",
+    "fiscalDefaultsTbaiBlock": "TicketBAI",
     "validationRequiredField": "El campo \"{field}\" es obligatorio.",
     "validationRequiredGeneric": "Falta un campo obligatorio.",
     "validationDuplicateRecord": "Ya existe un registro con el mismo valor.",
@@ -18297,6 +18317,7 @@
     "cpPisAuthorizedRegistered": "Pago registrado. Tu banco está procesando la transferencia.",
     "cpPisStillInProgress": "Tu banco sigue procesando la transferencia. El pago se actualizará solo.",
     "cpPisConnectionLost": "No se pudo consultar el estado — reintentando",
+    "cpPisVerifying": "Verificando el pago…",
     "cpPisRejectedNoPayment": "El banco rechazó la transferencia. No se creó ningún pago — podés intentar de nuevo.",
     "cpPisFailedError": "No se pudo completar la transferencia bancaria. Intenta nuevamente.",
     "cpPisWindowClosed": "Cerraste la ventana del banco antes de autorizar",
@@ -18531,6 +18552,7 @@
     "financeAccountsNewIbanCountryMismatch": "El IBAN no corresponde al país seleccionado",
     "financeAccountsNewIbanLengthMismatch": "El IBAN no tiene la longitud esperada para este país",
     "financeAccountsNewCountryRequiredForIban": "Una cuenta bancaria con IBAN debe tener un país",
+    "financeAccountsNewIbanCountryNoConfig": "El país seleccionado no tiene configuración de IBAN",
     "financeAccountsNewSubmit": "Añadir cuenta",
     "financeAccountsNewBack": "Volver",
     "financeAccountsNewCreateSuccess": "Cuenta creada",
@@ -18736,7 +18758,7 @@
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
     "financeReconcileFilterStatusPending": "Pendiente",
-    "financeReconcileFilterStatusSuggested": "Sugerido",
+    "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Diferencias",
     "financeReconcileFilterStatusReconciled": "Conciliadas",
@@ -18757,7 +18779,7 @@
     "financeReconcileColPendingBalance": "Saldo pendiente",
     "financeReconcileColAmount": "Importe",
     "financeReconcileColSelect": "Seleccionar",
-    "financeReconcileBadgeSuggested": "Sugerida",
+    "financeReconcileBadgeSuggested": "Con sugerencia",
     "financeReconcileBadgeByRule": "Por regla",
     "financeReconcileBadgeDifference": "Diferencia",
     "financeReconcileBadgePending": "Pendiente",
@@ -19054,7 +19076,7 @@
     "financeAccountStatementsManualSaving": "Guardando…",
     "financeAccountStatementsManualErrorName": "Introduce un nombre para el extracto",
     "financeAccountStatementsManualErrorLines": "Añade al menos una línea con importe",
-    "financeAccountStatementsManualErrorIncompleteLine": "Completa los campos obligatorios de cada línea (fecha, Reference No, salida y entrada)",
+    "financeAccountStatementsManualErrorIncompleteLine": "Completa los campos obligatorios de cada línea (fecha y un importe de salida o entrada)",
     "financeAccountStatementsManualDiscardTitle": "¿Descartar cambios?",
     "financeAccountStatementsManualDiscardBody": "Si cierras ahora perderás los datos no guardados de este extracto.",
     "financeAccountStatementsManualDiscardKeep": "Seguir editando",
@@ -19133,6 +19155,9 @@
     "financeAccountStatementsImportLines": "{count} líneas",
     "financeAccountStatementsImportMoreLines": "+ {count} líneas más en el extracto",
     "financeAccountStatementsImportSuccessToast": "Extracto '{name}' importado · {count} movimientos añadidos",
+    "financeAccountStatementsImportSuccessToastPartial": "Extracto '{name}' importado · {count} movimientos añadidos · {discarded} línea/s omitidas por no tener importe",
+    "financeAccountStatementsImportDiscardedLines": "{count} línea/s no se importarán porque no tienen importe.",
+    "financeAccountStatementsImportNoValidLines": "El archivo no contiene líneas válidas para importar.",
     "financeAccountStatementsImportImportingTitle": "Procesando extracto bancario…",
     "financeAccountStatementsImportImporting": "Analizando movimientos y preparando los datos.",
     "financeAccountStatementsImportDropTitlePrefix": "Arrastra tu archivo aquí o selecciona uno",
@@ -19972,6 +19997,19 @@
     "orgWebsiteLabel": "Sitio web",
     "orgUnsavedTitle": "Tienes cambios sin guardar",
     "orgUnsavedDesc": "Se aplicarán a los documentos emitidos desde ahora",
+    "orgSectionIae": "Actividades del IAE",
+    "orgSectionIaeDesc": "Actividades económicas (IAE) declaradas por esta organización. Al menos una debe estar marcada como principal y con un código asignado antes de presentar el último periodo del modelo 303 de la AEAT.",
+    "orgIaeEpigraphLabel": "Epígrafe IAE",
+    "orgIaeTypeLabel": "Clave",
+    "orgIaeCodeLabel": "Código",
+    "orgIaeDefaultLabel": "Principal",
+    "orgIaeCodeHint": "Obligatorio en la fila principal antes de presentar el último periodo (4T o diciembre) del modelo 303 de la AEAT.",
+    "orgIaeMissingCodeWarning": "Falta el código — obligatorio para el último periodo del modelo 303",
+    "orgIaeAddRow": "Añadir actividad del IAE",
+    "orgIaeEmpty": "Todavía no hay actividades del IAE",
+    "orgIaeLoadError": "No se pudieron cargar las actividades del IAE: {error}",
+    "orgIaeDeleteError": "No se pudo eliminar la actividad: {error}",
+    "orgIaeSaveError": "No se pudo guardar la actividad: {error}",
     "pricingUpdated": "Precios actualizados correctamente.",
     "priceVersionAlreadyPresent": "Esta versión de lista de precios ya está presente.",
     "priceSelectVersionFirst": "Seleccioná una versión de lista de precios primero.",
@@ -20165,6 +20203,12 @@
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",
     "backendError.genericAccountRequired": "Para generar la Cuenta Mostrada con Número de Cuenta Genérica es necesario introducir un Número de Cuenta Genérica",
     "backendError.countryIban": "Se necesita el País para una cuenta IBAN.",
+    "backendError.countryNoIbanConfig": "{country} no tiene configuración de IBAN, así que no puede usarse en una cuenta con IBAN",
+    "backendError.ibanPrefixCountryMismatch": "El IBAN empieza con '{prefix}' pero el país seleccionado es {country} ({iso})",
+    "backendError.ibanCountryLengthMismatch": "Un IBAN de {country} debe tener {expected} caracteres (recibidos {actual})",
+    "backendError.ibanTooShort": "El IBAN es demasiado corto",
+    "backendError.ibanChecksumInvalid": "El IBAN no es válido: los dígitos de control no coinciden",
+    "backendError.invalidCountry": "País no válido",
     "backendError.ibanInvalid": "El código IBAN introducido no es correcto. Por favor revise el código IBAN y el país definido para el banco",
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",
     "backendError.invalidAccountBpAndGroup": "No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})",
@@ -20189,6 +20233,7 @@
     "backendError.noShipmentsProvided": "No se proporcionaron albaranes.",
     "backendError.shipmentsMustShareBusinessPartner": "Todos los albaranes deben pertenecer al mismo Tercero.",
     "backendError.bpMissingPaymentTermsOrMethod": "Al Tercero le faltan las Condiciones de Pago o la Forma de Pago obligatorias.",
+    "backendError.shipmentPriceListRequired": "No se pudo resolver una tarifa para esta factura. Selecciona una tarifa o configura una tarifa por defecto para el Tercero.",
     "backendError.orderNotFound": "Pedido no encontrado: {orderId}",
     "backendError.shipmentNotFound": "Albarán no encontrado: {id}",
     "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos.",
@@ -21255,6 +21300,8 @@
     "fm.aeat.error.connection": "Error de conexión al presentar a la AEAT. Inténtalo de nuevo.",
     "fm.aeat.error.generic": "Error desconocido. Inténtalo de nuevo.",
     "fm.aeat.error.ibanRequired": "Se necesita el IBAN para presentar este tipo de declaración. Rellena el campo IBAN en la sección de Identificación.",
+    "fm.aeat.error.missingDefaultIae": "Esta organización necesita al menos una actividad del IAE marcada como principal, con un código asignado, antes de presentar la declaración del último periodo.",
+    "fm.aeat.action.go_to_organization": "Ir a Organización",
     "fm.aeat.warnings.title": "Advertencias",
     "fm.action.back": "Volver",
     "fm.action.cancel": "Cancelar",
@@ -24447,8 +24494,8 @@
     "Fiscal Configuration": {
       "label": "Configuración fiscal"
     },
-    "Connect AI assistant": {
-      "label": "Conectar asistente de IA"
+    "Connect AI agent": {
+      "label": "Conectar agente de IA"
     },
     "Smart Scan": {
       "label": "Escaneo inteligente"

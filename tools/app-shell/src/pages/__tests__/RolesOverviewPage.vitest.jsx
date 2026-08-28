@@ -51,6 +51,14 @@ vi.mock('@/components/ui/skeleton', () => ({
   Skeleton: (props) => <div {...props} />,
 }));
 
+// ETP-4999 — RoleSummaryCard (rendered here unmocked) now calls useNavigate()
+// for its click-through-to-filtered-Users-window behavior; that component's
+// own dedicated suite (RoleSummaryCard.vitest.jsx) covers the navigation
+// contract in full, this file only needs the import not to crash.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 // ── Import under test ───────────────────────────────────────────────────────
 
 import { render, screen, waitFor } from '@testing-library/react';

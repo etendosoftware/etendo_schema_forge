@@ -157,12 +157,27 @@ export function createReportHelpers({ numberFormat } = {}) {
  * Handlebars helper (artifacts/print-*\/helpers.js). Kept pure so it can be
  * tested without generating an actual QR image.
  *
+ * Verifactu invoices (`header.qr_mode === 'verifactu'`) are the exception: their QR
+ * must encode the AEAT validation URL, which classic already precomputes and stores
+ * in `C_Invoice.EM_Etvfac_Qr_Url` (see `GenerateQR.encodeQR()` in
+ * com.etendoerp.verifactu). We return it verbatim — never rebuild it: the base URL
+ * differs by environment (test/production) AND by whether the issuing system is
+ * VERI*FACTU-verifiable (`ValidarQR` vs `ValidarQRNoVerifactu`), and classic's
+ * EndpointResolver owns that choice. When the column is still empty (the invoice has
+ * no Registro de Facturacion yet) we return '' so that NO QR is rendered at all,
+ * rather than falling back to the internal string: a non-AEAT QR must never appear
+ * on a Verifactu invoice (ETP-4912).
+ *
  * @param {object} [header] Document header row.
- * @returns {string} Pipe-joined field string, 'empty' when the header has no
+ * @returns {string} The AEAT URL for Verifactu invoices ('' when not issued yet);
+ *          otherwise a pipe-joined field string, 'empty' when the header has no
  *          known fields, or 'no data' when there is no header object at all.
  */
 export function buildDocumentQrText(header) {
   if (!header || typeof header !== 'object') return 'no data';
+  if (header.qr_mode === 'verifactu') {
+    return typeof header.verifactu_qr_url === 'string' ? header.verifactu_qr_url.trim() : '';
+  }
   const docDate = header.dateinvoiced || header.dateordered || header.movementdate || header.paymentdate;
   const docAmount = header.grandtotal || header.amount;
   const parts = [];
@@ -178,6 +193,32 @@ export function buildDocumentQrText(header) {
 }
 
 /**
+ * Pixel width of a Verifactu QR PNG. The AEAT spec prints it at 40x40mm; a ~113-char
+ * validation URL at error-correction level M is a version-7 symbol (45x45 modules),
+ * so 400px yields ~8.5px per module — comfortably scannable in raster print output.
+ */
+const VERIFACTU_QR_PX = 400;
+
+/**
+ * QR encoding options for a document header. Verifactu invoices follow the AEAT
+ * spec; everything else keeps the historical `{ width: 120, margin: 1 }` untouched
+ * (its output is asserted byte for byte by the other seven print-* reports' tests).
+ *
+ * Returns a FRESH object on every call, never a shared constant: `QRCode.toDataURL`
+ * mutates the options object it is handed (it fills in `color: {}` among others), so
+ * a module-level constant would leak that mutation into every later render.
+ *
+ * @param {object} [header] Document header row.
+ * @returns {object} Options for `QRCode.toDataURL`.
+ */
+function buildQrEncodeOptions(header) {
+  if (header && header.qr_mode === 'verifactu') {
+    return { width: VERIFACTU_QR_PX, margin: 1, errorCorrectionLevel: 'M' };
+  }
+  return { width: 120, margin: 1 };
+}
+
+/**
  * Precompute a document's QR code as a PNG data URL (`header.qrDataUrl`).
  *
  * This replaces the per-report async `qrCode` Handlebars helper: Handlebars
@@ -187,17 +228,36 @@ export function buildDocumentQrText(header) {
  *
  * NOT a Handlebars helper — deliberately excluded from `createReportHelpers()`.
  *
+ * Encoding options are derived from the header, not passed in by the caller, so that
+ * every render path (Vite dev plugin, report-server HTML, jsreport PDF) produces the
+ * same QR without each having to know the rules:
+ *
+ * - Verifactu invoices (`qr_mode === 'verifactu'`) follow the AEAT spec (v0.4.7,
+ *   art. 21.1 + section 3): error correction level M, printed at 40x40mm. The PNG is
+ *   rendered at VERIFACTU_QR_PX so a 40mm print keeps ~8px per module; at the
+ *   inherited 120px a ~113-char URL (version 7, 45x45 modules) would get 2.55px per
+ *   module and risk not scanning. `margin` stays minimal here on purpose: the spec's
+ *   >=2mm (6mm recommended) quiet zone is applied as CSS padding in the template,
+ *   which is exact in millimetres and does not drift with the symbol version.
+ * - Every other document keeps the historical 120px/margin-1 output byte for byte.
+ *
+ * Returns '' when there is nothing to encode (a Verifactu invoice whose AEAT URL has
+ * not been issued yet). Callers assign the result to `header.qrDataUrl` as-is and the
+ * templates guard on it, so an empty string renders no QR — never `<img src="">`.
+ *
  * @param {object} [header] Document header row.
  * @param {object} [options]
  * @param {object} [options.qrcode] Pre-resolved `qrcode` module. The report
  *        server passes its own (its Docker image installs node_modules only
  *        under tools/report-server, unreachable from this module's path);
  *        other consumers can omit it and rely on the lazy dynamic import.
- * @returns {Promise<string>} PNG data URL.
+ * @returns {Promise<string>} PNG data URL, or '' when there is nothing to encode.
  */
 export async function computeDocumentQrDataUrl(header, { qrcode } = {}) {
+  const text = buildDocumentQrText(header);
+  if (!text) return '';
   const QRCode = qrcode || (await import('qrcode')).default;
-  return QRCode.toDataURL(buildDocumentQrText(header), { width: 120, margin: 1 });
+  return QRCode.toDataURL(text, buildQrEncodeOptions(header));
 }
 
 /**
