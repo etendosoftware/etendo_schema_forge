@@ -27,8 +27,12 @@ export function CopilotProvider({ children }) {
       input: ai.input,
       isSending: ai.isSending,
       error: ai.error,
+      pageHelpSuggestion: ai.pageHelpSuggestion,
+      pageHelpError: ai.pageHelpError,
+      pageHelpActive: ai.pageHelpActive,
+      pageHelpLoading: ai.pageHelpLoading,
     };
-  }, [agentEnabled, ai.error, ai.input, ai.isSending, ai.messages, legacy.state]);
+  }, [agentEnabled, ai.error, ai.input, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
   const actions = useMemo(() => {
     if (!agentEnabled) return legacy.actions;
     return {
@@ -40,6 +44,8 @@ export function CopilotProvider({ children }) {
       setInput: ai.actions.setInput,
       resetConversation: ai.actions.resetConversation,
       startNewConversation: ai.actions.startNewConversation,
+      requestPageHelp: ai.actions.requestPageHelp,
+      showPageHelp: ai.actions.showPageHelp,
     };
   }, [agentEnabled, ai.actions, legacy.actions]);
 

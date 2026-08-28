@@ -72,5 +72,5 @@ export function MarkdownContent({ children }) {
     }
     blocks.push(<p key={`paragraph-${index}`}>{paragraph}</p>);
   }
-  return <>{blocks}</>;
+  return <div className="space-y-2 leading-6">{blocks}</div>;
 }
