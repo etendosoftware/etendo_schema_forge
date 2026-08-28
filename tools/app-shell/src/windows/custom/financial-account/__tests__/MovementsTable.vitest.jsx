@@ -53,6 +53,13 @@ import {
   buildMovementSortCtx,
   buildMovementSortAccessors,
 } from '../MovementsTable.jsx';
+// ETP-5030 — shared row-shading assertion helpers (see @/test/rowShading.js for
+// why "exactly one background utility" is the assertion that matters here).
+import {
+  backgroundUtilities,
+  hoverBackgroundUtilities,
+  countBackgroundUtilities,
+} from '@/test/rowShading.js';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
@@ -554,5 +561,116 @@ describe('MovementsTable — Tipo header segments (ETP-4921)', () => {
     expect(screen.getByTestId('column-header-sort-posted').textContent).toContain('\u25B2');
     expect(screen.getByTestId('column-header-sort-transactionType').textContent)
       .not.toContain('\u25B2');
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP A (Tailwind utility on the row element). MovementsTable resolves the
+// row class through `computeMovementRowClassName`, which is module-private, so
+// every assertion below goes through the rendered <tr>'s real class list.
+//
+// The row is a `TableRow`, whose own base class is `hover:bg-muted/50` and which
+// merges through `cn` (tailwind-merge). That merge is load-bearing: without the
+// `hover:bg-primary/5` half of the fix the base hover survives and repaints over
+// the tint at exactly the moment the pointer is on the row — i.e. while the user
+// is clicking the checkbox. That is the reported bug, so the hover assertions
+// here are the ones that actually lock it.
+describe('MovementsTable — ETP-5030 selected-row shading', () => {
+  // The file-level `Harness` holds `selectedIds` as a fixed prop; these tests
+  // need the real tick → re-render loop, so selection lives in state here.
+  function SelectableMovements({ movements, highlightTxnId = null, enabledDimensions = [] }) {
+    const [selectedIds, setSelectedIds] = React.useState(() => new Set());
+    const toggle = (id) => setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    return (
+      <MovementsTable
+        movements={movements}
+        loading={false}
+        enabledDimensions={enabledDimensions}
+        selectedIds={selectedIds}
+        onSelectionChange={toggle}
+        highlightTxnId={highlightTxnId}
+        sortKey={null}
+        sortDirection="asc"
+        onSort={() => {}}
+      />
+    );
+  }
+
+  const TWO_ROWS = [
+    baseMovement({ id: 'm1', documentNo: 'DOC-001' }),
+    baseMovement({ id: 'm2', documentNo: 'DOC-002' }),
+  ];
+
+  /** Row checkboxes in DOM order; index 0 is the header select-all. */
+  const rowCheckbox = (index) => screen.getAllByRole('checkbox')[index + 1];
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('tints ONLY the ticked row and leaves the others on the default background', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    const row2 = screen.getByTestId('movement-row-m2');
+    expect(backgroundUtilities(row1)).toEqual(['bg-primary/5']);
+    // Negative half: the untouched row must NOT have picked up the tint, and it
+    // must still carry its own default background (so this cannot pass just
+    // because the class list came back empty).
+    expect(backgroundUtilities(row2)).toEqual(['bg-card']);
+  });
+
+  it('removes the tint when the row is unticked', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+    expect(backgroundUtilities(screen.getByTestId('movement-row-m1'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(rowCheckbox(0));
+    expect(backgroundUtilities(screen.getByTestId('movement-row-m1'))).toEqual(['bg-card']);
+  });
+
+  it('keeps the tint under the pointer: the selected row carries hover:bg-primary/5 and no competing hover background', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    // Exactly one hover background, and it is the tint — not `hover:bg-card`
+    // (the old hardcoded value) and not TableRow's own `hover:bg-muted/50`,
+    // which tailwind-merge must have dropped.
+    expect(hoverBackgroundUtilities(row1)).toEqual(['hover:bg-primary/5']);
+    expect(row1.className).not.toContain('hover:bg-muted/50');
+    expect(row1.className).not.toContain('hover:bg-card');
+    // The unselected sibling keeps the original hover background.
+    expect(hoverBackgroundUtilities(screen.getByTestId('movement-row-m2'))).toEqual(['hover:bg-card']);
+  });
+
+  it('collision — selected + deep-link highlighted: selection wins the background, the highlight keeps its ring, and exactly one background is emitted', () => {
+    render(<SelectableMovements movements={TWO_ROWS} highlightTxnId="m1" />);
+
+    const beforeTick = screen.getByTestId('movement-row-m1');
+    // Sanity: highlighted-but-unselected still uses the highlight background,
+    // so the assertion after the tick is a real change of state.
+    expect(backgroundUtilities(beforeTick)).toEqual(['bg-[hsl(var(--muted))]']);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    // The trap this whole ticket is about: two background utilities on one
+    // element do NOT let the last one win (Tailwind resolves them by stylesheet
+    // order), so the row could carry `bg-primary/5` and still render grey.
+    expect(countBackgroundUtilities(row1)).toBe(1);
+    expect(backgroundUtilities(row1)).toEqual(['bg-primary/5']);
+    expect(hoverBackgroundUtilities(row1)).toEqual(['hover:bg-primary/5']);
+    // The highlight cue survives as a ring (box-shadow, no layout cost).
+    expect(row1.className).toContain('ring-1');
+    expect(row1.className).toContain('ring-focus-ring');
   });
 });

@@ -39,6 +39,13 @@ vi.mock('@/hooks/useEntity', () => ({
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
+// ETP-5030 — shared row-shading assertion helpers (see @/test/rowShading.js for
+// why "exactly one background utility" is the assertion that matters here).
+import {
+  backgroundUtilities,
+  hoverBackgroundUtilities,
+  countBackgroundUtilities,
+} from '@/test/rowShading.js';
 
 // The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
 // <label data-testid="..."> wrapping a nested <input type="checkbox">.
@@ -1041,5 +1048,89 @@ describe('AssetsAmortizationPanel — bulk delete failure feedback (ETP-4981)', 
     // succeeded id (l1) was dropped from the selection immediately, before
     // the refetch settles.
     expect(checkboxInput('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP A (Tailwind utility on the row element). The <tr> className here is a
+// raw ternary (no `cn`/tailwind-merge), so whatever the branch emits reaches the
+// DOM verbatim — which is exactly why the `hover:` half matters: without it the
+// row keeps `hover:bg-muted/30`, and that repaints over the tint at precisely
+// the moment the pointer is on the row clicking the checkbox.
+describe('AssetsAmortizationPanel — ETP-5030 selected-row shading', () => {
+  const LINES = [
+    { id: 'l1', sEQNoAsset: 1, amortizationPercentage: 25, amortizationAmount: 1000, 'amortization$_identifier': 'Jan 2026' },
+    { id: 'l2', sEQNoAsset: 2, amortizationPercentage: 25, amortizationAmount: 1000, 'amortization$_identifier': 'Feb 2026' },
+  ];
+
+  /** The <tr> that owns the given row checkbox. */
+  const rowOf = (id) => screen.getByTestId(`Checkbox__amort-row-${id}`).closest('tr');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: LINES } }),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function renderRows() {
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument());
+  }
+
+  it('tints ONLY the ticked row and leaves the others untinted', async () => {
+    await renderRows();
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+
+    expect(backgroundUtilities(rowOf('l1'))).toEqual(['bg-primary/5']);
+    // Negative half: the untouched row must not have picked up the tint and
+    // must still carry its own hover background, so this cannot pass on an
+    // empty class list.
+    expect(backgroundUtilities(rowOf('l2'))).toEqual([]);
+    expect(hoverBackgroundUtilities(rowOf('l2'))).toEqual(['hover:bg-muted/30']);
+  });
+
+  it('removes the tint when the row is unticked', async () => {
+    await renderRows();
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    expect(backgroundUtilities(rowOf('l1'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    expect(backgroundUtilities(rowOf('l1'))).toEqual([]);
+    expect(hoverBackgroundUtilities(rowOf('l1'))).toEqual(['hover:bg-muted/30']);
+  });
+
+  it('keeps the tint under the pointer: the selected row carries hover:bg-primary/5 and drops hover:bg-muted/30', async () => {
+    await renderRows();
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+
+    const row = rowOf('l1');
+    // Exactly one hover background, and it is the tint. `hover:bg-muted/30`
+    // surviving here would reproduce the reported bug verbatim: the row would
+    // look unchanged for as long as the pointer stayed on it.
+    expect(hoverBackgroundUtilities(row)).toEqual(['hover:bg-primary/5']);
+    expect(row.className).not.toContain('hover:bg-muted/30');
+    // And exactly one resting background — no second utility to race with.
+    expect(countBackgroundUtilities(row)).toBe(1);
+  });
+
+  it('select-all tints every row, and clearing it untints every row', async () => {
+    await renderRows();
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+    expect(backgroundUtilities(rowOf('l1'))).toEqual(['bg-primary/5']);
+    expect(backgroundUtilities(rowOf('l2'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+    expect(backgroundUtilities(rowOf('l1'))).toEqual([]);
+    expect(backgroundUtilities(rowOf('l2'))).toEqual([]);
   });
 });
