@@ -100,9 +100,11 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       return detailPromise;
     };
     return [
-      { key: 'orders',   type: 'sales-order',            fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedOrders   ?? []) },
-      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedInvoices ?? []) },
-      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.returnReceipts ?? []) },
+      // The `base` argument RelatedDocumentsCard still passes is intentionally unused:
+      // apiFetch is already bound to this component's base (ETP-5022).
+      { key: 'orders',   type: 'sales-order',            fetch: (id, tok) => getDetail(id, tok).then(r => r.linkedOrders   ?? []) },
+      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok) => getDetail(id, tok).then(r => r.linkedInvoices ?? []) },
+      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok) => getDetail(id, tok).then(r => r.returnReceipts ?? []) },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipment?.id, apiFetch]);
