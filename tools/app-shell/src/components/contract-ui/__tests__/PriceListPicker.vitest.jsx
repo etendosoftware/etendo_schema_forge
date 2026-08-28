@@ -216,6 +216,107 @@ describe('usePriceListPicker', () => {
     act(() => result.current.setPriceListId('pl-manual'));
     expect(result.current.priceListId).toBe('pl-manual');
   });
+
+  // ── ETP-5052: defaultPriceListId (server-resolved tariff) ────────────────────
+  // GoodsShipmentHeaderHandler#enrichResolvedPriceList resolves the tariff from the
+  // linked sales order (or the Business Partner's own) and passes it through as
+  // `defaultPriceListId`, which must win over the system `default` flag.
+
+  it('auto-selects defaultPriceListId over the system-default flag when both are present in matches', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-system-default', default: true }),
+      makePriceList({ id: 'pl-resolved', default: false }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        defaultPriceListId: 'pl-resolved',
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-resolved');
+    });
+  });
+
+  it('falls back to the system-default flag when defaultPriceListId is not among the matches', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-system-default', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        // e.g. an inactive/wrong-direction price list already filtered out of `matches`
+        defaultPriceListId: 'pl-inactive-or-missing',
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-system-default');
+    });
+  });
+
+  it('falls back to the first match when defaultPriceListId is absent from matches and none is flagged default', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-b', default: false }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        defaultPriceListId: 'pl-not-in-matches',
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-a');
+    });
+  });
+
+  it('preserves previous behavior (system-default flag wins) when defaultPriceListId is omitted', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-b', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({ enabled: true, isSOTrx: true, base: BASE, headers: HEADERS }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-b');
+    });
+  });
+
+  it('preserves previous behavior (first match wins) when defaultPriceListId is undefined and none is flagged default', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-b', default: false }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS, defaultPriceListId: undefined,
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-a');
+    });
+  });
+
+  it('does not override a manual user selection made after the initial auto-select (no re-render stomp)', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-resolved', default: false }),
+      makePriceList({ id: 'pl-other', default: false }),
+    ]);
+    const { result, rerender } = renderHook(
+      (props) => usePriceListPicker(props),
+      { initialProps: { enabled: true, isSOTrx: true, base: BASE, headers: HEADERS, defaultPriceListId: 'pl-resolved' } },
+    );
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-resolved');
+    });
+
+    act(() => result.current.setPriceListId('pl-other'));
+    expect(result.current.priceListId).toBe('pl-other');
+
+    // Re-render with the same props (as a parent component would on an unrelated
+    // state change) must not re-run the fetch effect's auto-select and stomp the
+    // user's manual choice back to pl-resolved.
+    rerender({ enabled: true, isSOTrx: true, base: BASE, headers: HEADERS, defaultPriceListId: 'pl-resolved' });
+    await act(async () => {});
+    expect(result.current.priceListId).toBe('pl-other');
+  });
 });
 
 // ── resolvePriceListValue / toPriceListSelectValue (sentinel helpers) ─────────

@@ -79,6 +79,26 @@ describe('GoodsShipmentConfirmModal', () => {
       );
     });
   });
+
+  // ── ETP-5052: resolved price list wiring ────────────────────────────────────
+  // GoodsShipmentHeaderHandler#enrichResolvedPriceList computes the tariff to
+  // preselect (linked order's, else the Business Partner's) server-side and puts
+  // it on data.resolvedPriceListId. This modal must forward it as
+  // defaultPriceListId so the picker (usePriceListPicker) preselects it instead
+  // of always falling back to the system-default price list.
+  describe('resolved price-list wiring (ETP-5052)', () => {
+    it('passes defaultPriceListId={data?.resolvedPriceListId} to ConfirmInOutModal', () => {
+      assert.match(src, /defaultPriceListId=\{data\?\.resolvedPriceListId\}/);
+    });
+
+    it('does not pass a hardcoded or differently-derived defaultPriceListId (regression guard)', () => {
+      // Only one defaultPriceListId= occurrence should exist, and it must be the
+      // exact data?.resolvedPriceListId derivation asserted above.
+      const matches = src.match(/defaultPriceListId=\{[^}]*\}/g) || [];
+      assert.equal(matches.length, 1);
+      assert.equal(matches[0], 'defaultPriceListId={data?.resolvedPriceListId}');
+    });
+  });
 });
 
 // ── hasLinkedOrder derivation — isolated boolean-logic coverage (ETP-4942) ────
