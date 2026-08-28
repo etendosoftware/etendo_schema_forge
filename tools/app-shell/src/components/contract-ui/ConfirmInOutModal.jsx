@@ -60,6 +60,7 @@ export default function ConfirmInOutModal({
     base,
     headers,
     defaultPriceListId,
+    allowGenericFallback: !priceListRequired,
   });
   const canConfirm = !priceListRequired || !!priceListId;
 
