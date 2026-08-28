@@ -1,15 +1,14 @@
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { experimental_createMCPClient as createMCPClient, convertToCoreMessages, streamText, tool } from 'ai';
+import { createMCPClient } from '@ai-sdk/mcp';
+import { convertToModelMessages, pipeUIMessageStreamToResponse, stepCountIs, streamText, tool } from 'ai';
 import { z } from 'zod';
-import { StreamableHTTPTransport } from './streamable-http-transport.js';
 
 const port = Number(process.env.BFF_PORT || 3400);
 const mcpUrl = process.env.ETENDO_MCP_URL || 'http://localhost:8080/etendo/sws/mcp';
 const modelId = process.env.OPENCODE_MODEL || 'kimi-k2.6';
 const maxBodyBytes = Number(process.env.BFF_MAX_BODY_BYTES || 1_000_000);
-const mcpTimeoutMs = Number(process.env.ETENDO_MCP_TIMEOUT_MS || 10_000);
 const modelTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 60_000);
 
 export function hasConfiguredSecret(value) {
@@ -62,29 +61,48 @@ export async function handleChat(req, res) {
 
   const body = await readBody(req);
   let mcpClient;
+  const isPageHelpRequest = body.mode === 'page-help';
 
   try {
-    mcpClient = await createMCPClient({
-      transport: new StreamableHTTPTransport({
-        url: mcpUrl,
-        headers: { Authorization: authorization },
-        timeoutMs: mcpTimeoutMs,
-      }),
-    });
+    // Page help already includes the sanitized DOM in the user message. It
+    // must not wait for or depend on the Etendo MCP endpoint.
+    if (!isPageHelpRequest) {
+      mcpClient = await createMCPClient({
+        transport: {
+          type: 'http',
+          url: mcpUrl,
+          headers: { Authorization: authorization },
+        },
+      });
+    }
     const provider = createOpenAICompatible({
       name: 'opencode-go',
       baseURL: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1',
       apiKey: process.env.OPENCODE_API_KEY,
     });
-    const tools = {
+    const tools = isPageHelpRequest ? {} : {
       ...(await mcpClient.tools()),
       navigate_to: tool({
-        description: 'Navigate the Etendo Go application to an allowed internal route.',
+        description: [
+          'Navigate the Etendo Go application to an allowed internal route.',
+          'Use this tool whenever the user asks to open or go to a window.',
+          'Known menu routes include Goods Receipt (purchase receipts): /goods-receipt,',
+          'Goods Shipment (sales deliveries): /goods-shipment, Sales Order: /sales-order,',
+          'Purchase Order: /purchase-order, Sales Invoice: /sales-invoice, and Purchase Invoice: /purchase-invoice.',
+          'Do not instruct the user to open the menu manually when one of these routes matches the request.',
+        ].join(' '),
         parameters: z.object({ path: z.string().min(1) }),
       }),
       open_form: tool({
-        description: 'Open an Etendo Go form or window in the current application.',
-        parameters: z.object({ path: z.string().min(1), recordId: z.string().optional() }),
+        description: [
+          'Open an Etendo Go form or window in the current application.',
+          'This is a browser-side UI tool. Use it for requests to work inside a specific window,',
+          'including Goods Receipt at /goods-receipt and Goods Shipment at /goods-shipment.',
+          'The path may be omitted when the requested window is clear from the conversation; the browser resolves it from the user request.',
+          'Use /<window>/new only when the user explicitly asks to create a new record.',
+          'Use a recordId only when the user provided or the API returned that record ID.',
+        ].join(' '),
+        parameters: z.object({ path: z.string().min(1).optional(), recordId: z.string().optional() }),
       }),
       get_current_context: tool({
         description: 'Read the current application route and window context from the browser.',
@@ -94,21 +112,47 @@ export async function handleChat(req, res) {
         description: 'Open the application Copilot panel.',
         parameters: z.object({}),
       }),
+      inspect_page_dom: tool({
+        description: [
+          'Inspect the current Etendo Go page from the browser.',
+          'Returns a compact accessibility-oriented list of visible interactive elements with temporary elementId values.',
+          'Call this before interacting with a page element. Sensitive field values are not included.',
+        ].join(' '),
+        parameters: z.object({}),
+      }),
+      interact_with_page: tool({
+        description: [
+          'Interact with a visible element on the current Etendo Go page using an elementId from inspect_page_dom.',
+          'Supported actions are click, fill, type, and press. Do not invent elementIds and do not use CSS selectors or JavaScript.',
+          'Use fill/type only for non-sensitive visible form fields and ask the user before consequential submissions.',
+        ].join(' '),
+        parameters: z.object({
+          elementId: z.string().min(1),
+          action: z.enum(['click', 'fill', 'type', 'press']),
+          value: z.string().optional(),
+        }),
+      }),
     };
     const result = streamText({
       model: provider.chatModel(modelId),
-      messages: convertToCoreMessages(body.messages || []),
+      messages: await convertToModelMessages(body.messages || [], { tools }),
       tools,
-      maxSteps: 8,
+      ...(isPageHelpRequest ? {
+        // Page help is a lightweight observation, not an agentic task.
+        providerOptions: { openaiCompatible: { reasoningEffort: 'none' } },
+        maxOutputTokens: 220,
+        temperature: 0.1,
+      } : {}),
+      stopWhen: stepCountIs(8),
       abortSignal: AbortSignal.timeout(modelTimeoutMs),
       onError: ({ error }) => {
         console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
       },
-      onFinish: async () => mcpClient.close(),
+      onFinish: async () => mcpClient?.close(),
     });
-    result.pipeDataStreamToResponse(res);
+    await pipeUIMessageStreamToResponse({ response: res, stream: result.toUIMessageStream() });
   } catch (error) {
-    await mcpClient?.close().catch(() => {});
+    if (mcpClient) await mcpClient.close().catch(() => {});
     json(res, 502, { error: error instanceof Error ? error.message : 'AI request failed' });
   }
 }

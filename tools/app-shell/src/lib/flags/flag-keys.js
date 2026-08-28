@@ -20,9 +20,13 @@ export const PROOF_OF_CONCEPT_MENU = 'proof-of-concept-menu';
 /** Enables the AI SDK Copilot agent integration; native browser WebMCP is deferred. */
 export const WEBMCP_AGENT_CHAT = 'webmcp-agent-chat';
 
+/** Enables proactive DOM-based page-help suggestions next to the Copilot. */
+export const PAGE_HELP_SUGGESTIONS = 'page-help-suggestions';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
+  [PAGE_HELP_SUGGESTIONS]: false,
 });
 
 /**

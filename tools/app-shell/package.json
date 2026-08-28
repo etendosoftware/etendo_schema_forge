@@ -17,7 +17,7 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@ai-sdk/react": "^1.2.12",
+    "@ai-sdk/react": "^4.0.86",
     "@configcat/sdk": "^1.1.0",
     "@etendosoftware/app-shell-core": "0.3.40",
     "@etendosoftware/etendo-go-core": "0.3.40",
@@ -36,7 +36,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/react": "^10.53.0",
-    "ai": "^4.3.19",
+    "ai": "^7.0.83",
     "aws-rum-web": "^1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",
