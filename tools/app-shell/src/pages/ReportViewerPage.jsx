@@ -12,6 +12,7 @@ import { ViewToggle } from '@/components/contract-ui/ListView.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -168,6 +169,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const sentinelRef = useRef(null);
+  const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (open) { setQuery(''); setOptions([]); setOffset(0); setHasMore(false); setFocusIdx(-1); setTimeout(() => inputRef.current?.focus(), 50); }
@@ -176,7 +178,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   const fetchPage = useCallback((q, off, append) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const params = `q=${encodeURIComponent(q)}&limit=${SELECTOR_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
-    return fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    return apiFetch(`/sws/report-selectors/${selector}?${params}`)
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : (data?.items ?? []);
@@ -190,7 +192,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
         setOffset(off + items.length);
         setFocusIdx(-1);
       });
-  }, [selector, extraParams]);
+  }, [selector, extraParams, apiFetch]);
 
   useEffect(() => {
     if (!open) return;
@@ -325,6 +327,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
   const ref = useRef(null);
   const touched = useRef(false); // prevent auto-fetch on mount
   const extraParamsRef = useRef(extraParams);
+  const apiFetch = useApiFetch(ETENDO_BASE);
   useEffect(() => { extraParamsRef.current = extraParams; });
 
   const buildUrl = useCallback((q) => {
@@ -351,11 +354,11 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
       if (selectedOrgId) params.set('selectedOrgId', selectedOrgId);
       if (roleOrgIds && roleOrgIds.length > 0) params.set('roleOrgIds', roleOrgIds.join(','));
     }
-    fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params.toString()}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    apiFetch(`/sws/report-selectors/${selector}?${params.toString()}`)
       .then(r => r.json())
       .then(data => { setOptions(normalizeOptions(data)); setOpen(true); })
       .catch(() => setOptions([]));
-  }, [selector, selectedOrgId, roleOrgIds]);
+  }, [selector, selectedOrgId, roleOrgIds, apiFetch]);
 
   useEffect(() => {
     if (!touched.current) return;
@@ -563,17 +566,18 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
   const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
   const inputRef = useRef(null);
+  const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
-      fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+      apiFetch(`/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`)
         .then(r => r.json())
         .then(data => setOptions(Array.isArray(data) ? data : (data?.items ?? [])))
         .catch(() => setOptions([]));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
-  }, [query, open, selector]);
+  }, [query, open, selector, apiFetch]);
 
   const openModal = () => {
     setPending([...confirmed]);
@@ -710,6 +714,7 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
   const [options, setOptions] = useState([]);
   const inputRef = useRef(null);
   const extraParamsRef = useRef(extraParams);
+  const apiFetch = useApiFetch(ETENDO_BASE);
   useEffect(() => { extraParamsRef.current = extraParams; });
 
   useEffect(() => {
@@ -718,12 +723,13 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
       .filter(([, v]) => v)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
-    const url = `${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
+    const path = `/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
     const t = setTimeout(() => {
-      fetch(url).then(r => r.json()).then(setOptions).catch(() => setOptions([]));
+      apiFetch(path)
+        .then(r => r.json()).then(setOptions).catch(() => setOptions([]));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
-  }, [query, open, selector]);
+  }, [query, open, selector, apiFetch]);
 
   const openModal = () => {
     setQuery('');
@@ -1198,6 +1204,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
   const [error, setError] = useState(null);
   const { locale } = useLocaleSwitch();
   const ui = useUI();
+  const apiFetch = useApiFetch('');
 
   const reportId = targetReportId || report.id;
   // _display_bPartnerId matters for the same reason the account drill-down below
@@ -1236,9 +1243,8 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ format, params: renderParams, locale }),
       });
       if (!res.ok) {
@@ -1257,7 +1263,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     } catch (err) { setError(err.message); }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report.id, token, bpId, locale]);
+  }, [report.id, apiFetch, bpId, locale]);
 
   useEffect(() => { fetchFormat('preview'); }, [fetchFormat]);
 
@@ -1329,6 +1335,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const { locale } = useLocaleSwitch();
   const tMenu = useMenuLabel();
   const ui = useUI();
+  const apiFetch = useApiFetch(ETENDO_BASE);
   // Same URL state ReportViewerPage already reads for `report`/`category` — a
   // second useSearchParams() call is fine (React Router just re-reads the
   // current URL), used here to let a deep-link pre-fill the sidebar's filter
@@ -1459,7 +1466,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         const orgParam = (p.selector === 'currency' && selectedOrgId)
           ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
           : '';
-        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+        return apiFetch(`/sws/report-selectors/${p.selector}?q=${orgParam}`)
           .then(r => r.json())
           .then(data => { const rows = Array.isArray(data) ? data : (data.items || []); return rows[0] ? { name: p.name, id: rows[0].id, display: rows[0].name } : null; })
           .catch(() => null);
@@ -1473,7 +1480,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       }
       if (Object.keys(updates).length) setParams(prev => ({ ...prev, ...updates }));
     });
-  }, [report, selectedOrgId]);
+  }, [report, selectedOrgId, apiFetch]);
 
   useEffect(() => { loadAutoDefaults(); }, [loadAutoDefaults]);
 
@@ -1503,9 +1510,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${report.id}/render`, {
+      const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format, params, locale }),
       });
       if (!res.ok) {
@@ -1535,7 +1542,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, token, params, locale]);
+  }, [report.id, apiFetch, params, locale]);
 
   // No auto-render on mount — wait for user to click Run Report... UNLESS the
   // page was opened via a deep-link that carries real filter values (e.g. the
@@ -2002,6 +2009,7 @@ export default function ReportViewerPage() {
   const reportId = searchParams.get('report');
 
   useEffect(() => {
+    // raw-fetch-ok: dev-server report catalogue (vite-plugins/report-api.js), no token expected
     fetch('/api/reports')
       .then(r => r.json())
       .then(setReports)

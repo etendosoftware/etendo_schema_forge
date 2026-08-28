@@ -5,6 +5,7 @@ import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendos
 import { resolveCodedCellOrThrow, codedCellError } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
 // could ever populate it — the mirror image of the "column with no consumer" problem.
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'etgoIsperson', 'taxID'];
@@ -25,7 +26,7 @@ async function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -152,10 +153,10 @@ async function resolveCategoryId(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      baseUrl: '',
+      token: config.token,
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {

@@ -102,6 +102,9 @@ const NO_GATE_EXCLUSIONS = Object.freeze([]);
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { apiFetch } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 import {
   CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
@@ -236,10 +239,10 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
     secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
     let res;
     try {
-      res = await fetch(childUrl, {
+      res = await apiFetch(childUrl, {
         method: 'PATCH',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
         body: JSON.stringify({[fieldKey]: value}),
+        token, baseUrl: '',
       });
     } catch (err) {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
@@ -341,10 +344,10 @@ export function buildSecondaryLineHandlers(deps) {
       const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
       const fieldValues = {};
       normalizePatchFieldValues(secondaryLineEdits, fieldValues, st.addLineFields?.entry);
-      const res = await fetch(secUrl, {
+      const res = await apiFetch(secUrl, {
         method: 'PATCH',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
         body: JSON.stringify(fieldValues),
+        token, baseUrl: '',
       });
       if (res.ok) {
         // Server response wins over the local edits: it carries
@@ -383,9 +386,9 @@ export function buildSecondaryLineHandlers(deps) {
       const { succeeded, failed } = await runBatchDelete(rows, (row) => {
         const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
             || `${apiBaseUrl}/${st.key}/${row.id}`;
-        return fetch(childUrl, {
+        return apiFetch(childUrl, {
           method: 'DELETE',
-          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+          token, baseUrl: '',
         }).then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return row;
@@ -782,10 +785,10 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     // computed — matches the side-panel save flow.
     prepareLineForPost(fieldValues);
 
-    const res = await fetch(childUrl, {
+    const res = await apiFetch(childUrl, {
       method: 'PATCH',
-      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
       body: JSON.stringify(fieldValues),
+      token, baseUrl: '',
     });
     if (res.ok) {
       applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
@@ -815,9 +818,9 @@ export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, c
     try {
       const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-      const res = await fetch(childUrl, {
+      const res = await apiFetch(childUrl, {
         method: 'DELETE',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        token, baseUrl: '',
       });
       if (res.ok) {
         hook.handleDeleteChild(row.id);
@@ -989,13 +992,10 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return fetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
           body: JSON.stringify({ fieldValues }),
+          token, baseUrl: '',
         }).then(res => ({ res, row }));
       })
     );
@@ -1219,6 +1219,7 @@ export function DetailView({
     [Form, gateExclusions]
   );
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
+  const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1746,6 +1747,9 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
+  // ETP-5022: publish to the global registry so a language change (which reloads the page)
+  // and F5 / tab close both warn before discarding these edits.
+  useUnsavedChangesGuard(isDirty);
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1854,9 +1858,7 @@ export function DetailView({
     (async () => {
       try {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-        const sessionRes = await fetch(`${neoBase}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
         if (!sessionRes.ok || cancelled) return;
         const session = await sessionRes.json();
         const orgCurrencyId = session?.currencyId;
@@ -1882,9 +1884,9 @@ export function DetailView({
           return;
         }
 
-        const rateRes = await fetch(
+        const rateRes = await apiFetch(
           `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { token, baseUrl: '' },
         );
         if (!rateRes.ok || cancelled) {
           activeCurrencyConversionRef.current = null;
@@ -1909,7 +1911,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField, apiFetch]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2268,18 +2270,16 @@ export function DetailView({
             hook.handleChange('currency', previousCurrency);
           };
           try {
-            const sessionRes = await fetch(`${neoBase}/session`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
             if (!sessionRes.ok) { revert(); return; }
             const session = await sessionRes.json();
             const orgCurrencyId = session?.currencyId;
             // No rate needed when changing TO the org currency — that's just removing
             // the conversion. Allow without validation.
             if (!orgCurrencyId || orgCurrencyId === value) return;
-            const rateRes = await fetch(
+            const rateRes = await apiFetch(
               `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { headers: { Authorization: `Bearer ${token}` } },
+              { token, baseUrl: '' },
             );
             if (!rateRes.ok) { revert(); return; }
             const rateData = await rateRes.json();
@@ -2306,7 +2306,7 @@ export function DetailView({
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
     executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField, apiFetch]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
@@ -2370,13 +2370,10 @@ export function DetailView({
         formState: formStateForCallout,
         ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
       };
-      const res = await fetch(`${apiBaseUrl}/${detailEntity}/callout`, {
+      const res = await apiFetch(`${apiBaseUrl}/${detailEntity}/callout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload),
+        token, baseUrl: '',
       });
       if (!res.ok) return;
       const calloutData = await res.json();
@@ -2423,7 +2420,7 @@ export function DetailView({
     } catch {
       // Callout is best-effort
     }
-  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor]);
+  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch]);
 
   const data = transformRecord
     ? transformRecord(hook.editing || currentItem || {})
@@ -2436,13 +2433,10 @@ export function DetailView({
     const currentId = data?.id || recordId;
     if (!currentId || isNew) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
+      const res = await apiFetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ etgoTotalDiscount: pct }),
+        token, baseUrl: '',
       });
       if (!res.ok) {
         toast.error(await extractErrorMessage(res));
@@ -2463,7 +2457,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, apiBaseUrl, entity, token, hook, ui, extractErrorMessage]);
+  }, [data?.id, recordId, isNew, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
@@ -2473,13 +2467,10 @@ export function DetailView({
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
+      const res = await apiFetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ [notesField]: value }),
+        token, baseUrl: '',
       });
       if (!res.ok) {
         toast.error(await extractErrorMessage(res));
@@ -2490,7 +2481,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage]);
+  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   // Guard that controls whether "+ Add Lines" is shown.
   // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
@@ -3435,10 +3426,10 @@ export function DetailView({
                                             for (const f of editableChildFields) {
                                               fieldValues[f.column] = editingChild[f.key];
                                             }
-                                            const res = await fetch(childUrl, {
+                                            const res = await apiFetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                                               body: JSON.stringify({ fieldValues }),
+                                              token, baseUrl: '',
                                             });
                                             if (res.ok) {
                                               hook.handleUpdateChild(editingChild.id, editableChildFields.reduce((acc, f) => ({ ...acc, [f.key]: editingChild[f.key] }), {}));
@@ -3464,9 +3455,9 @@ export function DetailView({
                                           try {
                                             const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                            const res = await fetch(childUrl, {
+                                            const res = await apiFetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              token, baseUrl: '',
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -3664,10 +3655,10 @@ export function DetailView({
                                                 if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
                                                 const fieldValues = {};
                                                 normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
-                                                const res = await fetch(childUrl, {
+                                                const res = await apiFetch(childUrl, {
                                                   method: 'PATCH',
-                                                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                                                   body: JSON.stringify(fieldValues),
+                                                  token, baseUrl: '',
                                                 });
                                                 if (res.ok) {
                                                   setLineEdits(null);
@@ -3676,9 +3667,7 @@ export function DetailView({
                                                   // Always refresh from persisted record — backend may recompute
                                                   // derived fields (lineNetAmount, discounts) on save.
                                                   try {
-                                                    const freshRes = await fetch(childUrl, {
-                                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                    });
+                                                    const freshRes = await apiFetch(childUrl, { token, baseUrl: '' });
                                                     if (freshRes.ok) {
                                                       const freshJson = await freshRes.json();
                                                       const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
@@ -3722,9 +3711,9 @@ export function DetailView({
                                             try {
                                               const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                              const res = await fetch(childUrl, {
+                                              const res = await apiFetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                token, baseUrl: '',
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -4154,9 +4143,9 @@ export function DetailView({
                 setSavingSecondaryLine(true);
                 try {
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
-                  const res = await fetch(secUrl, {
+                  const res = await apiFetch(secUrl, {
                     method: 'DELETE',
-                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    token, baseUrl: '',
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

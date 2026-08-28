@@ -7,6 +7,7 @@ import { WRITEOFF_EPSILON } from '@/components/contract-ui/writeoffMath.js';
 import { paymentDisplayState } from './paymentStatuses';
 import { useRecordRefreshSignal } from './useRecordRefreshSignal';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   return formatCurrency(currency || 'EUR', n);
@@ -216,6 +217,7 @@ function appendEvent(id, type, date) {
 
 export default function PaymentDetailSidebarBase({ dir, specName, data, token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState(null);
   const [events, setEvents] = useState([]);
   const refreshSignal = useRecordRefreshSignal(data?.id);
@@ -293,14 +295,13 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const linesEntity = isIn ? 'finPaymentScheduleDetail' : 'lines';
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/${specName}/${linesEntity}?parentId=${data.id}&_startRow=0&_endRow=100`,
-          { headers },
+          { baseUrl: '', token },
         );
         if (!res.ok || cancelled) {
           if (!cancelled) setLines([]);
@@ -315,7 +316,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload moves
   // for this effect to react to. Without it "Aplicado a facturas" kept showing the amount from
   // before the save until the whole window was reloaded.
-  }, [data?.id, refreshSignal, token, apiBaseUrl, isIn, specName]);
+  }, [data?.id, refreshSignal, token, apiBaseUrl, apiFetch, isIn, specName]);
 
   const appliedLines = lines ?? [];
   const applied = appliedLines.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);

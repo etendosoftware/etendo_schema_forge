@@ -4,6 +4,7 @@ import { useUI, useLocale } from '@/i18n';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -99,6 +100,7 @@ export default function CloneOrderModal({
   const navigate = useNavigate();
   const ui = useUI();
   const dictionary = useLocale();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const items = recordsProp ?? (recordId ? [{ id: recordId, ...data }] : []);
   const n = items.length;
@@ -118,7 +120,7 @@ export default function CloneOrderModal({
     try {
       const newIds = [];
       for (const item of items) {
-        const res  = await fetch(`${apiBaseUrl}/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST', headers });
+        const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok) {
           setError(json?.error?.message || json?.response?.error?.message || ui(errorKey));
@@ -133,7 +135,7 @@ export default function CloneOrderModal({
       if (routePrefix) {
         const fetched = await Promise.all(
           newIds.map(id =>
-            fetch(`${apiBaseUrl}/${headerEntity}/${id}`, { headers })
+            apiFetch(`/${headerEntity}/${id}`)
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const raw = json?.response?.data;

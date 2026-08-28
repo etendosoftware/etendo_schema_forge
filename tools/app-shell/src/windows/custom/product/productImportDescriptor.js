@@ -9,6 +9,7 @@ import { parseBoolean } from '@/lib/parseBoolean.js';
 import { resolveCodedCellOrThrow, codedCellError } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // Columns copied verbatim onto the product body. Everything else declared in
 // `window.import.fields` needs interpreting first: `productType` and `uOM` are resolved
 // below, the two price columns become their own operations, and `category` resolves to a
@@ -95,9 +96,9 @@ async function fetchProductDefaults(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product/product/defaults`;
   try {
-    const res = await fetch(url, {
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await apiFetch(url, {
+      baseUrl: '',
+      token,
     });
     if (!res.ok) return {};
     const json = await res.json().catch(() => null);
@@ -118,7 +119,7 @@ function resolveProductDefaults(token) {
 async function fetchPriceListVersion(spec, token, wantSales) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
-  const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -147,7 +148,7 @@ async function fetchProductCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -194,13 +195,10 @@ async function resolveCategory(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/product-category/productCategory`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.token}`,
-      },
+      baseUrl: '',
+      token: config.token,
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {

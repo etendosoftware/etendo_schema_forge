@@ -70,10 +70,30 @@ const SHIP_LINE = {
  * Install mocks for the invoice detail + import flow.
  * Must be called AFTER login() so specific routes win over the catch-all.
  */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installMocks(page) {
   // Invoice header — detail page fetch
   await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    const req = route.request();
+    // A PATCH on the header must echo the updated header. Deferring it to the /sws/**
+    // catch-all instead answers with that route's generic saved-record body, which carries
+    // no businessPartner — the detail view then holds a record with no customer, so the
+    // import modal receives bpId === undefined and filters every shipment out.
+    if (req.method() === 'PATCH' || req.method() === 'PUT') {
+      const patch = req.postData() ? JSON.parse(req.postData()) : {};
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...INVOICE_HEADER, ...patch }] } }),
+      });
+      return;
+    }
+    if (req.method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -83,7 +103,7 @@ async function installMocks(page) {
 
   // Goods-shipment list — ImportFromShipmentModal.fetchDocuments
   await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -93,7 +113,7 @@ async function installMocks(page) {
 
   // Goods-shipment lines — ImportFromShipmentModal.fetchLines
   await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -231,7 +251,18 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Invoice header
     await page.route(`**/sws/neo/sales-invoice/header/${INVOICE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      const req = route.request();
+      // See the note on the same route in installMocks: a PATCH has to echo the header.
+      if (req.method() === 'PATCH' || req.method() === 'PUT') {
+        const patch = req.postData() ? JSON.parse(req.postData()) : {};
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [{ ...INVOICE_HEADER, ...patch }] } }),
+        });
+        return;
+      }
+      if (req.method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -241,7 +272,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Shipment list
     await page.route('**/sws/neo/goods-shipment/goodsShipment{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -251,7 +282,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Shipment lines — line WITH a salesOrderLine reference
     await page.route('**/sws/neo/goods-shipment/goodsShipmentLine{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -261,7 +292,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Sales order line — returns 10% discount
     await page.route(`**/sws/neo/sales-order/lines/${ORDER_LINE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -271,7 +302,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     // Capture the POST that creates the invoice line
     await page.route('**/sws/neo/sales-invoice/lines', async (route) => {
-      if (route.request().method() !== 'POST') return route.continue();
+      if (route.request().method() !== 'POST') return route.fallback();
       const body = route.request().postData() ? JSON.parse(route.request().postData()) : {};
       invoiceLinePosts.push(body);
       await route.fulfill({

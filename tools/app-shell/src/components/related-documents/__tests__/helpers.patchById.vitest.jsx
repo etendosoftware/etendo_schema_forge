@@ -53,9 +53,12 @@ describe('patchById — method, headers, body', () => {
 
     await patchById('tax', 'tax', 'tax-1', payload, TOKEN, '/sws/neo/sales-invoice');
 
+    // ETP-5022 — routed through apiFetch, which is also where `credentials: 'include'`
+    // now comes from instead of being remembered (or forgotten) per call site.
     expect(globalThis.fetch).toHaveBeenCalledWith('/sws/neo/tax/tax/tax-1', {
       method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      credentials: 'include',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
   });

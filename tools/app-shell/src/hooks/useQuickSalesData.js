@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -13,12 +14,10 @@ function guessCategory(name) {
   return 'Other';
 }
 
-function buildAuthHeaders(token) {
-  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function fetchJSON(url, headers) {
-  const res = await fetch(url, { headers });
+// A 401 here means the session expired, so it goes through apiFetch's default logout path
+// (ETP-5022); every other non-ok status stays a domain error handled by the !res.ok check.
+async function fetchJSON(apiFetch, path) {
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -35,13 +34,13 @@ function parseEntityRows(data) {
 
 const STATUS_MAP = { CO: 'delivered', DR: 'draft', IP: 'in-progress', VO: 'voided' };
 
-async function loadFromAPI(soBase, headers) {
+async function loadFromAPI(apiFetch, soPath) {
   // Fetch catalogs (required) independently
   const [productsRes, customersRes, taxRes, uomRes] = await Promise.all([
-    fetchJSON(`${soBase}/lines/selectors/M_Product_ID?limit=200`, headers),
-    fetchJSON(`${soBase}/header/selectors/C_BPartner_ID?limit=200`, headers),
-    fetchJSON(`${soBase}/lines/selectors/C_Tax_ID?limit=50`, headers),
-    fetchJSON(`${soBase}/lines/selectors/C_UOM_ID?limit=50`, headers),
+    fetchJSON(apiFetch, `${soPath}/lines/selectors/M_Product_ID?limit=200`),
+    fetchJSON(apiFetch, `${soPath}/header/selectors/C_BPartner_ID?limit=200`),
+    fetchJSON(apiFetch, `${soPath}/lines/selectors/C_Tax_ID?limit=50`),
+    fetchJSON(apiFetch, `${soPath}/lines/selectors/C_UOM_ID?limit=50`),
   ]);
 
   // Build lookup maps
@@ -93,8 +92,8 @@ async function loadFromAPI(soBase, headers) {
   let customerPriceLists = {};
   try {
     const headersRes = await fetchJSON(
-      `${soBase}/header?_sortBy=creationDate desc&_startRow=0&_endRow=19&documentStatus=CO`,
-      headers,
+      apiFetch,
+      `${soPath}/header?_sortBy=creationDate desc&_startRow=0&_endRow=19&documentStatus=CO`,
     );
     const rawHeaders = parseEntityRows(headersRes).filter(h => h.documentStatus === 'CO');
 
@@ -110,7 +109,7 @@ async function loadFromAPI(soBase, headers) {
         const bpId = h.businessPartner || h.C_BPartner_ID || null;
         const bpName = h['businessPartner$_identifier'] || '';
         try {
-          const linesData = await fetchJSON(`${soBase}/lines?parentId=${h.id}`, headers);
+          const linesData = await fetchJSON(apiFetch, `${soPath}/lines?parentId=${h.id}`);
           const rawLines = parseEntityRows(linesData);
           return {
             id: h.id,
@@ -151,6 +150,7 @@ async function loadFromAPI(soBase, headers) {
 
 export function useQuickSalesData(apiBaseUrl) {
   const { token } = useAuth();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [previousOrders, setPreviousOrders] = useState([]);
@@ -158,19 +158,18 @@ export function useQuickSalesData(apiBaseUrl) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const soBase = apiBaseUrl ? `${apiBaseUrl}/sales-order` : null;
+  const soPath = apiBaseUrl ? '/sales-order' : null;
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !soBase) {
+    if (!token || !soPath) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;
     }
 
-    const headers = buildAuthHeaders(token);
-    loadFromAPI(soBase, headers)
+    loadFromAPI(apiFetch, soPath)
       .then(result => {
         if (cancelled) return;
         setProducts(result.products);
@@ -187,7 +186,7 @@ export function useQuickSalesData(apiBaseUrl) {
       });
 
     return () => { cancelled = true; };
-  }, [token, soBase]);
+  }, [token, apiFetch, soPath]);
 
   // Derived: product categories
   const categories = useMemo(
