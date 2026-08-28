@@ -222,6 +222,96 @@ describe('generate303File — success path with identChecks and manualOverrides'
     assert.match(capturedUrl, /AdministrativeDiscrepancyRectifyingReason=Y/);
   });
 
+  it('forwards redeme as MonthlyRegister=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', redeme: true },
+      }
+    );
+    assert.match(capturedUrl, /MonthlyRegister=Y/);
+  });
+
+  it('does not set MonthlyRegister when redeme is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' } }
+    );
+    assert.doesNotMatch(capturedUrl, /MonthlyRegister/);
+  });
+
+  it('forwards concurso as IsConcurso=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true },
+      }
+    );
+    assert.match(capturedUrl, /IsConcurso=Y/);
+  });
+
+  it('does not set IsConcurso when concurso is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' } }
+    );
+    assert.doesNotMatch(capturedUrl, /IsConcurso/);
+  });
+
+  it('forwards postconcursal as ConcursoType=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true, postconcursal: true },
+      }
+    );
+    assert.match(capturedUrl, /ConcursoType=Y/);
+  });
+
+  it('does not set ConcursoType when postconcursal is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: true } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoType/);
+  });
+
   it('falls back to decl.result.kind and then N when tipo_declaracion is absent', async () => {
     globalThis.fetch = async () => ({ ok: true, blob: async () => new Blob(['x']) });
     const result = await generate303File(

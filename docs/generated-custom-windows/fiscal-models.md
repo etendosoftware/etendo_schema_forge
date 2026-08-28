@@ -204,6 +204,38 @@ always-true evaluation, wrongly showing these fields for tipo `U` too. `matchesS
 hardened against a malformed non-array `anyOf` (`f322ee41a`), returning `false` rather than
 throwing.
 
+### Identification checkboxes → AEAT params (`applyIdentParams`) — ETP-5027
+
+`applyIdentParams` (`fiscalModelsUtils.js`) is the single shared function that turns
+`identChecks` (the `casillas`/`identificacion` form state) into the HTTP params used by both
+the file-generation path (`generate303File`) and the AEAT online-submission path
+(`AeatSubmitFlow.jsx`) — so a checkbox is either wired here once, or silently ignored by both
+paths. Confirmed wirings, verified against the AEAT303 Java source
+(`org.openbravo.module.aeat303.es`, override chain unbroken through `AEAT303Report2025`):
+
+| `identChecks` field | AEAT param | Notes |
+|---|---|---|
+| `redeme` — "Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA)" | `MonthlyRegister` = `'Y'` | `AEAT303Report.java`'s `MONTHLY_REGISTER` constant; box 65 defaults to "not registered" (`2`) unless this is explicitly `Y`. Before ETP-5027 this checkbox updated only local UI state and was never forwarded — checking it produced no effect on the filed declaration (AEAT rejection `35092`/`E010124` on a Devolución with a negative result). |
+| `concurso` — "Sujeto pasivo declarado en concurso de acreedores…" | `IsConcurso` = `'Y'` | `AEAT303Report2014`'s `"IsConcurso"` constant, read unchanged through the override chain to `AEAT303Report2025`. Was not forwarded before ETP-5027. |
+| `postconcursal` | `ConcursoType` = `'Y'` | `AEAT303Report2014`'s `"ConcursoType"` constant (`preConcursal = !"Y".equals(ConcursoType)`); only meaningful when `concurso` is also checked. Was not forwarded before ETP-5027. |
+
+**Investigated, not wired (ETP-5027):**
+- **`dep_aduanero`** ("derecho a deducir pago a cuenta de entregas de gasolinas, gasóleos y
+  biocarburantes…") — no reference to this concept (`gasolina`/`gasoleo`/`biocarburante`/
+  `deposito`) exists anywhere in the AEAT303 Java source across any year override. No real
+  param name could be confirmed, so this checkbox is left unwired rather than guessed.
+- **`dep_foral`** ("tributa exclusivamente a una Administración tributaria Foral…") — a real
+  param, `IVA_IMPORT_ADUANA_HFORAL`, existed and was read from input params in
+  `AEAT303Report2018`. Starting with `AEAT303Report2019` (and unchanged through
+  `AEAT303Report2021`, with no later override reintroducing it through `AEAT303Report2025`),
+  `generatePage1` hardcodes this position to `"2"` (not foral) unconditionally, ignoring any
+  input param entirely. Wiring `dep_foral` in the frontend would have no effect on the current
+  filed declaration, so it was deliberately left unwired to avoid implying a fix that doesn't
+  work on the current AEAT303 version.
+- `fecha_concurso` (the date field paired with `concurso`) was out of scope for this fix — it is
+  a `date` field, not a checkbox, and this defect class was scoped to the checkbox-forwarding
+  gap.
+
 ### Live data
 
 When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `_precomputed` field passed at navigation. The compute button triggers a fresh `computeBoxes303` call. File generation calls `generate303File(decl, { token, apiBaseUrl })` → `GET /fiscal303/generate?year=&period=&tipo=`.

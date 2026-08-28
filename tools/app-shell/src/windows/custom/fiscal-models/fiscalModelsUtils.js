@@ -108,6 +108,14 @@ export function applyIdentParams(params, identChecks) {
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
   }
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
+  // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
+  // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
+  // (2) unless this is explicitly "Y" (ETP-5027).
+  if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
+  // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
+  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027).
+  if (identChecks.concurso === true) params.set('IsConcurso', 'Y');
+  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
   if (identChecks.complementaria === true) {
     params.set('IsComplementary', 'Y');
     if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
