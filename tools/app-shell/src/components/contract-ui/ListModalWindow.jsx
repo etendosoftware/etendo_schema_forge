@@ -73,6 +73,75 @@ function canonFilterValue(v) {
 // Client-side filtering for the list: exact-match toolbar dropdown filters first,
 // then a free-text search over the searchable columns. Pure helper so the
 // component's useMemo stays trivial (keeps cognitive complexity low).
+/**
+ * The list region: first-fetch skeletons, or the grid with a refresh bar over it.
+ *
+ * Same three states as before, stated as one early return instead of two chained ternaries:
+ * a first fetch (loading, nothing on screen yet) shows skeletons and no bar; any later load
+ * keeps the rows mounted and puts the indeterminate bar above them; otherwise just the grid.
+ *
+ * Its own component so those decisions leave `ListModalWindow`'s body, which was over Sonar's
+ * cognitive-complexity ceiling (javascript:S3776) — the rule scores each function separately,
+ * and a window component's JSX is where its conditionals accumulate.
+ *
+ * @param {{ loading: boolean, hasRows: boolean, gridProps: object }} props
+ */
+function ListModalBody({ loading, hasRows, gridProps }) {
+  if (loading && !hasRows) {
+    return (
+      <div className="flex flex-col gap-2 px-2">
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+      </div>
+    );
+  }
+  return (
+    <>
+      {/* Refresh indicator — only once rows are on screen; the first fetch shows the skeletons
+          above instead. */}
+      {loading ? (
+        <ListProgressBar testId="list-modal-progress-bar" data-testid="ListProgressBar__19eda5" />
+      ) : null}
+      {/* `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
+          base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid). */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ListModalGrid {...gridProps} data-testid="ListModalGrid__19eda5" />
+      </div>
+    </>
+  );
+}
+
+/**
+ * Rows ordered by the window's auto-priority field, ascending.
+ *
+ * Match rules are the case this exists for: their banner states that rows are evaluated in
+ * ascending priority order, so the list has to mirror that (10, 20, 30…). Rows with a missing or
+ * non-numeric priority sink to the end, and ties keep their order — `Array.prototype.sort` has
+ * been stable since ES2019, so equal rows stay in the order the backend sent them.
+ *
+ * Module-level rather than inline in the component: it is a named ordering rule, it is pure, and
+ * keeping the four-branch comparator out of the component body is what holds `ListModalWindow`
+ * under Sonar's cognitive-complexity ceiling (javascript:S3776).
+ *
+ * @param {Array<object>} rows
+ * @param {string|undefined} priorityField field to order by; falsy returns `rows` untouched
+ * @returns {Array<object>} a new array, or the original reference when there is nothing to do
+ */
+function orderByAutoPriority(rows, priorityField) {
+  if (!priorityField) return rows;
+  return [...rows].sort((a, b) => {
+    const av = Number(a?.[priorityField]);
+    const bv = Number(b?.[priorityField]);
+    const aok = Number.isFinite(av);
+    const bok = Number.isFinite(bv);
+    if (aok && bok) return av - bv;
+    if (aok) return -1;
+    if (bok) return 1;
+    return 0;
+  });
+}
+
 function filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }) {
   let result = allRows;
   for (const f of toolbarFilters) {
@@ -235,29 +304,13 @@ export function ListModalWindow({
   // --- Local search over the configured filter columns ----------------------
   const [searchQuery, setSearchQuery] = useState('');
   const priorityOrdered = useMemo(
-    () => {
-      const filtered = applyConditions(
+    () => orderByAutoPriority(
+      applyConditions(
         filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }),
         advancedFilter,
-      );
-      // Order by the auto-priority field ascending when the window declares one
-      // (e.g. match rules: the banner states rows are evaluated in ascending
-      // priority order, so the list must mirror that — 10, 20, 30…). Rows with a
-      // missing/non-numeric priority sink to the end; ties keep their order
-      // (Array.prototype.sort is stable).
-      const priorityField = config?.autoPriorityField;
-      if (!priorityField) return filtered;
-      return [...filtered].sort((a, b) => {
-        const av = Number(a?.[priorityField]);
-        const bv = Number(b?.[priorityField]);
-        const aok = Number.isFinite(av);
-        const bok = Number.isFinite(bv);
-        if (aok && bok) return av - bv;
-        if (aok) return -1;
-        if (bok) return 1;
-        return 0;
-      });
-    },
+      ),
+      config?.autoPriorityField,
+    ),
     [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config],
   );
 
@@ -571,39 +624,25 @@ export function ListModalWindow({
           {ui(config.bannerKey)}
         </InfoBanner>
       )}
-      {/* Refresh indicator — only once rows are on screen; the first fetch shows the skeletons
-          just below instead. */}
-      {loading && allRows.length > 0 ? (
-        <ListProgressBar testId="list-modal-progress-bar" data-testid="ListProgressBar__19eda5" />
-      ) : null}
-      {/* Grid */}
-      {loading && allRows.length === 0 ? (
-        <div className="flex flex-col gap-2 px-2">
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-        </div>
-      ) : (
-        // `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
-        // base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid).
-        (<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <ListModalGrid
-            columns={columns}
-            data={data}
-            sortKey={sortKey}
-            sortDirection={sortDirection}
-            onSort={toggleSort}
-            tMenu={tMenu}
-            ui={ui}
-            onEdit={openEdit}
-            onClone={config.allowClone ? openClone : undefined}
-            onDelete={(row) => setDeletingRow(row)}
-            deletingId={deleting ? deletingRow?.id : null}
-            onToggle={handleToggle}
-            savingToggles={savingToggles}
-            data-testid="ListModalGrid__19eda5" />
-        </div>)
-      )}
+      <ListModalBody
+        loading={loading}
+        hasRows={allRows.length > 0}
+        gridProps={{
+          columns,
+          data,
+          sortKey,
+          sortDirection,
+          onSort: toggleSort,
+          tMenu,
+          ui,
+          onEdit: openEdit,
+          onClone: config.allowClone ? openClone : undefined,
+          onDelete: (row) => setDeletingRow(row),
+          deletingId: deleting ? deletingRow?.id : null,
+          onToggle: handleToggle,
+          savingToggles,
+        }}
+        data-testid="ListModalBody__19eda5" />
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
           section, and a footer with an optional toggle (left) + pill submit (right). */}

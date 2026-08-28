@@ -1132,6 +1132,59 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
 }
 
 /**
+ * The line id the candidate list is fetched for.
+ *
+ * For a PARTIAL line that is its pending REMAINDER sub-line — the one carrying the group id and
+ * no transaction — so the candidates are the documents still available, not the ones already
+ * matched. A plain pending or fully-reconciled line uses its own id.
+ *
+ * @param {object|null} selectedLine
+ * @returns {string|null} null when no line is selected
+ */
+function resolveCandidateLineId(selectedLine) {
+  if (!selectedLine) return null;
+  return selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
+    ? selectedLine.remainderLineId
+    : selectedLine.id;
+}
+
+/**
+ * Which candidate operations the right panel shows, and in what order.
+ *
+ * Three rules, in this order:
+ *
+ *  1. A RECONCILED line is read-only. The backend already returns only its linked movement(s),
+ *     so they are shown verbatim — the sign / date / search filters exist for PICKING candidates
+ *     and would only hide what the user came to look at.
+ *  2. Text search runs in memory. Direction and date range are applied server-side, so that the
+ *     type counts in the filter match the list; only the free-text query is left to do here.
+ *  3. Selected rows float to the very top, then the standard algorithm's suggestions. Stable
+ *     within each group, so checking any row lifts it up and several selected rows gather
+ *     together instead of shuffling.
+ *
+ * Module-level and pure: it is a named rule, it needs nothing from the component but its
+ * arguments, and keeping the filter + comparator out of the component body is what holds
+ * `ReconciliationSplitPanel` under Sonar's cognitive-complexity ceiling (javascript:S3776).
+ *
+ * @param {{ candidates: Array<object>, selectedLine: object|null, search: string,
+ *   selectedOpIds: Set<string> }} args
+ * @returns {Array<object>}
+ */
+function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOpIds }) {
+  if (selectedLine?.status === 'reconciled') return candidates;
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
+      .some((v) => (v || '').toLowerCase().includes(q)))
+    : candidates;
+  return [...filtered].sort((a, b) => {
+    const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
+    if (sel !== 0) return sel;
+    return (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0);
+  });
+}
+
+/**
  * Manual bank reconciliation split panel (T6).
  *
  * Left: pending statement lines (single-select). Right: candidate operations for
@@ -1207,15 +1260,7 @@ export function ReconciliationSplitPanel({
   }, [lines, selectedLineSel]);
   const sourceMeta = SOURCE_META[rightSource] ?? SOURCE_META.receipts;
   const invoiceMode = sourceMeta.kind === 'invoices';
-  // For a PARTIAL line, reconcile the REST against its pending remainder sub-line (which carries the
-  // group id and no transaction) so the candidate list = available docs, not the already-matched
-  // ones. A plain pending / fully-reconciled line uses its own id.
-  let candidateLineId = null;
-  if (selectedLine) {
-    candidateLineId = selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
-      ? selectedLine.remainderLineId
-      : selectedLine.id;
-  }
+  const candidateLineId = resolveCandidateLineId(selectedLine);
   const { candidates, counts: sourceCounts, loading: candLoading } = useCandidateOperations(
     accountId, candidateLineId, sourceMeta.docType,
     invoiceMode ? 'invoices' : null,
@@ -1282,26 +1327,10 @@ export function ReconciliationSplitPanel({
     [visibleLines],
   );
 
-  const visibleCandidates = useMemo(() => {
-    // A reconciled line is read-only: the backend already returns ONLY its linked movement(s),
-    // so show them verbatim without the sign/date/search filters meant for picking candidates.
-    if (selectedLine?.status === 'reconciled') return candidates;
-    const q = rightSearch.trim().toLowerCase();
-    // Direction AND date range are applied server-side (so the type counts match the list);
-    // here we only do the in-memory text search.
-    const filtered = q
-      ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
-        .some((v) => (v || '').toLowerCase().includes(q)))
-      : candidates;
-    // Float SELECTED rows to the very top, then the standard-algorithm
-    // suggestions; stable within each group (so checking any row lifts it up,
-    // and multiple selected rows all gather at the top).
-    return [...filtered].sort((a, b) => {
-      const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
-      if (sel !== 0) return sel;
-      return (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0);
-    });
-  }, [candidates, rightSearch, selectedOpIds, selectedLine]);
+  const visibleCandidates = useMemo(
+    () => resolveVisibleCandidates({ candidates, selectedLine, search: rightSearch, selectedOpIds }),
+    [candidates, rightSearch, selectedOpIds, selectedLine],
+  );
 
   // Pre-select the candidates the standard algorithm suggests, so a clean match
   // is one click away. Depends on the line id + loading state (not the candidates
