@@ -4,6 +4,7 @@ import { InviteUserDialog } from '../InviteUserDialog.jsx';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 describe('InviteUserDialog', () => {
@@ -42,7 +43,7 @@ describe('InviteUserDialog', () => {
         expect.stringContaining('/sws/go/company-invitations'),
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ email: 'colleague@example.com' }),
+          body: JSON.stringify({ email: 'colleague@example.com', language: 'es_ES' }),
         })
       );
       expect(screen.getByTestId('invite-user-success-view')).toBeInTheDocument();

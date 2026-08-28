@@ -10,6 +10,11 @@ vi.mock('../SupportChatContext.jsx', () => ({
   useSupportChat: () => mockUseSupportChat(),
 }));
 
+const mockUseCopilot = vi.fn(() => ({ isOpen: false }));
+vi.mock('@/components/CopilotContext', () => ({
+  useCopilot: () => mockUseCopilot(),
+}));
+
 // The fuller mocks below expose the callback props as clickable buttons so
 // tests can exercise SupportChatWidget's wiring logic (handleSend,
 // handleSubmitRating, onBack, etc.) without rendering the real subcomponents.
@@ -93,6 +98,7 @@ function mockChat(stateOverrides = {}, actionOverrides = {}) {
 describe('SupportChatWidget', () => {
   beforeEach(() => {
     fetchHelpDocs.mockResolvedValue([]);
+    mockUseCopilot.mockReturnValue({ isOpen: false });
   });
 
   it('renders a closed FAB with no badge when there is nothing unread', () => {
@@ -175,6 +181,21 @@ describe('SupportChatWidget', () => {
     mockChat({ isOpen: true, activeTab: 'inicio', unreadCount: 2 });
     const { container } = render(<SupportChatWidget />);
     expect(container.querySelector('.sc-ind-dot')).toBeInTheDocument();
+  });
+
+  it('shifts the panel clear of Copilot\'s own panel when Copilot is open, so the two floating '
+      + 'windows do not stack on top of each other', () => {
+    mockChat({ isOpen: true, activeTab: 'inicio' });
+    mockUseCopilot.mockReturnValue({ isOpen: true });
+    const { container } = render(<SupportChatWidget />);
+    expect(container.querySelector('.sc-panel--copilot-open')).toBeInTheDocument();
+  });
+
+  it('does not shift the panel when Copilot is closed', () => {
+    mockChat({ isOpen: true, activeTab: 'inicio' });
+    mockUseCopilot.mockReturnValue({ isOpen: false });
+    const { container } = render(<SupportChatWidget />);
+    expect(container.querySelector('.sc-panel--copilot-open')).not.toBeInTheDocument();
   });
 
   it('loads conversations when the Mensajes tab becomes active', () => {

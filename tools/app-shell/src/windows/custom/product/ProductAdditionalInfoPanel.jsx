@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { EntityForm } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
-import CheckboxGroup from '@/windows/custom/shared/CheckboxGroup';
+import CheckboxGroup, { isCheckedYN } from '@/windows/custom/shared/CheckboxGroup';
+
+const PRODUCT_TYPE_SERVICE = 'S';
 
 function WeightStepper({ label, value, readOnly, onChange }) {
   const [local, setLocal] = useState(String(value ?? ''));
@@ -51,6 +53,18 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
   const t = useLabel();
 
   const readOnly = !editing;
+  const isService = data?.productType === PRODUCT_TYPE_SERVICE;
+
+  // ETP-4943: a Service product has no physical existence, so the Logistics
+  // section (weight/UOM, "Almacenable"/Returnable) does not apply to it — force
+  // both stock-management flags off as soon as the type becomes Service, the
+  // same rule ProductSidebar.jsx already applies to hide the stock widget
+  // (ETP-4606: `data?.productType === 'S'` → no stock UI at all).
+  useEffect(() => {
+    if (!editing || !isService) return;
+    if (isCheckedYN(data?.stocked)) onChange?.('stocked', false, 'IsStocked');
+    if (isCheckedYN(data?.returnable)) onChange?.('returnable', false, 'Returnable');
+  }, [editing, isService, data?.stocked, data?.returnable, onChange]);
 
   return (
     <div className="space-y-2 pb-6 [&_input]:bg-card">
@@ -88,51 +102,55 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
             data-testid="CheckboxGroup__fe05d5" />
         </div>
       </div>
-      <hr className="border-t border-[hsl(var(--border-subtle))] mx-5" />
-      <div className="flex flex-row items-start p-2 gap-5">
-        <div className="flex flex-col gap-1 w-[148px] shrink-0">
-          <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{ui('logistics')}</div>
-          <div className="text-xs text-[hsl(var(--foreground))]">{ui('logisticsDescription')}</div>
-        </div>
-        <div className="flex flex-col gap-5 flex-1">
-          <div className="flex flex-row items-start gap-5">
-            <div className="w-[236px] shrink-0">
-              <EntityForm
-                entity={entity}
-                fields={[
-                  { key: 'uOMForWeight', column: 'C_Uom_Weight_ID', type: 'selector', label: 'UOM for Weight', section: 'other', reference: 'UOM', inputMode: 'selector' },
-                ]}
-                data={data ?? {}}
-                onChange={onChange}
-                catalogs={catalogs}
-                cols={1}
-                displayLogic={{ readOnly: readOnly ? { uOMForWeight: true } : {}, visibility: {} }}
-                api={api}
-                token={token}
-                apiBaseUrl={apiBaseUrl}
-                data-testid="EntityForm__fe05d5" />
+      {!isService && (
+        <>
+          <hr className="border-t border-[hsl(var(--border-subtle))] mx-5" />
+          <div className="flex flex-row items-start p-2 gap-5">
+            <div className="flex flex-col gap-1 w-[148px] shrink-0">
+              <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{ui('logistics')}</div>
+              <div className="text-xs text-[hsl(var(--foreground))]">{ui('logisticsDescription')}</div>
             </div>
-            <div className="w-[236px] shrink-0">
-              <WeightStepper
-                label={t('Weight') ?? 'Weight'}
-                value={data?.weight ?? 0}
+            <div className="flex flex-col gap-5 flex-1">
+              <div className="flex flex-row items-start gap-5">
+                <div className="w-[236px] shrink-0">
+                  <EntityForm
+                    entity={entity}
+                    fields={[
+                      { key: 'uOMForWeight', column: 'C_Uom_Weight_ID', type: 'selector', label: 'UOM for Weight', section: 'other', reference: 'UOM', inputMode: 'selector' },
+                    ]}
+                    data={data ?? {}}
+                    onChange={onChange}
+                    catalogs={catalogs}
+                    cols={1}
+                    displayLogic={{ readOnly: readOnly ? { uOMForWeight: true } : {}, visibility: {} }}
+                    api={api}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    data-testid="EntityForm__fe05d5" />
+                </div>
+                <div className="w-[236px] shrink-0">
+                  <WeightStepper
+                    label={t('Weight') ?? 'Weight'}
+                    value={data?.weight ?? 0}
+                    readOnly={readOnly}
+                    onChange={v => onChange?.('weight', v, 'Weight')}
+                    data-testid="WeightStepper__fe05d5" />
+                </div>
+              </div>
+              <CheckboxGroup
+                label={ui('stockManagement')}
+                items={[
+                  { key: 'stocked', column: 'IsStocked', label: ui('productStocked'), required: true },
+                  { key: 'returnable', column: 'Returnable', label: ui('productReturnable'), required: true },
+                ]}
+                data={data}
                 readOnly={readOnly}
-                onChange={v => onChange?.('weight', v, 'Weight')}
-                data-testid="WeightStepper__fe05d5" />
+                onChange={onChange}
+                data-testid="CheckboxGroup__fe05d5" />
             </div>
           </div>
-          <CheckboxGroup
-            label={ui('stockManagement')}
-            items={[
-              { key: 'stocked', column: 'IsStocked', label: ui('productStocked'), required: true },
-              { key: 'returnable', column: 'Returnable', label: ui('productReturnable'), required: true },
-            ]}
-            data={data}
-            readOnly={readOnly}
-            onChange={onChange}
-            data-testid="CheckboxGroup__fe05d5" />
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

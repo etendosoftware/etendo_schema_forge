@@ -1,8 +1,8 @@
 {
   "version": "0.46.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-08-24T15:27:52.096Z",
-  "checksum": "af151404259c210e",
+  "updatedAt": "2026-08-25T13:38:55.278Z",
+  "checksum": "03903b84bac83ab0",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -44,9 +44,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
@@ -2748,9 +2745,6 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,

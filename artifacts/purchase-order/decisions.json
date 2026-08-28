@@ -43,7 +43,6 @@
     "secondaryTabs": {},
     "noHeaderBorder": true,
     "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
-    "listViewOptions": { "hidePrint": true },
     "hideSaveStatuses": [
       "CO",
       "CL",

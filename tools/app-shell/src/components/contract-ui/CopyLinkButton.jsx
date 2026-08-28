@@ -14,8 +14,11 @@ export default function CopyLinkButton({ selectedRows, windowName, selectionBarS
     <TooltipProvider data-testid="TooltipProvider__CopyLinkButton">
       <Tooltip delayDuration={150} data-testid="Tooltip__CopyLinkButton">
         <TooltipTrigger asChild data-testid="TooltipTrigger__CopyLinkButton">
+          {/* ETP-4972 — ghost variant, no border: only the destructive
+              "Eliminar" button keeps a border in the floating pill, per the
+              applied Figma instance. */}
           <Button
-            variant="outline"
+            variant="ghost"
             size={selectionBarSize}
             className="order-first gap-1.5"
             onClick={onCopyLink}

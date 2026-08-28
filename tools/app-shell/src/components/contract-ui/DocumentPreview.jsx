@@ -31,13 +31,17 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — z-[60], above SelectionToolbar's z-50 (ETP-4972 live-QA
+          finding): both portal to document.body, so equal z-index left
+          paint order to decide the winner, and the floating selection pill
+          was showing on top of this preview when opened with rows still
+          selected in the list behind it. */}
       <div
-        className="fixed inset-0 bg-foreground/30 z-50 transition-opacity"
+        className="fixed inset-0 bg-foreground/30 z-[60] transition-opacity"
         onClick={onClose}
       />
       {/* Modal */}
-      <div className="fixed inset-4 sm:inset-8 lg:inset-12 z-50 flex flex-col bg-card rounded-xl shadow-2xl overflow-hidden">
+      <div className="fixed inset-4 sm:inset-8 lg:inset-12 z-[60] flex flex-col bg-card rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-muted shrink-0">
           <div className="flex items-center gap-3 min-w-0">

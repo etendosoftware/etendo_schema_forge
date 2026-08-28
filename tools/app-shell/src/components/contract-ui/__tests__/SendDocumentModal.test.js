@@ -92,7 +92,12 @@ describe('SendDocumentModal', () => {
     const commandEnd = sendSrc.indexOf('export async function readEmailContractResponse');
     assert.ok(commandStart > -1, 'buildEmailContractCommand export not found');
     assert.ok(commandEnd > commandStart, 'readEmailContractResponse export not found after command builder');
-    const commandSrc = sendSrc.slice(commandStart, commandEnd);
+    // Comments are stripped first. The guarantee is about what the builder *sends*, and reading
+    // prose along with the code made ordinary English break the build: a comment explaining that
+    // the backend "falls back to Spanish" reads as the forbidden `to` field.
+    const commandSrc = sendSrc.slice(commandStart, commandEnd)
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\/\/[^\n]*/g, ' ');
     assert.doesNotMatch(commandSrc, /\bto\b/);
     assert.doesNotMatch(commandSrc, /\btemplate\b/);
     assert.doesNotMatch(commandSrc, /\bdata\b/);

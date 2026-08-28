@@ -72,13 +72,18 @@ describe('BulkDocumentAction', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders button with row count for draft rows', () => {
+  // ETP-4972 — the button label dropped the trailing "(count)" suffix
+  // (previously `{ui(labelKey)} ({selectedRows.length})`) to match the
+  // Figma "Confirmar"/"Procesado masivo" button, which carries only the
+  // plain label. The selection count is still shown elsewhere (the
+  // SelectionToolbar's own counter segment); this button just stopped
+  // duplicating it.
+  it('renders button with plain label (no row-count suffix) for draft rows', () => {
     const rows = [{ id: '1', documentStatus: 'DR' }];
     render(
       <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
     );
-    expect(screen.getByText(/bulkCompletion/)).toBeInTheDocument();
-    expect(screen.getByText(/\(1\)/)).toBeInTheDocument();
+    expect(screen.getByText('bulkCompletion')).toBeInTheDocument();
   });
 
   it('renders button for completed rows (reactivate action)', () => {
@@ -89,7 +94,7 @@ describe('BulkDocumentAction', () => {
     expect(screen.getByText(/bulkCompletion/)).toBeInTheDocument();
   });
 
-  it('renders with both draft and completed rows (two actions)', () => {
+  it('renders with both draft and completed rows (two actions), still with the plain label', () => {
     const rows = [
       { id: '1', documentStatus: 'DR' },
       { id: '2', documentStatus: 'CO' },
@@ -97,7 +102,7 @@ describe('BulkDocumentAction', () => {
     render(
       <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
     );
-    expect(screen.getByText(/\(2\)/)).toBeInTheDocument();
+    expect(screen.getByText('bulkCompletion')).toBeInTheDocument();
   });
 
   it('opens dialog when button is clicked', async () => {
