@@ -100,7 +100,7 @@ export function TicketList({ conversations, activeConversationId, isLoading, onS
                 <div className={`sc-ticket-av${human ? ' human' : ''}`}>
                   {human
                     ? (conv.assigneeInitials || (conv.assigneeName?.[0]) || 'A')
-                    : <ValerIATile size={28} radius={999} data-testid="ValerIATile__258569" />
+                    : <ValerIATile size={36} radius={999} data-testid="ValerIATile__258569" />
                   }
                 </div>
                 <div className="sc-grow">

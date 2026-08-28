@@ -166,7 +166,6 @@ export default function PurchaseOrderWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         hideLink
-        listViewOptions={{ hidePrint: true }}
         bulkActions={PurchaseOrderBulkActions}
         dateFilterKey="orderDate"
         refreshTrigger={refreshKey}

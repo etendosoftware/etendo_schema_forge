@@ -4,15 +4,20 @@
  * `toastBatchDeleteOutcome` helpers (lib/batchDelete.js):
  *   1. The non-inlineEditable toolbar button inside `detail-bulk-action-bar`
  *      (gated by `isBulkDeleteBarVisible` — testid `detail-bulk-delete-button`).
- *   2. `LinesSelectionBar`'s `onDelete` for `linesLayout==='inlineEditable'`
- *      (gated by `shouldShowInlineDeleteSelectionBar`) — mutually exclusive
- *      with #1, fires for every Sales/Purchase Order/Invoice/Goods
- *      Shipment/Receipt "Líneas" tab.
+ *   2. The shared `SelectionToolbar`'s inline delete button for
+ *      `linesLayout==='inlineEditable'` (gated by
+ *      `shouldShowInlineDeleteSelectionBar`) — mutually exclusive with #1,
+ *      fires for every Sales/Purchase Order/Invoice/Goods Shipment/Receipt
+ *      "Líneas" tab.
  *
  * Harness mirrors DetailView.detailProcesses.vitest.jsx (same mock
- * preamble), except `LinesSelectionBar` is stubbed with a trigger button
- * (exposing its `onDelete`/`deleting` props) instead of `() => null`, so
- * variant #2 is reachable.
+ * preamble). Unlike the old `LinesSelectionBar`, `SelectionToolbar` (ETP-4972)
+ * is a dumb positioning/chrome "shell" — DetailView renders its own delete
+ * button as a `children` segment, identified by `title={ui('delete')}`
+ * (same pattern used by every other migrated call site, e.g.
+ * AmortizationLinesTable.vitest.jsx). No mock of the bar itself is needed or
+ * possible: `SelectionToolbar` no longer exposes an `onDelete`/`deleting`
+ * prop contract to stub — it only knows how to portal + render children.
  */
 
 // --- MOCKS BEFORE IMPORTS ---
@@ -188,21 +193,6 @@ vi.mock('@/components/attachments/AttachmentIcon', () => ({
   AttachmentIcon: () => null,
 }));
 
-// `LinesSelectionBar` — the real one is only reachable when `linesLayout`
-// is `inlineEditable`. Stub it with a trigger exposing `onDelete`/`deleting`
-// (mirrors MockTable's onSelectionChange/onRowClick trigger pattern below) so
-// variant #2 is testable without depending on the real bar's own rendering.
-vi.mock('../LinesSelectionBar.jsx', () => ({
-  default: ({ onDelete, deleting, count }) => (
-    <div data-testid="lines-selection-bar-stub">
-      <span data-testid="lines-selection-bar-count">{count}</span>
-      <button data-testid="lines-selection-bar-delete-trigger" disabled={deleting} onClick={onDelete}>
-        delete selected
-      </button>
-    </div>
-  ),
-}));
-
 // --- IMPORTS ---
 
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -283,6 +273,20 @@ async function confirmDeleteDialog(user) {
   await user.click(within(dialog).getByText('delete'));
 }
 
+// The header's own record-delete action ("action-delete") also carries
+// title={ui('delete')}, so a plain screen.getByTitle('delete') is ambiguous
+// once SelectionToolbar's inline delete segment mounts. Disambiguate by
+// scoping to `.selection-toolbar` — the class SelectionToolbar itself sets
+// on its pill (see SelectionToolbar.jsx). SelectionToolbar does forward a
+// `data-testid` prop (fixed in ETP-4972), but each caller in this file sets
+// its own literal testid on the pill, not on this specific delete button, so
+// the class scope remains the simplest disambiguator here.
+function getSelectionToolbarDeleteButton() {
+  const button = screen.getAllByTitle('delete').find((el) => el.closest('.selection-toolbar'));
+  if (!button) throw new Error('SelectionToolbar delete button not found');
+  return button;
+}
+
 describe('DetailView — primary lines bulk delete (ETP-4656)', () => {
   beforeEach(() => {
     toast.success.mockClear();
@@ -352,14 +356,19 @@ describe('DetailView — primary lines bulk delete (ETP-4656)', () => {
     });
   });
 
-  describe('variant 2 — LinesSelectionBar (linesLayout="inlineEditable")', () => {
+  describe('variant 2 — SelectionToolbar inline delete (linesLayout="inlineEditable")', () => {
     it('mixed batch: removes only the succeeded row from cache and fires ONE combined warning toast', async () => {
       mockMixedFetch();
       const user = userEvent.setup();
       renderDetailView({ linesLayout: 'inlineEditable' });
 
       await user.click(screen.getByTestId('trigger-selection'));
-      await user.click(screen.getByTestId('lines-selection-bar-delete-trigger'));
+      // SelectionToolbar is portaled to document.body — `screen` still finds
+      // it (RTL queries the whole document, not just the render container).
+      // Its delete segment is identified by title={ui('delete')}, matching
+      // every other migrated call site (AmortizationLinesTable, etc.).
+      await waitFor(() => expect(getSelectionToolbarDeleteButton()).toBeInTheDocument());
+      await user.click(getSelectionToolbarDeleteButton());
       await confirmDeleteDialog(user);
 
       await waitFor(() => expect(toast.warning).toHaveBeenCalled());
@@ -380,7 +389,8 @@ describe('DetailView — primary lines bulk delete (ETP-4656)', () => {
       renderDetailView({ linesLayout: 'inlineEditable' });
 
       await user.click(screen.getByTestId('trigger-selection'));
-      await user.click(screen.getByTestId('lines-selection-bar-delete-trigger'));
+      await waitFor(() => expect(getSelectionToolbarDeleteButton()).toBeInTheDocument());
+      await user.click(getSelectionToolbarDeleteButton());
       await confirmDeleteDialog(user);
 
       await waitFor(() => expect(toast.success).toHaveBeenCalled());

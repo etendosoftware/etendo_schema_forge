@@ -448,11 +448,16 @@ never renders rows that can be picked — so it never sees a selection bar eithe
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
 
-Note that a window doing this swaps two bars, not stacks them: `ListView` renders
-its selection bar as a **sibling above** the slot and cannot reach inside it, so
-the slot must hide its own toolbar while a selection exists. To let it, `ListView`
-now forwards its authoritative **`selectedRows`** in the Table-slot props
-(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+Note that a window doing this swaps two toolbars, not stacks them — but since
+ETP-4972 (see §9e) the selection bar itself (`SelectionToolbar`) is a
+viewport-fixed portal to `document.body`, not a DOM sibling of the slot at
+all, so "swap" here means the **slot's own toolbar unmounts** while a
+selection exists, not that the selection bar takes its place in the slot's
+layout flow — the floating pill appears elsewhere in the viewport regardless
+of where the slot sits on the page. To let the slot know when to unmount its
+own toolbar, `ListView` forwards its authoritative **`selectedRows`** in the
+Table-slot props (read-only for the slot; `DataTable` has no such prop, so the
+spread is inert):
 
 ```jsx
 function MyHeaderTable({ data, meta, selectedRows, ...props }) {
@@ -543,8 +548,9 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   passed straight to `ListView` (through a generated page's `{...props}` spread, same as
   `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
 - When present, `ListView` recomputes on every selection change how many of the
-  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
-  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  **currently selected** rows fail the predicate. If any do, the generic delete button
+  (icon-only `Trash2`, no visible text label since ETP-4972 — see §9e) disables
+  (`bulkDeleting || blockedDeleteCount > 0`) and its `title`/`aria-label` tooltip switches to
   `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
   batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
   exists as a defense-in-depth backstop for a row that changed state between selection and
@@ -558,6 +564,110 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   only concerns `ListView`'s own generic bulk-delete button.
 - **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
   the only current consumer.
+
+### 9e. `SelectionToolbar` — the floating bulk-selection toolbar (ETP-4972)
+
+Every checkbox-selectable list/tab (grid multi-select in `ListView`, and every
+lines table that supports row selection — Sales Order, Physical Inventory,
+Amortization, Assets' Amortization Plan tab, Financial Accounts' Movimientos/
+Extractos tabs, the Periods panel's document bulk-open/close bar, contacts'
+secondary tabs) shares one component for the bar that appears once ≥1 row is
+checked: `tools/app-shell/src/components/contract-ui/SelectionToolbar.jsx`.
+It replaces the pre-ETP-4972 `LinesSelectionBar` (kept only as a one-line
+re-export shim, `LinesSelectionBar.jsx → SelectionToolbar.jsx`, for stragglers
+importing the old filename — do not add new imports of it).
+
+**Architecture — a true viewport-fixed portal, not an anchored one.** The old
+`LinesSelectionBar` was portaled to `document.body` with `position: fixed`,
+but its `top`/`left` came from `getBoundingClientRect()` on a sentinel
+`<div>` placed at the end of the scrollable list (some callers additionally
+tracked it via a `ResizeObserver` on a `barAnchorRef`). On a long list, once
+that sentinel scrolled out of view, the "fixed" bar scrolled out of view with
+it — a "floating" bar that wasn't actually anchored to the viewport.
+`SelectionToolbar` has no ref/rect-measuring code at all: it portals to
+`document.body` and hardcodes real viewport coordinates —
+`position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%)` —
+so it is bottom-center of the screen unconditionally, regardless of list
+length, scroll position, or which container it's logically nested under.
+That bug class cannot recur because there is no measured rect left to go
+stale.
+
+**Additive, not a swap, at the `ListView` idle-bar level.** Before ETP-4972,
+`ListView` rendered the selection bar and the idle filter bar (Filtros,
+ViewToggle, Nuevo, …) as either branch of one ternary occupying the same DOM
+slot — selecting a row replaced the idle bar outright. Since the selection
+bar is now a portal that floats independently of everything else on the
+page, `ListView` renders both as independent siblings: the idle bar **stays
+visible** while rows are selected, and the floating pill appears additively
+on top. (This is unrelated to the slot-level "swap" described in §9c above —
+a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
+selection is active, because that toolbar and the grid live in the same
+slot; see the corrected note there.)
+
+**Composition — children, not a data-driven `actions[]` prop.**
+`SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
+the portal, the true fixed placement, the dark-pill visual chrome (radius,
+shadow, enter/exit slide animation), a 1px divider rendered after every
+top-level child, and a trailing close (`X`) button that calls `onClose`. It
+does **not** impose a generic `actions[]` shape on callers — the selection
+counter, action buttons, and any destructive "Eliminar" affordance are all
+passed as plain `children`, one top-level element per segment (a divider is
+auto-inserted after each):
+
+```jsx
+<SelectionToolbar
+  visible={selectedRows.length > 0}
+  onClose={clearSelection}
+  closeTitle={ui('close')}
+>
+  <span className="text-sm font-medium">
+    {ui('selected').replace('{count}', selectedRows.length)}
+  </span>
+  <div className="flex items-center gap-2 h-10">
+    {/* action buttons */}
+  </div>
+</SelectionToolbar>
+```
+
+Because the shell no longer provides its own cancel/X affordance for callers
+to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
+hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
+button** — `SelectionToolbar` always renders one as the trailing segment.
+
+**Gotcha — use a plain `<button>`, not the shared shadcn `<Button
+size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
+in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
+selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
+regardless of Tailwind/twMerge class order. Two text-bearing action buttons
+in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
+rendered at visibly different icon/text sizes until both were rewritten as
+plain hand-rolled `<button>` elements with the same explicit classes,
+matching Figma's "Size: md" spec (padding `7px 12px`, gap `4px`) instead of
+inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
+with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
+any new bulk-toolbar action button, rather than `<Button size="sm">`.
+
+**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
+The Figma spec for the two text-bearing buttons above sources its icons
+(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
+draw the plus/check as a badge overlapping the file's corner with a heavier
+stroke — visually different from this app's lucide-react set (`FilePlus`/
+`FileCheck`), which draws the same glyphs contained inside the file body
+with a thinner stroke. This is a **confirmed, deliberate decision, not a
+drift from Figma to fix**: lucide-react's versions were kept for visual
+consistency with every other icon already in this toolbar (`Trash2`, `X`,
+`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
+Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
+shape without re-confirming with design first.
+
+**Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
+usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
+`tools/app-shell/src/components/financial-accounts/BulkDeleteSelectionBar.jsx`
+(Financial Accounts' Movimientos/Extractos tabs), `windows/custom/calendar/
+PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
+contacts/index.jsx`.
 
 ---
 
