@@ -7,6 +7,7 @@ import {
   addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
   readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
+  waitForDerivedFieldValue,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -48,6 +49,87 @@ async function findNegativeLineRow(page, qtyFieldKey) {
     if (parseAmount(qtyText) < 0) return row;
   }
   throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
+}
+
+/**
+ * Etendo primary keys are either a 32-char hex UUID (newer records) or a plain
+ * numeric legacy id — never a synthetic token. Used to separate real warehouse
+ * options from CreatableSearchSelect's own non-record entries
+ * (`option-warehouse-__empty__`, the "create" action).
+ */
+const ETENDO_ID = /^(?:[0-9A-Fa-f]{32}|\d+)$/;
+
+/**
+ * Starts recording, for the current page, every warehouse value the BACKEND
+ * hands the form on its own — i.e. the derived default that ETP-4772 was
+ * clobbering the user's explicit pick with.
+ *
+ * Two sources, both read as IDs from JSON payloads (never from rendered
+ * labels): `GET /header/defaults` (`defaults.warehouse`) and the
+ * `POST /header/callout` responses (`combos.warehouse.selected` /
+ * `updates.warehouse.value`). On Purchase Order the new-record defaults carry
+ * NO warehouse at all — a brand-new PO reports `data-missing-required` including
+ * `warehouse`, see the first test in this file — so in practice the value comes
+ * from the businessPartner callout, which is exactly the callout
+ * `NeoCrudHandler` re-fires server-side on every create.
+ *
+ * Must be called BEFORE the new-record form is opened.
+ */
+function recordServerWarehouseDefaults(page) {
+  const state = { fromCallout: null, fromDefaults: null, calloutTrace: [] };
+
+  page.on('response', async (resp) => {
+    const url = resp.url();
+    if (!url.includes('/sws/neo/purchase-order/header') || resp.status() >= 400) return;
+    const method = resp.request().method();
+    try {
+      if (method === 'GET' && url.includes('/header/defaults')) {
+        const warehouse = (await resp.json())?.defaults?.warehouse;
+        if (warehouse) state.fromDefaults = warehouse;
+        return;
+      }
+      if (method === 'POST' && url.includes('/header/callout')) {
+        const requested = resp.request().postDataJSON() ?? {};
+        const body = await resp.json();
+        const warehouse = body?.combos?.warehouse?.selected ?? body?.updates?.warehouse?.value ?? null;
+        state.calloutTrace.push({ field: requested.field, warehouse });
+        if (warehouse) state.fromCallout = warehouse;
+      }
+    } catch {
+      // Non-JSON body, or the body was already consumed elsewhere — this
+      // listener is best-effort; the test asserts on what it managed to read.
+    }
+  });
+
+  return state;
+}
+
+/**
+ * Opens the Warehouse selector and returns the IDs of every real option it
+ * offers, read straight off each option's `data-testid`
+ * (`option-warehouse-<ID>`, see CreatableSearchSelect.jsx). Deliberately never
+ * matches on option TEXT: the deleted ETP-4903 version of this guard picked "an
+ * option whose label differs from the default's label", which broke the moment
+ * two warehouses shared a label prefix and told the test nothing about which
+ * record it had actually chosen.
+ */
+async function listWarehouseOptionIds(page) {
+  const chip = page.getByTestId('field-warehouse-chip');
+  const input = page.getByTestId('field-warehouse');
+  const anyOption = page.locator('[data-testid^="option-warehouse-"]');
+
+  await expect(async () => {
+    const trigger = (await chip.isVisible().catch(() => false)) ? chip : input;
+    await trigger.click({ timeout: 3_000 });
+    await expect(anyOption.first()).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 25_000 });
+
+  const testIds = await anyOption.evaluateAll(
+    (els) => els.map((el) => el.getAttribute('data-testid') || ''),
+  );
+  return testIds
+    .map((testId) => testId.replace(/^option-warehouse-/, ''))
+    .filter((id) => ETENDO_ID.test(id));
 }
 
 test.describe('Purchase Order — Full flow with receipt and invoice (integration)', () => {
@@ -733,5 +815,210 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       ).toBeLessThan(0);
     }
     await slow(page);
+  });
+
+  /**
+   * ETP-4772 (BACKEND half) — an explicitly picked Warehouse must survive the
+   * business-partner callout that `NeoCrudHandler` re-fires SERVER-SIDE on every
+   * create.
+   *
+   * ── Why this test exists at all ──────────────────────────────────────────────
+   * ETP-4772 was two independent bugs with one symptom. The FRONTEND half (a
+   * stale-callout-response guard: `fieldGenerationRef` /
+   * `isStaleCalloutResponse`) is covered by
+   * `purchase-order-warehouse-persist.mocked.spec.js`. That spec cannot cover the
+   * BACKEND half, by construction: it mocks `/header/callout` AND `/header`, so
+   * `NeoDefaultsCascadeHelper.mergeCalloutCombos` — the code that was overwriting
+   * the user's warehouse and is now required to respect `protectedFields` — never
+   * executes. Only a live-backend test can reach it. Hence this one.
+   *
+   * ── This half is DETERMINISTIC — there is no race to reproduce ───────────────
+   * `NeoCrudHandler` re-fires the `businessPartner` callout on EVERY create; that
+   * callout returns `combos.warehouse` holding the warehouse derived from the BP;
+   * pre-fix, `mergeCalloutCombos` applied it unconditionally, discarding the
+   * explicit value in the request payload. That happens on every single create,
+   * with no dependency on network timing — which is why this test needs none of
+   * the callout-gating machinery the mocked frontend spec needs.
+   *
+   * Observed live before the backend fix, on `POST /sws/neo/sales-order/header`:
+   * the request body carried `"warehouse":"1FF18B068AA94146A2A49C51E13C739C"`
+   * (the user's pick) and the response came back with
+   * `"warehouse":"081A28467A2948529BB65C902289AFDF"` (the BP-derived default).
+   * That exact substitution is what the load-bearing assertion below catches.
+   *
+   * ── Why it has no conditional skip ──────────────────────────────────────────
+   * A previous live version of this guard (added ETP-4903, deleted ETP-4909)
+   * carried a mid-test `test.skip(true, 'Environment only exposes one Warehouse
+   * option')`, so on a single-warehouse dataset it silently reported green while
+   * proving nothing. Here, "the tenant exposes >= 2 warehouses" is a hard
+   * PRECONDITION asserted with an explicit message: too few options FAILS the
+   * test. The only skip in this file is the describe-level `E2E_SALES_INTEGRATION`
+   * environment gate, which is a legitimate suite-selection flag.
+   *
+   * ── Everything is matched by ID ─────────────────────────────────────────────
+   * The derived default, the chosen option, the request payload, the create
+   * response and the post-reload re-read are all compared as record IDs read from
+   * `data-testid`s and JSON payloads. No rendered label is ever compared — the
+   * other reason the deleted version was brittle.
+   *
+   * No `ensureOpenPeriod()` here on purpose: this test only saves a DRAFT, and
+   * accounting periods only gate the confirm/complete actions.
+   */
+  test('an explicitly picked Warehouse survives the server-side business-partner callout on create', async ({ page }) => {
+    const user = onboardingCreds?.email || process.env.E2E_USER;
+    const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
+
+    await login(page, { user, password });
+    await expect(page, 'Login should redirect to /dashboard').toHaveURL(/dashboard/, { timeout: 30_000 });
+    await slow(page);
+
+    await ensureVendorSetup(page, { navigateTo });
+
+    // Must be installed BEFORE the new-record form opens — it reads the very
+    // first `/header/defaults` and `/header/callout` payloads.
+    const serverDefaults = recordServerWarehouseDefaults(page);
+
+    let derivedWarehouseId;
+    let chosenWarehouseId;
+
+    await test.step('Open a new PO and let the BP callout derive a warehouse', async () => {
+      await navigateTo(page, 'purchase-order');
+      await slow(page);
+
+      const newButton = page.getByTestId('action-new');
+      await expect(newButton).toBeVisible({ timeout: 20_000 });
+      await newButton.click();
+      await waitForDetailReady(page);
+
+      // Selecting the BP fires the callout chain (partnerAddress, paymentTerms,
+      // priceList… and warehouse) — the same callout the backend re-runs on create.
+      await selectVendorBP(page);
+      await waitForDerivedFieldValue(page, 'warehouse', { timeout: 30_000 });
+
+      derivedWarehouseId = serverDefaults.fromCallout ?? serverDefaults.fromDefaults;
+      expect(
+        derivedWarehouseId,
+        '[ETP-4772] The backend must have handed the form a derived warehouse ID before the user '
+        + 'overrides it — without knowing that ID this test cannot prove the override survived. '
+        + `Observed callout trace: ${JSON.stringify(serverDefaults.calloutTrace)}`,
+      ).toBeTruthy();
+    });
+
+    await test.step('Pick a DIFFERENT warehouse, by ID', async () => {
+      const optionIds = await listWarehouseOptionIds(page);
+
+      // Hard precondition — never a skip. A single-warehouse tenant makes the
+      // guard vacuous, and that must surface as a failure, not as a green run.
+      expect(
+        optionIds.length,
+        '[ETP-4772] PRECONDITION: the dataset must expose at least 2 warehouses for this guard to be '
+        + 'meaningful — with only one option the user cannot pick anything other than the '
+        + `BP-derived default. Warehouse option IDs found: ${JSON.stringify(optionIds)}`,
+      ).toBeGreaterThanOrEqual(2);
+
+      expect(
+        optionIds,
+        `[ETP-4772] The BP-derived warehouse (${derivedWarehouseId}) should be one of the selectable options`,
+      ).toContain(derivedWarehouseId);
+
+      chosenWarehouseId = optionIds.find((id) => id !== derivedWarehouseId);
+      expect(
+        chosenWarehouseId,
+        '[ETP-4772] Could not pick a warehouse other than the BP-derived default '
+        + `(${derivedWarehouseId}) out of ${JSON.stringify(optionIds)}`,
+      ).toBeTruthy();
+
+      await page.getByTestId(`option-warehouse-${chosenWarehouseId}`).click();
+
+      await expect(page.getByTestId('field-warehouse-chip'),
+        'The warehouse field should hold the explicitly picked value',
+      ).toBeVisible({ timeout: 15_000 });
+      // Let the field's own callout (300ms debounce in useCallout) finish, so the
+      // save below is not racing an in-flight request.
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+      await slow(page);
+    });
+
+    let recordId;
+
+    await test.step('Save the draft and assert the SERVER did not overwrite the warehouse', async () => {
+      const createResponsePromise = page.waitForResponse(
+        (resp) => /\/sws\/neo\/purchase-order\/header(\?|$)/.test(resp.url())
+          && resp.request().method() === 'POST'
+          && resp.status() < 400,
+        { timeout: 30_000 },
+      );
+
+      const saveBtn = page.getByTestId('action-save-draft')
+        .or(page.getByRole('button', { name: /guardar|save/i }));
+      await expect(saveBtn.first(),
+        'Save draft should be enabled once BP, address and warehouse are filled',
+      ).toBeEnabled({ timeout: 15_000 });
+      await saveBtn.first().click();
+
+      const createResponse = await createResponsePromise;
+
+      // 1. The browser really did send the user's pick (rules out a frontend
+      //    regression masquerading as a backend one).
+      const sentWarehouse = (createResponse.request().postDataJSON() ?? {}).warehouse;
+      expect(sentWarehouse,
+        '[ETP-4772] The create request must carry the warehouse the user picked',
+      ).toBe(chosenWarehouseId);
+
+      // 2. LOAD-BEARING: the record the server persisted and echoed back.
+      const createBody = await createResponse.json();
+      const persistedWarehouse = createBody?.response?.data?.[0]?.warehouse;
+      expect(persistedWarehouse,
+        `[ETP-4772] The backend overwrote the user's warehouse with the business-partner default. `
+        + `Sent "${chosenWarehouseId}", got back "${persistedWarehouse}" `
+        + `(BP-derived default was "${derivedWarehouseId}"). `
+        + 'NeoDefaultsCascadeHelper.mergeCalloutCombos must skip fields listed in protectedFields '
+        + 'when NeoCrudHandler re-fires the businessPartner callout on create.',
+      ).toBe(chosenWarehouseId);
+      expect(persistedWarehouse,
+        '[ETP-4772] The persisted warehouse must not be the BP-derived default',
+      ).not.toBe(derivedWarehouseId);
+
+      await expect(page,
+        'After saving, URL should include the PO record ID',
+      ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      recordId = (page.url().match(/\/purchase-order\/([^/?]+)/) || [])[1];
+      expect(recordId, 'Should have captured the PO record id from the URL').toBeTruthy();
+    });
+
+    await test.step('Reload and confirm the full round trip still reads the picked warehouse', async () => {
+      await safeReload(page);
+      await waitForDetailReady(page);
+      await expect(page.getByTestId('field-warehouse-chip'),
+        'The reloaded form should render a warehouse value',
+      ).toBeVisible({ timeout: 20_000 });
+
+      // Independent server re-read, by ID.
+      //
+      // Deliberately NOT a `page.waitForResponse()` around `safeReload()`:
+      // safeReload navigates with `page.goto()`, which tears the old page's
+      // network resources down, so `response.json()` on a response captured
+      // across that navigation fails with "Protocol error
+      // (Network.getResponseBody): No resource with given identifier found"
+      // — verified live. `page.request` runs outside the page lifecycle, and
+      // asking the backend for the record again is a stronger check anyway:
+      // it re-queries the DB instead of re-reading a body the app already had.
+      const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
+      expect(token, 'An auth token should be present in localStorage after login').toBeTruthy();
+
+      const reread = await page.request.get(`/sws/neo/purchase-order/header/${recordId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(reread.ok(),
+        `Re-reading the saved PO should succeed (got ${reread.status()})`,
+      ).toBe(true);
+      const rereadBody = await reread.json();
+
+      expect(rereadBody?.response?.data?.[0]?.warehouse,
+        '[ETP-4772] Re-reading the saved PO must still return the warehouse the user picked, '
+        + `not the BP-derived default "${derivedWarehouseId}"`,
+      ).toBe(chosenWarehouseId);
+      await slow(page);
+    });
   });
 });
