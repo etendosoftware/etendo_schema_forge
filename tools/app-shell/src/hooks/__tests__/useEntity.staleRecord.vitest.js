@@ -9,9 +9,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const toast = { error: vi.fn(), success: vi.fn(), info: vi.fn() };
+const toast = { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() };
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
+
+// The prompt is a dialog now. The real store is imported so these cases exercise the actual
+// hand-off, and a host is subscribed per case to stand in for SaveConflictDialog.
+const { subscribeSaveConflict, refreshFromSaveConflict, resetSaveConflictForTests } =
+  await import('@/lib/saveConflict.js');
 
 const { handleSaveErrorResponse } = await import('../useEntity.js');
 
@@ -33,7 +38,15 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
   beforeEach(() => {
     toast.error.mockClear();
     toast.info.mockClear();
+    resetSaveConflictForTests();
   });
+
+  /** Subscribes a stand-in for the dialog host and reports when it was asked to open. */
+  function mountHost() {
+    const opened = [];
+    subscribeSaveConflict((next) => opened.push(next));
+    return opened;
+  }
 
   it('reports the conflict with the dedicated message, not a generic backend error', async () => {
     const setFieldErrors = vi.fn();
@@ -47,13 +60,32 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
     expect(toast.error.mock.calls[0][0]).toBe('saveConflictRecordChanged');
   });
 
-  it('offers exactly two choices: cancel the save, or discard and refresh', async () => {
-    // No third, cleverer option. A merge was tried and removed: it silently overwrote the other
-    // person's value on any field both had edited, and it injected values without running the
-    // callouts a real edit would run, so the form showed a combination nothing had derived.
+  it('raises the dialog rather than a toast when a host is mounted', async () => {
+    // A blocking decision with a destructive option belongs in a dialog. As a toast, sonner laid
+    // the two long labels out inline with the message and collapsed the text to one character per
+    // line — observed in a real run.
+    const opened = mountHost();
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), vi.fn(),
+    );
+    expect(opened).toEqual([true]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('hands the reload callback to the dialog, not to a toast button', async () => {
     const onStaleRecord = vi.fn();
+    mountHost();
     await handleSaveErrorResponse(
       jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), onStaleRecord,
+    );
+    refreshFromSaveConflict();
+    expect(onStaleRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a toast when no dialog host is mounted', async () => {
+    // Silence is the one outcome this ticket removes, so an unmounted host must not swallow it.
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), vi.fn(),
     );
     const options = toast.error.mock.calls[0][1];
     expect(options.cancel.label).toBe('saveConflictKeepEditing');
@@ -85,6 +117,21 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
     );
     toast.error.mock.calls[0][1].cancel.onClick();
     expect(onStaleRecord).not.toHaveBeenCalled();
+  });
+
+  it('reuses one stable toast id, so repeated attempts cannot stack notices forever', async () => {
+    // The notice never expires on its own, and sonner stacks collapsed by default: without a
+    // stable id a second failed save buries the first behind it and its buttons become
+    // unreachable. Reported from a real run — two overlapping toasts on screen.
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), vi.fn(),
+    );
+    await handleSaveErrorResponse(
+      jsonResponse({ error: 'stale_record' }), ui, vi.fn(), vi.fn(), vi.fn(),
+    );
+    const [first, second] = toast.error.mock.calls;
+    expect(first[1].id).toBeTruthy();
+    expect(second[1].id).toBe(first[1].id);
   });
 
   it('never auto-dismisses — a silently vanishing data-loss warning is the original defect', async () => {

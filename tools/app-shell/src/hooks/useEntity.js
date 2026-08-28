@@ -27,6 +27,9 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // record and every list row is parsed) and injected by apiFetch on the way out, so no call
 // site has to thread `updated` through by hand.
 import { rememberRecordVersion, forgetRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+// ETP-5073 / DOC-04: the conflict prompt is a dialog, not a toast — it is a blocking decision
+// with a destructive option. See lib/saveConflict.js for why the toast was abandoned.
+import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
@@ -668,6 +671,17 @@ export function buildSavePayload({
     return payload;
 }
 
+/**
+ * Stable id for the concurrency-conflict notice (ETP-5073).
+ *
+ * Without it every failed save adds ANOTHER toast, and because this one is deliberately
+ * non-dismissing (`duration: Infinity`) they accumulate forever — sonner stacks collapsed by
+ * default, so the second attempt buries the first behind it and the buttons become unreachable.
+ * A stable id makes sonner update the existing toast in place instead, which is the same trick
+ * the numeric-validation toasts use.
+ */
+const SAVE_CONFLICT_TOAST_ID = 'etgo-save-conflict';
+
 export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
@@ -692,17 +706,22 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
         // ignore — fall through to the legacy extractor
     }
     if (staleConflict) {
-        // Never silent, and never auto-dismissed: the save did NOT happen, and a warning that
-        // vanishes on its own is the defect this ticket is about.
-        //
-        // Two explicit choices and no third clever one. Cancelling keeps the form exactly as the
-        // user left it (nothing was written, so their edits are still theirs to save later against
-        // a fresh read). Refreshing drops those edits — the action label says so, because a button
-        // that destroys work must name what it destroys rather than read as a harmless "reload".
-        // We deliberately do NOT offer to merge: see discardChangesAndReload for why.
+        // The save did NOT happen, so the user has to decide: keep editing, or discard and
+        // refresh. Two explicit choices and no third clever one — we deliberately do NOT offer to
+        // merge, see discardChangesAndReload for why.
         const msg = ui('saveConflictRecordChanged');
         setSaveError(msg);
+        // A dialog, because this blocks the user's work and one of the options destroys it. The
+        // toast this replaced also rendered badly: sonner puts action buttons inline with the
+        // message, and two labels this long squeezed the text into a one-character-wide column.
+        if (openSaveConflict({ onRefresh: onStaleRecord })) {
+            return;
+        }
+        // No dialog host mounted (a test, an embedded view): fall back to a toast rather than say
+        // nothing. Silence is the single outcome this ticket exists to remove. The stable id keeps
+        // repeated attempts from stacking non-expiring notices.
         toast.error(msg, {
+            id: SAVE_CONFLICT_TOAST_ID,
             duration: Infinity,
             cancel: { label: ui('saveConflictKeepEditing'), onClick: () => {} },
             ...(onStaleRecord
@@ -1357,6 +1376,13 @@ export function useEntity(entity, childEntity, {
             userChangedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
+            // Belt and braces: sonner already dismisses a toast when its action is clicked, but
+            // this one never expires on its own, so a stuck copy would sit on screen forever if
+            // that ever changed or if the reload was triggered from anywhere else.
+            // Close both surfaces: the dialog resolves itself when its button is clicked, but a
+            // refresh triggered from anywhere else must not leave either one behind.
+            dismissSaveConflict();
+            toast.dismiss(SAVE_CONFLICT_TOAST_ID);
             toast.info(ui('saveConflictReloaded'));
         } catch {
             toast.error(ui('saveConflictReloadFailed'));
