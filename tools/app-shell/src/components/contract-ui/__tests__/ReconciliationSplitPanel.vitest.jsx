@@ -1722,4 +1722,69 @@ describe('ReconciliationSplitPanel', () => {
     });
   });
 
+
+  // ETP-4921 QA — "la vista de conciliación se ve cortada; si cambio el zoom se ve bien".
+  // A long statement description stretched the auto-layout table past the panel, so Progreso and
+  // Importe ended up behind a horizontal scrollbar. The fix is structural (fixed table layout +
+  // an ellipsised description), which is why these assert on the layout contract rather than on
+  // pixels: jsdom does no layout, so nothing here can measure the overflow itself.
+  describe('column layout — Progreso and Importe stay in view', () => {
+    const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE Galder Romo CONCEPTO Factura Nº : 10001754 1000896';
+
+    it('lays both tables out with fixed columns, so the free column absorbs the overflow', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const tables = screen.getAllByTestId('Table__d0f4d5');
+      expect(tables.length).toBeGreaterThan(0);
+      for (const table of tables) {
+        expect(table.className).toContain('table-fixed');
+      }
+    });
+
+    // Every column but the description declares a width; under `table-fixed` those widths are
+    // what the browser honours, so Progreso (90px) and Importe (139px) can no longer be pushed out.
+    it('keeps a declared width on the Progreso and Importe columns', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const classes = heads.map((h) => h.className);
+      expect(classes.some((c) => c.includes('w-[90px]'))).toBe(true);
+      expect(classes.some((c) => c.includes('w-[139px]'))).toBe(true);
+    });
+
+    it('ellipsises the statement description instead of widening the row', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      expect(desc).toHaveTextContent(LONG_DESC);
+      expect(desc.className).toContain('truncate');
+    });
+
+    // The full text is not lost — it comes back on hover, which is the whole point of clipping it.
+    it('offers the full description in a tooltip once it is clipped', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      // jsdom reports 0 for both metrics, so the overflow has to be stated explicitly.
+      Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+      Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 300 });
+
+      fireEvent.focus(desc);
+
+      expect(screen.getByTestId('recon-line-desc-L1-tooltip')).toHaveTextContent(LONG_DESC);
+    });
+
+    // The row still falls back through partnerName / referenceNo when there is no description.
+    it('keeps the description fallback chain', () => {
+      setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
+      renderPanel();
+
+      expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
+    });
+  });
+
 });

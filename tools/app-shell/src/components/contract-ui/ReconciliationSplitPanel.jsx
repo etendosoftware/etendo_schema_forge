@@ -31,6 +31,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   Dialog,
   DialogContent,
@@ -208,12 +209,20 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
  * Scrollable table scaffold shared by both panels: a sticky-styled header row
  * (the per-panel columns are passed as `headCells`) and the skeleton/empty/data
  * body produced by {@link renderRows}.
+ *
+ * `table-fixed` is load-bearing, not cosmetic. Both panels declare a fixed width on every column
+ * except the free-text one (Descripción / Información), and rely on `truncate` to clip it. Under
+ * the default auto layout a table grows to fit its widest cell, so one long statement description
+ * ("TRANSFERENCIA INMEDIATA A FAVOR DE … CONCEPTO Factura Nº …") stretched the table past the
+ * panel and pushed Progreso and Importe out of view behind a horizontal scrollbar — the exact QA
+ * report on ETP-4921. With a fixed layout the declared widths win, the free column absorbs
+ * whatever is left, and `truncate` finally has a bound to ellipsise against.
  */
 function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   const ui = useUI();
   return (
     <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
-      <Table data-testid="Table__d0f4d5">
+      <Table className="table-fixed" data-testid="Table__d0f4d5">
         <TableHeader data-testid="TableHeader__d0f4d5">
           <TableRow
             className="h-11 border-b border-[hsl(var(--border-subtle))] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[hsl(var(--foreground))]"
@@ -403,10 +412,15 @@ function StatementLinesPanel({
         <TableCell
           className={cn('h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]', cellBg)}
           data-testid="TableCell__d0f4d5">
-          <div className="flex flex-col items-start gap-0.5">
-            <span className={cn('w-full truncate leading-5', selected ? 'font-semibold' : 'font-normal')}>
-              {line.description || line.partnerName || line.referenceNo || '—'}
-            </span>
+          <div className="flex w-full min-w-0 flex-col items-start gap-0.5">
+            {/* Statement descriptions routinely run past the column ("TRANSFERENCIA INMEDIATA A
+                FAVOR DE … CONCEPTO Factura Nº …"). They are clipped with an ellipsis and the full
+                text is offered on hover, so the columns that carry the decision — Progreso and
+                Importe — keep their space instead of being pushed off the panel (ETP-4921 QA). */}
+            <TruncatedText
+              text={line.description || line.partnerName || line.referenceNo || '—'}
+              className={cn('leading-5', selected ? 'font-semibold' : 'font-normal')}
+              data-testid={`recon-line-desc-${line.id}`} />
             <div className="flex items-center gap-1">
               <StatusBadge kind={badgeKind} data-testid="StatusBadge__d0f4d5" />
               {line.partial ? (

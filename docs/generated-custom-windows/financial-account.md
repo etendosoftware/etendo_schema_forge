@@ -1423,6 +1423,41 @@ panels is always a filter result (status + date range + search), so there is not
 That is the opposite of the Movimientos tab, whose own empty copy is paired with a
 "+ Nuevo movimiento" hint — which is why these two tabs deliberately do not share a key.
 
+## Conciliación column layout (ETP-4921 QA)
+
+> QA: *"la vista de conciliación se ve cortada; si cambio el zoom se ve bien"*.
+
+Both reconciliation panels declare a width on every column **except** the free-text one
+(Descripción on the left, Información on the right) and rely on `truncate` to clip it. That never
+worked, because the shared `Table` used the browser's default **auto** layout: an auto-layout table
+grows to fit its widest cell, so a real statement description — `TRANSFERENCIA INMEDIATA A FAVOR DE
+… CONCEPTO Factura Nº : 10001754 1000896` — stretched the table past the panel and pushed
+**Progreso** and **Importe** behind a horizontal scrollbar. Zooming out only hid the symptom by
+making the same text fit.
+
+Two changes, both in `ReconciliationSplitPanel.jsx`:
+
+1. **`PanelTable` renders the table `table-fixed`.** Under a fixed layout the declared widths win
+   and the free column absorbs whatever is left, so Progreso (90px) and Importe (139px) can no
+   longer be pushed out of view. This is what makes them "always visible" — a layout fix, not a
+   sticky-column workaround, so there is no horizontal scroll left to pin anything against.
+   It applies to both panels, which have the same shape and the same latent bug.
+2. **The description is rendered through `TruncatedText`** (`components/ui/truncated-text.jsx`,
+   new): one line, ellipsised, with the full string in a tooltip on hover.
+
+`TruncatedText` measures before it speaks: Radix asks to open on hover/focus and the component only
+honours the request when `scrollWidth > clientWidth + 1`. Repeating a short label the reader can
+already see in full is noise, and the 1px slack absorbs the sub-pixel rounding that otherwise
+reports an exactly-fitting text as overflowing. It carries its own `TooltipProvider` (same
+reasoning as `CopyLinkButton`) so it works outside this window, and its tooltip is portalled —
+a hand-rolled absolute one, like `ProgressCell`'s, would be clipped by the very `overflow-hidden`
+that produces the ellipsis.
+
+Tests: `components/ui/__tests__/truncated-text.vitest.jsx` (behaviour, with the layout metrics
+jsdom cannot produce stubbed in), `truncated-text.test.js` (structure), and the
+`column layout — Progreso and Importe stay in view` block in
+`contract-ui/__tests__/ReconciliationSplitPanel.vitest.jsx`.
+
 ## Column sorting (ETP-4921)
 
 Two different mechanisms, because the LIST and the DETAIL tabs are two different kinds of grid.
