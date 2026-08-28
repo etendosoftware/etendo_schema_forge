@@ -358,7 +358,9 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        fetchWidget(apiBase, token, 'kpis', range),
+        // ETP-5011: the Financial Summary widget is always a calendar-year figure
+        // and does not follow the date-range selector, so `kpis` is fetched without `range`.
+        fetchWidget(apiBase, token, 'kpis', null),
         fetchWidget(apiBase, token, 'trends', range),
         fetchWidget(apiBase, token, 'pending-tasks', range),
         fetchWidget(apiBase, token, 'activity', range),

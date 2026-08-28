@@ -19261,6 +19261,7 @@
     "financialSummaryEmptySubtitle": "Registra ventas y compras para ver ingresos, gastos y beneficio",
     "newInvoice": "Nueva factura",
     "financialSummaryPositive": "Tus ingresos superaron a los gastos este año",
+    "financialSummaryNegative": "Tus gastos superaron a los ingresos este año",
     "financialSummaryIncome": "Ingresos",
     "financialSummaryExpenses": "Gastos",
     "financialSummaryProfit": "Beneficio",
