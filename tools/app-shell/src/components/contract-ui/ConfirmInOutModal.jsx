@@ -42,6 +42,7 @@ export default function ConfirmInOutModal({
   showPriceListPicker = false,
   isSOTrx = true,
   hasLinkedOrder = false,
+  defaultPriceListId = undefined,
   onConfirmed,
   onClose,
 }) {
@@ -58,6 +59,7 @@ export default function ConfirmInOutModal({
     isSOTrx,
     base,
     headers,
+    defaultPriceListId,
   });
   const canConfirm = !priceListRequired || !!priceListId;
 

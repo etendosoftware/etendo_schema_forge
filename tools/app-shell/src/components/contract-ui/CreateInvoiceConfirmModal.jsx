@@ -11,6 +11,10 @@ import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
  *
  * Props:
  *   data             — header record data (documentNo, businessPartner$_identifier, etc.)
+ *                      ETP-5052: also reads `resolvedPriceListId` when present (currently
+ *                      populated only for goods-shipment, see
+ *                      GoodsShipmentHeaderHandler#enrichResolvedPriceList) to preselect the
+ *                      correct tariff in the picker below instead of the system default.
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
@@ -49,6 +53,11 @@ export default function CreateInvoiceConfirmModal({
     isSOTrx,
     base,
     headers: priceListHeaders,
+    // ETP-5052 — preselect the price list the backend already resolved (linked order,
+    // else the Business Partner's own tariff) instead of always falling back to the
+    // system-default price list. Same fix as the pre-completion popup (ConfirmInOutModal),
+    // applied here to the post-completion "Crear factura" button, which shares this hook.
+    defaultPriceListId: data?.resolvedPriceListId,
   });
 
   const documentNo  = data?.documentNo || '';

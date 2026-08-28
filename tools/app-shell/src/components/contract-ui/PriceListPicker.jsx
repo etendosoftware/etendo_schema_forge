@@ -30,8 +30,14 @@ export const toPriceListSelectValue = (id) => id || EMPTY_SENTINEL;
  *   than recomputed here so this hook has a single job (fetch/filter/default)
  *   and no opinion on that derivation.
  * @param headers — fetch headers object (must carry `Authorization`).
+ * @param defaultPriceListId — ETP-5052: the price list resolved server-side (from the
+ *   linked sales order, or the Business Partner's own tariff — see
+ *   `GoodsShipmentHeaderHandler#enrichResolvedPriceList`), preferred over the system
+ *   `default` flag when present in the active/matching list. Falls back cleanly to the
+ *   previous behavior when absent, inactive, or of the wrong trade direction (not in
+ *   `matches`).
  */
-export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
+export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, defaultPriceListId }) {
   const [priceLists, setPriceLists] = useState([]);
   const [priceListId, setPriceListId] = useState('');
   const [loading, setLoading] = useState(!!enabled);
@@ -49,7 +55,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
         const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
         if (cancelled) return;
         setPriceLists(matches);
-        const preferred = matches.find(p => p.default) || matches[0];
+        const preferred = matches.find(p => p.id === defaultPriceListId) || matches.find(p => p.default) || matches[0];
         if (preferred) setPriceListId(preferred.id);
       } catch { /* silent */ } finally {
         if (!cancelled) setLoading(false);
@@ -57,7 +63,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- headers is keyed by authHeader below
-  }, [enabled, isSOTrx, base, authHeader]);
+  }, [enabled, isSOTrx, base, authHeader, defaultPriceListId]);
 
   return { priceLists, priceListId, setPriceListId, loading };
 }
