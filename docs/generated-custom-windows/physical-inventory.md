@@ -144,9 +144,9 @@ render in the secondary/collapsed area instead of the main visible form. Fixed b
 
 ## Design changes — ETP-5052
 
-- Header `warehouse` now locks once the count session has at least one line, and unlocks again once the last line is removed: `decisions.json` → `entities.header.fields.warehouse.readOnlyLogicJs: "!!record.hasLines"` (with `readOnlyLogic: null` explicit, per the documented convention for combining both keys).
+- Header `warehouse` now locks once the count session has at least one line, and unlocks again once the last line is removed — **OR'd with** the pre-existing Processed-based lock, not replacing it: `decisions.json` → `entities.header.fields.warehouse.readOnlyLogicJs: "!!record.hasLines || record.processed === true"` (with `readOnlyLogic: null` explicit, per the documented convention for combining both keys). The published `generate-contract.js` always prefers an explicit `readOnlyLogicJs` over the AD-translated raw logic unconditionally, so a bare `"!!record.hasLines"` would have silently dropped the `READONLY_Processed_Header` protection for this field once processed (caught in review) — the OR keeps both conditions honored.
 - Relies on the generic `record.hasLines` capability added to the header-form data path (`DetailView.jsx` / `detailViewHelpers.jsx`'s `buildHeaderFormData()`) — a live, display-only boolean (`hook.children.length > 0`) merged into the record object passed to header `<Form>` calls only. Full mechanism and the `readOnlyLogicJs` convention: see `docs/decisions-reference.md`, `readOnlyLogicJs` row (ETP-5052 note).
-- Regenerated via `make regen ONLY=physical-inventory`; confirmed in `contract.json` (`warehouse.readOnlyLogic.js: "!!record.hasLines"`) and in the generated `InventoryForm.jsx` (`readOnlyLogic: (record) => !!record.hasLines`). `npx sf-validate-pipeline --scope=physical-inventory` reports 0 violations.
+- Regenerated via `make regen ONLY=physical-inventory`; confirmed in `contract.json` (`warehouse.readOnlyLogic.js: "!!record.hasLines || record.processed === true"`) and in the generated `InventoryForm.jsx` (`readOnlyLogic: (record) => !!record.hasLines || record.processed === true`). `npx sf-validate-pipeline --scope=physical-inventory` reports 0 violations.
 
 ## Theme roles
 

@@ -78,7 +78,7 @@
           "gridOrder": 3,
           "searchable": true,
           "readOnlyLogic": null,
-          "readOnlyLogicJs": "!!record.hasLines"
+          "readOnlyLogicJs": "!!record.hasLines || record.processed === true"
         },
         "movementDate": {
           "grid": true,
@@ -268,7 +268,7 @@
       "type": "readOnlyLogic",
       "entity": "inventory",
       "decision": "Keep",
-      "description": "Header fields (warehouse, movementDate, description) become read-only when document is processed (Processed=Y).",
+      "description": "Header fields (movementDate, description) become read-only when document is processed (Processed=Y). warehouse additionally locks once the record has at least one count line (record.hasLines), OR'd with the same Processed=Y condition (ETP-5052) — see readOnlyLogicJs on warehouse.",
       "impactIfOmitted": "Users could edit fields on confirmed inventory counts, breaking data integrity."
     },
     "READONLY_Processed_Lines": {
