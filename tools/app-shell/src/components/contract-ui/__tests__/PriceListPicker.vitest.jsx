@@ -317,6 +317,73 @@ describe('usePriceListPicker', () => {
     await act(async () => {});
     expect(result.current.priceListId).toBe('pl-other');
   });
+
+  // ── ETP-4942 (round 3): allowGenericFallback ─────────────────────────────────
+  // ConfirmInOutModal (no linked order) and CreateInvoiceConfirmModal pass
+  // allowGenericFallback: false so a truly mandatory tariff field is never
+  // silently satisfied by an arbitrary price list (system `default` flag or
+  // simply the first entry) — the user must choose consciously instead.
+
+  it('allowGenericFallback=false with no defaultPriceListId match leaves priceListId empty (no generic fallback applied)', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-b', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        allowGenericFallback: false,
+      }));
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.priceListId).toBe('');
+  });
+
+  it('allowGenericFallback=true (or omitted, the default) preserves the previous default-then-first-match behavior', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-a', default: false }),
+      makePriceList({ id: 'pl-b', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        allowGenericFallback: true,
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-b');
+    });
+  });
+
+  it('a matching defaultPriceListId always wins first, regardless of allowGenericFallback=true', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-resolved', default: false }),
+      makePriceList({ id: 'pl-system-default', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        defaultPriceListId: 'pl-resolved', allowGenericFallback: true,
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-resolved');
+    });
+  });
+
+  it('a matching defaultPriceListId always wins first, regardless of allowGenericFallback=false', async () => {
+    mockPriceListFetch([
+      makePriceList({ id: 'pl-resolved', default: false }),
+      makePriceList({ id: 'pl-system-default', default: true }),
+    ]);
+    const { result } = renderHook(() =>
+      usePriceListPicker({
+        enabled: true, isSOTrx: true, base: BASE, headers: HEADERS,
+        defaultPriceListId: 'pl-resolved', allowGenericFallback: false,
+      }));
+    await waitFor(() => {
+      expect(result.current.priceListId).toBe('pl-resolved');
+    });
+  });
 });
 
 // ── resolvePriceListValue / toPriceListSelectValue (sentinel helpers) ─────────
