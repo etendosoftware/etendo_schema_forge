@@ -110,6 +110,12 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 // because a dirty HEADER is not endangered by changing line, and prompting about it would train
 // users to click through the dialog without reading it.
 import { requestTransition } from '@/lib/unsavedChanges.js';
+// ETP-5073 / DOC-04: the lines sidebar reuses the SAME conflict dialog the header uses, so a
+// concurrent edit is reported identically wherever it happens. `rememberRecordVersion` is called
+// explicitly on the refresh read below because that read does not go through useEntity's
+// normalizeRecord, which is what normally records the optimistic-locking token.
+import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
+import { rememberRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
 import {
   CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
@@ -2511,6 +2517,136 @@ export function DetailView({
   const hiddenEntryDefaults = addLineFields.hidden ?? [];
   const editableChildFields = allEntryFields.filter(f => f.type === 'number' || f.type === 'amount');
 
+  /**
+   * The lines sidebar's detail URL for the line currently open.
+   *
+   * Extracted because three places need the identical URL — the save, the post-save refresh and
+   * the conflict refresh — and they must not drift: a mismatch would refresh a different record
+   * than the one just written.
+   */
+  const buildSelectedLineUrl = useCallback(() => (
+    api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine?.id)
+      || `${apiBaseUrl}/${detailEntity}/${selectedLine?.id}`
+  ), [api, detailEntity, apiBaseUrl, selectedLine?.id]);
+
+  /**
+   * ETP-5073 / DOC-04: re-read the open line and drop its pending edits, after the user chose that
+   * over cancelling in the conflict dialog.
+   *
+   * Deliberately not a merge, for the same reasons as the header's equivalent: it would overwrite
+   * the other person's value on any field both had edited, and it would inject values without
+   * running the callouts a real edit runs.
+   */
+  const discardLineChangesAndReload = useCallback(async () => {
+    if (!selectedLine?.id) return;
+    try {
+      const res = await apiFetch(buildSelectedLineUrl(), { token, baseUrl: '' });
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      const freshLine = json?.response?.data?.[0] ?? json;
+      if (freshLine?.id) {
+        // This read bypasses useEntity's normalizeRecord, so the optimistic-locking token is
+        // recorded by hand. Without it the store would keep the version the conflict just
+        // rejected and the very next save would fail again — a refresh that does not let the
+        // user save is not a refresh.
+        rememberRecordVersion(freshLine);
+        hook.handleUpdateChild(selectedLine.id, freshLine);
+        setSelectedLine(prev => ({ ...prev, ...freshLine }));
+      }
+      setLineEdits(null);
+      setLineEditColumns({});
+      dismissSaveConflict();
+      toast.info(ui('saveConflictReloaded'));
+    } catch {
+      toast.error(ui('saveConflictReloadFailed'));
+    }
+  }, [selectedLine, buildSelectedLineUrl, apiFetch, token, hook, ui]);
+
+  /**
+   * ETP-5073 / DOC-04: raise the shared conflict dialog when the server refused this write because
+   * the record moved on, and report whether it was raised.
+   *
+   * Returns false for every other failure so the caller falls through to its normal error toast,
+   * and false when no dialog host is mounted — silence is the one outcome this ticket removes.
+   *
+   * Keyed off the `error` discriminator, never the 409 status alone: a duplicate key is also a 409
+   * and its remedy is the opposite (change your data, not your baseline).
+   */
+  const raiseLineSaveConflict = useCallback(async (res) => {
+    let staleConflict = false;
+    try {
+      const body = await res.clone().json();
+      staleConflict = body?.error === 'stale_record';
+    } catch {
+      return false;
+    }
+    if (!staleConflict) return false;
+    return openSaveConflict({ onRefresh: discardLineChangesAndReload });
+  }, [discardLineChangesAndReload]);
+
+  /**
+   * Saves the line open in the sidebar.
+   *
+   * Extracted from an inline `onClick` (ETP-5073). It had to become a named callback so its error
+   * branch could recognise the concurrency conflict and raise the shared dialog; as an inline
+   * handler it only had a generic toast, which is why a stale line first showed the bare string
+   * `OBJSON_StaleDate` and then untranslated prose. The success path is unchanged.
+   */
+  const handleSaveLine = useCallback(async () => {
+    // Guarded because buildSelectedLineUrl uses optional chaining: without this an absent
+    // selectedLine would build `.../undefined` and fire a real request, which is worse than the
+    // TypeError the inline handler used to throw — a silent bogus write beats no diagnosis only
+    // for the code, never for the user. The button is only rendered with a line open, so this is
+    // defence, not an expected path.
+    if (!selectedLine?.id) return;
+    setSavingLine(true);
+    try {
+      const childUrl = buildSelectedLineUrl();
+      // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
+      // Merge with selectedLine so listPrice/discount are always available.
+      const patchData = { ...(selectedLine ?? {}), ...lineEdits };
+      prepareLineForPost(patchData);
+      const patchEdits = { ...lineEdits };
+      if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
+      const fieldValues = {};
+      normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
+      const res = await apiFetch(childUrl, {
+        method: 'PATCH',
+        body: JSON.stringify(fieldValues),
+        token, baseUrl: '',
+      });
+      if (res.ok) {
+        setLineEdits(null);
+        setLineEditColumns({});
+        toast.success('Record saved');
+        // Always refresh from persisted record — backend may recompute
+        // derived fields (lineNetAmount, discounts) on save.
+        try {
+          const freshRes = await apiFetch(childUrl, { token, baseUrl: '' });
+          if (freshRes.ok) {
+            const freshJson = await freshRes.json();
+            const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
+            if (freshLine?.id) {
+              hook.handleUpdateChild(selectedLine.id, freshLine);
+              setSelectedLine(prev => ({ ...prev, ...freshLine }));
+            }
+          } else {
+            hook.handleUpdateChild(selectedLine.id, fieldValues);
+            setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+          }
+        } catch (_) {
+          hook.handleUpdateChild(selectedLine.id, fieldValues);
+          setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+        }
+      } else if (!(await raiseLineSaveConflict(res))) {
+        toast.error(await extractErrorMessage(res));
+      }
+    } catch (err) {
+      toast.error(err.message || 'Network error');
+    } finally { setSavingLine(false); }
+  }, [selectedLine, buildSelectedLineUrl, lineEdits, allEntryFields, apiFetch, token, hook,
+    extractErrorMessage, raiseLineSaveConflict]);
+
   const [panelCounts, setPanelCounts] = useState({});
   useEffect(() => { setPanelCounts({}); }, [parentRecordId]);
 
@@ -3643,54 +3779,7 @@ export function DetailView({
                                         <>
                                           <button
                                             disabled={savingLine}
-                                            onClick={async () => {
-                                              setSavingLine(true);
-                                              try {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                                // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
-                                                // Merge with selectedLine so listPrice/discount are always available.
-                                                const patchData = { ...(selectedLine ?? {}), ...lineEdits };
-                                                prepareLineForPost(patchData);
-                                                const patchEdits = { ...lineEdits };
-                                                if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
-                                                const fieldValues = {};
-                                                normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
-                                                const res = await apiFetch(childUrl, {
-                                                  method: 'PATCH',
-                                                  body: JSON.stringify(fieldValues),
-                                                  token, baseUrl: '',
-                                                });
-                                                if (res.ok) {
-                                                  setLineEdits(null);
-                                                  setLineEditColumns({});
-                                                  toast.success('Record saved');
-                                                  // Always refresh from persisted record — backend may recompute
-                                                  // derived fields (lineNetAmount, discounts) on save.
-                                                  try {
-                                                    const freshRes = await apiFetch(childUrl, { token, baseUrl: '' });
-                                                    if (freshRes.ok) {
-                                                      const freshJson = await freshRes.json();
-                                                      const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
-                                                      if (freshLine?.id) {
-                                                        hook.handleUpdateChild(selectedLine.id, freshLine);
-                                                        setSelectedLine(prev => ({ ...prev, ...freshLine }));
-                                                      }
-                                                    } else {
-                                                      hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                                      setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                                    }
-                                                  } catch (_) {
-                                                    hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                                    setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                                  }
-                                                } else {
-                                                  toast.error(await extractErrorMessage(res));
-                                                }
-                                              } catch (err) {
-                                                toast.error(err.message || 'Network error');
-                                              } finally { setSavingLine(false); }
-                                            }}
+                                            onClick={handleSaveLine}
                                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                           >
                                             {getSaveButtonLabel(savingLine, ui)}
