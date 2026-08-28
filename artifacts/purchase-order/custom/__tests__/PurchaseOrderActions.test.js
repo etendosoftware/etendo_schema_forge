@@ -332,12 +332,16 @@ describe('PurchaseOrderActions', () => {
   // automatically once the clamp is dropped for `!== 0` comparisons.
   describe('needsInvoice/needsReceipt pending computation (ETP-4567 bug B)', () => {
     function extractComputationBlocks(source) {
-      const re = /const qtyOrdered[\s\S]*?const totalPending\s*=\s*Math\.max\(0, totalOrder - totalInvoiced\);/g;
+      // ETP-4567: post-fix source drops the Math.max(0, ...) clamp entirely —
+      // qtyPending/totalPending are now plain (possibly negative) differences.
+      const re = /const qtyOrdered[\s\S]*?const totalPending\s*=\s*totalOrder - totalInvoiced;/g;
       return [...source.matchAll(re)].map(m => m[0]);
     }
     function extractNeedsBlocks(source, needsVarName) {
+      // ETP-4567: post-fix source compares against 0 with !== instead of the
+      // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending > 0 && !invoiceDraft;`,
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
