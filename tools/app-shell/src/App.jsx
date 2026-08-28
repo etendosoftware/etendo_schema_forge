@@ -12,6 +12,7 @@ import { createMockFetch } from './lib/mockFetch.js';
 import { useLocaleState } from './i18n/useLocaleState.js';
 import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from './lib/unsavedChanges.js';
 import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
+import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
@@ -315,6 +316,11 @@ export default function App() {
           onConfirm={() => applyLocaleAndReload(pendingLocale)}
           onCancel={() => setPendingLocale(null)}
           data-testid="LocaleChangeConfirmDialog__ecaf3f" />
+        {/* ETP-5073 / DOC-08 — mounted once: the navigation gate it subscribes to is a
+            module-level singleton, so a second host would fight this one for the same pending
+            navigation. Sits here, beside the locale dialog, because both answer the same
+            question about the same dirty registry. */}
+        <UnsavedChangesNavigationDialog data-testid="UnsavedChangesNavigationDialog__ecaf3f" />
       </AppShellRuntime>
     </ObservabilityProvider>
   );

@@ -72,6 +72,62 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 | `token` | a plain module was handed a specific token by its caller |
 | `credentials` | overrides the default `'include'` |
 
+## Updates carry a concurrency token (ETP-5073)
+
+`apiFetch` attaches an `updated` value to every `PATCH`/`PUT` whose target record this client has
+read. **You do not pass it, and you must not hand-roll it.**
+
+### Why the helper does this and not the call site
+
+The backend refuses an update that does not carry the `updated` value of the record as it was
+read. That is not a new rule invented here — it is how Etendo's core has always implemented
+optimistic concurrency (`JsonToDataConverter.setData` compares the value and raises
+`OBStaleObjectException`). Our layer used to strip `updated` from every write, so the check never
+ran for any entity: two users editing the same document both got a success and the second silently
+erased the first.
+
+Threading the token through the ~41 update call sites by hand would put the same failure one
+forgotten argument away, and forgetting is invisible at the call site — it surfaces as a 400 in
+whatever panel nobody was looking at. So the token is remembered centrally instead:
+
+| Piece | Where | Does what |
+|---|---|---|
+| The store | `app-shell-core/lib/recordVersions.js` | `updated` per record id, LRU-bounded |
+| Harvest (reads) | `useEntity.js` → `normalizeRecord` | the one place every record and list row is parsed |
+| Harvest (writes) | `apiFetch` | remembers what a successful write returned |
+| Injection | `apiFetch` → `withRecordVersion` | adds the token on the way out |
+
+Keyed by **record id**, not URL: the same row is read through the list endpoint and written
+through the detail endpoint, and inline grid editing depends on those resolving to one entry.
+
+### What happens when the token is missing
+
+Nothing is injected, the server answers **400 `missing_updated`**, and in dev a console warning
+names the call site. That is the intended behaviour, not a gap: a caller that cannot produce
+`updated` has not read the record it is about to overwrite. The fix is to read the record before
+writing it — never to fabricate a timestamp, which cannot work (any value other than the stored
+one is rejected as a conflict).
+
+Two situations produce this, and only one is a defect:
+
+- **a panel that patches a record it never read** — the defect; give it a read;
+- **an endpoint that is not a NEO record** (an OAuth2 `PUT`, a fiscal-config `PUT`) — harmless.
+  The guard is the cache miss itself: an id we never saw has no entry, so an unrelated write is
+  never touched.
+
+### What happens on a conflict
+
+**409** with `error: "stale_record"`. Branch on that discriminator, **never on the status alone** —
+a duplicate-key rejection is also a 409 and its remedy is the opposite (change your data, not your
+baseline). `useEntity` handles this already: a non-dismissing toast offering *reload and keep my
+changes*, which re-reads the record and layers the user's own pending edits (`userChangedKeysRef`)
+back on top, then leaves the form dirty so they see the merged result before saving again.
+
+### If you set `updated` yourself
+
+An explicit value always wins over the remembered one. Reserve it for a caller that genuinely
+holds a token from elsewhere; a copy of the record you just read is what the store already has.
+
 ## 401 and logout
 
 A 401 that is not ignored calls the logout handler and throws `Unauthorized`. In the app that

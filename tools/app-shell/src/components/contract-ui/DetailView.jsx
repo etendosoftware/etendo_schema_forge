@@ -105,6 +105,11 @@ import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from
 import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
+// ETP-5073 / DOC-08: switching to another line while one is being edited used to discard the
+// edit silently. Scoped deliberately — `requestTransition` is told to look at `lineEdits` alone,
+// because a dirty HEADER is not endangered by changing line, and prompting about it would train
+// users to click through the dialog without reading it.
+import { requestTransition } from '@/lib/unsavedChanges.js';
 import {
   CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
@@ -1734,7 +1739,18 @@ export function DetailView({
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
   // ETP-5022: publish to the global registry so a language change (which reloads the page)
   // and F5 / tab close both warn before discarding these edits.
-  useUnsavedChangesGuard(isDirty);
+  // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
+  // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
+  // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
+  // is what stops the navigation.
+  useUnsavedChangesGuard(isDirty, () => hook.handleSave({ silent: true }));
+  // No saver is passed: the line's save lives in an inline handler in the lines sidebar, not in
+  // an extractable callback, so the prompt offers Discard and Cancel. The user can cancel, save
+  // the line, then switch. Offering Save here needs that handler extracted first — deliberately
+  // NOT done inside this P0 fix.
+  const guardLineSwitch = useCallback((openLine) => {
+    requestTransition(openLine, { isDirty: () => lineEdits != null });
+  }, [lineEdits]);
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -3310,7 +3326,7 @@ export function DetailView({
                                   linesLayout={linesLayout}
                                   labelOverrides={labelOverrides}
                                   isDocumentReadOnly={isDocumentReadOnly}
-                                  onRowClick={buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine)}
+                                  onRowClick={buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guardLineSwitch)}
                                   selectedRowId={selectedLine?.id}
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}

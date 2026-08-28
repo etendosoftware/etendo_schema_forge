@@ -23,6 +23,10 @@ import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+// ETP-5073 / DOC-04: the optimistic-locking token is remembered here (the one place every
+// record and every list row is parsed) and injected by apiFetch on the way out, so no call
+// site has to thread `updated` through by hand.
+import { rememberRecordVersion, forgetRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
@@ -315,8 +319,12 @@ function deriveRecordId(record, entityName) {
 function normalizeRecord(record, entityName) {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
     const id = deriveRecordId(record, entityName);
-    if (id == null || record.id === id) return record;
-    return { ...record, id };
+    const normalized = (id == null || record.id === id) ? record : { ...record, id };
+    // ETP-5073 / DOC-04: remembered under the DERIVED id, which is the one the update URL and
+    // the update body will carry — keying it under whatever the backend happened to name the
+    // primary key would make every injection lookup miss.
+    rememberRecordVersion(normalized);
+    return normalized;
 }
 
 function normalizeRows(rows, entityName) {
@@ -660,11 +668,12 @@ export function buildSavePayload({
     return payload;
 }
 
-export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError) {
+export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
     let backendFieldErrors = null;
+    let staleConflict = false;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
@@ -674,8 +683,28 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
             backendFieldErrors = {};
             for (const k of errFields) backendFieldErrors[k] = ui('fieldRequired');
         }
+        // ETP-5073 / DOC-04: somebody else saved this record between our read and this write.
+        // Keyed off the machine-readable discriminator, never the status alone — a duplicate-key
+        // rejection is also a 409 and its remedy is the opposite (change your data, not your
+        // baseline).
+        staleConflict = body?.error === 'stale_record';
     } catch {
         // ignore — fall through to the legacy extractor
+    }
+    if (staleConflict) {
+        // The whole point of the P0 fix is that this is never silent, so the message stays until
+        // the user acts on it: no auto-dismiss, and the reload is offered rather than performed,
+        // because discarding-and-remerging someone's in-progress edit without asking is the very
+        // data loss this ticket is about.
+        const msg = ui('saveConflictRecordChanged');
+        setSaveError(msg);
+        toast.error(msg, {
+            duration: Infinity,
+            ...(onStaleRecord
+                ? { action: { label: ui('saveConflictReload'), onClick: () => onStaleRecord() } }
+                : {}),
+        });
+        return;
     }
     if (backendFieldErrors) {
         setFieldErrors(backendFieldErrors);
@@ -1284,6 +1313,44 @@ export function useEntity(entity, childEntity, {
         syncRegisteredFields();
     }, [syncRegisteredFields]);
 
+    /**
+     * ETP-5073 / DOC-04: re-read the record after a concurrency conflict and layer the user's
+     * own pending edits back on top of the other person's saved values.
+     *
+     * Reapplies rather than discards: the user's work is the thing we are protecting, and the
+     * fresh read is only needed for the baseline. `userChangedKeysRef` is the exact set of keys
+     * they touched this session, so untouched fields take the other person's new values while
+     * their own edits survive.
+     *
+     * Deliberately does NOT save. The form stays dirty and the user presses Save again, so they
+     * get to see the merged result before it is written — a silent re-save would be the same
+     * blind overwrite from the other side.
+     */
+    const reloadAndReapply = useCallback(async () => {
+        if (!selected?.id) return;
+        const pending = {};
+        for (const key of userChangedKeysRef.current) {
+            if (editing && Object.prototype.hasOwnProperty.call(editing, key)) {
+                pending[key] = editing[key];
+            }
+        }
+        try {
+            const res = await apiFetch(`/${entity}/${selected.id}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const data = await res.json();
+            // normalizeRecord also refreshes the remembered `updated`, so the next Save carries
+            // the token this read just produced instead of the one the conflict rejected.
+            const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+            setSelected(fresh);
+            setEditing({ ...fresh, ...pending });
+            setSaveError(null);
+            setFieldErrors({});
+            toast.info(ui('saveConflictReloaded'));
+        } catch {
+            toast.error(ui('saveConflictReloadFailed'));
+        }
+    }, [selected, editing, entity, apiFetch, ui]);
+
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
         setIsSaving(true);
@@ -1387,7 +1454,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, reloadAndReapply);
                 return null;
             }
         } catch (err) {
@@ -1398,7 +1465,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, reloadAndReapply]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1408,6 +1475,10 @@ export function useEntity(entity, childEntity, {
         try {
             const res = await apiFetch(`/${entity}/${selected.id}`, { method: 'DELETE' });
             if (res.ok) {
+                // ETP-5073: drop the remembered version, so an id reused by a later create
+                // (an import replaying a fixed key, a fixture) cannot inherit a token that
+                // was read for a different record.
+                forgetRecordVersion(selected.id);
                 setSelected(null);
                 setEditing(null);
                 setChildren([]);

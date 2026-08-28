@@ -5,6 +5,13 @@ import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+// ETP-5073 / DOC-09 + DOC-10: the dirty-state gate reads the SAME registry the beforeunload
+// guard and the locale switcher read. Gating HERE rather than in each window's topbar is what
+// makes one fix cover all of them: every window that offers cloning renders this very component
+// (sales-invoice, purchase-order, goods-shipment, goods-receipt, ReturnWindowShell, the grid's
+// row action), and each one had its own enable/disable decision — which is precisely why Clone
+// was reachable over a dirty form.
+import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -106,6 +113,10 @@ export default function CloneOrderModal({
   const n = items.length;
 
   const [phase, setPhase]           = useState('confirm'); // 'confirm' | 'cloning' | 'done'
+  // Snapshotted at mount (i.e. when the modal opens) rather than read on every render: while this
+  // modal is up the form behind it cannot be edited or saved, so the answer cannot legitimately
+  // change, and a stable value keeps the banner from flickering on unrelated re-renders.
+  const [blockedByUnsaved] = useState(() => hasUnsavedChanges());
   const [error, setError]           = useState(null);
   const [clonedRecords, setCloned]  = useState([]);
   const [hoveredId, setHoveredId]   = useState(null);
@@ -244,11 +255,19 @@ export default function CloneOrderModal({
               ))}
             </div>
             <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Info banner */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
-                <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
-                <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
-              </div>
+              {/* Info banner — or the unsaved-changes refusal, which replaces it: showing both
+                  would bury the one thing the user has to act on. */}
+              {blockedByUnsaved ? (
+                <div data-testid="clone-blocked-unsaved" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-warning-bg)', borderRadius: 8, border: '1px solid var(--status-warning-border)' }}>
+                  <span style={{ color: 'var(--status-warning-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+                  <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.5 }}>{ui('cloneBlockedUnsavedChanges')}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
+                  <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+                  <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
+                </div>
+              )}
 
               {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
@@ -257,8 +276,9 @@ export default function CloneOrderModal({
                 type="button"
                 data-testid="action-clone-record"
                 onClick={handleClone}
-                disabled={phase === 'cloning'}
-                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: phase === 'cloning' ? 0.6 : 1, cursor: phase === 'cloning' ? 'not-allowed' : 'pointer' }}
+                disabled={phase === 'cloning' || blockedByUnsaved}
+                title={blockedByUnsaved ? ui('cloneBlockedUnsavedChanges') : undefined}
+                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: (phase === 'cloning' || blockedByUnsaved) ? 0.6 : 1, cursor: (phase === 'cloning' || blockedByUnsaved) ? 'not-allowed' : 'pointer' }}
               >
                 {phase === 'cloning' ? <Spinner data-testid="Spinner__66b049" /> : <CloneIcon size={15} data-testid="CloneIcon__66b049" />}
                 {phase === 'cloning' ? ui(processingKey) : confirmTitle}

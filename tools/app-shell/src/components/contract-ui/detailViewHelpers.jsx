@@ -572,11 +572,24 @@ export function renderDetailBulkActionBar({
   );
 }
 
-export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
+/**
+ * @param {Function} [guard] ETP-5073 / DOC-08: wraps the switch so an in-progress line edit is
+ *   not discarded silently. Receives the switch as a callback and decides when (or whether) to
+ *   run it. Optional: without it the switch happens immediately, which is the pre-ticket
+ *   behaviour and keeps every existing caller working unchanged.
+ */
+export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guard) {
   return DetailForm && linesLayout !== 'inlineEditable' ? (row) => {
-    const line = {...row};
-    roundAmounts(line);
-    setSelectedLine(line);
+    const openLine = () => {
+      const line = {...row};
+      roundAmounts(line);
+      setSelectedLine(line);
+    };
+    if (guard) {
+      guard(openLine);
+    } else {
+      openLine();
+    }
   } : undefined;
 }
 
