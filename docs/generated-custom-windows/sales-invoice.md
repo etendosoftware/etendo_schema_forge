@@ -969,6 +969,18 @@ list. Fixed by hardcoding the same `listViewOptions={{ hidePrint: true }}` prop 
 this file's own `<ListView>` call, matching the existing pattern already used there for
 `dateFilterKey` and other generator-derived list props.
 
+**ETP-4728 update — list-level suppression removed.** QA flagged the resulting
+inconsistency: `sales-order` shows a bulk "Print (N)" button when rows are selected, this
+window did not, with no per-status reason for the difference (`sales-order` had already
+dropped its own equivalent `hidePrint` in ETP-4729 — "print unification onto the generic
+icon"). The `"listViewOptions": { "hidePrint": true }` key was removed from `decisions.json`
+and the matching `listViewOptions={{ hidePrint: true }}` prop was removed from this window's
+custom `index.jsx`, so the list-view Print (bulk and toolbar) is now unconditionally visible,
+matching `sales-order`/`sales-quotation`/`purchase-order`. Only the detail-view `hidePrintWhen`
+gate above still applies. A regression guard in
+`tools/app-shell/src/windows/custom/sales-invoice/__tests__/index.test.js` asserts `hidePrint`
+never reappears in this window's custom `index.jsx`.
+
 ## Semantic visual states
 
 The pending-payment control uses the warning background, border, and foreground

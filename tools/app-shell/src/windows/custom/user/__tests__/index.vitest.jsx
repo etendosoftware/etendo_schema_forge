@@ -39,6 +39,7 @@ vi.mock('@/i18n', () => ({
   // from the rejection's domain message vs. the `roleAssignmentSaveFailed` i18n fallback
   // key — both otherwise collapse to the same bare key under `(key) => key`.
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   // The real (unmocked) `DocumentStatusPill` — rendered by `PendingInvitationPill` —
   // also imports `useLocale` from `@/i18n`; stub it so that import doesn't crash.
   // Its own `label` is always explicit in `PendingInvitationPill`, so `dictionary`
@@ -779,7 +780,7 @@ describe('UserWindow — "Resend invitation" button (ETP-4999 — moved from top
 
     fireEvent.click(screen.getByTestId('ResendInvitationButton'));
 
-    await waitFor(() => expect(resendInvitation).toHaveBeenCalledWith('user-1'));
+    await waitFor(() => expect(resendInvitation).toHaveBeenCalledWith('user-1', 'es_ES'));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('resendInvitationSuccessToast'));
     expect(onRefresh).toHaveBeenCalled();
   });
