@@ -276,6 +276,8 @@ function mapPendingAmounts(handlerData) {
   // Handler returns data as object (not array) or as first element of array
   const obj = Array.isArray(handlerData) ? handlerData[0] : handlerData;
   if (!obj) return null;
+  // ETP-5012: toCollect/toPay are TOTAL pending balances (any due date), so
+  // their default drill-down is 'pending', not the now-stricter 'overdue'.
   return {
     toCollect: {
       count: obj.toCollect?.count ?? 0,
@@ -283,7 +285,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toCollect?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'sales-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
     toPay: {
@@ -292,7 +294,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toPay?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'purchase-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
   };
