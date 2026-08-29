@@ -3,6 +3,14 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
+// ETP-5022 — the hook gets its request function from `useApiFetch`, which reads the session
+// with the core's `useAuthOptional`. Mocking only `@/auth/AuthContext.jsx` no longer reaches
+// it, so the core module is mocked too (spread from the original, since useApiFetch also
+// imports createApiFetch and getAmbientToken from there).
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
 
 import { useBankStatementLines } from '../useBankStatementLines.js';
 

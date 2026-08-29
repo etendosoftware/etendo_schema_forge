@@ -1,10 +1,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useStatementActions } from '../useStatementActions.js';
+
+// ETP-5022: useStatementActions now goes through useApiFetch, which reads the
+// token from the real core AuthProvider (or falls back to the ambient session)
+// rather than from a mocked `useAuth`. A mocked `@/auth/AuthContext.jsx` never
+// crosses the `useApiFetch` shim (it imports auth via the core package's own
+// relative path, which the `@/auth` alias does not intercept), so a real
+// AuthProvider seeded with a token is required instead.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', { value: { pathname }, writable: true });
@@ -20,7 +27,7 @@ describe('useStatementActions', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('returns the initial idle state', () => {
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
     expect(result.current.busy).toBe(false);
     expect(result.current.error).toBeNull();
     expect(typeof result.current.processStatement).toBe('function');
@@ -30,7 +37,7 @@ describe('useStatementActions', () => {
 
   it('processStatement POSTs ?action=process with the id', async () => {
     globalThis.fetch.mockResolvedValue(okJson({ id: 'st-1', processed: true }));
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
 
     let res;
     await act(async () => { res = await result.current.processStatement('st-1'); });
@@ -45,7 +52,7 @@ describe('useStatementActions', () => {
 
   it('updateStatement POSTs ?action=update with the full header + lines (process defaults to false)', async () => {
     globalThis.fetch.mockResolvedValue(okJson({ id: 'st-2', lineCount: 2 }));
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
 
     const payload = {
       id: 'st-2',
@@ -65,7 +72,7 @@ describe('useStatementActions', () => {
 
   it('deleteStatement POSTs ?action=delete with the id', async () => {
     globalThis.fetch.mockResolvedValue(okJson({ id: 'st-3' }));
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
 
     await act(async () => { await result.current.deleteStatement('st-3'); });
 
@@ -77,7 +84,7 @@ describe('useStatementActions', () => {
   it('flips busy during a call', async () => {
     let resolve;
     globalThis.fetch.mockReturnValue(new Promise((r) => { resolve = r; }));
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
 
     let promise;
     act(() => { promise = result.current.processStatement('st-1'); });
@@ -96,7 +103,7 @@ describe('useStatementActions', () => {
       status: 400,
       json: async () => ({ error: { message: 'Only draft (unprocessed) statements can be modified', status: 400 } }),
     });
-    const { result } = renderHook(() => useStatementActions());
+    const { result } = renderHook(() => useStatementActions(), { wrapper });
 
     await act(async () => {
       await expect(result.current.processStatement('st-1'))

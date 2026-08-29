@@ -1,7 +1,23 @@
 import { renderHook, waitFor } from '@testing-library/react';
 
+const mockToken = 'test-token';
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ token: mockToken }),
+}));
+
+// useApiFetch resolves its token from the ambient session, not from the mocked
+// AuthContext above (see its own doc comment) — mirror it here so migrated
+// call sites keep sending the token this suite asserts on. Pattern copied
+// from useWindowFilterPresets.vitest.jsx.
+const mockApiFetch = (path, options) => globalThis.fetch(`https://base${path}`, {
+  headers: { Authorization: `Bearer ${mockToken}`, 'Accept-Language': 'es_ES' },
+  credentials: 'include',
+  ...options,
+});
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 import { useBPartnerLookup, useGLItemLookup } from '../useMovementLookups.js';
@@ -50,7 +66,7 @@ describe('useMovementLookups — useBPartnerLookup', () => {
     });
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(
-      '/etendo/sws/neo/financial-account-transactions?action=bpartner-lookup&q=acme',
+      'https://base/sws/neo/financial-account-transactions?action=bpartner-lookup&q=acme',
     );
     expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.signal).toBeDefined();
@@ -156,7 +172,7 @@ describe('useMovementLookups — useGLItemLookup', () => {
     });
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(
-      '/etendo/sws/neo/financial-account-transactions?action=glitem-lookup&q=bank',
+      'https://base/sws/neo/financial-account-transactions?action=glitem-lookup&q=bank',
     );
 
     await waitFor(() =>
