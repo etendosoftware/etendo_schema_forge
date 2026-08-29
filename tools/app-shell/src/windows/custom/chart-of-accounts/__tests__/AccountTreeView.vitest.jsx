@@ -463,6 +463,71 @@ describe('AccountTreeView', () => {
     });
   });
 
+  // ── Deactivate/activate toggle (ETP-4884 item 5) ────────────────────────────
+
+  describe('active/inactive toggle', () => {
+    function mockFetchPatch({ ok = true } = {}) {
+      globalThis.fetch = vi.fn(async () => ({ ok, status: ok ? 200 : 500, text: async () => '' }));
+    }
+
+    beforeEach(() => {
+      mockFetchPatch();
+    });
+
+    it('renders checked for an active leaf and unchecked for an inactive one', () => {
+      const data = [
+        { ...DATA[0], active: true },
+        { ...DATA[1], active: false },
+      ];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('PATCHes elementValue/{id} with { active: checked } on toggle', async () => {
+      const data = [{ ...DATA[0], active: true }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${defaultProps.apiBaseUrl}/elementValue/acc-40000001`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ active: false }),
+        }),
+      ));
+    });
+
+    it('rolls back the toggle and shows an error toast when the PATCH fails', async () => {
+      mockFetchPatch({ ok: false });
+      const data = [{ ...DATA[0], active: true }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
+
+      await waitFor(() => expect(screen.getByTestId('account-tree-active-toggle-acc-40000001'))
+        .toHaveAttribute('aria-checked', 'true'));
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('disables the toggle for a protected 0000-suffixed placeholder leaf', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-20000000')).toBeDisabled();
+    });
+
+    it('never renders a toggle on a virtual folder row', () => {
+      render(<AccountTreeView {...defaultProps} data={DATA} />);
+      expect(screen.queryByTestId('account-tree-active-toggle-group-4000')).not.toBeInTheDocument();
+    });
+  });
+
   // ── Editability: leaf codes ending in "0000" are protected placeholders ────
 
   // Nothing auto-expands — walk down every nested level to reach the leaves.

@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-06-27T02:03:57.118Z",
-  "contractChecksum": "03690ba1e00622d8",
+  "updatedAt": "2026-08-29T15:53:11.114Z",
+  "contractChecksum": "90005223374b3fe8",
   "apiPrediction": {
     "specName": "chart-of-accounts",
     "baseUrl": "/sws/neo/chart-of-accounts",
@@ -59,7 +59,6 @@
             "defaultValue": "E"
           },
           "active": {
-            "readOnly": true,
             "required": true,
             "defaultValue": "Y"
           }
@@ -78,7 +77,8 @@
       "headerFields": [
         "searchKey",
         "name",
-        "accountType"
+        "accountType",
+        "active"
       ],
       "recommendedOrder": [
         "createHeader"
@@ -95,7 +95,8 @@
         "fields": [
           "searchKey",
           "name",
-          "accountType"
+          "accountType",
+          "active"
         ]
       }
     ],
@@ -103,5 +104,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "747de3c379702005"
+  "checksum": "7a66ab6146940c2a"
 }

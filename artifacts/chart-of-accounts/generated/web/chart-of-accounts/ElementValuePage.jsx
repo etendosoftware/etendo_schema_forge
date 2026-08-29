@@ -15,7 +15,7 @@ const breadcrumb = 'Accounting / Chart of Accounts';
 
 // @sf-generated-start summary:elementValue
 const summary = [
-  { key: 'active', column: 'IsActive', type: 'boolean' },
+
 ];
 
 const statusField = null;

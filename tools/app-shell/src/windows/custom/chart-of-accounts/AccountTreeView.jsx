@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
+import { Switch } from '@/components/ui/switch';
+import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // A tree needs its FULL leaf list upfront to know which top-level folders exist —
@@ -311,7 +313,7 @@ function isProtectedLeafCode(item) {
   return typeof item.searchKey === 'string' && item.searchKey.endsWith('0000');
 }
 
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui }) {
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui, activeChecked, activeDisabled, onActiveToggle }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
   const isProtected = isProtectedLeafCode(item);
@@ -375,6 +377,22 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       <span className="shrink-0 w-40 truncate text-[hsl(var(--muted-foreground))]">
         {accountTypeLabel(ui, item.accountType)}
       </span>
+
+      {/* Active/inactive toggle — leaf rows only, disabled for protected placeholders */}
+      {!item.isVirtual && (
+        <span
+          className="shrink-0 flex items-center justify-center w-10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Switch
+            checked={activeChecked}
+            disabled={isProtected || activeDisabled}
+            onCheckedChange={(next) => onActiveToggle(item, next)}
+            aria-label={ui('active')}
+            data-testid={`account-tree-active-toggle-${item.id}`}
+          />
+        </span>
+      )}
     </div>
   );
 }
@@ -481,6 +499,28 @@ export default function AccountTreeView({
   // whatever `onDataMutated` triggers on the caller's side (ListView's own
   // one-page refresh).
   const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
+
+  const [optimisticActiveToggles, setOptimisticActiveToggles] = useState({});
+  const [savingActiveToggles, setSavingActiveToggles] = useState({});
+
+  const handleActiveToggle = useCallback((item, nextChecked) => {
+    const toggleKey = `${item.id}:active`;
+    runInlineToggleRequest({
+      apiBaseUrl,
+      entity: 'elementValue',
+      row: { id: item.id },
+      col: { key: 'active' },
+      token,
+      checked: nextChecked,
+      toggleKey,
+      setOptimisticToggles: setOptimisticActiveToggles,
+      setSavingToggles: setSavingActiveToggles,
+      onDataMutated: refetchFull,
+      ui,
+    }).catch((err) => {
+      console.error('[AccountTreeView] Failed to toggle account active status:', err);
+    });
+  }, [apiBaseUrl, token, refetchFull, ui]);
 
   // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
@@ -664,22 +704,34 @@ export default function AccountTreeView({
             <span className="shrink-0 w-40 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
               {ui('accountTreeFilterType')}
             </span>
+            <span className="shrink-0 w-10 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide text-center">
+              {ui('accountTreeFilterActive')}
+            </span>
           </div>
 
           {/* ── Tree rows ── */}
           <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
-            {visibleRows.map((item) => (
-              <AccountTreeRow
-                key={item.id}
-                item={item}
-                isExpanded={expanded.has(item.id)}
-                isSelected={item.id === selectedId}
-                onToggle={handleToggle}
-                onRowClick={handleRowClick}
-                ui={ui}
-                data-testid="AccountTreeRow__acc34a"
-              />
-            ))}
+            {visibleRows.map((item) => {
+              const toggleKey = `${item.id}:active`;
+              const rawActive = Object.hasOwn(optimisticActiveToggles, toggleKey)
+                ? optimisticActiveToggles[toggleKey]
+                : item.active;
+              return (
+                <AccountTreeRow
+                  key={item.id}
+                  item={item}
+                  isExpanded={expanded.has(item.id)}
+                  isSelected={item.id === selectedId}
+                  onToggle={handleToggle}
+                  onRowClick={handleRowClick}
+                  ui={ui}
+                  activeChecked={rawActive === true}
+                  activeDisabled={!!savingActiveToggles[toggleKey]}
+                  onActiveToggle={handleActiveToggle}
+                  data-testid="AccountTreeRow__acc34a"
+                />
+              );
+            })}
           </div>
         </>
       )}
