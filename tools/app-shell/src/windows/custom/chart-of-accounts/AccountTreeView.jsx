@@ -231,6 +231,23 @@ function flattenVisible(nodes, expanded) {
 }
 
 /**
+ * Recursively collects the id of every virtual (folder) node in a tree, at every
+ * depth — not just the root siblings. Shared by `expandAll` and by the filter's
+ * ancestor-auto-expand logic (see `filterTree` below) so both use the same genuine
+ * deep walk. `expandAll`'s previous bug was exactly a shallow, root-array-only
+ * check — this helper exists so that mistake has one fix point, not two.
+ */
+function collectVirtualIds(nodes, acc = []) {
+  for (const node of nodes) {
+    if (node.isVirtual) {
+      acc.push(node.id);
+      if (node.children?.length) collectVirtualIds(node.children, acc);
+    }
+  }
+  return acc;
+}
+
+/**
  * A leaf subaccount whose code ends in "0000" is a protected parent-like placeholder
  * (e.g. `20000000` under breakdown `2000`) — it is technically `issummary='N'` in the DB
  * but must render as non-editable, matching the backend's
@@ -465,7 +482,7 @@ export default function AccountTreeView({
   );
 
   const expandAll = useCallback(
-    () => setExpanded(new Set(tree.filter((n) => n.isVirtual).map((n) => n.id))),
+    () => setExpanded(new Set(collectVirtualIds(tree))),
     [tree],
   );
   const collapseAll = useCallback(() => setExpanded(new Set()), []);

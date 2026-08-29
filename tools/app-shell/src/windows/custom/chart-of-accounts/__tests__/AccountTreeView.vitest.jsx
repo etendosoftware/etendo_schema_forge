@@ -376,6 +376,20 @@ describe('AccountTreeView', () => {
       expect(screen.getAllByText('2000')).toHaveLength(1);
     });
 
+    it('"Expandir" (expand all) reveals every nested level, not just the first two', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByText('expand'));
+
+      // Every intermediate folder down the full A → A.A → A.A.I → 200 → 2000 chain
+      // must be expanded, not just the root "A" and its immediate child "A.A".
+      expect(screen.getByTestId('account-tree-row-group-A|A.A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-20000000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+    });
+
     it('collapsing an intermediate folder hides deeper levels', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
