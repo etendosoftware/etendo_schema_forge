@@ -106,14 +106,14 @@ not a change.
     `AutoMatchSupport.computeAmountTolerance()` / `withinDateWindow()` apply them. They are
     unrelated to the `0.01` epsilon that gates the `Conciliar` button.
   - **Difference settings** (`GlItemDifferenceSection`, ETP-4795, **all account types**):
-    **Concepto contable** — a `ChipSelect` over `useGLItemLookup`, persisting
+    **Cuenta contable** — a `ChipSelect` over `useGLItemLookup`, persisting
     `FIN_Financial_Account.EM_Aprm_Glitem_Diff` (DAL `aprmGlitemDiff`, an OBUISEL selector on
-    `C_GLItem`). **This is the accounting concept the residual amount is posted against when a cash
+    `C_GLItem`). **This is the accounting account the residual amount is posted against when a cash
     close or a reconciliation does not balance**; it is the same column Classic's manual
     reconciliation popup uses. That sentence used to render under the field as help text
     (`financeAccountsGlItemDifferenceHint`); it was dropped from the modal — the section heading
     ("Configuración de diferencias") already frames what the field is for, and the explanation
-    belongs here rather than in the dialog. The field label was shortened to just "Concepto
+    belongs here rather than in the dialog. The field label was shortened to just "Cuenta
     contable" for the same reason: the heading supplies the "de diferencias". Read back through the list payload as
     `glItemDifferenceId` / `glItemDifferenceName` (`FinancialAccountsPageHandler`), written through
     `useAccountMutations.toDalBody()` as `aprmGlitemDiff`.
@@ -617,28 +617,28 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
   - **Imported Statements tab, no statement selected** → exports the filtered statement **headers** (`GET /sws/neo/bank-statements?...&export=csv&ids=<filtered ids>`).
   - **Imported Statements tab, statement(s) selected** → exports the **lines** of the selected statement(s) (`...&action=lines&statementIds=<ids>`), mirroring Classic's line export.
   - Column labels/order and `ids`/`statementIds` are passed as query params; the statements tab exposes the current selection + filtered headers to the window via a ref (`getSelectedStatementIds` / `getFilteredStatements`), the movements tab via `getFilteredMovements`.
-- Movements toolbar: back arrow `←`, type filter (BPD/BPW, search-enabled), date range filter (preset list + dual calendar, same picker as grid views), advanced "by conditions" filter (`AdvancedFilterButton`, applied client-side), search input, and a **split button** (`MovementsSplitButton`, same pattern as the Imported-statements `ImportSplitButton`): the primary action is **`Nuevo movimiento`** (opens the GL-item modal — see "Nuevo movimiento (GL item)" below), and the ▾ dropdown holds **`Transferir fondos`** (ETP-4272, opens `FundsTransferModal.jsx`). (The older 2-step `NewMovementWizard` is superseded and no longer wired.)
-- Movements table: Expand chevron | Checkbox | Date | Payment | Contact | Description | Status (`MovementStatusBadge` — **two states only**: Conciliado / Sin conciliar) | Type (with `PostingStatusDot` sub-label) | G/L Item | Amount | Balance | kebab.
+- Movements toolbar: back arrow `←`, type filter (BPD/BPW, search-enabled), date range filter (preset list + dual calendar, same picker as grid views), advanced "by conditions" filter (`AdvancedFilterButton`, applied client-side), search input, and a **split button** (`MovementsSplitButton`, same pattern as the Imported-statements `ImportSplitButton`): the primary action is **`Nuevo movimiento`** (opens the accounting-account modal — see "Nuevo movimiento (accounting account)" below), and the ▾ dropdown holds **`Transferir fondos`** (ETP-4272, opens `FundsTransferModal.jsx`). (The older 2-step `NewMovementWizard` is superseded and no longer wired.)
+- Movements table: Expand chevron | Checkbox | Date | Payment | Contact | Description | Status (`MovementStatusBadge` — **two states only**: Conciliado / Sin conciliar) | Type (with `PostingStatusDot` sub-label) | Cuenta contable | Amount | Balance | kebab.
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
-- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual G/L-item transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the G/L actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
+- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
 - **Status column** shows three states derived from the transaction status code (`movementStatusConfig.js`): **Borrador** (grey — `RPAP`/`RPAE`, not yet processed), **Sin conciliar** (processed, not cleared), **Conciliado** (`RPPC`, cleared against a bank statement).
 - Back arrow in the toolbar runs `navigate(-1)`.
-- The action bar's primary button is **`Nuevo movimiento`** (opens the GL-item modal), with **`Transferir fondos`** (ETP-4272) inside its ▾ dropdown. The **accounts grid** row kebab (`AccountRowMenu.jsx`) also offers **`Nuevo movimiento`**, which deep-links to that account's Movements tab with the modal auto-opened (`?tab=movements&newMovement=true` → `index.jsx` sets `autoOpenNewMovement` on `MovementsTab`).
+- The action bar's primary button is **`Nuevo movimiento`** (opens the accounting-account modal), with **`Transferir fondos`** (ETP-4272) inside its ▾ dropdown. The **accounts grid** row kebab (`AccountRowMenu.jsx`) also offers **`Nuevo movimiento`**, which deep-links to that account's Movements tab with the modal auto-opened (`?tab=movements&newMovement=true` → `index.jsx` sets `autoOpenNewMovement` on `MovementsTab`).
 
-### Nuevo movimiento (GL item)
+### Nuevo movimiento (accounting account)
 
-"Nuevo movimiento" registers a **manual movement linked directly to a G/L item** (concept), in **Draft (Borrador)** — the Etendo Classic "create transaction in financial account" flow, without an invoice or reconciliation. It renders `windows/custom/financial-account/NewTransactionModal.jsx` — a single-view modal (shared `@/components/ui/dialog` + `@/components/forms/fields`). Fields:
+"Nuevo movimiento" registers a **manual movement linked directly to an accounting account**, in **Draft (Borrador)** — the Etendo Classic "create transaction in financial account" flow, without an invoice or reconciliation. It renders `windows/custom/financial-account/NewTransactionModal.jsx` — a single-view modal (shared `@/components/ui/dialog` + `@/components/forms/fields`). Fields:
 
 - **Fecha** (required, default today) → `transactionDate` (accounting date = same).
 - **Tipo** — segmented **Entrada / Salida** (default Salida): Entrada → `BPD` (deposit), Salida → `BPW` (withdrawal).
-- **Concepto contable / G/L Item** (required, searchable via `useGLItemLookup`).
+- **Cuenta contable** (required, searchable via `useGLItemLookup`).
 - **Importe** (required, > 0, single unified field) → mapped to `depositAmount` (Entrada) or `paymentAmount` (Salida).
 - **Descripción** (optional).
 - **Dimensiones contables** (optional): **Contacto** (`bpartnerId`, searchable) is **always shown**; **Centro de coste** / **Proyecto** / **Producto** appear only when enabled in the chart of accounts (the account's `headerDimensions`). Organization / Processed / Payment are intentionally not shown.
-- All selector fields (Concepto contable, Contacto, and each dimension) use the shared **`ChipSelect`** primitive (`components/forms/fields.jsx`) — the same chip-style searchable combobox as the Funds-transfer modal (selected value shown as a removable chip + inline, non-portaled dropdown so it scrolls inside the Dialog). Each holds an `{ id, name }` object. Dimensions search server-side via `useDimensionLookup` (the `dimension-values` action filtered by `q`).
+- All selector fields (Cuenta contable, Contacto, and each dimension) use the shared **`ChipSelect`** primitive (`components/forms/fields.jsx`) — the same chip-style searchable combobox as the Funds-transfer modal (selected value shown as a removable chip + inline, non-portaled dropdown so it scrolls inside the Dialog). Each holds an `{ id, name }` object. Dimensions search server-side via `useDimensionLookup` (the `dimension-values` action filtered by `q`).
 
 The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirmar** saves **and processes** it (Borrador → Procesado) in one atomic backend call. Both go through `useCreateMovement()`/`useUpdateMovement()` → `POST …financial-account-transactions?action=create|update` with a `process` flag (`false` for Guardar, `true` for Confirmar); the backend (`FinancialAccountTransactionsHandler`) inserts/updates the `FIN_Finacc_Transaction` (Draft = status `RPAE`/`RPAP`) and, when `process:true`, runs Classic's `FIN_TransactionProcess.doTransactionProcess("P", trx)`.
 
@@ -693,7 +693,7 @@ A cash drawer is not reconciled against a bank statement: the user ticks the mov
 - `CashCloseSidePanel.jsx` — right column, fixed `w-[400px]`, scrollable cards + a pinned action footer. "Datos del cierre" (statement date + declared balance, the latter with a `0,00` placeholder) and "Resumen del cierre" (Saldo inicial / Entradas marcadas / Salidas marcadas / Saldo calculado / Saldo declarado / **Diferencia**), plus the pending-for-next-close count. The opening-balance and account chips that used to sit under the date and balance fields were dropped — both figures already appear as rows in the summary right below.
 - `CashCloseConfirmDialog.jsx` — shown **only when the close does not balance**; a balanced close confirms directly. States the amount and that an adjustment movement will be posted. With no concept configured on the account, it explains where to set it and disables the confirm button (the backend rejects the same case with a 400 regardless).
 
-**Neither the dialog nor the side panel names the accounting concept.** It is configured once per account in Edit account → General, so it is not a choice being made at confirmation time — naming it only added a term to parse next to the amount that actually matters. `glItemDifference` is still required; what changed is the copy, not the guard. The no-concept branch is untouched in both places, because that one is a blocker the user has to act on.
+**Neither the dialog nor the side panel names the accounting account.** It is configured once per account in Edit account → General, so it is not a choice being made at confirmation time — naming it only added a term to parse next to the amount that actually matters. `glItemDifference` is still required; what changed is the copy, not the guard. The no-account branch is untouched in both places, because that one is a blocker the user has to act on.
 
 **Sign convention**, shared by frontend and backend: `difference = declared − (opening + clearedNet)`. POSITIVE means the drawer holds *more* than the books (a surplus → `BPD` deposit); NEGATIVE means *less* (a shortage → `BPW` withdrawal). Balanced when `|difference| < 0.005` — deliberately tighter than, and unrelated to, the split panel's `0.01` reconcile epsilon.
 
@@ -701,7 +701,7 @@ A cash drawer is not reconciled against a bank statement: the user ticks the mov
 
 | Action | Behaviour |
 |---|---|
-| `GET ?action=pending&accountId=` | Opening balance (last **confirmed** close's ending balance, else `initialBalance` — mirroring `Reconciliation.java`), the account's GL Item Difference, the current draft with its ticked ids, and every movement still available (`processed='Y'`, unreconciled or belonging to this draft, scoped to client + accessible org tree) |
+| `GET ?action=pending&accountId=` | Opening balance (last **confirmed** close's ending balance, else `initialBalance` — mirroring `Reconciliation.java`), the account's accounting-account difference setting, the current draft with its ticked ids, and every movement still available (`processed='Y'`, unreconciled or belonging to this draft, scoped to client + accessible org tree) |
 | `POST ?action=saveDraft` | Creates or reuses the draft (`TransactionsDao.getLastReconciliation(account,"N")`, else `AdvPaymentMngtDao.getNewReconciliation(...)` with a `REC` doctype), syncs the ticked set, stores the declared balance and close date. Does not complete |
 | `POST ?action=confirm` | Same, then validates, posts the difference, rewrites post-dated movement dates, settles invoices and completes the document |
 | `POST ?action=discardDraft` | `ReconciliationRemovalUtil.reactivateAndRemoveReconciliation(draft)` so the user can start over |
@@ -791,11 +791,11 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
-#### Posting the unreconciled remainder to an accounting concept (ETP-4796)
+#### Posting the unreconciled remainder to an accounting account (ETP-4796)
 
 When a statement line is only PARTIALLY reconciled — statement of 12,50 € matched against a 12,00 €
 transaction — the leftover 0,50 € used to have no resolution path: the line stayed pending forever.
-It can now be closed by posting the remainder to an accounting concept (GL item), the same primitive
+It can now be closed by posting the remainder to an accounting account, the same primitive
 the cash close uses (ETP-4795), applied to a statement line. Classic does the same thing at
 `Reconciliation.java:290-300`.
 
@@ -806,19 +806,19 @@ the cash close uses (ETP-4795), applied to a statement line. Classic does the sa
   `components/contract-ui/reconciliationDifferenceMath.js` (a plain `.js` so the `node:test` runner
   can import it — the same split as `writeoffMath.js` and `CashClose/cashCloseMath.js`).
 - **`Dejar pendiente`** hides the banner for that line for the current session only and changes no
-  data; reselecting the line brings it back. **`Llevar a concepto contable`** opens the confirmation
-  modal (breakdown + GL-item picker + optional description).
+  data; reselecting the line brings it back. **`Llevar a cuenta contable`** opens the confirmation
+  modal (breakdown + accounting-account picker + optional description).
 - **The amount is NOT editable.** The backend recomputes the remainder from the statement line and
   ignores any amount in the body, so the modal shows the figure in its "Diferencia a ajustar"
   breakdown row rather than offering a field that would promise control the server does not grant.
   (The design prototype had an editable amount; it was dropped for this reason.)
-- **A missing account default is not a dead end.** The account's `Concepto contable` only
+- **A missing account default is not a dead end.** The account's `Cuenta contable` only
   *preselects* the modal's picker; the banner's action is always enabled and the user can choose any
-  concept there. This mirrors the backend, which accepts whatever `glItemId` the modal sends and only
+  account there. This mirrors the backend, which accepts whatever `glItemId` the modal sends and only
   falls back to the account default when none is given. The real guard is the modal's own confirm,
-  disabled until a concept is picked — an adjustment is never posted without a destination account.
+  disabled until an account is picked — an adjustment is never posted without a destination account.
   (An earlier iteration disabled the banner and told the user to go configure the account; that was
-  wrong, since the concept is choosable right there in the modal.)
+  wrong, since the account is choosable right there in the modal.)
 - **The remainder is its own physical row.** A partially reconciled *logical* line is several
   `FIN_BankStatementLine` rows sharing a match-group id, and the pending one is exposed as
   `remainderLineId`. Both the panel (`candidateLineId`) and this action target that row, never the
@@ -876,9 +876,9 @@ adjustments and an orphaned match. The second request now exits with a 409 havin
 match-group tag, so the group goes back to PARTIAL.
 
 **Account configuration (previously undocumented anywhere).** Both reconciliation tolerances and the
-difference concept are edited in **Editar cuenta → General**: `Tolerancia de fecha (días)`
+difference account are edited in **Editar cuenta → General**: `Tolerancia de fecha (días)`
 (`EM_ETGO_Date_Tolerance`, default 3) and `Tolerancia de importe (%)`
-(`EM_ETGO_Amount_Tolerance`, default 0) under "Configuración de conciliación", and `Concepto contable`
+(`EM_ETGO_Amount_Tolerance`, default 0) under "Configuración de conciliación", and `Cuenta contable`
 (`EM_Aprm_Glitem_Diff`) under "Configuración de diferencias". Until ETP-4796 the amount tolerance fed
 only the automatch engine. They reach the modal under two different key spellings depending on where
 it was opened from — see `EditAccountModal.readTolerances`; `ReconciliationTab` does the same dual
@@ -944,7 +944,7 @@ its own currency while booking the bank transaction(s) in the account currency:
 - **Payment method modal:** invoices are no longer filtered by payment method — every unpaid invoice
   is a valid candidate. Instead, clicking "Conciliar" with invoices selected opens `PaymentMethodModal`
   — a `ChipSelect` picker (`@/components/forms/fields`, the same chip-style selector used for
-  "Concepto contable" in the New Movement modal) over the account's methods configured for the line's
+  "Cuenta contable" in the New Movement modal) over the account's methods configured for the line's
   direction, defaulting to the account's default method — before submitting; the chosen id travels as
   top-level `paymentMethodId` in the `reconcileGroup` payload and applies to **every invoice payment
   this action creates** — an already-selected existing transaction (`operationIds`) keeps its own
@@ -978,11 +978,11 @@ entry points cannot drift; the decision logic is the pure `writeoffMath.js` besi
 
 Four things are non-obvious:
 
-- **It is Etendo's native write-off, NOT a G/L item.** The difference is stored as `writeoffAmount`
+- **It is Etendo's native write-off, NOT a separately-picked accounting account.** The difference is stored as `writeoffAmount`
   on the `FIN_PaymentScheduleDetail` and its `FIN_PaymentDetail`, and posts against the business
   partner group's write-off account (`C_BP_GROUP_ACCT.WRITEOFF_ACCT`, falling back to
-  `C_ACCTSCHEMA_DEFAULT.WRITEOFF_ACCT`; resolved in Core's `DocFINPayment`). No accounting concept
-  is involved, so there is no selector — the toggle's "on" copy names the destination generically
+  `C_ACCTSCHEMA_DEFAULT.WRITEOFF_ACCT`; resolved in Core's `DocFINPayment`). No accounting account
+  is chosen here, so there is no selector — the toggle's "on" copy names the destination generically
   ("se llevará a una cuenta contable") without implying a pick, which is accurate: the amount does
   land in a real GL account, just one resolved from configuration rather than chosen here.
 - **Only offered for a single selected invoice.** `createInvoicePayments` allocates the line
@@ -1170,10 +1170,10 @@ The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post act
 
 ## Not implemented yet
 
-- The older 2-step `NewMovementWizard` (Cobro/Pago + pay-vs-GL) is superseded by the single-view `NewTransactionModal` (GL item only) and is no longer wired.
+- The older 2-step `NewMovementWizard` (Cobro/Pago + pay-vs-GL) is superseded by the single-view `NewTransactionModal` (accounting account only) and is no longer wired.
 - `Reactivar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above.
 - `Transferir` / `Nuevo documento` real actions — render but show a "próximamente" toast.
-- Unreconcile row action — visible but disabled, with tooltip. (Post/Unpost are implemented — see ETP-4505 below — and the G/L lifecycle actions Confirmar / Reactivar / Eliminar are enabled.)
+- Unreconcile row action — visible but disabled, with tooltip. (Post/Unpost are implemented — see ETP-4505 below — and the accounting-account lifecycle actions Confirmar / Reactivar / Eliminar are enabled.)
 - Real bank logos (Santander, BBVA, etc.) — uses the generic `AccountLogoAvatar` for all accounts.
 - Server-side filtering for movements and statements — filters are applied client-side.
 
@@ -1192,7 +1192,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
     Header action button (inline)  — right of tab strip; Export for Movements/Statements, disabled Automatch for Reconciliation
     MovimientosTab.jsx             — toolbar + summary strip + table; runs applyFilters client-side
       MovementsToolbar/index.jsx   — back ←, type filter, date range, advanced "by conditions" filter, search, Transferir fondos button (ETP-4272)
-      FundsTransferModal.jsx       — funds transfer modal (ETP-4272): source (RO) → destination, amount, GL item, multi-currency, bank fee
+      FundsTransferModal.jsx       — funds transfer modal (ETP-4272): source (RO) → destination, amount, accounting account, multi-currency, bank fee
         TypeFilter.jsx             — wraps DistinctValuesFilter (BPD, BPW)
         DateRangeFilter.jsx        — wraps DateRangePopover
         AdvancedFilterButton       — generic "Filtro por condicionales" (status filter now lives here: 2 options — Conciliado / Sin conciliar)
@@ -1211,13 +1211,13 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
-      StatementLinesInline.jsx     — lines table shown in the expanded accordion row (white rounded card): date, description, contact name (free text), contact (BP FK name), G/L item (concepto contable), Nº Referencia, **Estado** (badge: amber "Sin conciliar" / green "Conciliado"), **Transacción** (grey ↗ chip with the reconciled movement's doc no, opening `ReconciledTxnsModal`; a 1:N group shows as a single "N movimientos" chip), then **Salida · Entrada** last (amount headers left-aligned, values right-aligned)
+      StatementLinesInline.jsx     — lines table shown in the expanded accordion row (white rounded card): date, description, contact name (free text), contact (BP FK name), Cuenta contable, Nº Referencia, **Estado** (badge: amber "Sin conciliar" / green "Conciliado"), **Transacción** (grey ↗ chip with the reconciled movement's doc no, opening `ReconciledTxnsModal`; a 1:N group shows as a single "N movimientos" chip), then **Salida · Entrada** last (amount headers left-aligned, values right-aligned)
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
       ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / G/L item. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
-      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / G/L item), used by NewMovementDialog and ManualStatementModal.
+      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog and ManualStatementModal.
 ```
 
 ## Shared primitives introduced or used

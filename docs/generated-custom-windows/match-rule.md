@@ -27,7 +27,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
   - Nombre — `nameWithSubline` (bold name + a muted `→ <account>` sub-line sourced from `financialAccount`; falls back to "Todas las cuentas" when the rule has no account scope).
   - Condición — `conditionChip` (derived text `<kind>: "<pattern>"`, e.g. `empieza con: "IMPUESTO"`; kind label is i18n from `textCondition` C/S/R, pattern from `textPattern`).
   - Tipo — plain text showing the transaction type's name (FK `ETGO_Transaction_Type_ID` → `ETGO_Transaction_Type`, identifier `Name`).
-  - Concepto contable — plain text (the G/L item, FK `C_GLItem_ID`).
+  - Cuenta contable — plain text (the accounting account, FK `C_GLItem_ID`).
   - Conciliaciones — `boldText` (read-only match count).
   - Activa — `toggle` (inline `PillToggle`, `PATCH`; the shared pill toggle, same component as the modal footer and the Assets window).
   - Each row also shows a left **drag handle** (visual only; drag-to-reorder is deferred) and, on hover, an **edit** (pencil), a **clone** (Copy, opt-in via `templateConfig.allowClone`) and a **delete** (red trash) icon button. Clone opens the create modal pre-filled with the row's values; delete opens a confirmation dialog, then `DELETE`s the rule.
@@ -35,7 +35,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 - **Banner**: a dismissible info banner (`bannerKey`) explaining that rules are evaluated by ascending priority and only apply to statement lines the standard algorithm could not match.
 - **Search** rules by name or pattern (local filter over the list).
 - **Create** a rule via the "Nueva regla" button → modal. The modal groups fields:
-  - *General*: Name* (placeholder "Ej. Comisiones bancarias"), Pattern to match* (placeholder "Ej. comisión"), Applies to ("Afecta a"; financial account, defaulting to "Todas las cuentas" when empty), Transaction type (a **user-definable** lookup — searchable selector backed by `ETGO_Transaction_Type`, with an inline **"+ New transaction type"** action that creates a record on the fly via `POST /sws/neo/transaction-type/transactionType` and auto-selects it), Accounting concept ("Concepto contable", `C_GLItem` selector), Concept condition* (Contiene / Empieza con / Regex), Priority*, **Contacto** (`C_BPartner` selector), and **Activa** (checkbox, on by default — new rules are created active).
+  - *General*: Name* (placeholder "Ej. Comisiones bancarias"), Pattern to match* (placeholder "Ej. comisión"), Applies to ("Afecta a"; financial account, defaulting to "Todas las cuentas" when empty), Transaction type (a **user-definable** lookup — searchable selector backed by `ETGO_Transaction_Type`, with an inline **"+ New transaction type"** action that creates a record on the fly via `POST /sws/neo/transaction-type/transactionType` and auto-selects it), Accounting account ("Cuenta contable", `C_GLItem` selector), Concept condition* (Contiene / Empieza con / Regex), Priority*, **Contacto** (`C_BPartner` selector), and **Activa** (checkbox, on by default — new rules are created active).
   - *Dimensiones* (`matchRuleSectionDimensions`): Project, Cost center, 1st/2nd dimension, Product (`M_Product`).
 - **Edit** a rule by clicking its row → the same modal pre-filled.
 - **Toggle Active** inline from the grid (no modal) — a `PATCH` that flips the rule on/off.
@@ -45,7 +45,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 
 - **Priority auto-seed**: opening the create modal pre-fills `priority` with `max(priority) + 10` computed in the **frontend** from the loaded list (`templateConfig.autoPriorityField`/`autoPriorityStep`). There is no backend defaults endpoint for it.
 - **Scope = financial account**: `financialAccount` ("Afecta a") scopes a rule to one account, or to all accounts when left empty. Priority uniqueness is enforced **within that scope**.
-- **FK selectors** (accounting concept, financial account, business partner, transaction type, and the dimensions — project, cost center, 1st/2nd dimension, product) load from the generic `/sws/neo/match-rule/etgoMatchRuleHeader/selectors/<field>` endpoints that the W contract emits — no mock catalog.
+- **FK selectors** (accounting account, financial account, business partner, transaction type, and the dimensions — project, cost center, 1st/2nd dimension, product) load from the generic `/sws/neo/match-rule/etgoMatchRuleHeader/selectors/<field>` endpoints that the W contract emits — no mock catalog.
 - **Transaction type (user-definable lookup)**: `transactionType` is a FK to `ETGO_Transaction_Type` (formerly a fixed `B`/`T`/`H` AD list). The selector is opt-in inline-creatable (`decisions.json`: `searchSelect`, `allowCreate`, `createSpec: "transaction-type"`, `createEntity: "transactionType"`). Creating one POSTs `{ name }` to the standalone W spec `transaction-type` (an AD window with **no menu**, exposed only for selector + create). Its `TransactionTypeHandler` pre-hook (`@Named("transaction-type")`) validates the name and derives the `Value` (search key) as an uppercase, accent-stripped slug, rejecting duplicates — HTTP 409.
 - **Validation** runs server-side in the `MatchRuleHandler` pre-hook before the generic CRUD persists:
   - `textCondition` must be `C` (Contains), `S` (Starts with) or `R` (Regex) — HTTP 400.
@@ -76,7 +76,7 @@ The rules maintained here are now **consumed by the bank-reconciliation automatc
 ## Gap assessment
 
 - Inline editing of `priority` directly in the grid is carried as a contract flag (`inlineEdit`) but the primary edit path verified here is the modal; treat in-grid priority editing as future behavior.
-- The accounting concept (`C_GLItem`) selector lists every G/L item in scope.
+- The accounting account (`C_GLItem`) selector lists every accounting account in scope.
 
 ## Manual verification
 
