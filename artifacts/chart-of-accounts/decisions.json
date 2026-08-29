@@ -4,6 +4,7 @@
     "category": "accounting",
     "name": "Chart of Accounts",
     "hideCreate": true,
+    "hideListFilters": true,
     "titleField": "searchKey",
     "customComponents": {
       "headerTable": "AccountTreeView"

@@ -486,6 +486,21 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toHaveAttribute('aria-checked', 'false');
     });
 
+    // ETP-4884 bugfix — NEO can return `active` as the raw AD string 'Y'/'N'
+    // rather than a JS boolean. A strict `=== true` check rendered a genuinely
+    // active account ('Y') as OFF; the toggle must accept 'Y'/'N' too.
+    it('renders checked for an active leaf and unchecked for an inactive one when active is a string', () => {
+      const data = [
+        { ...DATA[0], active: 'Y' },
+        { ...DATA[1], active: 'N' },
+      ];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toHaveAttribute('aria-checked', 'false');
+    });
+
     it('PATCHes elementValue/{id} with { active: checked } on toggle', async () => {
       const data = [{ ...DATA[0], active: true }];
       render(<AccountTreeView {...defaultProps} data={data} />);

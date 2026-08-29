@@ -728,7 +728,7 @@ export default function AccountTreeView({
                   onToggle={handleToggle}
                   onRowClick={handleRowClick}
                   ui={ui}
-                  activeChecked={rawActive === true}
+                  activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
                   activeDisabled={!!savingActiveToggles[toggleKey]}
                   onActiveToggle={handleActiveToggle}
                   data-testid="AccountTreeRow__acc34a"

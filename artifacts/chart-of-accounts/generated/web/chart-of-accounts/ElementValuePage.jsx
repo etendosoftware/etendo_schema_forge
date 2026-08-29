@@ -127,6 +127,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hideCreate
+      hideListFilters
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

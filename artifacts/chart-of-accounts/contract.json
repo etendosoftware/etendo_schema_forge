@@ -1,8 +1,8 @@
 {
   "version": "0.8.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-08-29T15:53:11.114Z",
-  "checksum": "90005223374b3fe8",
+  "updatedAt": "2026-08-29T17:45:56.475Z",
+  "checksum": "dcf4fb7c67e38a6b",
   "frontendContract": {
     "window": {
       "id": "118",
@@ -10,6 +10,7 @@
       "primaryEntity": "elementValue",
       "category": "accounting",
       "hideCreate": true,
+      "hideListFilters": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
@@ -215,6 +216,7 @@
       "primaryEntity": "elementValue",
       "category": "accounting",
       "hideCreate": true,
+      "hideListFilters": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
