@@ -71,7 +71,8 @@ describe('useDimensionValues', () => {
     const url = globalThis.fetch.mock.calls[0][0];
     expect(url).toContain('/base/sws/neo/financial-account-transactions');
     expect(url).toContain('action=dimension-values');
-    expect(globalThis.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    // Auth headers are now added by the shared `useApiFetch` helper (ETP-5022),
+    // not built here — its own test suite covers the Authorization header.
   });
 
   it('returns [] for a dimension when the response is not ok', async () => {

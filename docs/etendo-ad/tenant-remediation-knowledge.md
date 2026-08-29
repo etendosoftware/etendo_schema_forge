@@ -1477,3 +1477,98 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   `updated`/`updatedby` on the c_acctschema row, which is weak -- it reflects the whole row, not just
   this one column, so any other field edit would also bump it and produce a false "possibly touched"
   flag).
+
+## ETP-5019 — L2: owner `AD_User.Email` backfill (2026-08-27)
+
+- **2026-08-27 — The canonical source for an existing tenant owner's "real" email is the
+  `ETGO_ACCOUNT` table, resolved from `AD_User.Username` via the SAME two-step algorithm the
+  runtime login path already uses — never guess or invent a new heuristic when one is already
+  shipped and load-bearing.** `AD_User.Username` is NOT reliably the owner's email: onboarding
+  names the FIRST environment a founder creates after their plain account email, and every LATER
+  environment `<accountEmail>+<clientName>` (`EtendoGoJwtSupport#buildClientUsername`, dodges the
+  `Username` uniqueness constraint). `GoAccountResolver#findAccountByUsername`
+  (`com.etendoerp.go/.../common/GoAccountResolver.java`) is the already-tested, already-live
+  inverse — used by `EtendoGoJwtDalHelper#findAccountForEnvironmentUser` to resolve a RETURNING
+  owner's identity on every login: try exact `lower(username) = lower(account.email)` first; on a
+  miss, split on the LAST `'+'` (never the first — the suffix alphabet is `[a-z0-9]` only, so a
+  legitimately plus-addressed email like `user+tag@example.com` survives) and retry exact match
+  on the prefix. **Apply:** a corrective backfill that needs "the real identity behind an
+  AD_User" should always check for an existing runtime resolver first (grep the module for
+  `findAccountBy*`/`resolveAccount*` before writing new join logic) and mirror it exactly in SQL
+  — divergence between the corrective SQL and the runtime path is a bug waiting to happen even if
+  today's data doesn't yet exercise the divergent case.
+- **2026-08-27 — `etgo_account` column is `isactive` (`Y`/`N`), NOT `active` — do not confuse
+  with the Java DAL property name.** `EtendoGoJwtDalHelper.ACTIVE_ACCOUNT_FILTER` reads
+  `account.active = true` in HQL/DAL-property space, which maps to the DB column `isactive`. A
+  raw SQL query against `etgo_account` must use `isactive = 'Y'`, not `active = true` — the
+  column literally does not exist under that name (`ERROR: column "active" does not exist`,
+  hint: "Perhaps you meant... isactive"). `etgo_account` also has a separate `status` column
+  (`'active'`/`'pending'`, ETP-4829 — distinguishes "already has a usable local password" from
+  "admin-created, awaiting invite") that is UNRELATED to `isactive` and is NOT checked by
+  `ACTIVE_ACCOUNT_FILTER` — a backfill mirroring the runtime resolver should likewise gate on
+  `isactive='Y'` only, not additionally require `status='active'` (a pending/SSO-only account is
+  still the correct identity to resolve to, matching what the live path itself would do).
+  `email_verified` is a third, also-unrelated nullable timestamp column — many real owner
+  accounts on this DB have it NULL (never gated by `findActiveAccountByEmail` either).
+- **2026-08-27 — Live-DB sweep: 69/69 pre-existing `EM_ETGO_Is_Owner='Y'` owners resolve
+  cleanly, all via the exact branch (0 currently need the suffix-split branch).** Every owner on
+  this DB is still the sole/first environment their account owns, so no owner username currently
+  carries a `+<clientName>` suffix. Also confirmed: exactly one owner per client (0 clients with
+  >1), zero owners already had a non-NULL email, and every matched `etgo_account` row has
+  `isactive='Y'`/`status='active'` uniformly. The suffix-split branch was still implemented (not
+  skipped as "unneeded YAGNI") because an owner CAN legitimately found a second tenant under the
+  same account, which DOES suffix their username — kept for correctness even though it is
+  provably a no-op on today's data, not merely "future-proofing" speculation.
+- **2026-08-27 — R28 run for real against the shared dev DB, not just validated in a
+  rolled-back tx.** `node cli/src/data-fixes/run.js` (no `--dry-run`, no `--client` — full
+  tenant universe) at 2026-08-27T14:18:28Z: 69 `APPLIED`, 26 `SKIPPED_NOT_NEEDED` (owner already
+  had an email), 0 `FAILED` — matching the earlier dry-run and rolled-back-tx validation exactly.
+  A subsequent re-run confirmed convergence — 0 rows left needing the fix, every tenant
+  `SKIPPED_NOT_NEEDED` — proving idempotency in production. **Apply generally:** once a fix like
+  this has actually been run for real, any earlier "verified in a rolled-back tx, not yet run"
+  language elsewhere (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file) must be
+  corrected in the same PR — a stale "not yet run" claim sitting next to a live-applied ledger
+  row is exactly the doc-drift class REVIEW must catch.
+- **2026-08-27 — In-flight branch discovered R26 (×2) and R27 already claimed on the unmerged
+  `feature/ETP-4877` branch (both repos) — same recurring trap as ETP-4245's R9 discovery.**
+  `git rev-list --all | xargs git ls-tree` (schema_forge side) surfaced
+  `20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit.sql`,
+  `20260826T120000Z__R26-admin-identity-real-org.sql`, and
+  `20260826T121500Z__R27-deactivate-r16-duplicate-roles.sql` — none present in this branch's
+  `cli/src/data-fixes/sql/` directory, all three confirmed via `git branch -a` to live only on
+  `feature/ETP-4877`/`origin/feature/ETP-4877`, NOT yet merged into `epic/ETP-3504`. Crucially,
+  **R26's owner-retrofit fix is already `APPLIED` in the LIVE `ETGO_DATA_FIX_HISTORY` ledger on
+  the shared dev DB** even though its `.sql` file is absent from every branch I have checked out
+  — i.e. a fix can be live-applied against the shared DB from a branch that never touched mine.
+  Read the file's content (`git show <branch>:<path>`) before assuming a collision is even
+  relevant to the current task: confirmed R26 does not touch `AD_User.Email` (it is
+  `EM_ETGO_Is_Owner` + personal-role composition only), so it does not conflict with this
+  session's L2 fix. **Apply generally:** before picking a new `Rn`/timestamp, check
+  `git branch -a` for ANY branch (not just local history) touching
+  `cli/src/data-fixes/sql/`, and cross-check the live ledger's `fix_id` column too — a fix can be
+  `APPLIED` on the shared DB before its file ever reaches your branch.
+- **2026-08-27 — Corrective-only-for-the-CUT, preventive-shipped-elsewhere is a real,
+  recurring, VALID shape — do not reflexively bump `ONBOARDING_PROVISIONED_THROUGH` to match a
+  new fix's own timestamp just because its OWN preventive front shipped in the same PR.** R28's
+  preventive front (`applyClientAdminEmail`) is real and already merged into this branch, but the
+  CUT sat at R23 (`2026-08-11T12:00:00Z`) with FOUR later fixes (R24×2, R25×2 — the L1
+  owner-flag/R26/R27 pair is a 5th, all unmerged) never individually re-verified this session to
+  each have their own confirmed preventive parity. Bumping the single shared CUT past all of them
+  to match R28's timestamp would risk silently skipping any ONE of theirs for a brand-new tenant
+  if it turns out to be corrective-only — the exact failure mode the framework's "never bump CUT
+  without confirming every intervening fix's parity" rule exists to prevent. Decision: ship the
+  `.sql` + preventive together, leave the CUT untouched. Per the framework's own trade-off table
+  this is always safe (new tenant's `@check` is a cheap no-op skip) — merely redundant, never
+  incorrect. Mirrors the ETP-4743/R22 precedent exactly, just with preventive/corrective ordering
+  swapped (there: corrective + CUT bump, preventive shipped earlier separately; here: preventive
+  shipped in-branch, corrective ships without a CUT bump because of UNRELATED intervening fixes,
+  not because R28 itself lacks one).
+- **2026-08-27 — Doc-drift found: `onboarding-and-datafixes-map.md`'s own gap-pairing table
+  already has an `L1` (bank-statement stale status, ETP-4891, `R25`) that collides with
+  `onboarding-gaps.md`'s EARLIER, independent `L1` ("Tenant Ownership", ETP-4830/ETP-4877) — two
+  unrelated gaps sharing one label because neither doc's author cross-checked the other's
+  `L`-series before assigning it.** Not renamed (would break existing shipped `.sql` `@gap:`
+  header references) — flagged inline in both docs instead. **Apply:** when adding any new gap
+  letter/number, grep BOTH `onboarding-gaps.md` (`^### [A-Z][0-9]`) AND
+  `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
+  doc you happen to be editing.

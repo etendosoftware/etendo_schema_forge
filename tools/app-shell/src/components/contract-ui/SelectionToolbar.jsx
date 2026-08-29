@@ -119,7 +119,15 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-50"
+      // z-40, the Navigation tier: this is list chrome, and per the z-index scale
+      // (docs/ui-design-guidelines.md, rule 6) anything that must be covered by a
+      // blocking overlay stays at z-40 or below. It sat at z-50 — the overlay tier —
+      // and, because it portals to document.body while overlays render in place, it
+      // painted ON TOP of a same-tier modal. ETP-4972 worked around that by raising
+      // GenericPreviewModal to z-[60], which then left every modal the preview opens
+      // (payment, SIF, send) underneath it; lowering the pill is the fix that tier
+      // actually calls for.
+      className="pointer-events-none fixed z-40"
       style={{ bottom: 24, left: '50%', transform: 'translateX(-50%)' }}
     >
       <div
