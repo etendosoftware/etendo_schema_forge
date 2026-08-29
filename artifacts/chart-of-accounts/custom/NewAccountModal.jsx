@@ -191,10 +191,11 @@ export default function NewAccountModal({
       const newId = e.target.value;
       const parent = parentOptions.find((p) => p.id === newId);
       const prefix = parent ? String(parent.searchKey) : '';
-      setForm((prev) => ({ ...prev, parentAccountId: newId, searchKey: prefix }));
+      const accountType = deriveDefaultAccountType(null, prefix, accountRows);
+      setForm((prev) => ({ ...prev, parentAccountId: newId, searchKey: prefix, accountType }));
       setErrors((prev) => ({ ...prev, parentAccountId: undefined }));
     },
-    [parentOptions],
+    [parentOptions, accountRows],
   );
 
   const handleNameChange = useCallback((e) => {
@@ -284,7 +285,7 @@ export default function NewAccountModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 py-2">
+        <div className="flex flex-col gap-5 py-2 min-w-0" data-testid="new-account-modal-fields">
           {/* ── Parent Account ── */}
           <AccountBadgeSelect
             label={ui('parentAccount')}

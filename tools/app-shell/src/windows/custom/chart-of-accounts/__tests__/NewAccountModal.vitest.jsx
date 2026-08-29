@@ -361,4 +361,59 @@ describe('NewAccountModal', () => {
     // the hardcoded fallback.
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('L');
   });
+
+  // ── Bug A: long parent-account names overflow the dialog (ETP-4884) ───────
+  //
+  // DialogContent (@etendosoftware/app-shell-core, dialog.jsx) uses `display: grid`,
+  // which makes the `<div className="flex flex-col gap-5 py-2">` fields wrapper a
+  // grid item. Grid items default to `min-width: auto`, so the wrapper grows to fit
+  // its widest child's full intrinsic content width instead of respecting the
+  // modal's `max-w-md` track — meaning a long account name in AccountBadgeSelect's
+  // trigger never actually gets truncated by its own `truncate` class, because the
+  // grid-item ANCESTOR expands first. jsdom has no real layout engine, so pixel
+  // overflow can't be asserted here — this is a className-level regression test,
+  // the same pattern already used for Task 6's styling tests in
+  // AccountTreeView.vitest.jsx (asserting `.className` contains a Tailwind class).
+  //
+  // IMPLEMENTATION NOTE: the fix must add `data-testid="new-account-modal-fields"`
+  // to that wrapper div in NewAccountModal.jsx (and give it `min-w-0`) for this
+  // test to find it — the testid does not exist in the source yet.
+  it('keeps the fields wrapper shrinkable inside the grid dialog so long names can truncate', () => {
+    render(<NewAccountModal {...baseProps()} />);
+    expect(screen.getByTestId('new-account-modal-fields').className).toContain('min-w-0');
+  });
+
+  // ── Bug B: Account Type doesn't update on manual parent change (ETP-4884) ──
+  //
+  // Today, deriveDefaultAccountType only runs once, in the init useEffect (latched
+  // via initDoneRef), when the modal first opens. handleParentChange updates
+  // parentAccountId and the searchKey code-prefix, but never touches
+  // form.accountType — so manually picking a DIFFERENT parent from the combobox
+  // after the modal is already open leaves Account Type stuck at whatever it was
+  // initially derived to, instead of re-deriving for the new parent (mirroring what
+  // already happens for the code-prefix field, and what happens on initial open).
+  it('re-derives Account Type when the user manually switches to a different parent', async () => {
+    const user = userEvent.setup();
+    // Two virtual-group parents (no explicit summary row, like the 'builds virtual
+    // parent groups' test above) each with their own sibling leaf accountType, so
+    // switching parents has a known, distinct expected value on each side —
+    // '5000'/Purchases → 'L', '6000'/Payroll → 'R'.
+    const switchAccounts = [
+      { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases', accountType: 'L' },
+      { id: 'acc-60000001', searchKey: '60000001', name: 'Payroll Expense', summaryLevel: 'N', parentCode4: '6000', parentCode4Name: 'Payroll', accountType: 'R' },
+    ];
+    const currentRecord = { id: 'acc-50000001', searchKey: '50000001', summaryLevel: 'N' };
+    render(<NewAccountModal {...baseProps({ allAccounts: switchAccounts, currentRecord })} />);
+
+    // Sanity check: opened defaulted to the '5000' (Purchases) parent, accountType 'L'.
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('5000')).toBeInTheDocument();
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('L');
+
+    // Manually switch the parent selector to a DIFFERENT parent ('6000' / Payroll).
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await user.click(await screen.findByText('Payroll'));
+
+    // Account Type must re-derive to 'R' for the new parent — today it stays stuck at 'L'.
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
+  });
 });
