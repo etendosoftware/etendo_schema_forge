@@ -81,4 +81,8 @@ The window's live artifact custom components use the shared semantic theme.
 Structural surfaces and controls consume background, card, foreground, muted, and
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
-controls the appearance.
+controls the appearance. The tree's column-header row, row hover/selection state,
+and toolbar buttons (Expand/Collapse/"+ New Sub-account") now reuse the same
+`components/ui/table.jsx`/`components/ui/button.jsx` tokens as every other
+window's grid, instead of a bespoke selection color and uppercase header
+treatment.

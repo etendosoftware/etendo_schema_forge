@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -324,8 +325,8 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       role="row"
       aria-selected={isSelected}
       className={[
-        'flex items-center gap-3 px-4 py-2 cursor-pointer text-sm select-none transition-colors',
-        isSelected ? 'bg-[var(--status-info-bg)]' : 'hover:bg-[hsl(var(--muted))]',
+        'flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm select-none transition-colors',
+        isSelected ? 'bg-[hsl(var(--muted))]' : 'hover:bg-[hsl(var(--muted))]/50',
         isSummary ? 'font-semibold text-[hsl(var(--foreground))]' : 'font-normal text-[hsl(var(--muted-foreground))]',
       ].join(' ')}
       onClick={() => onRowClick(item)}
@@ -613,21 +614,22 @@ export default function AccountTreeView({
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-[hsl(var(--border-subtle))] bg-card">
         <div className="flex items-center gap-3">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={expandAll}
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             {ui('expand')}
-          </button>
-          <span className="text-[hsl(var(--border-control))] select-none">|</span>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={collapseAll}
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             {ui('collapse')}
-          </button>
+          </Button>
           {isFetchingFull && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -636,13 +638,14 @@ export default function AccountTreeView({
           )}
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="default"
+          size="sm"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[hsl(var(--foreground))] text-primary-foreground rounded-full hover:bg-[hsl(var(--foreground))] transition-colors"
         >
           + {ui('newSubAccount')}
-        </button>
+        </Button>
       </div>
 
       {/* ── Filter row ── */}
@@ -691,20 +694,20 @@ export default function AccountTreeView({
           {/* ── Column headers ── */}
           <div
             role="row"
-            className="flex items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))]"
+            className="flex items-center gap-3 px-4 h-11 border-b border-[hsl(var(--border-subtle))]"
           >
             {/* Spacer for toggle column */}
             <span className="w-4 shrink-0" />
-            <span className="shrink-0 w-24 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+            <span className="shrink-0 w-24 text-sm font-medium text-[hsl(var(--muted-foreground))]">
               {ui('accountTreeCode')}
             </span>
-            <span className="flex-1 min-w-0 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+            <span className="flex-1 min-w-0 text-sm font-medium text-[hsl(var(--muted-foreground))]">
               {ui('name')}
             </span>
-            <span className="shrink-0 w-40 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+            <span className="shrink-0 w-40 text-sm font-medium text-[hsl(var(--muted-foreground))]">
               {ui('accountTreeFilterType')}
             </span>
-            <span className="shrink-0 w-10 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide text-center">
+            <span className="shrink-0 w-10 text-sm font-medium text-[hsl(var(--muted-foreground))] text-center">
               {ui('accountTreeFilterActive')}
             </span>
           </div>

@@ -528,6 +528,43 @@ describe('AccountTreeView', () => {
     });
   });
 
+  // ── Shared table/button styling (ETP-4884 item 3, token-alignment slice) ──
+
+  describe('shared table/button styling', () => {
+    it('renders column headers in the standard sentence-case style, not an uppercase shaded band', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const codeHeader = screen.getByText('accountTreeCode');
+
+      expect(codeHeader.className).toContain('text-sm');
+      expect(codeHeader.className).not.toContain('uppercase');
+      expect(codeHeader.className).not.toContain('tracking-wide');
+    });
+
+    it('uses the standard muted/50 hover on tree rows, not a full-opacity hover', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const row = screen.getByTestId('account-tree-row-group-4000');
+
+      expect(row.className).toContain('hover:bg-[hsl(var(--muted))]/50');
+    });
+
+    it('uses the standard plain muted selected-row color, not the info-blue tint', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-row-group-4000'));
+      const row = screen.getByTestId('account-tree-row-group-4000');
+
+      expect(row.className).toContain('bg-[hsl(var(--muted))]');
+      expect(row.className).not.toContain('--status-info-bg');
+    });
+
+    it('renders "+ New Sub-account" using the shared Button component (rounded-md), not a hand-rolled pill', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const trigger = screen.getByText('+ newSubAccount');
+
+      expect(trigger.className).toContain('rounded-md');
+      expect(trigger.className).not.toContain('rounded-full');
+    });
+  });
+
   // ── Editability: leaf codes ending in "0000" are protected placeholders ────
 
   // Nothing auto-expands — walk down every nested level to reach the leaves.
