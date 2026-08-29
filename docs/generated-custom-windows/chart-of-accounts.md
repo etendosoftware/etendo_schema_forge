@@ -10,7 +10,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 - Open an existing account and update those same setup fields, except protected parent-like subaccounts whose 8-digit code ends in `0000`.
 - Delete an account through the standard generated entity flow.
 - Review debit, credit, and balance values in the list as accounting outputs, not as manually editable form inputs.
-- Filter the tree by code, name, account type, or active status using the toolbar filter row — matches auto-expand their ancestor folders; non-matching branches are hidden.
+- Filter the tree by code, name, or account type using the toolbar filter row — matches auto-expand their ancestor folders; non-matching branches are hidden.
 - Deactivate or reactivate an existing subaccount directly from the tree via an inline toggle (protected `0000`-suffixed placeholder subaccounts cannot be toggled).
 - Toggle whether the account is active directly from the tree row; the form's own `isActive` control follows the same live-toggle behavior rather than staying read-only.
 

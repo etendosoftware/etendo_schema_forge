@@ -262,7 +262,7 @@ const ALL_FILTER = 'all';
  * folder survives based on its descendants, not on this function.
  */
 function matchesLeafFilter(item, filters) {
-  const { text, accountType, active } = filters;
+  const { text, accountType } = filters;
   if (text) {
     const q = text.toLowerCase();
     const codeMatch = String(item.searchKey ?? '').toLowerCase().includes(q);
@@ -270,11 +270,6 @@ function matchesLeafFilter(item, filters) {
     if (!codeMatch && !nameMatch) return false;
   }
   if (accountType !== ALL_FILTER && item.accountType !== accountType) return false;
-  if (active !== ALL_FILTER) {
-    const isActive = item.active !== false;
-    if (active === 'true' && !isActive) return false;
-    if (active === 'false' && isActive) return false;
-  }
   return true;
 }
 
@@ -538,14 +533,13 @@ export default function AccountTreeView({
 
   const [filterText, setFilterText] = useState('');
   const [filterAccountType, setFilterAccountType] = useState(ALL_FILTER);
-  const [filterActive, setFilterActive] = useState(ALL_FILTER);
 
   const hasActiveFilter =
-    filterText.trim() !== '' || filterAccountType !== ALL_FILTER || filterActive !== ALL_FILTER;
+    filterText.trim() !== '' || filterAccountType !== ALL_FILTER;
 
   const filters = useMemo(
-    () => ({ text: filterText.trim(), accountType: filterAccountType, active: filterActive }),
-    [filterText, filterAccountType, filterActive],
+    () => ({ text: filterText.trim(), accountType: filterAccountType }),
+    [filterText, filterAccountType],
   );
 
   const filteredTree = useMemo(
@@ -668,16 +662,6 @@ export default function AccountTreeView({
           {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
             <option key={code} value={code}>{ui(uiKey)}</option>
           ))}
-        </select>
-        <select
-          data-testid="account-tree-filter-active"
-          value={filterActive}
-          onChange={(e) => setFilterActive(e.target.value)}
-          className="h-8 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 text-xs cursor-pointer"
-        >
-          <option value={ALL_FILTER}>{ui('all')}</option>
-          <option value="true">{ui('yes')}</option>
-          <option value="false">{ui('no')}</option>
         </select>
       </div>
 
