@@ -9,8 +9,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
+import { AccountBadgeSelect } from '@/components/contract-ui';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
  *
@@ -37,13 +39,13 @@ import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
  */
 
 const INPUT_CLS =
-  'w-full h-10 rounded-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent';
+  'w-full h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent';
 
 const SELECT_CLS =
-  'w-full h-10 rounded-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent cursor-pointer';
+  'w-full h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:border-transparent cursor-pointer';
 
 const FIELD_LABEL_CLS = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1.5';
-const ERROR_CLS = 'mt-1 text-xs text-destructive-foreground';
+const ERROR_CLS = 'mt-1 text-xs text-destructive';
 
 /**
  * Derive the nearest 4-digit summary-account parent from the selected record.
@@ -67,6 +69,23 @@ function deriveDefaultParentId(currentRecord, parentOptions) {
   return match ? match.id : '';
 }
 
+/**
+ * Derives the Account Type default for a new subaccount. `accountRows` only ever
+ * contains leaf (posting) accounts — the parent options here are synthetic 4-digit
+ * group headings with no `accountType` of their own — so this looks at the
+ * selected record itself when it's a real leaf, and otherwise falls back to any
+ * existing leaf already filed under the same parent prefix.
+ */
+function deriveDefaultAccountType(currentRecord, parentPrefix, accountRows) {
+  if (currentRecord && !currentRecord.isVirtual && currentRecord.accountType) {
+    return currentRecord.accountType;
+  }
+  const sibling = accountRows.find(
+    (a) => !a.isVirtual && String(a.parentCode4 ?? '') === parentPrefix && a.accountType,
+  );
+  return sibling ? sibling.accountType : DEFAULT_ACCOUNT_TYPE;
+}
+
 // 'E' (Expense) mirrors the AD column's own default value for C_ElementValue.AccountType.
 const DEFAULT_ACCOUNT_TYPE = 'E';
 
@@ -82,6 +101,7 @@ export default function NewAccountModal({
   token,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [loadedAccounts, setLoadedAccounts] = useState([]);
   const [accountsFetched, setAccountsFetched] = useState(false);
   const accountRows = allAccounts.length > 0 ? allAccounts : loadedAccounts;
@@ -95,14 +115,12 @@ export default function NewAccountModal({
 
   useEffect(() => {
     if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
-    fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
+    apiFetch('/elementValue?_startRow=0&_endRow=9999')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
       .catch(() => setLoadedAccounts([]))
       .finally(() => setAccountsFetched(true));
-  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, token]);
+  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, apiFetch]);
 
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
@@ -161,10 +179,11 @@ export default function NewAccountModal({
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
     const prefix = defaultParent ? String(defaultParent.searchKey) : '';
-    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: DEFAULT_ACCOUNT_TYPE });
+    const defaultAccountType = deriveDefaultAccountType(currentRecord, prefix, accountRows);
+    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: defaultAccountType });
     setErrors({});
     initDoneRef.current = true;
-  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl]);
+  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl, accountRows]);
 
   // When parent changes, update the code prefix in the searchKey field
   const handleParentChange = useCallback(
@@ -216,12 +235,8 @@ export default function NewAccountModal({
 
     setSaving(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/elementValue`, {
+      const res = await apiFetch('/elementValue', {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),
@@ -243,7 +258,7 @@ export default function NewAccountModal({
     } finally {
       setSaving(false);
     }
-  }, [form, validate, apiBaseUrl, token, onSaved, ui]);
+  }, [form, validate, apiFetch, onSaved, ui]);
 
   const handleOpenChange = useCallback(
     (open) => {
@@ -271,37 +286,21 @@ export default function NewAccountModal({
 
         <div className="flex flex-col gap-5 py-2">
           {/* ── Parent Account ── */}
-          <div>
-            <label htmlFor="nam-parent" className={FIELD_LABEL_CLS}>
-              {ui('parentAccount')}
-              <span className="ml-1 text-destructive-foreground select-none">*</span>
-            </label>
-            <select
-              id="nam-parent"
-              data-testid="new-account-modal-parent"
-              className={SELECT_CLS}
-              value={form.parentAccountId}
-              onChange={handleParentChange}
-            >
-              <option value="">{ui('selectParentAccount')}</option>
-              {parentOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.searchKey} — {p.name}
-                </option>
-              ))}
-            </select>
-            {errors.parentAccountId && (
-              <p className={ERROR_CLS} role="alert">
-                {errors.parentAccountId}
-              </p>
-            )}
-          </div>
+          <AccountBadgeSelect
+            label={ui('parentAccount')}
+            required
+            value={form.parentAccountId || null}
+            options={parentOptions.map((p) => ({ id: p.id, code: p.searchKey, name: p.name }))}
+            onChange={(id) => handleParentChange({ target: { value: id ?? '' } })}
+            error={errors.parentAccountId}
+            data-testid="new-account-modal-parent"
+          />
 
           {/* ── Name ── */}
           <div>
             <label htmlFor="nam-name" className={FIELD_LABEL_CLS}>
               {ui('name')}
-              <span className="ml-1 text-destructive-foreground select-none">*</span>
+              <span className="ml-1 text-destructive select-none">*</span>
             </label>
             <input
               id="nam-name"
@@ -324,7 +323,7 @@ export default function NewAccountModal({
           <div>
             <label className={FIELD_LABEL_CLS}>
               {ui('accountCode')}
-              <span className="ml-1 text-destructive-foreground select-none">*</span>
+              <span className="ml-1 text-destructive select-none">*</span>
             </label>
             <div data-testid="new-account-modal-code">
               <AccountCodeField
@@ -346,7 +345,7 @@ export default function NewAccountModal({
           <div>
             <label htmlFor="nam-account-type" className={FIELD_LABEL_CLS}>
               {ui('accountTreeFilterType')}
-              <span className="ml-1 text-destructive-foreground select-none">*</span>
+              <span className="ml-1 text-destructive select-none">*</span>
             </label>
             <select
               id="nam-account-type"
@@ -375,7 +374,7 @@ export default function NewAccountModal({
             data-testid="new-account-modal-cancel"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--card))] rounded-full shadow-sm hover:bg-[hsl(var(--card))] disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] bg-card border border-[hsl(var(--border-control))] rounded-full shadow-sm hover:bg-[hsl(var(--muted))] disabled:opacity-50 transition-colors"
           >
             {ui('cancel')}
           </button>
