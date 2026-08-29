@@ -35,11 +35,21 @@ vi.mock('@generated/chart-of-accounts/custom/AccountCodeField', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { toast } from 'sonner';
 import NewAccountModal from '../NewAccountModal.jsx';
+
+// Radix Popover + cmdk (used by AccountBadgeSelect) need a few DOM APIs jsdom
+// does not implement. The global src/test/setup.js only polyfills
+// scrollIntoView/scrollTo/ResizeObserver, not pointer-capture — see the
+// dedicated AccountBadgeSelect.vitest.jsx suite for the same requirement.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
 
 const BASE_URL = 'http://localhost/sws/neo/chart-of-accounts';
 const TOKEN = 'test-token';
@@ -47,9 +57,15 @@ const TOKEN = 'test-token';
 // '4000' is an explicit summary row (no leaf references it, so no virtual
 // duplicate); '5000' only exists as a virtual group derived from a leaf row's
 // parentCode4 — covering both parent-option sources without overlap.
+// The 5000-prefixed leaf carries an explicit accountType so the
+// deriveDefaultAccountType "sibling leaf" fallback (ETP-4884 item 3) has a
+// concrete value to find. Deliberately 'L' (Liability), NOT 'E' — 'E' is
+// DEFAULT_ACCOUNT_TYPE, so a fixture value of 'E' would let the "sibling
+// leaf" test pass trivially against the hardcoded fallback without proving
+// the derivation logic actually ran.
 const ACCOUNTS = [
   { id: 'acc-4000', searchKey: '4000', name: 'Sales', summaryLevel: 'Y' },
-  { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases' },
+  { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases', accountType: 'L' },
 ];
 
 function baseProps(overrides = {}) {
@@ -83,50 +99,58 @@ describe('NewAccountModal', () => {
     expect(screen.getByTestId('account-code-stub')).toBeInTheDocument();
   });
 
-  it('renders parent options sorted by code when open', () => {
+  it('renders parent options sorted by code when open', async () => {
+    const user = userEvent.setup();
     render(<NewAccountModal {...baseProps()} />);
-    const select = screen.getByTestId('new-account-modal-parent');
-    const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
-    expect(optionTexts).toEqual([
-      'selectParentAccount',
-      '4000 — Sales',
-      '5000 — Purchases',
-    ]);
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+
+    // cmdk renders options in a portal, already sorted by code ('4000' then '5000').
+    const badges = await screen.findAllByText(/^(4000|5000)$/);
+    expect(badges.map((b) => b.textContent)).toEqual(['4000', '5000']);
+    expect(screen.getByText('Sales')).toBeInTheDocument();
+    expect(screen.getByText('Purchases')).toBeInTheDocument();
   });
 
   it('auto-selects the current record as parent when it is itself a 4-digit summary account', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('acc-4000');
+    const root = screen.getByTestId('new-account-modal-parent');
+    expect(within(root).getByText('4000')).toBeInTheDocument();
+    expect(within(root).getByText('Sales')).toBeInTheDocument();
     expect(screen.getByTestId('account-code-stub')).toHaveValue('4000');
   });
 
   it('auto-selects the matching 4-digit parent from the leaf account prefix', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-50000001', searchKey: '50000001', summaryLevel: 'N' } })} />);
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('group-5000');
+    const root = screen.getByTestId('new-account-modal-parent');
+    expect(within(root).getByText('5000')).toBeInTheDocument();
+    expect(within(root).getByText('Purchases')).toBeInTheDocument();
     expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
   });
 
   it('falls back to no parent selection when nothing matches', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: { id: 'x', searchKey: '9999', summaryLevel: 'N' } })} />);
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('');
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('selectAccount')).toBeInTheDocument();
   });
 
   it('falls back to no parent selection when currentRecord is null', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('');
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('selectAccount')).toBeInTheDocument();
   });
 
-  it('builds virtual parent groups from allAccounts when no explicit 4-digit summary row exists', () => {
+  it('builds virtual parent groups from allAccounts when no explicit 4-digit summary row exists', async () => {
+    const user = userEvent.setup();
     const flatOnly = [
       { id: 'acc-1', searchKey: '60000001', name: 'Leaf', summaryLevel: 'N', parentCode4: '6000', parentCode4Name: 'Expenses' },
     ];
     render(<NewAccountModal {...baseProps({ allAccounts: flatOnly, currentRecord: null })} />);
-    const select = screen.getByTestId('new-account-modal-parent');
-    const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
-    expect(optionTexts).toContain('6000 — Expenses');
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+
+    expect(await screen.findByText('6000')).toBeInTheDocument();
+    expect(screen.getByText('Expenses')).toBeInTheDocument();
   });
 
   it('fetches accounts from the API when allAccounts is empty', async () => {
+    const user = userEvent.setup();
     globalThis.fetch = vi.fn(() =>
       Promise.resolve({ ok: true, json: async () => ({ response: { data: ACCOUNTS } }) }),
     );
@@ -136,10 +160,9 @@ describe('NewAccountModal', () => {
       `${BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
       expect.objectContaining({ credentials: 'include', headers: { 'Accept-Language': 'es_ES' } }),
     ));
-    await waitFor(() => {
-      const select = screen.getByTestId('new-account-modal-parent');
-      expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
-    });
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    expect(await screen.findByText('Sales')).toBeInTheDocument();
+    expect(screen.getByText('Purchases')).toBeInTheDocument();
   });
 
   it('does not fetch accounts when allAccounts already has rows', () => {
@@ -149,22 +172,25 @@ describe('NewAccountModal', () => {
   });
 
   it('falls back to an empty list when the account fetch fails', async () => {
+    const user = userEvent.setup();
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
     render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    const select = screen.getByTestId('new-account-modal-parent');
-    expect(select.querySelectorAll('option').length).toBe(1); // only the placeholder
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    expect(await screen.findByText('noResultsFound')).toBeInTheDocument();
   });
 
   it('falls back to an empty list when the account fetch throws', async () => {
+    const user = userEvent.setup();
     globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
     render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    const select = screen.getByTestId('new-account-modal-parent');
-    expect(select.querySelectorAll('option').length).toBe(1);
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    expect(await screen.findByText('noResultsFound')).toBeInTheDocument();
   });
 
   it('retries the account fetch on the next open after a failed attempt', async () => {
+    const user = userEvent.setup();
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
     const { rerender } = render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
@@ -178,15 +204,15 @@ describe('NewAccountModal', () => {
     rerender(<NewAccountModal {...baseProps({ allAccounts: [], isOpen: true })} />);
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
-    const select = screen.getByTestId('new-account-modal-parent');
-    await waitFor(() => expect(select.querySelectorAll('option').length).toBeGreaterThan(1));
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    expect(await screen.findByText('Sales')).toBeInTheDocument();
   });
 
   it('selecting a parent fills the code prefix into the code field', async () => {
     const user = userEvent.setup();
     render(<NewAccountModal {...baseProps()} />);
-    const select = screen.getByTestId('new-account-modal-parent');
-    await user.selectOptions(select, screen.getByRole('option', { name: '5000 — Purchases' }));
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await user.click(await screen.findByText('Purchases'));
     expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
   });
 
@@ -195,29 +221,35 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps()} />);
     fireEvent.click(screen.getByTestId('new-account-modal-save'));
 
-    expect(screen.getAllByRole('alert')).toHaveLength(3); // parent, name, code
+    // AccountBadgeSelect's own error text is not rendered with role="alert",
+    // so only name + code carry that role; the parent error is still verified
+    // separately below via its literal text.
+    expect(screen.getAllByRole('alert')).toHaveLength(2); // name, code
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('required')).toBeInTheDocument();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('clears the name error as soon as the user types', () => {
     render(<NewAccountModal {...baseProps()} />);
     fireEvent.click(screen.getByTestId('new-account-modal-save'));
-    expect(screen.getAllByRole('alert')).toHaveLength(3);
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
 
     fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'New sub account' } });
-    expect(screen.getAllByRole('alert')).toHaveLength(2);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
-  it('switching the parent selector updates the code prefix and clears its error', () => {
+  it('switching the parent selector updates the code prefix and clears its error', async () => {
+    const user = userEvent.setup();
     render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
     fireEvent.click(screen.getByTestId('new-account-modal-save'));
-    expect(screen.getAllByRole('alert')).toHaveLength(3); // no parent selected yet
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('required')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByTestId('new-account-modal-parent'), { target: { value: 'group-5000' } });
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await user.click(await screen.findByText('Purchases'));
 
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('group-5000');
+    expect(within(screen.getByTestId('new-account-modal-parent')).getByText('5000')).toBeInTheDocument();
     expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
-    expect(screen.getAllByRole('alert')).toHaveLength(2); // parent error cleared
+    expect(within(screen.getByTestId('new-account-modal-parent')).queryByText('required')).not.toBeInTheDocument();
   });
 
   it('submits the correct POST body and calls onSaved on success', async () => {
@@ -283,5 +315,50 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ onClose })} />);
     fireEvent.click(screen.getByTestId('dialog-overlay-close'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // ── Searchable parent-account selector (ETP-4884 item 3) ──────────────────
+
+  it('shows a search input in the parent-account selector instead of a plain list', async () => {
+    const user = userEvent.setup();
+    render(<NewAccountModal {...baseProps()} />);
+
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    expect(await screen.findByPlaceholderText('search')).toBeInTheDocument();
+  });
+
+  it('filters parent-account options as the user types in the search box', async () => {
+    const user = userEvent.setup();
+    render(<NewAccountModal {...baseProps()} />);
+
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    const search = await screen.findByPlaceholderText('search');
+    await user.type(search, 'Purchases');
+
+    expect(await screen.findByText('Purchases')).toBeInTheDocument();
+    expect(screen.queryByText('Sales')).not.toBeInTheDocument();
+  });
+
+  // ── Account Type default derived from the parent (ETP-4884 item 3) ────────
+
+  it('defaults Account Type from the selected leaf record when opened from a leaf row', () => {
+    // currentRecord is a real leaf (not a 4-digit summary), accountType 'R' (Revenue).
+    const currentRecord = { id: 'acc-40000001', searchKey: '40000002', accountType: 'R', summaryLevel: 'N' };
+    render(<NewAccountModal {...baseProps({ currentRecord })} />);
+
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
+  });
+
+  it('defaults Account Type from an existing sibling leaf when the parent is a group heading', () => {
+    // currentRecord is a virtual group (no accountType of its own) — fall back to
+    // scanning `allAccounts` for a leaf already filed under the same 4-digit prefix.
+    const currentRecord = { id: 'group-5000', searchKey: '5000', summaryLevel: 'Y', isVirtual: true };
+    render(<NewAccountModal {...baseProps({ currentRecord })} />);
+
+    // Fixture's 5000-prefixed leaf ("Purchases US") has accountType 'L' —
+    // deliberately different from DEFAULT_ACCOUNT_TYPE ('E') so this test
+    // actually proves the derivation ran instead of coincidentally matching
+    // the hardcoded fallback.
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('L');
   });
 });

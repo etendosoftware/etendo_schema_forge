@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
+import { AccountBadgeSelect } from '@/components/contract-ui';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -66,6 +67,23 @@ function deriveDefaultParentId(currentRecord, parentOptions) {
     (a) => a.summaryLevel === 'Y' && a.searchKey === prefix4,
   );
   return match ? match.id : '';
+}
+
+/**
+ * Derives the Account Type default for a new subaccount. `accountRows` only ever
+ * contains leaf (posting) accounts — the parent options here are synthetic 4-digit
+ * group headings with no `accountType` of their own — so this looks at the
+ * selected record itself when it's a real leaf, and otherwise falls back to any
+ * existing leaf already filed under the same parent prefix.
+ */
+function deriveDefaultAccountType(currentRecord, parentPrefix, accountRows) {
+  if (currentRecord && !currentRecord.isVirtual && currentRecord.accountType) {
+    return currentRecord.accountType;
+  }
+  const sibling = accountRows.find(
+    (a) => !a.isVirtual && String(a.parentCode4 ?? '') === parentPrefix && a.accountType,
+  );
+  return sibling ? sibling.accountType : DEFAULT_ACCOUNT_TYPE;
 }
 
 // 'E' (Expense) mirrors the AD column's own default value for C_ElementValue.AccountType.
@@ -161,10 +179,11 @@ export default function NewAccountModal({
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
     const prefix = defaultParent ? String(defaultParent.searchKey) : '';
-    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: DEFAULT_ACCOUNT_TYPE });
+    const defaultAccountType = deriveDefaultAccountType(currentRecord, prefix, accountRows);
+    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: defaultAccountType });
     setErrors({});
     initDoneRef.current = true;
-  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl]);
+  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl, accountRows]);
 
   // When parent changes, update the code prefix in the searchKey field
   const handleParentChange = useCallback(
@@ -267,31 +286,15 @@ export default function NewAccountModal({
 
         <div className="flex flex-col gap-5 py-2">
           {/* ── Parent Account ── */}
-          <div>
-            <label htmlFor="nam-parent" className={FIELD_LABEL_CLS}>
-              {ui('parentAccount')}
-              <span className="ml-1 text-destructive select-none">*</span>
-            </label>
-            <select
-              id="nam-parent"
-              data-testid="new-account-modal-parent"
-              className={SELECT_CLS}
-              value={form.parentAccountId}
-              onChange={handleParentChange}
-            >
-              <option value="">{ui('selectParentAccount')}</option>
-              {parentOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.searchKey} — {p.name}
-                </option>
-              ))}
-            </select>
-            {errors.parentAccountId && (
-              <p className={ERROR_CLS} role="alert">
-                {errors.parentAccountId}
-              </p>
-            )}
-          </div>
+          <AccountBadgeSelect
+            label={ui('parentAccount')}
+            required
+            value={form.parentAccountId || null}
+            options={parentOptions.map((p) => ({ id: p.id, code: p.searchKey, name: p.name }))}
+            onChange={(id) => handleParentChange({ target: { value: id ?? '' } })}
+            error={errors.parentAccountId}
+            data-testid="new-account-modal-parent"
+          />
 
           {/* ── Name ── */}
           <div>
