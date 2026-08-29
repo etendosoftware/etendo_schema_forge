@@ -269,8 +269,7 @@ function matchesLeafFilter(item, filters) {
     const nameMatch = String(item.name ?? '').toLowerCase().includes(q);
     if (!codeMatch && !nameMatch) return false;
   }
-  if (accountType !== ALL_FILTER && item.accountType !== accountType) return false;
-  return true;
+  return accountType === ALL_FILTER || item.accountType === accountType;
 }
 
 /**
@@ -603,6 +602,71 @@ export default function AccountTreeView({
     refetchFull();
   }, [onDataMutated, refetchFull]);
 
+  let treeBody;
+  if (effectiveData.length === 0) {
+    treeBody = (
+      <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+        {ui('accountTreeNoAccounts')}
+      </div>
+    );
+  } else if (hasActiveFilter && visibleRows.length === 0) {
+    treeBody = (
+      <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+        {ui('noResultsFound')}
+      </div>
+    );
+  } else {
+    treeBody = (
+      <>
+        {/* ── Column headers ── */}
+        <div
+          role="row"
+          className="flex items-center gap-3 px-4 h-11 border-b border-[hsl(var(--border-subtle))]"
+        >
+          {/* Spacer for toggle column */}
+          <span className="w-4 shrink-0" />
+          <span className="shrink-0 w-24 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('accountTreeCode')}
+          </span>
+          <span className="flex-1 min-w-0 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('name')}
+          </span>
+          <span className="shrink-0 w-40 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('accountTreeFilterType')}
+          </span>
+          <span className="shrink-0 w-10 text-sm font-medium text-[hsl(var(--muted-foreground))] text-center">
+            {ui('accountTreeFilterActive')}
+          </span>
+        </div>
+
+        {/* ── Tree rows ── */}
+        <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
+          {visibleRows.map((item) => {
+            const toggleKey = `${item.id}:active`;
+            const rawActive = Object.hasOwn(optimisticActiveToggles, toggleKey)
+              ? optimisticActiveToggles[toggleKey]
+              : item.active;
+            return (
+              <AccountTreeRow
+                key={item.id}
+                item={item}
+                isExpanded={expanded.has(item.id)}
+                isSelected={item.id === selectedId}
+                onToggle={handleToggle}
+                onRowClick={handleRowClick}
+                ui={ui}
+                activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
+                activeDisabled={!!savingActiveToggles[toggleKey]}
+                onActiveToggle={handleActiveToggle}
+                data-testid="AccountTreeRow__acc34a"
+              />
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div data-testid="account-tree" role="grid" {...rest}>
       {/* ── Toolbar ── */}
@@ -613,6 +677,7 @@ export default function AccountTreeView({
             variant="ghost"
             size="sm"
             onClick={expandAll}
+            data-testid="account-tree-expand-button"
           >
             {ui('expand')}
           </Button>
@@ -621,6 +686,7 @@ export default function AccountTreeView({
             variant="ghost"
             size="sm"
             onClick={collapseAll}
+            data-testid="account-tree-collapse-button"
           >
             {ui('collapse')}
           </Button>
@@ -637,6 +703,7 @@ export default function AccountTreeView({
           variant="default"
           size="sm"
           onClick={() => setIsModalOpen(true)}
+          data-testid="account-tree-new-subaccount-button"
         >
           + {ui('newSubAccount')}
         </Button>
@@ -665,63 +732,7 @@ export default function AccountTreeView({
         </select>
       </div>
 
-      {effectiveData.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          {ui('accountTreeNoAccounts')}
-        </div>
-      ) : hasActiveFilter && visibleRows.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          {ui('noResultsFound')}
-        </div>
-      ) : (
-        <>
-          {/* ── Column headers ── */}
-          <div
-            role="row"
-            className="flex items-center gap-3 px-4 h-11 border-b border-[hsl(var(--border-subtle))]"
-          >
-            {/* Spacer for toggle column */}
-            <span className="w-4 shrink-0" />
-            <span className="shrink-0 w-24 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-              {ui('accountTreeCode')}
-            </span>
-            <span className="flex-1 min-w-0 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-              {ui('name')}
-            </span>
-            <span className="shrink-0 w-40 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-              {ui('accountTreeFilterType')}
-            </span>
-            <span className="shrink-0 w-10 text-sm font-medium text-[hsl(var(--muted-foreground))] text-center">
-              {ui('accountTreeFilterActive')}
-            </span>
-          </div>
-
-          {/* ── Tree rows ── */}
-          <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
-            {visibleRows.map((item) => {
-              const toggleKey = `${item.id}:active`;
-              const rawActive = Object.hasOwn(optimisticActiveToggles, toggleKey)
-                ? optimisticActiveToggles[toggleKey]
-                : item.active;
-              return (
-                <AccountTreeRow
-                  key={item.id}
-                  item={item}
-                  isExpanded={expanded.has(item.id)}
-                  isSelected={item.id === selectedId}
-                  onToggle={handleToggle}
-                  onRowClick={handleRowClick}
-                  ui={ui}
-                  activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
-                  activeDisabled={!!savingActiveToggles[toggleKey]}
-                  onActiveToggle={handleActiveToggle}
-                  data-testid="AccountTreeRow__acc34a"
-                />
-              );
-            })}
-          </div>
-        </>
-      )}
+      {treeBody}
 
       {/* ── New Sub-account modal ── */}
       <NewAccountModal
