@@ -401,6 +401,68 @@ describe('AccountTreeView', () => {
     });
   });
 
+  // ── Tree-native filter (code/name/type/active) ─────────────────────────────
+
+  describe('tree-native filter', () => {
+    it('filters leaves by code or name and auto-expands their ancestors', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+
+      // The match (20000001, "Investigación aplicada.") is visible without any
+      // manual expand click — every ancestor folder auto-expanded.
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      // The non-matching sibling leaf is hidden.
+      expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+
+    it('hides branches with no matching descendant at any depth', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'no-such-account' },
+      });
+
+      expect(screen.queryByTestId('account-tree-row-group-A')).not.toBeInTheDocument();
+      expect(screen.getByText('noResultsFound')).toBeInTheDocument();
+    });
+
+    it('filters by account type independently of the text filter', () => {
+      render(<AccountTreeView {...defaultProps} data={DATA} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-type'), {
+        target: { value: 'E' },
+      });
+
+      // "Purchases US" (accountType 'E') matches; the two 'R' (Revenue) leaves
+      // under 4000 do not, so that whole branch disappears.
+      expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
+    });
+
+    it('clearing the filter reverts to the manual expand/collapse state, not the auto-expanded one', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      // No manual expansion at all — tree is fully collapsed.
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: '' },
+      });
+
+      // Back to fully collapsed — the filter's auto-expand must not leak into
+      // the persisted manual `expanded` state.
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+    });
+  });
+
   // ── Editability: leaf codes ending in "0000" are protected placeholders ────
 
   // Nothing auto-expands — walk down every nested level to reach the leaves.

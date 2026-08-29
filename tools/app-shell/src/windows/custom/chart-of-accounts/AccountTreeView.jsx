@@ -52,6 +52,7 @@ function buildTreeColumns(ui) {
       label: ui('accountTreeFilterCode'),
       required: true,
       backendSortKey: 'searchKey',
+      filterable: false,
     },
     {
       key: 'name',
@@ -59,6 +60,7 @@ function buildTreeColumns(ui) {
       type: 'string',
       label: ui('accountTreeFilterName'),
       required: true,
+      filterable: false,
     },
     {
       key: 'accountType',
@@ -69,6 +71,7 @@ function buildTreeColumns(ui) {
       enumLabels: Object.fromEntries(
         Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => [code, ui(uiKey)]),
       ),
+      filterable: false,
     },
     {
       key: 'active',
@@ -80,6 +83,7 @@ function buildTreeColumns(ui) {
         true: ui('yes'),
         false: ui('no'),
       },
+      filterable: false,
     },
     {
       key: 'ytdDebit',
@@ -245,6 +249,52 @@ function collectVirtualIds(nodes, acc = []) {
     }
   }
   return acc;
+}
+
+const ALL_FILTER = 'all';
+
+/**
+ * A leaf "matches" if it satisfies every active filter criterion. Virtual
+ * folder nodes never match directly — `filterTree` below decides whether a
+ * folder survives based on its descendants, not on this function.
+ */
+function matchesLeafFilter(item, filters) {
+  const { text, accountType, active } = filters;
+  if (text) {
+    const q = text.toLowerCase();
+    const codeMatch = String(item.searchKey ?? '').toLowerCase().includes(q);
+    const nameMatch = String(item.name ?? '').toLowerCase().includes(q);
+    if (!codeMatch && !nameMatch) return false;
+  }
+  if (accountType !== ALL_FILTER && item.accountType !== accountType) return false;
+  if (active !== ALL_FILTER) {
+    const isActive = item.active !== false;
+    if (active === 'true' && !isActive) return false;
+    if (active === 'false' && isActive) return false;
+  }
+  return true;
+}
+
+/**
+ * Recursively prunes a tree, keeping only leaves that match `filters` and every
+ * virtual ancestor that leads to at least one match. Must walk `node.children`
+ * at every depth — a shallow top-level-only check here would repeat the exact
+ * `expandAll` bug (Task 1): matches nested more than one level deep would be
+ * silently dropped instead of surfaced.
+ */
+function filterTree(nodes, filters) {
+  const result = [];
+  for (const node of nodes) {
+    if (node.isVirtual) {
+      const children = filterTree(node.children ?? [], filters);
+      if (children.length > 0) {
+        result.push({ ...node, children });
+      }
+    } else if (matchesLeafFilter(node, filters)) {
+      result.push(node);
+    }
+  }
+  return result;
 }
 
 /**
@@ -445,6 +495,31 @@ export default function AccountTreeView({
     persistExpanded(expanded);
   }, [expanded]);
 
+  const [filterText, setFilterText] = useState('');
+  const [filterAccountType, setFilterAccountType] = useState(ALL_FILTER);
+  const [filterActive, setFilterActive] = useState(ALL_FILTER);
+
+  const hasActiveFilter =
+    filterText.trim() !== '' || filterAccountType !== ALL_FILTER || filterActive !== ALL_FILTER;
+
+  const filters = useMemo(
+    () => ({ text: filterText.trim(), accountType: filterAccountType, active: filterActive }),
+    [filterText, filterAccountType, filterActive],
+  );
+
+  const filteredTree = useMemo(
+    () => (hasActiveFilter ? filterTree(tree, filters) : tree),
+    [tree, filters, hasActiveFilter],
+  );
+
+  // While a filter is active, every surviving virtual folder must be expanded —
+  // this OVERRIDES the manual `expanded` state without mutating it, so clearing
+  // the filter reveals the manual state exactly as the user left it.
+  const effectiveExpanded = useMemo(
+    () => (hasActiveFilter ? new Set(collectVirtualIds(filteredTree)) : expanded),
+    [hasActiveFilter, filteredTree, expanded],
+  );
+
   useEffect(() => {
     onColumnsReady?.(treeColumns);
   }, [onColumnsReady, treeColumns]);
@@ -472,8 +547,8 @@ export default function AccountTreeView({
   );
 
   const visibleRows = useMemo(
-    () => flattenVisible(tree, expanded),
-    [tree, expanded],
+    () => flattenVisible(filteredTree, effectiveExpanded),
+    [filteredTree, effectiveExpanded],
   );
 
   const selectedRecord = useMemo(
@@ -530,9 +605,46 @@ export default function AccountTreeView({
         </button>
       </div>
 
+      {/* ── Filter row ── */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))] bg-card">
+        <input
+          type="text"
+          data-testid="account-tree-filter-text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder={ui('search')}
+          className="h-8 flex-1 max-w-xs rounded-md border border-[hsl(var(--border-control))] bg-card px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))]"
+        />
+        <select
+          data-testid="account-tree-filter-type"
+          value={filterAccountType}
+          onChange={(e) => setFilterAccountType(e.target.value)}
+          className="h-8 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 text-xs cursor-pointer"
+        >
+          <option value={ALL_FILTER}>{ui('all')}</option>
+          {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
+            <option key={code} value={code}>{ui(uiKey)}</option>
+          ))}
+        </select>
+        <select
+          data-testid="account-tree-filter-active"
+          value={filterActive}
+          onChange={(e) => setFilterActive(e.target.value)}
+          className="h-8 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 text-xs cursor-pointer"
+        >
+          <option value={ALL_FILTER}>{ui('all')}</option>
+          <option value="true">{ui('yes')}</option>
+          <option value="false">{ui('no')}</option>
+        </select>
+      </div>
+
       {effectiveData.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           {ui('accountTreeNoAccounts')}
+        </div>
+      ) : hasActiveFilter && visibleRows.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+          {ui('noResultsFound')}
         </div>
       ) : (
         <>
