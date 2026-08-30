@@ -38,6 +38,34 @@ import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal
 const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
 
+// ETP-4872 — the 9 accounting fields, grouped the way the "Contabilidad" tab renders them.
+// Banco renders all 3 groups (9 fields); Caja/Tarjeta render only paymentIn/paymentOut (6 fields)
+// — the "General" group is OMITTED for those types, not merely hidden (see
+// AccountingConfigurationSection). No field is required (Global Constraints, ETP-4872 plan).
+const ACCOUNTING_FIELD_GROUPS = {
+  general: [
+    { key: 'fINBankrevaluationgainAcct', id: 'edit-account-bank-revaluation-gain-acct', labelKey: 'financeAccountsAccountingBankRevaluationGain' },
+    { key: 'fINBankrevaluationlossAcct', id: 'edit-account-bank-revaluation-loss-acct', labelKey: 'financeAccountsAccountingBankRevaluationLoss' },
+    { key: 'fINBankfeeAcct', id: 'edit-account-bank-fee-acct', labelKey: 'financeAccountsAccountingBankFee' },
+  ],
+  paymentIn: [
+    { key: 'inTransitPaymentAccountIN', id: 'edit-account-in-transit-payment-in-acct', labelKey: 'financeAccountsAccountingInTransitIn' },
+    { key: 'depositAccount', id: 'edit-account-deposit-acct', labelKey: 'financeAccountsAccountingDeposit' },
+    { key: 'clearedPaymentAccount', id: 'edit-account-cleared-payment-in-acct', labelKey: 'financeAccountsAccountingClearedIn' },
+  ],
+  paymentOut: [
+    { key: 'fINOutIntransitAcct', id: 'edit-account-in-transit-payment-out-acct', labelKey: 'financeAccountsAccountingInTransitOut' },
+    { key: 'withdrawalAccount', id: 'edit-account-withdrawal-acct', labelKey: 'financeAccountsAccountingWithdrawal' },
+    { key: 'clearedPaymentAccountOUT', id: 'edit-account-cleared-payment-out-acct', labelKey: 'financeAccountsAccountingClearedOut' },
+  ],
+};
+
+const ACCOUNTING_FIELDS = [
+  ...ACCOUNTING_FIELD_GROUPS.general,
+  ...ACCOUNTING_FIELD_GROUPS.paymentIn,
+  ...ACCOUNTING_FIELD_GROUPS.paymentOut,
+].map((fieldMeta) => fieldMeta.key);
+
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
@@ -193,10 +221,11 @@ async function persistAccountEdits({
     await saveImportSettings({ financialAccountId: account.id, ...settings.form });
   }
   if (accounting?.dirty) {
-    await saveAccountingConfiguration(account.id, {
-      fINAssetAcct: accounting.assetAcct,
-      fINTransitoryAcct: accounting.transitoryAcct,
+    const payload = {};
+    ACCOUNTING_FIELDS.forEach((field) => {
+      payload[field] = accounting.values[field]?.value || null;
     });
+    await saveAccountingConfiguration(account.id, payload);
   }
 }
 
@@ -634,7 +663,7 @@ function useReconciliationSettings(open, account) {
   // Out-of-range input is surfaced, not silently rewritten: an earlier version clamped the text on
   // blur, which meant typing 500 and pressing Save stored 100 with no explanation and the value
   // "changed by itself" on reopening. The field now keeps what was typed, shows the error under it
-  // and blocks Save (same shape as accounting.assetAcctMissing).
+  // and blocks Save via canSave's amountToleranceInvalid check.
   const amountToleranceInvalid = isAmountToleranceInvalid(amountTolerance);
   // Compared numerically, so re-typing the stored value in a different shape ("03", "3.0")
   // correctly reads as unchanged rather than triggering a pointless write.
@@ -781,24 +810,30 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
+/** Builds an empty { [field]: { value: '', label: '' } } map for all 9 accounting fields. */
+function emptyAccountingValues() {
+  return ACCOUNTING_FIELDS.reduce((acc, field) => {
+    acc[field] = { value: '', label: '' };
+    return acc;
+  }, {});
+}
+
 /**
- * Loads and saves the account's accounting configuration (asset account / transitory account)
- * — the two accounts used when generating transaction journal entries. Backed by the
- * `accountingConfiguration` entity, fully owned by `FinancialAccountAccountingHandler`: GET
- * resolves the account's ledger and finds-or-defaults the row; save finds-or-creates it. The GET
- * response also carries `catalogs.accounts` (active accounting combinations for that ledger),
- * used to populate both search selects client-side with no extra round-trip.
+ * Loads and saves the account's accounting configuration (ETP-4872 — 9 account-type-dependent
+ * fields, replacing the old 2-field `fINAssetAcct`/`fINTransitoryAcct` set) used when generating
+ * transaction journal entries. Backed by the `accountingConfiguration` entity, fully owned by
+ * `FinancialAccountAccountingHandler`: GET resolves the account's ledger and finds-or-defaults
+ * the row; save finds-or-creates it. The GET response also carries `catalogs.accounts` (active
+ * accounting combinations for that ledger), used to populate every search select client-side
+ * with no extra round-trip. No field is required (ETP-4872 plan, Global Constraints).
  */
 function useAccountingConfiguration(open, account) {
   const { fetchAccountingConfiguration } = useFinancialAccountAccounting();
-  const [assetAcct, setAssetAcct] = useState('');
-  const [assetAcctLabel, setAssetAcctLabel] = useState('');
-  const [transitoryAcct, setTransitoryAcct] = useState('');
-  const [transitoryAcctLabel, setTransitoryAcctLabel] = useState('');
+  const [values, setValues] = useState(emptyAccountingValues);
   const [catalog, setCatalog] = useState([]);
   const [ledgerConfigured, setLedgerConfigured] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [snapshot, setSnapshot] = useState({ assetAcct: '', transitoryAcct: '' });
+  const [snapshot, setSnapshot] = useState(emptyAccountingValues);
 
   const accountId = account?.id;
 
@@ -807,28 +842,26 @@ function useAccountingConfiguration(open, account) {
     let cancelled = false;
     // Reset to a clean slate before fetching — otherwise a failed or slow fetch for a
     // NEW account (opened right after a previously-loaded one) would leave the previous
-    // account's assetAcct/labels/catalog/snapshot in memory, making dirty/validation
-    // derive from the wrong account.
-    setAssetAcct('');
-    setAssetAcctLabel('');
-    setTransitoryAcct('');
-    setTransitoryAcctLabel('');
+    // account's values/catalog/snapshot in memory, making dirty derive from the wrong account.
+    setValues(emptyAccountingValues());
     setCatalog([]);
-    setSnapshot({ assetAcct: '', transitoryAcct: '' });
+    setSnapshot(emptyAccountingValues());
     setLedgerConfigured(true);
     setLoading(true);
     fetchAccountingConfiguration(accountId)
       .then((row) => {
         if (cancelled) return;
-        const asset = row?.fINAssetAcct || '';
-        const transitory = row?.fINTransitoryAcct || '';
-        setAssetAcct(asset);
-        setAssetAcctLabel(row?.['fINAssetAcct$_identifier'] || '');
-        setTransitoryAcct(transitory);
-        setTransitoryAcctLabel(row?.['fINTransitoryAcct$_identifier'] || '');
+        const next = ACCOUNTING_FIELDS.reduce((acc, field) => {
+          acc[field] = {
+            value: row?.[field] || '',
+            label: row?.[`${field}$_identifier`] || '',
+          };
+          return acc;
+        }, {});
+        setValues(next);
         setCatalog(Array.isArray(row?.catalogs?.accounts) ? row.catalogs.accounts : []);
         setLedgerConfigured(row?.ledgerConfigured !== false);
-        setSnapshot({ assetAcct: asset, transitoryAcct: transitory });
+        setSnapshot(next);
       })
       .catch(() => {
         if (!cancelled) setLedgerConfigured(false);
@@ -842,23 +875,23 @@ function useAccountingConfiguration(open, account) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, accountId, fetchAccountingConfiguration]);
 
-  const dirty = assetAcct !== snapshot.assetAcct || transitoryAcct !== snapshot.transitoryAcct;
-  // The asset account is required, but only blocks Save once the user actually touches this tab —
-  // editing Name/bank connection/reconciliation on an account that never configured accounting must not be
-  // blocked by an unrelated mandatory field (ETP-4530).
-  const assetAcctMissing = dirty && !assetAcct;
+  const setFieldValue = useCallback((field, id, label) => {
+    setValues((prev) => ({ ...prev, [field]: { value: id || '', label: label || '' } }));
+  }, []);
+
+  const dirty = ACCOUNTING_FIELDS.some((field) => values[field]?.value !== snapshot[field]?.value);
 
   return {
-    assetAcct, setAssetAcct, assetAcctLabel, setAssetAcctLabel,
-    transitoryAcct, setTransitoryAcct, transitoryAcctLabel, setTransitoryAcctLabel,
-    catalog, ledgerConfigured, loading, dirty, assetAcctMissing,
+    values, setFieldValue, catalog, ledgerConfigured, loading, dirty,
   };
 }
 
-function AccountingConfigurationSection({ ui, accounting }) {
-  const accountField = { key: 'fINAssetAcct', id: 'edit-account-asset-acct', required: true };
-  const transitoryField = { key: 'fINTransitoryAcct', id: 'edit-account-transitory-acct' };
-
+// ETP-4872 — no field is required anymore, so Save is never blocked by this tab: the old
+// `assetAcctMissing` requiredness and the cross-tab `edit-account-accounting-error-summary`
+// banner it drove are gone (see the caller in EditAccountModal below). The
+// `financeAccountsAccountingBankAssetRequiredSummary` i18n key is left in the locale files —
+// deliberately unused — pending QA confirmation the "no field required" behavior is final.
+function AccountingConfigurationSection({ ui, accounting, accountType }) {
   if (accounting.loading) {
     return (
       <p className="text-xs text-muted-foreground" data-testid="accounting-configuration-loading">
@@ -875,43 +908,45 @@ function AccountingConfigurationSection({ ui, accounting }) {
     );
   }
 
+  // Banco gets all 3 groups (9 fields); Caja/Tarjeta omit the "General" group entirely (not just
+  // hide it) — it has no bank connection, so bank revaluation/fee accounts don't apply.
+  const groups = accountType === ACCOUNT_TYPE.BANK
+    ? [
+        { titleKey: 'financeAccountsEditTabGeneral', fields: ACCOUNTING_FIELD_GROUPS.general },
+        { titleKey: 'financeAccountsAccountingSectionPaymentIn', fields: ACCOUNTING_FIELD_GROUPS.paymentIn },
+        { titleKey: 'financeAccountsAccountingSectionPaymentOut', fields: ACCOUNTING_FIELD_GROUPS.paymentOut },
+      ]
+    : [
+        { titleKey: 'financeAccountsAccountingSectionPaymentIn', fields: ACCOUNTING_FIELD_GROUPS.paymentIn },
+        { titleKey: 'financeAccountsAccountingSectionPaymentOut', fields: ACCOUNTING_FIELD_GROUPS.paymentOut },
+      ];
+
   return (
-    <div className="flex flex-col gap-4" data-testid="accounting-configuration-section">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field
-          label={ui('financeAccountsAccountingBankAsset')}
-          required
-          data-testid="Field__accounting-asset">
-          <CreatableSearchSelect
-            field={accountField}
-            value={accounting.assetAcct}
-            displayValue={accounting.assetAcctLabel}
-            onChange={(id, label) => { accounting.setAssetAcct(id || ''); accounting.setAssetAcctLabel(label || ''); }}
-            formData={{}}
-            resolvedLabel={ui('financeAccountsAccountingBankAsset')}
-            staticOptions={accounting.catalog}
-            data-testid="edit-account-asset-acct" />
-          {accounting.assetAcctMissing ? (
-            <p className="text-xs text-destructive" data-testid="edit-account-asset-acct-error">
-              {ui('financeAccountsAccountingBankAssetRequired')}
-            </p>
-          ) : null}
-        </Field>
-        <Field
-          label={ui('financeAccountsAccountingTransitory')}
-          data-testid="Field__accounting-transitory">
-          <CreatableSearchSelect
-            field={transitoryField}
-            value={accounting.transitoryAcct}
-            displayValue={accounting.transitoryAcctLabel}
-            onChange={(id, label) => { accounting.setTransitoryAcct(id || ''); accounting.setTransitoryAcctLabel(label || ''); }}
-            formData={{}}
-            resolvedLabel={ui('financeAccountsAccountingTransitory')}
-            staticOptions={accounting.catalog}
-            emptyOptionLabel={ui('financeAccountsAccountingNone')}
-            data-testid="edit-account-transitory-acct" />
-        </Field>
-      </div>
+    <div className="flex flex-col gap-6" data-testid="accounting-configuration-section">
+      {groups.map((group) => (
+        <div key={group.titleKey} className="flex flex-col gap-3">
+          <h4 className="text-sm font-medium text-foreground">{ui(group.titleKey)}</h4>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {group.fields.map((fieldMeta) => (
+              <Field
+                key={fieldMeta.key}
+                label={ui(fieldMeta.labelKey)}
+                data-testid={`Field__accounting-${fieldMeta.key}`}>
+                <CreatableSearchSelect
+                  field={{ key: fieldMeta.key, id: fieldMeta.id }}
+                  value={accounting.values[fieldMeta.key]?.value || ''}
+                  displayValue={accounting.values[fieldMeta.key]?.label || ''}
+                  onChange={(id, label) => accounting.setFieldValue(fieldMeta.key, id, label)}
+                  formData={{}}
+                  resolvedLabel={ui(fieldMeta.labelKey)}
+                  staticOptions={accounting.catalog}
+                  emptyOptionLabel={ui('financeAccountsAccountingNone')}
+                  data-testid={fieldMeta.id} />
+              </Field>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1040,7 +1075,7 @@ export function EditAccountModal({
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !accounting.assetAcctMissing && !recon.amountToleranceInvalid;
+    && !recon.amountToleranceInvalid;
   const busy = saving || bankConnection.busy;
 
   const handleSave = async () => {
@@ -1177,21 +1212,15 @@ export function EditAccountModal({
               <AccountingConfigurationSection
                 ui={ui}
                 accounting={accounting}
+                accountType={fields.type || account?.type}
                 data-testid="AccountingConfigurationSection__73027d" />
             </TabsContent>
           ) : null}
         </Tabs>
 
-        {/* The bank account's asset account is validated on the Accounting tab, but Save is
-            disabled regardless of which tab is active — surface a summary here so the reason
-            isn't invisible when the user is looking at General (the field-level error inside
-            AccountingConfigurationSection already covers the Accounting tab itself, so this is
-            skipped there to avoid a duplicate message, ETP-4530 / BUG-1). */}
-        {accounting.assetAcctMissing && editTab !== EDIT_TAB_ACCOUNTING ? (
-          <p className="text-xs text-destructive" data-testid="edit-account-accounting-error-summary">
-            {ui('financeAccountsAccountingBankAssetRequiredSummary')}
-          </p>
-        ) : null}
+        {/* ETP-4872 — no accounting field is required anymore, so Save is never blocked by the
+            Contabilidad tab; the cross-tab error summary this used to show (ETP-4530 / BUG-1) is
+            gone along with the requiredness that drove it. */}
 
         {error ? (
           <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-error">{error}</p>
