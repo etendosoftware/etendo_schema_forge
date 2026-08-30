@@ -1527,3 +1527,72 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   letter/number, grep BOTH `onboarding-gaps.md` (`^### [A-Z][0-9]`) AND
   `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
   doc you happen to be editing.
+
+## ETP-4872 — A6 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+
+- **2026-08-30 — `R29` was already claimed AND already `APPLIED` live on the shared DB by an
+  unmerged sibling branch (`feature/ETP-4947`) before this session started — confirmed via
+  `git branch -a` + `git ls-tree` (found `20260828T140000Z__R29-acctschema-allownegative-revert.sql`
+  on `feature/ETP-4947`/`origin/feature/ETP-4947`, absent from this branch) AND independently via
+  a direct `SELECT DISTINCT fix_id FROM etgo_data_fix_history WHERE fix_id LIKE '%R29%'`, which
+  returned that exact fix_id already `APPLIED`. **Apply generally:** the ledger check alone would
+  have been sufficient here (it directly proves the id is live-taken, no branch archaeology
+  needed) — when both checks are available, the ledger query is the faster/more authoritative
+  one; `git branch -a` is still worth running too since a claimed-but-not-yet-applied id (still
+  only on a branch, no ledger row yet) wouldn't show up in the ledger at all. Used `R30` +
+  timestamp `2026-08-30T12:00:00Z` (after both R29's `20260828T140000Z` and the newest same-day
+  file `R26-acct-rpt-definitions` at `20260828T120000Z`).
+- **2026-08-30 — The account code width for the "572" bank-account family is genuinely NOT
+  uniform fleet-wide, confirmed by direct query across all 20 real+demo tenants with a wired `AC`
+  element, not assumed from any single source file.** 18/20 tenants (incl. GOClient,
+  SantoEmpresa) carry the R8-padded 8-digit leaf (`57200000`); exactly 2 (F&B International
+  Group, QA Testing) never got R8 applied and still carry the plain 5-digit PGC form (`57200`).
+  `GROUP BY length(value)` across every `572%` `issummary='N'` row on the whole DB confirms only
+  these two widths exist — no third. A fix that hardcodes either width (as R9's own
+  `41700000` did, reasonably, since it happened to only ever run against GOClient-family tenants)
+  would have silently corrupted the other family here. **Apply generally:** for any future
+  new-account gap, verify the sibling account's width per-tenant via direct query before writing
+  `@apply` — do not assume R9's single-width precedent generalizes.
+- **2026-08-30 — Confirmed live: `C_ELEMENTVALUE_TRL`, `C_VALIDCOMBINATION`, and one
+  `AD_TREENODE` row per new `C_ELEMENTVALUE` are ALL auto-created by the standard
+  `c_elementvalue_trg()` trigger firing reliably inside the data-fix runner's plain-SQL
+  transaction — do not manually INSERT any of the three (would violate their UNIQUE
+  constraints against the trigger's own rows).** This reconfirms the ETP-4402/R9 finding
+  (2026-07-02, same file, `c_elementvalue code structure` section) on a second, independent gap.
+  New corollary this session: the trigger's auto-created `C_VALIDCOMBINATION` sets
+  `ALIAS=COMBINATION=new.VALUE` **verbatim** — the FULL, possibly-8-digit value, never truncated.
+  On an 8-digit tenant this produces `'57210000'`, inconsistent with the sibling `57200`
+  account's own actual `ALIAS='57200'` (5-digit) shape on the SAME chart — itself an artifact of
+  R8 apparently having disabled triggers during its bulk 8-digit-padding UPDATE, so the
+  pre-existing combinations were never widened to match. **Apply generally:** any future fix that
+  inserts a NEW postable leaf onto an R8-padded (8-digit) chart must add an explicit follow-up
+  `UPDATE c_validcombination SET alias = LEFT(value,5), combination = LEFT(value,5) ...` after the
+  INSERT — the trigger's own output will NOT match the tenant's established convention on its own.
+  Verified empirically: on the 2 non-R8 (5-digit) tenants, `LEFT(value,5)` trivially equals
+  `value`, so this normalize step correctly no-ops there (`APPLIED (4 rows)` vs. `(5 rows)` on the
+  8-digit branch — the row-count difference is itself a clean signal the branch logic is correct).
+- **2026-08-30 — Self-caught authoring bug: typed the Spanish account name without its accent
+  ("Tarjetas de credito, euros" instead of "Tarjetas de crédito, euros") when transcribing it into
+  the `.sql` file by hand, diverging from both the preventive-side XML and the live DB's own
+  existing `572`-family names.** Caught only by re-querying the just-applied live row and diffing
+  its `name` against the preventive fix's committed XML — the SQL file itself doesn't fail any
+  syntax/idempotency check for a plain string content difference. Fixed the `.sql` file, then
+  cleaned up (manually deleted) the wrongly-accented test rows already committed to the shared DB
+  (`c_validcombination` → `ad_treenode` → `c_elementvalue_trl` → `c_elementvalue` → the
+  `etgo_data_fix_history` ledger row, in that FK-safe order) before re-running the corrected fix.
+  **Apply generally:** when a fix's `.sql` file hand-transcribes a name/description string that
+  must byte-match another artifact (a preventive XML, a sibling account's existing name), diff the
+  actual applied row's content against that source AFTER a real test run, not just eyeball the
+  `.sql` source — accented/non-ASCII characters are exactly the class of error that survives a
+  visual review of the file but not a live data diff.
+- **2026-08-30 — CUT (`ONBOARDING_PROVISIONED_THROUGH`) intentionally left unbumped for a
+  different reason than the ETP-5019/R28 precedent: the preventive front for THIS gap lives on an
+  UNMERGED sibling branch in a DIFFERENT repo (`com.etendoerp.go` `feat/ledger-account-57210`),
+  which this session could not safely edit (out of scope, explicitly read-only per the task
+  brief) even if the CUT-chain-verification concern didn't also apply.** Both reasons compound:
+  even setting aside the intervening-unbumped-fixes risk (R27/R28/R26-acct-rpt-definitions/the
+  sibling R29, none individually re-verified this session), bumping a Java constant that lives on
+  an unmerged branch this session has no write access to is a structurally separate blocker.
+  Flagged explicitly as a follow-up for whoever merges both the preventive dataset branch and this
+  corrective `.sql` — do not silently skip noting this, and do not bump it from a worktree that
+  cannot see the preventive branch's actual merged state.
