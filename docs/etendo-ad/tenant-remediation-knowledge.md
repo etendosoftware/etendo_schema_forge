@@ -1528,7 +1528,17 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
   doc you happen to be editing.
 
-## ETP-4872 — A6 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+## ETP-4872 — A7 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+
+- **2026-08-30 (review correction) — Originally filed as `A6`; caught in review as a collision
+  with the pre-existing `A6` (ETP-4539 "Asset group Genérico consolidation", documented above in
+  this same file) — a completely unrelated table (`A_Asset_Group`). Relabeled `A7` here, in
+  `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and the `.sql` header's `@gap:` line.**
+  Root cause: the letter was assigned without cross-checking the SQL headers directly (`grep
+  "@gap:" cli/src/data-fixes/sql/*.sql`), only against this doc's own prose — the exact check
+  `onboarding-and-datafixes-map.md`'s own `L1` collision note (2026-08-27, above) already flagged
+  as mandatory. **Apply generally:** grep the actual `.sql` `@gap:` headers, not just the docs,
+  before assigning any new letter/number — a doc can drift from the SQL it describes.
 
 - **2026-08-30 — `R29` was already claimed AND already `APPLIED` live on the shared DB by an
   unmerged sibling branch (`feature/ETP-4947`) before this session started — confirmed via

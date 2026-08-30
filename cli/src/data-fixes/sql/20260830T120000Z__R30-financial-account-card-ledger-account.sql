@@ -1,5 +1,5 @@
 -- @id: R30-financial-account-card-ledger-account
--- @gap: A6
+-- @gap: A7
 -- @risk: medium
 -- @type: sql
 -- @description: Provision the new "57210 - Tarjetas de crédito, euros" ledger account (sibling of 57200, group 5721 sibling of 5720) for tenants that already have a PGC-shaped 572 chain, mirroring ETP-4872's preventive onboarding-dataset addition (see NAME/DESCRIPTION below for the correctly-accented Spanish text)

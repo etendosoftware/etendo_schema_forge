@@ -17,7 +17,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
 | A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
-| A6 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
+| A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -684,7 +684,7 @@ remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no
 
 ---
 
-### A6 — A single new named ledger account missing from an already-provisioned chart (ETP-4872, 2026-08-30)
+### A7 — A single new named ledger account missing from an already-provisioned chart (ETP-4872, 2026-08-30)
 
 **Symptom:** ETP-4872 introduces accounting defaults for a new Tarjeta/Card `FIN_FinancialAccount`
 type. Those defaults need a brand-new ledger account, `57210` ("Tarjetas de crédito, euros"), as a
@@ -695,6 +695,14 @@ absent. This is a reusable gap SHAPE (a new account/document-type rollout needin
 `C_ELEMENTVALUE` added retroactively to already-provisioned tenants), of which `57210` is the first
 instance filed under this letter — ETP-4402's `417`/`4170`/`41700000` chain (`R9-bp-category-seed`,
 filed under `@gap: ETP-4402` before this letter existed) is the same shape in hindsight.
+
+> **Label note (2026-08-30):** this gap was originally filed as `A6`, which collided with the
+> pre-existing `A6` (Asset group "Genérico" consolidation, ETP-4539, §A above — see
+> `tenant-remediation-knowledge.md`) — a completely unrelated table (`A_Asset_Group`). Caught in
+> review before merge; relabeled `A7` across this doc, `tenant-remediation-knowledge.md`,
+> `onboarding-and-datafixes-map.md`, and the `.sql` header. No functional impact — `@gap` is a
+> documentation/categorization tag only, never stored in `ETGO_DATA_FIX_HISTORY` or read by the
+> runner (same class of drift as the `H1`→`H3` relabel documented above).
 
 **Root cause:** not a bug — a new account genuinely did not exist at the time earlier tenants were
 onboarded. Structural facts confirmed live against the shared dev/Experimental DB (2026-08-30, 20
