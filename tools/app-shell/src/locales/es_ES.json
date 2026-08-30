@@ -4977,7 +4977,7 @@
       "description": "Posición específica generada por procesos tanto ejecutados como no ejecutados."
     },
     "C_Glitem_Acct_ID": {
-      "label": "Cuenta contable Contabilidad",
+      "label": "Configuración de cuenta contable",
       "description": ""
     },
     "Showingrid": {
