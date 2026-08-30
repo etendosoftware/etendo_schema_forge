@@ -80,7 +80,7 @@ const statements = sqlApply
 describe('R30 data-fix — header metadata', () => {
   it('parses with the expected id and gap', () => {
     assert.equal(fix.id, 'R30-financial-account-card-ledger-account');
-    assert.equal(fix.gap, 'A6');
+    assert.equal(fix.gap, 'A7');
   });
 
   it('is a medium-risk sql fix', () => {
