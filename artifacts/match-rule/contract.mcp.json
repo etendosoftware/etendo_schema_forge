@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "generatedAt": "2026-06-11T18:36:13.442Z",
   "updatedAt": "2026-08-29T21:27:17.467Z",
-  "contractChecksum": "dc5f71452bac9d0d",
+  "contractChecksum": "9287d166f9dcd72a",
   "apiPrediction": {
     "specName": "match-rule",
     "baseUrl": "/sws/neo/match-rule",

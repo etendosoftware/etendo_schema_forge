@@ -151,6 +151,7 @@
           "grid": true,
           "gridOrder": 5,
           "gridLabelKey": "matchRuleColConcept",
+          "label": "Accounting account",
           "form": true,
           "section": "general",
           "seq": 5,
