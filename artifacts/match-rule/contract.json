@@ -374,7 +374,7 @@
             "name": "accountingConcept",
             "apiKey": "accountingConcept",
             "column": "C_GLItem_ID",
-            "label": "Accounting concept",
+            "label": "Accounting account",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",

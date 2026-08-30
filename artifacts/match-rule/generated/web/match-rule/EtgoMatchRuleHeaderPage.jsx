@@ -8,7 +8,7 @@ const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', labelKey: 'matchRuleColName', cellType: 'nameWithSubline', subField: 'financialAccount', subEmptyKey: 'matchRuleAllAccounts' },
   { key: 'textCondition', column: 'TextCondition', type: 'enum', label: 'Text Condition', labelKey: 'matchRuleColCondition', enumLabels: { 'C': 'textConditionC', 'R': 'textConditionR', 'S': 'textConditionS' }, cellType: 'conditionChip', kindField: 'textCondition', patternField: 'textPattern', kindLabels: {"C":"matchRuleConditionContains","S":"matchRuleConditionStartsWith","R":"matchRuleConditionRegex"} },
   { key: 'transactionType', column: 'ETGO_Transaction_Type_ID', type: 'selector', label: 'Transaction Type', labelKey: 'matchRuleColType' },
-  { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting concept', labelKey: 'matchRuleColConcept' },
+  { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting account', labelKey: 'matchRuleColConcept' },
   { key: 'matchCount', column: 'MatchCount', type: 'number', label: 'Match Count', labelKey: 'matchRuleColReconciliations', cellType: 'boldText' },
   { key: 'active', column: 'Isactive', type: 'boolean', label: 'Active', labelKey: 'matchRuleColActive', toggle: true, cellType: 'toggle' },
 ];
@@ -20,7 +20,7 @@ const fields = [
   { key: 'textPattern', column: 'TextPattern', type: 'text', label: 'Text Pattern', required: true, section: 'general', placeholderKey: 'matchRulePatternPlaceholder' },
   { key: 'financialAccount', column: 'FIN_Financial_Account_ID', type: 'selector', label: 'Financial Account', reference: 'Financial_Account', inputMode: 'selector', searchSelect: true, section: 'general', emptyOptionLabelKey: 'matchRuleAllAccounts' },
   { key: 'transactionType', column: 'ETGO_Transaction_Type_ID', type: 'selector', label: 'Transaction Type', reference: 'ETGO_Transaction_Type', inputMode: 'selector', searchSelect: true, allowCreate: true, createLabelKey: 'matchRuleTypeCreate', createTitleKey: 'matchRuleTypeCreateTitle', createNamePlaceholderKey: 'matchRuleTypeNamePlaceholder', createSpec: 'transaction-type', createEntity: 'transactionType', section: 'general', placeholderKey: 'matchRuleTypePlaceholder' },
-  { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting concept', required: true, reference: 'GLItem', inputMode: 'selector', searchSelect: true, section: 'general' },
+  { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting account', required: true, reference: 'GLItem', inputMode: 'selector', searchSelect: true, section: 'general' },
   { key: 'textCondition', column: 'TextCondition', type: 'select', label: 'Text Condition', required: true, searchSelect: true, section: 'general', options: [{ value: 'C', label: 'Contains' }, { value: 'R', label: 'Regex' }, { value: 'S', label: 'Starts with' }], placeholderKey: 'matchRuleConditionPlaceholder' },
   { key: 'priority', column: 'Priority', type: 'number', label: 'Priority', required: true, section: 'general' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', reference: 'BPartner', inputMode: 'selector', searchSelect: true, section: 'general' },
