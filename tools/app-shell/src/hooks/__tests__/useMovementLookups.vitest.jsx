@@ -128,7 +128,7 @@ describe('useMovementLookups — useBPartnerLookup', () => {
     expect(url).toContain('q=abc');
   });
 
-  it('does not fetch when the user has no token', async () => {
+  it('does not fetch when the user has no token — inverted: the cookie carries the session', async () => {
     const { useAuth: realAuth } = await import('@/auth/AuthContext.jsx');
     expect(realAuth().token).toBeTruthy(); // sanity check — mock is active
 
@@ -144,7 +144,10 @@ describe('useMovementLookups — useBPartnerLookup', () => {
 
     // Wait past the debounce — no fetch should fire because token is null
     await new Promise((r) => setTimeout(r, DEBOUNCE_MS + 100));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(globalThis.fetch).toHaveBeenCalled();
 
     vi.resetModules();
   });

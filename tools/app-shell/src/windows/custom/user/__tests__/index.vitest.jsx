@@ -198,9 +198,12 @@ describe('UserWindow — fetching applied roles on load', () => {
     expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', () => {
+  it('does not fetch when token is missing — inverted: the cookie carries the session', () => {
     render(<UserWindow recordId="user-1" apiBaseUrl="/api" />);
-    expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchUserRoleAssignments).toHaveBeenCalled();
   });
 
   it('does not fetch when apiBaseUrl is missing', () => {

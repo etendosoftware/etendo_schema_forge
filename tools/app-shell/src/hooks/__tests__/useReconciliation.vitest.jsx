@@ -1,4 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 
 // The GET hooks below (usePendingStatementLines, useCandidateOperations, useAutoMatch) still
 // go through useNeoResource.js, which reads its token via the aliased `useAuth` — this mock
@@ -52,6 +53,10 @@ afterEach(() => {
 });
 
 describe('usePendingStatementLines (GET)', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   it('stays idle (no fetch, empty data) when accountId is null', async () => {
     globalThis.fetch.mockResolvedValue(getResponse({ lines: [] }));
 

@@ -1,5 +1,6 @@
 // Vitest component tests for FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
@@ -161,6 +162,10 @@ afterEach(() => {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 describe('FmListPage — rendering', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   it('renders without crashing with empty declarations', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
     expect(document.body).toBeTruthy();

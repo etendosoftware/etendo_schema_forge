@@ -85,11 +85,6 @@ describe('computeBoxes303 — with token and apiBaseUrl', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('generate303File — guard clauses', () => {
-  it('returns no_token error when token is missing', async () => {
-    const result = await generate303File({ year: 2026, period: 'T1' }, { apiBaseUrl: '/x' });
-    assert.deepEqual(result, { ok: false, error: 'no_token' });
-  });
-
   it('returns no_token error when apiBaseUrl is missing', async () => {
     const result = await generate303File({ year: 2026, period: 'T1' }, { token: 'tok' });
     assert.deepEqual(result, { ok: false, error: 'no_token' });
