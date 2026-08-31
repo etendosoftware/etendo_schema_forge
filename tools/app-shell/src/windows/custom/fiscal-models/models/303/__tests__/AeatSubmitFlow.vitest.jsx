@@ -667,6 +667,25 @@ describe('AeatSubmitFlow — NRC required guard (ETP-5027)', () => {
     expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
   });
 
+  it('does not fire when declarationType is empty even though decl.result.kind is I', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    // `tipo` (the looser expression the IBAN guard uses) resolves to 'I' here via its
+    // decl.result.kind fallback, but declarationType is '' so the NRC field is NOT
+    // rendered. Keying the guard off `tipo` would block submission against an invisible
+    // field with no way for the user to satisfy it.
+    renderFlow({
+      fillNrc: false,
+      decl: { ...DECL, result: { kind: 'I' } },
+      identChecks: { tipo_declaracion: '', bank_iban: 'ES7620770024003102575766' },
+    });
+
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+    submit();
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
+  });
+
   it.each(['U', 'D', 'N'])('does not fire the NRC guard for tipo %s', async (tipo) => {
     stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
     renderFlow({
