@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -32,7 +32,24 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useActiveAccountingDimensions } from '@/hooks/useActiveAccountingDimensions.js';
 import { filterByActiveDimensions, hasDimensionFields } from '@/lib/accountingDimensions.js';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useRowSelection } from '@/hooks/useRowSelection';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
+
+// Row actions the grid should expose. A read-only role gets none, which also drops the whole
+// actions column. Kept out of the component so its branching does not count against the
+// component's cognitive complexity (Sonar javascript:S3776 — the function was already at 14 of
+// the 15 allowed before the selection work).
+function rowActionProps({ readOnly, allowClone, onEdit, onClone, onDelete }) {
+  if (readOnly) return {};
+  return { onEdit, onClone: allowClone ? onClone : undefined, onDelete };
+}
+
+// Bulk-delete outcome, per the shared three-outcome contract: refetch when anything was deleted,
+// and narrow the selection to the rows that failed (none left = cleared, all left = unchanged).
+function applyDeleteOutcome(succeeded, failed, reload, keepOnly) {
+  if (succeeded.length > 0) reload();
+  keepOnly(failed.map((row) => row.id));
+}
 
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
@@ -321,41 +338,10 @@ export function ListModalWindow({
   // ListView's own grid): a checkbox column plus the floating "N selected" pill. Read-only roles
   // get no selection at all — there is no action they could take with it.
   const selectable = !readOnly;
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const toggleSelect = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-  // Selection is scoped to the rows currently visible: changing a filter or the search must not
-  // leave invisible rows silently checked and then delete them.
-  const visibleIds = useMemo(() => data.map((row) => row?.id).filter(Boolean), [data]);
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visible = new Set(visibleIds);
-      const next = new Set([...prev].filter((id) => visible.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [visibleIds]);
-
-  const allSelected = visibleIds.length > 0 && selectedIds.size === visibleIds.length;
-  const someSelected = selectedIds.size > 0 && !allSelected;
-
-  const toggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) => (prev.size === visibleIds.length ? new Set() : new Set(visibleIds)));
-  }, [visibleIds]);
-
-  const selectedRows = useMemo(
-    () => data.filter((row) => selectedIds.has(row?.id)),
-    [data, selectedIds],
-  );
-
+  const {
+    selectedIds, selectedRows, allSelected, someSelected,
+    toggleSelect, toggleSelectAll, clearSelection, keepOnly,
+  } = useRowSelection(data);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -515,14 +501,10 @@ export function ListModalWindow({
   // Bulk delete of the checked rows. Reuses the shared hook every other grid uses, so the confirm
   // dialog, the parallel DELETEs and the three-outcome toast (all / partial / none) behave
   // identically here. On a partial failure only the rows that failed stay checked.
-  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
-    if (succeeded.length > 0) reload();
-    if (failed.length === 0) {
-      clearSelection();
-    } else {
-      setSelectedIds(new Set(failed.map((row) => row.id)));
-    }
-  }, [reload, clearSelection]);
+  const applyBulkDeleteOutcome = useCallback(
+    (succeeded, failed) => applyDeleteOutcome(succeeded, failed, reload, keepOnly),
+    [reload, keepOnly],
+  );
 
   const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
     apiBaseUrl,
@@ -677,9 +659,13 @@ export function ListModalWindow({
             onSort={toggleSort}
             tMenu={tMenu}
             ui={ui}
-            onEdit={readOnly ? undefined : openEdit}
-            onClone={!readOnly && config.allowClone ? openClone : undefined}
-            onDelete={readOnly ? undefined : (row) => setDeletingRow(row)}
+            {...rowActionProps({
+              readOnly,
+              allowClone: config.allowClone,
+              onEdit: openEdit,
+              onClone: openClone,
+              onDelete: setDeletingRow,
+            })}
             deletingId={deleting ? deletingRow?.id : null}
             onToggle={handleToggle}
             savingToggles={savingToggles}
