@@ -27,6 +27,10 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  'Priority is required': 'backendError.matchRulePriorityRequired',
+  'Priority must be a whole number': 'backendError.matchRulePriorityNotInteger',
+  'Priority must be 1 or greater': 'backendError.matchRulePriorityTooLow',
+  'Priority is too large': 'backendError.matchRulePriorityTooLarge',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',

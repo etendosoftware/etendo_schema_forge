@@ -54,6 +54,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
   - when the condition is Regex, the pattern is compiled and test-matched under a 200 ms cap; a pattern that fails to compile or shows catastrophic backtracking is rejected — HTTP 400.
   - `transactionType` is no longer validated against a fixed list — any `ETGO_Transaction_Type` record is accepted (referential integrity enforced by the FK).
   - `priority` is **not** required to be unique — per the functional spec it is an ordering/ranking key (the highest-priority match is the main suggestion, ties rank as alternatives), so duplicate priorities within a scope are allowed (e.g. a cloned rule may keep the source priority).
+  - `priority` **must be a whole number, 1 or greater** (upper bound: what `DECIMAL(10,0)` holds) — HTTP 400. Added because the field had no validation at all: `0` and negatives persisted silently, and a decimal was truncated by the column on the way in. Nothing technically broke with a negative (rules sort `priority ASC`, so it simply ranked first), which is why the range is a product decision rather than a crash fix. Validated on its own, **before** the content gate, because `priority` carries `inlineEdit` — a PATCH can legitimately carry priority and nothing else, and `hasContentFields` (name / condition / pattern) would not fire for it.
   - On a partial `PATCH` (inline Active toggle), content fields absent from the body are not re-validated.
 
 ## CRUD endpoints (generic W convention)
@@ -181,6 +182,7 @@ with one.
 2. Click "Nueva regla", confirm the modal opens with Priority pre-filled to `max + 10`, fill Name + Pattern + Concept condition, save, and confirm the row appears.
 3. Create a Regex-condition rule with a deliberately catastrophic pattern (e.g. `((a+)+)+$` — Java 17 optimizes the single-nested form) and confirm the save is rejected with a 400 error message (shown in Spanish via `translateBackendError`).
 4. Create two rules with the same Priority and the same "Afecta a" account and confirm **both are accepted** (priority is a ranking, not a unique key).
+4b. Enter `-1` (and then `0`, and `10.5`) in Priority and save: each must be rejected with a legible Spanish message — "La prioridad debe ser 1 o mayor" / "La prioridad debe ser un número entero". Same for the inline priority edit in the grid, which PATCHes only that field.
 5. Toggle a rule's Active switch in the grid and confirm it persists after refresh (PATCH, no modal). Creating a rule with the modal "Activa" check on must persist as active.
 6. Edit a rule by clicking its row, change a dimension under "Dimensiones" (e.g. Product), save, and confirm the change persists.
 6b. Deactivate the Proyecto dimension in the Esquema Contable (General Ledger Configuration → Dimensiones) and reload `/match-rule`: the Proyecto selector must be gone from both the create and the edit modal, while Producto and Centro de coste stay. Deactivate all three and the whole "Dimensiones" section (heading included) must disappear.
