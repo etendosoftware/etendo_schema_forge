@@ -21459,7 +21459,6 @@
     "returnReceipt.createRectificativeInvoiceDescription": "Created as draft, pre-filled with returned products and prices from the source invoice.",
     "fm.m349.invoices.empty": "Recalculate to see the source invoices.",
     "fm.m349.invoices.none": "No intra-EU invoices found for this period.",
-    "fm.m349.invoices.filtering_by": "Filtering by:",
     "fm.m349.invoices.filtered": "{visible} of {total}",
     "amortization": "Amortization",
     "totalAmortization": "Total Amortization",

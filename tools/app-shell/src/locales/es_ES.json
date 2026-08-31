@@ -21706,7 +21706,6 @@
     "returnReceipt.createRectificativeInvoiceDescription": "Se crea en borrador, prellenada con los productos devueltos y los precios de la factura origen.",
     "fm.m349.invoices.empty": "Recalcula para ver las facturas origen.",
     "fm.m349.invoices.none": "No hay facturas intracomunitarias en este período.",
-    "fm.m349.invoices.filtering_by": "Filtrando por:",
     "fm.m349.invoices.filtered": "{visible} de {total}",
     "amortization": "Amortización",
     "totalAmortization": "Amortización total",

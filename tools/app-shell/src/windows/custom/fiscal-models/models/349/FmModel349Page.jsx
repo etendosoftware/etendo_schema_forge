@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
-  OctagonAlert, X,
+  X,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -546,7 +547,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [originFilter, setOriginFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
-  const [genError,     setGenError]     = useState(null);
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
@@ -634,7 +634,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   async function handleGenerate({
     phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
   } = {}) {
-    setGenError(null);
     setGenerating(true);
     const result = await generate349File(decl, {
       token, apiBaseUrl, phone, contact,
@@ -650,7 +649,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       const msg = result.serverMessage
         || t('fm.gen349.error.generic')
         || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
-      setGenError(msg);
+      toast.error(msg);
       console.error('generate349File failed for', decl.year, decl.period, result.error, result.serverMessage);
     }
   }
@@ -805,7 +804,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
         <button
           className="fm-btn"
-          onClick={() => { setGenError(null); setShowFilegen(true); }}
+          onClick={() => setShowFilegen(true)}
           disabled={generating}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
         >
@@ -875,24 +874,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           badgeColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--text-disabled))'}
           data-testid="KpiWidget__346dd5" />
       </div>
-      {/* ── Inline generate error ────────────────────────────────── */}
-      {genError && (
-        <div style={{
-          margin: '4px 20px 0',
-          padding: '8px 14px',
-          background: 'var(--status-destructive-bg)',
-          border: '1px solid hsl(var(--destructive) / 0.3)',
-          borderRadius: 8,
-          fontSize: 13,
-          color: 'hsl(var(--destructive))',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error_349" />
-          {genError}
-        </div>
-      )}
       {/* ── Tabs ─────────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
         <Tabs

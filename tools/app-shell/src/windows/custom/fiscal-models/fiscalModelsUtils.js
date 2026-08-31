@@ -680,8 +680,18 @@ export async function generate349File(decl, {
       return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
     }
     const blob = await res.blob();
+    // Honour the user's "Nombre del fichero" (FileGenModal, `fm.filegen.filename`) — the
+    // backend sets Content-Disposition from it, but a fetch+blob+a.download flow ignores
+    // that header, so the name has to be applied here (mirrors generate303File).
+    // Unlike FileGenModal303, the 349 modal's field starts empty with an extension-less
+    // placeholder, so the typed value carries no extension: append it only when missing
+    // instead of unconditionally, which would yield "foo.txt.txt".
     // .txt to match the Etendo classic Tax Report Launcher output extension
-    triggerDownload(blob, `349_${decl.period}_${decl.year}.txt`);
+    const typedName = fileName?.trim();
+    const downloadName = typedName
+      ? (/\.txt$/i.test(typedName) ? typedName : `${typedName}.txt`)
+      : `349_${decl.period}_${decl.year}.txt`;
+    triggerDownload(blob, downloadName);
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
