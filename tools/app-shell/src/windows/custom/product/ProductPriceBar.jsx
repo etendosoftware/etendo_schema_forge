@@ -158,7 +158,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   ), [catalogs, priceSelector]);
 
   const refreshPrices = useCallback(async () => {
-    if (!recordId || !token) {
+    if (!recordId) {
       setPriceRows([]);
       return;
     }
@@ -193,7 +193,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       setOptionsLoaded(true);
       return undefined;
     }
-    if (!apiBaseUrl || !token) return undefined;
+    if (!apiBaseUrl) return undefined;
 
     let aborted = false;
     apiFetch(`/price/selectors/${selectorColumn}?limit=200`)

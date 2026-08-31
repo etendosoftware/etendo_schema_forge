@@ -12,7 +12,7 @@ function escHql(value) {
 // ("ACME, S.L." vs "ACME SL"), so we also try a case-insensitive LIKE that
 // resolves when the result is unambiguous.
 async function findBpFuzzy({ token, apiBaseUrl, name }) {
-  if (!apiBaseUrl || !token || !name || !String(name).trim()) return null;
+  if (!apiBaseUrl || !name || !String(name).trim()) return null;
   const contactsBase = deriveContactsApiBase(apiBaseUrl);
   const where = encodeURIComponent(
     `lower(name) like lower('%${escHql(String(name).trim())}%') and active = true`,

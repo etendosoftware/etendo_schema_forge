@@ -354,7 +354,7 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
   const cacheRecordUpdated = cacheConfig?.recordUpdated ?? null;
 
   useEffect(() => {
-    if (!recordId || !apiBaseUrl || !token) return;
+    if (!recordId || !apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     let cancelled = false;
     setLoading(true);

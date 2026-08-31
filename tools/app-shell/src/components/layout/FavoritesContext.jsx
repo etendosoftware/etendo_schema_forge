@@ -55,7 +55,7 @@ export function FavoritesProvider({ children }) {
 
   // Fetch from server on login — server wins over localStorage
   useEffect(() => {
-    if (!token || !username || fetchedRef.current) return;
+    if (!username || fetchedRef.current) return;
     let cancelled = false;
     apiFetch(FAVORITES_ENDPOINT, { baseUrl: '' })
       .then((res) => (res.ok ? res.json() : null))
@@ -76,7 +76,6 @@ export function FavoritesProvider({ children }) {
 
   const syncToServer = useCallback(
     (list) => {
-      if (!token) return;
       apiFetch(FAVORITES_ENDPOINT, {
         method: 'PUT',
         baseUrl: '',

@@ -136,7 +136,7 @@ export default function BillingPreferencesForm(props) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!bpId || !token) return;
+    if (!bpId) return;
 
     // Fetch current discount record for this BP
     apiFetch(`/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`)

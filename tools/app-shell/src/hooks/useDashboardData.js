@@ -339,11 +339,6 @@ export function useDashboardData() {
   const apiFetch = useApiFetch();
 
   const fetchData = useCallback(async () => {
-    if (!token) {
-      setData(buildEmptyFallback());
-      setLoading(false);
-      return;
-    }
 
     setLoading(true);
     try {

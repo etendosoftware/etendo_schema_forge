@@ -26,7 +26,7 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
   });
 
   useEffect(() => {
-    if (!docCurrencyCode || !apiBaseUrl || !token) {
+    if (!docCurrencyCode || !apiBaseUrl) {
       setState(s => ({ ...s, loading: false }));
       return;
     }

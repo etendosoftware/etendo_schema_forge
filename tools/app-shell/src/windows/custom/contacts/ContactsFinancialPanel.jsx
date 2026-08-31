@@ -83,7 +83,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
   ), [editing]);
 
   async function persistCreditTaxField(fieldKey) {
-    if (!data?.id || !apiBaseUrl || !token) return;
+    if (!data?.id || !apiBaseUrl) return;
     if (creditTaxReadOnly[fieldKey]) return;
 
     const currentValue = draftRef.current[fieldKey] ?? '';

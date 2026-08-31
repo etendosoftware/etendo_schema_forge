@@ -345,7 +345,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);

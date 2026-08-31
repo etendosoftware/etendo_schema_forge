@@ -34,6 +34,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [existingAuthenticated, setExistingAuthenticated] = useState(false);
+  // ETP-4576 — the credential LoginStep hands back on `onAuthenticated`. This page runs
+  // OUTSIDE the authenticated shell, so no AuthProvider publishes anything to the shared
+  // scheme and the value has to be threaded explicitly. It used to be read back out of
+  // `localStorage.sf_platform_token`, which no longer works: the session endpoints stopped
+  // handing out a bearer to store, and purgeLegacyAuthStorage deletes that key on mount —
+  // so the accept call was going out with no credential at all.
+  const [sessionCredential, setSessionCredential] = useState(null);
 
   const clearTokenFromUrl = () => {
     try {
@@ -96,7 +103,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     };
   }, [token, apiFetch]);
 
-  const handleExistingAuthenticated = async () => {
+  const handleExistingAuthenticated = async (credential) => {
+    setSessionCredential(credential || null);
     setActionError(null);
     setExistingAuthenticated(true);
   };
@@ -105,13 +113,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     setActionError(null);
     setSubmitting(true);
     try {
-      // ETP-5022: the platform session token is read from localStorage, not the
-      // app's auth context (this flow runs before/outside it), so it is passed as an
-      // explicit override; on401: 'ignore' keeps the existing domain error handling below.
-      const sessionToken = globalThis.localStorage?.getItem('sf_platform_token') || '';
+      // ETP-5022's explicit override, now fed by the credential LoginStep handed back
+      // rather than by a localStorage key; on401: 'ignore' keeps the domain error handling below.
       const res = await apiFetch('/sws/go/company-invitations/accept', {
         method: 'POST',
-        token: sessionToken,
+        token: sessionCredential,
         on401: 'ignore',
         body: JSON.stringify({ token: token.trim() }),
       });

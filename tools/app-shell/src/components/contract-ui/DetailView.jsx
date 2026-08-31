@@ -1850,7 +1850,7 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+    if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
 
@@ -2345,7 +2345,7 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
+    if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // These fields are computed client-side — no callout needed.

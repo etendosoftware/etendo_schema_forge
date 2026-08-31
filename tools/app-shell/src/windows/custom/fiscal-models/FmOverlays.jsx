@@ -802,7 +802,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const controller = new AbortController();
     apiFetch(`${neoBase(apiBaseUrl)}/session`, {
       baseUrl: '',

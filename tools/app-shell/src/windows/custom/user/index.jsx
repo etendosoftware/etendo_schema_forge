@@ -393,7 +393,7 @@ export default function UserWindow(props) {
       setSelectedRoleIds([]);
       return undefined;
     }
-    if (!token || !apiBaseUrl) return undefined;
+    if (!apiBaseUrl) return undefined;
     let cancelled = false;
     fetchUserRoleAssignments(recordId)
       .then((res) => {

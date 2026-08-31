@@ -327,7 +327,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // either returns the authorization number (injected into updates) or an ERROR message.
   const handleAuthorizationToggle = useCallback(async (val) => {
     onChange?.('aeatsiiIsauthorization', val); // optimistic update
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     try {
       const res = await apiFetch('/header/callout', {
         method: 'POST',

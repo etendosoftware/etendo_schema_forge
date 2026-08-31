@@ -41,7 +41,6 @@ function useDebouncedLookup({ action, resultKey, extraParams = '' }, query) {
   }, [action, resultKey, extraParams, apiFetch]);
 
   useEffect(() => {
-    if (!token) return undefined;
     const id = setTimeout(() => { run(query); }, DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [query, run, token]);
@@ -104,7 +103,6 @@ export function useOutstandingInvoices(bpartnerId, doc = 'in') {
   const abortRef = useRef(null);
 
   useEffect(() => {
-    if (!token) { setInvoices([]); setLoading(false); return undefined; }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;

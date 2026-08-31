@@ -9,7 +9,7 @@ registerFkResolver('contacts-country', async (value, { token, simSearchFn = simS
 });
 
 async function defaultFetchRegionCountryId(regionId, token, apiBaseUrl) {
-  if (!regionId || !token) return null;
+  if (!regionId) return null;
   const contactsBase = apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : '/sws/neo/contacts';
   const where = `id='${String(regionId).replace(/'/g, "''")}'`;
   const url = `${contactsBase}/region?_neoWhere=${encodeURIComponent(where)}&limit=1`;

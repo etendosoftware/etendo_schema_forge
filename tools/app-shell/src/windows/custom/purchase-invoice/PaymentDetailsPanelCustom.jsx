@@ -38,7 +38,7 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!parentId || !token) return;
+    if (!parentId) return;
     setLoading(true);
 
     apiFetch(`/paymentPlan?parentId=${parentId}`)

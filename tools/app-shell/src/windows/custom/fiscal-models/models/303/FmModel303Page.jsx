@@ -73,7 +73,7 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
 }
 
 function fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch) {
-  if (!token || !apiBaseUrl) return;
+  if (!apiBaseUrl) return;
   apiFetch(`${neoBase(apiBaseUrl)}/session`, { baseUrl: '' })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -286,7 +286,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
     // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     refreshIncidents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id, token, apiBaseUrl]);
@@ -313,7 +313,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
     if (hasPrecomputed) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
@@ -411,7 +411,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       isFirstManualDataRender.current = false;
       return;
     }
-    if (isSubmitted || !token || !apiBaseUrl) return;
+    if (isSubmitted || !apiBaseUrl) return;
     if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
     manualDataSaveTimer.current = setTimeout(() => {
       persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });

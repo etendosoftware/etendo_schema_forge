@@ -187,7 +187,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
   const contextKey = JSON.stringify(selectorContext ?? {});
 
   React.useEffect(() => {
-    if (!parentValue || !selectorUrl || !token) {
+    if (!parentValue || !selectorUrl) {
       setDynamicOptions([]);
       return;
     }

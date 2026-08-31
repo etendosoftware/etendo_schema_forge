@@ -65,7 +65,7 @@ export function SelectorInput({
   const contextKey = JSON.stringify(selectorContext ?? {});
 
   const fetchPage = useCallback((offset) => {
-    if (!selectorUrl || !token || loadingRef.current || !hasMoreRef.current) return;
+    if (!selectorUrl || loadingRef.current || !hasMoreRef.current) return;
     loadingRef.current = true;
     setFetching(true);
     const url = buildUrlWithParams(selectorUrl, {
