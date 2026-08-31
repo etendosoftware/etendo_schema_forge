@@ -15,6 +15,8 @@
 
 // --- Mocks must be declared before any imports that trigger module resolution ---
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('@generated/dashboard/generated/config', () => ({
   kpisConfig: [],
   actions: [],
@@ -24,15 +26,8 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
-// useApiFetch wraps app-shell-core auth hooks not set up in this unit-test
-// environment. Mock as a STABLE (vi.hoisted) passthrough to globalThis.fetch:
-// apiFetch is a useCallback dependency in the hook, so a fresh function
-// identity per render would re-trigger the effect forever.
-const { mockApiFetch } = vi.hoisted(() => ({
-  mockApiFetch: (url, options) => globalThis.fetch(url, options),
-}));
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: () => mockApiFetch,
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({

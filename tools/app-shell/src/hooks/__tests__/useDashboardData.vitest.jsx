@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
 import { useDashboardData } from '../useDashboardData';
 
 // Mock external dependencies
@@ -14,19 +15,8 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
-// useApiFetch wraps the core app-shell-core auth hooks (useAuthOptional,
-// createApiFetch) which aren't set up in this unit-test environment. Mock it
-// as a thin passthrough to globalThis.fetch so fetchWidget's calls still land
-// on the fetch mock the tests already assert against.
-// The passthrough must be a STABLE reference (vi.hoisted, not a fresh arrow
-// function per call): apiFetch is a useCallback dependency inside the hook,
-// so a new identity on every render re-triggers the effect forever and
-// `loading` never settles within waitFor's timeout.
-const { mockApiFetch } = vi.hoisted(() => ({
-  mockApiFetch: (url, options) => globalThis.fetch(url, options),
-}));
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: () => mockApiFetch,
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({

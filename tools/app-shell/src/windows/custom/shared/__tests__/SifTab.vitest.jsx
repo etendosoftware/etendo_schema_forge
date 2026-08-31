@@ -1,5 +1,7 @@
 // Mocks must be declared before any imports that pull in the mocked modules.
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
@@ -13,10 +15,8 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-001' } }),
 }));
 
-// useApiFetch wraps app-shell-core auth hooks (useAuthOptional) not set up in
-// this unit-test environment. Mock as a passthrough to globalThis.fetch.
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: () => (url, options) => globalThis.fetch(url, options),
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
