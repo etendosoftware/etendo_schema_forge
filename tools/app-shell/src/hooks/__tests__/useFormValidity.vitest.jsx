@@ -213,3 +213,63 @@ describe('useFormValidity (reactive wrapper)', () => {
     expect(result.current.missingRequired).toEqual([]);
   });
 });
+
+describe('getBlockingRequiredFields — deferBlocking (ETP-5002)', () => {
+  it('returns nothing while the form is not yet judgeable', () => {
+    const blocking = getBlockingRequiredFields({
+      fields: SALES_ORDER_FIELDS, values: {}, changedKeys: new Set(), deferBlocking: true,
+    });
+    expect(
+      blocking,
+      'a required field empty only because its backend default is still in flight is '
+      + 'not the user failing to fill it — see the ETP-5002 purchase-order/warehouse case'
+    ).toEqual([]);
+  });
+
+  it('defaults to off, so every existing caller keeps blocking', () => {
+    const blocking = getBlockingRequiredFields({
+      fields: SALES_ORDER_FIELDS, values: {}, changedKeys: new Set(),
+    });
+    expect(blocking.map(f => f.key).sort()).toEqual([...EXPECTED_BLOCKING_KEYS].sort());
+  });
+
+  it('wins over skipUnchangedInvalid rather than combining with it', () => {
+    const touched = new Set(['currency']);
+    const values = { businessPartner: 'BP-1', currency: '' };
+    expect(
+      getBlockingRequiredFields({
+        fields: SALES_ORDER_FIELDS, values, changedKeys: touched, skipUnchangedInvalid: true,
+      }).map(f => f.key),
+      'baseline: a touched-and-emptied required field blocks'
+    ).toEqual(['currency']);
+    expect(
+      getBlockingRequiredFields({
+        fields: SALES_ORDER_FIELDS, values, changedKeys: touched, skipUnchangedInvalid: true, deferBlocking: true,
+      }),
+      'deferBlocking short-circuits before any per-field policy runs'
+    ).toEqual([]);
+  });
+});
+
+describe('useFormValidity — deferBlocking (ETP-5002)', () => {
+  it('reports valid while deferred, then snaps to blocked when it lifts', () => {
+    const { result, rerender } = renderHook(
+      ({ deferBlocking }) => useFormValidity({
+        fields: SALES_ORDER_FIELDS, values: {}, changedKeys: new Set(), deferBlocking,
+      }),
+      { initialProps: { deferBlocking: true } },
+    );
+
+    expect(result.current.isValid).toBe(true);
+    expect(result.current.missingRequired).toEqual([]);
+    expect(result.current.missingRequiredFields).toEqual([]);
+
+    rerender({ deferBlocking: false });
+
+    expect(
+      result.current.isValid,
+      'deferBlocking is a memo dependency, so lifting it must re-evaluate on that render'
+    ).toBe(false);
+    expect(result.current.missingRequired.sort()).toEqual([...EXPECTED_BLOCKING_KEYS].sort());
+  });
+});
