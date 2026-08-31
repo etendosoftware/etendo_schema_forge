@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import CreateContactModal from '../../contract-ui/CreateContactModal.jsx';
 import { deriveContactsApiBase } from './contactApi.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 // Bridges the OCR EntityField create-popup contract
@@ -10,10 +11,7 @@ import { deriveContactsApiBase } from './contactApi.js';
 // { id, name }, which EntityField forwards as a resolved entity selection.
 export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onCancel, onSubmit }) {
   const bpApiBaseUrl = useMemo(() => deriveContactsApiBase(apiBaseUrl), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
   // `prefilled` is keyed by CreateContactModal form field id — the OCR doc type
   // declares the mapping in `createPrefilledFrom`, so everything the extraction
   // found for this contact (tax id, address, city, country, email, phone) is

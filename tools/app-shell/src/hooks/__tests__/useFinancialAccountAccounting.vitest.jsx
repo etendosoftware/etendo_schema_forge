@@ -1,9 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
 import { useFinancialAccountAccounting } from '../useFinancialAccountAccounting.js';
 
 // ETP-4530 — Tab Contabilidad. This hook is a thin fetch/save wrapper around the
@@ -41,7 +37,7 @@ describe('useFinancialAccountAccounting', () => {
 
   // ── fetchAccountingConfiguration ─────────────────────────────────────────
 
-  it('fetchAccountingConfiguration GETs the entity with financialAccountId and auth headers', async () => {
+  it('fetchAccountingConfiguration GETs the entity with financialAccountId', async () => {
     globalThis.fetch.mockResolvedValue(
       okResponse([{ id: 'row-1', fINAssetAcct: 'AST1', fINTransitoryAcct: null }]),
     );
@@ -56,8 +52,11 @@ describe('useFinancialAccountAccounting', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(`${ENTITY_URL}?financialAccountId=acc-1`);
     expect(init.method).toBeUndefined(); // GET: no explicit method
-    expect(init.headers.Authorization).toBe('Bearer test-token');
-    expect(init.headers['Content-Type']).toBe('application/json');
+    // Auth/Content-Type are now supplied by useApiFetch: no ambient session in this
+    // test means no Authorization header, and a GET (no body) correctly gets no
+    // Content-Type either — unlike the old `authHeaders` alias this hook used to call,
+    // which always added one (ETP-5022).
+    expect(init.headers['Content-Type']).toBeUndefined();
     expect(row).toEqual({ id: 'row-1', fINAssetAcct: 'AST1', fINTransitoryAcct: null });
   });
 
@@ -177,7 +176,7 @@ describe('useFinancialAccountAccounting', () => {
 
   // ── saveAccountingConfiguration ──────────────────────────────────────────
 
-  it('saveAccountingConfiguration POSTs to the entity with the DAL field names and auth headers', async () => {
+  it('saveAccountingConfiguration POSTs to the entity with the DAL field names', async () => {
     globalThis.fetch.mockResolvedValue(
       okResponse([{ id: 'row-1', fINAssetAcct: 'AST1', fINTransitoryAcct: 'TRA1' }]),
     );
@@ -195,7 +194,6 @@ describe('useFinancialAccountAccounting', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(ENTITY_URL);
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toEqual({
       financialAccountId: 'acc-1',

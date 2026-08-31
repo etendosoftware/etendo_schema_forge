@@ -55,7 +55,6 @@ describe('useBankConnectionActions — hook', () => {
     expect(calledUrl).toContain('/sws/neo/financial-account-bank-connection');
     expect(calledUrl).toContain('action=connect');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(JSON.parse(init.body)).toEqual({});
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
