@@ -63,8 +63,6 @@ vi.mock('@/components/ui/select', () => ({
 
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
-// ETP-5030 — shared row-shading assertion helpers (see @/test/rowShading.js for
-// why "exactly one background utility" is the assertion that matters here).
 import {
   backgroundUtilities,
   hoverBackgroundUtilities,

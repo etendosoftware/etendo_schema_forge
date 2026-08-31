@@ -53,8 +53,6 @@ import {
   buildMovementSortCtx,
   buildMovementSortAccessors,
 } from '../MovementsTable.jsx';
-// ETP-5030 — shared row-shading assertion helpers (see @/test/rowShading.js for
-// why "exactly one background utility" is the assertion that matters here).
 import {
   backgroundUtilities,
   hoverBackgroundUtilities,
