@@ -262,6 +262,18 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 - A comparator that only orders full timestamp instants (no local-getter reads, no day-bucket keys) is timezone-independent and does not need this helper — don't over-apply the fix where the bug can't occur.
 - Before writing a new date formatter or date-bucketing comparator, **grep for `parseCalendarDate`/`formatCalendarDate` first** — there is almost certainly an existing pattern to copy in a sibling window/component (10+ call sites already use it).
 
+## Authenticated Requests (MANDATORY)
+
+**Every request to the backend MUST go through the shared helper — never a bare `fetch`.** A raw `fetch` re-decides the headers, the base URL, `credentials`, the `FormData` boundary and what an expired session does, and getting the headers wrong is SILENT: a missing `Accept-Language` makes the backend resolve reference data (`*_Trl` names: countries, UoMs, `AD_Ref_List`) in the user's AD language instead of the UI locale, with no error anywhere. That shipped three times (ETP-4685, then ETP-5022 across País / UOM / UOM for Weight) before ETP-5022 migrated all 293 raw calls across 121 files.
+
+- **Component or hook:** `const apiFetch = useApiFetch(apiBaseUrl)` from `@/auth/useApiFetch.js`. Put `apiFetch` in the dependency array of any callback/effect that uses it.
+- **Plain module:** `import { apiFetch } from '@etendosoftware/app-shell-core/auth/api'` — the core subpath, NEVER the `@/auth/api.js` barrel (it re-exports `.jsx`, which plain `node --test` cannot load).
+- Options beyond `fetch`'s own: `on401: 'ignore'` (the 401 is a domain answer, not an expired session), `baseUrl: ''` (the URL is already complete or points outside the base), `token` (a plain module was handed one), `credentials`.
+- A test that needs a token supplies a **session**, not a `token` prop — mock `useAuthOptional` from `@etendosoftware/app-shell-core/auth`, spreading the original, and return a stable object.
+- Two guardrails fail the build on regression: `tools/app-shell/test/auth-header-policy.test.js` (hand-rolled `Authorization`) and `tools/app-shell/test/no-raw-fetch.test.js` (bare `fetch`). Genuine non-API calls (`blob:` URLs, the `/jsreport/*` container proxy) opt out with a `raw-fetch-ok: <reason>` comment; unauthenticated-by-design files are listed in the second test.
+
+Full reference (why, the 401-to-logout wiring, working without an `AuthProvider`, the documented exceptions): `docs/request-policy.md`.
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).

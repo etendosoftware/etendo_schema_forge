@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Radix Select has no empty-string value, so the picker uses '__empty__' as its
 // placeholder sentinel — translate it back to '' before it reaches priceListId,
@@ -51,6 +52,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, def
   const [priceListId, setPriceListId] = useState('');
   const [loading, setLoading] = useState(!!enabled);
   const authHeader = headers?.Authorization;
+  const apiFetch = useApiFetch(base);
 
   useEffect(() => {
     if (!enabled || !base) return;
@@ -58,7 +60,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, def
     setLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${base}/price-list/priceList?_startRow=0&_endRow=200`, { headers });
+        const res = await apiFetch('/price-list/priceList?_startRow=0&_endRow=200', { headers });
         if (!res.ok || cancelled) return;
         const all = (await res.json())?.response?.data || [];
         const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
@@ -73,7 +75,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, def
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- headers is keyed by authHeader below
-  }, [enabled, isSOTrx, base, authHeader, defaultPriceListId, allowGenericFallback]);
+  }, [enabled, isSOTrx, base, authHeader, apiFetch, defaultPriceListId, allowGenericFallback]);
 
   return { priceLists, priceListId, setPriceListId, loading };
 }

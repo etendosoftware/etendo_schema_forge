@@ -1,7 +1,17 @@
 import { renderHook } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'tok-123' }),
+// useApiFetch resolves its token from the ambient session, not from a mocked
+// AuthContext (see its own doc comment) — mirror it here so migrated call
+// sites keep sending the token this suite asserts on. `mockApiFetch` stays a
+// single stable reference (not rebuilt per render), matching the real hook's
+// own memoization. Pattern copied from useMovementLookups.vitest.jsx.
+const mockApiFetch = (path, options = {}) => globalThis.fetch(`https://base${path}`, {
+  headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES', ...options.headers },
+  credentials: 'include',
+});
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 import { useCsvExport } from '../useCsvExport';

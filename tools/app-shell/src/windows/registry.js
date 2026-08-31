@@ -56,7 +56,6 @@ const windowLoaders = {
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
-  'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
   'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
@@ -172,10 +171,19 @@ export function getAllWindowNames() {
 }
 
 /**
- * API-only sub-windows: have a contract.json and NEO spec but are never loaded
- * as standalone UI windows. They are consumed directly via fetch by other custom
- * components (e.g. FiscalConfigPage fetches sii-config / tbai-config / verifactu-config).
- * Listed here so pipeline F3 validation knows they are intentionally registry-free.
+ * API-only windows: have a contract.json and NEO spec but are never loaded as
+ * standalone UI windows. Listed here so pipeline F3 validation knows they are
+ * intentionally registry-free. Two distinct reasons land a window here:
+ *
+ * 1. Sub-windows consumed directly via fetch by another custom component
+ *    (e.g. FiscalConfigPage fetches sii-config / tbai-config / verifactu-config).
+ * 2. Windows retired from the UI but still served read-only over NEO/MCP —
+ *    `conversion-rate-downloader-log` (ETP-5068): an internal log of the
+ *    conversion-rate downloader job that added no value to the Etendo Go end
+ *    user, so it was dropped from the Settings menu. Administrators read it in
+ *    Etendo classic (the GO template roles keep their AD window grant, see
+ *    `TemplateRoleWindowAccess` in com.etendoerp.go), and `neo_discover` still
+ *    reports it read-only for agents.
  */
 export const apiOnlyWindows = new Set([
   'sii-config',
@@ -184,6 +192,7 @@ export const apiOnlyWindows = new Set([
   'sii-monitor',
   'monitor-verifactu',
   'tbai-facturas-enviadas',
+  'conversion-rate-downloader-log',
 ]);
 
 /**

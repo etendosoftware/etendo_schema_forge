@@ -1,3 +1,4 @@
+import { buildHeaders } from '@/auth/api.js';
 /**
  * Shared fetch helpers for the `financial-account` NEO spec's write hooks
  * (`useAccountMutations.js`, `useFinancialAccountAccounting.js`) — both call
@@ -6,7 +7,7 @@
  */
 
 export function authHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return buildHeaders(token);
 }
 
 export async function readErrorMessage(res) {

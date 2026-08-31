@@ -5,6 +5,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 
+import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Generic "Create Invoice" confirmation modal — used by both goods-shipment and
  * goods-receipt. Shows a summary card and a checkbox before executing the action.
@@ -48,11 +50,12 @@ export default function CreateInvoiceConfirmModal({
   token,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const priceListHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const priceListHeaders = useMemo(() => (authHeaders(token)), [token]);
   const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
     enabled: showPriceListPicker,
     isSOTrx,
@@ -90,7 +93,7 @@ export default function CreateInvoiceConfirmModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(pendingQtyUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch(pendingQtyUrl, { baseUrl: '', token });
         if (!res.ok || cancelled) return;
         const lines = (await res.json())?.response?.data || [];
         const total = lines.reduce((sum, l) => sum + Number(l.pendingQty || 0), 0);
@@ -98,7 +101,7 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl, token]);
+  }, [pendingQtyUrl, token, apiFetch]);
 
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
