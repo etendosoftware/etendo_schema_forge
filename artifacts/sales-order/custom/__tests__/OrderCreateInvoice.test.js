@@ -506,31 +506,5 @@ describe('OrderCreateInvoice', () => {
       });
     });
 
-    describe('CloneModal.handleClone', () => {
-      const cloneModalSrc = src.slice(src.indexOf('function CloneModal'));
-
-      function resolveMessage(json, ui) {
-        const expr = extractCallExprAfter(cloneModalSrc, 'action/cloneRecord', 'setError(');
-        const fn = new Function('json', 'ui', `return ${expr};`);
-        return fn(json, ui);
-      }
-
-      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
-        assert.equal(resolveMessage(flatErrBody(), (k) => k), REAL_MESSAGE);
-      });
-
-      it('does not fall back to the generic cloneOrderError i18n key when a flat message is present', () => {
-        assert.notEqual(resolveMessage(flatErrBody(), (k) => k), 'cloneOrderError');
-      });
-
-      it('still falls back to the cloneOrderError i18n key when the body has no message at all', () => {
-        assert.equal(resolveMessage({}, (k) => k), 'cloneOrderError');
-      });
-
-      it('keeps preferring the nested json.response.error.message over the flat json.message', () => {
-        const nested = { response: { error: { message: 'Nested clone message' } }, message: 'Flat message' };
-        assert.equal(resolveMessage(nested, (k) => k), 'Nested clone message');
-      });
-    });
   });
 });

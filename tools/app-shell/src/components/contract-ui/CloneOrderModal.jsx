@@ -123,7 +123,7 @@ export default function CloneOrderModal({
         const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok) {
-          setError(json?.error?.message || json?.response?.error?.message || ui(errorKey));
+          setError(json?.error?.message || json?.response?.error?.message || json?.response?.message || json?.message || ui(errorKey));
           setPhase('confirm');
           return;
         }
