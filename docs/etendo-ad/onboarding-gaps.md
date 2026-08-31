@@ -159,6 +159,16 @@ WHERE  ad_client_id = :client_id
 
 **Why this is dataset-only (no `Onboarding*Service` needed):** both tables are already in `INCLUDED_TABLES`, and neither `OnboardingAccountingWiringService` nor any other onboarding code references specific `elementtype` values or `c_acctschema` flags — they flow straight from the imported XML with zero code involvement. This mirrors the ETP-4341 "dataset-only provisioning" pattern (payment methods/terms) documented in `onboarding-and-datafixes-map.md` §1. **Decision:** no new Java service; only edit the sampledata XML + bump the CUT.
 
+> **⚠️ SUPERSEDED IN PART (2026-08-28, ETP-4947) — the `AllowNegative=Y` claim below is REVERSED.**
+> TC-38 (the Confluence Test Plan case that justified `AllowNegative=Y`) is itself being
+> retired/superseded in Confluence by the ticket owner. ETP-4947 is now the accepted requirement:
+> `C_ACCTSCHEMA.AllowNegative` must default to `N` (unchecked), remaining user-editable. This does
+> **NOT** touch `IsCentrallyMaintained` or the `CC`/`User1`/`User2` dimension rows below — those
+> stay exactly as this A3 fix left them. See gap **A3c** (further down this file) for the reversal's
+> own two-fronts closure, and `docs/etendo-ad/tenant-remediation-knowledge.md` (ETP-4947 section)
+> for the full investigation trail. The table below is left as historical record of what A3
+> originally shipped — do not rewrite it.
+
 **Both fronts closed (2026-07-06):**
 
 | Front | Deliverable |
@@ -219,6 +229,52 @@ WHERE s.ad_client_id = :client_id
 | **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
 
 See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
+
+### A3c — `AllowNegative` reverted back to N — TC-38 superseded (ETP-4947, 2026-08-28)
+
+**Symptom (Jira ETP-4947, "Corregir valor por defecto y visibilidad de campos en ventana Esquema
+Contable"):** the "Allow negative" checkbox (`C_AcctSchema.AllowNegative`) on the Esquema Contable /
+General Ledger Configuration window (`/general-ledger-configuration`, AD window 125, table
+`C_AcctSchema`) appears CHECKED by default when it should default to unchecked (`N`), while
+remaining editable.
+
+**Root cause — this is a direct reversal of A3, not a fresh gap.** A3/ETP-4245 (2026-07-06)
+deliberately flipped `AllowNegative` from `N`→`Y` on both fronts (preventive `C_ACCTSCHEMA.xml` +
+corrective `R10`), justified by Confluence Test Plan case **TC-38**. TC-38 is now itself being
+retired/superseded in Confluence by the ticket owner (Santiago Gremiger) — ETP-4947 is the accepted
+replacement requirement. Ruled out first: this is NOT a Schema Forge / frontend generator bug
+(`artifacts/general-ledger-configuration/schema-raw.json`'s AD column default is `N`, and the
+generator correctly omits `defaultValue` for a false-default checkbox) and NOT a Neo Headless
+handler bug (`GeneralLedgerConfigurationHandler.buildGeneral`/`applyGeneralChanges`,
+`src/com/etendoerp/go/schemaforge/GeneralLedgerConfigurationHandler.java:341,458`, is a pure
+passthrough with no default-injection logic — it faithfully mirrors whatever the DB row holds).
+Confirmed via `git log` that the sampledata XML's `<ALLOWNEGATIVE>` line was touched by exactly one
+commit ever (`47ff5aa8 Feature ETP-4245`), and via a live DB sweep (2026-08-28) that every
+GO-onboarded tenant on the dev DB (GOClient, DSAFSAD, 4× E2E test clients, QA Testing ×2 schemas,
+SantoEmpresa — 12/12) already carries `Y`, matching the frozen dataset default with zero variance.
+
+**Scope decision (explicit product call, not a data-driven guess):** revert **unconditionally**,
+for ALL tenants, no "was this manually set" guard. R10 itself force-set every tenant to `Y` only
+~7 weeks before this fix (2026-07-06) — there is no population of tenants who could have genuinely
+opted into `Y` independent of R10, so a blanket revert simply undoes an unwanted onboarding default.
+`IsCentrallyMaintained` (also touched by A3/R10) is explicitly **OUT of scope** — ETP-4947 concerns
+`AllowNegative` only; the CC/User1/User2 accounting-dimension rows A3 also introduced are untouched
+and remain correct.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260828T140000Z__R29-acctschema-allownegative-revert.sql` — single guarded `UPDATE c_acctschema SET allownegative = 'N' ... WHERE ad_client_id = :client_id AND allownegative = 'Y'`; does not touch `iscentrallymaintained` or `c_acctschema_element`. R10 itself is NOT retired (its other two effects stay in force). Labeled `R29` (not `R28`): two sibling in-flight branches, `feature/ETP-4706` and `feature/ETP-5019`, already claim `R28` with timestamps `20260828T120000Z` and `20260827T120000Z` respectively (neither merged yet) — confirmed via `git ls-tree` across all local branches before picking this label; `R29`'s timestamp (`20260828T140000Z`) sorts after both regardless of merge order. Static/parse tests: `cli/test/data-fixes-r29-acctschema-allownegative-revert.test.js` (16 assertions — header metadata, tenant isolation, two-layer idempotency, unconditional-scope guard). Live-validated: `--dry-run --fix 20260828T140000Z__R29-acctschema-allownegative-revert --client 802509E12436405C86BA1FD5B1DF508C` → `WOULD_APPLY — @check matched (1 row(s))` against GOClient. |
+| **Preventive** | `modules/com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` — `ALLOWNEGATIVE` reverted `Y`→`N` (the only line touched; `ISCENTRALLYMAINTAINED` stays `Y`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-28T14:00:00Z` in `OnboardingBaselineService.java`, with a new javadoc paragraph documenting the reversal and its rationale, plus the "Current watermark" comment updated to `R29 acctschema-allownegative-revert (2026-08-28)`. GOClient's own live `C_AcctSchema` row (`C06B100312FA48159DB36B9A4B461019`, "Esquema GO") is also reverted to `N` (confirmed via the real R29 run below), kept in sync with the dataset per the same convention A3 itself established. Regression test: A3's own `testNormalizerAccountingSchemaIsPredefinedForPosting` (`OnboardingDatasetNormalizerTest.java`) is updated in place and renamed to `testNormalizerAccountingSchemaAllowNegativeDefaultsToNo` — asserts `<allownegative>N</allownegative>` and still asserts `<iscentrallymaintained>Y</iscentrallymaintained>` (out of scope, unchanged). **Not verified by compilation** — this environment's `./gradlew test` is known-broken for `com.etendoerp.go` (`NO-SOURCE` on `compileTestJava`, see `tenant-remediation-knowledge.md`); flagged for QA to compile-check. |
+
+**Environment note (resolved):** the `com.etendoerp.go` edits (XML revert, CUT bump, watermark
+comment, and the updated JUnit test) were initially blocked by this session's tooling permission
+boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
+writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
+allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
+working tree was clean) — all deliverables above were then completed on that branch. All changes in
+both repos remain **unstaged/uncommitted**, pending REVIEW.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 

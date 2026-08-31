@@ -1443,6 +1443,51 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   checksum verification `retired.json` itself needs, computed on-demand for retired fixIds only, not
   stored anywhere or computed for the whole catalog on every run.
 
+## ETP-4947 — C_AcctSchema.AllowNegative defaults checked, investigation (2026-08-28)
+
+- **2026-08-28 — Gap A3 (ETP-4245) is the root cause, and it is a direct REVERSAL, not a fresh
+  gap.** ETP-4245 (`onboarding-gaps.md` A3, 2026-07-06) deliberately flipped
+  `C_ACCTSCHEMA.ALLOWNEGATIVE` from N to Y on BOTH fronts -- preventive:
+  `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` (`<ALLOWNEGATIVE><![CDATA[Y]]>`, commit
+  `47ff5aa8 Feature ETP-4245`, the only commit ever touching that line since the file's creation);
+  corrective: `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql`
+  (`UPDATE c_acctschema SET allownegative='Y', iscentrallymaintained='Y' ...`). The stated reason at
+  the time was a Confluence Test Plan case (TC-38) that expected "Allow Negatives=Yes". ETP-4947 now
+  reports the opposite requirement (should default unchecked/N). Apply: before scoping any
+  corrective/preventive work for ETP-4947, get product/QA to confirm TC-38 is superseded -- otherwise
+  the fix would just flip the same field back and forth across tickets.
+- **2026-08-28 -- Confirmed empirically: NOT a live "copy GOClient's row at onboarding time" bug --
+  it's the frozen onboarding dataset XML being imported verbatim, exactly per the documented
+  dataset-only mechanism.** `OnboardingDatasetImportService`/`OnboardingDatasetNormalizer` import
+  `C_ACCTSCHEMA.xml` as bundled classpath data; grepped the whole `com.etendoerp.go` module -- zero
+  Java references to allownegative/AllowNegative outside `GeneralLedgerConfigurationHandler`
+  (the Neo Headless read/write passthrough for the window itself, which has no default-injection
+  logic -- `buildGeneral`/`applyGeneralChanges` just mirror the DB column both ways). So GOClient's
+  live DB row happening to also show Y is a side-effect of the same ETP-4245 change having been
+  applied to GOClient's own row too (to keep XML and live GOClient in sync, per the project's own
+  convention), not a runtime dependency of onboarding on GOClient's live state.
+- **2026-08-28 -- Live DB sweep (dev DB, 2026-08-28): 12/12 GO-onboarded C_AcctSchema rows show Y,
+  the one N is irrelevant.** All of: GOClient (`802509E12436405C86BA1FD5B1DF508C`,
+  `C06B100312FA48159DB36B9A4B461019`, "Esquema GO"), DSAFSAD, 4x "E2E User 1/2 *" (E2E test
+  automation clients), QA Testing (2 schemas: Main + USA), SantoEmpresa -- all allownegative='Y'.
+  The only N is F&B International Group (`23C59575B9CF467C9620760EB255B389`, both its schemas) --
+  but that client's `ad_client.created = 2013-07-04`, i.e. it's stock Openbravo/Etendo-core demo
+  data bundled with the base product, never onboarded through the GO flow at all -- not a
+  counter-example, just an unrelated control case. Caveat: every sampled tenant on this dev DB is a
+  QA/E2E/test artifact, not a real paying customer -- this sample says nothing about whether any
+  real production tenant has ever manually re-toggled the field after onboarding (see next entry).
+- **2026-08-28 -- No field-level audit trail exists to distinguish "still the untouched onboarding
+  default" from "a user explicitly checked it after the fact."** `ad_changelog` does not exist on
+  this DB/version (`relation "ad_changelog" does not exist`) and `ad_table` has no isaudited-style
+  column either. A blanket corrective `UPDATE ... SET allownegative='N'` cannot distinguish the two
+  cases -- the 100%-uniform Y across every sampled tenant (zero variance) is circumstantial evidence
+  they're all still on the frozen default, but it is NOT proof for any given production tenant.
+  Apply: any corrective data-fix for this gap either accepts this residual risk explicitly
+  (documented, product-approved) or needs a different signal entirely (e.g. cross-checking against
+  `updated`/`updatedby` on the c_acctschema row, which is weak -- it reflects the whole row, not just
+  this one column, so any other field edit would also bump it and produce a false "possibly touched"
+  flag).
+
 ## ETP-5019 — L2: owner `AD_User.Email` backfill (2026-08-27)
 
 - **2026-08-27 — The canonical source for an existing tenant owner's "real" email is the
