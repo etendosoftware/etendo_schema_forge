@@ -26,6 +26,18 @@ const FIXES_WITH_REPORT = new Set([
   // that blocked the delete — exactly the "skipped part of its own work" case this section exists
   // for. See cli/test/data-fixes-r24-payment-method-cheque-to-recibo.test.js.
   '20260821T120000Z__R24-payment-method-cheque-to-recibo',
+  // R26 (ETP-4877) can't mechanically resolve a tenant with zero is_client_admin holders (owner
+  // detection has nothing to act on) or a personal-role name collision — @report surfaces both
+  // for manual review instead of silently doing nothing.
+  '20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit',
+  // R27 (ETP-4877) never deactivates a legacy Finance/Sales/Purchasing/Inventory clone that is
+  // still in real use — @report lists any such role found, for manual review.
+  '20260826T121500Z__R27-deactivate-r16-duplicate-roles',
+  // R28 backfills AD_User.Email for tenant owners; its @report lists any owner whose username
+  // could not be resolved to an active ETGO_Account by either the exact or suffix-stripped
+  // branch — same "flag, don't guess" pattern as R19. See
+  // cli/test/data-fixes-r28-owner-email-backfill.test.js.
+  '20260827T120000Z__R28-owner-email-backfill',
 ]);
 
 async function loadCatalogFiles() {
@@ -40,7 +52,7 @@ async function loadCatalogFiles() {
 }
 
 describe('data-fixes catalog — @report is opt-in and backward compatible', () => {
-  it('has at least one fix WITH @report (R19, R24) so this guard is not vacuous', async () => {
+  it('has at least one fix WITH @report (R19, R24, R28) so this guard is not vacuous', async () => {
     const catalog = await loadCatalogFiles();
     const withReport = catalog.filter(({ fix }) => fix.report.length > 0);
     assert.ok(withReport.length >= 1, 'expected at least one fix with a non-empty @report section');

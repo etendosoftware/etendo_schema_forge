@@ -18,6 +18,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // AD table name backing the AEAT justificante attachments store — both the
 // server-side auto-attach on a successful telematic submission and the
@@ -72,11 +73,9 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
   if (res.sources) setLiveSources(res.sources);
 }
 
-function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
+function fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch) {
   if (!token || !apiBaseUrl) return;
-  fetch(`${neoBase(apiBaseUrl)}/session`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  apiFetch(`${neoBase(apiBaseUrl)}/session`, { baseUrl: '' })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       const org = data?.organization;
@@ -212,6 +211,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // `useNavigate` and `@/auth/AuthContext.jsx`'s `useAuth`.
   const navigate = useNavigate();
   const { selectedOrg } = useAuth();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [status, setStatus] = useState(decl.status);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
@@ -334,9 +334,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     // any fetch/network error (never blocks a generation that might otherwise succeed).
     if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
       try {
-        const iaeRes = await fetch(
+        const iaeRes = await apiFetch(
           `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { baseUrl: '' },
         );
         if (iaeRes.ok) {
           const iaeRows = (await iaeRes.json())?.response?.data ?? [];
@@ -356,7 +356,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     if (!result.ok) applyGenerateError(result, t);
   }
 
-  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
+  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch); }, [token, apiBaseUrl, apiFetch]);
 
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);

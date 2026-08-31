@@ -4,9 +4,8 @@ import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import './not-posted-documents.css';
 
-function buildHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
+// ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function formatDate(raw) {
   if (!raw) return '';
@@ -56,16 +55,14 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const neoUrl = apiBaseUrl;
+  const apiFetch = useApiFetch(neoUrl);
 
   // ── Filter options (fetched once) ────────────────────────────────────────────
   const [filterOptions, setFilterOptions] = useState({ documentTypes: [], accountingStatuses: [] });
 
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch(`${neoUrl}/header?_mode=filter-options`, {
-      headers: buildHeaders(token),
-      signal: ctrl.signal,
-    })
+    apiFetch('/header?_mode=filter-options', { token, signal: ctrl.signal })
       .then(r => r.ok ? r.json() : null)
       .then(j => {
         if (j) {
@@ -77,7 +74,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       })
       .catch(() => {});
     return () => ctrl.abort();
-  }, [neoUrl, token]);
+  }, [apiFetch, token]);
 
   // ── Filter state ─────────────────────────────────────────────────────────────
   const [document, setDocument] = useState('');
@@ -114,10 +111,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.set('dateTo', filters.dateTo);
 
-      const res = await fetch(`${neoUrl}/header?${params}`, {
-        headers: buildHeaders(token),
-        signal: ctrl.signal,
-      });
+      const res = await apiFetch(`/header?${params}`, { token, signal: ctrl.signal });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         if (fetchAbortRef.current === ctrl) setLoadError(json?.message || res.statusText);
@@ -130,7 +124,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     } finally {
       if (fetchAbortRef.current === ctrl) setLoading(false);
     }
-  }, [neoUrl, token]);
+  }, [apiFetch, token]);
 
   // ── Initial load ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -170,11 +164,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
     setPosting(p => new Set(p).add(row.documentId));
     try {
-      const res = await fetch(
-        `${neoUrl}/header/${encodeURIComponent(row.documentId)}/action/post`,
+      const res = await apiFetch(
+        `/header/${encodeURIComponent(row.documentId)}/action/post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          token,
           body: JSON.stringify({ tableId: row.tableId, recordId: row.documentId }),
         }
       );
@@ -202,11 +196,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `${neoUrl}/header/0/action/bulk-post`,
+      const res = await apiFetch(
+        `/header/0/action/bulk-post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          token,
           body: JSON.stringify({
             rows: rowsToPost.map(r => ({ tableId: r.tableId, recordId: r.documentId, label: r.description })),
           }),

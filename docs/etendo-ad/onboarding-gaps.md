@@ -26,7 +26,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
-| L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill data-fix NOT yet written — Remedy's domain, heuristic not yet human-confirmed | ETP-4830 |
+| L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -1121,11 +1121,19 @@ same convention as `AD_Role.EM_ETGO_Show_Acct_Fields`) that flags the ONE user w
 self-service registration for a client, that client's "owner" — used to lock down PUT/PATCH and
 role-reassignment on that user's own `AD_User` record to the owner alone. Because the column
 defaults `'N'`, every tenant provisioned BEFORE this column shipped reads back with **zero**
-owner-flagged users, so both enforcement checks
-(`UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`,
-`UserRoleCompositionService#enforceOwnerProtection`) are silent no-ops for them — not a security
-hole (nothing is left more permissive than before this ticket), just a feature that has not yet
-reached tenants that already existed.
+owner-flagged users, so `UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`'s PUT/PATCH guard is
+a silent no-op for them — not a security hole (nothing is left more permissive than before this
+ticket), just a feature that has not yet reached tenants that already existed.
+
+**`UserRoleCompositionService#enforceOwnerProtection` is only a PARTIAL no-op for these tenants
+(ETP-5019 update):** it now also rejects role composition for any user who CURRENTLY holds the
+client-admin role — a signal read live off `AD_Role.is_client_admin`, entirely independent of the
+`EM_ETGO_Is_Owner` backfill. Because a tenant's owner IS, by construction, its client-admin role
+holder, a pre-existing tenant's real admin user is already protected against the self-overwrite
+bug ETP-5019 fixed (composing a template role onto the admin silently replacing their Admin role
+with a fresh personal role), even with zero owner-flagged rows. Only an unflagged non-admin edge
+case would still fall through unprotected until the backfill lands. Full mechanism:
+`com.etendoerp.go`'s `docs/neo-headless.md` §8d.
 
 **Root cause:** the column is only auto-set going forward, once, right after
 `EtendoGoJwtServlet#createClient` provisions a BRAND NEW client
@@ -1144,10 +1152,25 @@ the pre-existing, auto-granted `is_client_admin='Y'` "Company Admin" role, not a
 composition role). ETP-4877's Jira description was rewritten to own owner-detection and
 personal-role backfill as mutually-exclusive steps of the same script, resolving the owner FIRST
 and excluding them from the personal-role pass. This is still a one-time backfill data-fix
-(Remedy's domain, `cli/src/data-fixes/`), **NOT yet written as of this writing** — ETP-4877 remains
-in **Defined** status, ticket text only. Candidate owner-detection heuristic — **NOT yet
-human-confirmed; do not run against real tenant data before it is sanity-checked** — the
-earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED` ascending.
+(Remedy's domain, `cli/src/data-fixes/`) — **shipped 2026-08-26** as
+`20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit.sql`. The candidate owner-detection
+heuristic (earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED`
+ascending) is now confirmed and implemented: R26 Step 0 mirrors `OwnerSupport
+#markAsOwnerIfNoneExists`'s own atomic "UPDATE ... WHERE NOT EXISTS (already has an owner)" shape,
+just with the target resolved by this heuristic. Live-validated (2026-08-26, rolled-back
+transactions) across all 41 real tenants on the local dev DB: idempotent convergence confirmed for
+every tenant, including the one edge case found (`QA Testing` has ZERO `is_client_admin` holders —
+Step 0 is correctly a safe no-op there, surfaced via R26's own `@report` as `no_owner_candidate`
+rather than silently skipped). R26 also closes ETP-4877 items 1/3/4/5 (personal-role backfill from
+current access, org-access/defaults backfill for pre-existing personal-role holders, and
+`AD_User_Roles` single-active-row cleanup) in the same file, plus a mid-delivery scope addition
+(`AD_Role.EM_ETGO_Show_Acct_Fields` derived-flag sync, retroactive half in R26 Step 8, "going
+forward" half in `UserRoleCompositionService#syncShowAccountingFieldsFlag`, Java). The sibling
+`20260826T121500Z__R27-deactivate-r16-duplicate-roles.sql` closes item 6 (deactivates confirmed-
+unused R16-era per-client role clones); `R16` itself is retired permanently via the new
+`cli/src/data-fixes/retired.json` mechanism (item 7) — see `run.js`'s `loadRetiredList`/
+`verifyRetiredList`/`loadCatalogWithRetirement`. Full detail: `onboarding-and-datafixes-map.md`'s
+L1 row and `tenant-remediation-knowledge.md`'s ETP-4877 section.
 
 The full mechanism (assignment point, both enforcement paths, rollout/no-op-until-backfilled
 behavior) is documented in `com.etendoerp.go`'s `docs/neo-headless.md` §7 item 10 — deliberately
@@ -1156,9 +1179,77 @@ the still-open corrective half through the same catalog every other two-front ga
 uses, per this repo's own root `CLAUDE.md` convention ("Etendo AD findings go in
 `docs/etendo-ad/`, NOT in per-window artifacts").
 
-**Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **NOT YET
-IMPLEMENTED**, scope consolidated into and now tracked entirely under **ETP-4877** (Defined,
-2026-08-24) — flagged here per this document's own "flag, don't silently skip" convention.
+**Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **SHIPPED**
+2026-08-26 under **ETP-4877** (`R26-tenant-owner-and-personal-role-retrofit.sql` +
+`R27-deactivate-r16-duplicate-roles.sql`, plus the R16 retirement mechanism and the
+`EM_ETGO_Show_Acct_Fields` derived-flag sync). Both fronts now closed.
+
+### L2 — `AD_User.Email` NULL for pre-existing tenant owners (ETP-5019)
+
+**Symptom:** every `EM_ETGO_Is_Owner='Y'` `AD_User` row has `Email IS NULL` — the owner's "Correo
+electrónico" field renders empty in the Users window. Confirmed by direct query: 69/69 owners on
+this DB, 2026-08-27. Distinct from L1 (which is about the owner FLAG being unset) — this is about
+a genuinely different column on the SAME row, and can occur even for a tenant whose owner flag
+was already correctly backfilled by L1's fix (the flag and the email are two unrelated writes).
+
+**Root cause:** core Etendo's `InitialSetupUtility#insertUser` (the primitive
+`InitialClientSetup` calls to provision a brand-new client's admin `AD_User`) sets
+`Name`/`Description`/`Username` but never `Email` — so the column is genuinely `NULL` in the DB
+after onboarding, not a frontend display bug. Same root-cause shape as L1: a column onboarding
+never wrote, only auto-set going forward once the preventive fix ships.
+
+**Email source (the crux — do not use `Username` blindly):** `AD_User.Username` is NOT reliably
+the owner's real account email. Onboarding names the FIRST environment a founder creates after
+their plain account email, and every LATER environment
+`<accountEmail>+<clientName>` (`EtendoGoJwtSupport#buildClientUsername`) to dodge the
+`AD_User.Username` uniqueness constraint — so an owner who is the founder of a second (or later)
+tenant under the same account has a suffixed username that is NOT their email as-is. The
+canonical, already-proven-in-production inverse of that naming is
+`GoAccountResolver#findAccountByUsername` (`com.etendoerp.go/.../common/GoAccountResolver.java`)
+— used by `EtendoGoJwtDalHelper#findAccountForEnvironmentUser` to resolve a RETURNING owner's
+identity on every login: try an exact `username = account.email` match first; if that misses,
+split the username on the LAST `'+'` (never the first — the client-name suffix alphabet is
+`[a-z0-9]` only, so it can never itself contain `'+'`, which keeps a legitimately plus-addressed
+account email like `user+tag@example.com` intact) and retry the exact match on the prefix. The
+corrective fix mirrors this exact two-step resolution in SQL rather than inventing a new
+heuristic, so it can never disagree with the runtime login path about whose email a given owner
+really has.
+
+**Preventive front (shipped same session, ETP-5019, commit `986b543a`):**
+`EtendoGoJwtSupport#applyClientAdminEmail(username, email)`, called from
+`EtendoGoJwtServlet#resolveOrCreateClient` right after the existing `applyClientAdminDisplayName`
+call, backfills `Email` at client-creation time from `accountEmail` (the verified
+login/registration email held on the founder's `ETGO_Account` — NOT `clientUser`/`username`,
+which may carry the client-name suffix above). New tenants onboarded from this deploy onward are
+born with `Email` already set.
+
+**Corrective fix:** `20260827T120000Z__R28-owner-email-backfill.sql` — resolves each
+`EM_ETGO_Is_Owner='Y'` row with `Email IS NULL` against `ETGO_Account` using the exact same
+exact-then-suffix resolution as `GoAccountResolver#findAccountByUsername`, then backfills
+`Email`. Live sweep (2026-08-27): 69/69 owners resolved via the exact branch alone (no owner on
+this DB currently has a suffixed username) — 0 ambiguous, 0 left unresolved; verified end-to-end
+in a rolled-back transaction against `acreedortest` (`@check` 1 row → `@apply` 1 row → `@report`
+empty → re-`@check` 0 rows) before running for real. **Run for real against the shared dev DB
+(2026-08-27T14:18:28Z), full tenant universe:** 69 `APPLIED` / 26 `SKIPPED_NOT_NEEDED` (owner
+already had an email) / 0 `FAILED` — matching the earlier dry-run exactly. A subsequent re-run
+confirmed convergence: 0 rows left needing the fix (all tenants `SKIPPED_NOT_NEEDED`), proving
+idempotency in production, not just in a rolled-back transaction.
+
+**`ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped.** The current CUT
+(`2026-08-11T12:00:00Z`, R23) predates four intervening fixes (`R24`×2, `R25`×2, and the L1
+`R26`/`R27` pair above) that this session did not individually re-verify each have their own
+preventive front shipped. Bumping the single shared CUT constant past all of them to match R28's
+timestamp would risk silently skipping one of THEIR corrective fixes for a brand-new tenant if
+any turns out to be corrective-only — exactly the mistake the framework's own "never bump CUT
+without confirming every intervening fix's preventive parity" rule exists to prevent. Per the
+framework's documented trade-off table, shipping the `.sql` + preventive without a CUT bump is
+always safe (a new tenant's `@check` is a cheap no-op skip, since `Email` is already set by the
+preventive fix above) — merely redundant, never incorrect.
+
+**Status:** preventive front shipped (2026-08-27, ETP-5019); corrective `.sql` written,
+live-validated in a rolled-back transaction, then **run for real against the shared dev DB**
+(2026-08-27T14:18:28Z) — 69 owners backfilled, 26 already had an email, 0 failures; a re-run
+confirmed 0 rows remaining (idempotent).
 
 ---
 

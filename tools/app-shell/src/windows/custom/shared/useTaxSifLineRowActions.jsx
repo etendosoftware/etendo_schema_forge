@@ -10,6 +10,7 @@ import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 import { selectSifFields, pickRegimeChild } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
 // LinesTable.jsx declares for both sales-invoice and purchase-invoice.
 const TAX_SELECTOR_COLUMN = 'C_Tax_ID';
@@ -42,8 +43,8 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  * clamps `limit`.
  *
  * @param {object} args
- * @param {string} args.apiBaseUrl the calling window's own NEO base
- * @param {string} args.token NEO bearer token
+ * @param {(path: string, options?: object) => Promise<Response>} args.apiFetch the calling
+ *   window's `useApiFetch(apiBaseUrl)` instance
  * @param {object} args.selectorContext `buildLineSelectorContext()` output — required
  *   selector params (parentId, isSOTrx/IsSOTrx, priceList, DateInvoiced, etc.)
  * @param {string|null} args.currency optional `currency` param, merged in when present
@@ -56,18 +57,18 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  *   returned instead of discarding everything — degrading to a partial check rather
  *   than rendering no badges at all (ETP-4888 QA finding).
  */
-async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, isCancelled }) {
+async function fetchAllTaxPages({ apiFetch, selectorContext, currency, isCancelled }) {
   const allItems = [];
   let offset = 0;
   let page = 0;
   for (;;) {
-    const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
+    const url = buildUrlWithParams(`/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
       limit: TAX_SELECTOR_PAGE_LIMIT,
       offset,
       ...selectorContext,
       ...(currency ? { currency } : {}),
     });
-    const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const taxResponse = await apiFetch(url);
     const data = taxResponse.ok ? await taxResponse.json() : null;
     // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
     // state, since nothing is waiting for it any more.
@@ -218,6 +219,7 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui, taxById,
  */
 export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null, specName = null }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
   const { profile, verifactuRecord, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
@@ -246,9 +248,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     let cancelled = false;
 
     async function loadTaxCatalog() {
-      const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headerResponse = await apiFetch(`/header/${recordId}`);
       const headerJson = headerResponse.ok ? await headerResponse.json() : null;
       // NEO envelopes single-record GETs as { response: { data: [ {...} ], status } } —
       // same unwrapping useFiscalConfig.js's fetchRecord() already does. Reading the
@@ -268,8 +268,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       // Pages through the full catalog instead of trusting a single request — see
       // TAX_SELECTOR_PAGE_LIMIT's comment above and fetchAllTaxPages()'s own doc.
       const allItems = await fetchAllTaxPages({
-        apiBaseUrl,
-        token,
+        apiFetch,
         selectorContext,
         currency,
         isCancelled: () => cancelled,
@@ -280,7 +279,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
 
     loadTaxCatalog().catch(() => {});
     return () => { cancelled = true; };
-  }, [apiBaseUrl, token, enabled, recordId, windowCategory]);
+  }, [apiBaseUrl, token, apiFetch, enabled, recordId, windowCategory]);
 
   // ETP-4888 design-polish round — renders the trigger inline next to the "tax"
   // column's own value (InlineLinesPanel's `cellBadges` slot) instead of the

@@ -644,6 +644,10 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 **Edit mode**: opened from the kebab's **Editar** on a Draft movement — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. The backend rejects editing a processed transaction (its dimensions are locked; reactivate first). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
+**Reactivar (kebab) and the Reconciliación tab's un-reconcile actions overlap in scope but are separate code paths.** A movement matched to a bank statement can be reactivated from either surface — the Reconciliación split panel's Desconciliar/Reactivar (`ReconciliationHandler`, see above), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
+
+**Investigated but NOT fixed here (documented root cause, no reported repro):** a task originally reported `HTTP 400 {"error":{"message":"Document already Posted.: <docNo>"}}` from this same kebab action when the matched transaction's reconciliation was already posted (`FIN_Reconciliation.Posted='Y'`). Root cause: `ReconciliationRemovalUtil.removeTransactionFromReconciliation` (in `com.etendoerp.payment.removal`) calls `processReconciliation("R", reconciliation)` without first calling `Utilities.unPostReconciliation(reconciliation)` — its sibling `ReconciliationRemovalUtil.reactivate(rec)` does that unpost step; this method doesn't, so `FIN_ReconciliationProcess`'s `"R"` branch rejects with `@PostedDocument@` whenever the reconciliation is posted. Not reproducible in this environment (local reconciliations sit at `posted='D'`, not `'Y'` — no accounting run here), so left undone; the one-line fix (`if ("Y".equals(reconciliation.getPosted())) { Utilities.unPostReconciliation(reconciliation); }` before the `processReconciliation("R", …)` call) is ready to apply the moment it reproduces.
+
 ### Funds transfer (T11 · ETP-4272)
 
 "Transfer funds" moves money between two financial accounts of the organization. Two entry points:
@@ -1068,46 +1072,49 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
     top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
   - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
     whole reconciliation.
-  - **"Reactivar" — the lightweight alternative** (ETP-4502, action `reactivateSelected`): the
-    "Desconciliar (N)" button is a **split button** (chevron → `recon-action-reactivate`, `RotateCcw`
-    icon, same checked selection). Where Desconciliar DELETES the `FIN_Reconciliation`, Reactivar
-    returns it to **draft and keeps it** via the `payment.removal` module's PLAIN
-    `ReconciliationRemovalUtil.reactivate(rec)` (not `reactivateAndRemoveReconciliation`).
-    - **Key insight** (verified against Core's `FIN_ReconciliationProcess` action `"R"`, which only
-      does `setProcessed(false)` + `setDocumentStatus("DR")`): reactivating touches **nothing else** —
-      the statement line keeps its `financialAccountTransaction`, the transaction keeps its
-      `reconciliation` and its cleared `RPPC` status. So **no marker column and no re-linking are
-      needed**; the whole state is derivable, and `ReconciliationHandler.draftReconciliationOf(line)`
-      (line → txn → rec with `!isProcessed()`) is the single detector.
-    - Consequences, all keyed off that one detector: `PENDING_LINES_SQL` reports such a line as
-      **pending** (its `line_status` now also checks `COALESCE(rec.processed,'N') = 'N'`) and exposes
-      `draftReconciliationId`; its `pendingAmount` is forced to the line's full amount (the stored
-      `EM_ETGO_Pending_Amount` is 0 while a txn is linked, which would render as 100 % reconciled);
-      `buildCandidates` skips the read-only `buildLinkedTransactions` path and instead returns the
-      editable list with the draft's own transactions **pre-selected** (`CANDIDATES_SQL` gained an
-      `OR ft.fin_reconciliation_id = ?` branch that also bypasses the `status <> 'RPPC'` filter, bound
-      as its FIRST param); and `compose()` runs `reprocessDraftIfAlreadyMatched` first, which — when
-      the confirmed selection equals the draft's transactions — just calls `processReconciliation` on
-      that SAME document (no `addNewDraftReconciliation`, no re-match), or discards the draft
-      (`reactivateAndRemoveReconciliation`) and composes fresh when the selection changed.
-    - **Three guards had to be widened**, all sharing the same wrong assumption that a linked
-      transaction implies "reconciled": `reconcileGroup`'s and `applyGroup`'s 409 "Statement line is
-      already reconciled", and `ReconciliationFlowSupport.validateOperations`' 409 "Operation is
-      already reconciled". Each now also requires the reconciliation to be **processed** (the latter
-      exempts only the line's OWN draft, so a transaction on a different/processed reconciliation is
-      still rejected). Without this the feature dead-ended: the UI showed the pre-selected candidates
-      and then 409'd on confirm.
+  - **"Reactivar" — the lightweight alternative** (action `reactivateSelected`): the "Desconciliar
+    (N)" button is a **split button** (chevron → `recon-action-reactivate`, `RotateCcw` icon, same
+    checked selection).
+    - **Reimplemented (this task) as plain detach + reprocess — no more DRAFT-persisting state.**
+      ETP-4502 iteration 6 originally left the `FIN_Reconciliation` in `DR` so the line came back
+      pending with its own transactions pre-selected, editable before re-confirming. That relied on
+      Core creating **one reconciliation per statement-line group**; once a single automatch batch
+      started sharing ONE reconciliation across many lines (see "Cardinality" under "Automatch
+      engine" above), leaving that shared header in draft would have pushed **every other line in the
+      batch** back to pending too. So `reactivateSelected` now runs the exact same mechanics as
+      `removeOperation` (`ReconciliationHandlerSupport.removeSelectedFromReconciliations` — reactivate
+      the reconciliation, detach just the selected transactions, re-confirm it) instead of leaving
+      anything in draft. The freed transactions simply return to the normal candidate pool — no
+      special pre-selection any more.
+    - **Confirmed by live test (2026-08-27, account ETP-4951): re-matching a freed transaction
+      creates a brand-new `FIN_Reconciliation` document, it never reopens the one it was detached
+      from.** Sequence observed: one reconciliation `1000058` with 2 cleared items → reactivate the
+      26/08 one via GO → `1000058` stays `Completed` with only the 27/08 item left → reconcile the
+      freed 26/08 line again → a NEW `1000059` is created holding just that one transaction, `1000058`
+      is untouched. **Product decision: this is intentional, not a gap to close.** There is no single
+      well-defined "origin document" to return to once a header can hold transactions from several
+      lines (a shared automatch-batch header has no one line that owns it), so a new document per
+      manual re-match is the simplest, safest behavior — the alternative (track the prior
+      reconciliation id, reopen+reprocess it if still unposted) would reintroduce exactly the
+      "reopen a shared header to touch one line" risk this task removed.
+    - The three-way distinction this used to require — `ReconciliationHandler.draftReconciliationOf`,
+      `reprocessDraftIfAlreadyMatched`, `reactivateToDraft`, the `PENDING_LINES_SQL`
+      `COALESCE(rec.processed,'N')='N'` branch / `draftReconciliationId`, `CANDIDATES_SQL`'s
+      `OR ft.fin_reconciliation_id = ?` branch, and the three widened "already reconciled" guards on
+      `reconcileGroup`/`applyGroup`/`ReconciliationFlowSupport.validateOperations` — is gone: a linked
+      transaction now always means genuinely (processed) reconciled, so those guards reverted to their
+      original plain form (`line.getFinancialAccountTransaction() != null` / `trx.getReconciliation()
+      != null`, no exemption). `draftReconciliationCount` (`ReactivationSupport.draftCount`) and
+      `PENDING_LINES_SQL`'s `draft_reconciliation_id` column are the one piece of that plumbing left
+      in place rather than removed — they simply always report zero/empty now, since nothing leaves a
+      line matched to an unprocessed reconciliation any more. Known cleanup debt, not a bug.
     - **Auto-created movements are still fully deleted** (same `PaymentRemovalUtil` /
       `TransactionRemovalUtil` as Desconciliar) — a payment that only existed to back this
-      reconciliation has nothing worth preserving in a draft. A selection that is entirely
-      auto-created therefore falls back to the delete behavior.
-    - **Core allows only ONE editable (draft) reconciliation per account** (its reactivate rejects
-      with `@APRM_DraftReconciliationExists@`). So `reactivateToDraft` processes any pre-existing draft
-      first — the same ordering pre-step `undoReconciliation` already performed, and what the module's
-      own Classic "Reactivate Reconciliation" button does. Unavoidable consequence: **a line left
-      pending by an earlier Reactivar on that account becomes reconciled again**. The count of drafts
-      confirmed this way is returned as `autoConfirmedDrafts` and the UI warns about it
-      (`financeReconcileToastReactivatedOtherConfirmed`) rather than letting it happen silently.
+      reconciliation has nothing worth preserving.
+    - **The "confirm a pre-existing other draft to make room" consequence is gone too** — since
+      nothing creates a persistent draft on this path any more, `autoConfirmedDrafts` and its (never
+      actually wired to a toast) `financeReconcileToastReactivatedOtherConfirmed` key are removed
+      from the response and the codebase.
   - **Bulk un-reconcile is NOT atomic at the DB level** — Core's own removal utilities
     (`PaymentRemovalUtil.reactivateAndRemove`) commit mid-flow (`SessionHandler.commitAndStart`), so
     a failure partway through a multi-id batch does not roll back what already persisted. Rather than
@@ -1136,11 +1143,13 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):
 
 - **Automatch modal** (`components/contract-ui/AutoMatchSuggestionModal.jsx`, opened from the `Automatch` header action and from the Cuentas-list `Conciliar (N)` pill): runs the engine in preview (GET `?action=autoMatch`) and shows the suggested groups (statement line + its N operations) with per-group include/exclude checkboxes. Rule-origin groups carry a yellow **"Por regla {nombre}"** badge; candidates that would create a new payment carry a blue **"Nueva"** badge. Applying (POST `?action=applySuggestions`) reconciles only the ticked groups, creating payments for rule matches and incrementing each matched rule's count. On success the panel/list refresh. The 1:N signal matcher first tries the whole same-partner / same-reference block and, if that over-shoots, can now choose an exact subset inside that same signal block (for example two 13,20 receipts balancing a 26,40 statement line).
+  - **Cardinality: ONE `FIN_Reconciliation` per apply, not one per line.** Earlier, `applySuggestions` called `compose` per accepted group, so confirming N suggestions created N separate reconciliation documents — noisy (Classic's own "Match Statement" produces one per statement) and quadratic (`processReconciliation`'s `updateReconciliations` recomputes every later reconciliation's balance on each call). `ReconciliationHandler.applySuggestions` now runs two passes: `prepareGroup` validates every group first (an invalid group is reported in `results[]` without touching any reconciliation), then every valid group is matched via `matchInto` into ONE reconciliation obtained from `getOrCreateDraftReconciliation` (reuses the account's open draft — the same lookup Classic's `MatchStatementActionHandler` does — or creates one), which is processed once at the end. Not atomic across groups: Core's matching services commit mid-flow, so a failure on group *k* does not roll back groups `1..k-1` already matched into the shared document — the frontend surfaces this via a partial-success toast (`financeReconcileAutomatchToastPartial`) read off `results[]`, since the old code silently reported full success as long as the batch-level POST returned 2xx regardless of individual failures. The manual **`reconcileGroup`** path (single line, one click) is unaffected — it still creates its own dedicated reconciliation per call.
+- **Same-amount lines each get their own suggestion in one run (ETP-4971).** `buildAutoMatch` threads a single growing `excludedTxns` list through every pending line's call into Core's standard algorithm (`AutoMatchSupport.standardMatch`), mirroring Classic's own `runAutoMatchingAlgorithm` accumulator. Before this fix, Core's `FIN_MatchingTransaction.match(line, excluded)` was always called with an empty `excluded` list, so N pending lines of the identical amount all got offered the SAME transaction and only the first one ended up with a suggestion — the rest required a second Automatch run after accepting the first. `ReconciliationHandlerSupport.summarizePendingLines` shares the same accumulator across the left-panel's `suggested` classification, so its per-state counts match what an actual Automatch run produces (a line whose only same-amount candidate was already claimed by an earlier line now counts as `pending`, not `suggested`).
 - **Conditional auto-open (ETP-4922).** Entering the Reconciliation tab (tab click, `?tab=reconciliation` deep link, or the Cuentas-list `Conciliar (N)` pill's `?autoMatch=true`) no longer pops the modal unconditionally — it *arms* an `autoMatchArmed` flag in `index.jsx` and queries `useAutoMatch` for as long as that tab stays active. The modal only opens once a fresh response confirms `groups.length > 0`; an empty result never opens it (previously it always opened, showing an empty state). The **manual** `Automatch` header button is unaffected — it still calls `setAutoMatchOpen(true)` directly and always opens, empty state included. Leaving the tab disarms the flag, so returning to it re-evaluates from scratch (a stale response from the prior visit is never treated as fresh: `useNeoResource` doesn't clear `data` when its `path` goes back to `null`, so the code tracks readiness with an `autoMatchFetchedRef` ref instead of trusting `loading` alone).
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no date clause in its HQL, so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
 - **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` now covers both a Classic strong `1:1` match and an exact `1:N` signal-group match, so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
-- i18n keys: `financeReconcile*` in `packages/app-shell-core/src/locales/{en_US,es_ES}.json`.
+- i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES}.json`.
 - Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast.
 
 ### Movement Post / Unpost (ETP-4505)
@@ -1637,13 +1646,17 @@ path** — no bespoke bulk-delete code in this window:
 | --- | --- |
 | Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
 | Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
-| Selection bar + "Eliminar seleccionados" | `ListView`, rendered **above** the `AccountsHeaderTable` slot |
+| Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
 | Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
 
 **How the flow behaves.** Tick one or more row checkboxes → the slot's own
-`AccountsToolbar` unmounts and `ListView`'s selection bar takes its place (one swap, not
-two stacked bars) → **Eliminar seleccionados (N)** opens the shared confirm dialog → on
-confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
+`AccountsToolbar` unmounts (it reads `ListView`'s `selectedRows` prop; see the load-bearing
+note below) while `ListView`'s floating `SelectionToolbar` pill appears bottom-center of the
+viewport (ETP-4972 — a true `position: fixed` portal, not anchored to any scrolled element,
+so it does not occupy the slot's own layout the way the retired in-flow bar did) → the
+icon-only red trash button (no "(N)" count in the button itself anymore — the pill's own
+counter segment shows it) opens the shared confirm dialog → on confirm one DELETE per row
+goes out in parallel, then a single toast reports the outcome:
 
 - **all succeeded** → list refetches, selection clears, toolbar comes back.
 - **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
@@ -1666,14 +1679,19 @@ same mechanics as the old open-reconciliations guard, just a stricter, real-dele
 That equivalence with the plain per-row `DELETE` is still *why* no bespoke
 `useBatchDeleteDialog` + mutation wiring was added here — unlike the **Movimientos**
 and **Extractos importados** detail tabs, which are not `ListView`s and therefore must keep
-their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`.
+their own `BulkDeleteSelectionBar` + `useBatchDeleteDialog`. (`BulkDeleteSelectionBar` was
+itself migrated onto the shared `SelectionToolbar` shell in ETP-4972 — it used to render as
+its own in-flow bar pinned above the tab's toolbar, the one selection bar in this window that
+had been missed in the original ETP-4972 floating-pill migration; it is now the same
+viewport-fixed floating pill as everywhere else, icon-only delete button, no separate X — see
+`docs/ui-customization.md` §9e.)
 
 **`isRowDeletable` (ETP-4871, generic `ListView` prop) gates the button itself for a mixed
 selection.** `windows/custom/financial-account/index.jsx` passes
 `isRowDeletable={(row) => row.deletable !== false}` to `AccountPage` (forwarded straight through
 to `ListView` via its `{...props}` spread). `ListView` computes, on every selection change, how
-many of the *currently selected* rows fail that predicate; if any do, **Eliminar seleccionados**
-disables and shows a tooltip (`bulkDeleteBlockedTooltip`, generic/entity-agnostic) naming how many
+many of the *currently selected* rows fail that predicate; if any do, the icon-only delete button
+disables and its tooltip switches to `bulkDeleteBlockedTooltip` (generic/entity-agnostic) naming how many
 are blocked, instead of letting the batch go out and resolving as a confusing partial failure. The
 prop is optional and defaults to "every row is deletable" — every other `ListView` window is
 unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
@@ -1703,8 +1721,9 @@ unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
 The wrapper (`windows/custom/financial-account/index.jsx`) also keeps `hidePrint` from
 `decisions.json`, which covers the Printer button. The selection bar's "Vista Previa" (eye)
 button was removed unconditionally from `ListView.jsx` in ETP-4644 — it no longer exists in
-any window, so this wrapper no longer needs a flag for it either. Net result: **Eliminar
-seleccionados** is the only action in the bar.
+any window, so this wrapper no longer needs a flag for it either. Net result: the icon-only
+delete button (title/aria-label "Eliminar", no visible text since ETP-4972) is the only
+action in the bar besides its own built-in close button.
 
 **Testids** for anyone writing specs against this: row `row-{id}` (its checkbox is the
 `Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),

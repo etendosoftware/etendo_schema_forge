@@ -3,13 +3,17 @@
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
+import {Trash2} from 'lucide-react';
+import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import {computeBalance} from '@/lib/balanceTotals';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
+import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
@@ -352,6 +356,12 @@ export function SecondaryPanelTab(props) {
 }
 
 export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  // ETP-4836 — the subtitle + "add" CTA only make sense when the tab actually
+  // supports manual row creation (st.addLineFields configured). Tabs whose rows
+  // are entirely backend-managed (e.g. invoices' Exchange Rates, auto-created by
+  // AbstractInvoiceHeaderHandler) still get the "no records" illustration instead
+  // of a blank area, just without an action that would do nothing.
+  const canAdd = Boolean(onAddLineClick);
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
@@ -362,11 +372,15 @@ export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
           <line x1="8" y1="17" x2="13" y2="17" />
         </svg>
       </div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
-        + {addLineLabel}
-      </button>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: canAdd ? 4 : 0 }}>{ui('noRecordsYet')}</span>
+      {canAdd && (
+        <>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+          <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+            + {addLineLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -480,6 +494,92 @@ export function getLinesContainerClassName(linesLayout, embedded) {
 
 export function getDeleteChildButtonLabel(deletingChildren, ui) {
   return deletingChildren ? ui('loading') : ui('delete');
+}
+
+/**
+ * Bulk-action toolbar for classic (non-inlineEditable) lines tables: delete +
+ * detail-process buttons for the currently selected rows.
+ *
+ * ETP-4972 — was the standalone `LinesBulkActionBar.jsx`, an inline
+ * `sticky top-0` bar (removed). Now rendered inside a viewport-fixed
+ * `SelectionToolbar`, reusing the primary tab's `selectionBarVisible`/
+ * `selectionBarClosing` lifecycle: this bar and the inlineEditable
+ * LinesSelectionBar/SelectionToolbar path are mutually exclusive by
+ * `linesLayout` (see isBulkDeleteBarVisible vs shouldShowInlineDeleteSelectionBar),
+ * so they never compete for the same state.
+ *
+ * The process-button styling uses the pill's own theme-invariant
+ * `--floating-toolbar-fg` token instead of `border-primary`/`text-primary`:
+ * `--primary` collapses to nearly the same dark navy as the pill background
+ * in light theme, which made those buttons unreadable.
+ */
+export function renderDetailBulkActionBar({
+  visible, closing, linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess, executeDetailProcessImpl,
+  detailProcessDeps, tMenu, deletingChildren, setDeletingChildren, confirmDelete, apiBaseUrl, token,
+  hook, selectedLine, setSelectedLine, setSelectedChildRows,
+}) {
+  return (
+    <SelectionToolbar
+      visible={visible}
+      closing={closing}
+      onClose={() => setSelectedChildRows([])}
+      closeTitle={ui('close')}
+      data-testid="SelectionToolbar__7c75ad">
+      <span className="text-sm font-medium">{ui('selected', {count: selectedChildRows.length})}</span>
+      <div className="flex items-center gap-2">
+        {detailProcesses.map(p => (
+          <button
+            key={p.name}
+            disabled={executingDetailProcess}
+            onClick={() => {
+              if (p.params?.some(param => !param.hidden)) {
+                setDetailParamDialogProcess({...p, _rows: [...selectedChildRows]});
+              } else {
+                executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--floating-toolbar-fg)/0.3)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+            data-testid="Button__detail-process"
+          >
+            {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
+          </button>
+        ))}
+        {/* ETP-4972 — icon-only, no visible label: applied Figma instance has
+            this button's Button Text property set to false. */}
+        {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
+          <button
+            disabled={deletingChildren}
+            title={getDeleteChildButtonLabel(deletingChildren, ui)}
+            aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
+            onClick={async () => {
+              if (!(await confirmDelete())) return;
+              setDeletingChildren(true);
+              try {
+                const {succeeded, failed} = await deleteSelectedChildRows({
+                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                });
+                for (const row of succeeded) {
+                  hook.handleDeleteChild(row.id);
+                  if (selectedLine?.id === row.id) setSelectedLine(null);
+                }
+                setSelectedChildRows([]);
+                toastBatchDeleteOutcome(ui, {succeeded, failed, total: selectedChildRows.length});
+              } catch (err) {
+                toast.error(err.message || ui('networkError'));
+              } finally {
+                setDeletingChildren(false);
+              }
+            }}
+            className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            data-testid="detail-bulk-delete-button"
+          >
+            <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
+          </button>
+        )}
+      </div>
+    </SelectionToolbar>
+  );
 }
 
 export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
