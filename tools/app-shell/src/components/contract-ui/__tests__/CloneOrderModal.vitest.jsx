@@ -33,7 +33,7 @@ describe('CloneOrderModal', () => {
   const defaultProps = {
     records: singleRecord,
     apiBaseUrl: '/sws/neo/sales-order',
-    headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer test', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
     onClose: vi.fn(),
     routePrefix: '/sales-order/',
     onCloned: vi.fn(),

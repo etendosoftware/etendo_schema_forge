@@ -6,6 +6,7 @@ import FinancialSection from './FinancialSection.jsx';
 import AddressSection from './AddressSection.jsx';
 import { contactModalConfig } from './contactModalConfig.js';
 import { matchOptionByLabel } from '@/lib/matchOptionLabel';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const COMPONENT_MAP = { AddressSection, FinancialSection };
 
@@ -140,6 +141,7 @@ export default function CreateContactModal({
   documentType = null,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(bpApiBaseUrl);
   const [locale] = useLocaleState();
   const [opts, setOpts] = useState(EMPTY_OPTS);
   const [retryCount, setRetryCount] = useState(0);
@@ -176,12 +178,11 @@ export default function CreateContactModal({
       countries: { ...o.countries, loading: true, error: null },
     }));
 
-    const h = headers;
-    const bp = `${bpApiBaseUrl}/businessPartner`;
-    const vc = `${bpApiBaseUrl}/vendorCreditor`;
+    const bp = '/businessPartner';
+    const vc = '/vendorCreditor';
 
     const fetchSel = url =>
-      fetch(url, { headers: h })
+      apiFetch(url)
         .then(r => (r.ok ? r.json() : null))
         .then(d => (d?.items || []).map(i => ({ id: i.id, label: i.label || i.name || i.id })))
         .catch(() => []);
@@ -191,7 +192,7 @@ export default function CreateContactModal({
       let offset = 0;
       const all = [];
       for (let i = 0; i < 20; i++) {
-        const res = await fetch(`${baseUrl}?limit=${PAGE}&offset=${offset}&language=${locale}`, { headers: h });
+        const res = await apiFetch(`${baseUrl}?limit=${PAGE}&offset=${offset}&language=${locale}`);
         if (!res.ok) break;
         const data = await res.json();
         const items = (data?.items || []).map(x => ({ id: x.id, label: x.label || x.name || x.id }));
@@ -203,8 +204,8 @@ export default function CreateContactModal({
     };
 
     const countrySelectors = [
-      `${bpApiBaseUrl}/locationAddress/selectors/C_Country_ID`,
-      `${bpApiBaseUrl}/bankAccount/selectors/C_Country_ID`,
+      '/locationAddress/selectors/C_Country_ID',
+      '/bankAccount/selectors/C_Country_ID',
     ];
 
     const fetchCountries = async () => {
@@ -259,7 +260,7 @@ export default function CreateContactModal({
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bpApiBaseUrl, locale, retryCount]);
+  }, [bpApiBaseUrl, apiFetch, locale, retryCount]);
 
   // Re-fetch regions when country changes
   useEffect(() => {
@@ -270,9 +271,8 @@ export default function CreateContactModal({
     let cancelled = false;
     setOpts(o => ({ ...o, regions: { options: [], loading: true, error: null } }));
 
-    fetch(
-      `${bpApiBaseUrl}/locationAddress/selectors/C_Region_ID?C_Country_ID=${currentCountry}&limit=200&language=${locale}`,
-      { headers }
+    apiFetch(
+      `/locationAddress/selectors/C_Region_ID?C_Country_ID=${currentCountry}&limit=200&language=${locale}`
     )
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(d => {
@@ -293,7 +293,7 @@ export default function CreateContactModal({
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCountry, locale, retryRegionCount]);
+  }, [currentCountry, apiFetch, locale, retryRegionCount]);
 
   // Match label-valued pre-fills (country, region) against their selector
   // options as those arrive. Regions only load once a country is known, so
@@ -429,9 +429,8 @@ export default function CreateContactModal({
       ...(form.etgoWeb?.trim() && { etgoWeb: form.etgoWeb.trim() }),
     };
 
-    const res = await fetch(`${bpApiBaseUrl}/businessPartner`, {
+    const res = await apiFetch('/businessPartner', {
       method: 'POST',
-      headers,
       body: JSON.stringify(createPayload),
     });
 
@@ -458,9 +457,8 @@ export default function CreateContactModal({
       if (newId && (form.address || form.city || form.country)) {
         const countryLabel = opts.countries?.options?.find(c => c.id === form.country)?.label;
         const locName = [form.city, form.address].filter(Boolean).join(', ') || countryLabel || 'Location';
-        await fetch(`${bpApiBaseUrl}/locationAddress?parentId=${newId}`, {
+        await apiFetch(`/locationAddress?parentId=${newId}`, {
           method: 'POST',
-          headers,
           body: JSON.stringify({
             name: locName,
             addressLine1: form.address || null,
@@ -484,9 +482,8 @@ export default function CreateContactModal({
       await Promise.all([
         // Step 3 — contact persons (C_BPartner_Contact)
         ...contacts.map(async (c) => {
-          const contactRes = await fetch(`${bpApiBaseUrl}/contact?parentId=${newId}`, {
+          const contactRes = await apiFetch(`/contact?parentId=${newId}`, {
             method: 'POST',
-            headers,
             body: JSON.stringify({
               parentId: newId,
               businessPartner: newId,
@@ -513,9 +510,8 @@ export default function CreateContactModal({
         }),
         // Step 4 — bank accounts (C_BPartner_Bank_Account)
         ...banks.map(async (b) => {
-          const bankRes = await fetch(`${bpApiBaseUrl}/bankAccount?parentId=${newId}`, {
+          const bankRes = await apiFetch(`/bankAccount?parentId=${newId}`, {
             method: 'POST',
-            headers,
             body: JSON.stringify({
               parentId: newId,
               bankFormat: b.bankAccountFormat || 'GENERIC',
@@ -532,9 +528,8 @@ export default function CreateContactModal({
         }),
         // Step 5 — billing preferences PATCH
         Object.keys(billingPatch).length > 0
-          ? fetch(`${bpApiBaseUrl}/businessPartner/${newId}`, {
+          ? apiFetch(`/businessPartner/${newId}`, {
               method: 'PATCH',
-              headers,
               body: JSON.stringify(billingPatch),
             }).then(async patchRes => {
               if (!patchRes.ok) {
@@ -547,7 +542,7 @@ export default function CreateContactModal({
     } catch (e) {
       // BP was created in Step 1 but subsequent steps failed — roll it back to avoid orphans
       if (newId) {
-        await fetch(`${bpApiBaseUrl}/businessPartner/${newId}`, { method: 'DELETE', headers }).catch(() => null);
+        await apiFetch(`/businessPartner/${newId}`, { method: 'DELETE' }).catch(() => null);
       }
       throw e;
     }
