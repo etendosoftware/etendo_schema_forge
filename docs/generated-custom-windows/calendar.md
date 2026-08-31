@@ -41,8 +41,13 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    `derivation: "fromParent"` declaration remains semantic documentation only; it does not reach
    the backend shape for a `system`-visibility field. The broader selector fallback issue remains
    tracked separately as Jira ETP-5086.
-- Trigger **Create Periods** on a year to generate its 12 standard periods (Jan–Dec) plus an
-  optional adjustment period.
+- Trigger **Create Periods** on a year to generate 12 standard periods plus an optional adjustment
+  period. The required **Fiscal Year Range** choice defaults to **January - December**; selecting
+  **July - June** for Fiscal Year 2027 creates July 2027 through June 2028, with chronological
+  period numbers 1-12. January-December remains the untouched core process-100 flow; July-June is
+  handled by the `year-close` NEO handler because core process metadata has no range parameter. A
+  year must not already contain periods for a different range. Invalid range values are rejected
+  server-side rather than silently falling back to January.
 - On a year's detail, switch between two secondary tabs:
    - **Periods** (the first detail tab) — an expandable list of the year's periods (aggregate status badge), where
     expanding a period row reveals its per-document-type breakdown inline, each with its own
@@ -111,9 +116,13 @@ ever changes, this needs revisiting.
 
 ## Reactive behavior and dependencies
 - **Create Periods** (`year.processNow`, column `Processing`, on `fiscal-calendar`) is bound to
-  classic AD Process `100` (`C_YearPeriods`), a plain DB-procedure process — invoked generically
-  via `CallProcess`, no custom `NeoHandler` needed. `decisions.json → window.processOverrides.processNow`
-  opens a `ProcessParamDialog` with one parameter, `CREATEADJUSTMENT` (Yes/No select). This
+  classic AD Process `100` (`C_YearPeriods`). `decisions.json → window.processOverrides.processNow`
+  opens a `ProcessParamDialog` with `FISCALYEARSTART` (January - December or July - June) and
+  `CREATEADJUSTMENT` (Yes/No select) parameters. The entity's existing `YearCloseHandler` qualifier
+  delegates only `processNow` to the dedicated `FiscalYearPeriodsHandler`, which consumes the range selector:
+  it removes the UI-only key and lets the standard January-December request run through `CallProcess`,
+  while it creates the July-June periods directly through DAL. The core `C_PERIOD_TRG` still creates
+  the normal period-control records for those DAL inserts. This
   process runs in the **`YearPage`** subtree (`fiscal-calendar` spec), while the Periods tab
   (`PeriodsExpandablePanel.jsx`) lives on a completely different spec (`open-close-period-control`)
   stitched in via `secondaryTabs` — so the two do not share React state. `PeriodsExpandablePanel`
@@ -125,14 +134,15 @@ ever changes, this needs revisiting.
   success but the Periods tab kept showing its pre-create (usually empty) list until a manual
   navigation away and back.
 - **Abrir/Cerrar Periodo** (`periodControl.openClose`, on `open-close-period-control`) calls AD
-  Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
-  (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
-  (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
-  changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
-  in one transaction, so `PeriodsExpandablePanel.jsx`'s `handleDialogConfirm` refreshes both
-  `loadPeriods()` (the aggregate badge) and, when the acted-on period is the currently expanded
-  one, `loadDocumentsForPeriod(id)` too (ETP-4948 Issue 2) — otherwise the expanded document rows
-  keep showing pre-action status until manually collapsed/re-expanded.
+   Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
+   (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
+   (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
+   changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
+   in one transaction, so `PeriodsExpandablePanel.jsx`'s `handleDialogConfirm` refreshes both
+   `loadPeriods()` (the aggregate badge) and, when the acted-on period is the currently expanded
+   one, `loadDocumentsForPeriod(id)` too (ETP-4948 Issue 2). When the period is collapsed, it
+   invalidates any earlier document-list cache instead, so a later expansion always fetches the
+   updated child statuses rather than displaying rows cached before the period-level action.
 - **Abrir/Cerrar Documento** (`documents.openClose`, on `open-close-period-control`) calls AD
   Process `168` (`C_PeriodControl_Process`) via `PeriodControlDocOpenCloseHandler`
   (`JAVA_QUALIFIER = 'period-control-doc-openclose'`), same carry-over as above.
@@ -188,6 +198,18 @@ ever changes, this needs revisiting.
   classified `readOnly` — the Periods tab is a status/confirmation view, not a metadata editor.
 
 ## Loading, error, and double-submit UX (Periods/Accounting panels)
+The Periods tab uses the shared table and button primitives used by generated windows: a standard
+header row, table-cell spacing, hover tint, selected-row contrast, and compact outline/ghost
+actions. Its expandable document breakdown remains custom because it supports nested document
+actions and bulk selection, but it is rendered as a full-width child table row rather than a
+separate flex-list visual language.
+
+Persisted `C_Period.Name` values remain the canonical core abbreviations (for example, `Jan-27`).
+The Calendar UI renders a full localized month and two-digit year from `startingDate` instead:
+`January 27` in English and `Enero 27` in Spanish. Reading the date through the shared date-only
+utility also makes a July-June period ending in June 2028 display `June 28` / `Junio 28`, regardless
+of the stored name or the browser timezone.
+
 `AccountingPanel.jsx` and `PeriodsExpandablePanel.jsx` each track three distinct states for their
 fetched data — never just "empty vs loaded":
 - **Loading** (`rows`/`periods === undefined`, the initial/in-flight state) — a `{ui('loading')}`
@@ -201,12 +223,12 @@ fetched data — never just "empty vs loaded":
   distinct `accounting-panel-empty` state for a loaded-but-zero-rows year; `PeriodsExpandablePanel`
   just renders no rows).
 
-The expanded/pinned period row (and its bulk-action bar, when visible) is highlighted with
-`bg-primary/5 ring-1 ring-focus-ring` — the same selected-row token family `DataTable.jsx` already
-uses for `isSelectedLine` — instead of bare `bg-card`, which had no visible contrast against the
-surrounding page background (confirmed via live screenshot comparison, ETP-4948 Issue 4). The
-year list itself (`YearTableWithCloseStatus.jsx` → generic `DataTable`) was unaffected — it
-already reused this same token family with no wiring bug found there.
+The expanded period row is highlighted with `bg-primary/5 ring-1 ring-focus-ring` — the same
+selected-row token family `DataTable.jsx` already uses for `isSelectedLine` — instead of bare
+`bg-card`, which had no visible contrast against the surrounding page background (confirmed via
+live screenshot comparison, ETP-4948 Issue 4). The year list itself
+(`YearTableWithCloseStatus.jsx` → generic `DataTable`) was unaffected — it already reused this
+same token family with no wiring bug found there.
 
 `PeriodsExpandablePanel` applies the same three-state pattern independently to each period's
 expanded document list (`documentsByPeriod[periodId]` / `documentsError[periodId]`, testid
@@ -278,8 +300,9 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 - `end-year-close` spec: `endYearClose` entity fully excluded (`exclude: true`); `accounting` discards `generalLedger`, `accountingFact`, `cYearCloseVID`, `active`, `organization`, `client`, `id`, `creationDate`, `createdBy`, `updated`, `updatedBy`.
 
 ## Gap assessment
-- `ProcessParamDialog` only renders `type: "select"` parameters — `CREATEADJUSTMENT` is modeled as
-  a two-option select (Yes/No), same constraint the original `fiscal-calendar` window had.
+- `ProcessParamDialog` only renders `type: "select"` parameters — `FISCALYEARSTART` and
+  `CREATEADJUSTMENT` are modeled as selects. The former defaults to January - December; the latter
+  remains the optional Yes/No adjustment-period choice.
 - ~~The `calendar` field on `year` is auto-derived server-side (`NeoDefaultsService.tryInjectFirstFromLookup`,
    "the org's first active calendar") rather than resolved via its actual AD parent-link
    (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
@@ -320,27 +343,34 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 3. Navigate directly to `/fiscal-calendar` and `/open-close-period-control` and confirm both
    redirect to `/calendar`.
 4. Click **New**, fill in Fiscal Year and Calendar, save, confirm the year appears in the list.
-5. Open the year, click **Create Periods**, confirm 12 periods appear.
-6. Switch to the **Periods** tab, confirm the period list renders with aggregate status badges.
-7. Expand a period row and confirm its per-document-type rows appear (fetched only on expand).
-8. Click **Abrir/Cerrar Periodo** on a period and confirm the process dialog / status update.
-9. Click **Abrir/Cerrar Documento** on a document-type row and confirm only that row's status changes.
-10. Switch to the **Accounting** tab and confirm the year's Fact_Acct rows render (account, debit,
-    credit, description).
-11. Open the kebab menu with at least one period still Open and confirm **Cerrar Año** is present
-    but its confirm button is disabled.
-12. Close/Permanently-close every period, reopen the kebab menu, confirm **Cerrar Año**'s confirm
-    button is now enabled, and confirm it posts to `/sws/neo/fiscal-calendar/year/{id}/action/closeYear`
-    (note the `fiscal-calendar` spec base, not `/calendar/...`).
-13. Force the `accounting` request to fail (e.g. block the network request in devtools) and
-    confirm the Accounting tab shows the error message, not a blank panel or a false "no entries".
-14. Force the `periodControl` request to fail and confirm the Periods tab shows its own error
-    message; then restore the network and confirm expanding a period whose `documents` request
-    fails shows that period's own error line without affecting other periods.
-15. Double-click **Abrir/Cerrar Periodo** (or throttle the network to make the click visibly
-    slow) and confirm the button disables immediately and re-enables only after the request
-    settles — a second click during the pending window must not fire a second request.
-16. Confirm all three backing specs push cleanly and independently: `sf-push-neo fiscal-calendar`
+5. Open an empty year, click **Create Periods**, retain the default **January - December**, and
+   confirm 12 periods appear from January through December.
+6. Open another empty Fiscal Year 2027, select **July - June**, and confirm 12 periods appear from
+   July 2027 through June 2028, with period numbers 1 through 12 and month/year labels matching
+   their actual dates.
+7. Run Create Periods again for an already-populated year and confirm the existing periods are
+   retained rather than moved or duplicated. Do not change range on a populated year.
+8. Switch to the **Periods** tab, confirm the period list renders chronologically by starting date
+   with aggregate status badges.
+9. Expand a period row and confirm its per-document-type rows appear (fetched only on expand).
+10. Click **Abrir/Cerrar Periodo** on a period and confirm the process dialog / status update.
+11. Click **Abrir/Cerrar Documento** on a document-type row and confirm only that row's status changes.
+12. Switch to the **Accounting** tab and confirm the year's Fact_Acct rows render (account, debit,
+   credit, description).
+13. Open the kebab menu with at least one period still Open and confirm **Cerrar Año** is present
+   but its confirm button is disabled.
+14. Close/Permanently-close every period, reopen the kebab menu, confirm **Cerrar Año**'s confirm
+   button is now enabled, and confirm it posts to `/sws/neo/fiscal-calendar/year/{id}/action/closeYear`
+   (note the `fiscal-calendar` spec base, not `/calendar/...`).
+15. Force the `accounting` request to fail (e.g. block the network request in devtools) and
+   confirm the Accounting tab shows the error message, not a blank panel or a false "no entries".
+16. Force the `periodControl` request to fail and confirm the Periods tab shows its own error
+   message; then restore the network and confirm expanding a period whose `documents` request
+   fails shows that period's own error line without affecting other periods.
+17. Double-click **Abrir/Cerrar Periodo** (or throttle the network to make the click visibly
+   slow) and confirm the button disables immediately and re-enables only after the request
+   settles — a second click during the pending window must not fire a second request.
+18. Confirm all three backing specs push cleanly and independently: `sf-push-neo fiscal-calendar`
     and `sf-push-neo end-year-close` should each succeed with 0 errors; `open-close-period-control`
     needs no re-push (unchanged by this feature).
 

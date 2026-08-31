@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LocaleProvider } from '@/i18n';
 import enUS from '../../../../locales/en_US.json';
 import esES from '../../../../locales/es_ES.json';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fiscalCalendarDecisions = JSON.parse(readFileSync(
+  join(__dirname, '../../../../../../../artifacts/fiscal-calendar/decisions.json'),
+  'utf8',
+));
 
 // Labels now render via ui()/tMenu() (dictionary.genericLabels) instead of server
 // $_identifier strings (see PeriodsExpandablePanel.jsx's own comment for why) — so these
@@ -69,7 +78,7 @@ function selectOpenCloseOption(value) {
   fireEvent.change(screen.getByTestId('select-control'), { target: { value } });
 }
 
-const PERIOD = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
+const PERIOD = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
 // documentCategory codes below are the REAL codes for the asserted English text (per
 // DOCUMENT_CATEGORY_LABEL_KEYS, generated from the actual DB data) — labels now render via
 // ui(DOCUMENT_CATEGORY_LABEL_KEYS[code]) rather than the $_identifier fields (still present on
@@ -112,7 +121,8 @@ describe('PeriodsExpandablePanel', () => {
         apiBaseUrl="https://api.test"
         data-testid="PeriodsExpandablePanel__test" />
     );
-    await waitFor(() => expect(screen.getByText('Jan-2027')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('January 27')).toBeInTheDocument());
+    expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/documents'), expect.anything());
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -121,9 +131,22 @@ describe('PeriodsExpandablePanel', () => {
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/documents?parentId=p1'), expect.anything());
   });
 
+  it('renders the full localized month from startingDate instead of the persisted short period name', async () => {
+    const julyToJunePeriod = { id: 'june', name: 'Jan-27', startingDate: '2028-06-01', status: 'O' };
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
+    }));
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+
+    await waitFor(() => expect(screen.getByTestId('period-name-june')).toHaveTextContent('June 28'));
+    expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
+  });
+
   it('renders period status as a colored badge with the translated label, not the raw code', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p11" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
     expect(badge).toHaveAttribute('data-variant', 'green'); // status "O" -> green per enumVariants
@@ -133,7 +156,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('renders document type + status as a readable label and colored badge, not raw codes', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p12" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
 
@@ -146,37 +169,52 @@ describe('PeriodsExpandablePanel', () => {
   it('falls back to the raw code when the $_identifier field is absent (e.g. an older mock/handler)', async () => {
     global.fetch = vi.fn((url) => {
       if (url.includes('/periodControl')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Jan-2027', status: 'M' }] } }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'M' }] } }) });
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p13" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
     expect(badge).toHaveAttribute('data-variant', 'orange'); // status "M" -> orange per enumVariants
     expect(badge).toHaveTextContent('M');
   });
 
-  it('scopes the periodControl fetch to the year via the classic Openbravo criteria param, not ?year=', async () => {
+  it('requests periods chronologically while retaining the classic criteria filter for the selected year', async () => {
     // periodControl's LIST goes through NEO's generic DefaultJsonDataService, which silently
     // ignores an arbitrary `?year=<id>` query param (confirmed live — it returned every period
     // across every year, unfiltered). The real mechanism is the `criteria` JSON-array param.
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p10" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     const expectedCriteria = encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: 'year1' }]));
     expect(global.fetch).toHaveBeenCalledWith(
-      `https://api.test/periodControl?criteria=${expectedCriteria}`,
+      `https://api.test/periodControl?criteria=${expectedCriteria}&_sortBy=startingDate asc`,
       expect.anything()
     );
     expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
   });
 
+  it('declares the Create Periods fiscal-year range before the adjustment choice', () => {
+    const params = fiscalCalendarDecisions.window.processOverrides.processNow.params;
+    const [fiscalYearRange, createAdjustment] = params;
+
+    expect(fiscalYearRange).toMatchObject({
+      key: 'FISCALYEARSTART',
+      type: 'select',
+      label: 'Fiscal Year Range',
+      required: true,
+    });
+    expect(fiscalYearRange.options.map(({ value }) => value)).toEqual(['JANUARY', 'JULY']);
+    expect(params.map(({ key }) => key)).toEqual(['FISCALYEARSTART', 'CREATEADJUSTMENT']);
+    expect(createAdjustment.key).toBe('CREATEADJUSTMENT');
+  });
+
   it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Periodo is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -192,7 +230,7 @@ describe('PeriodsExpandablePanel', () => {
   ])('submits {"openClose": "%s"} for the period action when "%s" is selected and confirmed', async (value, _label) => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -213,7 +251,7 @@ describe('PeriodsExpandablePanel', () => {
   it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Documento is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     global.fetch = postSpy;
@@ -231,7 +269,7 @@ describe('PeriodsExpandablePanel', () => {
   ])('submits {"openClose": "%s"} for the document action when "%s" is selected and confirmed', async (value, _label) => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     global.fetch = postSpy;
@@ -265,7 +303,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p14" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -278,7 +316,7 @@ describe('PeriodsExpandablePanel', () => {
     await waitFor(() => {
       const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
       expect(badge).toHaveTextContent('All Closed');
-      expect(badge).toHaveAttribute('data-variant', 'neutral'); // status "C" -> neutral per enumVariants
+       expect(badge).toHaveAttribute('data-variant', 'red'); // status "C" -> red per enumVariants
     });
     // The panel itself must never have been torn down for a full reload — it stayed mounted
     // and showed the (stale, then updated) row the whole time, no top-level loading state again.
@@ -312,7 +350,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p16" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     expect(periodControlCallCount).toBe(1);
@@ -350,7 +388,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p17" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
     expect(documentsCallCount).toBe(0); // never expanded, so no documents fetch yet
 
@@ -362,6 +400,57 @@ describe('PeriodsExpandablePanel', () => {
     // The guard must resolve to a no-op for a period that isn't expanded — documents are never
     // fetched at all in this test.
     expect(documentsCallCount).toBe(0);
+  });
+
+  it('invalidates cached documents after a successful action on a collapsed period so re-expanding shows refreshed statuses', async () => {
+    const CLOSED_DOC = { ...DOC, periodStatus: 'C' };
+    const OPEN_DOC = { ...DOC, periodStatus: 'O' };
+    let documentsCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url.includes('/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        documentsCallCount += 1;
+        const data = documentsCallCount === 1 ? [CLOSED_DOC] : [OPEN_DOC];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p18" />);
+    await waitFor(() => screen.getByText('January 27'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => {
+      const badge = screen.getByTestId('document-status-d1').querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('Closed');
+    });
+    expect(documentsCallCount).toBe(1);
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => expect(screen.queryByTestId('period-documents-p1')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('O');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.test/periodControl/p1/action/openClose',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ fieldValues: { openClose: 'O' } }),
+      })
+    ));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => expect(documentsCallCount).toBe(2));
+    await waitFor(() => {
+      const badge = screen.getByTestId('document-status-d1').querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('Open');
+      expect(badge).toHaveAttribute('data-variant', 'green');
+    });
   });
 
   it('re-fetches BOTH the affected period\'s documents AND the periods list after a document action succeeds, updating the parent\'s aggregate badge too', async () => {
@@ -390,7 +479,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p15" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     expect(documentsCallCount).toBe(1);
@@ -417,7 +506,7 @@ describe('PeriodsExpandablePanel', () => {
   it('cancelling the dialog does not submit any request', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3b" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -429,7 +518,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('collapses the period row again on a second click without re-fetching documents', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p4" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -464,7 +553,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected'));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p7" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => expect(screen.getByTestId('period-documents-error-p1')).toBeInTheDocument());
@@ -477,7 +566,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected'));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p8" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
     selectOpenCloseOption('C');
@@ -493,7 +582,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.reject(new Error('unexpected'));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     // Only the POST is held pending by the test — the post-success periodControl refetch
     // (a GET) must resolve immediately, or the pending flag (cleared only after that refetch
@@ -530,7 +619,7 @@ describe('PeriodsExpandablePanel', () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9b" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -565,7 +654,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev1" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
     await act(async () => {
@@ -587,7 +676,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
       return Promise.reject(new Error('unexpected url ' + url));
     });
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev2" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
     await act(async () => {
@@ -607,7 +696,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
     });
     const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
     const { unmount } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev3" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     unmount();
 
@@ -635,7 +724,7 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
 
   async function renderExpanded(testId) {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid={testId} />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
   }
@@ -865,9 +954,9 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
 });
 
 describe('PeriodsExpandablePanel — pinning the expanded period to the top', () => {
-  const P1 = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened' };
-  const P2 = { id: 'p2', name: 'Feb-2027', status: 'O', 'status$_identifier': 'All Opened' };
-  const P3 = { id: 'p3', name: 'Mar-2027', status: 'O', 'status$_identifier': 'All Opened' };
+  const P1 = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened' };
+  const P2 = { id: 'p2', name: 'Feb-27', startingDate: '2027-02-01', status: 'O', 'status$_identifier': 'All Opened' };
+  const P3 = { id: 'p3', name: 'Mar-27', startingDate: '2027-03-01', status: 'O', 'status$_identifier': 'All Opened' };
 
   function renderedPeriodOrder(container) {
     return Array.from(container.querySelectorAll('[data-testid^="period-row-expand-"]'))
@@ -891,13 +980,13 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
 
   it('renders periods in their original (unpinned) order when nothing is expanded', async () => {
     const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
     expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
   });
 
   it('moves a non-first period to the top of the list once it is expanded', async () => {
     const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p3'));
     await waitFor(() => screen.getByTestId('period-documents-p3'));
@@ -912,7 +1001,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
       return Promise.reject(new Error('unexpected url ' + url));
     });
     const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -928,7 +1017,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
 
   it('moves the pin to a newly expanded period, returning the previous one to its normal sorted position', async () => {
     const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p3'));
     await waitFor(() => screen.getByTestId('period-documents-p3'));
@@ -945,7 +1034,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
 
   it('returns to the original order once the pinned period is collapsed', async () => {
     const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
     await waitFor(() => screen.getByTestId('period-documents-p2'));
@@ -957,13 +1046,9 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
   });
 });
 
-describe('PeriodsExpandablePanel — sticky expanded period row + bulk action bar', () => {
-  // jsdom cannot actually evaluate `position: sticky` against a scroll container (no real
-  // layout engine) — asserting the className is applied to the right element in the right
-  // state is the meaningful thing to test here; the actual "does it visually stay pinned
-  // while scrolling" behavior was verified live in a real browser instead (see commit message).
-  const P1 = { id: 'p1', name: 'Jan-2027', status: 'O', 'status$_identifier': 'All Opened' };
-  const P2 = { id: 'p2', name: 'Feb-2027', status: 'O', 'status$_identifier': 'All Opened' };
+describe('PeriodsExpandablePanel — shared table styling', () => {
+  const P1 = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened' };
+  const P2 = { id: 'p2', name: 'Feb-27', startingDate: '2027-02-01', status: 'O', 'status$_identifier': 'All Opened' };
 
   beforeEach(() => {
     global.fetch = vi.fn((url) => {
@@ -973,77 +1058,94 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
     });
   });
 
-  function stickyWrapperFor(periodId) {
+  function periodRowFor(periodId) {
     return screen.getByTestId(`period-row-expand-${periodId}`)
-      .closest('div').parentElement; // button -> row div -> sticky wrapper div
+      .closest('tr');
   }
 
-  it('does not apply sticky positioning to a collapsed period row', async () => {
+  it('renders the established table headers and four-cell layout for collapsed period rows', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
-    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
-    expect(stickyWrapperFor('p2').className).not.toMatch(/sticky/);
+    const panel = screen.getByTestId('periods-expandable-panel');
+    expect(panel.querySelector('table')).toBeInTheDocument();
+    expect(panel.querySelector('thead')).toBeInTheDocument();
+    expect(panel.querySelector('tbody')).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      '',
+      'Period',
+      'Status',
+      'Actions',
+    ]);
+    expect(periodRowFor('p1').querySelectorAll(':scope > td')).toHaveLength(4);
+    expect(periodRowFor('p2').querySelectorAll(':scope > td')).toHaveLength(4);
+    expect(periodRowFor('p1').className).toMatch(/hover:bg-muted/);
+    expect(periodRowFor('p2').className).toMatch(/hover:bg-muted/);
   });
 
-  it('applies sticky top-0 to the expanded period row + bulk bar unit, and to that one only', async () => {
+  it('uses the standard selected-row treatment for the expanded period', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
     await waitFor(() => screen.getByTestId('period-documents-p2'));
 
-    const p2Wrapper = stickyWrapperFor('p2');
-    expect(p2Wrapper.className).toMatch(/\bsticky\b/);
-    expect(p2Wrapper.className).toMatch(/\btop-0\b/);
-    // Contrast fix (ETP-4948 Issue 4): the expanded row now uses a visible highlight token
-    // (bg-primary/5 + ring-focus-ring) instead of the old bg-card, which had no contrast
-    // against the page background.
-    expect(p2Wrapper.className).toMatch(/\bbg-primary\b/);
-    expect(p2Wrapper.className).toMatch(/\bring-focus-ring\b/);
-    // The collapsed period must never also be sticky — only one pinned unit at a time.
-    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+    const p2Row = periodRowFor('p2');
+    expect(p2Row.className).toMatch(/\bbg-primary\b/);
+    expect(p2Row.className).toMatch(/\bring-focus-ring\b/);
+    expect(periodRowFor('p1').className).not.toMatch(/ring-focus-ring/);
   });
 
   // ETP-4972 — before this ticket, the bulk action bar was an in-flow
-  // element rendered as a child of this same sticky-positioned wrapper, so
-  // it inherited the row's own sticky/scroll behavior. It now renders
+  // element rendered as a child of the period row's own markup, so it
+  // inherited that row's DOM position/scroll behavior. It now renders
   // through the shared `SelectionToolbar`, which portals straight to
   // `document.body` with true viewport-fixed coordinates — it is no longer
-  // a DOM descendant of the wrapper at all, and doesn't need to be: it can
-  // never scroll away or be clipped regardless of where the period row
-  // ends up. This test now verifies that split explicitly, rather than
-  // asserting an ancestry relationship that no longer exists.
-  it('period row keeps its sticky positioning once documents are selected; the bulk action bar itself floats independently via the portaled SelectionToolbar', async () => {
+  // a DOM descendant of the period row (`<tr>`) at all, and doesn't need to
+  // be: it can never scroll away or be clipped regardless of where the
+  // period row ends up in the table (ETP-4948's own Table conversion, see
+  // `periodRowFor` above).
+  it('renders the bulk action bar independently of the period row via the portaled SelectionToolbar', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
     fireEvent.click(screen.getByTestId('document-select-d1'));
 
-    const p1Wrapper = stickyWrapperFor('p1');
-    expect(p1Wrapper.className).toMatch(/\bsticky\b/);
-    // The bar is NOT nested inside the sticky wrapper anymore...
-    expect(p1Wrapper.querySelector('[data-testid="document-selection-count"]')).toBeNull();
+    // The bar is NOT nested inside the period row...
+    expect(periodRowFor('p1').querySelector('[data-testid="document-selection-count"]')).toBeNull();
     // ...it lives in SelectionToolbar's own portaled, fixed-position pill.
     const bar = screen.getByTestId('document-selection-count').closest('.selection-toolbar');
     expect(bar).toBeTruthy();
     expect(bar.closest('.fixed')).toBeTruthy();
   });
 
-  it('moves the sticky unit to the newly expanded period, and the previous one is no longer sticky', async () => {
+  it('renders expanded documents in a full-width table row below their period row', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Feb-2027'));
+    await waitFor(() => screen.getByText('February 27'));
+
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+
+    const documentsRow = screen.getByTestId('period-documents-p1');
+    expect(documentsRow.tagName).toBe('TR');
+    expect(documentsRow.querySelector(':scope > td[colspan="4"]')).toBeInTheDocument();
+    expect(documentsRow).toHaveTextContent('AP Credit Memo');
+  });
+
+  it('moves the selected-row treatment to the newly expanded period', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByTestId('period-documents-p1'));
-    expect(stickyWrapperFor('p1').className).toMatch(/sticky/);
+    expect(periodRowFor('p1').className).toMatch(/ring-focus-ring/);
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
     await waitFor(() => screen.getByTestId('period-documents-p2'));
-    expect(stickyWrapperFor('p2').className).toMatch(/sticky/);
-    expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
+    expect(periodRowFor('p2').className).toMatch(/ring-focus-ring/);
+    expect(periodRowFor('p1').className).not.toMatch(/ring-focus-ring/);
   });
 });
 
@@ -1068,7 +1170,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
   // The header is still sent (harmless, correct for other things like AD_Message
   // translations) — these tests still confirm it, plus confirm the REAL fix: Spanish labels
   // render correctly regardless of what (or whether) $_identifier says.
-  const PERIOD_ES = { id: 'p1', name: 'Ene-2027', status: 'M' }; // no $_identifier on purpose
+  const PERIOD_ES = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'M' }; // no $_identifier on purpose
   const DOC_ES = { id: 'd1', documentCategory: 'MMS', periodStatus: 'C' }; // ditto
 
   beforeEach(() => {
@@ -1086,7 +1188,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     global.fetch = fetchSpy;
 
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('Enero 27'));
 
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/periodControl'),
@@ -1103,7 +1205,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     global.fetch = fetchSpy;
 
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('Enero 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('Entrega material'));
 
@@ -1122,7 +1224,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     });
     global.fetch = postSpy;
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('Enero 27'));
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
     selectOpenCloseOption('C');
@@ -1157,7 +1259,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     });
 
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('Enero 27'));
 
     const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('Mixto');
@@ -1172,6 +1274,19 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     expect(screen.queryByText('Closed')).not.toBeInTheDocument();
   });
 
+  it('renders a July-to-June period from startingDate in Spanish rather than its persisted short name', async () => {
+    const julyToJunePeriod = { id: 'june', name: 'Jan-27', startingDate: '2028-06-01', status: 'O' };
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
+    }));
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+
+    await waitFor(() => expect(screen.getByTestId('period-name-june')).toHaveTextContent('Junio 28'));
+    expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
+  });
+
   it('renders the equivalent English labels under en_US, from the same code-keyed dictionaries', async () => {
     currentTestLocale = 'en_US';
     global.fetch = vi.fn((url) => {
@@ -1180,7 +1295,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     });
 
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('January 27'));
 
     const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('Mixed');
@@ -1193,12 +1308,12 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
   it('falls back to the raw code if it is somehow not in the dictionary (e.g. a future/unknown code)', async () => {
     global.fetch = vi.fn((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Ene-2027', status: 'ZZZ' }] } }) });
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'ZZZ' }] } }) });
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
     });
 
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Ene-2027'));
+    await waitFor(() => screen.getByText('Enero 27'));
 
     const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('ZZZ');

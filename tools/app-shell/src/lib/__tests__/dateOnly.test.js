@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   formatCalendarDate,
+  formatCalendarMonthYear,
   getCalendarDateRelation,
   parseCalendarDate,
   todayCalendarISO,
@@ -39,6 +40,21 @@ describe('dateOnly helpers', () => {
 
     it('returns an em dash when the input is empty', () => {
       assert.equal(formatCalendarDate(null), '—');
+    });
+  });
+
+  describe('formatCalendarMonthYear', () => {
+    it('expands persisted English period names to a full localized month and two-digit year', () => {
+      assert.equal(formatCalendarMonthYear('2027-01-01', 'en_US'), 'January 27');
+    });
+
+    it('expands persisted Spanish period names to a full localized month and two-digit year', () => {
+      assert.equal(formatCalendarMonthYear('2027-01-01', 'es_ES'), 'Enero 27');
+    });
+
+    it('uses the starting date year for fiscal years that cross from July through June', () => {
+      assert.equal(formatCalendarMonthYear('2028-06-01', 'en_US'), 'June 28');
+      assert.equal(formatCalendarMonthYear('2028-06-01', 'es_ES'), 'Junio 28');
     });
   });
 
