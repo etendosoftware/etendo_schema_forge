@@ -1625,6 +1625,31 @@ export function useEntity(entity, childEntity, {
         if (selected?.id) refreshHeaderTotals(selected.id);
     }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
+    /**
+     * ETP-5073 follow-up: refresh ONLY the remembered `updated` token of a record, without
+     * touching `selected`/`editing`.
+     *
+     * A process action the backend REFUSES can still have written to the record before it
+     * validated (observed on `assets/action/processAsset`: it answered 400 "El campo fecha de
+     * inicio es obligatorio" and left `updated` bumped). The remembered token was then stale, so
+     * the user's very next save came back 500 "already been changed by another user or process"
+     * and their correction was silently lost. Re-reading the row runs it through normalizeRecord,
+     * which re-remembers the version — and deliberately does NOT touch the form, because the user
+     * still has the fix they just typed in it.
+     */
+    const refreshRecordVersion = useCallback(async (id) => {
+        if (!id) return;
+        try {
+            const res = await apiFetch(`/${entity}/${id}`, { method: 'GET' });
+            if (!res.ok) return;
+            const data = await res.json();
+            const row = data?.response?.data?.[0] ?? data;
+            if (row) normalizeRecord(row, entity);
+        } catch {
+            // Best-effort: without it the next write still fails loudly rather than silently.
+        }
+    }, [entity, apiFetch]);
+
     const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
         const saved = await handleSave({ silent: true });
         if (!saved?.id) return null;
@@ -1640,6 +1665,8 @@ export function useEntity(entity, childEntity, {
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
             toast.error(msg);
+            // A refused process may still have bumped `updated` — see refreshRecordVersion.
+            await refreshRecordVersion(saved.id);
             return null;
         }
         toast.success(ui('recordProcessed'));
@@ -1716,6 +1743,8 @@ export function useEntity(entity, childEntity, {
             } else {
                 const msg = await extractErrorMessage(res, ui);
                 toast.error(msg);
+                // A refused process may still have bumped `updated` — see refreshRecordVersion.
+                await refreshRecordVersion(selected.id);
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
