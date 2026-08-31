@@ -648,12 +648,39 @@ The import field-mapping entry (`window.import.fields`, `target: "taxID"`) also 
 components) render `field.label` directly in the column-mapping dropdown and the review
 queue's column header — both are part of this window's own Import flow.
 
-**Out of scope, deliberately.** The shared `CreateContactModal.jsx` quick-create modal (its
-own `taxIDField: "CIF/NIF"` locale key) is used by the partner-selector "+ crear contacto"
-flow inside *other* windows (Sales Order, Sales Quotation, Purchase Order, Purchase Invoice,
-Goods Shipment — see the ETP-4700 E2E coverage in
-`e2e/tests/flows/contacts-integration.spec.js`), not by `/contacts` itself, so it is a
-different feature and was left unchanged. The import's `TAX_ID_KEY_VALUES` alias list in
-`contactsImportDescriptor.js` (accepting user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as
-synonyms for the *Tax ID Type* enum value `NIF`) was also left unchanged — it recognizes
-what users type in their own CSV files and is unrelated to the displayed field label.
+**Scope broadened to `CreateContactModal.jsx` (human decision, same day).** The shared
+quick-create modal's own `taxIDField` locale key (`genericLabels.taxIDField` in
+`es_ES.json`) was initially left out of scope because `CreateContactModal.jsx` is not part
+of the `/contacts` window itself — it is the partner-selector "+ crear contacto" flow opened
+from *other* windows (Sales Order, Sales Quotation, Purchase Order, Purchase Invoice, Goods
+Shipment — see the ETP-4700 E2E coverage in `e2e/tests/flows/contacts-integration.spec.js`).
+The human asked for it anyway for real-world consistency: it is the same fiscal field (CIF no
+longer exists in Spain), so a stale "CIF/NIF" in the quick-create modal while the main window
+says "NIF" would just be confusing. `genericLabels.taxIDField` in `es_ES.json` is now `"NIF"`
+too (`es_AR.json` is untouched — Argentina's own fiscal-ID terminology, CUIT/CUIL, is a
+separate matter this ticket does not touch). `CreateContactModal.jsx` and `contactModalConfig.js`
+have no hardcoded "CIF"/"NIF" strings of their own — the field is declared as
+`{ id: 'taxID', labelKey: 'taxIDField', ... }` and rendered via `{ui(f.labelKey)}` in
+`EntityCreationModal.jsx`, so the locale-key edit is the only change needed for it to take
+effect. `e2e/tests/flows/contacts-integration.spec.js`'s two ETP-4700 tests, which fill this
+modal's tax-ID input by locating its label text, were updated from
+`page.getByText(/^cif\/nif/i)` to `page.locator('label', { hasText: /^nif$/i })` — scoped to
+`<label>` specifically because the sibling "Clave NIF país residencia" `<select>` also has a
+literal `<option>NIF</option>`, which a plain `getByText(/^nif/i)` would ambiguously match too.
+
+The import's `TAX_ID_KEY_VALUES` alias list in `contactsImportDescriptor.js` (accepting
+user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as synonyms for the *Tax ID Type* enum value `NIF`)
+remains unchanged — it recognizes what users type in their own CSV files and is unrelated to
+the displayed field label. Likewise the `taxID` import field's own `aliases` array in
+`decisions.json` (`["cif/nif", "cif", "nif", ...]`) is unchanged, so old import templates and
+files with a "CIF/NIF" column header still map correctly — only the *displayed* label changed,
+not what the importer recognizes as input.
+
+**`generated/core.es_ES.json` note.** The app does not read `es_ES.json` directly at runtime —
+`useLocaleDictionaries` loads the gitignored, build-time-sliced
+`src/locales/generated/core.<locale>.json` instead (see `vite-plugins/slice-labels.js`, ETP-4300/
+ETP-4830). That file is regenerated automatically from `es_ES.json` on every `make dev` boot and
+on every save to a top-level locale file while `make dev` is already running — no manual step or
+extra commit is needed for the `taxIDField` change (or the `TaxID` `labelOverrides` change above)
+to take effect; it was spot-checked locally by re-running the slicer once, confirming
+`generated/core.es_ES.json` picked up `"NIF"`.

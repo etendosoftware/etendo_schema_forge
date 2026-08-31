@@ -744,8 +744,14 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // CIF/NIF
-    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    // NIF (renamed from "CIF/NIF" — ETP-4992). Anchored to a <label> and matched
+    // exactly so it does not also match the "NIF" <option> inside the sibling
+    // "Clave NIF país residencia" select. The field is required, so
+    // EntityCreationModal.jsx appends a trailing "*" span to the label's own
+    // textContent ("NIF*", no space) — tolerate that (and incidental
+    // whitespace) without loosening the anchor enough to match "NIF" inside
+    // unrelated longer labels.
+    const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
     const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
     await taxIdInput.fill(TAX_ID);
 
@@ -861,8 +867,14 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // CIF/NIF
-    const taxIdLabel = page.getByText(/^cif\/nif/i);
+    // NIF (renamed from "CIF/NIF" — ETP-4992). Anchored to a <label> and matched
+    // exactly so it does not also match the "NIF" <option> inside the sibling
+    // "Clave NIF país residencia" select. The field is required, so
+    // EntityCreationModal.jsx appends a trailing "*" span to the label's own
+    // textContent ("NIF*", no space) — tolerate that (and incidental
+    // whitespace) without loosening the anchor enough to match "NIF" inside
+    // unrelated longer labels.
+    const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
     const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
     await taxIdInput.fill(TAX_ID);
 
