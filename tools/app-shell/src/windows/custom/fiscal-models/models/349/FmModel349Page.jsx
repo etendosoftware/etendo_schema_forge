@@ -4,7 +4,7 @@ import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
-  OctagonAlert,
+  OctagonAlert, X,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -52,6 +52,30 @@ function isRectificativeOp(op) {
 // into the identity used for React keys and row selection.
 function rowKey(op) {
   return `${op?.id ?? op?.bpId ?? op?.nif ?? ''}|${op?.key ?? ''}|${isRectificativeOp(op) ? 'R' : ''}`;
+}
+
+// ETP-5027 — AEAT349 classification of a rectification row. Rectification rows
+// (`collectRectifications` in Fiscal349BoxesHandler) carry no `key` of their own:
+// they expose `type` ('Compra'/'Venta') plus the two registro-tipo-2 bases
+// (`baseProducts` = EM_AEAT349_BPBaseAmount, `baseServices` = ..._BPBaseAmountS).
+// The E/S/A/I key is therefore derived the same way the AEAT classifies them:
+// goods vs services × sale vs purchase.
+const RECTIF_KEY_BY_TYPE = {
+  Venta:  { products: 'E', services: 'S' },
+  Compra: { products: 'A', services: 'I' },
+};
+
+// The keys a single rectification contributes to — one per non-zero base, so a
+// mixed goods+services correction counts under both. A rectification whose two
+// bases are zero is a no-op correction and is attributed to no key (mirrors the
+// zero-base skip in `appendOperators`).
+function rectificationKeys(r) {
+  const byType = RECTIF_KEY_BY_TYPE[r?.type];
+  if (!byType) return [];
+  const keys = [];
+  if ((parseFloat(r.baseProducts) || 0) !== 0) keys.push(byType.products);
+  if ((parseFloat(r.baseServices) || 0) !== 0) keys.push(byType.services);
+  return keys;
 }
 
 // ── Sub-components ───────────────────────────────────────────────
@@ -280,17 +304,188 @@ function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
 // component's render (SonarQube S3776, same rationale as ViesBanner above): the
 // `activeTab === 'invoices' || ... || ...` gate and its 3 nested per-tab `&&`
 // branches now live in their own function, called unconditionally below.
+// ETP-5027 — the Origen link's operator filter, shared by the two tabs it can land
+// on. `originFilter` is a single `{ nif, key, tab }` (null = unfiltered): only one
+// tab is ever filtered at a time, because the filter is set by the jump that also
+// switches tabs and is cleared as soon as the user leaves that tab. `tab` records
+// which dataset the filter belongs to so the other tab can never inherit it.
+//
+// The grain is (nif, key), NOT the VAT number alone. One operator can occupy
+// SEVERAL rows of the operators table, one per AEAT349 key, and both `originByNif`
+// and `originByRectification` count under the composite `nif|key`. Filtering on the
+// VAT number alone would land the user on rows belonging to a *different* operator
+// row, with a count that disagrees with the link they just clicked.
+function OriginFilterChip({ nif, count, onClear, t, testId }) {
+  return (
+    <div style={{ padding: '12px 0 8px', display: 'flex', justifyContent: 'flex-end' }}>
+      <button
+        className="fm-toolbar__pill fm-toolbar__pill--active-dark"
+        style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        onClick={onClear}
+        title={t('fm.m349.origin_filter.clear')}
+        data-testid={testId}
+      >
+        {t('fm.m349.origin_filter.operator', { nif })}
+        <span className="fm-toolbar__count-badge">{count}</span>
+        <X size={11} strokeWidth={2} data-testid="X__346dd5" />
+      </button>
+    </div>
+  );
+}
+
+// Filter-specific empty state. Deliberately distinct from each tab's generic
+// "nothing here" message, which would otherwise imply the declaration has no
+// invoices / no rectifications at all rather than none for THIS operator.
+function OriginFilterEmpty({ message, testId }) {
+  return (
+    <div
+      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}
+      data-testid={testId}
+    >
+      <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+        {message}
+      </span>
+    </div>
+  );
+}
+
+// ETP-5027 — "Facturas origen" tab body. The Origen link on a REGULAR operator row
+// narrows this list to the invoices that produced the count the user clicked.
+// Invoice rows carry the operator's VAT number in `nifIva` and its AEAT349
+// classification in `key` (backend `buildInvoiceRow`), so they match the filter grain
+// directly.
+//
+// Filtering happens here rather than inside the shared `SourcesTab`, which stays
+// generic (303 renders it too) and never learns about 349's operator filter.
+function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOriginFilter }) {
+  const allSources = liveInvoices ?? decl.invoices ?? [];
+  const sources = originFilter
+    ? allSources.filter(inv => inv.nifIva === originFilter.nif && (inv.key ?? '') === originFilter.key)
+    : allSources;
+  return (
+    <>
+      {originFilter && (
+        <OriginFilterChip
+          nif={originFilter.nif}
+          count={sources.length}
+          onClear={onClearOriginFilter}
+          t={t}
+          testId="fm349-invoice-origin-filter-chip"
+          data-testid="OriginFilterChip__346dd5" />
+      )}
+      {originFilter && sources.length === 0 ? (
+        // Reachable when a row carries a preset `op.origin` string (legacy/mock
+        // shape) that no live invoice backs.
+        <OriginFilterEmpty
+          message={t('fm.m349.invoices.filter.empty', { nif: originFilter.nif })}
+          testId="fm349-invoice-origin-filter-empty"
+          data-testid="OriginFilterEmpty__346dd5" />
+      ) : (
+        <SourcesTab
+          decl={{ ...decl, sources }}
+          t={t}
+          data-testid="SourcesTab__346dd5" />
+      )}
+    </>
+  );
+}
+
+// ETP-5027 — "Rectificaciones" tab body. The Origen link on a RECTIFICATIVE operator
+// row narrows this table the same way the regular row narrows the invoices tab.
+//
+// Rectification rows carry no `key` of their own, so the filter's key is matched
+// against `rectificationKeys(r)` — the very derivation `originByRectification` uses
+// to build the count shown in the Origen cell. Filter and count therefore agree by
+// construction, and a rectification contributing to two keys shows under both.
+function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }) {
+  const allRows = Array.isArray(rows) ? rows : [];
+  const filtered = originFilter
+    ? allRows.filter(r => r.nifIva === originFilter.nif && rectificationKeys(r).includes(originFilter.key))
+    : allRows;
+
+  if (allRows.length === 0) {
+    return (
+      <div style={{ padding: '60px 0', textAlign: 'center' }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
+          {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
+        </div>
+        <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))' }}>
+          {t('fm.m349.rectif.empty')}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {originFilter && (
+        <OriginFilterChip
+          nif={originFilter.nif}
+          count={filtered.length}
+          onClear={onClearOriginFilter}
+          t={t}
+          testId="fm349-rectif-origin-filter-chip"
+          data-testid="OriginFilterChip__346dd5" />
+      )}
+      {originFilter && filtered.length === 0 ? (
+        <OriginFilterEmpty
+          message={t('fm.m349.rectif.filter.empty', { nif: originFilter.nif })}
+          testId="fm349-rectif-origin-filter-empty"
+          data-testid="OriginFilterEmpty__346dd5" />
+      ) : (
+        <div className="fm-table-wrap" style={{ marginTop: 8 }}>
+          <table className="fm-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 20 }}>{t('fm.col.date')}</th>
+                <th>{t('fm.m349.rectif.col.invoice')}</th>
+                <th>{t('fm.col.type')}</th>
+                <th>{t('fm.m349.col.operator')}</th>
+                <th>{t('fm.m349.rectif.col.original')}</th>
+                <th>{t('fm.m349.rectif.col.declared_period')}</th>
+                <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_products')}</th>
+                <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_services')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r, idx) => (
+                <tr key={`${r.ref}-${r.originalRef}-${idx}`}>
+                  <td style={{ paddingLeft: 20, fontWeight: 600 }}>{r.date || '—'}</td>
+                  <td>{r.ref}</td>
+                  <td>{r.type}</td>
+                  <td>
+                    <div>{r.party}</div>
+                    {r.nifIva && <div style={{ fontSize: 12, color: 'var(--fm-fg-3)' }}>{r.nifIva}</div>}
+                  </td>
+                  <td>{r.originalRef || '—'}</td>
+                  <td>{r.declaredYear ? `${r.declaredYear} / ${r.declaredPeriod || '—'}` : '—'}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseProducts)}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseServices)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 function DetailTabContent({
   activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
+  originFilter, onClearOriginFilter,
 }) {
   if (activeTab !== 'invoices' && activeTab !== 'incidents' && activeTab !== 'receipt') return null;
   return (
     <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
       {activeTab === 'invoices' && (
-        <SourcesTab
-          decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
+        <InvoicesTabContent
+          decl={decl}
+          liveInvoices={liveInvoices}
           t={t}
-          data-testid="SourcesTab__346dd5" />
+          originFilter={originFilter}
+          onClearOriginFilter={onClearOriginFilter}
+          data-testid="InvoicesTabContent__346dd5" />
       )}
       {activeTab === 'incidents' && (
         <IncidentsTab
@@ -344,10 +539,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
     if (decl._precomputed?.rectificativeSummary) setLiveRectifSummary(decl._precomputed.rectificativeSummary);
   }, [decl._precomputed]);
-  // Only the setter is used below (no consumer reads the filtered value yet —
-  // pre-existing, not introduced by this change); keeping the binding slot
-  // empty avoids an unused-variable warning without touching that behavior.
-  const [, setInvoiceNifFilter] = useState(null);
+  // ETP-5027 — `{ nif, key, tab }` the Origen link narrowed a tab to (null = show
+  // everything). ONE state serves both destinations: the link sets it and switches to
+  // `tab` in the same gesture, and it is cleared whenever the user leaves that tab, so
+  // two filters can never be live at once and a stale one can never silently hide rows.
+  const [originFilter, setOriginFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
   const [genError,     setGenError]     = useState(null);
@@ -480,9 +676,32 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     return map;
   }, [liveInvoices]);
 
+  // ETP-5027 — same `nif|key` shape as `originByNif`, but built from the
+  // rectifications dataset. Corrective invoices are deliberately absent from
+  // `liveInvoices` (backend puts them in their own array), so resolving a
+  // rectificative operator row against `originByNif` made it inherit the invoice
+  // count of the REGULAR row sharing its (nif, key) — the misattribution this fixes.
+  const originByRectification = React.useMemo(() => {
+    const map = {};
+    // `decl.rectifications` is a COUNT in the legacy/mock shape (the array form
+    // only arrives from the operators endpoint) — same guard as `rectifications` above.
+    if (!Array.isArray(rectifRows)) return map;
+    rectifRows.forEach(r => {
+      rectificationKeys(r).forEach(key => {
+        const k = `${r.nifIva}|${key}`;
+        if (!map[k]) map[k] = { Compra: 0, Venta: 0 };
+        map[k][r.type] = (map[k][r.type] ?? 0) + 1;
+      });
+    });
+    return map;
+  }, [rectifRows]);
+
   function formatOrigin(op) {
     if (op.origin) return op.origin;
-    const counts = originByNif[`${op.nif}|${op.key ?? ''}`];
+    // A rectificative row resolves ONLY against the rectifications lookup: no match
+    // means "—", never a fallback to the regular-invoice count.
+    const source = isRectificativeOp(op) ? originByRectification : originByNif;
+    const counts = source[`${op.nif}|${op.key ?? ''}`];
     if (!counts) return null;
     const c = counts['Compra'] ?? 0;
     const v = counts['Venta']  ?? 0;
@@ -491,6 +710,22 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     if (v > 0) return `${v} factura${v !== 1 ? 's' : ''} venta`;
     return null;
   }
+
+  // The Origen link must land on the dataset the value was computed from, narrowed to
+  // the row that was clicked: the Rectificaciones tab for corrective rows, Facturas
+  // origen for regular ones. Both destinations filter on the same (nif, key) grain the
+  // Origen count is aggregated under, so the list and the number always agree.
+  function goToOrigin(op) {
+    const tab = isRectificativeOp(op) ? 'rectif' : 'invoices';
+    setOriginFilter({ nif: op.nif, key: op.key ?? '', tab });
+    setActiveTab(tab);
+  }
+
+  // A filter only ever applies to the tab it was created for; the other tab reads null
+  // even in the instant before the clear lands.
+  const invoiceOriginFilter = originFilter?.tab === 'invoices' ? originFilter : null;
+  const rectifOriginFilter  = originFilter?.tab === 'rectif'   ? originFilter : null;
+
 
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
@@ -663,7 +898,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         <Tabs
           tabs={TABS}
           active={activeTab}
-          onSelect={(id) => { setActiveTab(id); if (id !== 'invoices') setInvoiceNifFilter(null); }}
+          onSelect={(id) => { setActiveTab(id); if (originFilter && id !== originFilter.tab) setOriginFilter(null); }}
           data-testid="Tabs__346dd5" />
       </div>
       {/* ── Body ─────────────────────────────────────────────────── */}
@@ -764,7 +999,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                           <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
                           <td>
                             {formatOrigin(op)
-                              ? <button className="fm-origin-link" onClick={() => { setInvoiceNifFilter(op.nif); setActiveTab('invoices'); }}>{formatOrigin(op)}</button>
+                              ? <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
                               : <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
                             }
                           </td>
@@ -779,50 +1014,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         )}
 
         {activeTab === 'rectif' && (
-          rectifRows.length === 0 ? (
-            <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
-                {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
-              </div>
-              <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))' }}>
-                {t('fm.m349.rectif.empty')}
-              </div>
-            </div>
-          ) : (
-            <div className="fm-table-wrap" style={{ marginTop: 8 }}>
-              <table className="fm-table">
-                <thead>
-                  <tr>
-                    <th style={{ paddingLeft: 20 }}>{t('fm.col.date')}</th>
-                    <th>{t('fm.m349.rectif.col.invoice')}</th>
-                    <th>{t('fm.col.type')}</th>
-                    <th>{t('fm.m349.col.operator')}</th>
-                    <th>{t('fm.m349.rectif.col.original')}</th>
-                    <th>{t('fm.m349.rectif.col.declared_period')}</th>
-                    <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_products')}</th>
-                    <th style={{ textAlign: 'right' }}>{t('fm.m349.rectif.col.base_services')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rectifRows.map((r, idx) => (
-                    <tr key={`${r.ref}-${r.originalRef}-${idx}`}>
-                      <td style={{ paddingLeft: 20, fontWeight: 600 }}>{r.date || '—'}</td>
-                      <td>{r.ref}</td>
-                      <td>{r.type}</td>
-                      <td>
-                        <div>{r.party}</div>
-                        {r.nifIva && <div style={{ fontSize: 12, color: 'var(--fm-fg-3)' }}>{r.nifIva}</div>}
-                      </td>
-                      <td>{r.originalRef || '—'}</td>
-                      <td>{r.declaredYear ? `${r.declaredYear} / ${r.declaredPeriod || '—'}` : '—'}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseProducts)}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatAmount(r.baseServices)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+          <RectificationsTabContent
+            rows={rectifRows}
+            t={t}
+            originFilter={rectifOriginFilter}
+            onClearOriginFilter={() => setOriginFilter(null)}
+            data-testid="RectificationsTabContent__346dd5" />
         )}
 
       </div>
@@ -834,10 +1031,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         blocking={blocking}
         warning={warning}
         t={t}
-        onGoToSources={() => setActiveTab('invoices')}
+        onGoToSources={() => { setOriginFilter(null); setActiveTab('invoices'); }}
         token={token}
         apiBaseUrl={apiBaseUrl}
         status={status}
+        originFilter={invoiceOriginFilter}
+        onClearOriginFilter={() => setOriginFilter(null)}
         data-testid="DetailTabContent__346dd5" />
       {/* Overlays */}
       {showPresent && (
