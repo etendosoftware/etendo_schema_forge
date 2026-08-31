@@ -486,7 +486,8 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
   - Corrective rows are **excluded** from the regular `TotalsCard` per-key totals and from the "Total operaciones" KPI, so their deltas never net off against the regular base. They are summarized separately by `RectificativeSubtotalCard`, rendered as its own card in the same left column under the totals card.
   - **`rectificativeSummary` carries per-key totals ONLY (`totalE`/`totalS`/`totalA`/`totalI`) — there is deliberately no grand `total`, and `RectificativeSubtotalCard` renders no "Total rectificativas" row.** `E`/`S` are *entregas* (sales) and `A`/`I` are *adquisiciones* (purchases); the AEAT never nets one against the other, so `E + S + A + I` is not a quantity that means anything. The first pass did emit it and produced figures like `-32,00 + -5,00 = -37,00`, and would have rendered `0,00` for a `-30` sales correction offset by a `+30` purchase correction (ETP-5027, QA F1). `summary` has always omitted a grand total for the same reason, and both objects now go through the single `Fiscal349BoxesHandler#buildKeyTotals(totalsByKey)` shape. Do not reintroduce the row. A legacy cached payload that still carries `total` is ignored by the card.
   - **No double-counting**: the "Rectificaciones" KPI and tab badge stay fed exclusively by `rectifications`. Corrective *operator* rows describe the same business events and must not bump that count — there is an explicit regression test for this in `FmModel349Page.rectifications.vitest.jsx`.
-  - Row identity moved from `op.id` to `rowKey(op)` (`bpId|key|R`): a regular and a corrective row can describe the same operator *and* key, so `bpId` alone is no longer unique for React keys or row selection.
+  - Row identity moved from `op.id` to `rowKey(op)` (`bpId|key|R|<declared period>`): a regular and a corrective row can describe the same operator *and* key, so `bpId` alone is not unique for React keys or row selection.
+  - **Corrective rows carry `declaredYear`/`declaredPeriod`, and the declared period is part of `rowKey` (ETP-5027, QA F4).** The DAO groups corrective rows by `(BPId, TaxKey, Year, Period)`, so correcting the same partner's 2025/T1 *and* 2025/T2 sales of goods in one declaration — ordinary AEAT 349 usage — legitimately produces two rows sharing `(bpId, key, rectificative)`. `appendOperators` used to drop `Year`/`Period`, so `bpId|key|R` was identical for both: duplicate React keys, and — because `selected` is keyed by that same string — **ticking one row's checkbox ticked the other**. The subtotals were always arithmetically correct; this was presentation and selection only. Regular rows come from `getTaxBaseAmountPerBusinessPartner`, which groups by `(BPId, TaxKey)` alone and carries no `Year`/`Period`, so the two keys are emitted **only when present** and regular rows keep exactly their previous shape. The `RectificativeBadge` also renders the period (`fm.m349.rectificative_period`, "Rectificativa {period}" / "Corrective {period}", e.g. "Rectificativa 1T 2025") so the two rows are distinguishable on screen, falling back to the plain `fm.m349.rectificative` when the backend sent no period.
   - The existing key filter and name/NIF search need no change — corrective rows flow through the same predicates and are picked up for free (covered by a test).
   - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
   - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
@@ -504,16 +505,59 @@ not dismissed it. Its **"Validar VIES"** button re-runs the validation for the d
 pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at all and did nothing.
 
 - **Endpoint**: `POST /neo/fiscal349/validate-vies?year=YYYY&period=PP` → `200 { validated, valid,
-  invalid, stillPending }`. **POST-only** — the call mutates `C_BPartner` and the endpoint answers
-  405 to a GET. `validated` is every pending operator the call *accounted for*, deduplicated by
-  `bpId` (one partner spans several operator rows — one per AEAT key, plus rectificative rows —
-  and is checked once). `valid + invalid + stillPending === validated` **always** holds, and the
+  invalid, notEligible, failed, stillPending }`. **POST-only** — the call mutates `C_BPartner` and
+  the endpoint answers 405 to a GET. `validated` is every pending operator the call *accounted
+  for*, deduplicated by `bpId` (one partner spans several operator rows — one per AEAT key, plus
+  rectificative rows — and is checked once).
+  `valid + invalid + notEligible + failed + stillPending === validated` **always** holds, and the
   UI relies on that invariant. Note `validated` is not necessarily the "Pendientes VIES" KPI
   value: the KPI counts distinct *NIF-IVA* (`viesIdentity`), the endpoint distinct *partners*.
+
+  The five outcome buckets each imply a **different next action**, which is why they are five and
+  not one (ETP-5027, QA F2/F5):
+
+  | Bucket | Meaning | Next action |
+  |---|---|---|
+  | `valid` / `invalid` | VIES answered conclusively **and** the answer was written back to `C_BPartner` | none |
+  | `notEligible` | the partner failed the eligibility gate (`EM_OBTIK_Tax_ID_Key != '2'`, or a blank `taxid`) or no longer exists | **permanent** — fix the partner record; a re-run can never change it |
+  | `failed` | VIES answered conclusively but the write-back did not land | transient — retry |
+  | `stillPending` | genuinely inconclusive: VIES could not answer (timeout, `MS_MAX_CONCURRENT_REQ`), or the partner was deferred past the batch cap of 25 | transient — retry |
+
+  **`valid`/`invalid` are derived from what was actually PERSISTED, never from the in-memory
+  answers.** `persistViesStatuses` returns the ids whose `UPDATE` reported an affected row, and
+  anything conclusive that is missing from that set becomes `failed`. Before this, a failed
+  `UPDATE` was swallowed by a `log.warn` while the response still said `valid: 20`, so the user
+  was told the job was done and then reloaded to 20 still-pending badges. An `UPDATE` matching
+  zero rows counts as failed too — same user-visible consequence as a thrown error.
+
+  **`notEligible` must never be folded back into `stillPending`.** The frontend copy for
+  `stillPending` invites a re-run; a gate failure fails the same gate on every future click, so
+  merging the two produced an unbreakable loop with no explanation. A partner the gate could not
+  even *read* (a row-level DB error) is in **neither** bucket — that is transient and falls
+  through to `stillPending` so the next click retries it. Row-level errors in both the gate and
+  the persist phase are isolated per id: previously the gate's `catch` sat outside its loop, so
+  one unreadable row silently discarded every candidate not yet processed.
+
+  `validate349Vies` in `fiscalModelsUtils.js` reads all six through `num()`, which defaults to 0,
+  so a payload from a backend predating the split still parses.
   Wrapped by `validate349Vies(decl, { token, apiBaseUrl })` in `fiscalModelsUtils.js`,
   which returns `{ ok: true, ...counts }` or `{ ok: false, error, serverMessage }` — the same
   contract as `generate349File`, including `parseServerMessage()`, because a user-initiated
   button has to say *why* nothing changed (`compute349Operators`'s bare `null` cannot).
+- **No DB connection is held during the network phase (ETP-5027, QA F3).** `DalRequestFilter`
+  binds the Hibernate session — and with it a pooled JDBC connection — to the request thread for
+  the whole request, and `handleValidateVies` runs `computeOperators` (a dozen HQL queries)
+  before the VIES calls. Without an explicit release, `invokeAll(…, 120 s)` would block with a
+  transaction open and a connection pinned (25 partners over 4 threads is typically ~60 s), so a
+  few users clicking the banner at once could exhaust the pool **instance-wide**.
+  `Fiscal349BoxesHandler#releaseDalConnection()` therefore does a `flush()` +
+  `commitAndClose()` between the gate phase and the network phase; the persist phase then
+  re-acquires a fresh session via `OBDal.getInstance().getConnection()`, and
+  `DalRequestFilter`'s own end-of-request commit tolerates an already-closed session. This is
+  safe because everything still needed is already materialized (a `JSONObject` plus plain-JDBC
+  `ViesCandidate` value objects) — no detached entity is touched after the release. Ordering is
+  pinned by `testDalConnectionIsReleasedBeforeTheViesPhase`. **Any new DB work added between the
+  gate and the network phase re-introduces the pinning** — put it before the release.
 - **Double-submission**: the button is `disabled` + `aria-busy` and swaps its label to
   `fm.m349.banner.vies_validating` while in flight, backed by a synchronous
   `validatingViesRef` guard for the window before React commits the state. Each run is a bulk
@@ -545,20 +589,25 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   | all valid | `toast.success` | "4 NIF-IVA procesados: 4 válidos" |
   | mixed | `toast.warning` | "4 NIF-IVA procesados: 3 válidos, 1 inválido" |
   | some/all still pending | `toast.warning` | "4 NIF-IVA procesados: 2 válidos, 2 siguen pendientes; puedes volver a intentarlo" |
+  | write-back failed | `toast.warning` | "2 NIF-IVA procesados: 1 válido, 1 comprobado pero no se pudo guardar; inténtalo de nuevo" |
+  | not eligible for VIES | `toast.warning` | "3 NIF-IVA procesados: 1 válido, 2 no se pueden consultar en VIES (necesitan clave de NIF intracomunitario y NIF-IVA)" |
   | request failed | `toast.error` | `serverMessage`, else "No se pudo ejecutar la validación VIES. Inténtelo de nuevo." |
+
+  Fragment order is fixed and part of the sentence: **valid, invalid, failed, notEligible,
+  pending** — conclusive first, then the two actionable buckets, then the retryable one, which
+  always closes. Any non-zero bucket other than `valid` keeps the toast off the success channel.
 
   The headline says "procesados", not "comprobados", because `validated` counts operators the
   call *accounted for*, including the ones it declined to check.
 
-  **The `stillPending` fragment attributes no cause, deliberately.** The backend folds THREE
-  distinct outcomes into that one number: the partner failed the eligibility gate (tax-id key is
-  not `NOI`, or the tax id is blank), VIES answered inconclusively (timeout, or the very common
-  `MS_MAX_CONCURRENT_REQ` — France returns it on essentially every attempt right now), or the
-  partner was deferred past the batch cap of **25 partners per call**. So "el servicio VIES no
-  respondió" would be false for the gate-failure and deferred cases, and "invalid data" would be
-  false for the service case. What *is* true of all three: `stillPending` is exactly what the
-  banner will show on the next render, which is why the copy offers a re-run and nothing more.
-  A non-zero `stillPending` is a routine outcome, not an edge case.
+  **`notEligible` names the cause; `stillPending` still does not.** The ineligible bucket points
+  at the partner record (it needs an intra-community tax-id key and a VAT number) and
+  deliberately offers **no retry**, because retrying can never change it. `stillPending` keeps
+  conflating two *transient* outcomes — VIES answered inconclusively (timeout, or the very common
+  `MS_MAX_CONCURRENT_REQ`, which France returns on essentially every attempt right now) and the
+  partner was deferred past the batch cap of **25 partners per call**. Blaming the VIES service
+  would be false for the deferred case, so the copy attributes no cause and offers a re-run and
+  nothing more. A non-zero `stillPending` is a routine outcome, not an edge case.
 - **Banner sub-copy corrected**: `fm.m349.banner.vies_sub` used to read "Validación VIES
   asíncrona — informativa, no bloqueante". That was factually wrong — `bptaxidkey`'s
   `ViesStatusObserver` calls `ViesService.checkVat()` **synchronously inside the
@@ -568,8 +617,9 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   declaration"). What is non-blocking is the *declaration*, not the call.
 - **i18n keys added** (all three locales — `en_US`, `es_ES`, `es_AR`):
   `fm.m349.banner.vies_validating`, `fm.m349.vies.result.none`, `.processed_one/_many`,
-  `.valid_one/_many`, `.invalid_one/_many`, `.pending_one/_many`, `.error`. Singular/plural pairs
-  are picked in code because `useUI()` does `{param}` substitution only — it has no plural rules.
+  `.valid_one/_many`, `.invalid_one/_many`, `.pending_one/_many`, `.failed_one/_many`,
+  `.not_eligible_one/_many`, `.error`. Singular/plural pairs are picked in code because
+  `useUI()` does `{param}` substitution only — it has no plural rules.
 
 ### Action bar and kebab menu
 

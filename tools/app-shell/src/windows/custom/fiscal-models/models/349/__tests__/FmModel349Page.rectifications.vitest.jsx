@@ -5,8 +5,16 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+// Echoes the key, except for the handful of PARAMETERIZED keys under test here,
+// which resolve to their real es_ES copy so the assertion is about the sentence
+// the user reads rather than about a key name. Inlined in the factory because
+// `vi.mock` is hoisted above module-scope consts.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => {
+    const copy = { 'fm.m349.rectificative_period': 'Rectificativa {period}' };
+    const raw = copy[key] ?? key;
+    return Object.keys(params ?? {}).reduce((acc, p) => acc.replace(`{${p}}`, params[p]), raw);
+  },
 }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
@@ -243,6 +251,17 @@ const RECTIF_SUMMARY = {
   totalE: '-30.00', totalS: '0.00', totalA: '0.00', totalI: '0.00',
 };
 
+// ETP-5027 (QA F4) — two corrections to the SAME operator and key, differing only
+// by the period they rectify. The backend groups corrective rows by
+// (BPId, TaxKey, Year, Period), so this is what one declaration correcting a
+// partner's 2025/T1 and 2025/T2 sales of goods actually returns.
+const CORRECTIVE_OP_T1 = {
+  ...CORRECTIVE_OP, base: '-30.00', declaredYear: '2025', declaredPeriod: '1T',
+};
+const CORRECTIVE_OP_T2 = {
+  ...CORRECTIVE_OP, base: '-50.00', declaredYear: '2025', declaredPeriod: '2T',
+};
+
 const totalOpsKpiValue = () =>
   document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.total_ops"] .test-kpi349-value')?.textContent;
 
@@ -457,5 +476,80 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     const rows = document.querySelectorAll('.fm-table tbody tr');
     expect(rows).toHaveLength(2);
     expect(screen.getAllByTestId('badge__rectificative')).toHaveLength(1);
+  });
+});
+
+// ── ETP-5027 (QA F4) — corrective rows for several corrected periods ─────────
+//
+// Correcting more than one prior period in a single declaration is ordinary AEAT
+// 349 usage. Those rows share (bpId, key, rectificative), so the old
+// `bpId|key|R` row key was identical for all of them: duplicate React keys, and —
+// because `selected` is keyed by that same string — ticking one row's checkbox
+// ticked every sibling. The declared period is the discriminator.
+describe('FmModel349Page — several corrected periods for one operator (QA F4)', () => {
+  function renderTwoPeriods() {
+    return render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP_T1, CORRECTIVE_OP_T2] },
+        })}
+        {...defaultProps}
+      />
+    );
+  }
+
+  const rowCheckboxes = () =>
+    Array.from(document.querySelectorAll('.fm-table tbody tr input[type="checkbox"]'));
+
+  it('renders one row per corrected period, each with its own amount', () => {
+    renderTwoPeriods();
+    const rows = document.querySelectorAll('.fm-table tbody tr');
+    expect(rows).toHaveLength(3);
+    expect(rows[1].textContent).toContain('-30');
+    expect(rows[2].textContent).toContain('-50');
+  });
+
+  // Without this the two rows are visually identical and the user cannot tell which
+  // correction is which.
+  it('names the corrected period on each badge so the rows are distinguishable', () => {
+    renderTwoPeriods();
+    const badges = screen.getAllByTestId('badge__rectificative');
+    expect(badges).toHaveLength(2);
+    expect(badges[0].textContent).toBe('Rectificativa 1T 2025');
+    expect(badges[1].textContent).toBe('Rectificativa 2T 2025');
+  });
+
+  // The regression the row key exists for.
+  it('ticking one corrective row does NOT tick the other', () => {
+    renderTwoPeriods();
+    const boxes = rowCheckboxes();
+    expect(boxes).toHaveLength(3);
+
+    fireEvent.click(boxes[1]);
+
+    expect(rowCheckboxes()[1].checked).toBe(true);
+    expect(rowCheckboxes()[2].checked).toBe(false);
+    expect(rowCheckboxes()[0].checked).toBe(false);
+  });
+
+  it('selecting all then one still leaves the two corrective rows independent', () => {
+    renderTwoPeriods();
+    fireEvent.click(rowCheckboxes()[2]);
+
+    expect(rowCheckboxes()[2].checked).toBe(true);
+    expect(rowCheckboxes()[1].checked).toBe(false);
+  });
+
+  // A corrective row that predates the backend emitting the discriminator still
+  // renders the plain badge rather than a dangling "Rectificativa undefined".
+  it('falls back to the plain badge when the backend sent no declared period', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+    const badge = screen.getByTestId('badge__rectificative');
+    expect(badge.textContent).toBe('fm.m349.rectificative');
   });
 });

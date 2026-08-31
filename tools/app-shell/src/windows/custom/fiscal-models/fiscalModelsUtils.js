@@ -693,11 +693,17 @@ export async function validate349Vies(decl, { token, apiBaseUrl } = {}) {
       const n = Number(v);
       return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
     };
+    // ETP-5027 (QA F2/F5) — `notEligible` and `failed` were split out of `stillPending`:
+    // a gate failure is permanent (retrying can never change it) and a failed write-back is
+    // not a success. Both default to 0 through `num()`, so a payload from an older backend
+    // still parses — it simply reports neither bucket.
     return {
       ok: true,
       validated:    num(data?.validated),
       valid:        num(data?.valid),
       invalid:      num(data?.invalid),
+      notEligible:  num(data?.notEligible),
+      failed:       num(data?.failed),
       stillPending: num(data?.stillPending),
     };
   } catch (_) {

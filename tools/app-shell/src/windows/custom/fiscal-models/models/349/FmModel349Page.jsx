@@ -49,11 +49,32 @@ function isRectificativeOp(op) {
   return op?.rectificative === true || op?.rectificative === 'true' || op?.rectificative === 'Y';
 }
 
+// ETP-5027 — the declaration period a corrective row rectifies, as the
+// `T1 2025` string shown on the row and folded into its identity. Regular rows
+// carry neither field and yield '' (see `appendOperators`, which emits
+// `declaredYear`/`declaredPeriod` only when the source row has them).
+function declaredPeriodLabel(op) {
+  const period = String(op?.declaredPeriod ?? '').trim();
+  const year   = String(op?.declaredYear   ?? '').trim();
+  return [period, year].filter(Boolean).join(' ');
+}
+
 // A regular row and a corrective row can describe the SAME operator+key, so
-// `bpId` alone is not unique once corrective rows are present. Fold the flag
-// into the identity used for React keys and row selection.
+// `bpId` alone is not unique once corrective rows are present.
+//
+// ETP-5027 (QA F4) — nor is `bpId|key|R`. The backend groups corrective rows by
+// (BPId, TaxKey, Year, Period), so correcting the same partner's 2025/T1 and
+// 2025/T2 sales of goods in ONE declaration — ordinary AEAT 349 usage — produces
+// two rows sharing that triple. They collided as React keys, and because
+// `selected` is keyed by this same string, ticking one row's checkbox ticked the
+// other. The declared period is the discriminator, so it belongs in the identity.
 function rowKey(op) {
-  return `${op?.id ?? op?.bpId ?? op?.nif ?? ''}|${op?.key ?? ''}|${isRectificativeOp(op) ? 'R' : ''}`;
+  return [
+    op?.id ?? op?.bpId ?? op?.nif ?? '',
+    op?.key ?? '',
+    isRectificativeOp(op) ? 'R' : '',
+    declaredPeriodLabel(op),
+  ].join('|');
 }
 
 // ETP-5027 — the operators table is at (operator × AEAT key × regular/corrective)
@@ -119,10 +140,16 @@ function KeyBadge({ k }) {
 
 // Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
 // fiscal-models.css) — no new component system, just a sibling class.
-function RectificativeBadge({ t }) {
+// ETP-5027 (QA F4) — the badge names the declared period it rectifies whenever the
+// backend supplied one. Two corrective rows for the same operator and key differ ONLY
+// by that period, so without it they are indistinguishable on screen; the row key
+// disambiguates them for React and selection, but the user needs to read it too.
+function RectificativeBadge({ t, period }) {
   return (
     <span className="fm-349-rectif-badge" data-testid="badge__rectificative">
-      {t('fm.m349.rectificative') ?? 'Rectificativa'}
+      {period
+        ? (t('fm.m349.rectificative_period', { period }) ?? `Rectificativa ${period}`)
+        : (t('fm.m349.rectificative') ?? 'Rectificativa')}
     </span>
   );
 }
@@ -300,16 +327,28 @@ function KeyFilterDropdown({ value, onChange, t }) {
 // ("why is this one pending?"). Classic collapses every inconclusive VIES answer into
 // "pending" and GO must behave the same.
 //
-// The `stillPending` fragment deliberately states NO cause. The backend folds THREE
-// different outcomes into that one number: the partner failed the eligibility gate (tax-id
-// key is not NOI, or the tax id is blank), VIES itself answered "pending" (a timeout, or the
-// very common MS_MAX_CONCURRENT_REQ — France returns that on essentially every attempt right
-// now), or the partner was deferred past the batch cap of 25 per call. Blaming the VIES
-// service would therefore be wrong for the gate-failure and deferred cases, and calling it a
-// data error would be wrong for the service case. What IS true of all three is the number
-// itself, and that `stillPending` equals what the banner shows on the next render — so a
-// re-run is always a sensible next step, which is the only hint the copy offers.
-function buildViesResultMessage(t, { validated = 0, valid = 0, invalid = 0, stillPending = 0 } = {}) {
+// The five outcome buckets partition `validated` and each gets its own fragment, because
+// each one implies a DIFFERENT next action:
+//
+//   valid / invalid   — conclusive AND persisted. Nothing to do.
+//   notEligible       — the partner failed the eligibility gate (tax-id key is not NOI, or the
+//                       tax id is blank) or no longer exists. This is PERMANENT: the same
+//                       partner fails the same gate on every future click. It used to be folded
+//                       into `stillPending`, whose copy invites a re-run — an unbreakable loop
+//                       with no explanation (ETP-5027, QA F5). Its copy points at the partner
+//                       record instead, and never at a retry.
+//   failed            — VIES answered, but the write-back to C_BPartner did not land. Transient
+//                       and retryable, but it must not be reported as success (QA F2).
+//   stillPending      — genuinely inconclusive right now: VIES could not answer (a timeout, or
+//                       the very common MS_MAX_CONCURRENT_REQ — France returns that on
+//                       essentially every attempt), or the partner was deferred past the batch
+//                       cap of 25 per call. Both are transient, and `stillPending` is exactly
+//                       what the banner shows on the next render, so a re-run is the right
+//                       follow-up — the only hint this fragment offers. It still attributes no
+//                       cause: blaming the VIES service would be wrong for the deferred case.
+function buildViesResultMessage(t, {
+  validated = 0, valid = 0, invalid = 0, notEligible = 0, failed = 0, stillPending = 0,
+} = {}) {
   if (validated <= 0) {
     return {
       level: 'info',
@@ -324,6 +363,12 @@ function buildViesResultMessage(t, { validated = 0, valid = 0, invalid = 0, stil
   if (invalid > 0) {
     parts.push(t(invalid === 1 ? 'fm.m349.vies.result.invalid_one' : 'fm.m349.vies.result.invalid_many', { count: invalid }));
   }
+  if (failed > 0) {
+    parts.push(t(failed === 1 ? 'fm.m349.vies.result.failed_one' : 'fm.m349.vies.result.failed_many', { count: failed }));
+  }
+  if (notEligible > 0) {
+    parts.push(t(notEligible === 1 ? 'fm.m349.vies.result.not_eligible_one' : 'fm.m349.vies.result.not_eligible_many', { count: notEligible }));
+  }
   if (stillPending > 0) {
     parts.push(t(stillPending === 1 ? 'fm.m349.vies.result.pending_one' : 'fm.m349.vies.result.pending_many', { count: stillPending }));
   }
@@ -332,10 +377,12 @@ function buildViesResultMessage(t, { validated = 0, valid = 0, invalid = 0, stil
   // FOR (deduplicated by bpId — one partner spans several rows, one per AEAT key plus
   // rectificative rows), which includes the ones it declined to check.
   const headline = t(validated === 1 ? 'fm.m349.vies.result.processed_one' : 'fm.m349.vies.result.processed_many', { count: validated });
-  // The backend guarantees `valid + invalid + stillPending === validated`, so `parts` can
-  // only be empty if that invariant broke. Say what is known and stay off the success
-  // channel rather than implying every NIF came back clean.
-  const level = (stillPending > 0 || invalid > 0 || parts.length === 0) ? 'warning' : 'success';
+  // The backend guarantees `valid + invalid + notEligible + failed + stillPending ===
+  // validated`, so `parts` can only be empty if that invariant broke. Say what is known and
+  // stay off the success channel rather than implying every NIF came back clean.
+  const level = (stillPending > 0 || invalid > 0 || notEligible > 0 || failed > 0 || parts.length === 0)
+    ? 'warning'
+    : 'success';
   return { level, message: parts.length ? `${headline}: ${parts.join(', ')}` : headline };
 }
 
@@ -1117,7 +1164,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                           <td style={{ fontWeight: 600 }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               {op.name}
-                              {isRectificativeOp(op) && <RectificativeBadge t={t} data-testid="RectificativeBadge__346dd5" />}
+                              {isRectificativeOp(op) && (
+                                <RectificativeBadge
+                                  t={t}
+                                  period={declaredPeriodLabel(op)}
+                                  data-testid="RectificativeBadge__346dd5" />
+                              )}
                             </span>
                           </td>
                           <td>

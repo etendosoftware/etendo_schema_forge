@@ -1,5 +1,5 @@
 // ETP-5027 — `validate349Vies`: POST /neo/fiscal349/validate-vies?year=&period=
-// → 200 { validated, valid, invalid, stillPending }.
+// → 200 { validated, valid, invalid, notEligible, failed, stillPending }.
 //
 // Every call here is against a stubbed `fetch`. Nothing in this suite may reach
 // ec.europa.eu or a real NEO instance.
@@ -50,28 +50,43 @@ describe('validate349Vies — request', () => {
 });
 
 describe('validate349Vies — success payload', () => {
-  it('returns the four counts on 200', async () => {
-    stubJson({ validated: 4, valid: 3, invalid: 1, stillPending: 0 });
-    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API }))
-      .toEqual({ ok: true, validated: 4, valid: 3, invalid: 1, stillPending: 0 });
+  it('returns the six counts on 200', async () => {
+    stubJson({ validated: 6, valid: 3, invalid: 1, notEligible: 1, failed: 1, stillPending: 0 });
+    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API })).toEqual({
+      ok: true, validated: 6, valid: 3, invalid: 1, notEligible: 1, failed: 1, stillPending: 0,
+    });
   });
 
   it('coerces the NEO string-number shape', async () => {
-    stubJson({ validated: '4', valid: '2', invalid: '1', stillPending: '1' });
-    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API }))
-      .toEqual({ ok: true, validated: 4, valid: 2, invalid: 1, stillPending: 1 });
+    stubJson({
+      validated: '6', valid: '2', invalid: '1', notEligible: '1', failed: '1', stillPending: '1',
+    });
+    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API })).toEqual({
+      ok: true, validated: 6, valid: 2, invalid: 1, notEligible: 1, failed: 1, stillPending: 1,
+    });
   });
 
   it('defaults missing / non-numeric / negative counts to 0 rather than NaN', async () => {
-    stubJson({ validated: 2, valid: 'abc', stillPending: -3 });
-    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API }))
-      .toEqual({ ok: true, validated: 2, valid: 0, invalid: 0, stillPending: 0 });
+    stubJson({ validated: 2, valid: 'abc', notEligible: 'x', failed: null, stillPending: -3 });
+    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API })).toEqual({
+      ok: true, validated: 2, valid: 0, invalid: 0, notEligible: 0, failed: 0, stillPending: 0,
+    });
+  });
+
+  // ETP-5027 (QA F2/F5): `notEligible` and `failed` were split out of `stillPending`. A
+  // payload from a backend that predates the split must still parse — both simply read 0.
+  it('tolerates a legacy four-count payload', async () => {
+    stubJson({ validated: 4, valid: 3, invalid: 1, stillPending: 0 });
+    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API })).toEqual({
+      ok: true, validated: 4, valid: 3, invalid: 1, notEligible: 0, failed: 0, stillPending: 0,
+    });
   });
 
   it('survives an empty body without throwing', async () => {
     stubJson(null);
-    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API }))
-      .toEqual({ ok: true, validated: 0, valid: 0, invalid: 0, stillPending: 0 });
+    expect(await validate349Vies(DECL, { token: 'tok', apiBaseUrl: API })).toEqual({
+      ok: true, validated: 0, valid: 0, invalid: 0, notEligible: 0, failed: 0, stillPending: 0,
+    });
   });
 });
 

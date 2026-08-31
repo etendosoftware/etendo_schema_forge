@@ -28,6 +28,10 @@ const ES = {
   'fm.m349.vies.result.invalid_many': '{count} inválidos',
   'fm.m349.vies.result.pending_one': '1 sigue pendiente; puedes volver a intentarlo',
   'fm.m349.vies.result.pending_many': '{count} siguen pendientes; puedes volver a intentarlo',
+  'fm.m349.vies.result.failed_one': '1 comprobado pero no se pudo guardar; inténtalo de nuevo',
+  'fm.m349.vies.result.failed_many': '{count} comprobados pero no se pudieron guardar; inténtalo de nuevo',
+  'fm.m349.vies.result.not_eligible_one': '1 no se puede consultar en VIES (necesita clave de NIF intracomunitario y NIF-IVA)',
+  'fm.m349.vies.result.not_eligible_many': '{count} no se pueden consultar en VIES (necesitan clave de NIF intracomunitario y NIF-IVA)',
   'fm.m349.vies.result.error': 'No se pudo ejecutar la validación VIES. Inténtelo de nuevo.',
   'fm.m349.banner.vies_title': '{count} NIF-IVA con validación VIES pendiente',
 };
@@ -296,9 +300,9 @@ describe('Validar VIES — what the toast says', () => {
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
       '1 NIF-IVA procesado: 1 sigue pendiente; puedes volver a intentarlo'));
     const msg = toast.warning.mock.calls[0][0];
-    // `stillPending` conflates "VIES did not answer", "partner is ineligible" and
-    // "deferred past the batch cap", so the copy may blame neither the external service
-    // nor the user's data.
+    // ETP-5027 (QA F5): `stillPending` no longer carries the ineligible partners, but it
+    // still conflates "VIES did not answer" with "deferred past the batch cap" — both
+    // transient — so the copy may blame neither the external service nor the user's data.
     expect(msg).not.toMatch(/inválid|error/i);
     expect(msg).not.toMatch(/VIES no respondió|servicio/i);
   });
@@ -317,11 +321,82 @@ describe('Validar VIES — what the toast says', () => {
   });
 
   it('a broken sum invariant stays off the success channel', async () => {
-    // valid + invalid + stillPending === validated is guaranteed by the backend; this is
-    // the defensive branch for the day it is not.
+    // valid + invalid + notEligible + failed + stillPending === validated is guaranteed by
+    // the backend; this is the defensive branch for the day it is not.
     await clickWith({ ok: true, validated: 3, valid: 0, invalid: 0, stillPending: 0 });
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('3 NIF-IVA procesados'));
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // ── ETP-5027 QA F2/F5: the two buckets split out of `stillPending` ──
+
+  // F5. A partner whose tax-id key is not NOI (or whose VAT number is blank) fails the
+  // eligibility gate on EVERY future click. It used to be folded into `stillPending`,
+  // whose copy says "you can run it again" — an unbreakable loop with no explanation.
+  it('reports permanently-ineligible partners separately and never invites a retry for them',
+    async () => {
+      await clickWith({
+        ok: true, validated: 3, valid: 1, invalid: 0, notEligible: 2, failed: 0, stillPending: 0,
+      });
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        '3 NIF-IVA procesados: 1 válido, '
+        + '2 no se pueden consultar en VIES (necesitan clave de NIF intracomunitario y NIF-IVA)'));
+      const msg = toast.warning.mock.calls[0][0];
+      expect(msg).not.toMatch(/siguen pendientes|volver a intentarlo/);
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+  it('an all-ineligible run is a warning, never a success', async () => {
+    await clickWith({
+      ok: true, validated: 1, valid: 0, invalid: 0, notEligible: 1, failed: 0, stillPending: 0,
+    });
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+      '1 NIF-IVA procesado: '
+      + '1 no se puede consultar en VIES (necesita clave de NIF intracomunitario y NIF-IVA)'));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // F2. A conclusive VIES answer whose write-back failed must NOT be reported as success:
+  // the user reloads against the database and would find the partner still pending.
+  it('reports a failed write-back as a failure, not as valid', async () => {
+    await clickWith({
+      ok: true, validated: 2, valid: 1, invalid: 0, notEligible: 0, failed: 1, stillPending: 0,
+    });
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+      '2 NIF-IVA procesados: 1 válido, '
+      + '1 comprobado pero no se pudo guardar; inténtalo de nuevo'));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('a run where nothing could be saved is a warning, never a success', async () => {
+    await clickWith({
+      ok: true, validated: 2, valid: 0, invalid: 0, notEligible: 0, failed: 2, stillPending: 0,
+    });
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+      '2 NIF-IVA procesados: '
+      + '2 comprobados pero no se pudieron guardar; inténtalo de nuevo'));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // Fragment order is part of the sentence: conclusive first, then the two actionable
+  // buckets, then the retryable pending one, which always closes.
+  it('orders the five buckets valid, invalid, failed, ineligible, pending', async () => {
+    await clickWith({
+      ok: true, validated: 5, valid: 1, invalid: 1, notEligible: 1, failed: 1, stillPending: 1,
+    });
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+      '5 NIF-IVA procesados: 1 válido, 1 inválido, '
+      + '1 comprobado pero no se pudo guardar; inténtalo de nuevo, '
+      + '1 no se puede consultar en VIES (necesita clave de NIF intracomunitario y NIF-IVA), '
+      + '1 sigue pendiente; puedes volver a intentarlo'));
+  });
+
+  // A payload from a backend that predates the split still parses: both new buckets
+  // default to 0 and the sentence is the one it always was.
+  it('tolerates a legacy payload with neither notEligible nor failed', async () => {
+    await clickWith({ ok: true, validated: 2, valid: 2, invalid: 0, stillPending: 0 });
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('2 NIF-IVA procesados: 2 válidos'));
   });
 
   it('a failure prefers the real backend message over the generic one', async () => {
