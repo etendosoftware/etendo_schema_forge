@@ -21,8 +21,14 @@ vi.mock('lucide-react', () => ({
 // --- Import under test ---
 
 import { render, screen, fireEvent } from '@testing-library/react';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import WarehouseTransactionsTable from '../WarehouseTransactionsTable.jsx';
 import { useWarehouseStock } from '../useWarehouseStock';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- Helpers ---
 
@@ -427,6 +433,17 @@ describe('WarehouseTransactionsTable', () => {
       });
     }
   });
+
+  // ETP-5083: document navigation moved from same-tab react-router (`useNavigate`) to
+  // `window.open` in a new tab. This file deliberately carries NO `vi.mock('react-router-dom',
+  // ...)` — asserted here via a source read rather than a runtime mock, since a stray mock for a
+  // module the component no longer imports would silently stop being a meaningful guard the
+  // moment someone re-adds a react-router import for an unrelated reason.
+  it('no longer imports react-router-dom (navigation is window.open, not same-tab routing)', () => {
+    const src = readFileSync(join(__dirname, '..', 'WarehouseTransactionsTable.jsx'), 'utf8');
+    assert.doesNotMatch(src, /react-router-dom/);
+    assert.doesNotMatch(src, /useNavigate/);
+  });
 });
 
 // --- AC1/AC2: default order + sortable column headers ---
@@ -481,8 +498,16 @@ describe('WarehouseTransactionsTable — sorting (ETP-5083)', () => {
   it('AC1: defaults to movementDate descending (most recent first) with no user interaction', () => {
     render(<WarehouseTransactionsTable {...defaultProps} />);
     expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']); // t3 (25th), t2 (15th), t1 (5th)
-    // No header shows a direction arrow while unsorted.
-    expect(screen.getByTestId('column-header-sort-date').textContent).not.toMatch(/[▲▼]/);
+    // The Date column is the active sort from the very first render — the rows already arrive
+    // pre-sorted movementDate desc, so the header must show the ▼ that reflects that real order
+    // (not "no sort", which would misrepresent an active, just-not-yet-clicked sort as none at
+    // all). `initialSort: { key: 'date', direction: 'desc' }` (useClientSort) is what seeds this.
+    expect(screen.getByTestId('column-header-sort-date').textContent).toContain('▼');
+    // No OTHER header shows a direction arrow while only the seeded default is active.
+    expect(screen.getByTestId('column-header-sort-product').textContent).not.toMatch(/[▲▼]/);
+    expect(screen.getByTestId('column-header-sort-document').textContent).not.toMatch(/[▲▼]/);
+    expect(screen.getByTestId('column-header-sort-type').textContent).not.toMatch(/[▲▼]/);
+    expect(screen.getByTestId('column-header-sort-qty').textContent).not.toMatch(/[▲▼]/);
   });
 
   it('AC2: clicking the Date header cycles asc → desc → default, reordering by date each time', () => {
@@ -500,6 +525,71 @@ describe('WarehouseTransactionsTable — sorting (ETP-5083)', () => {
     fireEvent.click(dateHeader); // back to default: no arrow, default order restored
     expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']);
     expect(dateHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  // ETP-5083: the Date header is seeded active (▼) on load, so its FIRST click must be a
+  // one-shot jump straight to ▲ (a visible reorder) instead of following the normal
+  // none→asc→desc→none cycle, which would land on "no sort" — the exact same order the rows
+  // already start in, reading as a no-op click. This test walks the full sequence end-to-end,
+  // including a 4th click, to prove the one-shot override fires exactly once: after the
+  // override is consumed by click 1, clicks 2-4 follow the ORIGINAL unmodified cycle starting
+  // from wherever click 1 left the state (asc), not a second jump.
+  it('AC2/ETP-5083: full click sequence on Date — one-shot jump on click 1, normal cycle resumes after', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const dateHeader = screen.getByTestId('column-header-sort-date');
+
+    // Load: seeded desc, most-recent-first, no click yet.
+    expect(dateHeader.textContent).toContain('▼');
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']); // t3, t2, t1
+
+    // Click 1: one-shot override — jumps straight to ascending (oldest first), a real reorder.
+    fireEvent.click(dateHeader);
+    expect(dateHeader.textContent).toContain('▲');
+    expect(productOrder()).toEqual(['Mango', 'Apple', 'Banana']); // t1, t2, t3
+
+    // Click 2: normal cycle resumes — asc -> desc.
+    fireEvent.click(dateHeader);
+    expect(dateHeader.textContent).toContain('▼');
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']); // t3, t2, t1
+
+    // Click 3: normal cycle — desc -> none (default order restored, no arrow).
+    fireEvent.click(dateHeader);
+    expect(dateHeader.textContent).not.toMatch(/[▲▼]/);
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']);
+
+    // Click 4: normal cycle resumes from none -> asc, NOT another one-shot jump (which would
+    // have gone straight to desc). Proves the override only ever fires once per mount.
+    fireEvent.click(dateHeader);
+    expect(dateHeader.textContent).toContain('▲');
+    expect(productOrder()).toEqual(['Mango', 'Apple', 'Banana']); // t1, t2, t3
+  });
+
+  // ETP-5083: if the user's FIRST click ever lands on a DIFFERENT column than the seeded one,
+  // that column must behave like a completely normal first click (straight to ascending, not
+  // itself getting a one-shot jump-to-opposite — the override is keyed to `initialSort.key`
+  // only). The seeded Date column must simultaneously lose its arrow (no longer the active
+  // sort). And this click must CONSUME the one-shot grace period entirely: a later click back
+  // on Date must follow the plain none->asc->desc->none cycle from "no sort", not fall back to
+  // jumping to a direction.
+  it('AC2/ETP-5083: first click on a different column consumes the one-shot grace period without using it', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const dateHeader = screen.getByTestId('column-header-sort-date');
+    const productHeader = screen.getByTestId('column-header-sort-product');
+
+    expect(dateHeader.textContent).toContain('▼'); // seeded on load
+
+    // First click ever lands on Product, not Date.
+    fireEvent.click(productHeader);
+    expect(productHeader.textContent).toContain('▲'); // normal first-click behavior: straight to asc
+    expect(productOrder()).toEqual(['Apple', 'Banana', 'Mango']);
+    expect(dateHeader.textContent).not.toMatch(/[▲▼]/); // Date is no longer the active sort
+
+    // Grace period is spent. A later click on Date now follows the NORMAL cycle starting from
+    // "no sort" (-> ascending), not a jump to a direction.
+    fireEvent.click(dateHeader);
+    expect(dateHeader.textContent).toContain('▲');
+    expect(productOrder()).toEqual(['Mango', 'Apple', 'Banana']); // t1, t2, t3 — oldest first
+    expect(productHeader.textContent).not.toMatch(/[▲▼]/); // Product no longer active
   });
 
   it('AC2: clicking the Product header cycles asc → desc → default, reordering alphabetically', () => {

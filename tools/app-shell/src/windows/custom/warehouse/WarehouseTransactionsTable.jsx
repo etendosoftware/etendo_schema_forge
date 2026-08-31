@@ -1,16 +1,19 @@
 import { useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useWarehouseStock } from './useWarehouseStock';
 import { parseCalendarDate, formatCalendarDate } from '@/lib/dateOnly';
+import { getRouterBase } from '@/lib/deploymentBasePath';
+import { useClientSort } from '@/hooks/useClientSort';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 
 /** Navigable link to the source document, styled like the Assets "Period" link. */
-function DocumentLink({ label, onClick }) {
+function DocumentLink({ label, onClick, 'data-testid': dataTestId }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-testid={dataTestId}
       className="group inline-flex items-center gap-1 text-sm font-medium text-[hsl(var(--foreground))]"
     >
       <span className="border-b border-[hsl(var(--text-disabled))] group-hover:border-[hsl(var(--foreground))] transition-colors leading-6">
@@ -76,7 +79,6 @@ function fmtQty(val) {
 
 export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl, onCount }) {
   const ui = useUI();
-  const navigate = useNavigate();
   const { loading, error, transactions } = useWarehouseStock(parentId, token, apiBaseUrl);
 
   useEffect(() => {
@@ -92,12 +94,33 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
     return tx['movementType$_identifier'] ?? tx.movementType ?? '';
   };
 
-  const sorted = useMemo(() => {
+  // Pre-sorted default order (movementDate desc, most recent first) — required with no user
+  // action per AC1. Fed into useClientSort as `rows`; the hook's `initialSort` below only seeds
+  // the header's sort-indicator state, it does not re-sort this already-correct order.
+  const defaultOrder = useMemo(() => {
     if (!transactions) return [];
     return [...transactions].sort((a, b) =>
       (parseCalendarDate(b.movementDate)?.getTime() ?? 0) - (parseCalendarDate(a.movementDate)?.getTime() ?? 0)
     );
   }, [transactions]);
+
+  // `resolveTypeLabel` closes over `ui`, which is stable per locale — rebuilding this on every
+  // render would defeat the memo useClientSort builds on top of these accessors (same pattern
+  // as MovementsTab's `sortAccessors`).
+  const accessors = useMemo(() => ({
+    date: (tx) => parseCalendarDate(tx.movementDate)?.getTime() ?? null,
+    type: (tx) => resolveTypeLabel(tx),
+    document: (tx) => documentLabel(tx),
+    product: (tx) => tx['product$_identifier'] ?? tx.product ?? null,
+    qty: (tx) => Number(tx.movementQuantity),
+  }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [ui]);
+
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(defaultOrder, {
+    accessors,
+    initialSort: { key: 'date', direction: 'desc' },
+  });
 
   if (loading) {
     return (
@@ -120,11 +143,52 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-border/50">
-          <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-[180px]">{ui('warehouseDate')}</th>
-          <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-[200px]">{ui('warehouseType')}</th>
-          <th className="text-left py-2 pr-3 font-medium text-muted-foreground">{ui('warehouseDocument')}</th>
-          <th className="text-left py-2 pr-3 font-medium text-muted-foreground">{ui('warehouseProduct')}</th>
-          <th className="text-right py-2 font-medium text-muted-foreground">{ui('warehouseQty')}</th>
+          <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-[180px]">
+            <SortableHeaderLabel
+              label={ui('warehouseDate')}
+              sortKey="date"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={toggleSort}
+              data-testid="SortableHeaderLabel__date" />
+          </th>
+          <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-[200px]">
+            <SortableHeaderLabel
+              label={ui('warehouseType')}
+              sortKey="type"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={toggleSort}
+              data-testid="SortableHeaderLabel__type" />
+          </th>
+          <th className="text-left py-2 pr-3 font-medium text-muted-foreground">
+            <SortableHeaderLabel
+              label={ui('warehouseDocument')}
+              sortKey="document"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={toggleSort}
+              data-testid="SortableHeaderLabel__document" />
+          </th>
+          <th className="text-left py-2 pr-3 font-medium text-muted-foreground">
+            <SortableHeaderLabel
+              label={ui('warehouseProduct')}
+              sortKey="product"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={toggleSort}
+              data-testid="SortableHeaderLabel__product" />
+          </th>
+          <th className="text-right py-2 font-medium text-muted-foreground">
+            <SortableHeaderLabel
+              label={ui('warehouseQty')}
+              sortKey="qty"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={toggleSort}
+              align="right"
+              data-testid="SortableHeaderLabel__qty" />
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -142,7 +206,11 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
                 {docLabel && canNavigate ? (
                   <DocumentLink
                     label={docLabel}
-                    onClick={() => navigate(`/${tx.etgoDocWindow}/${tx.etgoDocHeaderId}`)}
+                    onClick={() => window.open(
+                      `${window.location.origin}${getRouterBase()}/${tx.etgoDocWindow}/${tx.etgoDocHeaderId}`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )}
                     data-testid="DocumentLink__4dd2db" />
                 ) : (
                   <span>{docLabel ?? '—'}</span>
