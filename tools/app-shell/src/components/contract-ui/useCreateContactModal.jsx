@@ -2,13 +2,11 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import CreateContactModal from './CreateContactModal';
 
+import { buildHeaders } from '@/auth/api.js';
 export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale' }) {
   const [createContactState, setCreateContactState] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const bpApiBaseUrl = useMemo(
     () => (apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : null),

@@ -52,7 +52,7 @@ describe('fetchDeclarationIncidents', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe('http://host/neo/fiscal303/incidents?id=303-2026-T2');
-    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+    expect(init.headers).toEqual({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' });
 
     expect(result).toEqual({
       blocking: 2,

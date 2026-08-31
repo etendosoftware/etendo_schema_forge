@@ -472,7 +472,7 @@ describe('AccountTreeView', () => {
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}` } }),
+        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}`, 'Accept-Language': 'es_ES' } }),
       ));
     });
 
