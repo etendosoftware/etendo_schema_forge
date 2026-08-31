@@ -2010,7 +2010,10 @@ export function DetailView({
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
-  // Save header first (if new), then open add-line form.
+  // Save header first (if new), then open add-line form. A second click while the create is
+  // still in flight cannot duplicate the document: concurrent creates share one in-flight
+  // promise (saveInFlightRef in useEntity), so this awaits the same record the first click is
+  // creating and then navigates to it.
   const handleAddLineClick = useCallback(async () => {
     if (isNew) {
       const saved = await hook.handleSave();
@@ -2044,6 +2047,7 @@ export function DetailView({
   // knows which modal to auto-open via the forceOpen mechanism.
   const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
+      // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);

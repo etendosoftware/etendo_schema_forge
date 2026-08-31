@@ -1389,7 +1389,7 @@ export function useEntity(entity, childEntity, {
         }
     }, [selected, entity, apiFetch, ui]);
 
-    const handleSave = useCallback(async ({ silent = false } = {}) => {
+    const performSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
         setIsSaving(true);
         setSaveError(null);
@@ -1504,6 +1504,33 @@ export function useEntity(entity, childEntity, {
             setIsSaving(false);
         }
     }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload]);
+
+    /**
+     * ETP-5081: one create in flight at a time.
+     *
+     * `performSave` has no re-entrancy guard, so two concurrent calls issue two POSTs — two
+     * documents. Nothing prevented that: the Save button, "Add lines" and "Import lines" each
+     * call it, none of them disables the others, and on a slow backend (NEO took ~16 s per
+     * create) the second click lands long before the first returns. Observed leaving THREE empty
+     * purchase orders behind in one flow. Concurrent callers now share the SAME in-flight
+     * promise, so they all get the record the first call created and the follow-up navigation
+     * still works — which also makes "Save, then immediately Add lines" behave the way the user
+     * reads it. Updates (an existing id) are unaffected: they are idempotent and stay parallel.
+     */
+    const saveInFlightRef = useRef(null);
+    const handleSave = useCallback((opts) => {
+        const creating = !editing?.id;
+        if (creating && saveInFlightRef.current) return saveInFlightRef.current;
+        const promise = performSave(opts);
+        if (creating) {
+            saveInFlightRef.current = promise;
+            promise.finally(() => {
+                if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+            });
+        }
+        return promise;
+    }, [performSave, editing?.id]);
+
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
