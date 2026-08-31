@@ -72,6 +72,102 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 | `token` | a plain module was handed a specific token by its caller |
 | `credentials` | overrides the default `'include'` |
 
+## Updates carry a concurrency token (ETP-5073)
+
+`apiFetch` attaches an `updated` value to every `PATCH`/`PUT` whose target record this client has
+read. **You do not pass it, and you must not hand-roll it.**
+
+### Why the helper does this and not the call site
+
+The backend refuses an update that does not carry the `updated` value of the record as it was
+read. That is not a new rule invented here — it is how Etendo's core has always implemented
+optimistic concurrency (`JsonToDataConverter.setData` compares the value and raises
+`OBStaleObjectException`). Our layer used to strip `updated` from every write, so the check never
+ran for any entity: two users editing the same document both got a success and the second silently
+erased the first.
+
+Threading the token through the ~41 update call sites by hand would put the same failure one
+forgotten argument away, and forgetting is invisible at the call site — it surfaces as a 400 in
+whatever panel nobody was looking at. So the token is remembered centrally instead:
+
+| Piece | Where | Does what |
+|---|---|---|
+| The store | `app-shell-core/lib/recordVersions.js` | `updated` per record id, LRU-bounded |
+| Harvest (reads) | `useEntity.js` → `normalizeRecord` | the one place every record and list row is parsed |
+| Harvest (writes) | `apiFetch` | remembers what a successful write returned |
+| Injection | `apiFetch` → `withRecordVersion` | adds the token on the way out |
+
+Keyed by **record id**, not URL: the same row is read through the list endpoint and written
+through the detail endpoint, and inline grid editing depends on those resolving to one entry.
+
+### What happens when the token is missing
+
+Nothing is injected, the server answers **400 `missing_updated`**, and in dev a console warning
+names the call site. That is the intended behaviour, not a gap: a caller that cannot produce
+`updated` has not read the record it is about to overwrite. The fix is to read the record before
+writing it — never to fabricate a timestamp, which cannot work (any value other than the stored
+one is rejected as a conflict).
+
+Two situations produce this, and only one is a defect:
+
+- **a panel that patches a record it never read** — the defect; give it a read;
+- **an endpoint that is not a NEO record** (an OAuth2 `PUT`, a fiscal-config `PUT`) — harmless.
+  The guard is the cache miss itself: an id we never saw has no entry, so an unrelated write is
+  never touched.
+
+### What happens on a conflict
+
+**409** with `error: "stale_record"`. Branch on that discriminator, **never on the status alone** —
+a duplicate-key rejection is also a 409 and its remedy is the opposite (change your data, not your
+baseline).
+
+The same dialog is raised from all three write paths, so a conflict looks identical wherever the
+user was typing:
+
+| Path | Where it is wired | Refresh action |
+|---|---|---|
+| Header save | `useEntity.handleSaveErrorResponse` | `discardChangesAndReload` |
+| Lines sidebar save | `useLineSaveConflict.raiseLineSaveConflict` | `discardLineChangesAndReload` |
+| Inline lines grid (`linesLayout: 'inlineEditable'`) | `useLineSaveConflict.raiseRowSaveConflict` | `discardRowChangesAndReload` |
+
+`components/contract-ui/useLineSaveConflict.js` holds both line paths (extracted from
+`DetailView.jsx`, which is size-gated). Its `isStaleRecordResponse` reads a **clone** of the
+response so the caller's own `extractErrorMessage` still has an unconsumed body — ask for the
+conflict first, extract the message second.
+
+The inline grid needs one extra step: `InlineLinesPanel` catches the save handler's throw and
+toasts it, so a failure the handler had already reported surfaced **twice**. The handler therefore
+throws `Object.assign(new Error(msg), { userNotified: true })` and the panel skips its own toast on
+that marker. Any error raised from elsewhere still gets one.
+
+`useEntity` handles the header already, with a non-dismissing notice and **exactly two choices**:
+
+- **Cancel save** — nothing was written, so the form keeps the user's edits and they can save later
+  against a fresh read.
+- **Discard my changes and refresh** — re-reads the record as the system holds it and drops the
+  pending edits. The label names the loss on purpose: a button that destroys work must not read as
+  a harmless "reload".
+
+**There is deliberately no merge option.** An earlier implementation re-applied the user's changed
+keys over the freshly-read record, and it was wrong twice:
+
+1. it silently overwrote the other person's value on any field **both** had edited — the exact data
+   loss this ticket removes, moved one step later;
+2. it injected values through `setEditing`, which does **not** run callouts. On a document whose
+   fields are interdependent (changing the business partner recomputes price list, payment terms
+   and taxes) the merged form displayed a combination no callout had ever derived. The server would
+   recompute on save, so the database stayed consistent — but the user was shown numbers that did
+   not add up, and asked to approve them.
+
+Re-entering a value by hand goes through the normal edit path, so **its callouts fire in the new
+context** — which no merge could guarantee. On a rare, integrity-critical path, that is worth more
+than the convenience of not retyping.
+
+### If you set `updated` yourself
+
+An explicit value always wins over the remembered one. Reserve it for a caller that genuinely
+holds a token from elsewhere; a copy of the record you just read is what the store already has.
+
 ## 401 and logout
 
 A 401 that is not ignored calls the logout handler and throws `Unauthorized`. In the app that

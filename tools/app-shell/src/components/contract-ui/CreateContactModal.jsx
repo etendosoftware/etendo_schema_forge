@@ -530,7 +530,13 @@ export default function CreateContactModal({
         Object.keys(billingPatch).length > 0
           ? apiFetch(`/businessPartner/${newId}`, {
               method: 'PATCH',
-              body: JSON.stringify(billingPatch),
+              // `updated` comes from the create response, explicitly. apiFetch normally fills it in
+              // from the version it harvests off a successful write, but that harvest resolves on a
+              // later microtask (it re-reads a clone of the body), and this PATCH is fired in the
+              // same tick as the create inside the Promise.all below — so the remembered version is
+              // not there yet and NEO answered 400 `missing_updated`, which rolled the whole contact
+              // back (ETP-5073). An explicit value always wins over the remembered one.
+              body: JSON.stringify({ ...billingPatch, updated: record?.updated }),
             }).then(async patchRes => {
               if (!patchRes.ok) {
                 const err = await patchRes.json().catch(() => null);

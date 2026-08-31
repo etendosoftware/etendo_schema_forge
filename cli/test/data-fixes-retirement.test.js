@@ -15,6 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
 const RETIRED_R16_ID = '20260727T114306Z__R16-tenant-roles-and-webhook-access';
 const RETIRED_R14_ID = '20260716T120000Z__R14-payment-method-multicurrency';
+const RETIRED_R18_ID = '20260803T140000Z__R18-stuck-average-cost-anchor';
 
 async function sha256Of(fixId) {
   const text = await readFile(join(SQL_DIR, `${fixId}.sql`), 'utf-8');
@@ -29,6 +30,16 @@ describe('loadRetiredList (ETP-4877)', () => {
     assert.equal(typeof entry.checksum, 'string');
     assert.equal(entry.checksum.length, 64, 'sha256 hex digest is 64 chars');
     assert.equal(entry.retiredBy, 'ETP-4877');
+  });
+
+  it('loads the real retired.json and finds the R18 Average-cost anchor entry', async () => {
+    const retired = await loadRetiredList();
+    assert.ok(retired.has(RETIRED_R18_ID), 'retired.json must list R18 as retired');
+    const entry = retired.get(RETIRED_R18_ID);
+    assert.equal(typeof entry.checksum, 'string');
+    assert.equal(entry.checksum.length, 64, 'sha256 hex digest is 64 chars');
+    assert.match(entry.reason, /Average/i);
+    assert.match(entry.reason, /Standard/i);
   });
 
   /**
@@ -100,10 +111,13 @@ describe('loadCatalogWithRetirement (ETP-4877) — end-to-end against the real c
       loadCatalogWithRetirement(), loadRetiredList(),
     ]);
     const retiredFixIds = catalog.filter(f => f.retired).map(f => f.fixId).sort();
-    // Derived from retired.json rather than hardcoded, so adding a retirement does not fail this
-    // test for the wrong reason — what it guards is that the flag matches the list exactly.
+    // Derived from retired.json rather than hardcoded: the hardcoded list this replaced had to be
+    // edited by every retirement, and two of them landing in parallel (R18 on develop, R14 here)
+    // is exactly how it goes stale. What the test guards is that the .retired flag matches the
+    // list exactly — the three ids below then pin that the list itself is complete.
     assert.deepEqual(retiredFixIds, [...retired.keys()].sort());
     assert.ok(retiredFixIds.includes(RETIRED_R16_ID));
+    assert.ok(retiredFixIds.includes(RETIRED_R18_ID));
     assert.ok(retiredFixIds.includes(RETIRED_R14_ID));
 
     const unretiredSample = catalog.find(f => !f.retired);
