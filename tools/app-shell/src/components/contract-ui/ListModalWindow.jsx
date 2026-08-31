@@ -655,7 +655,8 @@ export function ListModalWindow({
           count={selectedIds.size}
           deleting={bulkDeleting}
           onCancel={clearSelection}
-          onDelete={() => requestBulkDelete(selectedRows)} />
+          onDelete={() => requestBulkDelete(selectedRows)}
+          data-testid="BulkDeleteSelectionBar__19eda5" />
       )}
       {/* Grid */}
       {loading && allRows.length === 0 ? (
