@@ -1048,6 +1048,8 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - **Left panel — "Progreso" column** (`ProgressCell`): a thin 4px bar = `reconciled / total`, shown
   only when the line has something reconciled; hovering shows a tooltip "X € por conciliar" (the
   remaining amount). No "% chip" on the row. Column order: Fecha · Descripción · Progreso · Importe.
+  The "something reconciled" test is `reconciledAmount != 0`, computed backend-side — see the
+  sign note below.
   A PARTIAL line also shows a second **"Parcial"** status badge next to "Pendiente" (`line.partial`
   → `StatusBadge kind="partial"`, same warning tone as "Factura"/"Por regla") — otherwise a partial
   line was indistinguishable from a fully-untouched pending one in that column.
@@ -1191,7 +1193,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
     Editar button (inline, ETP-4530) — left of the contextual action; opens EditAccountModal
     Header action button (inline)  — right of tab strip; Export for Movements/Statements, disabled Automatch for Reconciliation
     MovimientosTab.jsx             — toolbar + summary strip + table; runs applyFilters client-side
-      MovementsToolbar/index.jsx   — back ←, type filter, date range, advanced "by conditions" filter, search, Transferir fondos button (ETP-4272)
+      MovementsToolbar/index.jsx   — back ←, type filter, date range, advanced "by conditions" filter, search, sort popover, refresh button, Transferir fondos button (ETP-4272)
       FundsTransferModal.jsx       — funds transfer modal (ETP-4272): source (RO) → destination, amount, GL item, multi-currency, bank fee
         TypeFilter.jsx             — wraps DistinctValuesFilter (BPD, BPW)
         DateRangeFilter.jsx        — wraps DateRangePopover
@@ -1204,7 +1206,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
     ReconciliacionTab.jsx          — placeholder (T6)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
-      StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, import split-button (▾ → "+ Nuevo extracto")
+      StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
       advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
@@ -1323,7 +1325,208 @@ POST /sws/neo/bank-statements?action=delete    body: { id }            → delet
 
 The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**` — Reference No is optional in BOTH flows). A non-blank line whose `in` and `out` are both 0 is rejected with a 400 ("Every line must have an amount in either Deposit or Withdrawal") rather than silently dropped: the manual flow has a user who can fix it. The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
 
-**Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **replaces all lines** (deletes the existing ones, then recreates from the body), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
+**Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **rebuilds only the unmatched lines** (see the reactivation section below), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
+
+#### Reactivating a partially reconciled statement (ETP-4921)
+
+Classic lets you reactivate a statement whose lines are only partly reconciled, and then refuses
+to save an edit to a **matched line** ("Bank Statement Line is already matched. It can not be
+modified nor deleted."). Etendo GO refused the reactivation itself, so a partially reconciled
+statement — the exact case users need to fix — was frozen: `No se pudo reactivar el extracto`.
+
+**Why Classic behaves that way.** Core's `FIN_BankStatementProcess` has NO reconciled-lines guard
+on Reactivate. The protection is one level down, in the DB:
+`APRM_FIN_BNKSTM_LINE_CHECK_TRG` (`org.openbravo.advpaymentmngt`, `FIN_BANKSTATEMENTLINE`, BEFORE
+insert/update/delete) raises `@APRM_BSTLine_Matched@` for any insert, update or delete of a line
+whose `FIN_FinAcc_Transaction_ID` is set — for **every** caller, and **independently** of the
+parent statement's `Processed` flag. So the unit of immutability is the LINE, not the statement.
+GO had put the guard on the wrong object.
+
+**What changed:**
+
+| Where | Before | After |
+|---|---|---|
+| `handleReactivate` | `hasReconciledLines()` → 400 | no line guard; only the `posted` check remains |
+| `handleUpdate` | `deleteLines()` — deletes ALL lines, then recreates | `deleteUnmatchedLines()` — matched lines are never touched |
+| `handleUpdate` line numbering | always restarts at 10 | starts after `maxExistingLineNo()`, so a rebuild cannot collide with a kept matched line |
+| `handleUpdate` empty body | always 400 `At least one line is required` | valid when matched lines remain (a header-only edit of an all-matched statement) |
+| `handleDelete` | no line guard | `hasMatchedLines()` → 400 `MSG_HAS_MATCHED_LINES` |
+
+The new `handleDelete` guard is the flip side of relaxing reactivation: a DRAFT statement can now
+carry matched lines, and deleting the statement would take those lines with it — which the trigger
+never allows. Guarding up front turns that into a clean 400 instead of a raw trigger exception
+raised mid-delete. `hasReconciledLines` was renamed `hasMatchedLines` to match the trigger's own
+vocabulary and to make its single remaining caller obvious.
+
+**Frontend (`ManualStatementModal`).** A matched line hydrates with `matched: true` (already
+returned by `?action=lines` — `BankStatementsSupport.mapLineRow` sets it from
+`fin_finacc_transaction_id`; the modal simply used to drop it) and renders through `MatchedRow`
+instead of `EditRow`: the same CSS grid tracks, but plain read-only text, a muted background, and
+a `Lock` icon in place of the delete button (`financeAccountStatementsManualLineMatchedTooltip`).
+Those rows are excluded from the save payload entirely, which is what makes the backend's
+"rebuild only the unmatched subset" correct rather than lossy. Offering the inputs would be
+offering an edit the database is going to reject.
+
+#### Numeric column headers are right-aligned (ETP-4921)
+
+The generic `DataTable` right-aligns a header whose column type is in `NUMERIC_FIELD_TYPES`
+(`renderColumnHeaderCell`), which is why amounts line up with their labels in Sales Invoices and
+every other generated list. The hand-rolled grids in this window do not go through `DataTable`,
+so they never inherited the rule: their money cells had always been `text-right tabular-nums`
+while the header above sat at the opposite edge of the column.
+
+Fixed in the three that still had it, using the convention `MovementsTable` and
+`ReconciliationListTable` already followed (`text-right` on the header cell **plus**
+`align="right"` on `SortableHeaderLabel`, which flips the sort arrow to the label's left so the
+arrow stays on the column's outer edge):
+
+| Grid | Columns |
+|---|---|
+| `StatementsTable` (Extractos, header row) | Lineas / Salida / Entrada — marked `numeric: true` in `TAIL_SORT` |
+| `StatementLinesInline` (the expanded accordion) | Salida / Entrada — the existing `AMOUNT_COLS` set |
+| `ReconciliationSplitPanel` (both panels) | Importe / Saldo pendiente — these carried an explicit `text-left` |
+
+Deliberately NOT changed: Estado (a pill), Progreso (a bar, not a figure), and every text column.
+
+#### The expanded row and the header row refresh together (ETP-4921)
+
+A statement's header row and its expanded accordion are fed by **two independent fetches**:
+`useBankStatements(accountId)` for the headers (whose `reload()` the tab already called after
+every mutation) and, inside `StatementLinesInline`, a separate
+`useBankStatementLines(statementId)` keyed on nothing but the id. Nothing invalidated the second
+one, so after editing a line in the modal the header showed the recomputed total and status
+(`+120,00 €`, `Parcial 2/3`) while the rows underneath still showed the pre-edit amount — and the
+toolbar's refresh button looked broken, because it reloaded exactly the half that was already
+correct. Only a full window reload fixed it.
+
+`useBankStatementLines(statementId, refreshToken)` now takes a second dependency, threaded
+`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow` →
+`StatementLinesInline`. The tab owns `linesRefreshToken` and bumps it inside `refreshStatements()`,
+which replaced every bare `reload()` call site: the bulk-delete outcome, the PSD2 sync, the
+process/reactivate/delete confirm, both modals' `onSuccess`, and the toolbar's `onRefresh`. A
+FAILED action deliberately does not bump — nothing changed server-side, so re-fetching would be
+noise.
+
+The edit modal needs no token: its own `useBankStatementLines` call passes `null` while closed, so
+`path` flips `null` → url on every open, which is already a dependency change and already forces a
+fresh fetch.
+
+#### Why a fully pending line used to show a full progress bar (ETP-4921)
+
+Reported as "some statement lines have no Progreso column". The question was inverted: the lines
+WITHOUT a bar were the correct ones. On an account whose lines were all unreconciled, every
+WITHDRAWAL drew a solid black bar under a "Pendiente" badge, and only the two deposits were blank.
+
+`ProgressCell` draws a bar whenever `reconciledAmount != 0`, and `reconciledAmount` came from
+
+```java
+BigDecimal reconciled = amount.subtract(pending);   // ReconciliationHandlerSupport
+```
+
+where the two operands do not share a sign convention. `amount` is SIGNED (a withdrawal is
+negative), while `pendingAmount` is the unsigned `|cramount - dramount|` that
+`BankStatementLinePendingAmountHandler` stores — and that `BankStatementsSupport.mergeMatchGroups`
+sums across a split group's sub-lines. Verified against the live rows that surfaced it:
+
+| Line | `amount` | stored `pendingAmount` | old `reconciled` | bar |
+|---|---|---|---|---|
+| deposit | `+10.00` | `10.00` | `0` | none — correct, *by coincidence* |
+| withdrawal | `-0.50` | `0.50` | `-1.00` | solid, at 200% clamped to 100% |
+| partial withdrawal | `-100` | `46.76` | `-146.76` | solid 100% instead of 53% |
+
+Deposits only ever worked because both signs happened to match. The fix is
+`ReconciliationHandlerSupport.signedReconciledAmount(amount, pending)`: subtract MAGNITUDES, then
+put the sign of `amount` back, clamped at zero (`pending > |amount|` is a data anomaly, and
+"nothing reconciled" is the honest reading of it — the alternative flips the sign and draws a bar
+pointing the wrong way). Unit-tested in `ReconciliationSupportTest` with the live values above.
+
+Fixed in the CONSUMER, not the stored column. Making `EM_ETGO_Pending_Amount` signed would also
+work arithmetically, but it is a magnitude by contract, three other call sites read it, and
+`mergeMatchGroups` sums it — that is a semantics change plus a data migration for an error that
+lives in one subtraction. No frontend change: the `reconciledAmount != 0` contract was always
+right, it was being fed wrong numbers.
+
+#### A bank-connected account's statements are read-only (ETP-4921)
+
+On a PSD2-connected account the statements come from the bank, so they must not be hand-edited.
+Reactivar was the one door still open: Edit and Delete already hide themselves once a statement is
+processed (and the sync leaves them processed), but reactivating brings it back to draft and
+reopens both.
+
+**The signal is ACCOUNT-level, and that is deliberate.** Nothing on the statement records that it
+came from the bank. The PSD2 module writes only a `fileName`, from a translated AD_MESSAGE:
+
+```java
+// BankStatementHelper.java:533 (com.etendoerp.psd2.bank.integration)
+newBankStatement.setFileName(OBMessageUtils.getI18NMessage("PSD2_BankStatementFileName"));
+```
+
+`com.etendoerp.psd2.bank.integration.es_es` ships a Spanish translation of that message, so the
+stored text depends on the language the sync ran in — matching against it later would resolve a
+different string. There is no link table and no marker column either (`fin_bankstatement` carries
+only the `em_etgo_*` aggregates and the bulk-posting columns), and the document type is `BSF` for
+manual statements too.
+
+So the gate keys off `account.bankConnected` (Salt Edge status `"CO"`,
+`FinancialAccountsPageHandler:310`). That is coherent with a decision this window already made:
+`StatementsToolbar:185` replaces the "Importar extracto / Nuevo extracto" split-button with
+"Sincronizar extractos" on such an account, so a statement cannot be created by hand there
+either. The known consequence, accepted knowingly: a legacy MANUAL statement sitting on a
+now-connected account also becomes non-reactivable — it is one that could no longer be created
+there in the first place.
+
+Three entry points are closed, all from the same flag threaded
+`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`:
+
+| Entry point | Behaviour |
+|---|---|
+| `StatementRowKebab` Reactivar | disabled, tooltip `financeAccountStatementsRowBankSyncedTooltip` |
+| `RowActions` inline Edit + Delete | not rendered at all, even for a draft — same as they already do for a processed statement |
+| Bulk-delete trigger | disabled with the same reason, via `resolveBulkDeleteBlock` |
+
+Procesar is deliberately NOT gated: completing a draft is not editing its content.
+
+`resolveBulkDeleteBlock` (exported from `ImportedStatementsTab`, unit-tested directly) states the
+precedence between the two block reasons: the connected-account one wins over "the selection
+contains a processed statement", because it is unconditional. Reporting "processed statements
+cannot be modified" on a connected account would point the user at a state they could try to
+change, when nothing in this window unblocks it. That is also why the copy is a new key rather
+than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+
+Follow-up worth having: if the PSD2 module ever marks the statements it creates, this gate should
+move to that per-statement flag — it would then also leave legacy manual statements editable.
+
+#### Bulk delete cannot attempt a processed statement, and failures explain why (ETP-4921)
+
+The per-row hover trash icon (`StatementsTable`'s `RowActions`) was already hidden for a processed
+statement — `isDraftStatement(s)` (now `statementStatus.js`, a plain `.js` module so both
+`StatementsTable` and `StatementRowKebab` can import it without a cycle between the two component
+files). The gap was the **bulk-delete path**: the row checkboxes have no such gate, because the
+same selection also feeds the tab's Export button (exporting a processed statement's lines is
+legitimate), so hiding the checkboxes for processed rows would have broken that. A selection
+containing a processed statement could still reach the floating "N Seleccionados" bar and fire a
+delete the backend was guaranteed to reject — surfacing only the generic
+`toastBatchDeleteOutcome` count message ("None of the 1 selected could be deleted"), with no hint
+that the reason was the statement being processed.
+
+Fixed at the trigger, not the checkbox: `ImportedStatementsTab` computes
+`selectionHasNonDraft` (any selected id whose statement fails `isDraftStatement`) and passes it to
+`BulkDeleteSelectionBar` as `disabledReason` — a new, additive prop (`MovementsTab`'s own bulk-bar
+usage is unaffected, since it doesn't pass it). The trigger disables itself and its
+`title`/`aria-label` become the reason, reusing the exact same
+`financeAccountStatementsRowProcessedTooltip` copy `StatementRowKebab` already shows for its own
+gated Procesar item — "don't let them touch the trash can", not "let them try and fail". Selecting
+even one processed statement blocks the WHOLE batch (not just that item), matching the
+per-row hover behavior it mirrors.
+
+The single-row delete confirm (`ImportedStatementsTab.runConfirm`, shared by the Process /
+Reactivate / Delete confirm dialog) also stopped discarding the backend's actual rejection reason:
+`useStatementActions.post()` now parses the NEO error envelope (`parseBackendErrorMessage`, the
+same helper `DetailView.jsx` uses) instead of prefixing the raw response text with `HTTP 400`, and
+`runConfirm` runs it through `translateBackendError` before falling back to the flat
+per-variant generic toast. Two new `BACKEND_ERROR_MAP` entries in `backendErrors.js` translate
+`BankStatementsHandler`'s `requireDraft`/`requireProcessed` guard messages:
+`backendError.statementNotDraft` / `backendError.statementNotProcessed`.
 
 **Status derivation** — `EM_ETGO_STATUS` (Etendo Go-only extension column) is a real STORED value, not computed on read: the list reads it straight off the row and only falls back to a live `BankStatementsSupport.deriveStatementStatus(processed, lineCount, matchedCount)` call when the column is blank (legacy rows predating it). The formula itself: not processed → `DRAFT`; otherwise `PENDING` (no matched lines) / `PARTIAL` / `RECONCILED` (all matched). The list also returns `notes`, and `?action=lines` returns each line's `bpartnerId`/`glItemId` (+ joined `bpartnerFkName`/`glItemName`) and separate `in`/`out` so the edit modal can hydrate the FK pickers.
 
@@ -1431,6 +1634,41 @@ The hint names the way out rather than nudging the user to create something: the
 panels is always a filter result (status + date range + search), so there is nothing to create.
 That is the opposite of the Movimientos tab, whose own empty copy is paired with a
 "+ Nuevo movimiento" hint — which is why these two tabs deliberately do not share a key.
+
+## Conciliación column layout (ETP-4921 QA)
+
+> QA: *"la vista de conciliación se ve cortada; si cambio el zoom se ve bien"*.
+
+Both reconciliation panels declare a width on every column **except** the free-text one
+(Descripción on the left, Información on the right) and rely on `truncate` to clip it. That never
+worked, because the shared `Table` used the browser's default **auto** layout: an auto-layout table
+grows to fit its widest cell, so a real statement description — `TRANSFERENCIA INMEDIATA A FAVOR DE
+… CONCEPTO Factura Nº : 10001754 1000896` — stretched the table past the panel and pushed
+**Progreso** and **Importe** behind a horizontal scrollbar. Zooming out only hid the symptom by
+making the same text fit.
+
+Two changes, both in `ReconciliationSplitPanel.jsx`:
+
+1. **`PanelTable` renders the table `table-fixed`.** Under a fixed layout the declared widths win
+   and the free column absorbs whatever is left, so Progreso (90px) and Importe (139px) can no
+   longer be pushed out of view. This is what makes them "always visible" — a layout fix, not a
+   sticky-column workaround, so there is no horizontal scroll left to pin anything against.
+   It applies to both panels, which have the same shape and the same latent bug.
+2. **The description is rendered through `TruncatedText`** (`components/ui/truncated-text.jsx`,
+   new): one line, ellipsised, with the full string in a tooltip on hover.
+
+`TruncatedText` measures before it speaks: Radix asks to open on hover/focus and the component only
+honours the request when `scrollWidth > clientWidth + 1`. Repeating a short label the reader can
+already see in full is noise, and the 1px slack absorbs the sub-pixel rounding that otherwise
+reports an exactly-fitting text as overflowing. It carries its own `TooltipProvider` (same
+reasoning as `CopyLinkButton`) so it works outside this window, and its tooltip is portalled —
+a hand-rolled absolute one, like `ProgressCell`'s, would be clipped by the very `overflow-hidden`
+that produces the ellipsis.
+
+Tests: `components/ui/__tests__/truncated-text.vitest.jsx` (behaviour, with the layout metrics
+jsdom cannot produce stubbed in), `truncated-text.test.js` (structure), and the
+`column layout — Progreso and Importe stay in view` block in
+`contract-ui/__tests__/ReconciliationSplitPanel.vitest.jsx`.
 
 ## Column sorting (ETP-4921)
 
@@ -1565,6 +1803,65 @@ ever appears inside that cell, which is why it contributes an accessor but no co
 ISO-8601 is chronological, so the comparator only ever orders two instants against each other —
 it never reads a local-time getter and never buckets by day, which are the two things that helper
 exists to protect. See the date-only section of `CLAUDE.md`, which calls out this exact non-case.
+
+## The refresh button — and why a refresh must not flash
+
+Every generated list gets a refresh icon (circular arrows, between the sort control and the
+create button) from `ListView`'s idle bar. This window suppresses that bar entirely
+(`hideListBar: true`, see the sort section above) and draws its own toolbars, so the control was
+missing from the Cuentas list **and** from all four detail tabs.
+
+`components/contract-ui/RefreshButton.jsx` is the shared icon button — same markup and classes as
+`ListView`'s own private one, so the two read identically on screen. It sits in `contract-ui`
+rather than `financial-accounts` because it is generic: `ListModalWindow` (Reglas de matcheo) had
+no refresh button either and now renders the same one. The `financial-accounts` barrel re-exports
+it, since every toolbar in this window consumes it. Each toolbar takes an `onRefresh` handler and
+wires it to the reload it already had:
+
+| Where | `onRefresh` |
+|---|---|
+| `AccountsToolbar` (Cuentas list) | `onDataMutated` → `ListView`'s `hook.refresh` |
+| `MovementsToolbar` (Movimientos) | the tab's own `onReload` → `useAccountMovements.reload` |
+| `StatementsToolbar` (Extractos importados) | `useBankStatements.reload` |
+| `ReconciliationListTab` (Reconciliaciones, cash only) | `useReconciliations.reload`, lifted in `index.jsx` |
+| **Detail header**, next to *Editar cuenta* (Conciliación tab only) | `handleReconciliationRefresh` in `index.jsx` |
+
+**Conciliación is the one tab whose refresh lives in the header rather than in a toolbar.** Its
+toolbar belongs to `ReconciliationSplitPanel`'s *left column*, so a button there would reload only
+the statement lines and leave the candidates, the account and the badges stale — and the cash
+variant of the tab (`CashCloseTab`) has no toolbar at all. From the header it reloads everything:
+account + movements + automatch (bank) / reconciliations (cash), and bumps
+`reconciliationRefreshKey` so whichever screen is mounted remounts and re-runs its matching from
+scratch — the same full reload an automatch apply already triggers.
+
+**The skeleton is for the FIRST fetch only.** Every table here used to render a full skeleton
+whenever `loading` was true, regardless of whether rows were already on screen. On a refresh that
+wiped the grid to grey bars and snapped it back — very visible next to a generated list, which
+never does this (`ListView`'s default branch only shows skeletons when
+`hook.loading && hook.items.length === 0`). The gate is now the same everywhere:
+
+- skeleton ⟺ `loading && rows.length === 0` (true initial fetch)
+- otherwise the rows stay mounted and the table dims via
+  `opacity-70 transition-opacity duration-200` — `ListView`'s existing `tableOpacityClass`
+  treatment, now matched by the hand-rolled tables.
+
+Applied in `MovementsTable`, `StatementsTable`, `ReconciliationListTable`,
+`ReconciliationSplitPanel` (`renderRows` + `PanelTable`) and, generically, in `ListView`'s
+`ownScroll` branch — which forwarded `hook.loading` unconditionally and so made the Cuentas grid
+the worst offender, since `DataTable` renders `loading` as a full-table skeleton with no row-count
+check of its own. That `ListView` fix benefits any window using `tableOwnsScroll`, not just this
+one.
+
+**The bar that says it is working.** Dimming alone is a weak signal, so a generated list also
+shows a thin indeterminate sliding line above the grid. It lived inline in `ListView`, which is
+why Cuentas already had it (it sits *outside* the idle list bar this window suppresses) while none
+of the detail tabs did. It is now `components/contract-ui/ListProgressBar.jsx`, rendered by
+`ListView` and by each tab under that same `loading && rows.length > 0` condition — Movimientos,
+Extractos, Reconciliaciones, the bank split panel (spanning both columns, since the header button
+reloads the whole tab), the cash close, and `ListModalWindow`. Each passes its own `testId`.
+
+The pair is the contract: **`RefreshButton` is what the user clicks, `ListProgressBar` is what
+tells them it worked.** A toolbar that adds one without the other refreshes silently.
 
 ## Payment status mapping (two states)
 

@@ -26,6 +26,7 @@ import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
+import { RefreshButton } from '@/components/financial-accounts';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 
 /** Tabs whose content `handleExport` knows how to stream as CSV. */
@@ -217,6 +218,19 @@ export function FinancialAccountDetail({ recordId }) {
   const {
     reconciliations, loading: reconciliationsLoading, reload: reloadReconciliations,
   } = useReconciliations(isCashAccount ? recordId : null);
+  // The header's refresh button while the Reconciliation tab is open. Deliberately the SAME
+  // full reload `handleAutoMatchSuccess` performs, plus the cash side: whichever of the two
+  // screens is mounted (bank split panel / cash close) re-runs its matching from scratch via the
+  // remount key, and the surrounding account + movements + tab badges come back fresh with it.
+  // `reloadAutoMatch` is idle on a cash account and `reloadReconciliations` on a bank one (both
+  // hooks are passed `null` there), so calling all of them is safe on either type.
+  const handleReconciliationRefresh = useCallback(() => {
+    reloadAccount();
+    reloadAutoMatch();
+    reloadMovements();
+    reloadReconciliations();
+    setReconciliationRefreshKey((k) => k + 1);
+  }, [reloadAccount, reloadAutoMatch, reloadMovements, reloadReconciliations]);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
   const runCsvExport = useCsvExport();
@@ -341,6 +355,17 @@ export function FinancialAccountDetail({ recordId }) {
             }}
             data-testid="DetailTabs__f7dbb3" />
           <div className="flex items-center gap-2">
+            {/* Reconciliation is the one tab whose toolbar gets no refresh button of its own:
+                the bank split panel's toolbar belongs to its LEFT column, so a button there
+                would reload only the statement lines, and the cash-close screen has no toolbar
+                at all. Sitting here it reloads the whole tab — account, movements, and whichever
+                of the two screens is mounted (via the remount key). */}
+            {activeTab === 'reconciliation' ? (
+              <RefreshButton
+                onRefresh={handleReconciliationRefresh}
+                label={ui('refresh')}
+                data-testid="RefreshButton__f7dbb3" />
+            ) : null}
             <button
               type="button"
               data-testid="financial-account-edit"
@@ -430,6 +455,7 @@ export function FinancialAccountDetail({ recordId }) {
               account={account}
               reconciliations={reconciliations}
               loading={reconciliationsLoading}
+              onRefresh={reloadReconciliations}
               data-testid="ReconciliationListTab__f7dbb3" />
           )}
         </div>
