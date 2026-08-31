@@ -147,21 +147,29 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [formReady, setFormReady] = useState(false);
+  // The serialized baseline the form was actually seeded from. Comparing against THIS
+  // rather than against the freshly recomputed `baseline` below is what keeps the
+  // unsaved-changes banner from flashing during load: `header` and `info` arrive from two
+  // separate requests, so between them `baseline` already reflects the newer pair while
+  // `form` still holds the snapshot seeded from the older one — a one-render mismatch that
+  // read as "dirty" and briefly showed the banner (and made
+  // OrganizationPage.vitest.jsx's banner assertion order-dependent).
+  const [seededBaseline, setSeededBaseline] = useState(null);
 
   useSetPageMeta({ title: ui('organizationPageTitle'), breadcrumb: `${ui('settings')} / ${ui('organizationPageTitle')}` });
 
   useEffect(() => {
     if (!loading && !error) {
-      setForm(buildFormFromData(header, info));
-      setFormReady(true);
+      const seeded = buildFormFromData(header, info);
+      setForm(seeded);
+      setSeededBaseline(JSON.stringify(seeded));
     }
   }, [loading, error, header, info]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
   const isDirty = useMemo(
-    () => formReady && JSON.stringify(form) !== JSON.stringify(baseline),
-    [formReady, form, baseline],
+    () => seededBaseline !== null && JSON.stringify(form) !== seededBaseline,
+    [seededBaseline, form],
   );
 
   const updateField = (field, value) => {

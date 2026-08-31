@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from '@/hooks/useNeoResource.js';
-import { authHeaders, throwHttpError } from '@/hooks/financialAccountHttp.js';
+import { throwHttpError } from '@/hooks/financialAccountHttp.js';
 
 /**
  * Read/write operations against the `accountingConfiguration` entity of the
@@ -31,20 +31,18 @@ function firstRecord(json) {
 }
 
 export function useFinancialAccountAccounting() {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
 
   const fetchAccountingConfiguration = useCallback(async (accountId) => {
-    const url = `${getApiBase()}${ENTITY_PATH}?financialAccountId=${encodeURIComponent(accountId)}`;
-    const res = await fetch(url, { headers: authHeaders(token) });
+    const res = await apiFetch(`${ENTITY_PATH}?financialAccountId=${encodeURIComponent(accountId)}`);
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [apiFetch]);
 
   const saveAccountingConfiguration = useCallback(async (accountId, { fINAssetAcct, fINTransitoryAcct }) => {
-    const res = await fetch(`${getApiBase()}${ENTITY_PATH}`, {
+    const res = await apiFetch(ENTITY_PATH, {
       method: 'POST',
-      headers: authHeaders(token),
       body: JSON.stringify({
         financialAccountId: accountId,
         fINAssetAcct: fINAssetAcct || null,
@@ -54,7 +52,7 @@ export function useFinancialAccountAccounting() {
     if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     return firstRecord(json);
-  }, [token]);
+  }, [apiFetch]);
 
   return { fetchAccountingConfiguration, saveAccountingConfiguration };
 }

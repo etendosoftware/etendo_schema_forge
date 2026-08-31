@@ -5,4 +5,13 @@
   class="document-brand-logo"
   style="max-width: 42mm; max-height: 18mm; object-fit: contain; object-position: left center; display: block; margin-bottom: 2mm;"
 >
+{{else}}
+{{#if meta.companyLogoDataUrl}}
+<img
+  src="{{meta.companyLogoDataUrl}}"
+  alt="{{meta.title}}"
+  class="document-brand-logo"
+  style="max-width: 42mm; max-height: 18mm; object-fit: contain; object-position: left center; display: block; margin-bottom: 2mm;"
+>
+{{/if}}
 {{/if}}
