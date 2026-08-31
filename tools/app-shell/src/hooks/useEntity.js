@@ -1515,20 +1515,52 @@ export function useEntity(entity, childEntity, {
      * purchase orders behind in one flow. Concurrent callers now share the SAME in-flight
      * promise, so they all get the record the first call created and the follow-up navigation
      * still works — which also makes "Save, then immediately Add lines" behave the way the user
-     * reads it. Updates (an existing id) are unaffected: they are idempotent and stay parallel.
+     * reads it.
+     *
+     * An UPDATE cannot be coalesced the same way — the second caller may legitimately be saving
+     * newer edits, and dropping it would lose them silently. But it cannot run in PARALLEL
+     * either, which is what this used to do on the assumption that updates are idempotent. Since
+     * ETP-5073 they are not: every update carries the `updated` token the client last read, and
+     * two overlapping saves of one record necessarily carry the SAME token — the second one is
+     * built before the first one's response can refresh it. The server commits the first, bumps
+     * `updated`, and refuses the second with 409 `stale_record`, which surfaces as the
+     * "No se puede guardar este registro" conflict dialog — a modal blaming another user for a
+     * collision the app caused with itself, and one that then blocks every later click.
+     * Reproduced end to end in the amortization E2E flow: "Guardar" followed by "Crear
+     * amortización" (which saves before it processes) sent two byte-identical PATCHes 510 ms
+     * apart, 200 then 409, and the dialog swallowed the process click.
+     *
+     * So updates are SERIALIZED instead: each one waits for the previous save of this record to
+     * settle, and `apiFetch` then injects the freshly harvested `updated`. Nothing is dropped and
+     * nothing overlaps.
      */
     const saveInFlightRef = useRef(null);
+    const updateChainRef = useRef(null);
     const handleSave = useCallback((opts) => {
         const creating = !editing?.id;
-        if (creating && saveInFlightRef.current) return saveInFlightRef.current;
-        const promise = performSave(opts);
         if (creating) {
+            if (saveInFlightRef.current) return saveInFlightRef.current;
+            const promise = performSave(opts);
             saveInFlightRef.current = promise;
             promise.finally(() => {
                 if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
             });
+            return promise;
         }
-        return promise;
+        const previous = updateChainRef.current;
+        // No save in flight: run immediately, so the common single-save case keeps issuing its
+        // request in the same tick it always did.
+        const next = previous ? previous.then(() => performSave(opts)) : performSave(opts);
+        // The tail must never reject or the chain would stay poisoned for every later save;
+        // `performSave` already reports its own failures and resolves to null.
+        const tail = next.catch(() => null);
+        updateChainRef.current = tail;
+        // Once nothing is queued behind this save, drop the tail so the next one runs
+        // immediately again instead of inheriting a microtask hop forever.
+        tail.finally(() => {
+            if (updateChainRef.current === tail) updateChainRef.current = null;
+        });
+        return next;
     }, [performSave, editing?.id]);
 
 
