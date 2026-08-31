@@ -81,7 +81,7 @@ async function extractErrorMessage(res) {
  *   error: Error|null,
  *   uploadingFiles: Map<string, { name: string, size: number }>,
  *   list: () => Promise<void>,
- *   upload: (file: File) => Promise<void>,
+ *   upload: (file: File, opts?: { recordId?: string }) => Promise<void>,
  *   download: (attachment: object) => Promise<void>,
  *   downloadAll: () => Promise<void>,
  *   remove: (attachmentId: string) => Promise<void>,
@@ -179,8 +179,14 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   useAttachmentsChanged({ tableName, recordId, source: sourceRef.current }, list);
 
   // ── upload ──────────────────────────────────────────────────────────────
-  const upload = useCallback(async (file) => {
-    if (!file || !tableName || !recordId) return;
+  // `opts.recordId` lets a caller upload against a record it just created but
+  // that hasn't reached this hook's own `recordId` prop yet (ETP-4315 QA
+  // follow-up — a new/unsaved header has no persisted id to attach to, so
+  // AttachmentsTab force-saves the header first and passes the freshly
+  // returned id here instead of waiting for a re-render).
+  const upload = useCallback(async (file, opts = {}) => {
+    const targetRecordId = opts.recordId || recordId;
+    if (!file || !tableName || !targetRecordId) return;
     const tempId = `upload-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     setUploadingFiles((prev) => {
       const next = new Map(prev);
@@ -192,7 +198,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       form.append('file', file);
       // NOTE: apiFetch drops Content-Type for a FormData body — the browser sets the boundary.
       const res = await apiFetch(
-        `/sws/neo/attachments/${tableName}/${recordId}`,
+        `/sws/neo/attachments/${tableName}/${targetRecordId}`,
         { method: 'POST', body: form, token },
       );
       if (!res.ok) {

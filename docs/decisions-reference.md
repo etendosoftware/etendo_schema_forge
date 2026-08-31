@@ -341,7 +341,8 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
     "attachments": {
       "enabled": true,
       "maxSizeMB": 10,
-      "allowedMimeTypes": ["application/pdf", "image/*"]
+      "allowedMimeTypes": ["application/pdf", "image/*"],
+      "saveBeforeAttach": false
     }
   }
 }
@@ -352,6 +353,7 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
 | `enabled` | boolean | `true` | Master toggle. Set to `false` for the same effect as `attachments: false`. |
 | `maxSizeMB` | number | `10` | Max file size enforced client-side before upload. The NEO servlet has its own hard limit of 10 MB (`MultipartConfig`); raising this beyond 10 will surface a server error. |
 | `allowedMimeTypes` | string[] | `undefined` (any) | MIME-type allow-list applied client-side. Supports wildcards like `"image/*"`, `"application/*"`. When omitted, every MIME type is accepted. |
+| `saveBeforeAttach` | boolean | `false` | ETP-4315 QA follow-up. On a brand-new (unsaved) record, `recordId` is the literal string `"new"` — truthy, so the dropzone stays enabled, but an upload against it fails server-side and the file is silently lost. When `true`, dropping a file on an unsaved record force-saves the header first (same `hook.handleSave()` → `primeSaved()` → navigate mechanism `secondaryTabs.requireSavedRecord` already uses), then uploads against the newly persisted id and lands on the saved record with this tab still open. When `false` (default), the tab keeps today's behavior — the underlying bug still exists on any window that hasn't opted in. Enabled today only on `purchase-invoice`, where attaching the supplier's original document before finishing data entry is the expected flow; other windows are a deliberately separate follow-up (see the ETP-4315 comment thread) rather than a blanket auto-save-on-attach for every window. |
 
 **Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
