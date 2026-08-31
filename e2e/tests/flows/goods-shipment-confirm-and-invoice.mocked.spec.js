@@ -434,6 +434,7 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
       linkedOrders: [
         { id: 'order-001', grandTotalAmount: 750, 'currency$_identifier': 'EUR' },
       ],
+      resolvedPriceListId: 'pl-001',
     });
 
     await login(page);
