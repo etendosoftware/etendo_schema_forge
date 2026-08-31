@@ -1,0 +1,260 @@
+/**
+ * ETP-4576 — module-wide request contract for DetailView.jsx.
+ *
+ * The session is a server-side `__Host-go_session` cookie. Every request the
+ * module issues must therefore:
+ *   - send `credentials: 'include'` so the cookie travels;
+ *   - send NO `Authorization` header, on any code path;
+ *   - carry the CSRF proof `X-Go-CSRF` if and only if the method is unsafe
+ *     (POST/PUT/PATCH/DELETE). A safe GET must not carry it.
+ *
+ * Why this suite is structural rather than behavioural: the module has 21 fetch
+ * sites. Six live in exported helper factories and are asserted behaviourally in
+ * their own suites (`DetailView.secondaryTabs`, `.secondaryLineHandlers`,
+ * `.inlineRowUpdate`, `.deleteRow`, `.detailProcesses`); one more — the line
+ * callout POST — is asserted behaviourally in `DetailView.lineCalloutFlow`. The
+ * remaining 14 are inline arrow handlers buried in JSX props of a 5000-line
+ * component; driving each one through the mounted component would need long,
+ * brittle interaction flows. This suite covers all 21 uniformly at the source
+ * level instead, so no site can be missed — and unlike the behavioural suites it
+ * also catches an unexercised branch that still builds a bearer header.
+ *
+ * IMPORTANT — comments are stripped before any matching. The module is being
+ * migrated with explanatory comments that mention "bearer token" and
+ * "Authorization"; a comment must never decide whether these tests pass. Both
+ * block and line comments are removed, and nothing here asserts on comment text.
+ */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const CSRF_HEADER = 'X-Go-CSRF';
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+const RAW_SRC = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'DetailView.jsx'),
+  'utf8',
+);
+
+/** Comment-stripped source. Every assertion below runs against this. */
+const codeOnly = RAW_SRC
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+
+/**
+ * Extracts every `fetch(...)` call from the source with its full argument list,
+ * by walking parenthesis depth from the opening paren. `refetch(`/`prefetch(`
+ * are excluded (the char before `fetch` must not be a word char), while
+ * `globalThis.fetch(` is kept.
+ */
+function extractFetchCalls(src) {
+  const calls = [];
+  let idx = 0;
+  while ((idx = src.indexOf('fetch(', idx)) !== -1) {
+    const before = idx > 0 ? src[idx - 1] : ' ';
+    if (/[A-Za-z0-9_$]/.test(before)) { idx += 'fetch('.length; continue; }
+    let depth = 0;
+    let i = idx + 'fetch'.length;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (c === '(') depth++;
+      else if (c === ')') { depth--; if (depth === 0) break; }
+    }
+    calls.push({
+      line: src.slice(0, idx).split('\n').length,
+      text: src.slice(idx, i + 1),
+    });
+    idx = i + 1;
+  }
+  return calls;
+}
+
+const fetchCalls = extractFetchCalls(codeOnly);
+
+/** A fetch init with no explicit `method` is a GET. */
+function methodOf(call) {
+  const m = call.text.match(/method:\s*['"](\w+)['"]/);
+  return m ? m[1].toUpperCase() : 'GET';
+}
+
+const unsafeCalls = fetchCalls.filter((c) => UNSAFE_METHODS.has(methodOf(c)));
+const safeCalls = fetchCalls.filter((c) => !UNSAFE_METHODS.has(methodOf(c)));
+
+/** Label used in failure messages so a red points at the offending line. */
+const at = (call) => `${methodOf(call)} at DetailView.jsx line ~${call.line}`;
+
+describe('DetailView.jsx — fetch site inventory', () => {
+  // Was 21/16/5 before the epic merge. Two unsafe sites left this module rather
+  // than disappearing: the epic extracted the lines bulk-action bar into
+  // LinesBulkActionBar.jsx and its batch delete into
+  // lib/batchDelete.js#deleteSelectedChildRows. Both were re-migrated to the
+  // shared builders when they were adopted here — they were written on the epic
+  // side, so they had never seen this task and hand-built a bearer header with no
+  // credentials at all.
+  //
+  // Known gap: neither extracted file has a source-reading guard of its own yet,
+  // so this suite no longer watches those two sites. Their behaviour IS covered
+  // (useBulkRowDelete/DetailView.bulkLineDelete exercise them), but the textual
+  // "no bearer header survives" invariant now stops at this module's boundary.
+  it('finds all 19 fetch sites', () => {
+    // Guards the parser itself: if this count drifts, the partitioning below is
+    // no longer covering the whole module and every other test here is suspect.
+    expect(fetchCalls.length).toBe(19);
+  });
+
+  it('splits into 14 unsafe requests and 5 safe GETs', () => {
+    expect(unsafeCalls.length).toBe(14);
+    expect(safeCalls.length).toBe(5);
+    expect(safeCalls.every((c) => methodOf(c) === 'GET')).toBe(true);
+  });
+});
+
+describe('DetailView.jsx — no bearer credential survives', () => {
+  it('builds no Authorization header anywhere in the module', () => {
+    expect(codeOnly).not.toMatch(/Authorization/);
+  });
+
+  it('never mentions Bearer in code', () => {
+    expect(codeOnly).not.toMatch(/Bearer/);
+  });
+
+  for (const call of fetchCalls) {
+    it(`sends no Authorization header — ${at(call)}`, () => {
+      expect(call.text).not.toMatch(/Authorization/);
+      expect(call.text).not.toMatch(/Bearer/);
+    });
+  }
+});
+
+describe('DetailView.jsx — every request carries the session cookie', () => {
+  for (const call of fetchCalls) {
+    it(`sends credentials: 'include' — ${at(call)}`, () => {
+      expect(call.text).toMatch(/credentials:\s*['"]include['"]/);
+    });
+  }
+});
+
+// The header literals are NOT built at the call sites: `lib/sessionHeaders.js`
+// owns the single definition of both builders, so what each site must prove is
+// that it reaches for the RIGHT one. `writeHeaders()` emits whatever proof the
+// active scheme requires on an unsafe method, `jsonHeaders()` never does.
+//
+// ETP-4576 — neither builder takes the credential as an ARGUMENT any more. They
+// read the scheme the preference selected, which is what lets one DB switch flip
+// the whole app between the bearer token and the `__Host-` session cookie. That
+// is why the assertions below are about which builder is called, and never about
+// what is passed to it: a call site that names a credential is, by construction,
+// a call site that can disagree with the active scheme.
+const WRITE_BUILDER = /headers:\s*writeHeaders\(\s*\)/;
+const READ_BUILDER = /headers:\s*jsonHeaders\(\s*\)/;
+
+describe('DetailView.jsx — the write proof only on unsafe methods', () => {
+  for (const call of unsafeCalls) {
+    it(`is handed the write builder — ${at(call)}`, () => {
+      expect(call.text).toMatch(WRITE_BUILDER);
+    });
+  }
+
+  for (const call of safeCalls) {
+    it(`is handed the read builder and no proof — ${at(call)}`, () => {
+      // A safe method must not present the proof: an implementation that
+      // blanket-applies the write builder to all 21 sites has to fail here.
+      expect(call.text).toMatch(READ_BUILDER);
+      expect(call.text).not.toMatch(/writeHeaders/);
+      expect(call.text).not.toContain(CSRF_HEADER);
+    });
+  }
+
+  it('asserts the asymmetry in one place: an unsafe site takes the write builder, a GET site does not', () => {
+    // The two halves of the branch, side by side, so neither a blanket "always
+    // send it" nor a blanket "never send it" implementation can pass.
+    const oneUnsafe = unsafeCalls[0];
+    const oneSafe = safeCalls[0];
+    expect(oneUnsafe.text).toMatch(WRITE_BUILDER);
+    expect(oneSafe.text).toMatch(READ_BUILDER);
+    expect(oneSafe.text).not.toMatch(/writeHeaders/);
+    // Both still send the cookie and neither sends a bearer token.
+    expect(oneUnsafe.text).toMatch(/credentials:\s*['"]include['"]/);
+    expect(oneSafe.text).toMatch(/credentials:\s*['"]include['"]/);
+    expect(oneUnsafe.text).not.toMatch(/Authorization/);
+    expect(oneSafe.text).not.toMatch(/Authorization/);
+  });
+
+  it('passes no argument to either builder, at any site', () => {
+    // The whole point of the preference. A site that hands the builder a
+    // credential has pinned a scheme, and flipping the preference would leave it
+    // sending the wrong one — or nothing at all.
+    expect(codeOnly).not.toMatch(/writeHeaders\(\s*[^)\s]/);
+    expect(codeOnly).not.toMatch(/jsonHeaders\(\s*[^)\s]/);
+  });
+
+  it('imports both builders from the shared module', () => {
+    expect(codeOnly).toMatch(
+      /import\s*\{[^}]*\bjsonHeaders\b[^}]*\bwriteHeaders\b[^}]*\}\s*from\s*['"]@\/lib\/sessionHeaders(\.js)?['"]/,
+    );
+  });
+
+  it('defines no header builder of its own', () => {
+    // Regression guard: 21 sites once repeated the same bearer header inline,
+    // which is exactly how it survived unnoticed. Re-inlining a builder here —
+    // or reviving authHeaders — puts us back there.
+    expect(codeOnly).not.toMatch(/function\s+(writeHeaders|jsonHeaders|authHeaders)\s*\(/);
+    expect(codeOnly).not.toMatch(/const\s+(writeHeaders|jsonHeaders|authHeaders)\s*=/);
+  });
+});
+
+// This describe used to pin the OPPOSITE invariant: that DetailView read the
+// proof from context and threaded it into all five exported helpers, with one
+// test per hand-off. That design existed for a real reason — the helpers are
+// called by 15 test files without mounting the component, so they could not call
+// a hook — and the threading was the only way to get the proof to them.
+//
+// The shared builders removed that constraint: they are plain functions over
+// module state, not hooks, so a helper can call one directly. Which makes the
+// threading not just unnecessary but harmful — five hand-offs are five places a
+// credential can go missing, and the old suite needed five tests to watch them.
+// The invariant below replaces all of it, and is strictly stronger: if nothing in
+// the file names a credential, there is no hand-off left to break.
+describe('DetailView.jsx — nothing here decides how a request authenticates', () => {
+  it('never reads the auth context', () => {
+    expect(codeOnly).not.toMatch(/useAuth\s*\(/);
+  });
+
+  it('does not import useAuth at all', () => {
+    // Not just unused — absent. A live import is an invitation to reintroduce the
+    // read, and an unused one is a Sonar S1128 violation besides.
+    expect(codeOnly).not.toMatch(/\buseAuth\b/);
+  });
+
+  it('names no CSRF proof anywhere in the module', () => {
+    // The single assertion that replaces the five hand-off tests. Verified with an
+    // AST reference count, not this regex alone: 38 references across 3
+    // declarations in this file went to zero.
+    //
+    // Deliberately scoped to csrfToken. A bare `token` IS still threaded through
+    // this file (a `token={token}` prop on SecondaryTableTab and its readers) —
+    // dead plumbing of the same kind, left over from the bearer scheme, which the
+    // builders no longer consult. Removing it is a separate sweep with its own
+    // call-site fan-out, so this test does not claim it is done: widen the
+    // assertion to /\btoken\b/ as the last step of that sweep and it should pass
+    // unchanged.
+    expect(codeOnly).not.toMatch(/\bcsrfToken\b/);
+  });
+
+  it('passes no credential into any of the five exported helper factories', () => {
+    for (const helper of [
+      'getSecondaryRowUpdateHandler',
+      'buildSecondaryLineHandlers',
+      'buildInlineRowUpdateHandler',
+      'buildDeleteRowHandler',
+      'executeDetailProcessImpl',
+    ]) {
+      const decl = codeOnly.match(
+        new RegExp(`(export\\s+)?(async\\s+)?function\\s+${helper}\\s*\\(([\\s\\S]*?)\\)\\s*\\{`),
+      );
+      expect(decl, `expected a declaration for ${helper}`).toBeTruthy();
+      expect(decl[3], `${helper} must not take a credential`).not.toMatch(/\btoken\b/);
+      expect(decl[3], `${helper} must not take a credential`).not.toMatch(/\bcsrfToken\b/);
+    }
+  });
+});
