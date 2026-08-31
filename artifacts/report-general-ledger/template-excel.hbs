@@ -26,6 +26,7 @@
       <th>{{meta.labels.bPartnerId}}</th>
       <th>{{meta.labels.productId}}</th>
       <th>{{meta.labels.projectId}}</th>
+      <th>{{meta.labels.costCenterId}}</th>
     </tr></thead>
     <tbody>
       {{#each rows}}
@@ -39,6 +40,7 @@
         <td>{{lookup this 'bpname'}}</td>
         <td>{{lookup this 'productname'}}</td>
         <td>{{lookup this 'projectname'}}</td>
+        <td>{{lookup this 'costcentername'}}</td>
       </tr>
       {{/each}}
     </tbody>

@@ -11,6 +11,7 @@ import {
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
  *
@@ -82,6 +83,7 @@ export default function NewAccountModal({
   token,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [loadedAccounts, setLoadedAccounts] = useState([]);
   const [accountsFetched, setAccountsFetched] = useState(false);
   const accountRows = allAccounts.length > 0 ? allAccounts : loadedAccounts;
@@ -95,14 +97,12 @@ export default function NewAccountModal({
 
   useEffect(() => {
     if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
-    fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
+    apiFetch('/elementValue?_startRow=0&_endRow=9999')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
       .catch(() => setLoadedAccounts([]))
       .finally(() => setAccountsFetched(true));
-  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, token]);
+  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, apiFetch]);
 
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
@@ -216,12 +216,8 @@ export default function NewAccountModal({
 
     setSaving(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/elementValue`, {
+      const res = await apiFetch('/elementValue', {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),
@@ -243,7 +239,7 @@ export default function NewAccountModal({
     } finally {
       setSaving(false);
     }
-  }, [form, validate, apiBaseUrl, token, onSaved, ui]);
+  }, [form, validate, apiFetch, onSaved, ui]);
 
   const handleOpenChange = useCallback(
     (open) => {

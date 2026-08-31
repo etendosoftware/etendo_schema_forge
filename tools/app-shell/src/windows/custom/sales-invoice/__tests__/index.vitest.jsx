@@ -67,7 +67,7 @@ vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
 
 vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
   useCreateContactModal: vi.fn(() => ({
-    headers: { Authorization: 'Bearer tkn' },
+    headers: { Authorization: 'Bearer tkn', 'Accept-Language': 'es_ES' },
     createContactCtxValue: { open: vi.fn() },
     contactPortal: <div data-testid="contact-portal" />,
   })),

@@ -189,7 +189,17 @@ function renderHtmlLike(templateFile, showEntryDescription) {
   const hb = Handlebars.create();
   const helpersCode = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
   registerReportHelpers(hb, helpersCode);
-  const templateSrc = readFileSync(resolve(ARTIFACT_DIR, templateFile), 'utf8');
+  // ETP-5013 added `{{> document-branding}}` to template.hbs's .report-header —
+  // NOT a native Handlebars partial (see report-api.js's own comment on
+  // expandReportPartials), so it must be string-expanded before compiling or
+  // Handlebars throws "The partial document-branding could not be found".
+  // template-csv.hbs never got the partial, so it needs no expansion.
+  let templateSrc = readFileSync(resolve(ARTIFACT_DIR, templateFile), 'utf8');
+  if (templateFile === 'template.hbs') {
+    const brandingPartial = readFileSync(
+      resolve(import.meta.dirname, '../../../templates/reports/document-branding.hbs'), 'utf8');
+    templateSrc = templateSrc.replace(/\{\{>\s*document-branding\s*\}\}/g, brandingPartial);
+  }
   const template = hb.compile(templateSrc);
   return template({
     css: '',
