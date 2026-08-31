@@ -39,6 +39,10 @@ const BACKEND_ERROR_MAP = {
   // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
   // recursively re-parse the nested placeholder), so it's a stable exact match.
   'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
+  // Core `InvalidCostWhichProduct` AD_MESSAGE. The posting engine can return this with the
+  // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
+  // same actionable retry-later copy as the other transient costing message, not costing internals.
+  'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).

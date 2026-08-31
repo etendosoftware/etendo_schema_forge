@@ -304,6 +304,7 @@ describe('translateBackendError — parameterized "Account could not be found" (
 // capture, unlike the parameterized "Account could not be found" case above.
 describe('translateBackendError — cost not calculated exact match (ETP-4706)', () => {
   const RAW = 'The cost of the product @product@ has not been calculated.';
+  const RAW_CORE_NO_COST = 'There is no cost defined for the product: @Product@ on @Date@';
 
   it('translates the raw (broken, literal @product@) message to en_US', () => {
     const t = (k) => (k === 'backendError.costNotCalculated'
@@ -317,6 +318,17 @@ describe('translateBackendError — cost not calculated exact match (ETP-4706)',
       ? 'No se pudo calcular el costo del producto.'
       : k);
     assert.equal(translateBackendError(RAW, t), 'No se pudo calcular el costo del producto.');
+  });
+
+  it('translates the raw core NoCostDefinedForProduct message with literal placeholders', () => {
+    const t = (k) => (k === 'backendError.costNotCalculated'
+      ? 'No se pudo calcular el costo del producto.'
+      : k);
+    assert.equal(translateBackendError(RAW_CORE_NO_COST, t), 'No se pudo calcular el costo del producto.');
+  });
+
+  it('returns the raw core NoCostDefinedForProduct message unchanged when the key is missing', () => {
+    assert.equal(translateBackendError(RAW_CORE_NO_COST, (k) => k), RAW_CORE_NO_COST);
   });
 });
 
