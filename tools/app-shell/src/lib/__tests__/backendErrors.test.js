@@ -986,3 +986,58 @@ describe('translateBackendError — bank-statement sync result (ETP-4891)', () =
     assert.doesNotMatch(result, /reportó un error/);
   });
 });
+
+// ── ETP-4983: asset (category / search key) uniqueness validation ────────────────
+//
+// AssetHandler (com.etendoerp.go) rejects a duplicate asset category name / asset
+// search key within the same organization with two fixed, non-parameterized English
+// literals — exact-match BACKEND_ERROR_MAP entries, same style as the other simple
+// exact-match cases above (e.g. "no lines to invoice").
+describe('translateBackendError — asset uniqueness validation (ETP-4983)', () => {
+  describe('"There is already an asset category with this name." exact match', () => {
+    const RAW = 'There is already an asset category with this name.';
+
+    it('translates the raw English literal to en_US', () => {
+      const t = (k) => (k === 'backendError.assetGroupNameDuplicate'
+        ? 'There is already an asset category with this name.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'There is already an asset category with this name.');
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.assetGroupNameDuplicate'
+        ? 'Ya existe una categoría de activo con este nombre.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'Ya existe una categoría de activo con este nombre.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('"There is already an asset with this identifier in this organization." exact match', () => {
+    const RAW = 'There is already an asset with this identifier in this organization.';
+
+    it('translates the raw English literal to en_US', () => {
+      const t = (k) => (k === 'backendError.assetSearchKeyDuplicate'
+        ? 'There is already an asset with this identifier in this organization.'
+        : k);
+      assert.equal(
+        translateBackendError(RAW, t),
+        'There is already an asset with this identifier in this organization.',
+      );
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.assetSearchKeyDuplicate'
+        ? 'Ya existe un activo con este identificador en esta organización.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'Ya existe un activo con este identificador en esta organización.');
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+});
