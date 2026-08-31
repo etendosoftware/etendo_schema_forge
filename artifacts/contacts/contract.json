@@ -1,8 +1,8 @@
 {
-  "version": "0.51.0",
+  "version": "0.52.0",
   "generatedAt": "2026-08-27T21:15:30.861Z",
-  "updatedAt": "2026-08-27T21:55:22.090Z",
-  "checksum": "a44dd6c8e52c1935",
+  "updatedAt": "2026-08-31T17:56:46.878Z",
+  "checksum": "c879fcc06c48d13b",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -144,7 +144,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -374,7 +375,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -386,7 +387,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -400,7 +401,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -411,7 +412,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -430,7 +431,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
@@ -5378,7 +5379,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -5608,7 +5610,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5620,7 +5622,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5634,7 +5636,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -5645,7 +5647,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -5664,7 +5666,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
@@ -10939,6 +10941,14 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           }
@@ -17901,6 +17911,14 @@
         "description": "System field 'emailServerUsername' should exist in backend but not frontend for contact"
       },
       {
+        "id": "t-system-field-contact-eTGOIsOwner",
+        "category": "system-field",
+        "entity": "contact",
+        "field": "eTGOIsOwner",
+        "runner": "node",
+        "description": "System field 'eTGOIsOwner' should exist in backend but not frontend for contact"
+      },
+      {
         "id": "t-system-field-contact-fax",
         "category": "system-field",
         "entity": "contact",
@@ -21223,7 +21241,7 @@
       }
     ],
     "summary": {
-      "total": 1153,
+      "total": 1154,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -21235,11 +21253,11 @@
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 516,
+        "system-field": 517,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1153,
+        "node": 1154,
         "junit": 0
       }
     }

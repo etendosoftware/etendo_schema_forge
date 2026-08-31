@@ -894,6 +894,24 @@ export function useEntity(entity, childEntity, {
         );
     }, [editing, selected]);
 
+    /**
+     * The list query minus its row window: the sort plus every filter layer, composed exactly
+     * as `refresh` composes it.
+     *
+     * Exposed (ETP-4997) so a feature that must re-run the SAME server-side query the grid is
+     * showing — the CSV export — reuses this composition instead of re-deriving it. The grid
+     * is filtered and paginated server-side, so exporting `items` would silently export only
+     * the pages the user happened to scroll; and `applyFilterParams` is module-private, so
+     * without this there is no way to reproduce the criteria from outside.
+     */
+    const buildListQuery = useCallback(() => {
+        const colDef = columnDefs[sortColumn] || { key: sortColumn };
+        const queryParams = new URLSearchParams();
+        queryParams.append('_sortBy', resolveBackendSort(colDef, sortDirection));
+        applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
+        return queryParams;
+    }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
+
     const refresh = useCallback(() => {
         startRowRef.current = 0;
         setHasMore(true);
@@ -1676,6 +1694,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }
