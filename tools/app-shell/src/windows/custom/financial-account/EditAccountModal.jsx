@@ -954,7 +954,11 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
       {groups.map((group) => (
         <div key={group.titleKey} className="flex flex-col gap-3">
           <h4 className="text-sm font-medium text-foreground">{ui(group.titleKey)}</h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* ETP-4872 — every group is fixed at exactly 3 fields (see ACCOUNTING_FIELD_GROUPS),
+              so sm:grid-cols-3 fills the row instead of orphaning the 3rd field alone on a
+              half-empty row under sm:grid-cols-2. Same 3-column convention BankConnectionPanel
+              already uses above for its own fixed-3-item row. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {group.fields.map((fieldMeta) => (
               <Field
                 key={fieldMeta.key}
@@ -1157,7 +1161,15 @@ export function EditAccountModal({
           X) as an outside interaction and closes the edit modal instead. Escape is guarded for
           the same reason — it must dismiss the cartel, not the modal underneath it. */}
       <DialogContent
-        className="max-w-[1020px] bg-card"
+        // ETP-4872 — `flex … flex-col` + `max-h-[90vh]` caps the modal's own height and lets the
+        // body below scroll internally instead of growing past the viewport (the Accounting tab
+        // went from 2 to 9 fields and started pushing Save off screen). Deliberately NOT paired
+        // with `overflow-hidden` (unlike the sibling Import/Manual statement modals): the footer's
+        // `FooterSplitButton` menu is a plain absolutely-positioned child, not portaled, and relies
+        // on DialogContent clipping nothing so its dropdown can render past the box edge (see that
+        // component's own doc comment below) — `max-h` alone already bounds the visible layout via
+        // flexbox without clipping that popover.
+        className="flex max-h-[90vh] flex-col max-w-[1020px] bg-card p-0"
         onPointerDownOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onInteractOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onEscapeKeyDown={(e) => {
@@ -1167,7 +1179,7 @@ export function EditAccountModal({
           }
         }}
         data-testid="edit-account-modal">
-        <DialogHeader data-testid="DialogHeader__73027d">
+        <DialogHeader className="px-6 pt-6" data-testid="DialogHeader__73027d">
           <div className="flex items-center justify-between gap-6 pr-8">
             <DialogTitle data-testid="DialogTitle__73027d">{ui('financeAccountsEditTitle')}</DialogTitle>
             {!fields.typeEditable ? (
@@ -1180,79 +1192,84 @@ export function EditAccountModal({
           </div>
         </DialogHeader>
 
-        <AccountFieldsGrid
-          ui={ui}
-          account={account}
-          isCash={isCash}
-          hasBankLink={hasBankLink}
-          fields={fields}
-          token={token}
-          data-testid="AccountFieldsGrid__73027d" />
+        {/* ETP-4872 — the only scrollable region: header and footer stay pinned outside it (same
+            shape as ImportStatementModal's body wrapper) so the 9-field Accounting tab can grow
+            without pushing Cancel/Save out of view. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+          <AccountFieldsGrid
+            ui={ui}
+            account={account}
+            isCash={isCash}
+            hasBankLink={hasBankLink}
+            fields={fields}
+            token={token}
+            data-testid="AccountFieldsGrid__73027d" />
 
-        <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
-          <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
-            {/* ETP-4795: the General tab always renders now — a cash account has no bank
-                connection and no amount/date tolerances (see below), but it DOES have the GL
-                Item Difference concept used to close the difference of a cash-close. */}
-            <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
-              {ui('financeAccountsEditTabGeneral')}
-            </TabsTrigger>
-            {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
-                without the showAccountingFields capability (not just disabled/hidden via CSS). */}
-            {canSeeAccounting ? (
-              <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
-                {ui('financeAccountsEditTabAccounting')}
+          <Tabs value={editTab} onValueChange={setEditTab} className="-mt-3" data-testid="EditAccountTabs__73027d">
+            <TabsList className="w-full border-b border-border-subtle" data-testid="EditAccountTabsList__73027d">
+              {/* ETP-4795: the General tab always renders now — a cash account has no bank
+                  connection and no amount/date tolerances (see below), but it DOES have the GL
+                  Item Difference concept used to close the difference of a cash-close. */}
+              <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
+                {ui('financeAccountsEditTabGeneral')}
               </TabsTrigger>
-            ) : null}
-          </TabsList>
+              {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
+                  without the showAccountingFields capability (not just disabled/hidden via CSS). */}
+              {canSeeAccounting ? (
+                <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
+                  {ui('financeAccountsEditTabAccounting')}
+                </TabsTrigger>
+              ) : null}
+            </TabsList>
 
-          <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
-            {!isCash ? (
-              <>
-                <BankConnectionSection
-                  ui={ui}
-                  bankConnection={bankConnection}
-                  busy={busy}
-                  reauthMessage={reauthMessage}
-                  onConnect={handleConnectClick}
-                  onReconnect={bankConnection.handleReconnect}
-                  connectEligible={canConnectToSaltEdge(account)}
-                  data-testid="BankConnectionSection__73027d" />
+            <TabsContent value={EDIT_TAB_GENERAL} className="pt-4" data-testid="edit-account-tabpanel-general">
+              {!isCash ? (
+                <>
+                  <BankConnectionSection
+                    ui={ui}
+                    bankConnection={bankConnection}
+                    busy={busy}
+                    reauthMessage={reauthMessage}
+                    onConnect={handleConnectClick}
+                    onReconnect={bankConnection.handleReconnect}
+                    connectEligible={canConnectToSaltEdge(account)}
+                    data-testid="BankConnectionSection__73027d" />
 
-                <ReconciliationSettingsSection
-                  ui={ui}
-                  recon={recon}
-                  data-testid="ReconciliationSettingsSection__73027d" />
-              </>
-            ) : null}
+                  <ReconciliationSettingsSection
+                    ui={ui}
+                    recon={recon}
+                    data-testid="ReconciliationSettingsSection__73027d" />
+                </>
+              ) : null}
 
-            <GlItemDifferenceSection
-              ui={ui}
-              glItemDifference={glItemDifference}
-              first={isCash}
-              data-testid="GlItemDifferenceSection__73027d" />
-          </TabsContent>
-
-          {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
-              role without the showAccountingFields capability. */}
-          {canSeeAccounting ? (
-            <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
-              <AccountingConfigurationSection
+              <GlItemDifferenceSection
                 ui={ui}
-                accounting={accounting}
-                accountType={fields.type || account?.type}
-                data-testid="AccountingConfigurationSection__73027d" />
+                glItemDifference={glItemDifference}
+                first={isCash}
+                data-testid="GlItemDifferenceSection__73027d" />
             </TabsContent>
+
+            {/* ETP-4530 — panel is gated the same as its trigger, so it's never mounted for a
+                role without the showAccountingFields capability. */}
+            {canSeeAccounting ? (
+              <TabsContent value={EDIT_TAB_ACCOUNTING} className="pt-4" data-testid="edit-account-tabpanel-accounting">
+                <AccountingConfigurationSection
+                  ui={ui}
+                  accounting={accounting}
+                  accountType={fields.type || account?.type}
+                  data-testid="AccountingConfigurationSection__73027d" />
+              </TabsContent>
+            ) : null}
+          </Tabs>
+
+          {/* ETP-4872 — no accounting field is required anymore, so Save is never blocked by the
+              Contabilidad tab; the cross-tab error summary this used to show (ETP-4530 / BUG-1) is
+              gone along with the requiredness that drove it. */}
+
+          {error ? (
+            <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-error">{error}</p>
           ) : null}
-        </Tabs>
-
-        {/* ETP-4872 — no accounting field is required anymore, so Save is never blocked by the
-            Contabilidad tab; the cross-tab error summary this used to show (ETP-4530 / BUG-1) is
-            gone along with the requiredness that drove it. */}
-
-        {error ? (
-          <p className="text-xs text-[hsl(var(--destructive))]" data-testid="edit-account-error">{error}</p>
-        ) : null}
+        </div>
 
         <EditFooter
           ui={ui}
@@ -1736,7 +1753,10 @@ function EditFooter({
     );
   }
   return (
-    <div className="mt-2 flex items-center justify-between gap-2">
+    // ETP-4872 — px-6/pb-6 replace the padding `DialogContent` used to provide on every side
+    // (now `p-0`, see the modal's own className comment); the top gap to the scrollable body
+    // above comes from DialogContent's own `gap-4` flex spacing instead of the old `mt-2`.
+    <div className="flex items-center justify-between gap-2 px-6 pb-6">
       <div className="flex items-center gap-3">
         {renderArchiveOrDeleteButton()}
         {connected ? (
@@ -1821,7 +1841,8 @@ function FooterButton({ icon: Icon, label, onClick, disabled, danger, testId }) 
  * as an outline pill to match `FooterButton`.
  *
  * The menu drops downward like those variants, just left-aligned to this button. It extends past
- * the modal's bottom edge, which is fine: `DialogContent` sets no overflow clipping.
+ * the modal's bottom edge, which is fine: `DialogContent` gained a `max-h-[90vh]` cap in ETP-4872
+ * but deliberately no `overflow-hidden`, so this non-portaled popover is never clipped.
  */
 function FooterSplitButton({
   icon: Icon, label, onClick, disabled, menuIcon: MenuIcon, menuLabel, onMenuClick, testId,
