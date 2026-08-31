@@ -244,7 +244,7 @@ describe('loadRemoteSurveyConfig', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     await loadRemoteSurveyConfig({ apiBaseUrl: '', token: 'tok', fetchImpl });
     expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/', {
-      headers: { Authorization: 'Bearer tok' },
+      headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' },
     });
   });
 
@@ -255,7 +255,7 @@ describe('loadRemoteSurveyConfig', () => {
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok-123', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
-      headers: { Authorization: 'Bearer tok-123' },
+      headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' },
     });
     expect(getSurveyConfig({}).maxPerMonth).toBe(9);
   });
@@ -304,7 +304,7 @@ describe('submitSurveyResponse', () => {
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/response', {
       method: 'POST',
       headers: {
-        Authorization: 'Bearer tok-123',
+        Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const SELECTOR_PAGE = 50;
 
 function buildSelectPlaceholder(ui, label) {
@@ -40,6 +41,7 @@ export function SelectorInput({
   optionTranslator,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   const catalogOptions = selectorUrl ? [] : getCatalogOptions(catalogs, entityName, field);
   const [serverOptions, setServerOptions] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -71,9 +73,7 @@ export function SelectorInput({
       limit: SELECTOR_PAGE,
       offset,
     });
-    fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
+    apiFetch(url, { baseUrl: '' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         loadingRef.current = false;
@@ -95,7 +95,7 @@ export function SelectorInput({
         loadingRef.current = false;
         if (isMountedRef.current) setFetching(false);
       });
-  }, [selectorUrl, contextKey, token]);
+  }, [selectorUrl, contextKey, token, apiFetch]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually

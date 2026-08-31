@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from './useNeoResource';
 
 /**
@@ -24,21 +24,16 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useStatementActions() {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const post = useCallback(async (action, body) => {
-    const url = `${getApiBase()}/sws/neo/bank-statements?action=${action}`;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(`/sws/neo/bank-statements?action=${action}`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -54,7 +49,7 @@ export function useStatementActions() {
     } finally {
       setBusy(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   const processStatement = useCallback((id) => post('process', { id }), [post]);
 
