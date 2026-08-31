@@ -8,6 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
@@ -52,6 +53,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
   const ui = useUI();
   const gl = dictionary?.genericLabels || {};
   const t = (key) => gl[key] || key;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [editingRow, setEditingRow] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -70,14 +72,13 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     if (!editingRow) return;
     const { id, values } = editingRow;
     setEditingRow(null);
-    const res = await fetch(`${apiBaseUrl}/businessPartner/${id}`, {
+    const res = await apiFetch(`/businessPartner/${id}`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
     onDataMutated?.();
-  }, [editingRow, apiBaseUrl, token, onDataMutated]);
+  }, [editingRow, apiFetch, onDataMutated]);
 
   const handleEditRow = useCallback((row) => {
     const isPerson = isPersonRow(row);
@@ -205,9 +206,8 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     const { row, resolve } = pendingDelete;
     setPendingDelete(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/businessPartner/${row.id}`, {
+      const res = await apiFetch(`/businessPartner/${row.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         toast.error(await extractApiErrorMessage(res));
@@ -219,7 +219,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     } finally {
       resolve();
     }
-  }, [pendingDelete, apiBaseUrl, token, onDataMutated]);
+  }, [pendingDelete, apiFetch, onDataMutated]);
 
   const cancelDelete = useCallback(() => {
     pendingDelete?.resolve();

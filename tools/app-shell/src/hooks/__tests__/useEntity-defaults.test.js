@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
  */
 async function fetchDefaults(apiBaseUrl, entity, token) {
   const headers = {
-    'Authorization': `Bearer ${token}`,
+    'Authorization': `Bearer ${token}`, 'Accept-Language': 'es_ES',
     'Content-Type': 'application/json',
   };
 

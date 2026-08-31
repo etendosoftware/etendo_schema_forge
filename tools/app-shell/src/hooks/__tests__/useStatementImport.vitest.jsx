@@ -1,10 +1,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useStatementImport } from '../useStatementImport.js';
+
+// ETP-5022: useStatementImport (via useStatementFileRequest) now goes through
+// useApiFetch, which reads the token from the real core AuthProvider (or falls
+// back to the ambient session) rather than from a mocked `useAuth`. A mocked
+// `@/auth/AuthContext.jsx` never crosses the `useApiFetch` shim (it imports auth
+// via the core package's own relative path, which the `@/auth` alias does not
+// intercept), so a real AuthProvider seeded with a token is required instead.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
@@ -24,7 +31,7 @@ describe('useStatementImport', () => {
   });
 
   it('returns the initial idle state', () => {
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
     expect(result.current.importing).toBe(false);
     expect(result.current.error).toBeNull();
     expect(typeof result.current.importStatement).toBe('function');
@@ -36,7 +43,7 @@ describe('useStatementImport', () => {
       json: async () => ({ response: { data: { id: 'st-1', lineCount: 3 } } }),
     });
 
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
 
     let res;
     await act(async () => {
@@ -67,7 +74,7 @@ describe('useStatementImport', () => {
       new Promise((r) => { resolve = r; }),
     );
 
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
     let promise;
     act(() => {
       promise = result.current.importStatement({
@@ -87,7 +94,7 @@ describe('useStatementImport', () => {
     globalThis.fetch.mockResolvedValue({
       ok: false, status: 422, text: async () => 'parse error',
     });
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
 
     await act(async () => {
       await expect(result.current.importStatement({
@@ -100,7 +107,7 @@ describe('useStatementImport', () => {
 
   it('propagates a network rejection', async () => {
     globalThis.fetch.mockRejectedValue(new Error('offline'));
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
 
     await act(async () => {
       await expect(result.current.importStatement({
@@ -115,7 +122,7 @@ describe('useStatementImport', () => {
     globalThis.fetch.mockResolvedValue({
       ok: true, json: async () => ({}),
     });
-    const { result } = renderHook(() => useStatementImport());
+    const { result } = renderHook(() => useStatementImport(), { wrapper });
 
     let res;
     await act(async () => {

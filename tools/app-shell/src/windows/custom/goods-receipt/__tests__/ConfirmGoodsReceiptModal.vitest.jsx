@@ -16,7 +16,7 @@ const defaultProps = {
     'currency$_identifier': 'EUR',
   },
   base: '/api',
-  headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' },
+  headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
   recordId: 'receipt-1',
   onConfirmed: vi.fn(),
   onClose: vi.fn(),

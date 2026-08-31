@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-28T15:51:01.937Z",
-  "checksum": "f6d274f65844ac8e",
+  "updatedAt": "2026-08-27T15:11:37.217Z",
+  "checksum": "ae4716072f313613",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -38,7 +38,8 @@
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
-          "ProductType": "Tipo"
+          "ProductType": "Tipo",
+          "Value": "Código"
         }
       },
       "primaryTabs": [
@@ -86,7 +87,7 @@
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "file",
+          "scope": "database",
           "key": [
             "searchKey"
           ]
@@ -101,6 +102,8 @@
             ],
             "label": "Search Key",
             "required": true,
+            "example": "SKU-1001",
+            "column": "Value",
             "type": "string"
           },
           {
@@ -110,6 +113,8 @@
             ],
             "label": "Name",
             "required": true,
+            "example": "Tornillo hexagonal M8",
+            "column": "Name",
             "type": "string"
           },
           {
@@ -118,7 +123,9 @@
               "descripcion",
               "descripción"
             ],
+            "example": "Tornillería inoxidable",
             "label": "Description",
+            "column": "Description",
             "required": false,
             "type": "textarea"
           },
@@ -130,6 +137,8 @@
             ],
             "label": "Product Type",
             "required": false,
+            "example": "Item",
+            "column": "ProductType",
             "type": "enum"
           },
           {
@@ -143,6 +152,8 @@
             "label": "Unit of Measure",
             "matchEntity": "UOM",
             "required": false,
+            "example": "Unidad",
+            "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
           },
@@ -156,7 +167,10 @@
               "precio",
               "pvp"
             ],
-            "label": "Sales Price"
+            "label": "Sales Price",
+            "isNumeric": true,
+            "example": "12,50",
+            "labelKey": "importHeaderSalesPrice"
           },
           {
             "required": false,
@@ -168,7 +182,10 @@
               "coste",
               "costo"
             ],
-            "label": "Purchase Price"
+            "label": "Purchase Price",
+            "isNumeric": true,
+            "example": "8,20",
+            "labelKey": "importHeaderPurchasePrice"
           },
           {
             "required": false,
@@ -182,7 +199,9 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Category"
+            "label": "Category",
+            "example": "Herramientas",
+            "column": "M_Product_Category_ID"
           }
         ]
       },
@@ -2452,7 +2471,8 @@
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
-          "ProductType": "Tipo"
+          "ProductType": "Tipo",
+          "Value": "Código"
         }
       },
       "primaryTabs": [
@@ -2500,7 +2520,7 @@
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "file",
+          "scope": "database",
           "key": [
             "searchKey"
           ]
@@ -2515,6 +2535,8 @@
             ],
             "label": "Search Key",
             "required": true,
+            "example": "SKU-1001",
+            "column": "Value",
             "type": "string"
           },
           {
@@ -2524,6 +2546,8 @@
             ],
             "label": "Name",
             "required": true,
+            "example": "Tornillo hexagonal M8",
+            "column": "Name",
             "type": "string"
           },
           {
@@ -2532,7 +2556,9 @@
               "descripcion",
               "descripción"
             ],
+            "example": "Tornillería inoxidable",
             "label": "Description",
+            "column": "Description",
             "required": false,
             "type": "textarea"
           },
@@ -2544,6 +2570,8 @@
             ],
             "label": "Product Type",
             "required": false,
+            "example": "Item",
+            "column": "ProductType",
             "type": "enum"
           },
           {
@@ -2557,6 +2585,8 @@
             "label": "Unit of Measure",
             "matchEntity": "UOM",
             "required": false,
+            "example": "Unidad",
+            "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
           },
@@ -2570,7 +2600,10 @@
               "precio",
               "pvp"
             ],
-            "label": "Sales Price"
+            "label": "Sales Price",
+            "isNumeric": true,
+            "example": "12,50",
+            "labelKey": "importHeaderSalesPrice"
           },
           {
             "required": false,
@@ -2582,7 +2615,10 @@
               "coste",
               "costo"
             ],
-            "label": "Purchase Price"
+            "label": "Purchase Price",
+            "isNumeric": true,
+            "example": "8,20",
+            "labelKey": "importHeaderPurchasePrice"
           },
           {
             "required": false,
@@ -2596,7 +2632,9 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Category"
+            "label": "Category",
+            "example": "Herramientas",
+            "column": "M_Product_Category_ID"
           }
         ]
       },
@@ -6204,7 +6242,8 @@
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
-        "ProductType": "Tipo"
+        "ProductType": "Tipo",
+        "Value": "Código"
       }
     }
   },
