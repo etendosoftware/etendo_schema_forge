@@ -66,6 +66,26 @@ const ACCOUNTING_FIELDS = [
   ...ACCOUNTING_FIELD_GROUPS.paymentOut,
 ].map((fieldMeta) => fieldMeta.key);
 
+// The "General" group (bank revaluation/fee accounts) only applies to Banco — mirrors the group
+// selection AccountingConfigurationSection renders (see its own `groups` derivation below).
+const ACCOUNTING_FIELDS_ALL_TYPES = [
+  ...ACCOUNTING_FIELD_GROUPS.paymentIn,
+  ...ACCOUNTING_FIELD_GROUPS.paymentOut,
+].map((fieldMeta) => fieldMeta.key);
+
+/**
+ * Accounting field keys that actually belong to `accountType`'s rendered layout (ETP-4872 BUG-1).
+ * `accounting.values` is always keyed on all 9 fields regardless of type — the field state map
+ * itself is never reset when Type changes mid-edit, since a value picked while a since-hidden
+ * group was still visible must not be silently thrown away if the user flips Type back before
+ * Save. This helper is consulted only at save time (`persistAccountEdits`), so a value that
+ * belongs to a group no longer applicable to the type actually being saved is nulled out in the
+ * payload rather than carried over onto a row it doesn't apply to.
+ */
+function accountingFieldsForType(accountType) {
+  return accountType === ACCOUNT_TYPE.BANK ? ACCOUNTING_FIELDS : ACCOUNTING_FIELDS_ALL_TYPES;
+}
+
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
@@ -221,9 +241,17 @@ async function persistAccountEdits({
     await saveImportSettings({ financialAccountId: account.id, ...settings.form });
   }
   if (accounting?.dirty) {
+    // ETP-4872 BUG-1: build the payload against the type actually being saved — the pending
+    // Type selection if it changed this edit, else the account's persisted type — not blindly
+    // off `accounting.values`. A field whose group no longer applies to that type (e.g. a
+    // Banco-only "General" field after switching to Cash pre-Save) is explicitly nulled here so
+    // a stale, now-invisible value is never persisted against the new type's row.
+    const applicableFields = accountingFieldsForType(fields.type || account.type);
     const payload = {};
     ACCOUNTING_FIELDS.forEach((field) => {
-      payload[field] = accounting.values[field]?.value || null;
+      payload[field] = applicableFields.includes(field)
+        ? (accounting.values[field]?.value || null)
+        : null;
     });
     await saveAccountingConfiguration(account.id, payload);
   }
