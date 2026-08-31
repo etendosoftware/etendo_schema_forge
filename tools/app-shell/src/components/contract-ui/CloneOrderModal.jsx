@@ -13,6 +13,44 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // was reachable over a dirty form.
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 
+// Re-reads each freshly cloned header so State 2 can list them with their own documentNo /
+// business partner / status instead of bare ids. A failed or unparseable read degrades to
+// `{ id }` — the row still renders and stays clickable, which beats failing the whole clone
+// after the records were already created server-side.
+async function fetchClonedRecords(apiFetch, headerEntity, newIds) {
+  return Promise.all(newIds.map(id =>
+    apiFetch(`/${headerEntity}/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const raw = json?.response?.data;
+        const record = Array.isArray(raw) ? raw[0] : raw;
+        return { id, ...(record ?? {}) };
+      })
+      .catch(() => ({ id }))
+  ));
+}
+
+// Singular/plural copy for the two states. Kept together (and out of the component) because all
+// three strings switch on the same count and the many-variants share the {count} placeholder.
+function buildCloneTitles(n, ui) {
+  const one = n === 1;
+  return {
+    confirmTitle: one ? ui('cloneConfirmTitleOne') : ui('cloneConfirmTitleMany').replace('{count}', n),
+    confirmSub: one ? ui('cloneConfirmSubtitleOne') : ui('cloneConfirmSubtitleMany').replace('{count}', n),
+    doneTitle: one ? ui('cloneDoneTitleOne') : ui('cloneDoneTitleMany').replace('{count}', n),
+  };
+}
+
+// NEO reports a failed action at one of several depths depending on where it was raised
+// (handler, servlet, DAL), so all four shapes are tried before the generic i18n fallback.
+function extractCloneErrorMessage(json, fallback) {
+  return json?.error?.message
+    || json?.response?.error?.message
+    || json?.response?.message
+    || json?.message
+    || fallback;
+}
+
 function CloneIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -121,9 +159,7 @@ export default function CloneOrderModal({
   const [clonedRecords, setCloned]  = useState([]);
   const [hoveredId, setHoveredId]   = useState(null);
 
-  const confirmTitle   = n === 1 ? ui('cloneConfirmTitleOne')   : ui('cloneConfirmTitleMany').replace('{count}', n);
-  const confirmSub     = n === 1 ? ui('cloneConfirmSubtitleOne') : ui('cloneConfirmSubtitleMany').replace('{count}', n);
-  const doneTitle      = n === 1 ? ui('cloneDoneTitleOne')       : ui('cloneDoneTitleMany').replace('{count}', n);
+  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui);
 
   const handleClone = async () => {
     setPhase('cloning');
@@ -134,7 +170,7 @@ export default function CloneOrderModal({
         const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok) {
-          setError(json?.error?.message || json?.response?.error?.message || json?.response?.message || json?.message || ui(errorKey));
+          setError(extractCloneErrorMessage(json, ui(errorKey)));
           setPhase('confirm');
           return;
         }
@@ -144,18 +180,7 @@ export default function CloneOrderModal({
 
       const result = n > 1 ? newIds : newIds[0];
       if (routePrefix) {
-        const fetched = await Promise.all(
-          newIds.map(id =>
-            apiFetch(`/${headerEntity}/${id}`)
-              .then(r => r.ok ? r.json() : null)
-              .then(json => {
-                const raw = json?.response?.data;
-                const record = Array.isArray(raw) ? raw[0] : raw;
-                return { id, ...(record ?? {}) };
-              })
-              .catch(() => ({ id }))
-          )
-        );
+        const fetched = await fetchClonedRecords(apiFetch, headerEntity, newIds);
         setCloned(fetched);
         setPhase('done');
         onCloned?.(result);

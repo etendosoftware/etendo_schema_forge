@@ -716,6 +716,22 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
+// Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
+// priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
+// the header's, so without this prune the callout would receive businessPartner=null and NEO
+// returns listPrice=0. The addRow flow doesn't hit this because it starts from an empty values
+// object, but existing rows include denormalized parent keys.
+function pruneInheritedParentKeys(row, headerSnapshot) {
+  const cleanRow = { ...row };
+  for (const k of Object.keys(headerSnapshot)) {
+    const v = cleanRow[k];
+    if (v === null || v === undefined || v === '') {
+      delete cleanRow[k];
+    }
+  }
+  return cleanRow;
+}
+
 export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
@@ -728,22 +744,10 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     const coerce = buildRowValueCoercer(fields);
     const payloadValue = coerce(value, fieldKey);
 
-    // Build the row snapshot the callout sees: existing row + the change.
-    // Strip null/empty inherited keys that the parent has set (e.g.
-    // businessPartner, priceList on OrderLine). buildCalloutFormState
-    // by contract does NOT overwrite a row value with the header's,
-    // so without this prune the callout would receive
-    // businessPartner=null and NEO returns listPrice=0. The addRow
-    // flow doesn't hit this because it starts from an empty values
-    // object, but existing rows include denormalized parent keys.
+    // Build the row snapshot the callout sees: existing row (minus the parent's null/empty
+    // inherited keys — see pruneInheritedParentKeys) + the change.
     const headerSnapshot = hook.editing || hook.selected || {};
-    const cleanRow = {...row};
-    for (const k of Object.keys(headerSnapshot)) {
-      const v = cleanRow[k];
-      if (v === null || v === undefined || v === '') {
-        delete cleanRow[k];
-      }
-    }
+    const cleanRow = pruneInheritedParentKeys(row, headerSnapshot);
     const snapshot = {...cleanRow, [fieldKey]: payloadValue};
     if (opts?.identifier !== undefined) {
       snapshot[fieldKey + '$_identifier'] = opts.identifier;
@@ -2535,7 +2539,7 @@ export function DetailView({
   // ETP-5073 / DOC-04 — conflict handling for both line write paths (sidebar save and inline grid
   // autosave). See useLineSaveConflict.js for why it lives outside this file.
   const {
-    buildSelectedLineUrl, discardLineChangesAndReload, raiseLineSaveConflict, raiseRowSaveConflict,
+    buildSelectedLineUrl, raiseLineSaveConflict, raiseRowSaveConflict,
   } = useLineSaveConflict({
     api, detailEntity, apiBaseUrl, apiFetch, token, hook, ui,
     selectedLine, setSelectedLine, setLineEdits, setLineEditColumns,
