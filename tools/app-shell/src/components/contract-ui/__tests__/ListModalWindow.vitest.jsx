@@ -7,7 +7,7 @@
 // these tests stay focused on ListModalWindow behaviour; the children get their
 // own dedicated test files.
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // react-router-dom: capture the navigate mock so we can assert the back button.
@@ -109,12 +109,20 @@ vi.mock('../ListModalToolbarFilter.jsx', () => ({
 }));
 
 // Lightweight EntityForm stub: records props (so tests can read the seeded
-// form `data`, e.g. the auto-priority value, and drive onChange).
+// form `data`, e.g. the auto-priority value, and drive onChange) and renders a
+// marker per received field, so tests can assert which descriptors actually
+// reached the form (accounting-dimension gating).
 let lastEntityFormProps = null;
 vi.mock('../EntityForm.jsx', () => ({
   EntityForm: (props) => {
     lastEntityFormProps = props;
-    return <div data-testid="entity-form" />;
+    return (
+      <div data-testid="entity-form">
+        {(props.fields ?? []).map(f => (
+          <span key={f.key} data-testid={`form-field-${f.key}`} />
+        ))}
+      </div>
+    );
   },
 }));
 
@@ -544,5 +552,207 @@ describe('ListModalWindow — submit button', () => {
     renderWindow({ config: { submitLabelKey: 'matchRuleSubmitCreate' } });
     fireEvent.click(screen.getByTestId('list-modal-new'));
     expect(screen.getByTestId('list-modal-submit')).toHaveTextContent('matchRuleSubmitCreate');
+  });
+});
+
+describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
+  // A dimension descriptor is recognised by its AD column alone, so these fields need no
+  // per-window opt-in: `C_Project_ID` is the project dimension everywhere in Etendo.
+  const DIMENSION_FIELDS = [
+    { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+    { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'dimensions' },
+  ];
+  const DIMENSION_SECTIONS = [
+    { key: 'general', label: 'sectionGeneral' },
+    { key: 'dimensions', label: 'sectionDimensions' },
+  ];
+
+  const isDimensionRequest = (url) => String(url).includes('action=activeDimensions');
+
+  // Route the `?action=activeDimensions` GET to `dimensionsResponse`; everything else gets the
+  // generic ok/{} answer the other suites rely on.
+  function mockFetch(dimensionsResponse) {
+    global.fetch = vi.fn((url) => {
+      if (isDimensionRequest(url)) return Promise.resolve(dimensionsResponse());
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+  }
+
+  function dimensionRequestCount() {
+    return global.fetch.mock.calls.filter(([url]) => isDimensionRequest(url)).length;
+  }
+
+  it('hides a dimension field whose dimension is not active in the Accounting Schema', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    // Project is not among the active dimensions → dropped from the form...
+    await waitFor(() => {
+      expect(screen.queryByTestId('form-field-project')).not.toBeInTheDocument();
+    });
+    // ...while the non-dimension field is untouched.
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('drops the section heading once the section has no visible field left', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('list-modal-section-dimensions')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('list-modal-section-general')).toBeInTheDocument();
+  });
+
+  it('keeps a dimension field whose dimension IS active', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['project', 'product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
+  });
+
+  it('fails open: keeps the dimension field when the dimensions request is not ok', async () => {
+    mockFetch(() => ({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
+  });
+
+  it('fails open: keeps the dimension field when the dimensions request throws', async () => {
+    global.fetch = vi.fn((url) => {
+      if (isDimensionRequest(url)) return Promise.reject(new Error('network down'));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+  });
+
+  it('does not request the active dimensions when no field carries a dimension column', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    // The default FIELDS are Name + Priority — no dimension column, so gating is skipped
+    // entirely and the window costs no extra request.
+    renderWindow();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    expect(dimensionRequestCount()).toBe(0);
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('does not treat the contact column as a gated dimension', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+        { key: 'bpartner', column: 'C_BPartner_ID', type: 'selector', section: 'general' },
+      ],
+      sections: [{ key: 'general', label: 'sectionGeneral' }],
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    // No dimension column at all → no request, and the contact stays visible.
+    expect(dimensionRequestCount()).toBe(0);
+    expect(screen.getByTestId('form-field-bpartner')).toBeInTheDocument();
+  });
+
+  it('hides every dimension field when the tenant has all dimensions switched off', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        ...DIMENSION_FIELDS,
+        { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'dimensions' },
+        { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', section: 'dimensions' },
+      ],
+      sections: DIMENSION_SECTIONS,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('list-modal-section-dimensions')).not.toBeInTheDocument();
+    });
+    for (const key of ['project', 'product', 'costcenter']) {
+      expect(screen.queryByTestId(`form-field-${key}`)).not.toBeInTheDocument();
+    }
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('excludes a hidden dimension field from the required-field gate', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+        { key: 'project', column: 'C_Project_ID', type: 'selector', required: true, section: 'dimensions' },
+      ],
+      sections: DIMENSION_SECTIONS,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('form-field-project')).not.toBeInTheDocument();
+    });
+
+    // Only the visible required field remains, so filling it must enable the submit —
+    // a hidden dimension can never be filled and would otherwise deadlock the modal.
+    await act(async () => {
+      lastEntityFormProps.onChange('name', 'Rule A');
+    });
+    expect(screen.getByTestId('list-modal-submit')).toBeEnabled();
   });
 });

@@ -28,6 +28,8 @@ import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useActiveAccountingDimensions } from '@/hooks/useActiveAccountingDimensions.js';
+import { filterByActiveDimensions, hasDimensionFields } from '@/lib/accountingDimensions.js';
 
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
@@ -162,6 +164,9 @@ function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
  * @param {string}   [props.breadcrumb]
  * @param {Array}    props.columns        grid column descriptors (carry cellType)
  * @param {Array}    props.fields         EntityForm field descriptors (grouped by section)
+ *   Descriptors whose AD `column` is an accounting dimension (`C_Project_ID`,
+ *   `C_Costcenter_ID`, `M_Product_ID`) are rendered only while that dimension is active in the
+ *   Accounting Schema; a section left with no visible field is dropped along with its heading.
  * @param {Array}    props.sections       ordered [{ key, label? }] for modal grouping
  * @param {string[]} props.filters        column keys used by the local search box
  * @param {object}   props.config         { titleKey, editTitleKey, subtitleKey,
@@ -183,7 +188,7 @@ export function ListModalWindow({
   entityLabel,
   breadcrumb,
   columns = [],
-  fields = [],
+  fields: fieldsProp = [],
   sections = [],
   filters = [],
   config = {},
@@ -203,6 +208,19 @@ export function ListModalWindow({
     [apiBaseUrlProp, api],
   );
   const apiFetch = useApiFetch(apiBaseUrl);
+
+  // Accounting-dimension gating: a dimension switched off in the Accounting Schema must not be
+  // offered here either (ETP-4950). Recognised from each descriptor's AD column, so no window
+  // needs to opt in, and skipped entirely — no request — for a window with no dimension fields.
+  const gateDimensions = useMemo(() => hasDimensionFields(fieldsProp), [fieldsProp]);
+  const activeDimensions = useActiveAccountingDimensions(entity, {
+    apiBaseUrl,
+    enabled: gateDimensions,
+  });
+  const fields = useMemo(
+    () => (gateDimensions ? filterByActiveDimensions(fieldsProp, activeDimensions) : fieldsProp),
+    [gateDimensions, fieldsProp, activeDimensions],
+  );
 
   const label = tMenu(entityLabel) || entityLabel || entity;
   const fullBreadcrumb = breadcrumb

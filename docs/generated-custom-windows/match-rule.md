@@ -36,7 +36,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 - **Search** rules by name or pattern (local filter over the list).
 - **Create** a rule via the "Nueva regla" button → modal. The modal groups fields:
   - *General*: Name* (placeholder "Ej. Comisiones bancarias"), Pattern to match* (placeholder "Ej. comisión"), Applies to ("Afecta a"; financial account, defaulting to "Todas las cuentas" when empty), Transaction type (a **user-definable** lookup — searchable selector backed by `ETGO_Transaction_Type`, with an inline **"+ New transaction type"** action that creates a record on the fly via `POST /sws/neo/transaction-type/transactionType` and auto-selects it), Accounting concept ("Concepto contable", `C_GLItem` selector), Concept condition* (Contiene / Empieza con / Regex), Priority*, **Contacto** (`C_BPartner` selector), and **Activa** (checkbox, on by default — new rules are created active).
-  - *Dimensiones* (`matchRuleSectionDimensions`): Project, Cost center, 1st/2nd dimension, Product (`M_Product`).
+  - *Dimensiones* (`matchRuleSectionDimensions`): Project (`C_Project`), Cost center (`C_Costcenter`), Product (`M_Product`). Each selector renders **only while its accounting dimension is active** — see "Accounting-dimension gating (ETP-4950)" below. The 1st/2nd dimension (`User1_ID` / `User2_ID`) columns this section used to list were dropped from the model in ETP-4099 and no longer exist.
 - **Edit** a rule by clicking its row → the same modal pre-filled.
 - **Toggle Active** inline from the grid (no modal) — a `PATCH` that flips the rule on/off.
 - **Delete** a rule from the row actions.
@@ -73,6 +73,61 @@ The rules maintained here are now **consumed by the bank-reconciliation automatc
 - The first (lowest-priority) match wins; the rest rank as alternatives. A match can create a payment (G/L-item based) when the line has no counterpart, and on apply it **increments the rule's `matchCount`** — surfaced read-only as the "Conciliaciones" column here.
 - This window remains catalog-only (create / list / prioritize / toggle / delete); the matching itself runs in the reconciliation surface (see `docs/generated-custom-windows/financial-account.md` → "Automatch engine (T7)").
 
+## Dimension propagation + gating (ETP-4950)
+
+Reported as a bug: a rule with Producto / Proyecto / Centro de costos generated a movement without
+any of them, and the three fields were offered regardless of the Accounting Schema configuration.
+
+**Propagation.** The rule's dimensions now travel all the way to the transaction Automatch creates:
+
+1. `MatchRuleEngine.loadRules` already loaded `c_project_id` / `c_costcenter_id` / `m_product_id`
+   into `MatchRuleEngine.Rule` — that part was never broken.
+2. `AutoMatchSupport.buildRuleGroup` now emits them (`putRuleDimensions`) into **both** the
+   `operations[]` preview entry and the `createPayment` spec, under the wire keys `projectId`,
+   `costcenterId` and `productId` (the same names the New Movement wizard uses). The suggestion
+   modal forwards `createPayment` verbatim, so nothing had to change in the frontend for this.
+3. `ReconciliationHandler.createTransactionForRule` reads those keys and assigns them via
+   `applyRuleDimensions` → `FinancialAccountTransactionsSupport.attachOptional` →
+   `setProject` / `setCostCenter` / `setProduct`. The business partner now goes through the same
+   helper instead of its own hand-rolled null check.
+   `applyRuleDimensions` returns early when the spec carries no non-blank dimension id, so the
+   tenant's dimension configuration is only queried when something actually needs it — a rule with
+   no dimensions, and the difference postings in `ReconciliationDifferenceSupport` (the other caller
+   of `createTransactionForRule`), issue no extra query at all.
+
+The rule's **transaction type** (`ETGO_Transaction_Type_ID`) is deliberately NOT propagated: there
+is no column on `FIN_FINACC_TRANSACTION` to hold it — the movement's own type is `TRXTYPE`
+(`BPD`/`BPW`), derived from the sign of the amount. It stays a catalog attribute of the rule. Known
+gap, decided out of scope for ETP-4950.
+
+**Gating.** A dimension switched off in the Esquema Contable disappears from the rule form *and* is
+never assigned to the generated movement:
+
+- Backend source of truth: `AccountingDimensionsSupport.activeHeaderDimensions*`, which resolves the
+  header-level set for document base type `FAT` — the same set the New Movement wizard renders
+  (`financial-account.md` → "Dimensiones contables"), which is correct because the movement Automatch
+  generates *is* a `FAT` document. It picks between the two configuration sources depending on
+  `AD_Client.Acctdim_Centrally_Maintained` (`C_AcctSchema_Element` when `'N'`, Core's
+  `DimensionDisplayUtility.getAccountingDimensionConfiguration` when `'Y'`), because reading
+  `C_AcctSchema_Element` directly is a no-op for centrally-maintained tenants — gap K1 / ETP-4854.
+- Read endpoint: `GET /sws/neo/match-rule/etgoMatchRuleHeader?action=activeDimensions` →
+  `{ "response": { "data": { "dimensions": ["project", "costcenter", "product", ...] } } }`, served by
+  `MatchRuleHandler.buildActiveDimensions()`. No AD registration needed — same `?action=` pattern as
+  `ReconciliationHandler`.
+- Frontend: generic, in `ListModalWindow`. Dimension fields are recognised from each descriptor's AD
+  `column` (`lib/accountingDimensions.js`), the active set comes from
+  `hooks/useActiveAccountingDimensions.js`, and a section left with no visible field is dropped
+  together with its heading. No `decisions.json` change, no `make regen`, no generator change — the
+  generated `fields` array already carries `column`.
+- Write path: `MatchRuleHandler.stripInactiveDimensions` removes an inactive dimension from the
+  request body instead of rejecting it with a 400 — the clone and edit flows pre-fill from a stored
+  row that may still hold a now-inactive value, and a hard error there would be a false alarm.
+- **A value stored on a rule whose dimension was later switched off is ignored, never cleared.** The
+  movement is generated without it and the rule starts applying it again if the dimension is
+  re-enabled.
+- Everything **fails open**: an unreadable accounting configuration leaves every field visible and
+  simply assigns no dimensions, rather than hiding fields or failing the reconciliation.
+
 ## Gap assessment
 
 - Inline editing of `priority` directly in the grid is carried as a contract flag (`inlineEdit`) but the primary edit path verified here is the modal; treat in-grid priority editing as future behavior.
@@ -86,6 +141,7 @@ The rules maintained here are now **consumed by the bank-reconciliation automatc
 4. Create two rules with the same Priority and the same "Afecta a" account and confirm **both are accepted** (priority is a ranking, not a unique key).
 5. Toggle a rule's Active switch in the grid and confirm it persists after refresh (PATCH, no modal). Creating a rule with the modal "Activa" check on must persist as active.
 6. Edit a rule by clicking its row, change a dimension under "Dimensiones" (e.g. Product), save, and confirm the change persists.
+6b. Deactivate the Proyecto dimension in the Esquema Contable (General Ledger Configuration → Dimensiones) and reload `/match-rule`: the Proyecto selector must be gone from both the create and the edit modal, while Producto and Centro de coste stay. Deactivate all three and the whole "Dimensiones" section (heading included) must disappear.
 7. Hover a row and click the **clone** (Copy) action: the create modal opens pre-filled with the source rule's values (same priority included); save creates an independent copy.
 
 ## Automated evidence
@@ -97,4 +153,9 @@ The rules maintained here are now **consumed by the bank-reconciliation automatc
 - `cli/config/regen-windows.json` — registry entry added by ETP-4658.
 - `tools/app-shell/src/components/contract-ui/ListModalWindow.jsx` + `__tests__/ListModalWindow.vitest.jsx` — the generic component and its tests.
 - `cli/test/generate-frontend-list-modal.test.js` + `cli/test/generate-contract-list-modal.test.js` — generator regression tests.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java` — the validation pre-hook.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java` — the validation pre-hook,
+  the `?action=activeDimensions` read endpoint and `stripInactiveDimensions` (ETP-4950).
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AccountingDimensionsSupport.java` — the single
+  source of truth for active accounting dimensions, shared with `FinancialAccountTransactionsHandler`.
+- `tools/app-shell/src/lib/accountingDimensions.js` + `tools/app-shell/src/hooks/useActiveAccountingDimensions.js`
+  — the generic column→dimension mapping and the fail-open fetch used by `ListModalWindow`.
