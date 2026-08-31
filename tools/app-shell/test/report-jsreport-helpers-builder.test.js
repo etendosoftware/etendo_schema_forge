@@ -361,6 +361,26 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       [[{ category: 'ASSET', amount: null }, { category: 'ASSET', amount: '2' }], 'AS', 'amount'],
       [[{ category: 'ASSET', amount: 1 }], 'ZZ', 'amount'],
     ],
+    // ETP-5013: docbasetype+isreturn based document-type translation. Covers a
+    // known docbasetype in both locales, the MMR/MMR_RETURN and MMS/MMS_RETURN
+    // splits (same docbasetype, different isreturn), the no-docbasetype fallback
+    // (Journal — never a dictionary key), and an unknown-docbasetype fallback.
+    translateDocType: [
+      ['ARI', 'N', 'AR Invoice', 'en_US'],
+      ['ARI', 'N', 'AR Invoice', 'es_ES'],
+      ['MMR', 'N', 'MM Receipt', 'en_US'],
+      ['MMR', 'Y', 'RTV Shipment', 'en_US'],
+      ['MMR', 'N', 'MM Receipt', 'es_ES'],
+      ['MMR', 'Y', 'RTV Shipment', 'es_ES'],
+      ['MMS', 'N', 'MM Shipment', 'en_US'],
+      ['MMS', 'Y', 'RFC Receipt', 'en_US'],
+      ['MMS', 'N', 'MM Shipment', 'es_ES'],
+      ['MMS', 'Y', 'RFC Receipt', 'es_ES'],
+      [null, null, 'Journal', 'es_ES'],
+      [null, null, 'Journal', 'en_US'],
+      ['ZZZ', 'N', 'Custom Type', 'es_ES'],
+      ['ZZZ', 'N', 'Custom Type', 'en_US'],
+    ],
   };
 
   it('covers every parity-checked helper with at least one case (no silently untested helper)', () => {

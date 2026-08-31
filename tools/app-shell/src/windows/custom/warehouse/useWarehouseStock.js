@@ -1,22 +1,18 @@
 import { useState, useEffect } from 'react';
 import { aggregateProducts } from './warehouseUtils';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-async function fetchJson(url, token) {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+async function fetchJson(apiFetch, path, token) {
+  const res = await apiFetch(path, { token });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const json = await res.json();
   return json?.response?.data ?? json?.data ?? [];
 }
 
 /** Fetch translated UoM names from C_UOM_TRL via the binContents selector. */
-async function fetchUomNames(apiBaseUrl, token) {
+async function fetchUomNames(apiFetch, token) {
   try {
-    const data = await fetchJson(
-      `${apiBaseUrl}/binContents/selectors/uOM?_startRow=0&_endRow=500`,
-      token,
-    );
+    const data = await fetchJson(apiFetch, '/binContents/selectors/uOM?_startRow=0&_endRow=500', token);
     const map = {};
     for (const item of data) {
       if (item.id) map[item.id] = item.identifier ?? item.name ?? item.id;
@@ -36,6 +32,7 @@ export { aggregateProducts } from './warehouseUtils';
  */
 export function useWarehouseStock(warehouseId, token, apiBaseUrl, refreshKey = 0) {
   const [state, setState] = useState({ loading: true, error: null, products: [], transactions: [] });
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     // No saved warehouse yet: there is no stock to load, so drop out of the
@@ -50,11 +47,8 @@ export function useWarehouseStock(warehouseId, token, apiBaseUrl, refreshKey = 0
     (async () => {
       try {
         const [bins, uomMap] = await Promise.all([
-          fetchJson(
-            `${apiBaseUrl}/storageBin?parentId=${warehouseId}&_startRow=0&_endRow=100`,
-            token,
-          ),
-          fetchUomNames(apiBaseUrl, token),
+          fetchJson(apiFetch, `/storageBin?parentId=${warehouseId}&_startRow=0&_endRow=100`, token),
+          fetchUomNames(apiFetch, token),
         ]);
 
         if (bins.length === 0) {
@@ -64,10 +58,10 @@ export function useWarehouseStock(warehouseId, token, apiBaseUrl, refreshKey = 0
 
         const [allContents, allTxs] = await Promise.all([
           Promise.all(bins.map(b =>
-            fetchJson(`${apiBaseUrl}/binContents?parentId=${b.id}&_startRow=0&_endRow=1000`, token)
+            fetchJson(apiFetch, `/binContents?parentId=${b.id}&_startRow=0&_endRow=1000`, token)
           )).then(results => results.flat()),
           Promise.all(bins.map(b =>
-            fetchJson(`${apiBaseUrl}/productTransactions?parentId=${b.id}&_startRow=0&_endRow=2000`, token)
+            fetchJson(apiFetch, `/productTransactions?parentId=${b.id}&_startRow=0&_endRow=2000`, token)
           )).then(results => results.flat()),
         ]);
 
@@ -83,7 +77,7 @@ export function useWarehouseStock(warehouseId, token, apiBaseUrl, refreshKey = 0
     })();
 
     return () => { cancelled = true; };
-  }, [warehouseId, token, apiBaseUrl, refreshKey]);
+  }, [warehouseId, token, apiFetch, refreshKey]);
 
   return state;
 }

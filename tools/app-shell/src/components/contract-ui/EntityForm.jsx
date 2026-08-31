@@ -10,7 +10,7 @@ import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { ImageField } from './ImageField.jsx';
@@ -175,6 +175,7 @@ function SearchSelectField({ f, value, displayValue, onChange, formData, resolve
  */
 function DependentSelect({ field, value, displayValue, onChange, catalogs, formData, resolvedLabel, selectorUrl, selectorContext, token }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   const [dynamicOptions, setDynamicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -196,9 +197,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       ...selectorContext,
       [field.dependsOn?.filterKey]: parentValue,
     });
-    fetch(url, {
-      headers: buildHeaders(token),
-    })
+    apiFetch(url, { baseUrl: '', token })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.items) {
@@ -223,7 +222,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         setDynamicOptions([]);
       })
       .finally(() => setLoading(false));
-  }, [parentValue, selectorUrl, contextKey, token, field.dependsOn?.filterKey]);
+  }, [parentValue, selectorUrl, contextKey, token, apiFetch, field.dependsOn?.filterKey]);
 
   // If the current value isn't in options (real data from existing record), add it
   const hasValue = value && dynamicOptions.some(opt => opt.id === value);

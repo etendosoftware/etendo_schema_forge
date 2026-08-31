@@ -57,6 +57,12 @@ const ONE_LINE = {
  * The `state` object lets the test toggle which step fails between attempts
  * and counts how many times each endpoint was hit.
  */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installConfirmMocks(page, state) {
   // Header GET/PATCH — shared helper (see confirmMocks.js for the ETP-4468
   // rationale on why the PATCH/PUT echo is required to keep ConfirmModal
@@ -69,7 +75,7 @@ async function installConfirmMocks(page, state) {
 
   // Lines GET — return a single line so the modal computes a non-empty count
   await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

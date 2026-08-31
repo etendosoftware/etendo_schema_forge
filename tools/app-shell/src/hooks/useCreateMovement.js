@@ -1,16 +1,11 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /** POSTs a JSON payload to a financial-account-transactions action and returns data. */
-async function postAction(token, action, payload) {
-  const url = `${getApiBase()}/sws/neo/financial-account-transactions?action=${action}`;
-  const res = await fetch(url, {
+async function postAction(apiFetch, action, payload) {
+  const res = await apiFetch(`/sws/neo/financial-account-transactions?action=${action}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -24,7 +19,7 @@ async function postAction(token, action, payload) {
 
 /** Wraps a POST action into a `{ run, busy, error }` triple. */
 function usePostAction(action) {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -32,14 +27,14 @@ function usePostAction(action) {
     setBusy(true);
     setError(null);
     try {
-      return await postAction(token, action, payload);
+      return await postAction(apiFetch, action, payload);
     } catch (err) {
       setError(err);
       throw err;
     } finally {
       setBusy(false);
     }
-  }, [token]);
+  }, [apiFetch, action]);
 
   return { run, busy, error };
 }
