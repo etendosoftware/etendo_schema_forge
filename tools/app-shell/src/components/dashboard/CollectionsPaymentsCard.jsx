@@ -39,13 +39,16 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
   const { toCollect = { count: 0, amount: 0 }, toPay = { count: 0, amount: 0 } } = pendingAmounts;
   const hasNoData = toCollect.count === 0 && toPay.count === 0;
 
+  // ETP-5012: this card shows the TOTAL pending balance (any due date), so it
+  // must drill down into 'pending', not the now-stricter 'overdue' filter —
+  // otherwise the list opened here would show fewer rows than this count.
   const toCollectTarget = resolveDashboardNavigation(
-    toCollect.navigation ?? createDashboardNavigation({ type: 'list', window: 'sales-invoice', filter: 'overdue' })
-  ) || '/sales-invoice?filter=overdue';
+    toCollect.navigation ?? createDashboardNavigation({ type: 'list', window: 'sales-invoice', filter: 'pending' })
+  ) || '/sales-invoice?filter=pending';
 
   const toPayTarget = resolveDashboardNavigation(
-    toPay.navigation ?? createDashboardNavigation({ type: 'list', window: 'purchase-invoice', filter: 'overdue' })
-  ) || '/purchase-invoice?filter=overdue';
+    toPay.navigation ?? createDashboardNavigation({ type: 'list', window: 'purchase-invoice', filter: 'pending' })
+  ) || '/purchase-invoice?filter=pending';
 
   return (
     <DashboardCard
