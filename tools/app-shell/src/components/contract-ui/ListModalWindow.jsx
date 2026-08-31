@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { PillToggle } from '@/components/PillToggle';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from '@/hooks/useNeoResource.js';
 import { useUI, useMenuLabel, useLabel } from '@/i18n';
@@ -30,6 +31,8 @@ import { applyConditions } from '@/windows/custom/financial-account/advancedFilt
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useActiveAccountingDimensions } from '@/hooks/useActiveAccountingDimensions.js';
 import { filterByActiveDimensions, hasDimensionFields } from '@/lib/accountingDimensions.js';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
@@ -195,6 +198,7 @@ export function ListModalWindow({
   api,
   token: tokenProp,
   apiBaseUrl: apiBaseUrlProp,
+  window: windowConfig,
 }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -304,6 +308,54 @@ export function ListModalWindow({
   const [deleting, setDeleting] = useState(false);
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
+
+  // ETP-4950 — the generated page passes `window={{ ...,  readOnly: true }}` when the role's
+  // AD_Window_Access tier for this window is "read-only". This component used to drop that prop,
+  // so a read-only role still saw New / edit / clone / delete and the Active toggle, and only
+  // found out on click when NEO rejected the write (NeoAccessHelper gates write methods on
+  // AD_Window_Access.IsReadWrite). Honour it here instead.
+  const readOnly = Boolean(windowConfig?.readOnly);
+
+  // --- Multi-select + bulk delete ------------------------------------------
+  // Same affordance every other list in the app has (Cuentas, Movimientos, Extractos, and
+  // ListView's own grid): a checkbox column plus the floating "N selected" pill. Read-only roles
+  // get no selection at all — there is no action they could take with it.
+  const selectable = !readOnly;
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  // Selection is scoped to the rows currently visible: changing a filter or the search must not
+  // leave invisible rows silently checked and then delete them.
+  const visibleIds = useMemo(() => data.map((row) => row?.id).filter(Boolean), [data]);
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(visibleIds);
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleIds]);
+
+  const allSelected = visibleIds.length > 0 && selectedIds.size === visibleIds.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => (prev.size === visibleIds.length ? new Set() : new Set(visibleIds)));
+  }, [visibleIds]);
+
+  const selectedRows = useMemo(
+    () => data.filter((row) => selectedIds.has(row?.id)),
+    [data, selectedIds],
+  );
+
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -460,6 +512,25 @@ export function ListModalWindow({
     }
   }, [deletingRow, entity, apiFetch, errorMessage, reload, ui]);
 
+  // Bulk delete of the checked rows. Reuses the shared hook every other grid uses, so the confirm
+  // dialog, the parallel DELETEs and the three-outcome toast (all / partial / none) behave
+  // identically here. On a partial failure only the rows that failed stay checked.
+  const applyBulkDeleteOutcome = useCallback((succeeded, failed) => {
+    if (succeeded.length > 0) reload();
+    if (failed.length === 0) {
+      clearSelection();
+    } else {
+      setSelectedIds(new Set(failed.map((row) => row.id)));
+    }
+  }, [reload, clearSelection]);
+
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity,
+    token,
+    onSuccess: applyBulkDeleteOutcome,
+  });
+
   const handleBack = useCallback(() => {
     if (config?.backTo) navigate(config.backTo);
     else navigate(-1);
@@ -550,6 +621,7 @@ export function ListModalWindow({
             onClear={clearSort}
             isDefaultSort={isDefaultSort}
             data-testid="ListSortPopover__19eda5" />
+          {!readOnly && (
           <button
             type="button"
             onClick={openCreate}
@@ -561,6 +633,7 @@ export function ListModalWindow({
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
           </button>
+          )}
         </div>
       </div>
       {/* Dismissible banner explaining how the rows are evaluated */}
@@ -574,6 +647,15 @@ export function ListModalWindow({
           data-testid="InfoBanner__19eda5">
           {ui(config.bannerKey)}
         </InfoBanner>
+      )}
+      {/* Floating "N selected" pill (portals to the viewport via SelectionToolbar), so it does not
+          take a slot in this flow. */}
+      {selectable && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={() => requestBulkDelete(selectedRows)} />
       )}
       {/* Grid */}
       {loading && allRows.length === 0 ? (
@@ -594,12 +676,19 @@ export function ListModalWindow({
             onSort={toggleSort}
             tMenu={tMenu}
             ui={ui}
-            onEdit={openEdit}
-            onClone={config.allowClone ? openClone : undefined}
-            onDelete={(row) => setDeletingRow(row)}
+            onEdit={readOnly ? undefined : openEdit}
+            onClone={!readOnly && config.allowClone ? openClone : undefined}
+            onDelete={readOnly ? undefined : (row) => setDeletingRow(row)}
             deletingId={deleting ? deletingRow?.id : null}
             onToggle={handleToggle}
             savingToggles={savingToggles}
+            readOnly={readOnly}
+            selectable={selectable}
+            selectedIds={selectedIds}
+            allSelected={allSelected}
+            someSelected={someSelected}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
             data-testid="ListModalGrid__19eda5" />
         </div>)
       )}
@@ -689,6 +778,8 @@ export function ListModalWindow({
         onConfirm={handleDeleteConfirmed}
         ui={ui}
         data-testid="DeleteConfirmDialog__19eda5" />
+      {/* Bulk-delete confirm dialog owned by useBulkRowDelete — the host only has to render it. */}
+      {bulkDeleteDialog}
     </div>
   );
 }
@@ -789,9 +880,14 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
 function ListModalGrid({
   columns, data, sortKey, sortDirection, onSort, tMenu, ui,
   onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
+  readOnly = false, selectable = false, selectedIds, allSelected, someSelected,
+  onToggleSelect, onToggleSelectAll,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
   const isEmpty = !data || data.length === 0;
+  const hasRowActions = Boolean(onEdit || onClone || onDelete);
+  // columns + the leading checkbox + the trailing actions column, whichever are present.
+  const colSpan = columns.length + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   return (
     // [&>div]:overflow-visible cancels the base Table's inner overflow-auto so the
@@ -802,6 +898,16 @@ function ListModalGrid({
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
             data-testid="TableRow__19eda5">
+            {selectable && (
+              <TableHead className="w-10 px-3" data-testid="list-modal-select-all-head">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label={ui('selectAll')}
+                  data-testid="list-modal-select-all" />
+              </TableHead>
+            )}
             {columns.map((col) => (
               <TableHead
                 key={col.key}
@@ -821,19 +927,19 @@ function ListModalGrid({
               </TableHead>
             ))}
             {/* Actions column header */}
-            <TableHead
-              className={cn(actionsColClass, 'p-0')}
-              aria-hidden="true"
-              data-testid="TableHead__19eda5" />
+            {hasRowActions && (
+              <TableHead
+                className={cn(actionsColClass, 'p-0')}
+                aria-hidden="true"
+                data-testid="TableHead__19eda5" />
+            )}
           </TableRow>
         </TableHeader>
         <TableBody data-testid="TableBody__19eda5">
           {isEmpty ? (
             <TableRow className="hover:bg-transparent" data-testid="TableRow__19eda5">
               <TableCell
-                // columns + the trailing actions column. Was +2 while a drag-handle column led
-                // every row; that column is gone (ETP-4921).
-                colSpan={columns.length + 1}
+                colSpan={colSpan}
                 className="py-12 text-center text-[hsl(var(--muted-foreground))]"
                 data-testid="list-modal-empty"
               >
@@ -847,6 +953,15 @@ function ListModalGrid({
               data-testid={`list-modal-row-${row.id}`}
               className="group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
             >
+              {selectable && (
+                <TableCell className="w-10 px-3" data-testid={`list-modal-select-cell-${row.id}`}>
+                  <Checkbox
+                    checked={selectedIds?.has(row.id) ?? false}
+                    onChange={() => onToggleSelect?.(row.id)}
+                    aria-label={ui('selectRow')}
+                    data-testid={`list-modal-select-${row.id}`} />
+                </TableCell>
+              )}
               {columns.map((col) => (
                 <TableCell
                   key={col.key}
@@ -858,22 +973,26 @@ function ListModalGrid({
                     tMenu={tMenu}
                     ui={ui}
                     onToggle={onToggle}
+                    readOnly={readOnly}
                     savingToggle={savingToggles[`${row.id}:${col.key}`]}
                     data-testid="ListModalCell__19eda5" />
                 </TableCell>
               ))}
               {/* Hover row actions */}
+              {hasRowActions && (
               <TableCell className={cn(actionsColClass, 'p-0')} data-testid="TableCell__19eda5">
                 <div className={cn('flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100', actionsColClass)}>
+                  {onEdit && (
                   <button
                     type="button"
-                    onClick={() => onEdit?.(row)}
+                    onClick={() => onEdit(row)}
                     aria-label={ui('edit')}
                     data-testid={`list-modal-edit-${row.id}`}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <Pencil className="h-4 w-4" data-testid="Pencil__19eda5" />
                   </button>
+                  )}
                   {onClone && (
                     <button
                       type="button"
@@ -901,6 +1020,7 @@ function ListModalGrid({
                   )}
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

@@ -19,7 +19,10 @@ vi.mock('react-router-dom', () => ({
 // i18n: useUI echoes the key (so banner / titles assert against the key name);
 // useMenuLabel echoes the label.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // Echoes the key. When the caller interpolates a `count` (the bulk-delete selection
+  // bar's "N selected" pill, the bulk confirm dialog) the count is appended, so the
+  // selection counter is assertable without shipping real translations into the test.
+  useUI: () => (key, params) => (params?.count != null ? `${key} (${params.count})` : key),
   useMenuLabel: () => (label) => label,
   // useLabel echoes the column name so footer-toggle label assertions are predictable.
   useLabel: () => (column) => column,
@@ -44,7 +47,7 @@ vi.mock('@/lib/backendErrors.js', () => ({
 }));
 
 // toast: collect calls.
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 // useNeoResource is driven per-test via this mutable holder.
 const neoState = { data: [], loading: false, reload: vi.fn() };
@@ -67,11 +70,12 @@ vi.mock('@/lib/utils', () => ({
 // onToggle(row, col, true) so the inline-toggle PATCH path can be asserted
 // without pulling in the real Switch / resolveIdentifier UI deps.
 vi.mock('../listModalCells.jsx', () => ({
-  ListModalCell: ({ row, col, onToggle }) =>
+  ListModalCell: ({ row, col, onToggle, readOnly }) =>
     col.toggle || col.cellType === 'toggle' ? (
       <button
         type="button"
         data-testid={`cell-toggle-${col.key}-${row.id}`}
+        data-readonly={String(!!readOnly)}
         onClick={() => onToggle?.(row, col, true)}
       >
         toggle
@@ -754,5 +758,250 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
       lastEntityFormProps.onChange('name', 'Rule A');
     });
     expect(screen.getByTestId('list-modal-submit')).toBeEnabled();
+  });
+});
+
+// --- Multi-select + bulk delete helpers ------------------------------------
+//
+// `Checkbox` (app-shell-core) puts the forwarded `data-testid` on its <label> and the
+// state (`checked` / `aria-checked="mixed"`) on the sr-only <input> inside it, so every
+// assertion and every click goes through that inner input.
+function checkboxInput(testId) {
+  return screen.getByTestId(testId).querySelector('input');
+}
+
+function selectAllInput() {
+  return checkboxInput('list-modal-select-all');
+}
+
+function rowSelectInput(id) {
+  return checkboxInput(`list-modal-select-${id}`);
+}
+
+// Text of the floating selection pill, or null when the pill is not rendered.
+// `BulkDeleteSelectionBar` renders through `SelectionToolbar`, which is `visible`
+// only while count > 0 — so a null here means "nothing is selected".
+function selectionPillText() {
+  return screen.queryByTestId('bulk-delete-selection-count')?.textContent ?? null;
+}
+
+function deleteCalls() {
+  return global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
+}
+
+const TWO_ROWS = [
+  { id: 'ROW-1', name: 'Alpha rule', active: true },
+  { id: 'ROW-2', name: 'Beta rule', active: true },
+];
+
+describe('ListModalWindow — multi-select + bulk delete', () => {
+  it('renders the checkbox column and shows the selection pill with the checked count', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    // Header checkbox + one per row.
+    expect(screen.getByTestId('list-modal-select-all-head')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-cell-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-ROW-2')).toBeInTheDocument();
+
+    // Nothing checked yet → no floating pill.
+    expect(selectionPillText()).toBeNull();
+
+    fireEvent.click(rowSelectInput('ROW-1'));
+
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(rowSelectInput('ROW-2')).not.toBeChecked();
+    expect(selectionPillText()).toBe('selected (1)');
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeInTheDocument();
+  });
+
+  it('select-all checks every visible row, and clicking it again clears the selection', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(rowSelectInput('ROW-2')).toBeChecked();
+    expect(selectAllInput()).toBeChecked();
+    expect(selectionPillText()).toBe('selected (2)');
+
+    fireEvent.click(selectAllInput());
+    expect(rowSelectInput('ROW-1')).not.toBeChecked();
+    expect(rowSelectInput('ROW-2')).not.toBeChecked();
+    expect(selectionPillText()).toBeNull();
+  });
+
+  it('select-all only spans the rows the active search leaves visible', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ filters: ['name'] });
+
+    fireEvent.change(screen.getByTestId('list-modal-search'), { target: { value: 'Alpha' } });
+    expect(rowCount()).toBe(1);
+
+    fireEvent.click(selectAllInput());
+    // Only the visible row got checked — the filtered-out one is not silently selected.
+    expect(selectionPillText()).toBe('selected (1)');
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(screen.queryByTestId('list-modal-select-ROW-2')).not.toBeInTheDocument();
+  });
+
+  it('puts the header checkbox in the indeterminate state when only some rows are checked', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    // 1 of 2 → someSelected → aria-checked="mixed" on the inner input.
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'mixed');
+
+    // 2 of 2 → allSelected → no longer indeterminate.
+    fireEvent.click(rowSelectInput('ROW-2'));
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'true');
+
+    // 0 of 2 → neither.
+    fireEvent.click(selectAllInput());
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('confirming the bulk delete issues one DELETE per selected row and reloads the list', async () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    });
+    // The confirm dialog is owned by useBulkRowDelete and rendered by the window.
+    expect(screen.getByTestId('bulk-delete-confirm')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+    });
+
+    const urls = deleteCalls().map(([url]) => url).sort();
+    expect(urls).toEqual([
+      `${API_BASE}/${ENTITY}/ROW-1`,
+      `${API_BASE}/${ENTITY}/ROW-2`,
+    ]);
+    await waitFor(() => expect(neoState.reload).toHaveBeenCalled());
+    // Everything succeeded → the selection is cleared and the pill disappears.
+    await waitFor(() => expect(selectionPillText()).toBeNull());
+  });
+
+  it('prunes the selection when a search hides the checked row', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ filters: ['name'] });
+
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(selectionPillText()).toBe('selected (1)');
+
+    // Searching for the OTHER row hides the checked one — it must not stay silently
+    // selected (and thus deletable) while invisible.
+    fireEvent.change(screen.getByTestId('list-modal-search'), { target: { value: 'Beta' } });
+
+    expect(rowCount()).toBe(1);
+    expect(screen.queryByTestId('list-modal-select-ROW-1')).not.toBeInTheDocument();
+    expect(selectionPillText()).toBeNull();
+  });
+
+  it('keeps only the failed rows checked after a partial bulk-delete failure', async () => {
+    neoState.data = TWO_ROWS;
+    // ROW-2's DELETE fails; ROW-1's succeeds.
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'DELETE' && String(url).endsWith('/ROW-2')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: { message: 'row is referenced' } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+    expect(selectionPillText()).toBe('selected (2)');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+    });
+
+    expect(deleteCalls()).toHaveLength(2);
+    // One row went through → the list is reloaded...
+    await waitFor(() => expect(neoState.reload).toHaveBeenCalled());
+    // ...and the failed row stays checked so the user can retry just that one.
+    await waitFor(() => expect(selectionPillText()).toBe('selected (1)'));
+    expect(rowSelectInput('ROW-2')).toBeChecked();
+    expect(rowSelectInput('ROW-1')).not.toBeChecked();
+  });
+});
+
+describe('ListModalWindow — read-only window access (ETP-4950)', () => {
+  const READ_ONLY = { readOnly: true };
+
+  it('hides every write affordance when window.readOnly is true', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ window: READ_ONLY, config: { allowClone: true } });
+
+    // Toolbar create action.
+    expect(screen.queryByTestId('list-modal-new')).not.toBeInTheDocument();
+    // Per-row actions (the whole actions cell is gone).
+    for (const id of ['ROW-1', 'ROW-2']) {
+      expect(screen.queryByTestId(`list-modal-edit-${id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`list-modal-clone-${id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`list-modal-delete-${id}`)).not.toBeInTheDocument();
+    }
+    // Selection column + floating bulk-delete pill.
+    expect(screen.queryByTestId('list-modal-select-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-all-head')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-ROW-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-cell-ROW-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(selectionPillText()).toBeNull();
+    // The rows themselves are still listed — read-only means read, not blank.
+    expect(rowCount()).toBe(2);
+  });
+
+  it('renders every write affordance when no window config is passed', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ config: { allowClone: true } });
+
+    expect(screen.getByTestId('list-modal-new')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-edit-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-clone-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-delete-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-ROW-1')).toBeInTheDocument();
+
+    // ...and the selection bar does show up once a row is checked (so the negative
+    // assertions above are not vacuous).
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(selectionPillText()).toBe('selected (1)');
+  });
+
+  it('renders every write affordance when window.readOnly is explicitly false', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ window: { readOnly: false }, config: { allowClone: true } });
+
+    expect(screen.getByTestId('list-modal-new')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-edit-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-delete-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+  });
+
+  it('forwards readOnly to the grid cells so the inline toggle is locked', () => {
+    neoState.data = [{ id: 'ROW-7', name: 'A', active: false }];
+
+    const { unmount } = renderWindow({ window: READ_ONLY });
+    expect(screen.getByTestId('cell-toggle-active-ROW-7')).toHaveAttribute('data-readonly', 'true');
+    unmount();
+
+    renderWindow();
+    expect(screen.getByTestId('cell-toggle-active-ROW-7')).toHaveAttribute('data-readonly', 'false');
   });
 });

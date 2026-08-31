@@ -10,7 +10,7 @@ Use this window to maintain the catalog of **matching rules** ("Reglas de matche
 
 ## Runtime window-access gating (ETP-4520)
 
-Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.js` now emits the generic per-role gate into `EtgoMatchRuleHeaderPage.jsx` — the same `useWindowAccess`/`WindowAccessGuard` mechanism every other registered window gets (see `docs/decisions-reference.md`, "Runtime window-access gating"). A role whose `AD_Window_Access` tier for this window resolves to `"none"` gets the guard's blocked-render panel instead of the grid — before any data fetch — closing the deep-link gap where a role with no menu entry could still hit `/match-rule` directly. A `"read-only"` tier flips `window.readOnly` for this render, disabling create/edit/delete; `"full"` is unchanged. This did not require any decisions.json change — it is automatic once `window.id` is present, exactly like the 42 previously-registered windows.
+Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.js` now emits the generic per-role gate into `EtgoMatchRuleHeaderPage.jsx` — the same `useWindowAccess`/`WindowAccessGuard` mechanism every other registered window gets (see `docs/decisions-reference.md`, "Runtime window-access gating"). A role whose `AD_Window_Access` tier for this window resolves to `"none"` gets the guard's blocked-render panel instead of the grid — before any data fetch — closing the deep-link gap where a role with no menu entry could still hit `/match-rule` directly. A `"read-only"` tier flips `window.readOnly` for this render; **`ListModalWindow` ignored that prop until ETP-4950** (see below), so until then a read-only role still saw create/edit/delete and only found out on click, when NEO rejected the write. `"full"` is unchanged. This did not require any decisions.json change — it is automatic once `window.id` is present, exactly like the 42 previously-registered windows.
 
 ## Interaction model
 
@@ -31,6 +31,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
   - Conciliaciones — `boldText` (read-only match count).
   - Activa — `toggle` (inline `PillToggle`, `PATCH`; the shared pill toggle, same component as the modal footer and the Assets window).
   - Each row also shows a left **drag handle** (visual only; drag-to-reorder is deferred) and, on hover, an **edit** (pencil), a **clone** (Copy, opt-in via `templateConfig.allowClone`) and a **delete** (red trash) icon button. Clone opens the create modal pre-filled with the row's values; delete opens a confirmation dialog, then `DELETE`s the rule.
+  - **Multi-select + bulk delete** — a leading checkbox column (the header checkbox selects every *visible* row, and renders indeterminate while partial) plus the floating "N Seleccionados" pill with a trash action: the same affordance the Cuentas / Movimientos / Extractos lists and `ListView`'s own grid already have. See "Multi-select and read-only gating (ETP-4950)" below.
 - **Toolbar**: a **back button** ("Cancelar", navigates to the referrer), a **dropdown filter** "Todas las reglas" (filter by Active: Activas / Inactivas), an **advanced "by conditions" filter** (funnel button → `AdvancedFilterButton`, applied client-side via `applyConditions`), a **search** box ("Buscar…"), and the primary **"+ Nueva regla"** button (yellow `#FFD500` hover, like the Accounts window). Filters and search are applied client-side over the loaded rows.
 - **Banner**: a dismissible info banner (`bannerKey`) explaining that rules are evaluated by ascending priority and only apply to statement lines the standard algorithm could not match.
 - **Search** rules by name or pattern (local filter over the list).
@@ -128,6 +129,47 @@ never assigned to the generated movement:
 - Everything **fails open**: an unreadable accounting configuration leaves every field visible and
   simply assigns no dimensions, rather than hiding fields or failing the reconciliation.
 
+## Multi-select and read-only gating (ETP-4950)
+
+Two gaps found while testing the dimension fix, both in the generic `ListModalWindow` and therefore
+fixed once for every `list-modal` window.
+
+### Multi-select + bulk delete
+
+The rules grid had no way to act on more than one row: deleting five rules meant five hover-and-click
+rounds, while every other list in the app (Cuentas, its Movimientos / Extractos tabs, and the generic
+`ListView`) already offered a checkbox column and a bulk delete. Added here with the **same** parts,
+not a second implementation:
+
+- `hooks/useBulkRowDelete` — the confirm dialog, one `DELETE /{entity}/{id}` per row in parallel, and
+  the three-outcome toast (all / partial / none).
+- `components/financial-accounts/BulkDeleteSelectionBar` — the floating "N Seleccionados" pill
+  (count + trash + close), itself built on the generic `SelectionToolbar` portal.
+
+Behaviour worth knowing:
+
+- **Selection follows the visible rows.** `ListModalWindow` prunes any selected id that stops being
+  visible when a toolbar filter, the advanced filter or the search changes, so a bulk delete can
+  never reach a row the user can no longer see.
+- The header checkbox selects/deselects every visible row and renders indeterminate while partial.
+- On a **partial** failure only the rows that failed stay checked, and the list reloads so the
+  deleted ones disappear — the shared outcome contract `ListView` follows.
+- No new i18n keys: `selected`, `selectAll`, `selectRow`, `delete` and `close` already existed.
+
+### Read-only window access is finally honoured
+
+`EtgoMatchRuleHeaderPage` passes `window={{ ...window, readOnly: true }}` when the role's
+`AD_Window_Access` tier for this window is `"read-only"` (ETP-4520), but `ListModalWindow` never
+destructured the `window` prop, so the flag was silently dropped. A read-only role saw the
+"Nueva regla" button, the row pencil / clone / trash and a live *Activa* toggle, and got a backend
+error on click — the write itself was never at risk (`NeoAccessHelper.hasWindowAccess` gates write
+methods on `AD_Window_Access.IsReadWrite`), so this was a UX defect, not a permission hole.
+
+With `window.readOnly` true the component now hides the create button, drops the whole row-actions
+cell, disables the inline toggle (`ListModalCell` -> `ToggleCell` -> `PillToggle disabled`) and
+offers no selection column or bulk bar at all — there is no action a read-only role could take
+with one.
+
 ## Gap assessment
 
 - Inline editing of `priority` directly in the grid is carried as a contract flag (`inlineEdit`) but the primary edit path verified here is the modal; treat in-grid priority editing as future behavior.
@@ -143,6 +185,8 @@ never assigned to the generated movement:
 6. Edit a rule by clicking its row, change a dimension under "Dimensiones" (e.g. Product), save, and confirm the change persists.
 6b. Deactivate the Proyecto dimension in the Esquema Contable (General Ledger Configuration → Dimensiones) and reload `/match-rule`: the Proyecto selector must be gone from both the create and the edit modal, while Producto and Centro de coste stay. Deactivate all three and the whole "Dimensiones" section (heading included) must disappear.
 7. Hover a row and click the **clone** (Copy) action: the create modal opens pre-filled with the source rule's values (same priority included); save creates an independent copy.
+8. Tick two rules with the row checkboxes, confirm the floating "2 Seleccionados" pill appears, press the trash and confirm: both rules disappear and the list reloads. Then tick one rule and type something in the search that excludes it — the pill must vanish (the selection is pruned, not silently kept).
+9. With a role whose `AD_Window_Access` for this window is read-only, open `/match-rule` and confirm the grid renders but "Nueva regla", the row pencil / clone / trash, the checkbox column and the *Activa* toggle are all gone or disabled.
 
 ## Automated evidence
 
@@ -151,7 +195,10 @@ never assigned to the generated movement:
 - `artifacts/match-rule/contract.json` carries `frontendContract.window.layoutType = "list-modal"` + `templateConfig`, the `etgoMatchRuleHeader` fields, and the `apiPrediction` selectors.
 - `artifacts/match-rule/generated/web/match-rule/EtgoMatchRuleHeaderPage.jsx` renders `<ListModalWindow>` with the generated `columns`/`fields`/`sections`/`config`, gated by `useWindowAccess('24963D64E83B4543A7F6BD248CF944EE')`/`WindowAccessGuard` (ETP-4520/ETP-4658).
 - `cli/config/regen-windows.json` — registry entry added by ETP-4658.
-- `tools/app-shell/src/components/contract-ui/ListModalWindow.jsx` + `__tests__/ListModalWindow.vitest.jsx` — the generic component and its tests.
+- `tools/app-shell/src/components/contract-ui/ListModalWindow.jsx` + `__tests__/ListModalWindow.vitest.jsx` — the generic component and its tests,
+  including the multi-select / bulk-delete and read-only gating coverage added by ETP-4950.
+- `tools/app-shell/src/hooks/useBulkRowDelete.jsx` and `tools/app-shell/src/components/financial-accounts/BulkDeleteSelectionBar.jsx`
+  — reused unchanged; this window is a consumer, not a second implementation.
 - `cli/test/generate-frontend-list-modal.test.js` + `cli/test/generate-contract-list-modal.test.js` — generator regression tests.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java` — the validation pre-hook,
   the `?action=activeDimensions` read endpoint and `stripInactiveDimensions` (ETP-4950).
