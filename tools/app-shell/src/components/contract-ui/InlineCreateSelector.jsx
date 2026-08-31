@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateModal } from './InlineCreateModal.jsx';
 
+import { apiFetch } from '@/auth/api.js';
 /**
  * Build the create endpoint for an inline-creatable FK. The host window's `apiBaseUrl`
  * ends with its own spec (e.g. `/sws/neo/match-rule`); the new record lives in a
@@ -17,9 +18,10 @@ export function buildCreateUrl(apiBaseUrl, createSpec, createEntity) {
  * Throws on a non-ok response or a missing id so the modal can surface the error.
  */
 export async function createLookupRecord({ apiBaseUrl, createSpec, createEntity, token, name }) {
-  const res = await fetch(buildCreateUrl(apiBaseUrl, createSpec, createEntity), {
+  const res = await apiFetch(buildCreateUrl(apiBaseUrl, createSpec, createEntity), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    baseUrl: '',
+    token,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
   // `null` = a request failed (network error or non-2xx response), an array = loaded rows
   // (possibly empty). Never conflate "failed" with "empty" — a server error must not be
@@ -12,16 +14,14 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   useEffect(() => {
     if (!parentId) return;
     setRows(undefined);
-    fetch(`${apiBaseUrl}/accounting?year=${parentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/accounting?year=${parentId}`, { token })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();
       })
       .then((body) => setRows(body.data ?? []))
       .catch(() => setRows(null));
-  }, [parentId, apiBaseUrl, token]);
+  }, [parentId, apiFetch, token]);
 
   if (rows === undefined) {
     return <div data-testid="accounting-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
