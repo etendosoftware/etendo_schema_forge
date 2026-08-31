@@ -527,10 +527,10 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
       {originFilter && sources.length === 0 ? (
         // Reachable when a row carries a preset `op.origin` string (legacy/mock
         // shape) that no live invoice backs.
-        <OriginFilterEmpty
+        (<OriginFilterEmpty
           message={t('fm.m349.invoices.filter.empty', { nif: originFilter.nif })}
           testId="fm349-invoice-origin-filter-empty"
-          data-testid="OriginFilterEmpty__346dd5" />
+          data-testid="OriginFilterEmpty__346dd5" />)
       ) : (
         <SourcesTab
           decl={{ ...decl, sources }}
