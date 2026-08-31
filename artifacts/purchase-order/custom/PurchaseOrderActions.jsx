@@ -166,16 +166,16 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
     const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
     const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-    const qtyPending   = Math.max(0, qtyOrdered - qtyDelivered);
+    const qtyPending   = qtyOrdered - qtyDelivered;
 
     const totalOrder    = Number(data?.grandTotalAmount) || 0;
     const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-    const totalPending  = Math.max(0, totalOrder - totalInvoiced);
+    const totalPending  = totalOrder - totalInvoiced;
 
     currency = data?.['currency$_identifier'] || '';
 
-    const needsReceipt = qtyPending > 0 && receiptsDraft.length === 0;
-    const needsInvoice = totalPending > 0 && !invoiceDraft;
+    const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
+    const needsInvoice = totalPending !== 0 && !invoiceDraft;
 
     if      (needsReceipt && needsInvoice) buttonLabel = ui('poManageReceiptAndInvoice');
     else if (needsReceipt)                 buttonLabel = ui('poManageReceipt');
@@ -503,7 +503,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
@@ -631,13 +631,13 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   const grandTotal = Number(d.grandTotalAmount) || 0;
 
   // Contextual subtitles: show pending qty/amount so the user knows what's outstanding
-  const receiptSubtitle = qtyOrdered > 0
+  const receiptSubtitle = qtyOrdered !== 0
     ? (qtyDelivered > 0
         ? ui('poQtyReceivedOf', { received: fmtNum(qtyDelivered, 0), total: fmtNum(qtyOrdered, 0), pending: fmtNum(qtyPending, 0) })
         : `${fmtNum(qtyPending, 0)} ${ui('poPendingReceipt')}`)
     : ui('poCreateReceiptCheckDesc');
 
-  const invoiceSubtitle = totalOrder > 0
+  const invoiceSubtitle = totalOrder !== 0
     ? (totalInvoiced > 0
         ? ui('poAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), pending: formatCurrency(currency, totalPending) })
         : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
@@ -707,7 +707,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
+              {formatCurrency(currency, grandTotal)}
             </div>
           </div>
         </div>
@@ -874,14 +874,14 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
 
   const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
   const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-  const qtyPending   = Math.max(0, qtyOrdered - qtyDelivered);
+  const qtyPending   = qtyOrdered - qtyDelivered;
 
   const totalOrder    = Number(data?.grandTotalAmount) || 0;
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-  const totalPending  = Math.max(0, totalOrder - totalInvoiced);
+  const totalPending  = totalOrder - totalInvoiced;
 
-  const needsReceipt = qtyPending > 0 && receiptsDraft.length === 0;
-  const needsInvoice = totalPending > 0 && !invoiceDraft;
+  const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
+  const needsInvoice = totalPending !== 0 && !invoiceDraft;
   const nothingToManage = !needsReceipt && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the
