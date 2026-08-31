@@ -97,6 +97,14 @@
   background: var(--fm-gray-900); color: hsl(var(--card));
   border-color: var(--fm-gray-900); font-weight: 600;
 }
+/* Overrides the generic .fm-toolbar__pill:hover (light background) — without this,
+   hovering an active-dark pill left white text on a near-white background (invisible).
+   Matches .fm-toolbar__btn--primary:hover so every dark actionable pill/button in the
+   fiscal-models toolbar shares one hover treatment. */
+.fm-toolbar__pill--active-dark:hover {
+  background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight));
+  color: hsl(var(--accent-highlight-foreground));
+}
 .fm-toolbar__pill--active-blue {
   background: var(--fm-info-bg); color: var(--fm-info-fg);
   border-color: var(--fm-blue-200); font-weight: 600;
