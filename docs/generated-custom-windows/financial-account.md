@@ -791,6 +791,196 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
+#### Match with a difference — detection and automatic posting (ETP-4965)
+
+A 1:1 match whose deviation falls inside the account's configured tolerances is now detected as
+**"Con diferencia"**, proposed by the Automatch, and — on reconciling — has its amount deviation
+posted to the account's **GL Item Difference**, leaving the line **Conciliada** instead of split and
+stuck on "Pendiente".
+
+**What was broken.** Nothing in the codebase applied the amount tolerance to a 1:1 match. Core's
+`StandardMatchingAlgorithm` searches by EXACT amount and EXACT date, and Etendo GO's date tolerance
+(`withinDateWindow` inside `AutoMatchSupport.standardMatch`) is only a post-filter over what Core
+already found, so it can never widen the search. The one tolerance-aware path,
+`AutoMatchSupport.findSignalGroup`, discards any partition with fewer than two transactions
+(`matchByKey`), so a lone 26,62 € movement against a 27,00 € line was unreachable. The line
+classified `pending`, the Automatch proposed nothing, and reconciling by hand produced a Core partial
+split whose 0,38 € remainder had no way to close.
+
+**Classification matrix.** Both account tolerances take part — `EM_ETGO_Amount_Tolerance` (%) and
+`EM_ETGO_Date_Tolerance` (days, default 3, so there is always a minimum date slack):
+
+| Amount deviation | Date deviation | State |
+|---|---|---|
+| 0 | 0 | Con sugerencia |
+| 0 | > 0, within date tolerance | Con diferencia |
+| > 0, within amount tolerance | 0 | Con diferencia |
+| > 0, within amount tolerance | > 0, within date tolerance | Con diferencia |
+| beyond amount tolerance | any | Pendiente |
+| any | beyond date tolerance | Pendiente |
+
+A **date-only** deviation posts nothing: the amount balances, so the reconciliation is the ordinary
+one and no GL item is needed. The accounting concept only comes into play for an amount deviation.
+
+**Detection** — `AutoMatchSupport.findNearMatch` searches the `loadUnreconciledSameSign` pool
+directly (the only code that widens by date) for a single same-sign unreconciled transaction within
+the date window whose amount deviates by no more than the tolerance, best deviation first and date
+distance as the tie-break. The exact-exact case is excluded on purpose — that is a plain suggestion.
+It honours the shared `usedTxnIds` / `excludedTxns` accumulator (see ETP-4971 below) and records its
+winner in both, so the left panel can never count more differences than an Automatch run could apply.
+
+**Two tolerances, one column, two meanings.** `EM_ETGO_Amount_Tolerance` is read by two helpers with
+deliberately opposite conventions, and they are named apart so the two are never confused:
+`AutoMatchSupport.signalGroupTolerance` (formerly `computeAmountTolerance`) is rounding slack for a
+1:N SUM, where 0 still yields a one-cent floor because nothing is posted on that path;
+`AutoMatchSupport.differenceTolerance` returns `null` for 0, because it authorises an automatic
+accounting entry and an unconfigured account must never get one by default.
+
+**The two tolerances govern INDEPENDENT dimensions — the amount one is not a master switch.**
+`EM_ETGO_Amount_Tolerance` bounds how far the AMOUNT may deviate, and is therefore the only thing
+that can authorise an accounting entry. At **0%** no amount deviation is admitted at all:
+`differenceTolerance` returns `null` and `findNearMatch` accepts only **exact-amount** candidates, so
+nothing is ever posted without a configured percentage. But `null` does **not** disable the search
+and is emphatically not "unlimited" — `EM_ETGO_Date_Tolerance` stays in force, defaults to 3 days,
+and a date-only deviation posts nothing, so 0%'s safety rationale does not apply to it. A 100,00 €
+line dated 28/08 against a 100,00 € movement dated 26/08, on an account at 0% amount / 3 days, is
+detected as **"Con diferencia"** and reconciles with no GL-item movement created.
+
+**Scope note:** because every account ships with date tolerance = 3, this detection is live on
+**every** account in the instance, not only those that configured a percentage. What it produces
+there is proposals and classification — never an automatic accounting entry.
+
+**WEAK is now a suggestion, not a difference.** Core's STRONG/WEAK distinction is about documentary
+evidence (does the reference or partner corroborate the hit), never about amount or date — both are
+exact either way. Mapping WEAK to `difference` made that filter mean two unrelated things. It now
+classifies as `suggested`. **This changes existing behaviour**: anyone who used the "Diferencias"
+filter to find weak-evidence matches will no longer see them there.
+
+**The difference movement's description.** `createTransactionForRule` falls back to the statement
+line's description, and an imported line very often has none — which left a bare `0,38 €` row in the
+Movements list with nothing to identify it by. `defaultDifferenceDescription` resolves the text from
+the message dictionary (`ETGO_ReconciliationDifference`) so it arrives in the user's language, and
+degrades to the accounting concept's own name when that message is not installed. An explicitly
+supplied description (the manual ETP-4796 flow, where the user types one) always wins.
+
+> **OPEN DECISION — the difference movement's date.** It currently inherits the STATEMENT LINE's
+> date, the same as every other movement `createTransactionForRule` builds. On a match with a date
+> deviation this reads oddly: a line of 30/08 matched to a movement of 31/08 produces a difference
+> movement dated 30/08, so the reconciliation holds two movements on different days. Three candidates
+> were weighed — the statement line's date (today's behaviour; zero cross-month risk, since it
+> matches the sub-line the movement is attached to, and the statement is the authority on when the
+> money moved), the matched movement's date (the two movements agree; risk bounded by the account's
+> date tolerance), and the reconciliation date (unbounded risk — an August line reconciled in
+> September puts its difference in September while the sub-line stays in August, i.e. a different
+> accounting period). **Pending a decision from the functional analyst; behaviour unchanged until
+> then.**
+
+**Posting** — `ReconciliationDifferenceSupport.applyInlineDifference` runs on both the manual
+(`reconcileGroup`) and the Automatch (`ReconciliationFlowSupport.prepareGroup`) paths, before the
+match is composed. It computes `gap = line − Σ operations` and, when the gap is within
+`differenceTolerance`, creates the compensating GL-item movement via `createTransactionForRule` and
+adds it to the operation set so the sum matches the line EXACTLY. Core still splits the line, but now
+both halves end matched: the group's pending amount reaches zero, `mergeSubLineIntoHead` reports
+RECONCILED, and the user sees one closed line. The movement carries `EM_ETGO_Auto_Created`, so
+Desconciliar / Reactivar delete it with no extra code. A negligible gap (< 0,005), an over-coverage
+gap, a disabled tolerance or a gap beyond tolerance all leave the previous behaviour untouched.
+
+**No accounting concept configured.** Manual: the backend answers `400` with
+`code: "GL_ITEM_REQUIRED"` and the difference amount, and the panel reopens `DifferenceModal` to ask
+for a concept, then resubmits with `glItemId`. Automatch: a mass run cannot pick a concept line by
+line, so the group is rejected — its error travels back inside `applySuggestions`' `results[]`, the
+suggestion modal counts it as failed and surfaces a direct **Editar cuenta** link. Detection and the
+proposal are NOT suppressed; only applying fails.
+
+**Why one path rolls back and the other must not.** A returned `NeoResponse.error` commits — only an
+escaping exception rolls back (see `ReconciliationDifferenceSupport`'s header javadoc). On the manual
+invoice path `ReconciliationWriteoffSupport.payInvoices` has already written payments by the time the
+gap is knowable, so the rejection rolls back explicitly (`rollbackOnReject`). The Automatch batch
+passes `false`: there the rejection is per group, sibling groups are already prepared, and a rollback
+would discard their work and close the session the rest of the loop still needs.
+
+**Frontend.** `financeReconcileFilterStatusDifference` and `financeReconcileBadgeDifference` now read
+**"Con diferencia"** (parallel to "Con sugerencia") instead of "Diferencias" / "Diferencia". Candidate
+rows the backend flags with `nearMatch` carry the red difference badge — `badgeKindFor` ranks
+`nearMatch` above `suggested`, since the backend sets both. The action bar no longer paints a
+within-tolerance shortfall in destructive red; it shows the neutral notice
+`financeReconcileBarDifferenceNotice` naming the concept it will be posted to (or
+`…NoConcept` when the account has none). `useNeoPost` now hangs the parsed error body off the thrown
+Error (`err.body`, `err.code`), which is what makes both `GL_ITEM_REQUIRED` and the 409's
+`remainderLineId` reachable at all — previously only `message` and `status` survived.
+
+#### Why an un-reconcile failed now reaches the user (ETP-4965 follow-up)
+
+Un-reconciling is deliberately non-atomic: Core's removal utilities commit mid-flow, so
+`ReconciliationHandlerSupport.removeSelectedFromReconciliations` attempts every unit regardless of an
+earlier one's outcome, and `removeOperation` / `reactivateSelected` then re-check each transaction's
+ACTUAL post-state rather than trusting that no exception was thrown. That part works — a failed undo
+is correctly reported as `failedTransactionIds`, never as a false success.
+
+What was missing was the CAUSE. The helpers swallowed their exception into the server log, so the
+response could say *which* transactions were still reconciled but never *why*, and the panel fell
+back to a generic toast. In practice the commonest cause is an accounting period closed for
+unposting (`@PeriodClosedForUnPosting@`, raised by Core's `ResetAccounting` when a `Fact_Acct` row
+for the document sits in a period whose `C_PeriodControl` is not open for that document base type) —
+exactly the failure a user can resolve, and exactly the one they could not see.
+
+- The removal helpers now record the translated reason per transaction id, and both endpoints emit
+  the first reason that belongs to a genuinely failed id as `failureReason` on the 200 response.
+- **Only the translatable part is kept.** Core wraps each cause in untranslated English prose and
+  concatenates the chain without separators, so the raw message arrives as
+  `Error when removing the transaction from reconciliation.Error when reactivating
+  reconciliation@PeriodClosedForUnPosting@`. Translating that whole string leaves English fragments
+  glued in front of the Spanish sentence — unacceptable in a product used in Spanish by real
+  clients. `userFacingReason` resolves the LAST `@KEY@` placeholder (the innermost, most specific
+  cause) through the message dictionary and returns just that; a message with no placeholder is
+  translated whole, as before. The user sees `Periodo Cerrado. No se puede descontabilizar un
+  documento en un periodo cerrado` and nothing else.
+- `ReconciliationSplitPanel.confirmRemove` shows it as the toast description, and no longer reuses
+  `financeReconcileToastError` — whose copy reads "Error al conciliar", the wrong action for an
+  un-reconcile. The un-reconcile and reactivate paths have their own keys
+  (`financeReconcileToastOperationRemoveError` / `…ReactivateError`).
+
+**One path still reports nothing: the whole-line `reactivate`.** It calls `detachSelected` directly
+and discards the accumulator, because unlike `removeOperation` / `reactivateSelected` it never
+re-checks the post-state and always answers `{reactivated: true}`. Giving it a reason would mean also
+giving it the `failedTransactionIds` contract it does not have — a product change, not a compile fix,
+so it was left as it was. Its OTHER branch (`undoReconciliation`, when the selection covers the whole
+document) does let the exception propagate, and `runPostAction` turns that into an error response, so
+only the partial-detach branch is silent. Pre-existing; worth its own ticket.
+
+**The "period closed" error was a lie, and is now worked around from this side.** Un-reconciling a
+posted reconciliation failed with `@PeriodClosedForUnPosting@` on an environment whose periods were
+all open — verified exhaustively: the client has a single organization, it is its own
+period-control organization, and all 43 document base types are `O` for the period in question.
+
+The real cause is a date mismatch. `com.etendoerp.payment.removal`'s
+`Utilities.unPostReconciliation` resets accounting passing the RECONCILIATION's own date as both
+ends of the range, but Core dates a reconciliation's `Fact_Acct` rows with the TRANSACTION's
+accounting date. On the live case the reconciliation was dated 29/08 and its entries 28/08, so the
+range matched nothing, zero entries were deleted, and `ResetAccounting` fell into the catch-all
+`throw` at the end of its `delete` — a branch that performs no period check at all and whose only
+wording is `@PeriodClosedForUnPosting@`. Any reconciliation whose statement line is older than the
+day it was reconciled hits this, which is the normal case.
+
+`ReconciliationHandlerSupport.unpostBeforeUndo` resets the accounting first with an OPEN range —
+what Classic's own unpost button does, and what `DocumentPostingService.unpost` already does in this
+module — from both the whole-document undo and the per-transaction detach. The document then has no
+entries, so the narrow-range reset downstream becomes a no-op that returns cleanly. `recordId`
+already scopes the deletion, so the open range removes nothing extra, and a genuinely closed period
+still fails — accurately this time.
+
+This compensates for the other module's defect rather than fixing it there, deliberately: that
+module is outside this ticket's repos. Its `unPostPayment` carries the same date-narrowing and is
+presumably latent-broken the same way. Worth its own ticket against that module.
+
+**`guardOpenPeriods` was deliberately left alone.** It runs `Utilities.checkPeriod` on the
+reconciliation's own date and table, which is NOT the rule Core enforces when unposting, so it does
+not pre-empt this failure. Making it do so would mean duplicating
+`ResetAccounting.validateNoFactsInClosedPeriods` — a private Core method that queries `Fact_Acct`
+against `C_PeriodControl` — in a codebase whose rule is never to reimplement Core's logic. The copy
+would drift on the first Core change. Failing inside Core and reporting its message costs one
+harmless round trip (nothing is written) and stays correct by construction.
+
 #### Posting the unreconciled remainder to an accounting concept (ETP-4796)
 
 When a statement line is only PARTIALLY reconciled — statement of 12,50 € matched against a 12,00 €
@@ -1148,9 +1338,9 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 - **Conditional auto-open (ETP-4922).** Entering the Reconciliation tab (tab click, `?tab=reconciliation` deep link, or the Cuentas-list `Conciliar (N)` pill's `?autoMatch=true`) no longer pops the modal unconditionally — it *arms* an `autoMatchArmed` flag in `index.jsx` and queries `useAutoMatch` for as long as that tab stays active. The modal only opens once a fresh response confirms `groups.length > 0`; an empty result never opens it (previously it always opened, showing an empty state). The **manual** `Automatch` header button is unaffected — it still calls `setAutoMatchOpen(true)` directly and always opens, empty state included. Leaving the tab disarms the flag, so returning to it re-evaluates from scratch (a stale response from the prior visit is never treated as fresh: `useNeoResource` doesn't clear `data` when its `path` goes back to `null`, so the code tracks readiness with an `autoMatchFetchedRef` ref instead of trusting `loading` alone).
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no date clause in its HQL, so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
-- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` now covers both a Classic strong `1:1` match and an exact `1:N` signal-group match, so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
-- i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES}.json`.
-- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast.
+- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
+- i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`. `es_AR` was missing 15 of them (the 14 `financeReconcileDiff*` plus `financeReconcileAutomatchToastPartial`), which rendered raw key names for that locale — the resolver does not fall back to English (`useUI.js`: `dictionary?.genericLabels?.[key] ?? key`). Backfilled and covered by a parity test (ETP-4965).
+- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
 
 ### Movement Post / Unpost (ETP-4505)
 

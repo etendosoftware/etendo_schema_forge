@@ -443,6 +443,7 @@ export function FinancialAccountDetail({ recordId }) {
         open={autoMatchOpen && !isCashAccount}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
+        onEditAccount={() => setEditOpen(true)}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
         open={editOpen}
