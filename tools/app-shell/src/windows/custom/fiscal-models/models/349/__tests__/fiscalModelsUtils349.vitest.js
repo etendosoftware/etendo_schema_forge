@@ -49,7 +49,7 @@ describe('compute349Operators', () => {
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/fiscal349/operators?'),
-      expect.objectContaining({ headers: { Authorization: 'Bearer tok' } }),
+      expect.objectContaining({ headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' } }),
     );
     expect(result.operators).toEqual([]);
     vi.unstubAllGlobals();
@@ -117,7 +117,7 @@ describe('generate349File', () => {
       expect.stringContaining('/fiscal349/generate'),
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }),
         body: expect.stringContaining('year=2026'),
       }),
     );

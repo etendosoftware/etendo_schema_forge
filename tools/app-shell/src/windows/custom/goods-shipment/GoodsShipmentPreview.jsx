@@ -13,6 +13,7 @@ import { InfoRow, CardShell, PercentBar } from '../shared/preview-cards/SummaryC
 import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -65,6 +66,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const modalRef = useRef(null);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
@@ -88,11 +90,9 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // Fetch the full header record once; all 3 specs share 1 HTTP call via the cached promise.
   const shipmentDocSpecs = useMemo(() => {
     let detailPromise = null;
-    const getDetail = (id, tok, base) => {
+    const getDetail = (id, tok) => {
       if (!detailPromise) {
-        detailPromise = fetch(`${base}/goodsShipment/${id}`, {
-          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
-        })
+        detailPromise = apiFetch(`/goodsShipment/${id}`, { token: tok })
           .then(r => r.ok ? r.json() : null)
           .then(j => j?.response?.data?.[0] ?? {})
           .catch(() => ({}));
@@ -100,12 +100,14 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       return detailPromise;
     };
     return [
-      { key: 'orders',   type: 'sales-order',            fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedOrders   ?? []) },
-      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.linkedInvoices ?? []) },
-      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok, base) => getDetail(id, tok, base).then(r => r.returnReceipts ?? []) },
+      // The `base` argument RelatedDocumentsCard still passes is intentionally unused:
+      // apiFetch is already bound to this component's base (ETP-5022).
+      { key: 'orders',   type: 'sales-order',            fetch: (id, tok) => getDetail(id, tok).then(r => r.linkedOrders   ?? []) },
+      { key: 'invoices', type: 'sales-invoice',           fetch: (id, tok) => getDetail(id, tok).then(r => r.linkedInvoices ?? []) },
+      { key: 'returns',  type: 'return-material-receipt', fetch: (id, tok) => getDetail(id, tok).then(r => r.returnReceipts ?? []) },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shipment?.id]);
+  }, [shipment?.id, apiFetch]);
 
   if (!shipment) return null;
 

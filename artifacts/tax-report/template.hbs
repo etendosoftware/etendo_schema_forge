@@ -2,10 +2,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
 {{{css}}}
-.report-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin: 8px 0 16px; font-size: 12px; }
-.report-info-grid span { color: #555; }
-.report-info-grid strong { color: #111; }
-
 /* Section banners (Purchases / Sales) */
 .section-banner { font-size: 15px; font-weight: bold; color: #fff; background: #1e3a5f; padding: 6px 12px; margin: 20px 0 0; }
 
@@ -19,8 +15,17 @@
 
 /* Document rows */
 .doc-row td { border: none; font-size: 11px; }
+{{#if meta.isInteractive}}
 .doc-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
 .doc-link:hover { opacity: 0.75; text-decoration: none; }
+{{/if}}
+/* Belt-and-suspenders (ETP-5013 follow-up, see report-trial-balance's own
+   template for the full rationale): a browser's own Cmd/Ctrl+P on the live
+   preview bypasses meta.isInteractive entirely, so @media print is what
+   actually catches it — plus our own jsreport PDF export, uniformly. */
+@media print {
+  .doc-link { color: inherit !important; text-decoration: none !important; cursor: default !important; }
+}
 
 /* Category / Rate summary */
 .cat-header td, .rate-header td { font-weight: bold; font-size: 13px; background: #f0f4fa; padding: 6px 8px; border-top: 2px solid #1e3a5f; border-bottom: 1px solid #aac; }
@@ -35,31 +40,21 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
 
   <div class="report-header">
     <div class="report-title">{{meta.title}}</div>
+    {{> document-branding}}
   </div>
 
-  <div class="report-info-grid">
-    <div><span>{{meta.labels.dateFrom}}: </span><strong>{{formatDateDisplay meta.params.dateFrom}}</strong></div>
-    <div><span>{{meta.labels.dateTo}}: </span><strong>{{formatDateDisplay meta.params.dateTo}}</strong></div>
-    <div><span>{{meta.labels.dateType}}: </span><strong>{{#if (eq meta.params.dateType 'acct')}}{{meta.labels.accountingDate}}{{else}}{{meta.labels.operationDate}}{{/if}}</strong></div>
-    {{#if meta.params._display_currencyId}}
-    <div><span>{{meta.labels.currencyId}}: </span><strong>{{meta.params._display_currencyId}}</strong></div>
-    {{/if}}
-    {{#if meta.params._display_bPartnerId}}
-    <div><span>{{meta.labels.bPartnerId}}: </span><strong>{{meta.params._display_bPartnerId}}</strong></div>
-    {{/if}}
-    <div><span>{{meta.labels.transactionType}}: </span><strong>
-      {{#if (eq meta.params.transactionType 'S')}}{{meta.labels.salesReceipts}}
-      {{else}}{{#if (eq meta.params.transactionType 'P')}}{{meta.labels.purchasesPayments}}
-      {{else}}{{meta.labels.both}}{{/if}}{{/if}}
-    </strong></div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
   </div>
+  {{/if}}
 
   {{!-- ================================================================ --}}
   {{!-- REGION 1: DETAIL                                                 --}}
   {{!-- ================================================================ --}}
   {{#if meta.showDetails}}
-  <div class="region-title">{{meta.labels.detail}}</div>
-
   {{#if (eq meta.params.transactionType 'P')}}
     {{#if rows.purchase.detail.length}}
       {{> detailSection sectionRows=rows.purchase.detail label=meta.labels.purchasesPayments groupByBp=meta.groupByBp}}
@@ -113,10 +108,9 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
     {{#if rows.sales.summaryByRate.length}}{{> rateSection groups=rows.sales.summaryByRate label=meta.labels.salesReceipts}}{{/if}}
   {{/if}}
 
-  <div class="report-footer">
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
-
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div>
 
 {{!-- ================================================================ --}}

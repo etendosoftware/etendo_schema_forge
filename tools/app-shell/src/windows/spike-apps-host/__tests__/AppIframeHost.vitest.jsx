@@ -108,7 +108,7 @@ describe('AppIframeHost', () => {
       expect.stringContaining('appId=app42'),
       expect.objectContaining({
         method: 'POST',
-        headers: { Authorization: 'Bearer bearer-tok' },
+        headers: { Authorization: 'Bearer bearer-tok', 'Accept-Language': 'es_ES' },
       }),
     );
   });
