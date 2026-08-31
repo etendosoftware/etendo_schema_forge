@@ -19041,6 +19041,7 @@
     "financialSummaryEmptySubtitle": "Register sales and purchases to see income, expenses and profit",
     "newInvoice": "New invoice",
     "financialSummaryPositive": "Your revenues beat your expenses this year",
+    "financialSummaryNegative": "Your expenses beat your revenues this year",
     "financialSummaryIncome": "Income",
     "financialSummaryExpenses": "Expenses",
     "financialSummaryProfit": "Profit",
