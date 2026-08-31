@@ -145,6 +145,8 @@ vi.mock('../lib/mockFetch.js', () => ({
 
 vi.mock('../i18n/index.js', () => ({
   LocaleProvider: ({ children }) => <>{children}</>,
+  // App renders LocaleChangeConfirmDialog (ETP-5022), which calls useUI().
+  useUI: () => (key) => key,
 }));
 
 vi.mock('../i18n/useLocaleState.js', () => ({
