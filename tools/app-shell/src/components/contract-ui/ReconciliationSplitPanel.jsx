@@ -22,6 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
+import { ListProgressBar } from './ListProgressBar.jsx';
 import {
   Table,
   TableHeader,
@@ -31,6 +32,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import {
   Dialog,
   DialogContent,
@@ -171,7 +173,10 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
  * single line of copy floating in it looks broken.
  */
 function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow }) {
-  if (loading) {
+  // Only the true initial fetch (no rows yet) wipes the body into skeleton rows — a later
+  // refresh (the left toolbar's refresh button, or reselecting a line for the right panel)
+  // already has rows to show, same reasoning as MovementsTable / StatementsTable.
+  if (loading && items.length === 0) {
     return SKELETON_ROWS.map((n) => (
       <TableRow key={n} data-testid="TableRow__d0f4d5">
         {SKELETON_CELL_KEYS.slice(0, colSpan).map((cellKey) => (
@@ -208,12 +213,25 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
  * Scrollable table scaffold shared by both panels: a sticky-styled header row
  * (the per-panel columns are passed as `headCells`) and the skeleton/empty/data
  * body produced by {@link renderRows}.
+ *
+ * `table-fixed` is load-bearing, not cosmetic. Both panels declare a fixed width on every column
+ * except the free-text one (Descripción / Información), and rely on `truncate` to clip it. Under
+ * the default auto layout a table grows to fit its widest cell, so one long statement description
+ * ("TRANSFERENCIA INMEDIATA A FAVOR DE … CONCEPTO Factura Nº …") stretched the table past the
+ * panel and pushed Progreso and Importe out of view behind a horizontal scrollbar — the exact QA
+ * report on ETP-4921. With a fixed layout the declared widths win, the free column absorbs
+ * whatever is left, and `truncate` finally has a bound to ellipsise against.
  */
 function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   const ui = useUI();
+  // A refresh over rows that are already on screen dims instead of collapsing into skeletons —
+  // see renderRows' matching `items.length === 0` gate.
+  const dimWhileRefreshing = loading && items.length > 0 ? 'opacity-70' : '';
   return (
     <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
-      <Table data-testid="Table__d0f4d5">
+      <Table
+        className={cn('table-fixed transition-opacity duration-200', dimWhileRefreshing)}
+        data-testid="Table__d0f4d5">
         <TableHeader data-testid="TableHeader__d0f4d5">
           <TableRow
             className="h-11 border-b border-[hsl(var(--border-subtle))] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[hsl(var(--foreground))]"
@@ -403,10 +421,15 @@ function StatementLinesPanel({
         <TableCell
           className={cn('h-[62px] px-3 py-2 text-sm text-[hsl(var(--foreground))]', cellBg)}
           data-testid="TableCell__d0f4d5">
-          <div className="flex flex-col items-start gap-0.5">
-            <span className={cn('w-full truncate leading-5', selected ? 'font-semibold' : 'font-normal')}>
-              {line.description || line.partnerName || line.referenceNo || '—'}
-            </span>
+          <div className="flex w-full min-w-0 flex-col items-start gap-0.5">
+            {/* Statement descriptions routinely run past the column ("TRANSFERENCIA INMEDIATA A
+                FAVOR DE … CONCEPTO Factura Nº …"). They are clipped with an ellipsis and the full
+                text is offered on hover, so the columns that carry the decision — Progreso and
+                Importe — keep their space instead of being pushed off the panel (ETP-4921 QA). */}
+            <TruncatedText
+              text={line.description || line.partnerName || line.referenceNo || '—'}
+              className={cn('leading-5', selected ? 'font-semibold' : 'font-normal')}
+              data-testid={`recon-line-desc-${line.id}`} />
             <div className="flex items-center gap-1">
               <StatusBadge kind={badgeKind} data-testid="StatusBadge__d0f4d5" />
               {line.partial ? (
@@ -471,7 +494,11 @@ function StatementLinesPanel({
           <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
           <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
-          <TableHead className="w-[139px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          {/* Right-aligned to sit over its own figures: MoneyCell renders `text-right`, so a
+              left-aligned header put the label at the opposite edge of the column from the
+              amount it names — the same rule the generic DataTable applies to any numeric
+              column, which this hand-rolled table does not inherit. */}
+          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -750,8 +777,10 @@ function CandidateOperationsPanel({
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
           <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
           <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColInfo')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-left" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          {/* Both money columns render through MoneyCell (`text-right`) — see the left panel's
+              own Importe header for why these follow it. */}
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -1103,6 +1132,59 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
 }
 
 /**
+ * The line id the candidate list is fetched for.
+ *
+ * For a PARTIAL line that is its pending REMAINDER sub-line — the one carrying the group id and
+ * no transaction — so the candidates are the documents still available, not the ones already
+ * matched. A plain pending or fully-reconciled line uses its own id.
+ *
+ * @param {object|null} selectedLine
+ * @returns {string|null} null when no line is selected
+ */
+function resolveCandidateLineId(selectedLine) {
+  if (!selectedLine) return null;
+  return selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
+    ? selectedLine.remainderLineId
+    : selectedLine.id;
+}
+
+/**
+ * Which candidate operations the right panel shows, and in what order.
+ *
+ * Three rules, in this order:
+ *
+ *  1. A RECONCILED line is read-only. The backend already returns only its linked movement(s),
+ *     so they are shown verbatim — the sign / date / search filters exist for PICKING candidates
+ *     and would only hide what the user came to look at.
+ *  2. Text search runs in memory. Direction and date range are applied server-side, so that the
+ *     type counts in the filter match the list; only the free-text query is left to do here.
+ *  3. Selected rows float to the very top, then the standard algorithm's suggestions. Stable
+ *     within each group, so checking any row lifts it up and several selected rows gather
+ *     together instead of shuffling.
+ *
+ * Module-level and pure: it is a named rule, it needs nothing from the component but its
+ * arguments, and keeping the filter + comparator out of the component body is what holds
+ * `ReconciliationSplitPanel` under Sonar's cognitive-complexity ceiling (javascript:S3776).
+ *
+ * @param {{ candidates: Array<object>, selectedLine: object|null, search: string,
+ *   selectedOpIds: Set<string> }} args
+ * @returns {Array<object>}
+ */
+function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOpIds }) {
+  if (selectedLine?.status === 'reconciled') return candidates;
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
+      .some((v) => (v || '').toLowerCase().includes(q)))
+    : candidates;
+  return [...filtered].sort((a, b) => {
+    const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
+    if (sel !== 0) return sel;
+    return (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0);
+  });
+}
+
+/**
  * Manual bank reconciliation split panel (T6).
  *
  * Left: pending statement lines (single-select). Right: candidate operations for
@@ -1178,15 +1260,7 @@ export function ReconciliationSplitPanel({
   }, [lines, selectedLineSel]);
   const sourceMeta = SOURCE_META[rightSource] ?? SOURCE_META.receipts;
   const invoiceMode = sourceMeta.kind === 'invoices';
-  // For a PARTIAL line, reconcile the REST against its pending remainder sub-line (which carries the
-  // group id and no transaction) so the candidate list = available docs, not the already-matched
-  // ones. A plain pending / fully-reconciled line uses its own id.
-  let candidateLineId = null;
-  if (selectedLine) {
-    candidateLineId = selectedLine.reconcileStatus === 'PARTIAL' && selectedLine.remainderLineId
-      ? selectedLine.remainderLineId
-      : selectedLine.id;
-  }
+  const candidateLineId = resolveCandidateLineId(selectedLine);
   const { candidates, counts: sourceCounts, loading: candLoading } = useCandidateOperations(
     accountId, candidateLineId, sourceMeta.docType,
     invoiceMode ? 'invoices' : null,
@@ -1253,26 +1327,10 @@ export function ReconciliationSplitPanel({
     [visibleLines],
   );
 
-  const visibleCandidates = useMemo(() => {
-    // A reconciled line is read-only: the backend already returns ONLY its linked movement(s),
-    // so show them verbatim without the sign/date/search filters meant for picking candidates.
-    if (selectedLine?.status === 'reconciled') return candidates;
-    const q = rightSearch.trim().toLowerCase();
-    // Direction AND date range are applied server-side (so the type counts match the list);
-    // here we only do the in-memory text search.
-    const filtered = q
-      ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
-        .some((v) => (v || '').toLowerCase().includes(q)))
-      : candidates;
-    // Float SELECTED rows to the very top, then the standard-algorithm
-    // suggestions; stable within each group (so checking any row lifts it up,
-    // and multiple selected rows all gather at the top).
-    return [...filtered].sort((a, b) => {
-      const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
-      if (sel !== 0) return sel;
-      return (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0);
-    });
-  }, [candidates, rightSearch, selectedOpIds, selectedLine]);
+  const visibleCandidates = useMemo(
+    () => resolveVisibleCandidates({ candidates, selectedLine, search: rightSearch, selectedOpIds }),
+    [candidates, rightSearch, selectedOpIds, selectedLine],
+  );
 
   // Pre-select the candidates the standard algorithm suggests, so a clean match
   // is one click away. Depends on the line id + loading state (not the candidates
@@ -1542,6 +1600,12 @@ export function ReconciliationSplitPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Spans BOTH columns, unlike the toolbar: the header's refresh button reloads the whole
+          tab, so the indicator belongs above the split rather than inside the left panel. Only
+          once lines are on screen — the first fetch shows the panel's own skeleton rows. */}
+      {linesLoading && lines.length > 0 ? (
+        <ListProgressBar testId="reconciliation-progress-bar" data-testid="ListProgressBar__d0f4d5" />
+      ) : null}
       <div className="flex flex-1 overflow-hidden">
         <StatementLinesPanel
           lines={visibleLines}

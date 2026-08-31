@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-07-21T12:35:18.312Z",
-  "checksum": "03690ba1e00622d8",
+  "updatedAt": "2026-08-29T17:45:56.475Z",
+  "checksum": "dcf4fb7c67e38a6b",
   "frontendContract": {
     "window": {
       "id": "118",
@@ -10,6 +10,7 @@
       "primaryEntity": "elementValue",
       "category": "accounting",
       "hideCreate": true,
+      "hideListFilters": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
@@ -181,16 +182,13 @@
             "label": "Active",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "true"
-            },
             "defaultValue": "Y",
+            "inlineToggle": true,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -205,13 +203,6 @@
               "type": "computed",
               "source": "E"
             }
-          },
-          {
-            "name": "active",
-            "derivation": {
-              "type": "computed",
-              "source": "true"
-            }
           }
         ],
         "javaQualifier": "chart-of-accounts"
@@ -225,6 +216,7 @@
       "primaryEntity": "elementValue",
       "category": "accounting",
       "hideCreate": true,
+      "hideListFilters": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
@@ -337,7 +329,7 @@
             "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {

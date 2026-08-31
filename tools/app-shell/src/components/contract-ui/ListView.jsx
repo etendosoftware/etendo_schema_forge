@@ -16,6 +16,7 @@ import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
@@ -154,12 +155,19 @@ function ListTableRegion({
   onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
 }) {
   if (ownScroll) {
+    // Only the TRUE initial fetch (no items yet) hands `loading` to the Table, which renders
+    // it as a full skeleton (DataTable: `if (loading) return <TableSkeleton />`, unconditional
+    // on row count). A later refresh — the button next to sort, or any reload() after an
+    // edit/CRUD action — already has rows to show, so it stays smooth via the opacity dim
+    // below instead, matching the non-ownScroll branch just below (which never even forwards
+    // `loading` once `hook.items.length > 0`).
+    const showInitialSkeleton = hook.loading && hook.items.length === 0;
     return (
       <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
         <div
           className={tableOpacityClass(hook)}
           style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
-          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+          <Table {...tableProps} loading={showInitialSkeleton} data-testid="Table__620cbc" />
         </div>
       </div>
     );
@@ -1238,17 +1246,11 @@ export function ListView({
             </div>
           )}
 
-          {/* Indeterminate top progress bar — visible while refreshing existing data */}
+          {/* Indeterminate top progress bar — visible while refreshing existing data. Extracted
+              to ListProgressBar so the hand-rolled tables that never reach ListView (the
+              financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
-            <>
-              <div role="progressbar" className="h-0.5 w-full overflow-hidden bg-primary/10" data-testid="list-progress-bar">
-                <div
-                  className="h-full w-1/3 bg-primary"
-                  style={{ animation: 'sf-list-progress 1.1s ease-in-out infinite' }}
-                />
-              </div>
-              <style>{`@keyframes sf-list-progress { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }`}</style>
-            </>
+            <ListProgressBar data-testid="ListProgressBar__620cbc" />
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its

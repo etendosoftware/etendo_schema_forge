@@ -176,19 +176,30 @@ describe('useFinancialAccountAccounting', () => {
 
   // ── saveAccountingConfiguration ──────────────────────────────────────────
 
-  it('saveAccountingConfiguration POSTs to the entity with the DAL field names', async () => {
+  // ETP-4872 — the old two-field (fINAssetAcct/fINTransitoryAcct) body is fully retired; the
+  // save payload now always carries the 9 account-type-dependent fields, `|| null` each.
+  const NINE_FIELDS = {
+    fINBankrevaluationgainAcct: 'GAIN1',
+    fINBankrevaluationlossAcct: 'LOSS1',
+    fINBankfeeAcct: 'FEE1',
+    inTransitPaymentAccountIN: 'INTRANSITIN1',
+    depositAccount: 'DEP1',
+    clearedPaymentAccount: 'CLEAREDIN1',
+    fINOutIntransitAcct: 'INTRANSITOUT1',
+    withdrawalAccount: 'WITHDRAW1',
+    clearedPaymentAccountOUT: 'CLEAREDOUT1',
+  };
+
+  it('saveAccountingConfiguration POSTs all 9 fields with the DAL field names (ETP-4872)', async () => {
     globalThis.fetch.mockResolvedValue(
-      okResponse([{ id: 'row-1', fINAssetAcct: 'AST1', fINTransitoryAcct: 'TRA1' }]),
+      okResponse([{ id: 'row-1', ...NINE_FIELDS }]),
     );
 
     const { result } = renderHook(() => useFinancialAccountAccounting());
 
     let saved;
     await act(async () => {
-      saved = await result.current.saveAccountingConfiguration('acc-1', {
-        fINAssetAcct: 'AST1',
-        fINTransitoryAcct: 'TRA1',
-      });
+      saved = await result.current.saveAccountingConfiguration('acc-1', NINE_FIELDS);
     });
 
     const [url, init] = globalThis.fetch.mock.calls[0];
@@ -197,47 +208,51 @@ describe('useFinancialAccountAccounting', () => {
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toEqual({
       financialAccountId: 'acc-1',
-      fINAssetAcct: 'AST1',
-      fINTransitoryAcct: 'TRA1',
+      ...NINE_FIELDS,
     });
-    expect(saved).toEqual({ id: 'row-1', fINAssetAcct: 'AST1', fINTransitoryAcct: 'TRA1' });
+    expect(saved).toEqual({ id: 'row-1', ...NINE_FIELDS });
   });
 
-  it('saveAccountingConfiguration coerces a falsy Cuenta transitoria to null (optional field)', async () => {
+  it('saveAccountingConfiguration coerces a falsy value on any of the 9 fields to null (no field required)', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'row-1' }]));
 
     const { result } = renderHook(() => useFinancialAccountAccounting());
     await act(async () => {
       await result.current.saveAccountingConfiguration('acc-1', {
-        fINAssetAcct: 'AST1',
-        fINTransitoryAcct: '',
+        ...NINE_FIELDS,
+        depositAccount: '',
+        withdrawalAccount: null,
       });
     });
 
     const [, init] = globalThis.fetch.mock.calls[0];
-    expect(JSON.parse(init.body)).toEqual({
+    expect(JSON.parse(init.body)).toMatchObject({
       financialAccountId: 'acc-1',
-      fINAssetAcct: 'AST1',
-      fINTransitoryAcct: null,
+      depositAccount: null,
+      withdrawalAccount: null,
     });
   });
 
-  it('saveAccountingConfiguration coerces a falsy Cuenta bancaria to null (defensive — required is enforced client-side)', async () => {
+  it('saveAccountingConfiguration sends null for every field when the payload is fully empty (no field required)', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'row-1' }]));
 
     const { result } = renderHook(() => useFinancialAccountAccounting());
     await act(async () => {
-      await result.current.saveAccountingConfiguration('acc-1', {
-        fINAssetAcct: undefined,
-        fINTransitoryAcct: undefined,
-      });
+      await result.current.saveAccountingConfiguration('acc-1', {});
     });
 
     const [, init] = globalThis.fetch.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({
       financialAccountId: 'acc-1',
-      fINAssetAcct: null,
-      fINTransitoryAcct: null,
+      fINBankrevaluationgainAcct: null,
+      fINBankrevaluationlossAcct: null,
+      fINBankfeeAcct: null,
+      inTransitPaymentAccountIN: null,
+      depositAccount: null,
+      clearedPaymentAccount: null,
+      fINOutIntransitAcct: null,
+      withdrawalAccount: null,
+      clearedPaymentAccountOUT: null,
     });
   });
 
@@ -247,7 +262,7 @@ describe('useFinancialAccountAccounting', () => {
     const { result } = renderHook(() => useFinancialAccountAccounting());
     await act(async () => {
       await expect(
-        result.current.saveAccountingConfiguration('acc-1', { fINAssetAcct: 'AST1' }),
+        result.current.saveAccountingConfiguration('acc-1', NINE_FIELDS),
       ).rejects.toMatchObject({ message: 'invalid account', status: 400 });
     });
   });
@@ -264,7 +279,7 @@ describe('useFinancialAccountAccounting', () => {
     const { result } = renderHook(() => useFinancialAccountAccounting());
     await act(async () => {
       await expect(
-        result.current.saveAccountingConfiguration('acc-1', { fINAssetAcct: 'AST1' }),
+        result.current.saveAccountingConfiguration('acc-1', NINE_FIELDS),
       ).rejects.toMatchObject({ message: 'HTTP 500', status: 500 });
     });
   });
