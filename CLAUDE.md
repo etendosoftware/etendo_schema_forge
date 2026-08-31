@@ -55,7 +55,7 @@ Include the agent's name, role, and key rules in the prompt passed to the subage
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
 | "Check ETP-4321 for the merge block" / "is it ready to merge?" | **Blockie** | Pre-flight PR verification across the 3 repos for a merge block |
-| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never `develop`) |
+| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never `develop` directly) |
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
