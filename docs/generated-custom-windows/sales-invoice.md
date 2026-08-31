@@ -653,6 +653,14 @@ which rejects a foreign payment carrying a `1:1` rate (it would otherwise silent
 ledger amount). The rate is sent to the backend as `conversionRate` on the `registerPayment`
 body; the backend recomputes the account-currency amount authoritatively from it.
 
+**The same rate also drives a cross-currency bank transfer (ETP-5084).** On the payment side
+(`dir='out'`), a PIS transfer is instructed in the *account's* currency, so this rate is what converts
+the amount actually sent to the bank — through the same `PaymentCurrencyConverter.convertedAmount` the
+booked `financialTransactionAmount` goes through, so the two cannot diverge. That means the rate field
+is no longer only a bookkeeping input: on a PSD2 account it decides how much money leaves the bank.
+See [`purchase-invoice.md`](purchase-invoice.md#cross-currency-transfers--etp-5084). Collections are
+unaffected — PIS initiates outbound transfers only.
+
 **Rate persistence on drafts (ETP-4841).** A rate typed by the user is stored on the draft and
 shown back when the draft is reopened — it is not re-derived from the system rate. Three parts:
 

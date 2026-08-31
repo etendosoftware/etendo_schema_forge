@@ -959,8 +959,14 @@ its own currency while booking the bank transaction(s) in the account currency:
   against the account actually being reconciled instead. If the account has no methods configured for
   the direction, the modal is skipped and the backend auto-resolves a default, same as before this
   iteration. A cross-currency settlement additionally requires the resolved/chosen method to be
-  multi-currency enabled (`payin/payout_ismulticurrency`); a PSD2 bank-transfer method (disabled by
-  ETP-4503) is rejected with a clear error instead of a cryptic Core failure.
+  multi-currency enabled (`payin/payout_ismulticurrency`), and is rejected with a clear error instead
+  of a cryptic Core failure when it is not. **Since ETP-5084 a PSD2 bank-transfer method no longer
+  trips this**: connecting an account to its bank used to clear those two flags on the transfer link
+  (ETP-4503), on the premise that a transfer could only ever settle an invoice in the account's own
+  currency. A PIS transfer now converts the amount to the account currency before instructing the
+  bank, so that premise is gone — the disabling was removed and data-fix R29 re-enabled the flags on
+  already-connected accounts. The guard now only fires on a link an administrator deliberately
+  configured as single-currency.
 - **Same currency:** unchanged — rate ONE, standard flow.
 
 #### Write off the invoice difference (ETP-4797)

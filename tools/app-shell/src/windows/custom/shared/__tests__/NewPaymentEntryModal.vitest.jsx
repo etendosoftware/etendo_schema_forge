@@ -129,7 +129,9 @@ function buildApiFetch(cfg = {}) {
  */
 function buildPisApiFetch(cfg = {}) {
   const {
-    accounts = [{ id: 'acc-1', label: 'Banco PIS', bankConnected: true, maskedPan: '****1234' }],
+    // ETP-5084: PIS eligibility and the template default key off the ACCOUNT currency, so the
+    // fixture has to carry one — an account with no currency falls back to the invoice's.
+    accounts = [{ id: 'acc-1', label: 'Banco PIS', bankConnected: true, maskedPan: '****1234', currency: 'EUR' }],
     methods = [{ id: 'm-1', label: 'Transferencia' }],
     sources = [],
     plan = [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '1000' }],
@@ -2104,12 +2106,13 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
       });
 
-      it('hides the PIS block when the invoice currency is not EUR or GBP', async () => {
-        mockApiFetch = buildPisApiFetch();
-        renderModal({
-          dir: 'out', specName: 'purchase-invoice',
-          invoiceData: { ...INVOICE, 'currency$_identifier': 'USD' },
+      // ETP-5084: the gate moved from the invoice currency to the ACCOUNT currency, because that
+      // is the currency the transfer is instructed in. A CHF bank account has no PIS template.
+      it('hides the PIS block when the ACCOUNT currency is not one PIS supports', async () => {
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{ id: 'acc-1', label: 'Banco CHF', bankConnected: true, currency: 'CHF' }],
         });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
         expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
       });
@@ -2192,6 +2195,195 @@ describe('NewPaymentEntryModal', () => {
           const body = JSON.parse(call[1].body);
           expect(body).not.toHaveProperty('pis');
         });
+      });
+    });
+
+    // ── ETP-5084 ───────────────────────────────────────────────────────────
+    // A transfer leaves the bank in the ACCOUNT's currency, so an invoice in another currency is
+    // payable over PIS: the amount is converted first. Before this change the modal gated on the
+    // INVOICE currency, so the block simply never appeared for the ticket's own case (USD invoice,
+    // EUR bank) — and the template was derived from the invoice currency too.
+    describe('cross-currency PIS transfer (ETP-5084)', () => {
+      const USD_INVOICE = { ...INVOICE, 'currency$_identifier': 'USD' };
+
+      /** A connected account in `accountCurrency`, paying the USD invoice above. */
+      function renderCrossCurrency(accountCurrency, rate = 0.92) {
+        mockConversion = { rate, hasRate: true, loading: false };
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{
+            id: 'acc-1', label: `Banco ${accountCurrency}`, bankConnected: true,
+            maskedPan: '****1234', currency: accountCurrency,
+          }],
+        });
+        return renderModal({
+          dir: 'out', specName: 'purchase-invoice', invoiceData: USD_INVOICE,
+        });
+      }
+
+      it('shows the PIS block for a USD invoice paid from a connected EUR account', async () => {
+        renderCrossCurrency('EUR');
+        expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+      });
+
+      it('shows the conversion fields alongside the PIS block', async () => {
+        renderCrossCurrency('EUR');
+        await screen.findByTestId('cp-pis-section');
+        expect(screen.getByTestId('cp-conversion-fields')).toBeInTheDocument();
+        await waitFor(() =>
+          expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+      });
+
+      it('defaults the template from the ACCOUNT currency, not the invoice currency', async () => {
+        // USD invoice + EUR account -> SEPA (the account's template). Keyed off the invoice it
+        // would also have been SEPA by fallthrough, so the discriminating cases are below.
+        renderCrossCurrency('EUR');
+        await screen.findByTestId('cp-pis-section');
+        expect(await screen.findByText('cpPisIbanLabel', { selector: 'label' })).toBeInTheDocument();
+        expect(screen.queryByTestId('cp-pis-sort-code')).not.toBeInTheDocument();
+      });
+
+      it('uses FPS for a GBP account even though the invoice is USD', async () => {
+        renderCrossCurrency('GBP');
+        await screen.findByTestId('cp-pis-section');
+        expect(await screen.findByTestId('cp-pis-sort-code')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-account-number')).toBeInTheDocument();
+        expect(screen.queryByText('cpPisIbanLabel', { selector: 'label' })).not.toBeInTheDocument();
+      });
+
+      it('uses DOMESTIC for a USD account (invoice in USD too, so no conversion)', async () => {
+        mockConversion = { rate: null, hasRate: false, loading: false };
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{ id: 'acc-1', label: 'Banco USD', bankConnected: true, currency: 'USD' }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice', invoiceData: USD_INVOICE });
+        await screen.findByTestId('cp-pis-section');
+        // DOMESTIC shows IBAN + BBAN + account number, and no sort code.
+        expect(await screen.findByTestId('cp-pis-bban')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-account-number')).toBeInTheDocument();
+        expect(screen.queryByTestId('cp-pis-sort-code')).not.toBeInTheDocument();
+      });
+
+      // The whole point of the ticket: the user must see the figure that will actually leave the
+      // bank (1000 USD x 0.92 = 920,00 EUR), not the invoice amount, before authorizing it at the
+      // SCA widget. Showing the invoice figure here is how a user ends up authorizing a number
+      // nobody ever displayed to them. All the clauses render into one span (alertParts.join),
+      // and the useUI mock echoes `key {params}`, so each slot can be asserted by name.
+      it('states the CONVERTED amount in the transfer clause, and the invoice amount + rate '
+        + 'in the conversion clause', async () => {
+        renderCrossCurrency('EUR');
+        await screen.findByTestId('cp-pis-section');
+
+        await waitFor(() => {
+          const alert = screen.getByText(/^cpPisAlertTransfer/);
+          // The money leaving the account: converted, in the account currency.
+          expect(alert).toHaveTextContent(/"dinero":"920,00/);
+          expect(alert).toHaveTextContent('€');
+          // The invoice figure is still shown, but as context — not as the transferred amount.
+          expect(alert).toHaveTextContent(/cpPisAlertConverted/);
+          expect(alert).toHaveTextContent(/"importeFactura":"1\.000,00/);
+          expect(alert).toHaveTextContent(/"tasa":"0\.92"/);
+          expect(alert).toHaveTextContent(/"monedaBanco":"EUR"/);
+        });
+      });
+
+      it('states the invoice amount as the transferred one when no conversion applies', async () => {
+        // Same currency on both sides -> no conversion clause, and `dinero` is the invoice amount.
+        mockConversion = { rate: null, hasRate: false, loading: false };
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const alert = screen.getByText(/^cpPisAlertTransfer/);
+        expect(alert).toHaveTextContent(/"dinero":"1\.000,00/);
+        expect(alert).not.toHaveTextContent(/cpPisAlertConverted/);
+      });
+
+      it('still sends the invoice-currency amount plus the rate — the backend converts', async () => {
+        renderCrossCurrency('EUR');
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body.pis).toBe(true);
+          expect(body.pisTemplate).toBe('SEPA');
+          // actual_payment stays in the INVOICE currency; conversionRate is what lets the backend
+          // derive the account-currency figure it instructs the bank for.
+          expect(body.actual_payment).toBe('1000');
+          expect(body.conversionRate).toBe('0.92');
+        });
+      });
+
+    });
+
+    // A 400 from this endpoint arrives in NEO Headless's OWN envelope, `{error:{message,status}}`.
+    // extractSaveError only ever looked at Etendo's `response.*` envelope, so every backend
+    // rejection collapsed into the generic "cpSaveFailed" and the real reason was visible only in
+    // the network tab. Reported live with an unsupported DOMESTIC template on a Salt Edge sandbox
+    // provider (ETP-5084).
+    describe('backend error surfacing (ETP-5084)', () => {
+      function withRegisterError(message) {
+        const base = buildPisApiFetch();
+        mockApiFetch = vi.fn(async (path, opts) => {
+          if (path.includes('registerPayment')) {
+            return jsonRes({ error: { message, status: 400 } }, false);
+          }
+          return base(path, opts);
+        });
+      }
+
+      async function confirmAndFail(message) {
+        withRegisterError(message);
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+      }
+
+      // The reported symptom, verbatim: the provider refuses DOMESTIC and the user saw only
+      // "no se pudo guardar". What this asserts is that the real reason reaches the screen at all;
+      // the English-to-locale-key mapping is asserted in lib/__tests__/backendErrors.test.js,
+      // because the useUI mock here echoes keys and translateBackendError deliberately falls back
+      // to the raw message when a key has no translation.
+      it('shows the provider message instead of the generic save error', async () => {
+        const raw = 'The selected template is not supported by the chosen provider. '
+          + 'Please select a different template.';
+        await confirmAndFail(raw);
+
+        expect(await screen.findByText(raw)).toBeInTheDocument();
+        expect(screen.queryByText('cpSaveFailed')).not.toBeInTheDocument();
+      });
+
+      it('surfaces the conversion-rate rejections too', async () => {
+        await confirmAndFail('Conversion rate must be greater than zero');
+        expect(await screen.findByText('Conversion rate must be greater than zero'))
+          .toBeInTheDocument();
+        expect(screen.queryByText('cpSaveFailed')).not.toBeInTheDocument();
+      });
+
+      it('falls back to the raw message when there is no mapping for it', async () => {
+        // Better an untranslated backend sentence than "could not save, try again": the user can at
+        // least read what went wrong and report it.
+        await confirmAndFail('Some brand new backend rule nobody has mapped yet');
+        expect(await screen.findByText('Some brand new backend rule nobody has mapped yet'))
+          .toBeInTheDocument();
+      });
+
+      it('still falls back to cpSaveFailed when the response carries no message at all', async () => {
+        withRegisterError(undefined);
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        expect(await screen.findByText('cpSaveFailed')).toBeInTheDocument();
       });
     });
 
@@ -2285,8 +2477,10 @@ describe('NewPaymentEntryModal', () => {
         expect(screen.queryByTestId('cp-pis-account-number')).not.toBeInTheDocument();
       });
 
-      it('shows sort code + account number (and hides IBAN) for the FPS template (GBP invoice)', async () => {
-        mockApiFetch = buildPisApiFetch();
+      it('shows sort code + account number (and hides IBAN) for the FPS template (GBP account)', async () => {
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{ id: 'acc-1', label: 'Banco GBP', bankConnected: true, currency: 'GBP' }],
+        });
         renderModal({
           dir: 'out', specName: 'purchase-invoice',
           invoiceData: { ...INVOICE, 'currency$_identifier': 'GBP' },
@@ -2299,7 +2493,9 @@ describe('NewPaymentEntryModal', () => {
       });
 
       it('keeps Confirmar disabled for FPS until sort code + account number are filled, then sends them', async () => {
-        mockApiFetch = buildPisApiFetch();
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{ id: 'acc-1', label: 'Banco GBP', bankConnected: true, currency: 'GBP' }],
+        });
         renderModal({
           dir: 'out', specName: 'purchase-invoice',
           invoiceData: { ...INVOICE, 'currency$_identifier': 'GBP' },
