@@ -313,8 +313,31 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
     present with a null/blank value explicitly clears it. In practice `EditAccountModal.jsx`
     always sends all 9 keys on every save regardless of the active account type — the whole tab
     is one form (`persistAccountEdits` builds the payload from `ACCOUNTING_FIELDS`) — so the
-    omitted-key path only matters for other API/MCP consumers of this entity.
+    omitted-key path only matters for other API/MCP consumers of this entity. (Some of those 9
+    values may be forced to `null` in the payload rather than read from state — see the
+    Type-switch note right below.)
 ```
+
+**Type-switch mid-edit — payload scoped to the type actually being saved (ETP-4872 QA fix,
+BUG-1).** `accounting.values` (the field-value map inside `useFinancialAccountAccounting`) is keyed
+on all 9 fields regardless of the account's current type, and nothing resets or filters it when the
+user changes Type on the General tab before Save — a value entered while a since-hidden group was
+still on screen is deliberately not thrown away just because the user flips Type back before saving.
+The gap this left: `persistAccountEdits` used to build the save payload by reading straight off that
+unfiltered map, so a value set for a group that no longer applies to the type being saved (e.g. a
+Banco-only "General" field such as `fINBankfeeAcct`, filled in while the account was still Banco)
+was still sent — and persisted — after the user switched Type to Caja/Tarjeta and saved, even though
+that field is invisible for the new type. The backend has no way to catch this on its own: the
+handler's PATCH-like semantics mean "field present in the body" always means "set this value,"
+never "infer whether it still applies from the account's type." Fixed in `EditAccountModal.jsx`'s
+`accountingFieldsForType()` / `persistAccountEdits`: the save payload is now built against the type
+actually being saved (the pending Type selection if `fields.typeDirty`, else the account's persisted
+type) — any of the 9 fields that does not belong to that type's rendered layout is explicitly nulled
+in the payload instead of being carried over stale. This can only surface while Type is still
+editable at all — Type locks once the account has transactions or an active bank connection
+(ETP-4581) — so it is a pre-Save-only edge case: switch Type and save, and any field belonging only
+to the previous type is gone from that row; switch Type back and forth without saving, and nothing
+is lost until Save actually fires.
 
 - **Resolution:** the handler resolves the **account's own organization's** general ledger
   (`org.getGeneralLedger()`, mirroring `GeneralLedgerConfigurationHandler`) — not the caller's
@@ -399,19 +422,30 @@ not duplicated here.
   `57200000` (leaf), so `57210000` needed a new sibling subgroup (`5721`) as its parent, not a leaf
   hung directly off `572`.
 - **Existing tenants (corrective):** `cli/src/data-fixes/sql/20260830T120000Z__R30-financial-account-card-ledger-account.sql`
-  (`@gap: A6`) mirrors the same shape — inserts the `5721` subgroup and the `57210`/`57210000` leaf,
-  deriving the leaf's exact code width per-tenant from that tenant's own `57200` sibling rather than
-  assuming one convention fleet-wide (confirmed live: real tenants carry both a 5-digit and an
-  8-digit form). **Validated with a real (non-rolled-back) apply run across every real+demo tenant
-  on the shared dev DB backed by `go.experimental.etendo.cloud`** (idempotent on re-run) — see
-  `docs/etendo-ad/onboarding-gaps.md` §A6 and `docs/etendo-ad/tenant-remediation-knowledge.md` for
-  the full investigation, including two self-caught authoring issues (an accent typo in the Spanish
-  name, and a two-`C_Element`-chain hazard specific to GOClient) fixed before that run.
+  (`@gap: A7` — originally filed as `A6`, relabeled after colliding with the pre-existing ETP-4539
+  `A6`; see `docs/etendo-ad/onboarding-gaps.md` §A7's label note) mirrors the same shape — inserts
+  the `5721` subgroup and the `57210`/`57210000` leaf, deriving the leaf's exact code width
+  per-tenant from that tenant's own `57200` sibling rather than assuming one convention fleet-wide
+  (confirmed live: real tenants carry both a 5-digit and an 8-digit form). **Validated with a real
+  (non-rolled-back) apply run across every real+demo tenant on the shared dev DB backed by
+  `go.experimental.etendo.cloud`** (idempotent on re-run) — see `docs/etendo-ad/onboarding-gaps.md`
+  §A7 and `docs/etendo-ad/tenant-remediation-knowledge.md` for the full investigation, including two
+  self-caught authoring issues (an accent typo in the Spanish name, and a two-`C_Element`-chain
+  hazard specific to GOClient) fixed before that run.
   `ONBOARDING_PROVISIONED_THROUGH` was **deliberately left unbumped** pending both this fix and the
   preventive branch above being confirmed merged. As of this writing this doc cannot confirm
   whether R30 has also been run against every tenant in the actual production fleet (as opposed to
   the shared dev/experimental DB it was validated against) — check the data-fix ledger
   (`ETGO_DATA_FIX_HISTORY`) or the data-fixes README before assuming this is closed everywhere.
+  **QA follow-up (2026-08-31):** Sentinel filed two further findings against this already-`APPLIED`,
+  immutable migration — a multi-chain edge case (a tenant wired to more than one qualifying `AC`
+  element chain would only get the lowest-`c_element_id` one fixed) and a doc-accuracy nit (Steps
+  C/D/E resolve by plain value equality, not literally via `C_AcctSchema_Element` as the file's own
+  Background comment claims). Both were investigated live and confirmed **zero exposure fleet-wide**
+  and accepted as known, documented limitations rather than reopened as fixes — the `.sql` itself
+  was left untouched (an applied migration is never edited). Full detail, including why each is safe
+  in practice: `docs/etendo-ad/onboarding-gaps.md` §A7's 2026-08-31 caveat and
+  `docs/etendo-ad/tenant-remediation-knowledge.md`'s "ETP-4872 — R30 QA rejection" entry.
 
 ### Editar from the detail view (ETP-4530)
 
