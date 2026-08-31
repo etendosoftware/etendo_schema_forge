@@ -23,6 +23,13 @@ import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+// ETP-5073 / DOC-04: the optimistic-locking token is remembered here (the one place every
+// record and every list row is parsed) and injected by apiFetch on the way out, so no call
+// site has to thread `updated` through by hand.
+import { rememberRecordVersion, forgetRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+// ETP-5073 / DOC-04: the conflict prompt is a dialog, not a toast — it is a blocking decision
+// with a destructive option. See lib/saveConflict.js for why the toast was abandoned.
+import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
@@ -315,8 +322,12 @@ function deriveRecordId(record, entityName) {
 function normalizeRecord(record, entityName) {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
     const id = deriveRecordId(record, entityName);
-    if (id == null || record.id === id) return record;
-    return { ...record, id };
+    const normalized = (id == null || record.id === id) ? record : { ...record, id };
+    // ETP-5073 / DOC-04: remembered under the DERIVED id, which is the one the update URL and
+    // the update body will carry — keying it under whatever the backend happened to name the
+    // primary key would make every injection lookup miss.
+    rememberRecordVersion(normalized);
+    return normalized;
 }
 
 function normalizeRows(rows, entityName) {
@@ -660,11 +671,23 @@ export function buildSavePayload({
     return payload;
 }
 
-export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError) {
+/**
+ * Stable id for the concurrency-conflict notice (ETP-5073).
+ *
+ * Without it every failed save adds ANOTHER toast, and because this one is deliberately
+ * non-dismissing (`duration: Infinity`) they accumulate forever — sonner stacks collapsed by
+ * default, so the second attempt buries the first behind it and the buttons become unreachable.
+ * A stable id makes sonner update the existing toast in place instead, which is the same trick
+ * the numeric-validation toasts use.
+ */
+const SAVE_CONFLICT_TOAST_ID = 'etgo-save-conflict';
+
+export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
     let backendFieldErrors = null;
+    let staleConflict = false;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
@@ -674,8 +697,38 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
             backendFieldErrors = {};
             for (const k of errFields) backendFieldErrors[k] = ui('fieldRequired');
         }
+        // ETP-5073 / DOC-04: somebody else saved this record between our read and this write.
+        // Keyed off the machine-readable discriminator, never the status alone — a duplicate-key
+        // rejection is also a 409 and its remedy is the opposite (change your data, not your
+        // baseline).
+        staleConflict = body?.error === 'stale_record';
     } catch {
         // ignore — fall through to the legacy extractor
+    }
+    if (staleConflict) {
+        // The save did NOT happen, so the user has to decide: keep editing, or discard and
+        // refresh. Two explicit choices and no third clever one — we deliberately do NOT offer to
+        // merge, see discardChangesAndReload for why.
+        const msg = ui('saveConflictRecordChanged');
+        setSaveError(msg);
+        // A dialog, because this blocks the user's work and one of the options destroys it. The
+        // toast this replaced also rendered badly: sonner puts action buttons inline with the
+        // message, and two labels this long squeezed the text into a one-character-wide column.
+        if (openSaveConflict({ onRefresh: onStaleRecord })) {
+            return;
+        }
+        // No dialog host mounted (a test, an embedded view): fall back to a toast rather than say
+        // nothing. Silence is the single outcome this ticket exists to remove. The stable id keeps
+        // repeated attempts from stacking non-expiring notices.
+        toast.error(msg, {
+            id: SAVE_CONFLICT_TOAST_ID,
+            duration: Infinity,
+            cancel: { label: ui('saveConflictKeepEditing'), onClick: () => {} },
+            ...(onStaleRecord
+                ? { action: { label: ui('saveConflictDiscardAndReload'), onClick: () => onStaleRecord() } }
+                : {}),
+        });
+        return;
     }
     if (backendFieldErrors) {
         setFieldErrors(backendFieldErrors);
@@ -1284,6 +1337,58 @@ export function useEntity(entity, childEntity, {
         syncRegisteredFields();
     }, [syncRegisteredFields]);
 
+    /**
+     * ETP-5073 / DOC-04: re-read the record after a concurrency conflict, discarding the pending
+     * edits.
+     *
+     * Deliberately NOT a merge. An earlier version layered the user's changed keys back over the
+     * freshly-read record, and that was wrong twice over:
+     *
+     *  - it silently overwrote the other person's value on any field BOTH had edited, which is the
+     *    very data loss this ticket exists to remove, moved one step later;
+     *  - it injected values through `setEditing`, which does not run callouts. On a document whose
+     *    fields are interdependent (a business-partner change recomputes price list, payment terms
+     *    and taxes) the merged form showed a combination no callout had ever derived.
+     *
+     * So the record is reloaded as the system holds it and the pending edits are dropped. The user
+     * re-enters what still makes sense, and because each re-entry goes through the normal edit
+     * path, its callouts fire in the NEW context — which a merge could never guarantee. Safety over
+     * convenience: this is a rare path, and guessing intent on a document with chained derivations
+     * is not a guess we are entitled to make.
+     *
+     * The caller only reaches this after the user explicitly chose it over cancelling the save.
+     */
+    const discardChangesAndReload = useCallback(async () => {
+        if (!selected?.id) return;
+        try {
+            const res = await apiFetch(`/${entity}/${selected.id}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const data = await res.json();
+            // normalizeRecord also refreshes the remembered `updated`, so the next save carries
+            // the token this read just produced instead of the one the conflict rejected.
+            const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+            setSelected(fresh);
+            setEditing({ ...fresh });
+            // Both sides now hold the same values, so isDirtyHeader is false and every unsaved-
+            // changes consumer (the navigation guard, the clone gate) sees a clean form again.
+            // The changed-key set is dropped too: those keys are no longer the user's edits, and
+            // leaving them would keep scoping format validation to fields nobody touched.
+            userChangedKeysRef.current.clear();
+            setSaveError(null);
+            setFieldErrors({});
+            // Belt and braces: sonner already dismisses a toast when its action is clicked, but
+            // this one never expires on its own, so a stuck copy would sit on screen forever if
+            // that ever changed or if the reload was triggered from anywhere else.
+            // Close both surfaces: the dialog resolves itself when its button is clicked, but a
+            // refresh triggered from anywhere else must not leave either one behind.
+            dismissSaveConflict();
+            toast.dismiss(SAVE_CONFLICT_TOAST_ID);
+            toast.info(ui('saveConflictReloaded'));
+        } catch {
+            toast.error(ui('saveConflictReloadFailed'));
+        }
+    }, [selected, entity, apiFetch, ui]);
+
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
         setIsSaving(true);
@@ -1387,7 +1492,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload);
                 return null;
             }
         } catch (err) {
@@ -1398,7 +1503,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1408,6 +1513,10 @@ export function useEntity(entity, childEntity, {
         try {
             const res = await apiFetch(`/${entity}/${selected.id}`, { method: 'DELETE' });
             if (res.ok) {
+                // ETP-5073: drop the remembered version, so an id reused by a later create
+                // (an import replaying a fixed key, a fixture) cannot inherit a token that
+                // was read for a different record.
+                forgetRecordVersion(selected.id);
                 setSelected(null);
                 setEditing(null);
                 setChildren([]);

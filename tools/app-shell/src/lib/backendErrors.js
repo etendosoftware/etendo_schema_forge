@@ -1,4 +1,13 @@
 const BACKEND_ERROR_MAP = {
+  // ETP-5073 / DOC-04. The lines sidebar renders the server's message verbatim rather than going
+  // through the concurrency-conflict dialog the main form uses, so without this entry the user
+  // reads it in English. Both spellings are mapped: the sentence Etendo GO now sends, and core's
+  // own wording, which still reaches this path on a write that does not go through
+  // NeoCrudHandler's pre-check.
+  'This record was modified by someone else after you read it. Your changes were not saved.':
+    'backendError.staleRecord',
+  'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
+    'backendError.staleRecord',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
