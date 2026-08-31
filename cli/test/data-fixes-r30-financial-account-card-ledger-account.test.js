@@ -361,3 +361,74 @@ describe('R30 data-fix — structural facts pinned (mirrors Task 5\'s preventive
     );
   });
 });
+
+/**
+ * QA (Sentinel) findings, ETP-4872 — re-read with fresh eyes rather than assuming the 38 tests
+ * above are exhaustive. Both are statically verifiable (no DB needed) and neither is covered by
+ * the existing suite.
+ */
+describe('R30 data-fix — QA finding: multi-element tenant only gets ONE chain fixed (BUG-2)', () => {
+  // Steps A and B each pick exactly one (c_acctschema, c_element_id) pair via
+  // `ORDER BY ae.c_element_id LIMIT 1` — necessary because both INSERTs mint their PK from a
+  // SINGLE @uuid_<KEY>@ token, which resolves to the SAME id for every row a multi-row
+  // INSERT...SELECT would try to produce (see README's @uuid_<KEY>@ contract: "same KEY -> same
+  // generated id WITHIN ONE APPLY"). A tenant whose accounting schemas are wired to MORE THAN ONE
+  // distinct AC element (a real, if uncommon, Etendo shape — e.g. two legal entities on separate
+  // charts) and where more than one of those element chains independently has a 57200 sibling but
+  // no 57210 yet would only get the lowest-c_element_id chain fixed by a single @apply run.
+  //
+  // The runner (run.js) then marks the WHOLE fix APPLIED for that tenant unconditionally on
+  // success (writeLedger with STATUS.APPLIED, not conditioned on how many element chains actually
+  // got fixed — see run.js ~L408-410) and PROCESSED-gates it (run.js L71/454/578): a fix already
+  // in APPLIED/MANUALLY_FIXED/SKIPPED_NOT_NEEDED state for a (client, fix_id) pair is never
+  // re-attempted. So the second (and any further) qualifying element chain is left permanently
+  // unfixed for that tenant, with no natural retry path and no signal in the ledger that anything
+  // was left incomplete (@apply has no @report section to surface it either — see the "has
+  // non-empty @check and @apply... no @report" test above).
+  it('Steps A and B are single-row INSERTs (ORDER BY ae.c_element_id LIMIT 1) — only the lowest-id qualifying element gets fixed per apply', () => {
+    assert.match(statements[0], /ORDER BY ae\.c_element_id\s+LIMIT 1/);
+    assert.match(statements[1], /ORDER BY ae\.c_element_id\s+LIMIT 1/);
+  });
+
+  it('the runner marks the fix APPLIED unconditionally on success, with no rows-affected gate (run.js)', () => {
+    const runnerSrc = readFileSync(join(__dirname, '..', 'src', 'data-fixes', 'run.js'), 'utf8');
+    assert.match(
+      runnerSrc,
+      /status:\s*STATUS\.APPLIED,\s*appliedUtc:\s*new Date\(\),\s*rowsAffected:\s*rows,\s*detail,/,
+      'writeLedger is called with STATUS.APPLIED regardless of how many rows @apply actually affected',
+    );
+  });
+
+  it('the runner never re-attempts a fix already APPLIED for a (client, fix_id) pair (PROCESSED gate)', () => {
+    const runnerSrc = readFileSync(join(__dirname, '..', 'src', 'data-fixes', 'run.js'), 'utf8');
+    assert.match(runnerSrc, /const PROCESSED = new Set\(\[STATUS\.APPLIED, STATUS\.MANUALLY_FIXED, STATUS\.SKIPPED\]\);/);
+  });
+});
+
+describe('R30 data-fix — QA finding: Steps C/D/E do not re-resolve via c_acctschema_element (BUG-3, minor)', () => {
+  // The file's own Background point 4 claims: "Every statement below resolves the target element
+  // ONLY via C_AcctSchema_Element.elementtype='AC' ... so the orphan chain is never touched." That
+  // is true for @check and Steps A/B (asserted by the "two-C_Element hazard" suite above, which
+  // counts exactly 2 c_acctschema_element joins — Steps A and B only). Steps C, D and E instead
+  // resolve their target rows by plain c_elementvalue.value equality (scoped to :client_id and
+  // paired to a same-c_element_id sibling), with NO c_acctschema_element join at all. In the
+  // ordinary case this is harmless: Steps A/B insert at most one new '5721' and one new
+  // '57210'/'57210000' row per apply, so there is only one row of each to match. But if a tenant's
+  // own ORPHAN (non-wired) element chain — the exact hazard Background point 4 describes, and
+  // confirmed to exist live for GOClient — ever independently carries a matching '572'/'5721'
+  // pair (e.g. from an earlier, unrelated migration or manual entry predating this fix), Steps
+  // C/D/E's value-only joins would reparent that orphan data too, contradicting the file's own
+  // "never touched" claim for those three steps specifically.
+  it('Steps C, D and E contain no c_acctschema_element join (unlike @check/Steps A/B)', () => {
+    assert.doesNotMatch(statements[2], /c_acctschema_element/);
+    assert.doesNotMatch(statements[3], /c_acctschema_element/);
+    assert.doesNotMatch(statements[4], /c_acctschema_element/);
+  });
+
+  it('Steps C and D resolve their target elementvalue rows by plain value equality, not by element-scoped id', () => {
+    assert.match(statements[2], /ev5721\.value = '5721'/);
+    assert.match(statements[2], /ev572\.value = '572'/);
+    assert.match(statements[3], /evleaf\.value IN \('57210', '57210000'\)/);
+    assert.match(statements[3], /ev5721\.value = '5721'/);
+  });
+});

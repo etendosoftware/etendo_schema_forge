@@ -1238,6 +1238,125 @@ describe('EditAccountModal', () => {
     });
   });
 
+  // ── ETP-4872 QA regression: accounting field state across a mid-edit Type switch ──
+  // AccountingConfigurationSection renders only the subset of ACCOUNTING_FIELDS that applies to
+  // `accountType`, but `accounting.values` (the state map in useAccountingConfiguration) is keyed
+  // on ALL 9 fields regardless of type, and nothing resets/filters it when `fields.type` changes —
+  // the hook's fetch effect is keyed on `[open, accountId]` only (EditAccountModal.jsx ~L840-876).
+  // persistAccountEdits then builds its save payload by iterating the FULL ACCOUNTING_FIELDS list
+  // unconditionally (~L223-229), reading straight from that unfiltered map.
+  describe('Accounting field state across a mid-edit Type switch (ETP-4872 regression)', () => {
+    const SWITCHABLE_BANK_ACCOUNT = {
+      id: 'acc-switchable',
+      name: 'Switchable',
+      type: 'B',
+      currencyId: '102',
+      bankConnected: false,
+      hasTransactions: false, // Type stays editable (ETP-4581) — no bank link/transactions.
+    };
+
+    it('BUG-1: still sends the now-hidden Banco-only field value after switching Type to Cash pre-Save', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: { accounts: [{ id: 'FEE1', name: 'Fee 1' }] },
+      });
+      saveAccountingConfiguration.mockResolvedValue({ id: 'row-switch' });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      // Fill the Banco-only "General" field while the account is still type Banco.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(screen.getByTestId('field-fINBankfeeAcct'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Switch back to General and change Type to Cash BEFORE saving. The Accounting tab's
+      // "General" sub-section (and fINBankfeeAcct with it) is now unmounted — Cash renders only
+      // 6 fields across 2 sub-sections, no "General" group at all.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(saveAccountingConfiguration).toHaveBeenCalledTimes(1));
+      const [, payload] = saveAccountingConfiguration.mock.calls[0];
+      // Expected (correct) behavior: a value that belongs only to the account type the user is
+      // no longer saving as must not be silently carried over onto the Cash row. Current
+      // implementation FAILS this assertion — payload.fINBankfeeAcct still comes back 'FEE1'
+      // because persistAccountEdits reads straight from the unfiltered `accounting.values` map,
+      // with no re-derivation keyed on the (possibly just-changed) account type.
+      expect(payload.fINBankfeeAcct).toBeNull();
+    });
+
+    it('keeps the accounting dirty-check accurate across a round-trip Type switch', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch-2',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: 'DEP1',
+        'depositAccount$_identifier': 'Deposit 1',
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'DEP1', name: 'Deposit 1' },
+            { id: 'DEP2', name: 'Deposit 2' },
+          ],
+        },
+      });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      // Flip Type to Cash (depositAccount is common to both Banco and Cash's "Payment IN" group,
+      // so it stays rendered either way) with no accounting change yet.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      // Change depositAccount while the account is (momentarily) type Cash.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+
+      // Revert Type back to Banco — typeDirty clears, isolating accounting.dirty as the only
+      // remaining source of Save being enabled.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeBank' }));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert depositAccount to its snapshot too — every key in the 9-field map matches its
+      // snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
+      // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
+    });
+  });
+
   // ── ETP-4530: tab default / reset behavior ────────────────────────────────
   describe('tab default/reset behavior (ETP-4530)', () => {
     it('opens on the General tab by default', () => {
