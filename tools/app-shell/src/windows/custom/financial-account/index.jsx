@@ -40,6 +40,12 @@ const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
 // are pre-derived server-side on the transaction rows, so the generic exporter
 // stays a dumb serializer. `foreignAmount`/`foreignCurrency` are not exposed yet
 // → those keys are absent on the row and render as empty cells (as in Classic).
+// ETP-5020: this whole column list is a hardcoded, unlocalized mirror of
+// Classic's own CSV export headers (by design — every label here, not just
+// "G/L Item", stays in Classic's English regardless of active UI locale).
+// Classic itself is out of scope for the "Cuenta contable"/"Accounting
+// account" rename, so `glItem:G/L Item` is deliberately left unrenamed to
+// keep byte-for-byte parity with what a Classic export produces.
 const MOVEMENT_CSV_COLUMNS = [
   'transactionTypeLabel:Transaction Type',
   'paymentLabel:Payment',
@@ -73,6 +79,8 @@ const HEADER_CSV_COLUMNS = [
   'status:Status',
 ].join('|');
 
+// ETP-5020: same Classic-parity rationale as MOVEMENT_CSV_COLUMNS above —
+// `glItemName:G/L Item` is deliberately left unrenamed.
 const LINE_CSV_COLUMNS = [
   'description:Description',
   'lineNo:Line No.',
