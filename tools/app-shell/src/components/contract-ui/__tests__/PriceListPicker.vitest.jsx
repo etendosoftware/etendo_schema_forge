@@ -1,4 +1,11 @@
 // Mocks BEFORE imports
+// ETP-5022 — the hook's requests now come from `useApiFetch`, which reads the bearer
+// token from the session instead of from the `headers` prop.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
     if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
