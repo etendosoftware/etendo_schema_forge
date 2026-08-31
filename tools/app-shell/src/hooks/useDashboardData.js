@@ -426,11 +426,12 @@ export function useDashboardData() {
         // (`WidgetPendingTasksHandler` sets it on each task it builds), so an unresolvable task
         // is dropped: fail closed.
         pendingTasks: filterFeed(mapPendingTasks(pendingData)),
-        // `WidgetActivityHandler` does NOT emit `navigation` yet — it knows each row's document
-        // type and `issotrx` but only uses them to build the text. Until it does, dropping
-        // unresolved entries would empty the feed for every role instead of filtering it, so
-        // they are kept. This is a KNOWN GAP: an activity line for a document the role cannot
-        // open is still listed. Closed by the backend half of ETP-5088.
+        // The activity feed is filtered server-side too: `WidgetActivityHandler` resolves each
+        // entry's window from its document type + `issotrx` and now emits `navigation`, dropping
+        // what the role cannot open. `dropUnresolved: false` is therefore about COMPATIBILITY,
+        // not permissiveness — against an Etendo GO older than ETP-5088 the entries carry no
+        // `navigation`, and dropping them would empty the feed for everyone instead of filtering
+        // it. Tighten to the default (fail closed) once the minimum supported GO version emits it.
         recentMessages: filterFeed(mapActivity(activityData) || [], { dropUnresolved: false }),
         recentInvoices: mapRecentInvoices(invoicesData) ?? [],
         bestProducts: mapBestProducts(bestProductsData) ?? [],
