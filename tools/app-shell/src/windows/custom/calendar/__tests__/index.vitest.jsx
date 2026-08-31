@@ -1,5 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const calendarSource = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
+const yearPageSource = readFileSync(
+  join(__dirname, '../../../../../../../artifacts/fiscal-calendar/generated/web/fiscal-calendar/YearPage.jsx'),
+  'utf8'
+);
 
 vi.mock('@generated/fiscal-calendar/generated/web/fiscal-calendar/YearPage', () => ({
   default: (props) => {
@@ -55,9 +65,16 @@ describe('CalendarWindow', () => {
   it('passes the expected secondaryTabs to YearPage', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
     const tabs = globalThis.__lastCalendarPageProps.secondaryTabs;
-    expect(tabs.map((t) => t.key)).toEqual(['accounting', 'periods']);
+    expect(tabs.map((t) => t.key)).toEqual(['periods', 'accounting']);
     expect(typeof tabs[0].Panel).toBe('function');
     expect(typeof tabs[1].Panel).toBe('function');
+  });
+
+  it('leaves Attachments to the generated YearPage tab instead of reimplementing it', () => {
+    expect(yearPageSource).toMatch(/AttachmentsTab/);
+    expect(yearPageSource).toMatch(/key:\s*'attachments'/);
+    expect(calendarSource).not.toMatch(/AttachmentsTab/);
+    expect(calendarSource).not.toMatch(/key:\s*'attachments'/);
   });
 
   it('rewrites the calendar-route apiBaseUrl to fiscal-calendar for the header page', () => {
@@ -67,7 +84,7 @@ describe('CalendarWindow', () => {
 
   it('rewrites the injected apiBaseUrl to end-year-close for the Accounting tab Panel', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    const { AccountingPanelForCalendar } = { AccountingPanelForCalendar: globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel };
+    const { AccountingPanelForCalendar } = { AccountingPanelForCalendar: globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel };
     render(<AccountingPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     expect(globalThis.__lastAccountingPanelProps.apiBaseUrl).toBe('https://api.test/end-year-close');
     expect(globalThis.__lastAccountingPanelProps.parentId).toBe('year1');
@@ -75,7 +92,7 @@ describe('CalendarWindow', () => {
 
   it('rewrites the injected apiBaseUrl to open-close-period-control for the Periods tab Panel', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    const PeriodsPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel;
+    const PeriodsPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
     render(<PeriodsPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     expect(globalThis.__lastPeriodsPanelProps.apiBaseUrl).toBe('https://api.test/open-close-period-control');
     expect(globalThis.__lastPeriodsPanelProps.parentId).toBe('year1');
@@ -96,8 +113,8 @@ describe('CalendarWindow', () => {
 
   it('sends the header, Accounting tab, and Periods tab to three distinct spec bases', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
-    const PeriodsPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel;
+    const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel;
+    const PeriodsPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
     render(<AccountingPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     render(<PeriodsPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
 
@@ -127,7 +144,7 @@ describe('CalendarWindow', () => {
     // The status pill and the Contabilidad tab must read from the exact same accounting
     // endpoint so they can never disagree with each other about whether a year is closed.
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[0].Panel;
+    const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel;
     const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
     render(<AccountingPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);

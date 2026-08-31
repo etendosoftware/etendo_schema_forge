@@ -64,8 +64,8 @@ export default function CalendarWindow(props) {
   const yearApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/fiscal-calendar`;
   const endYearCloseApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/end-year-close`;
   const secondaryTabs = [
-    { key: 'accounting', label: ui('calendarAccountingTab'), Panel: AccountingPanelForCalendar },
     { key: 'periods', label: ui('calendarPeriodsTab'), Panel: PeriodsExpandablePanelForCalendar },
+    { key: 'accounting', label: ui('calendarAccountingTab'), Panel: AccountingPanelForCalendar },
   ];
 
   // The generated YearPage.jsx's own `menuActions` unconditionally offers BOTH "Cerrar Año"

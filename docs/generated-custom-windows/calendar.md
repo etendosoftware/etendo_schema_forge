@@ -30,37 +30,24 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   filled in manually; onboarding is expected to guarantee at least one calendar
   per organization.
   **ETP-4948 Issue 1 — FIXED (real root cause, distinct from the staleness fix below):**
-  `C_Calendar_ID` is `C_Year`'s AD parent-link column (`AD_Column.ISPARENT = 'Y'`).
-  `decisions.json` declares `"derivation": "fromParent"` on it (matching the same convention
-  already used for `warehouse`/`assetCategory`/`organization` elsewhere in this repo), but that
-  declaration is documentation only — tracing the published `schema-forge-cli` pipeline
-  (`generate-contract.js`'s `generateBackendContract`, and `push-to-neo.js`/`neo-delta.js`'s
-  `ETGO_SF_FIELD` row builder) confirms `derivation` is never read for a `system`-visibility
-  field, so it never reaches `contract.json` or `ETGO_SF_FIELD` — a config-only fix was not
-  viable here. The real fix is server-side, in `NeoMandatoryDefaultsService.tryInjectFromParentValues`
-  (`com.etendoerp.go`): before this fix, that method only resolved a parent-derived default when
-  the child column's `AD_Column.DefaultValue` matched the classic `"@VarName@"` expression
-  pattern — `C_Year.C_Calendar_ID.DefaultValue` is `NULL`, so that match always failed and
-  resolution fell through to `tryInjectFirstFromLookup` → `NeoDefaultsService.resolveFirstComboOption`,
-  an org-blind selector that picks the alphabetically-first readable `C_Calendar` row (including
-  org `*`) — reproduced live on the GOClient tenant, which has "GOClient Calendar" (org `*`)
-  sorting ahead of "GOOrg Calendar" (the actual org). `tryInjectFromParentValues` now checks
-  `AD_Column.ISPARENT` (`Column.isLinkToParentColumn()`) directly: for a true parent-link column
-  it injects the parent tab's own record id straight from `NeoParentValuesLoader`'s already-loaded
-  `parentValues` map (keyed by the parent's own DB column name), without requiring a classic
-  `@VarName@` default expression, and without touching the generic org-blind selector fallback
-  itself (that broader class of bug — `SelectorOrgFilter`/`resolveFirstComboOption` picking the
-  alphabetically-first org for *any* combo field, not just parent-links — is intentionally left
-  for a separate follow-up, Jira ETP-5086). Covered by unit tests in `NeoDefaultsServiceTest`
-  (`testTryInjectFromParentValuesInjectsOwnIdForIsParentColumnWithNoDefaultExpression` and two
-  companion regression tests for the pre-existing `@VarName@` path and non-parent columns).
+   `C_Calendar_ID` is `C_Year`'s AD parent-link column (`AD_Column.ISPARENT = 'Y'`). The generic
+   parent-default mechanism correctly handles nested child-tab creates, but this custom route
+   exposes `C_Year` directly, so its create request has no `parentId` and cannot use that mechanism.
+   `YearCloseHandler` therefore validates the create request and overwrites the hidden calendar
+   field with `OBContext`'s current organization's calendar before generic CRUD persists it. This
+   prevents the org-blind first-combo fallback from choosing the global (`*`) calendar when a
+   client owns more than one. The handler also rejects missing or malformed fiscal years: only
+   four-digit values from 1900 through 2999 are accepted. The `decisions.json`
+   `derivation: "fromParent"` declaration remains semantic documentation only; it does not reach
+   the backend shape for a `system`-visibility field. The broader selector fallback issue remains
+   tracked separately as Jira ETP-5086.
 - Trigger **Create Periods** on a year to generate its 12 standard periods (Jan–Dec) plus an
   optional adjustment period.
 - On a year's detail, switch between two secondary tabs:
-  - **Periods** — an expandable list of the year's periods (aggregate status badge), where
+   - **Periods** (the first detail tab) — an expandable list of the year's periods (aggregate status badge), where
     expanding a period row reveals its per-document-type breakdown inline, each with its own
     **Abrir/Cerrar Periodo** / **Abrir/Cerrar Documento** action.
-  - **Accounting** — a read-only, year-scoped Fact_Acct grid (account, debit, credit,
+   - **Accounting** (the second detail tab) — a read-only, year-scoped Fact_Acct grid (account, debit, credit,
     description) for reviewing the year's accounting entries.
 - Trigger **Cerrar Año** (Close Year) from the kebab ("more") menu once every period is
   Closed or Permanently Closed, and **Deshacer Cierre de Año** (Undo Close Year) to reverse it.
@@ -240,9 +227,9 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
-| fiscalYear | string | editable | yes | yes | The year value, e.g. "2027" |
+| fiscalYear | string | editable | yes | yes | Required four-digit value from 1900 through 2999, e.g. "2027"; enforced server-side on create |
 | description | string | editable | yes | yes | Optional |
-| calendar | foreignKey | system | no | no | Hidden parent-link field (`C_Calendar_ID`, `AD_Column.ISPARENT='Y'`); no UI selector. Auto-derived server-side — now correctly resolved from the parent tab's own record via `NeoMandatoryDefaultsService.tryInjectFromParentValues`'s ISPARENT check, ahead of the org-blind `tryInjectFirstFromLookup` fallback — see Issue 1 note above (ETP-4948, fixed) |
+| calendar | foreignKey | system | no | no | Hidden parent-link field (`C_Calendar_ID`, `AD_Column.ISPARENT='Y'`); no UI selector. On direct Fiscal Calendar creates, `YearCloseHandler` sets it from the current organization calendar and ignores any caller value — see Issue 1 note above (ETP-4948, fixed) |
 | processNow | button | editable | no | yes | **Create Periods** — AD Process 100 |
 | createRegFactAcct | button | discarded | — | — | Backing field for **Close Year**; triggered only via the `closeYear` menuAction/`CloseYearConfirmModal`, never rendered directly |
 | dropRegFactAcct | button | discarded | — | — | Backing field for **Undo Close Year**; same trigger path as above |
@@ -294,15 +281,13 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 - `ProcessParamDialog` only renders `type: "select"` parameters — `CREATEADJUSTMENT` is modeled as
   a two-option select (Yes/No), same constraint the original `fiscal-calendar` window had.
 - ~~The `calendar` field on `year` is auto-derived server-side (`NeoDefaultsService.tryInjectFirstFromLookup`,
-  "the org's first active calendar") rather than resolved via its actual AD parent-link
-  (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
-  alphabetically-first readable row instead of the year's real parent calendar (ETP-4948 Issue 1).~~
-  **Fixed** — `NeoMandatoryDefaultsService.tryInjectFromParentValues` now special-cases
-  `ISPARENT='Y'` columns and resolves the year's real parent calendar directly, ahead of the
-  generic lookup fallback. `decisions.json`'s `derivation: "fromParent"` on this field remains
-  documentation only (still not wired into `contract.json`/`ETGO_SF_FIELD` for `system`-visibility
-  fields) — the actual fix lives entirely in the Java default-injection layer, not in decisions
-  config. The broader, still-open class of bug — the org-blind selector fallback
+   "the org's first active calendar") rather than resolved via its actual AD parent-link
+   (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
+   alphabetically-first readable row instead of the year's real parent calendar (ETP-4948 Issue 1).~~
+   **Fixed** — since the custom Fiscal Calendar route creates the child-tab `C_Year` directly and
+   has no parent record id, `YearCloseHandler` injects the current organization's calendar before
+   generic CRUD runs and never trusts a caller-supplied value. It also rejects non-four-digit
+   fiscal years outside 1900-2999. The broader, still-open class of bug — the org-blind selector fallback
   (`SelectorOrgFilter`/`resolveFirstComboOption` picking the alphabetically-first org for *any*
   combo field, not just parent-links) — is tracked separately as Jira ETP-5086.
 - No free-text search is configured on any entity (`searchableFields: []`, inherited default).
