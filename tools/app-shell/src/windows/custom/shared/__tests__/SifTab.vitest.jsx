@@ -13,6 +13,12 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-001' } }),
 }));
 
+// useApiFetch wraps app-shell-core auth hooks (useAuthOptional) not set up in
+// this unit-test environment. Mock as a passthrough to globalThis.fetch.
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => (url, options) => globalThis.fetch(url, options),
+}));
+
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
   useFiscalConfig: vi.fn(),
 }));
