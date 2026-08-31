@@ -63,11 +63,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
-import {
-  backgroundUtilities,
-  hoverBackgroundUtilities,
-  countBackgroundUtilities,
-} from '@/test/rowShading.js';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 function selectOpenCloseOption(value) {
   fireEvent.change(screen.getByTestId('select-control'), { target: { value } });

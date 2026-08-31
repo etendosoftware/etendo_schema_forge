@@ -39,11 +39,7 @@ vi.mock('@/hooks/useEntity', () => ({
 import { toast } from 'sonner';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
-import {
-  backgroundUtilities,
-  hoverBackgroundUtilities,
-  countBackgroundUtilities,
-} from '@/test/rowShading.js';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 // The shared Checkbox (app-shell-core, Semantic Theme Contract) renders a
 // <label data-testid="..."> wrapping a nested <input type="checkbox">.

@@ -23,11 +23,7 @@ vi.mock('../StatementLinesInline', () => ({
 import * as React from 'react';
 import { useClientSort } from '@/hooks/useClientSort';
 import { StatementsTable, buildStatementSortAccessors } from '../StatementsTable.jsx';
-import {
-  backgroundUtilities,
-  hoverBackgroundUtilities,
-  countBackgroundUtilities,
-} from '@/test/rowShading.js';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 // The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
 // "Ordenar por" popover). This harness supplies that state with the same hook the tab uses.

@@ -53,11 +53,7 @@ import {
   buildMovementSortCtx,
   buildMovementSortAccessors,
 } from '../MovementsTable.jsx';
-import {
-  backgroundUtilities,
-  hoverBackgroundUtilities,
-  countBackgroundUtilities,
-} from '@/test/rowShading.js';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
