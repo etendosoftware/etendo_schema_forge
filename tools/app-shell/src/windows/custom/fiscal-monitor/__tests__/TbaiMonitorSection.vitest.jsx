@@ -27,6 +27,7 @@ vi.mock('../FmPrimitives.jsx', () => ({
     handleToggleAll: vi.fn(),
     handleToggleRow: vi.fn(),
   }),
+  selectedRowClassName: (selectedIds, id) => (selectedIds.has(id) ? 'fm-row--selected' : undefined),
 }));
 vi.mock('../useFiscalMonitor.js', () => ({
   TBAI_SPEC: 'tbai-facturas-enviadas',

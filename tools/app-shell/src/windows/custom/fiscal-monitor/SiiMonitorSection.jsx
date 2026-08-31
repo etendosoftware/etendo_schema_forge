@@ -5,7 +5,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { FileUp, FileDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { pickMostRecentMotivo } from './fiscalMonitor.utils.js';
 import {
   SII_SPEC,
@@ -197,15 +197,8 @@ function SiiTableContent({
             const errorMsg = isErrorStatus(row.aeatsiiEstado)
               ? (row.aeatsiiErrorMsg || motivoMap[row.id] || null)
               : null;
-            // ETP-5030 — selected-row tint. The single source of truth is the
-            // `.fm-row--selected` rule in fiscal-monitor.css: this table paints its
-            // backgrounds on the CELLS, so a Tailwind `bg-primary/5` on the <tr> would be
-            // covered by `tr:hover td` at exactly the moment the user clicks the checkbox.
-            // Only the class-name lookup is repeated across the three monitor sections —
-            // a shared export from FmPrimitives.jsx would break the five test files that
-            // mock that module exhaustively.
             return (
-              <tr key={row.id ?? i} className={selectedIds.has(row.id) ? 'fm-row--selected' : undefined}>
+              <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
                 <td><Checkbox
                   checked={selectedIds.has(row.id)}
                   onChange={() => onToggleRow(row.id)}

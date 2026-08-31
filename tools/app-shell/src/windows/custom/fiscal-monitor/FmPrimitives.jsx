@@ -188,6 +188,18 @@ export function buildCsvAndDownload(filename, columnDefs, rows) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * ETP-5030 — selected-row tint. The single source of truth for the actual
+ * colour is the `.fm-row--selected` rule in fiscal-monitor.css (these tables
+ * paint their backgrounds on the CELLS, so a Tailwind `bg-primary/5` on the
+ * <tr> would be covered by `tr:hover td` at exactly the moment the user
+ * clicks the checkbox). This helper only computes the class name shared by
+ * the three monitor sections (SII, TBAI, Verifactu).
+ */
+export function selectedRowClassName(selectedIds, id) {
+  return selectedIds.has(id) ? 'fm-row--selected' : undefined;
+}
+
 export const WipBadge = ({ inline = false }) => {
   const ui = useUI();
   return (

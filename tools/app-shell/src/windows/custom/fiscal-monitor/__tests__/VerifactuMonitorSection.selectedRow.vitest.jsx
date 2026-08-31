@@ -88,6 +88,7 @@ vi.mock('../FmPrimitives.jsx', async () => {
       });
       return { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow };
     },
+    selectedRowClassName: (selectedIds, id) => (selectedIds.has(id) ? 'fm-row--selected' : undefined),
   };
 });
 
