@@ -1606,3 +1606,84 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   Flagged explicitly as a follow-up for whoever merges both the preventive dataset branch and this
   corrective `.sql` — do not silently skip noting this, and do not bump it from a worktree that
   cannot see the preventive branch's actual merged state.
+
+## ETP-4872 — R30 QA rejection (Sentinel): multi-chain hazard, live-verified, zero exposure (2026-08-31)
+
+QA filed two findings against R30 (BUG-2 medium, BUG-3 low), both backed by new **passing**
+pinning tests (`cli/test/data-fixes-r30-financial-account-card-ledger-account.test.js`, describing
+current behavior, not failing it). Investigated both against the SAME shared dev DB R30 was
+originally validated against. R30 is already `APPLIED` for 19/19 real+demo tenants in that DB
+(confirmed via `SELECT ... FROM etgo_data_fix_history WHERE fix_id =
+'20260830T120000Z__R30-financial-account-card-ledger-account'`) — per this agent's own
+`what_i_never_do` rule ("never rename or edit an already-applied migration"), **the `.sql` file
+itself was left untouched for both findings.** Root cause of confusion the first time around: it's
+tempting to think "not yet in production" means a corrective data-fix `.sql` is still free-form
+editable during a QA cycle — it is NOT, once it has a real `APPLIED` ledger row anywhere, even a
+shared dev/experimental DB. **Apply generally:** treat the ledger row, not the git/PR merge state,
+as the immutability trigger for a data-fix `.sql` file.
+
+- **BUG-2 (multi-chain: >1 qualifying element chain per tenant, only the lowest-`c_element_id` one
+  gets fixed per `@apply` since both INSERTs share one `@uuid_<KEY>@` token) — confirmed ZERO live
+  exposure, fleet-wide, not just within the original 20-tenant sample.** Queried
+  `c_acctschema_element` (`elementtype='AC'`, `isactive='Y'`) grouped by `ad_client_id`, counting
+  `DISTINCT c_element_id`: only **2 clients in the ENTIRE fleet** are wired to more than one
+  distinct `AC` element — `F&B International Group` (`23C59575B9CF467C9620760EB255B389`, elements
+  `56E65CF592BD4DAF8A8A879810646266` + `FB577CDB95A54375AD95AE5F3B9D8458`) and `QA Testing`
+  (`4028E6C72959682B01295A070852010D`, elements `3DE10A7188234EB2898C0500B97CB495` +
+  `A0DA7C90447A412EAB5E1E4D16D1A9CA`). For BOTH, only ONE of the two wired elements carries ANY
+  `572%` row at all — the second `C_AcctSchema` on each (a US-Dollar-denominated schema) uses a
+  completely different chart with zero `572` family. So the BUG-2 precondition — two INDEPENDENTLY
+  qualifying chains (each with its own `57200`/`57200000` sibling but missing `57210`/`57210000`)
+  on the SAME tenant — cannot occur for either client, and both are already correctly `APPLIED`
+  (their one real chain's `57210`/`57210000` row exists). **Decision: accept as a known, documented
+  limitation, not worth a proactive hardening fix at this priority.** Rationale beyond
+  "zero exposure today": a second `C_AcctSchema` on an Etendo tenant is, structurally, almost
+  always there FOR a different chart of accounts (different currency/jurisdiction/reporting need)
+  — the exact reason a tenant adds a second schema in the first place tends to be the same reason
+  its element rarely shares the same `572` PGC family as the first. Not a proof of impossibility,
+  but a real reason this class of gap is unlikely to materialize, distinct from "we just haven't
+  seen it yet."
+  - **Separate, more durable observation (framework-level, not R30-specific):** `run.js` marks a
+    fix `APPLIED` unconditionally on `@apply` success — no rows-affected gate — and
+    `APPLIED`/`MANUALLY_FIXED`/`SKIPPED_NOT_NEEDED` are all in the `PROCESSED` set that a re-run
+    never revisits (see `run.js` `STATUS`/`PROCESSED` around L58-71, L408-410). So ANY future
+    single-token-per-apply fix (not just R30) that intentionally picks one of several qualifying
+    rows via `ORDER BY ... LIMIT 1` has the SAME latent gap: a tenant with N qualifying rows only
+    ever gets 1 fixed, with no ledger signal that N-1 remain and no retry path short of a brand-new
+    fix. Worth remembering as a pattern to watch for in future `ORDER BY ... LIMIT 1`-shaped fixes,
+    not something to retrofit onto R30 today.
+
+- **BUG-3 (Steps C/D/E lack a `c_acctschema_element` join, contradicting the SQL file's Background
+  point 4 claim that "every statement... resolves ONLY via `C_AcctSchema_Element`") — confirmed
+  the SAME zero-exposure result live.** Directly checked GOClient's own documented orphan chain
+  (element `91D04C02EF8F4975B9E4F5E07543B6EA`, the "GOOrg Account Tree" element, not wired to any
+  `C_AcctSchema` — see the ETP-4402 two-`C_Element`-hazard precedent above): it carries `572`,
+  `5720`, `57200000` but **NOT** `5721`/`57210`/`57210000` — the exact values Steps C/D/E actually
+  match on. A fleet-wide sweep (`SELECT ad_client_id, value, COUNT(DISTINCT c_element_id) ... value
+  IN ('572','5721','57210','57210000') ... HAVING COUNT(DISTINCT c_element_id) > 1`) found exactly
+  ONE collision anywhere: GOClient's bare `572` node (shared by both its wired and orphan
+  elements) — and Steps C/D/E never match on `572` alone, only on `5721`/`57210`/`57210000`, none
+  of which collide anywhere in the fleet. So Steps C/D/E's plain value-equality joins, while not
+  literally scoped via `C_AcctSchema_Element`, have never actually been ambiguous in practice: they
+  work because `5721`/`57210`/`57210000` happen to be unique-per-tenant values today (each row was
+  freshly minted by this fix's own Step A/B on the ONE wired element), not because of an explicit
+  guard. **Decision: since R30 is an already-applied, immutable migration (see above), do NOT edit
+  the `.sql` file — not even the Background comment — to correct the imprecise claim.** Recording
+  the correction here instead: Background point 4's blanket "every statement... ONLY via
+  `C_AcctSchema_Element`" is accurate for `@check` and Steps A/B (which DO join
+  `c_acctschema_element`) but NOT for Steps C/D/E, which resolve their target rows by
+  `ad_client_id` + plain `value` equality, paired to the SAME apply's own newly-inserted `5721`/leaf
+  row via `c_element_id` equality between the two joined `c_elementvalue` aliases — never via
+  `c_acctschema_element` itself. Correctness in practice rests on an unstated invariant (no tenant
+  has two elements sharing a `5721`/`57210`/`57210000` value), verified true fleet-wide today, not
+  on the AC-element join the comment claims. `docs/etendo-ad/onboarding-gaps.md`'s A7 entry repeats
+  the same overstated claim in its own "Fix" paragraph — annotated with a caveat there rather than
+  rewritten, for the same immutable-migration-adjacent reason (keep the historical record intact,
+  correct via annotation).
+  - **Apply generally:** a future fix using the same "insert new leaf → reparent via
+    value-matched-sibling UPDATE" pattern (Steps C/D here) should scope the sibling match
+    explicitly to the newly-inserted row's own `c_element_id` from the START (e.g. carry the
+    `@uuid_<KEY>@` token's element through, or re-derive it via the same `c_acctschema_element`
+    join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
+    OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
+    orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.

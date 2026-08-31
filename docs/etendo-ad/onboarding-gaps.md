@@ -736,6 +736,19 @@ including the combination-normalize step); F&B International Group/QA Testing �
 (5-digit branch, where the normalize step correctly no-ops since the trigger's own output already
 matches); full re-run → 19/19 `SKIPPED_NOT_NEEDED`, confirming idempotency in both width branches.
 
+> **Caveat (2026-08-31, QA rejection follow-up — see `tenant-remediation-knowledge.md`'s "R30 QA
+> rejection" entry for the full investigation):** the "ONLY via `C_AcctSchema_Element`" claim above
+> is accurate for `@check` and Steps A/B, but NOT literally true for Steps C/D/E (the two
+> `AD_TREENODE` reparents and the `C_VALIDCOMBINATION` normalize) — those resolve their target rows
+> by plain `value` equality (`5721`/`57210`/`57210000`), paired to the row this SAME apply just
+> inserted via `c_element_id` equality between the joined aliases, never via
+> `C_AcctSchema_Element` itself. Live-verified this is harmless in practice (GOClient's own orphan
+> chain, and every other tenant's, never carries a `5721`/`57210`/`57210000` value on more than one
+> element), but that's an unstated invariant the SQL relies on, not something the joins enforce.
+> R30 is already `APPLIED` fleet-wide, so left as-is (immutable migration) rather than edited —
+> flagging here so the next reader doesn't take the "ONLY via" claim as a hard guarantee for a
+> future fix copying this pattern.
+
 **Preventive:** already shipped — ETP-4872 Task 5, `com.etendoerp.go` branch
 `feat/ledger-account-57210` (unmerged at the time this corrective fix was authored), extending
 `referencedata/sampledata/GOClient/{C_ELEMENTVALUE,C_ELEMENTVALUE_TRL,C_VALIDCOMBINATION,
