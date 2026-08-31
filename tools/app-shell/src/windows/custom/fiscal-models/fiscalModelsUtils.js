@@ -637,6 +637,67 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
 }
 
 /**
+ * Re-runs the VIES validation for every NIF-IVA of a declaration that is still
+ * pending, by calling POST /neo/fiscal349/validate-vies?year=&period=.
+ *
+ * Endpoint contract: 200 { validated, valid, invalid, stillPending }, where `validated` is
+ * every pending operator the call ACCOUNTED FOR — deduplicated by `bpId`, since one partner
+ * spans several operator rows (one per AEAT key, plus rectificative rows) and is checked once.
+ * `valid + invalid + stillPending === validated` always holds; the UI relies on that invariant.
+ *
+ * POST-only by design: the call mutates C_BPartner, and the endpoint answers 405 to a GET.
+ *
+ * Return contract deliberately mirrors `generate349File` (`{ ok, error, serverMessage }`)
+ * rather than `compute349Operators`'s bare `null`-on-failure: the caller has to tell the
+ * user WHY nothing changed, and `parseServerMessage` is what turns a NEO error body
+ * ("@AEAT349_SomeKey@", a Java exception message) into that text. `compute349Operators`
+ * can collapse every failure into `null` only because its caller silently keeps the
+ * previous operators; a user-initiated button cannot stay silent.
+ *
+ * NOTE ON "PENDING": `stillPending` absorbs THREE different outcomes and does not
+ * distinguish them — the partner failed the eligibility gate (tax-id key is not NOI, or the
+ * tax id is blank), VIES answered inconclusively (timeout, HTTP error, or the very common
+ * `MS_MAX_CONCURRENT_REQ` — the member state is saturated; France returns it routinely), or
+ * the partner was deferred past the batch cap of 25 partners per call.
+ *
+ * Callers must therefore NOT attribute a cause to this number: "the VIES service did not
+ * answer" is false for the gate-failure and deferred cases, and "invalid data" is false for
+ * the service case. The per-outcome breakdown is deliberately not surfaced at all — classic
+ * collapses every failure into "pending" and GO matches it (aggregate counts only).
+ * `stillPending` IS exactly what the banner will show on the next render, so re-running the
+ * action is always a meaningful follow-up.
+ */
+export async function validate349Vies(decl, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const params = new URLSearchParams({ year: decl.year, period: decl.period });
+    const res = await fetch(`${base}/fiscal349/validate-vies?${params}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
+    }
+    const data = await res.json();
+    const num = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+    };
+    return {
+      ok: true,
+      validated:    num(data?.validated),
+      valid:        num(data?.valid),
+      invalid:      num(data?.invalid),
+      stillPending: num(data?.stillPending),
+    };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
  * Calls POST /neo/fiscal349/generate and triggers a browser file download.
  * Returns { ok: true } on success, or { ok: false, error: string, serverMessage?: string }
  * on failure — same return contract as generate303File, so both 303 and 349 callers can

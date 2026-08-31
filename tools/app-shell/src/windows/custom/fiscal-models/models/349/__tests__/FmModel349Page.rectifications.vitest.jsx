@@ -246,6 +246,9 @@ const RECTIF_SUMMARY = {
 const totalOpsKpiValue = () =>
   document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.total_ops"] .test-kpi349-value')?.textContent;
 
+const operatorsKpiValue = () =>
+  document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.operators"] .test-kpi349-value')?.textContent;
+
 describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
   it('badges the corrective row and leaves the regular row unbadged', () => {
     render(
@@ -398,15 +401,20 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     expect(rectifKpiValue()).toBe('1');
   });
 
-  it('the operator count KPI includes corrective rows (they are real table rows)', () => {
+  // ETP-5027 (owner correction): this originally asserted `2` — the KPI counted
+  // table ROWS, so an operator's own correction inflated the "Operadores" figure.
+  // The owner overruled that call: the card answers "how many counterparties are
+  // in this declaration", which is a DISTINCT count. Do not flip this back to a
+  // row count; the row count still lives on the Operadores TAB BADGE.
+  it('the Operadores KPI counts DISTINCT operators, so a corrective row for the same operator does NOT add one', () => {
     render(
       <FmModel349Page
         decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
         {...defaultProps}
       />
     );
-    const opsKpi = document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.operators"] .test-kpi349-value');
-    expect(opsKpi.textContent).toBe('2');
+    // Same bpId on both rows → one counterparty, two rows.
+    expect(operatorsKpiValue()).toBe('1');
   });
 
   it('picks up rectificativeSummary from the compute() response', async () => {

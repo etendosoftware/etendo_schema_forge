@@ -465,6 +465,80 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 
 Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`. Each operator's `vies` value (`'valid'`/`'invalid'`/`'pending'`, driving both the Operadores row badge and the Pendientes VIES count) is derived server-side by `Fiscal349BoxesHandler#mapViesStatus` from the operator's BusinessPartner VIES status (`C_BPartner.EM_OBTIK_VIESStatus`, the same "Estado VIES" field editable on the Contact/BusinessPartner record): `'V'` → `valid`, `'I'` → `invalid`, anything else (null/blank/`'P'`) → `pending` (ETP-4755 — previously this field was never populated, so the badge always defaulted to `pending` regardless of the contact's real verification status).
 
+### VIES banner and the "Validar VIES" action (ETP-5027)
+
+The informational banner above the KPIs renders whenever `viesPending > 0` and the user has
+not dismissed it. Its **"Validar VIES"** button re-runs the validation for the declaration's
+pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at all and did nothing.
+
+- **Endpoint**: `POST /neo/fiscal349/validate-vies?year=YYYY&period=PP` → `200 { validated, valid,
+  invalid, stillPending }`. **POST-only** — the call mutates `C_BPartner` and the endpoint answers
+  405 to a GET. `validated` is every pending operator the call *accounted for*, deduplicated by
+  `bpId` (one partner spans several operator rows — one per AEAT key, plus rectificative rows —
+  and is checked once). `valid + invalid + stillPending === validated` **always** holds, and the
+  UI relies on that invariant. Note `validated` is not necessarily the "Pendientes VIES" KPI
+  value: the KPI counts distinct *NIF-IVA* (`viesIdentity`), the endpoint distinct *partners*.
+  Wrapped by `validate349Vies(decl, { token, apiBaseUrl })` in `fiscalModelsUtils.js`,
+  which returns `{ ok: true, ...counts }` or `{ ok: false, error, serverMessage }` — the same
+  contract as `generate349File`, including `parseServerMessage()`, because a user-initiated
+  button has to say *why* nothing changed (`compute349Operators`'s bare `null` cannot).
+- **Double-submission**: the button is `disabled` + `aria-busy` and swaps its label to
+  `fm.m349.banner.vies_validating` while in flight, backed by a synchronous
+  `validatingViesRef` guard for the window before React commits the state. Each run is a bulk
+  of live, rate-limited calls to the member states' services — overlapping runs are what earn a
+  `MS_MAX_CONCURRENT_REQ` rejection.
+- **Refresh**: on success the handler calls `invalidateFiscalComputeCache(decl.id)` and then
+  `handleCompute()`, so the row badges, the "Pendientes VIES" KPI and the banner (all three read
+  the same `operators` array) move together. On failure it returns early — the displayed statuses
+  are left exactly as they were, never blanked.
+- **Why the cache has to be invalidated**: `useFiscalAutoCompute` caches each declaration's
+  compute payload in `sessionStorage` (`fiscal_ac_v3_<declId>`) and, on every run of its mount
+  effect, restores the cached payload whenever `checkModifiedFn` says nothing changed.
+  `checkModified349` only asks whether the period's **invoices** changed, while a VIES
+  revalidation updates **business partners** — so it answers `false`, the pre-validation payload
+  is restored, and the old VIES badges are repainted over the fresh ones, making the button look
+  inert. Bumping the `fiscal_ac_vN_` key version does **not** fix this: a version bump only
+  discards payloads written by a *previous build*, whereas the stale entry here was written
+  seconds ago by the running build under the current version. The entry must be deleted by id,
+  which is what `invalidateFiscalComputeCache` (exported from `useFiscalAutoCompute.js`) does.
+  Regression coverage, including the stale repaint itself, is in
+  `__tests__/useFiscalAutoCompute.invalidate.vitest.js`.
+- **Result feedback** — a `sonner` toast built by `buildViesResultMessage`, **aggregate counts
+  only**. There is deliberately no per-error-code breakdown ("why is this one pending?"): classic
+  collapses every inconclusive VIES answer into "pending" and GO matches it. Outcomes:
+
+  | Outcome | Channel | es_ES |
+  |---|---|---|
+  | nothing attempted | `toast.info` | "No había ningún NIF-IVA pendiente de validar" |
+  | all valid | `toast.success` | "4 NIF-IVA procesados: 4 válidos" |
+  | mixed | `toast.warning` | "4 NIF-IVA procesados: 3 válidos, 1 inválido" |
+  | some/all still pending | `toast.warning` | "4 NIF-IVA procesados: 2 válidos, 2 siguen pendientes; puedes volver a intentarlo" |
+  | request failed | `toast.error` | `serverMessage`, else "No se pudo ejecutar la validación VIES. Inténtelo de nuevo." |
+
+  The headline says "procesados", not "comprobados", because `validated` counts operators the
+  call *accounted for*, including the ones it declined to check.
+
+  **The `stillPending` fragment attributes no cause, deliberately.** The backend folds THREE
+  distinct outcomes into that one number: the partner failed the eligibility gate (tax-id key is
+  not `NOI`, or the tax id is blank), VIES answered inconclusively (timeout, or the very common
+  `MS_MAX_CONCURRENT_REQ` — France returns it on essentially every attempt right now), or the
+  partner was deferred past the batch cap of **25 partners per call**. So "el servicio VIES no
+  respondió" would be false for the gate-failure and deferred cases, and "invalid data" would be
+  false for the service case. What *is* true of all three: `stillPending` is exactly what the
+  banner will show on the next render, which is why the copy offers a re-run and nothing more.
+  A non-zero `stillPending` is a routine outcome, not an edge case.
+- **Banner sub-copy corrected**: `fm.m349.banner.vies_sub` used to read "Validación VIES
+  asíncrona — informativa, no bloqueante". That was factually wrong — `bptaxidkey`'s
+  `ViesStatusObserver` calls `ViesService.checkVat()` **synchronously inside the
+  business-partner save transaction** (blocking up to the `HttpURLConnection` timeout), and this
+  button is synchronous too. It now reads "Consulta en vivo al servicio VIES — informativa, no
+  bloquea la declaración" (EN: "Live call to the VIES service — informative, does not block the
+  declaration"). What is non-blocking is the *declaration*, not the call.
+- **i18n keys added** (all three locales — `en_US`, `es_ES`, `es_AR`):
+  `fm.m349.banner.vies_validating`, `fm.m349.vies.result.none`, `.processed_one/_many`,
+  `.valid_one/_many`, `.invalid_one/_many`, `.pending_one/_many`, `.error`. Singular/plural pairs
+  are picked in code because `useUI()` does `{param}` substitution only — it has no plural rules.
+
 ### Action bar and kebab menu
 
 The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Marcar como 'Presentado'"** and, unlike that button, not gated on submission status (`!isSubmitted`).

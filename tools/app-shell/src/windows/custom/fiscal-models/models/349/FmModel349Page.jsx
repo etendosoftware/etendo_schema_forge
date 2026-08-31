@@ -11,7 +11,8 @@ import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
-import { formatAmount, compute349Operators, generate349File } from '../../fiscalModelsUtils.js';
+import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
+import { invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
 
@@ -53,6 +54,38 @@ function isRectificativeOp(op) {
 // into the identity used for React keys and row selection.
 function rowKey(op) {
   return `${op?.id ?? op?.bpId ?? op?.nif ?? ''}|${op?.key ?? ''}|${isRectificativeOp(op) ? 'R' : ''}`;
+}
+
+// ETP-5027 — the operators table is at (operator × AEAT key × regular/corrective)
+// grain, so `operators.length` is a ROW count and NEVER an answer to "how many
+// counterparties are in this declaration": one operator with two keys plus a
+// correction already produces three rows. The identity of an operator is the
+// business partner, so dedup on `bpId` — the stable AD id the endpoint emits on
+// every row (Fiscal349BoxesHandler.appendOperators). It is preferred over `nif`
+// because two BP records can legitimately carry the same tax id (duplicates,
+// branches) while still being two operators, and a BP whose tax id is missing
+// comes through with `nif: ''`. `nif`/`id` are fallbacks for payloads that
+// predate `bpId` (mocks, older cached responses).
+function operatorIdentity(op) {
+  return String(op?.bpId ?? op?.nif ?? op?.id ?? '');
+}
+
+// ETP-5027 — VIES validates a NIF-IVA, not a business partner: two BP records
+// sharing one tax id are ONE validation to perform, and the KPI/banner wording
+// ("N NIF-IVA con validación VIES pendiente") counts exactly that. Deliberately a
+// DIFFERENT key from operatorIdentity above. Rows with no tax id cannot be folded
+// into a NIF bucket, so they fall back to the BP identity and stay individually
+// countable instead of collapsing into a single empty-string bucket.
+function viesIdentity(op) {
+  const nif = String(op?.nif ?? '').trim().toUpperCase();
+  return nif || `bp:${operatorIdentity(op)}`;
+}
+
+// Corrective rows are NOT filtered out by either counter: a counterparty that
+// appears in this declaration only through a correction is still a counterparty,
+// and their NIF still needs validating.
+function countDistinct(rows, identify) {
+  return new Set(rows.map(identify).filter(Boolean)).size;
 }
 
 // ETP-5027 — AEAT349 classification of a rectification row. Rectification rows
@@ -260,11 +293,57 @@ function KeyFilterDropdown({ value, onChange, t }) {
   );
 }
 
+// ETP-5027 — turns a `validate349Vies` result into the sonner toast to show.
+// Pure and exported-by-position (module-local, exercised through the page's tests).
+//
+// AGGREGATE COUNTS ONLY, by explicit product decision: no per-error-code breakdown
+// ("why is this one pending?"). Classic collapses every inconclusive VIES answer into
+// "pending" and GO must behave the same.
+//
+// The `stillPending` fragment deliberately states NO cause. The backend folds THREE
+// different outcomes into that one number: the partner failed the eligibility gate (tax-id
+// key is not NOI, or the tax id is blank), VIES itself answered "pending" (a timeout, or the
+// very common MS_MAX_CONCURRENT_REQ — France returns that on essentially every attempt right
+// now), or the partner was deferred past the batch cap of 25 per call. Blaming the VIES
+// service would therefore be wrong for the gate-failure and deferred cases, and calling it a
+// data error would be wrong for the service case. What IS true of all three is the number
+// itself, and that `stillPending` equals what the banner shows on the next render — so a
+// re-run is always a sensible next step, which is the only hint the copy offers.
+function buildViesResultMessage(t, { validated = 0, valid = 0, invalid = 0, stillPending = 0 } = {}) {
+  if (validated <= 0) {
+    return {
+      level: 'info',
+      message: t('fm.m349.vies.result.none') ?? 'No había ningún NIF-IVA pendiente de validar',
+    };
+  }
+
+  const parts = [];
+  if (valid > 0) {
+    parts.push(t(valid === 1 ? 'fm.m349.vies.result.valid_one' : 'fm.m349.vies.result.valid_many', { count: valid }));
+  }
+  if (invalid > 0) {
+    parts.push(t(invalid === 1 ? 'fm.m349.vies.result.invalid_one' : 'fm.m349.vies.result.invalid_many', { count: invalid }));
+  }
+  if (stillPending > 0) {
+    parts.push(t(stillPending === 1 ? 'fm.m349.vies.result.pending_one' : 'fm.m349.vies.result.pending_many', { count: stillPending }));
+  }
+
+  // "procesado", not "comprobado": `validated` is every pending operator the call ACCOUNTED
+  // FOR (deduplicated by bpId — one partner spans several rows, one per AEAT key plus
+  // rectificative rows), which includes the ones it declined to check.
+  const headline = t(validated === 1 ? 'fm.m349.vies.result.processed_one' : 'fm.m349.vies.result.processed_many', { count: validated });
+  // The backend guarantees `valid + invalid + stillPending === validated`, so `parts` can
+  // only be empty if that invariant broke. Say what is known and stay off the success
+  // channel rather than implying every NIF came back clean.
+  const level = (stillPending > 0 || invalid > 0 || parts.length === 0) ? 'warning' : 'success';
+  return { level, message: parts.length ? `${headline}: ${parts.join(', ')}` : headline };
+}
+
 // VIES pending-validation banner — extracted out of the main component's render
 // (SonarQube S3776: keeps FmModel349Page's own cognitive complexity down without
 // changing behavior) so the `viesPending > 0 && !dismissed` gate lives in its own
 // small function instead of nesting inside the main render tree.
-function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
+function ViesBanner({ viesPending, dismissed, onDismiss, onValidate, validating, t }) {
   if (viesPending <= 0 || dismissed) return null;
   return (
     <div style={{ padding: '8px 20px', flexShrink: 0 }}>
@@ -281,15 +360,39 @@ function ViesBanner({ viesPending, dismissed, onDismiss, t }) {
           <span style={{ color: 'var(--status-info-fg)', fontWeight: 500 }}>
             {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
           </span>
-          {' '}
+          {/* ETP-5027 — the two halves are independent sentences and were running
+              together ("…VIES pendiente Validación VIES asíncrona…"). The separator
+              lives here, in the layout, rather than being baked into either locale
+              string, so no translation has to remember to carry the punctuation. */}
+          {'. '}
           <span style={{ color: 'var(--status-info-fg)', fontWeight: 400 }}>
-            {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
+            {/* ETP-5027 — this used to read "Validación VIES asíncrona". It is not
+                asynchronous: bptaxidkey's ViesStatusObserver calls ViesService.checkVat()
+                SYNCHRONOUSLY inside the business-partner save transaction (blocking up to
+                the HttpURLConnection timeout), and the "Validar VIES" button below is a
+                synchronous request too. What is actually true is that it does not block
+                the DECLARATION — hence the reworded key. */}
+            {t('fm.m349.banner.vies_sub') ?? 'Consulta en vivo al servicio VIES — informativa, no bloquea la declaración'}
           </span>
         </span>
+        {/* Disabled while a validation is in flight so the user cannot queue several
+            bulk VIES runs — each one is a live, rate-limited call to the member states'
+            services, and MS_MAX_CONCURRENT_REQ is exactly what piling them up produces. */}
         <button
-          style={{ fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+          type="button"
+          onClick={onValidate}
+          disabled={validating}
+          aria-busy={validating || undefined}
+          data-testid="vies-validate-button"
+          style={{
+            fontSize: 14, fontWeight: 500, color: 'var(--status-info-fg)', background: 'none',
+            border: 'none', cursor: validating ? 'progress' : 'pointer', textDecoration: 'underline',
+            textUnderlineOffset: 2, whiteSpace: 'nowrap', opacity: validating ? 0.6 : 1,
+          }}
         >
-          {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
+          {validating
+            ? (t('fm.m349.banner.vies_validating') ?? 'Validando…')
+            : (t('fm.m349.banner.vies_action') ?? 'Validar VIES')}
         </button>
         <button
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-info-fg)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
@@ -547,6 +650,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [originFilter, setOriginFilter] = useState(null);
   const [computing,    setComputing]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
+  const [validatingVies, setValidatingVies] = useState(false);
+  // Mirrors `validatingVies` synchronously: `setState` is async, so between two fast
+  // clicks (or a programmatic caller) the `disabled` attribute has not been committed yet.
+  const validatingViesRef = useRef(false);
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
@@ -569,7 +676,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
-  const viesPending  = operators.filter(o => o.vies === 'pending').length;
+  // ETP-5027 — both counters are DISTINCT counts, not row counts (see
+  // operatorIdentity / viesIdentity). The VIES banner consumes this same
+  // `viesPending` value, so the KPI and the banner can never disagree.
+  const operatorCount = countDistinct(operators, operatorIdentity);
+  const viesPending  = countDistinct(operators.filter(o => o.vies === 'pending'), viesIdentity);
   // Excludes corrective rows for the same reason TotalsCard does — their signed
   // deltas must not net off against the regular base total (ETP-5027).
   const totalBase    = operators
@@ -610,6 +721,43 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
     } finally {
       setComputing(false);
+    }
+  }
+
+  // ETP-5027 — re-runs VIES for this declaration's pending NIF-IVAs, then refreshes the
+  // operators so the VIES badges, the "Pendientes VIES" KPI and this banner all move
+  // together (all three read the same `operators` array).
+  async function handleValidateVies() {
+    // Double-submit guard. The button is `disabled` while in flight, but each run fires a
+    // bulk of LIVE calls to the member states' VIES services; overlapping runs are exactly
+    // what earns a MS_MAX_CONCURRENT_REQ rejection, so the guard is not merely cosmetic.
+    if (validatingViesRef.current) return;
+    validatingViesRef.current = true;
+    setValidatingVies(true);
+    try {
+      const res = await validate349Vies(decl, { token, apiBaseUrl });
+      if (!res.ok) {
+        // Return WITHOUT touching liveOperators: a failed request must leave the
+        // currently displayed statuses exactly as they were, not blank them.
+        toast.error(
+          res.serverMessage
+          || t('fm.m349.vies.result.error')
+          || 'No se pudo ejecutar la validación VIES. Inténtelo de nuevo.'
+        );
+        return;
+      }
+      // Drop the list's cached operators payload BEFORE recomputing. `checkModified349`
+      // only asks whether the period's INVOICES changed, and a VIES revalidation touches
+      // business partners instead — so it answers `false` and `useFiscalAutoCompute`
+      // restores the pre-validation payload, repainting the stale VIES badges over the
+      // fresh ones and making this button look inert. See invalidateFiscalComputeCache.
+      invalidateFiscalComputeCache(decl.id);
+      await handleCompute();
+      const { level, message } = buildViesResultMessage(t, res);
+      (toast[level] ?? toast)(message);
+    } finally {
+      validatingViesRef.current = false;
+      setValidatingVies(false);
     }
   }
 
@@ -825,6 +973,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       </div>
       {/* ── VIES banner ──────────────────────────────────────────── */}
       <ViesBanner
+        onValidate={handleValidateVies}
+        validating={validatingVies}
         viesPending={viesPending}
         dismissed={viesBannerDismissed}
         onDismiss={() => setViesBannerDismissed(true)}
@@ -840,7 +990,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
           iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.operators') ?? 'Operadores'}
-          value={String(operators.length)}
+          value={String(operatorCount)}
           badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
           badgeBg="hsl(var(--muted))"
           badgeColor="hsl(var(--text-disabled))"
@@ -863,15 +1013,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           badgeBg="var(--status-warning-bg)"
           badgeColor="var(--status-warning-fg)"
           data-testid="KpiWidget__346dd5" />
+        {/* ETP-5027 — informational severity, not an error: the banner right above
+            this bar states the VIES check is "informativa, no bloquea la
+            declaración", so the destructive/red token was overstating it. Uses the
+            SAME --status-info-* pair as that banner. The genuinely-invalid VIES
+            state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
         <KpiWidget
           icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
           iconColor="hsl(var(--text-disabled))"
           label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
           value={String(viesPending)}
-          valueColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))'}
+          valueColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--foreground))'}
           badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
-          badgeBg={viesPending > 0 ? 'var(--status-destructive-bg)' : 'hsl(var(--muted))'}
-          badgeColor={viesPending > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--text-disabled))'}
+          badgeBg={viesPending > 0 ? 'var(--status-info-bg)' : 'hsl(var(--muted))'}
+          badgeColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'}
           data-testid="KpiWidget__346dd5" />
       </div>
       {/* ── Tabs ─────────────────────────────────────────────────── */}
