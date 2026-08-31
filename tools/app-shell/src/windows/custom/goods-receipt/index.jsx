@@ -130,6 +130,13 @@ export default function GoodsReceiptWindow(props) {
       <GeneratedApp
         {...props}
         autoSaveOnBlur={true}
+        // ETP-5058 — GoodsReceiptHeaderHandler.afterHandle only enriches linkedInvoices/
+        // linkedOrders/invoiceStatus/etc. on GET responses (NeoHandlerUtils.extractGetDataArray
+        // bails for any other HTTP method). Without a refetch, handleSave() replaces the
+        // already-enriched `editing` state with the bare PATCH response, wiping the DOCUMENTOS
+        // panel after every save (e.g. changing Warehouse), not just when the invoice link
+        // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
+        refetchAfterSave={true}
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}
