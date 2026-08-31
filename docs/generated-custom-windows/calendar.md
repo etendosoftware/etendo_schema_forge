@@ -29,6 +29,31 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   calendars this will fail with a DB constraint error, since the field can't be
   filled in manually; onboarding is expected to guarantee at least one calendar
   per organization.
+  **ETP-4948 Issue 1 — FIXED (real root cause, distinct from the staleness fix below):**
+  `C_Calendar_ID` is `C_Year`'s AD parent-link column (`AD_Column.ISPARENT = 'Y'`).
+  `decisions.json` declares `"derivation": "fromParent"` on it (matching the same convention
+  already used for `warehouse`/`assetCategory`/`organization` elsewhere in this repo), but that
+  declaration is documentation only — tracing the published `schema-forge-cli` pipeline
+  (`generate-contract.js`'s `generateBackendContract`, and `push-to-neo.js`/`neo-delta.js`'s
+  `ETGO_SF_FIELD` row builder) confirms `derivation` is never read for a `system`-visibility
+  field, so it never reaches `contract.json` or `ETGO_SF_FIELD` — a config-only fix was not
+  viable here. The real fix is server-side, in `NeoMandatoryDefaultsService.tryInjectFromParentValues`
+  (`com.etendoerp.go`): before this fix, that method only resolved a parent-derived default when
+  the child column's `AD_Column.DefaultValue` matched the classic `"@VarName@"` expression
+  pattern — `C_Year.C_Calendar_ID.DefaultValue` is `NULL`, so that match always failed and
+  resolution fell through to `tryInjectFirstFromLookup` → `NeoDefaultsService.resolveFirstComboOption`,
+  an org-blind selector that picks the alphabetically-first readable `C_Calendar` row (including
+  org `*`) — reproduced live on the GOClient tenant, which has "GOClient Calendar" (org `*`)
+  sorting ahead of "GOOrg Calendar" (the actual org). `tryInjectFromParentValues` now checks
+  `AD_Column.ISPARENT` (`Column.isLinkToParentColumn()`) directly: for a true parent-link column
+  it injects the parent tab's own record id straight from `NeoParentValuesLoader`'s already-loaded
+  `parentValues` map (keyed by the parent's own DB column name), without requiring a classic
+  `@VarName@` default expression, and without touching the generic org-blind selector fallback
+  itself (that broader class of bug — `SelectorOrgFilter`/`resolveFirstComboOption` picking the
+  alphabetically-first org for *any* combo field, not just parent-links — is intentionally left
+  for a separate follow-up, Jira ETP-5086). Covered by unit tests in `NeoDefaultsServiceTest`
+  (`testTryInjectFromParentValuesInjectsOwnIdForIsParentColumnWithNoDefaultExpression` and two
+  companion regression tests for the pre-existing `@VarName@` path and non-parent columns).
 - Trigger **Create Periods** on a year to generate its 12 standard periods (Jan–Dec) plus an
   optional adjustment period.
 - On a year's detail, switch between two secondary tabs:
@@ -101,15 +126,46 @@ ever changes, this needs revisiting.
 - **Create Periods** (`year.processNow`, column `Processing`, on `fiscal-calendar`) is bound to
   classic AD Process `100` (`C_YearPeriods`), a plain DB-procedure process — invoked generically
   via `CallProcess`, no custom `NeoHandler` needed. `decisions.json → window.processOverrides.processNow`
-  opens a `ProcessParamDialog` with one parameter, `CREATEADJUSTMENT` (Yes/No select).
+  opens a `ProcessParamDialog` with one parameter, `CREATEADJUSTMENT` (Yes/No select). This
+  process runs in the **`YearPage`** subtree (`fiscal-calendar` spec), while the Periods tab
+  (`PeriodsExpandablePanel.jsx`) lives on a completely different spec (`open-close-period-control`)
+  stitched in via `secondaryTabs` — so the two do not share React state. `PeriodsExpandablePanel`
+  listens for the generic `neo:processSuccess` window `CustomEvent` (dispatched by
+  `useEntity.js`'s `handleProcess` on any successful process, matching the same convention
+  `AmortizationLinesTable.jsx`/`AssetsAmortizationPanel.jsx` already use to refresh a sibling
+  panel), filtered on `detail.recordId === parentId` (the year id) only — not `entity` — and
+  calls `loadPeriods()` on a match (ETP-4948 Issue 1). Without this, "Create Periods" reported
+  success but the Periods tab kept showing its pre-create (usually empty) list until a manual
+  navigation away and back.
 - **Abrir/Cerrar Periodo** (`periodControl.openClose`, on `open-close-period-control`) calls AD
   Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
   (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
   (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
-  changed for ETP-4478.
+  changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
+  in one transaction, so `PeriodsExpandablePanel.jsx`'s `handleDialogConfirm` refreshes both
+  `loadPeriods()` (the aggregate badge) and, when the acted-on period is the currently expanded
+  one, `loadDocumentsForPeriod(id)` too (ETP-4948 Issue 2) — otherwise the expanded document rows
+  keep showing pre-action status until manually collapsed/re-expanded.
 - **Abrir/Cerrar Documento** (`documents.openClose`, on `open-close-period-control`) calls AD
   Process `168` (`C_PeriodControl_Process`) via `PeriodControlDocOpenCloseHandler`
   (`JAVA_QUALIFIER = 'period-control-doc-openclose'`), same carry-over as above.
+- **`documents` list filtering (ETP-4948 Issue 3).** The `documents` entity is a plain generic
+  CRUD list — every `C_PeriodControl` row for a period used to be returned unfiltered, one per
+  registered `documentCategory` (DocBaseType), including base types that never post to accounting
+  at all (`SOO` Sales Order, `POO` Purchase Order, `POR` Purchase Requisition, …). Since GET/CRUD
+  requests aren't `openClose` ACTION requests, `AbstractPeriodOpenCloseHandler.handle()` safely
+  no-ops for them (`PeriodOpenCloseSupport.parse()` returns `SKIP`), so
+  `NeoServletSupport.handleWithHooks` runs the default CRUD list first and then calls
+  `PeriodControlDocOpenCloseHandler.afterHandle` — which now filters the response down to
+  accounting-relevant categories only, using the exact same predicate the Not Posted Documents
+  window already applies (`com.etendoerp.go.schemaforge.util.AccountingDocumentTypeSupport`,
+  extracted out of `NotPostedDocumentsHandler` so the two windows can never diverge — see
+  [`not-posted-documents.md`](not-posted-documents.md#document-type-accounting-support) for the
+  full document-type table). Confirmed in scope by the product owner: the same 5 codes globally
+  excluded there by product decision (ETP-4452 — `BMP`, `DD`, `LC`, `LCC`, `CA`, in Not Posted
+  Documents' own code space) are also hidden here, in Calendar's own DocBaseType code space
+  (`MMP`, `DDB`, `LDC`, `LCC`, `CAD` — same underlying tables, different codes; only `LCC` shares
+  the literal code across both vocabularies).
 - **Cerrar Año** / **Deshacer Cierre de Año** are `fiscal-calendar`'s `window.menuActions` entries
   (`closeYear`/`undoCloseYear`), rendered from the kebab menu, each opening
   `CloseYearConfirmModal.jsx` (in `tools/app-shell/src/windows/custom/fiscal-calendar/`) via a thin
@@ -158,6 +214,13 @@ fetched data — never just "empty vs loaded":
   distinct `accounting-panel-empty` state for a loaded-but-zero-rows year; `PeriodsExpandablePanel`
   just renders no rows).
 
+The expanded/pinned period row (and its bulk-action bar, when visible) is highlighted with
+`bg-primary/5 ring-1 ring-focus-ring` — the same selected-row token family `DataTable.jsx` already
+uses for `isSelectedLine` — instead of bare `bg-card`, which had no visible contrast against the
+surrounding page background (confirmed via live screenshot comparison, ETP-4948 Issue 4). The
+year list itself (`YearTableWithCloseStatus.jsx` → generic `DataTable`) was unaffected — it
+already reused this same token family with no wiring bug found there.
+
 `PeriodsExpandablePanel` applies the same three-state pattern independently to each period's
 expanded document list (`documentsByPeriod[periodId]` / `documentsError[periodId]`, testid
 `period-documents-error-{id}`) — expanding one period's error state does not affect any other
@@ -179,7 +242,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 |-------|------|------------|------|------|-------|
 | fiscalYear | string | editable | yes | yes | The year value, e.g. "2027" |
 | description | string | editable | yes | yes | Optional |
-| calendar | foreignKey | editable | no | yes | Required selector |
+| calendar | foreignKey | system | no | no | Hidden parent-link field (`C_Calendar_ID`, `AD_Column.ISPARENT='Y'`); no UI selector. Auto-derived server-side — now correctly resolved from the parent tab's own record via `NeoMandatoryDefaultsService.tryInjectFromParentValues`'s ISPARENT check, ahead of the org-blind `tryInjectFirstFromLookup` fallback — see Issue 1 note above (ETP-4948, fixed) |
 | processNow | button | editable | no | yes | **Create Periods** — AD Process 100 |
 | createRegFactAcct | button | discarded | — | — | Backing field for **Close Year**; triggered only via the `closeYear` menuAction/`CloseYearConfirmModal`, never rendered directly |
 | dropRegFactAcct | button | discarded | — | — | Backing field for **Undo Close Year**; same trigger path as above |
@@ -202,9 +265,15 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
-| documentCategory | enum | readOnly | yes | yes | AD document base type |
+| documentCategory | enum | readOnly | yes | yes | AD document base type (DocBaseType). List rows are filtered server-side to accounting-relevant categories only — see Reactive behavior, ETP-4948 Issue 3 |
 | periodStatus | enum | readOnly | yes | yes | Per-document-type badge: N/O/C/P |
 | openClose | button | editable | no | yes | AD Process 168 via `PeriodControlDocOpenCloseHandler` |
+
+**List-level filtering:** `PeriodControlDocOpenCloseHandler.afterHandle` drops any row whose
+`documentCategory` is not accounting-relevant (not actively registered in `c_acctschema_table`, or
+structurally/product-decision excluded — see `AccountingDocumentTypeSupport`, shared with
+[Not Posted Documents](not-posted-documents.md#document-type-accounting-support)). This only
+applies to the GET/list path; the `openClose` ACTION on an individual row is untouched.
 
 ### accounting entity (`end-year-close` spec — FinancialMgmtAccountingFactEndYearHQL, read-only)
 
@@ -224,8 +293,18 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 ## Gap assessment
 - `ProcessParamDialog` only renders `type: "select"` parameters — `CREATEADJUSTMENT` is modeled as
   a two-option select (Yes/No), same constraint the original `fiscal-calendar` window had.
-- The `calendar` field on `year` is a plain required selector rather than an auto-derived single
-  default (same as the retired standalone `fiscal-calendar` window).
+- ~~The `calendar` field on `year` is auto-derived server-side (`NeoDefaultsService.tryInjectFirstFromLookup`,
+  "the org's first active calendar") rather than resolved via its actual AD parent-link
+  (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
+  alphabetically-first readable row instead of the year's real parent calendar (ETP-4948 Issue 1).~~
+  **Fixed** — `NeoMandatoryDefaultsService.tryInjectFromParentValues` now special-cases
+  `ISPARENT='Y'` columns and resolves the year's real parent calendar directly, ahead of the
+  generic lookup fallback. `decisions.json`'s `derivation: "fromParent"` on this field remains
+  documentation only (still not wired into `contract.json`/`ETGO_SF_FIELD` for `system`-visibility
+  fields) — the actual fix lives entirely in the Java default-injection layer, not in decisions
+  config. The broader, still-open class of bug — the org-blind selector fallback
+  (`SelectorOrgFilter`/`resolveFirstComboOption` picking the alphabetically-first org for *any*
+  combo field, not just parent-links) — is tracked separately as Jira ETP-5086.
 - No free-text search is configured on any entity (`searchableFields: []`, inherited default).
 - `YearCloseHandler`'s reflection into `CreateRegFactAcct`/`DropRegFactAcct`'s private
   `processButton(...)` method is inherently brittle across Etendo core versions — accepted
@@ -288,6 +367,28 @@ the same `submitting` boolean pattern to disable its own confirm button during t
   `fiscal-calendar-redirect`/`open-close-period-control-redirect` (`windowLoaders`).
 - `artifacts/fiscal-calendar/contract.json` — `year` entity, `menuActions` for
   `closeYear`/`undoCloseYear`, `javaQualifier: "year-close"`.
+- `artifacts/fiscal-calendar/decisions.json` — `entities.year.fields.calendar` declares
+  `"derivation": "fromParent"` (ETP-4948 Issue 1, documentation only — see the Issue 1 note
+  above for why this key has no runtime effect on `system`-visibility fields). `make regen
+  ONLY=fiscal-calendar` re-ran clean (extract → resolve → contract → frontend, 5 components
+  generated); a before/after diff of `contract.json` confirmed the change is a no-op there —
+  expected, not a regression.
+- `com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoMandatoryDefaultsService.java` — the
+  actual Issue 1 fix. `tryInjectFromParentValues` now checks `Column.isLinkToParentColumn()`
+  (`AD_Column.ISPARENT`) and injects the parent tab's own record id directly from
+  `NeoParentValuesLoader`'s `parentValues` map, ahead of the `@VarName@`-only match and the
+  org-blind `tryInjectFirstFromLookup` fallback. No `decisions.json`/`contract.json`/`push-to-neo`
+  step involved — this is a pure Java default-injection fix, applies to every `ISPARENT='Y'`
+  column across every window, not just `year.calendar`. Covered by three new unit tests in
+  `NeoDefaultsServiceTest` (the ISPARENT-with-no-default-expression fix case, the pre-existing
+  `@VarName@` fallback still working, and a non-parent column still returning false).
+- `com.etendoerp.go/src/com/etendoerp/go/schemaforge/PeriodControlDocOpenCloseHandler.java` —
+  review finding W2: `afterHandle` now also guards on `NeoEndpointType.CRUD.equals(context.getEndpointType())`
+  alongside the existing `GET` check, matching the `FinancialAccountHandler` convention
+  (`docs/neo-headless-extensibility.md`) exactly. Currently a no-op in practice (no selector/
+  defaults GET path exists on the `documents` entity), kept for convention parity. Covered by a
+  new `afterHandleReturnsNullForGetWithNonCrudEndpointType` test in
+  `PeriodControlDocOpenCloseHandlerTest`.
 - `artifacts/open-close-period-control/contract.json` — `periodControl`/`documents`, unchanged.
 - `artifacts/end-year-close/contract.json` — the new single-entity `accounting` spec.
 - `tools/app-shell/src/windows/custom/calendar/index.jsx` — the aggregating custom window;

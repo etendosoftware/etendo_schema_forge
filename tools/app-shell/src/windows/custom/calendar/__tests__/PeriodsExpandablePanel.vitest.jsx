@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { LocaleProvider } from '@/i18n';
 import enUS from '../../../../locales/en_US.json';
 import esES from '../../../../locales/es_ES.json';
@@ -285,6 +285,85 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();
   });
 
+  it('re-fetches BOTH the periods list AND the expanded period\'s documents after a period action succeeds, not just the periods list', async () => {
+    // Regression guard for the C_Period_Process fix (AD Process 167 opens/closes EVERY
+    // C_PeriodControl row for the period in one DB transaction): if the acted-on period is
+    // currently expanded, its stale documentsByPeriod[id] must be refreshed too. Before the fix,
+    // handleDialogConfirm's 'period' branch only called loadPeriods(), so documentsCallCount
+    // would have stayed at 1 here instead of advancing to 2.
+    const UPDATED_PERIOD = { ...PERIOD, status: 'C', 'status$_identifier': 'All Closed' };
+    const UPDATED_DOC = { ...DOC, periodStatus: 'C', 'periodStatus$_identifier': 'Closed' };
+    let periodControlCallCount = 0;
+    let documentsCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        const data = periodControlCallCount === 1 ? [PERIOD] : [UPDATED_PERIOD];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      if (url.includes('/documents')) {
+        documentsCallCount += 1;
+        const data = documentsCallCount === 1 ? [DOC] : [UPDATED_DOC];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p16" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByText('AP Credit Memo'));
+    expect(periodControlCallCount).toBe(1);
+    expect(documentsCallCount).toBe(1);
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
+    await waitFor(() => expect(documentsCallCount).toBe(2));
+    await waitFor(() => {
+      const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('All Closed');
+    });
+  });
+
+  it('does not re-fetch documents for a period action when that period is not currently expanded', async () => {
+    // Mirrors the `expandedId === id ? loadDocumentsForPeriod(id) : Promise.resolve()` guard —
+    // acting on a period that is not the expanded one must not trigger a documents fetch for it.
+    let periodControlCallCount = 0;
+    let documentsCallCount = 0;
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        documentsCallCount += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p17" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    expect(periodControlCallCount).toBe(1);
+    expect(documentsCallCount).toBe(0); // never expanded, so no documents fetch yet
+
+    fireEvent.click(screen.getByTestId('period-openclose-p1'));
+    selectOpenCloseOption('C');
+    fireEvent.click(screen.getByTestId('process-param-confirm'));
+
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
+    // The guard must resolve to a no-op for a period that isn't expanded — documents are never
+    // fetched at all in this test.
+    expect(documentsCallCount).toBe(0);
+  });
+
   it('re-fetches BOTH the affected period\'s documents AND the periods list after a document action succeeds, updating the parent\'s aggregate badge too', async () => {
     // A document's own status changing can flip its parent period's aggregate rollup too
     // (e.g. "All Opened" -> "Mixed" once one document type differs from the rest — same
@@ -466,6 +545,74 @@ describe('PeriodsExpandablePanel', () => {
 
     resolvePost({ ok: true, json: () => Promise.resolve({}) });
     await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
+  });
+});
+
+describe('PeriodsExpandablePanel — refresh on cross-component neo:processSuccess event', () => {
+  // "Create Periods" runs in a different React subtree (the generated YearPage from the
+  // fiscal-calendar spec). Its success handler (useEntity.js's handleProcess) dispatches a
+  // generic `window` CustomEvent on ANY successful process, regardless of which spec/entity
+  // fired it — this panel listens for it and refreshes its own periods list when the event's
+  // recordId matches its own parentId (the year id), same convention as
+  // AmortizationLinesTable.jsx (filters on recordId only, not entity).
+  it('re-fetches the periods list when a matching neo:processSuccess event is dispatched', async () => {
+    let periodControlCallCount = 0;
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev1" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    expect(periodControlCallCount).toBe(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('neo:processSuccess', {
+        detail: { process: 'createPeriods', entity: 'year', recordId: 'year1' },
+      }));
+    });
+
+    await waitFor(() => expect(periodControlCallCount).toBe(2));
+  });
+
+  it('does not re-fetch when the event\'s recordId does not match this panel\'s parentId', async () => {
+    let periodControlCallCount = 0;
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        periodControlCallCount += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev2" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    expect(periodControlCallCount).toBe(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('neo:processSuccess', {
+        detail: { process: 'createPeriods', entity: 'year', recordId: 'other-year' },
+      }));
+    });
+
+    // No refetch was triggered for a record that isn't this panel's own year.
+    expect(periodControlCallCount).toBe(1);
+  });
+
+  it('removes the neo:processSuccess listener on unmount', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev3" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+
+    unmount();
+
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('neo:processSuccess', expect.any(Function));
+    removeEventListenerSpy.mockRestore();
   });
 });
 
@@ -849,6 +996,11 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
     const p2Wrapper = stickyWrapperFor('p2');
     expect(p2Wrapper.className).toMatch(/\bsticky\b/);
     expect(p2Wrapper.className).toMatch(/\btop-0\b/);
+    // Contrast fix (ETP-4948 Issue 4): the expanded row now uses a visible highlight token
+    // (bg-primary/5 + ring-focus-ring) instead of the old bg-card, which had no contrast
+    // against the page background.
+    expect(p2Wrapper.className).toMatch(/\bbg-primary\b/);
+    expect(p2Wrapper.className).toMatch(/\bring-focus-ring\b/);
     // The collapsed period must never also be sticky — only one pinned unit at a time.
     expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
   });

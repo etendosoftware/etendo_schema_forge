@@ -207,6 +207,25 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     loadPeriods();
   }, [parentId, apiBaseUrl, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "Create Periods" runs in a completely different React subtree — the generated `YearPage`
+  // from the `fiscal-calendar` spec (this panel lives on the `open-close-period-control` spec,
+  // stitched in via `secondaryTabs`, see the window's own doc for the 3-specs-one-window shape).
+  // useEntity.js's handleProcess dispatches a generic `neo:processSuccess` window CustomEvent on
+  // any successful process — the same cross-component signal AmortizationLinesTable.jsx and
+  // AssetsAmortizationPanel.jsx already listen for to refresh a sibling panel after a header-level
+  // process. Filtered on `recordId` only (not `entity`), matching AmortizationLinesTable's
+  // convention: this panel only cares whether the event's record is its own year, regardless of
+  // which spec/entity actually fired the process.
+  useEffect(() => {
+    if (!parentId) return undefined;
+    function onProcessSuccess(e) {
+      if (String(e?.detail?.recordId) !== String(parentId)) return;
+      loadPeriods();
+    }
+    window.addEventListener('neo:processSuccess', onProcessSuccess);
+    return () => window.removeEventListener('neo:processSuccess', onProcessSuccess);
+  }, [parentId, loadPeriods]);
+
   // Fetches (or re-fetches) one period's documents — used both by toggleExpand (first expand)
   // and, silently, to refresh a document row's status right after a document action succeeds.
   // Reused rather than duplicated so "initial load" and "post-action refresh" can never drift.
@@ -311,7 +330,19 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     const { kind, id, ids, periodId } = dialogTarget;
     setDialogTarget(null);
     if (kind === 'period') {
-      runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
+      // The period-level action opens/closes EVERY C_PeriodControl row for this period in one
+      // DB transaction (AD Process 167 — "Opens/Closes all PeriodControl for a C_Period"), so if
+      // this period is currently expanded its stale documentsByPeriod[id] must be refreshed too,
+      // same as the document-level and bulk-document-level branches just below.
+      runAction(
+        `period-${id}`,
+        `${apiBaseUrl}/periodControl/${id}/action/openClose`,
+        paramValues,
+        () => Promise.all([
+          loadPeriods(),
+          expandedId === id ? loadDocumentsForPeriod(id) : Promise.resolve(),
+        ])
+      );
     } else if (kind === 'bulk-documents') {
       runBulkDocumentAction(ids, periodId, paramValues);
     } else {
@@ -326,7 +357,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
         () => Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()])
       );
     }
-  }, [dialogTarget, apiBaseUrl, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod]);
+  }, [dialogTarget, apiBaseUrl, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod, expandedId]);
 
   const dialogProcess = (dialogTarget?.kind === 'document' || dialogTarget?.kind === 'bulk-documents')
     ? DOCUMENT_OPEN_CLOSE_PROCESS
@@ -366,8 +397,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 expanded (only the expanded/pinned period, always rendered first per the
                 array-reordering fix above, has a long document list worth pinning against —
                 collapsed rows never need it and must never compete for the same top-0 slot).
-                `bg-card` prevents the scrolling document rows from showing through underneath. */}
-            <div className={isExpanded ? 'sticky top-0 z-10 bg-card' : undefined}>
+                Highlight reuses the same selected-row token family DataTable.jsx already uses
+                elsewhere in the app (`bg-primary/5` + `ring-1 ring-focus-ring`, its own
+                `isSelectedLine` treatment) instead of bare `bg-card`, which had no visible
+                contrast against the surrounding page background (confirmed via live screenshot
+                — ETP-4948 Issue 4) — this also still opaquely covers the scrolling document rows
+                underneath, same as `bg-card` did. */}
+            <div className={isExpanded ? 'sticky top-0 z-10 bg-primary/5 ring-1 ring-focus-ring' : undefined}>
               <div className="flex items-center gap-2 py-2 px-3">
                 <button
                   type="button"
