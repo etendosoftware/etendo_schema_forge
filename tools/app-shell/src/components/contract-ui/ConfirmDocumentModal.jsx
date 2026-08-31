@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ export default function ConfirmDocumentModal({
   onClose,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(base);
   const [createInvoice, setCreateInvoice] = useState(defaultCreateInvoice);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -151,8 +153,8 @@ export default function ConfirmDocumentModal({
     try {
       const actionBase = `${base}/${specName}/${entityName}/${recordId}/action`;
 
-      const res = await fetch(`${actionBase}/documentAction`, {
-        method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }),
+      const res = await apiFetch(`${actionBase}/documentAction`, {
+        method: 'POST', body: JSON.stringify({ docAction: 'CO' }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -161,8 +163,8 @@ export default function ConfirmDocumentModal({
 
       let invoice = null;
       if (createInvoice && invoiceAction) {
-        const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers, body: JSON.stringify({}),
+        const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
+          method: 'POST', body: JSON.stringify({}),
         });
         if (!invRes.ok) {
           const err = await invRes.json().catch(() => null);

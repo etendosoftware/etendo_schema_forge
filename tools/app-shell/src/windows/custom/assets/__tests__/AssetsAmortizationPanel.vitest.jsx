@@ -576,7 +576,10 @@ describe('AssetsAmortizationPanel', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE_PROPS.apiBaseUrl}/amortizationLine/l1`,
-        expect.objectContaining({ method: 'DELETE', headers: {} })
+        expect.objectContaining({
+          method: 'DELETE',
+          headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+        })
       );
     });
   });

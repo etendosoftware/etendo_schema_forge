@@ -50,7 +50,7 @@ const defaultProps = {
   invoiceId: 'inv-1',
   bpId: 'bp-1',
   base: '/sws/neo/purchase-invoice',
-  headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+  headers: { Authorization: 'Bearer test', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
   onClose: vi.fn(),
   onSuccess: vi.fn(),
   titleKey: 'importFromOrders',

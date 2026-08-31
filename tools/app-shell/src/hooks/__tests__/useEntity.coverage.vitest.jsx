@@ -621,21 +621,29 @@ describe('useEntity — coverage paths', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 401 — logout on refresh
+  // 401 — refresh/loadMore treat it as any other failed request
   // ---------------------------------------------------------------------------
+  // ETP-5022: refresh/loadMore no longer special-case a 401 themselves — the
+  // shared apiFetch helper already logs out and throws before the response ever
+  // reaches this hook (see @etendosoftware/app-shell-core's createApiFetch), so
+  // there is nothing left here to unit-test about logout. What IS still this
+  // hook's responsibility is that the resulting rejection lands in the normal
+  // error path (items reset, loading released) instead of hanging or throwing
+  // unhandled.
 
-  describe('401 logout paths', () => {
-    it('calls logout on 401 during refresh', async () => {
+  describe('401 responses', () => {
+    it('resets items and clears loading when refresh gets a 401', async () => {
       globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
 
-      renderEntity('header', 'lines');
+      const { result } = renderEntity('header', 'lines');
 
       await waitFor(() => {
-        expect(mockLogout).toHaveBeenCalled();
+        expect(result.current.loading).toBe(false);
+        expect(result.current.items).toEqual([]);
       });
     });
 
-    it('calls logout on 401 during loadMore', async () => {
+    it('stops loadMore and clears hasMore when it gets a 401', async () => {
       // Initial fetch: 75 items (triggers hasMore=true)
       const batch = Array.from({ length: 75 }, (_, i) => ({ id: `r${i}` }));
       globalThis.fetch.mockResolvedValueOnce(mockFetchOk(batch));
@@ -650,7 +658,8 @@ describe('useEntity — coverage paths', () => {
       await act(async () => { result.current.loadMore(); });
 
       await waitFor(() => {
-        expect(mockLogout).toHaveBeenCalled();
+        expect(result.current.loadingMore).toBe(false);
+        expect(result.current.hasMore).toBe(false);
       });
     });
   });
