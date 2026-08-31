@@ -158,10 +158,12 @@ const INPUT_ST = {
   boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
 };
 
-function Field({ label, children }) {
+function Field({ label, children, required }) {
   return (
     <div style={{ width: 376 }}>
-      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+        {label}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+      </div>
       {children}
     </div>
   );
@@ -241,6 +243,19 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
   const [presenterNif, setPresenterNif] = useState(orgIdent?.nif ?? '');
   const [presenterName, setPresenterName] = useState(orgIdent?.nombre ?? '');
 
+  // Single source of truth for "the NRC must be filled": drives BOTH the required asterisk
+  // on the field and the pre-flight guard in handleSubmit. Keeping them on one expression is
+  // deliberate — duplicating the condition is what let the asterisk keep promising a
+  // requirement that test mode had already lifted (ETP-5027 follow-up).
+  // DELIBERATELY keyed on `localData.declarationType` rather than the looser `tipo` computed
+  // in handleSubmit — this is the exact expression that controls the NRC field's visibility in
+  // the render below. Do not "harmonize" it to `tipo`: `tipo` falls back to decl.result.kind /
+  // 'N', so a falsy declarationType with decl.result.kind === 'I' would make the guard fire
+  // against a field the user cannot see, blocking submission with no way to satisfy it.
+  // Excluded in test mode: "Validar sin presentar" only validates the file, nothing is actually
+  // paid, so no NRC exists yet — the field stays visible but stops being required.
+  const nrcRequired = !testMode && localData.declarationType === DECLARATION_TYPE_INGRESO;
+
   async function handleSubmit() {
     setSubmitting(true);
     setConnError(null);
@@ -267,6 +282,15 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
       const ibanRequired = IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true;
       if (ibanRequired && !identChecks?.bank_iban?.trim()) {
         setConnError(t('fm.aeat.error.ibanRequired') ?? 'IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.');
+        setSubmitting(false);
+        return;
+      }
+      // Same shape as the IBAN guard above, but driven by the shared `nrcRequired`
+      // expression (see its declaration above for why it uses the strict
+      // `localData.declarationType` and why test mode lifts it). Without the guard an empty
+      // NRC round-trips to the AEAT and fails there with an untranslated error (ETP-5027).
+      if (nrcRequired && !nrc?.trim()) {
+        setConnError(t('fm.aeat.error.nrcRequired') ?? 'The NRC is required to file a declaration with an amount due.');
         setSubmitting(false);
         return;
       }
@@ -385,6 +409,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                 {localData.declarationType === DECLARATION_TYPE_INGRESO && (
                   <Field
                     label={t('fm.aeat.nrc.label') ?? 'NRC'}
+                    required={nrcRequired}
                     data-testid="Field__fc2aac">
                     <input
                       type="text"

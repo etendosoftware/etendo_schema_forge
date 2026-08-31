@@ -21312,6 +21312,7 @@
     "fm.aeat.error.ibanRequired": "Se necesita el IBAN para presentar este tipo de declaración. Rellena el campo IBAN en la sección de Identificación.",
     "fm.aeat.error.missingDefaultIae": "Esta organización necesita al menos una actividad del IAE marcada como principal, con un código asignado, antes de presentar la declaración del último periodo.",
     "fm.aeat.action.go_to_organization": "Ir a Organización",
+    "fm.aeat.error.nrcRequired": "Se necesita el NRC para presentar una declaración con resultado a ingresar.",
     "fm.aeat.warnings.title": "Advertencias",
     "fm.action.back": "Volver",
     "fm.action.cancel": "Cancelar",
