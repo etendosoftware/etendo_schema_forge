@@ -21632,6 +21632,8 @@
     "fm.m349.vies.pending": "Pendiente",
     "fm.m349.vies.invalid": "Inválido",
     "fm.m349.totals.title": "Totales por clave",
+    "fm.m349.rectificative": "Rectificativa",
+    "fm.m349.rectif_subtotal.title": "Subtotal rectificativas",
     "fm.m349.totals.info": "Calculados a partir de los operadores. No editable. Modifica los operadores para ajustar los totales.",
     "fm.m349.totals.readonly": "solo lectura",
     "fm.m349.totals.sub": "Calculados a partir de los operadores. No editables — modifica los operadores para ajustar los totales.",

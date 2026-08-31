@@ -220,3 +220,234 @@ describe('FmModel349Page — compute result refreshes the rectifications tab', (
     expect(rows[1].textContent).toContain('NC-02');
   });
 });
+
+// ── ETP-5027 — rectificative operator rows + separate subtotal ───────────────
+//
+// The operators endpoint now returns corrective rows inside `operators` (ordered
+// after the regular ones, each carrying `rectificative: true`) plus a
+// `rectificativeSummary`. Their amounts are SIGNED deltas and are usually
+// NEGATIVE. They must stay out of the regular totals and out of the
+// Rectificaciones KPI, which is fed exclusively by `rectifications`.
+
+const REGULAR_OP = {
+  bpId: 'bp-1', nif: 'IT12345678901', name: 'Bramini Vino S.r.l.',
+  key: 'E', base: '1000.00', vies: 'valid', rectificative: false,
+};
+const CORRECTIVE_OP = {
+  bpId: 'bp-1', nif: 'IT12345678901', name: 'Bramini Vino S.r.l.',
+  key: 'E', base: '-30.00', vies: 'valid', rectificative: true,
+};
+// ETP-5027 (QA F1): no `total` key — E/S are sales and A/I are purchases, so the
+// backend deliberately emits no grand total for either subtotal object.
+const RECTIF_SUMMARY = {
+  totalE: '-30.00', totalS: '0.00', totalA: '0.00', totalI: '0.00',
+};
+
+const totalOpsKpiValue = () =>
+  document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.total_ops"] .test-kpi349-value')?.textContent;
+
+describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
+  it('badges the corrective row and leaves the regular row unbadged', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+
+    // Exactly one badge for two rows describing the same operator+key.
+    expect(screen.getAllByTestId('badge__rectificative')).toHaveLength(1);
+    const rows = document.querySelectorAll('.fm-table tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].getAttribute('data-rectificative')).toBeNull();
+    expect(rows[1].getAttribute('data-rectificative')).toBe('true');
+    // The badge is the ONLY row-level marker: the amber row tint was removed
+    // after the owner reviewed it on screen (too heavy across a full-width table).
+    expect(rows[1].className).not.toContain('fm-349-row--rectificative');
+  });
+
+  it('renders the negative delta as-is, never absolute', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+    const rows = document.querySelectorAll('.fm-table tbody tr');
+    expect(rows[1].textContent).toContain('-30');
+    expect(rows[1].querySelector('.fm-349-amount--negative')).not.toBeNull();
+  });
+
+  it('renders rectificativeSummary as its own subtotal card with the negative per-key delta', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [REGULAR_OP, CORRECTIVE_OP],
+            rectificativeSummary: RECTIF_SUMMARY,
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+
+    const card = screen.getByTestId('card__rectificativeSubtotal');
+    expect(card).toBeInTheDocument();
+    expect(card.textContent).toContain('fm.m349.rectif_subtotal.title');
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
+    expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
+  });
+
+  // ETP-5027 (QA F1) — a "Total rectificativas" row used to sum E+S+A+I, i.e. sales
+  // plus purchases. A -30 sales correction offset by a +30 purchase correction then
+  // rendered "0", hiding two real corrections. The row is gone; both survive per key.
+  it('never sums sales and purchase corrections into a single grand total', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [REGULAR_OP, CORRECTIVE_OP],
+            rectificativeSummary: {
+              totalE: '-30.00', totalS: '0.00', totalA: '30.00', totalI: '0.00',
+            },
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
+    expect(screen.getByTestId('amount__rectifSubtotal_A').textContent).toBe('30');
+    expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card__rectificativeSubtotal').textContent)
+      .not.toContain('rectif_subtotal.total');
+  });
+
+  // A stale/cached payload can still carry the old `total` key. It must be ignored,
+  // never rendered.
+  it('ignores a legacy `total` key on rectificativeSummary', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [REGULAR_OP, CORRECTIVE_OP],
+            rectificativeSummary: { ...RECTIF_SUMMARY, total: '-30.00' },
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+    expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
+  });
+
+  it('does not render the subtotal card when there is no rectificativeSummary', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP] } })}
+        {...defaultProps}
+      />
+    );
+    expect(screen.queryByTestId('card__rectificativeSubtotal')).not.toBeInTheDocument();
+  });
+
+  it('keeps corrective deltas OUT of the regular totals card and the total-ops KPI', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [REGULAR_OP, CORRECTIVE_OP],
+            rectificativeSummary: RECTIF_SUMMARY,
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+
+    // 1000, not 970 — the -30 delta must not net off against the regular base.
+    expect(totalOpsKpiValue()).toBe('1000');
+    const totalsCard = document.querySelector('.fm-349-totals__card');
+    expect(totalsCard.textContent).toContain('1000');
+    expect(totalsCard.textContent).not.toContain('970');
+  });
+
+  it('REGRESSION: corrective operator rows do not change the Rectificaciones KPI', () => {
+    // The KPI counts `rectifications` only. Corrective rows live in `operators`,
+    // so counting them here would double-count the same business event.
+    const { unmount } = render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP], rectifications: [RECTIF_ROW] } })}
+        {...defaultProps}
+      />
+    );
+    expect(rectifKpiValue()).toBe('1');
+    unmount();
+
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [REGULAR_OP, CORRECTIVE_OP],
+            rectifications: [RECTIF_ROW],
+            rectificativeSummary: RECTIF_SUMMARY,
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+    // Still 1 — adding a corrective operator row must not bump the count.
+    expect(rectifKpiValue()).toBe('1');
+  });
+
+  it('the operator count KPI includes corrective rows (they are real table rows)', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+    const opsKpi = document.querySelector('.test-kpi349[data-kpi-label="fm.m349.kpi.operators"] .test-kpi349-value');
+    expect(opsKpi.textContent).toBe('2');
+  });
+
+  it('picks up rectificativeSummary from the compute() response', async () => {
+    compute349Operators.mockResolvedValueOnce({
+      operators: [REGULAR_OP, CORRECTIVE_OP],
+      rectificativeSummary: RECTIF_SUMMARY,
+    });
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('card__rectificativeSubtotal')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
+  });
+
+  it('the existing key filter picks corrective rows up for free', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          _precomputed: {
+            operators: [
+              REGULAR_OP,
+              { ...REGULAR_OP, bpId: 'bp-2', key: 'A', base: '500.00' },
+              CORRECTIVE_OP,
+            ],
+          },
+        })}
+        {...defaultProps}
+      />
+    );
+    expect(document.querySelectorAll('.fm-table tbody tr')).toHaveLength(3);
+
+    // Filter to key E via the real dropdown: the regular E row AND the corrective
+    // E row survive, the A row is dropped — no filter change was needed for this
+    // to work, the corrective rows flow through the existing predicate untouched.
+    fireEvent.click(screen.getByRole('button', { name: /fm.m349.filter.all_keys/ }));
+    const option = screen.getAllByRole('button')
+      .find(b => b.className.includes('fm-status-select__item') && b.textContent.includes('fm.m349.key.E'));
+    fireEvent.click(option);
+    const rows = document.querySelectorAll('.fm-table tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(screen.getAllByTestId('badge__rectificative')).toHaveLength(1);
+  });
+});

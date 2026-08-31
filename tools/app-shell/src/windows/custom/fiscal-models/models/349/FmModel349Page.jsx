@@ -39,9 +39,34 @@ const MOCK_OPERATORS = [
   { id:7, nif:'PL1234567890',  name:'Kraków Components sp.z.o.o.',key:'A', base:3200.00,  vies:'valid',   origin:'1 factura compra' },
 ];
 
+// ETP-5027 — the operators endpoint now returns corrective (rectificative) rows
+// alongside the regular ones, ordered after them. `rectificative` is present on
+// EVERY row (false for regular ones, never omitted), so no undefined-check is
+// needed; this helper only normalizes the string/boolean shapes NEO can emit.
+function isRectificativeOp(op) {
+  return op?.rectificative === true || op?.rectificative === 'true' || op?.rectificative === 'Y';
+}
+
+// A regular row and a corrective row can describe the SAME operator+key, so
+// `bpId` alone is not unique once corrective rows are present. Fold the flag
+// into the identity used for React keys and row selection.
+function rowKey(op) {
+  return `${op?.id ?? op?.bpId ?? op?.nif ?? ''}|${op?.key ?? ''}|${isRectificativeOp(op) ? 'R' : ''}`;
+}
+
 // ── Sub-components ───────────────────────────────────────────────
 function KeyBadge({ k }) {
   return <span className={`fm-key fm-key--${k}`}>{k}</span>;
+}
+
+// Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
+// fiscal-models.css) — no new component system, just a sibling class.
+function RectificativeBadge({ t }) {
+  return (
+    <span className="fm-349-rectif-badge" data-testid="badge__rectificative">
+      {t('fm.m349.rectificative') ?? 'Rectificativa'}
+    </span>
+  );
 }
 
 function ViesBadge({ status }) {
@@ -51,9 +76,13 @@ function ViesBadge({ status }) {
   return <span className={`fm-vies fm-vies--${cls}`}>{icon} {t(`fm.m349.vies.${status ?? 'pending'}`)}</span>;
 }
 
-function TotalsCard({ operators, t }) {
+function TotalsCard({ operators, rectifSummary, t }) {
+  // Corrective rows carry signed deltas and are summarized separately in
+  // RectificativeSubtotalCard — folding them in here would silently net them
+  // off against the regular totals, which is exactly what must not happen.
+  const regular = operators.filter(o => !isRectificativeOp(o));
   const totals = {};
-  KEY_IDS.forEach(k => { totals[k] = operators.filter(o => o.key === k).reduce((s,o) => s + (parseFloat(o.base) || 0), 0); });
+  KEY_IDS.forEach(k => { totals[k] = regular.filter(o => o.key === k).reduce((s,o) => s + (parseFloat(o.base) || 0), 0); });
   const [showInfo, setShowInfo] = useState(false);
   return (
     <div className="fm-349-totals">
@@ -89,6 +118,54 @@ function TotalsCard({ operators, t }) {
           </div>
         ))}
       </div>
+      <RectificativeSubtotalCard summary={rectifSummary} t={t} data-testid="RectificativeSubtotalCard__346dd5" />
+    </div>
+  );
+}
+
+// ETP-5027 — `rectificativeSummary` from the operators endpoint, rendered as its
+// own card so corrective deltas stay visually and numerically separate from the
+// regular totals above. Amounts are SIGNED deltas and are usually negative (a
+// rectification removing 3 units of a 10 EUR product reports -30) — they are
+// rendered as-is through the canonical formatter, never Math.abs()'d, because a
+// negative subtotal is the expected, valid case and not an error state.
+//
+// Deliberately per-key ONLY, with no "Total rectificativas" row. E/S are entregas
+// (sales) and A/I are adquisiciones (purchases); the AEAT never nets one against
+// the other, so E+S+A+I is not a quantity that means anything. An earlier revision
+// showed that sum and produced figures like "-32,00 + -5,00 = -37,00", and would
+// have rendered "0,00" for a -30 sales correction offset by a +30 purchase
+// correction. `summary` above has always omitted a grand total for the same
+// reason; the backend now emits both subtotals through one shared shape
+// (`buildKeyTotals`), so `summary.total` is never present.
+function RectificativeSubtotalCard({ summary, t }) {
+  if (!summary) return null;
+  const rows = KEY_IDS
+    .map(k => [k, summary[`total${k}`]])
+    .filter(([, v]) => v != null && v !== '');
+  if (rows.length === 0) return null;
+  return (
+    <div className="fm-349-totals__card fm-349-rectif-totals" data-testid="card__rectificativeSubtotal">
+      <div className="fm-349-totals__title">
+        {t('fm.m349.rectif_subtotal.title') ?? 'Subtotal rectificativas'}
+      </div>
+      {rows.map(([k, v]) => {
+        const num = parseFloat(v) || 0;
+        return (
+          <div key={k} className="fm-349-total-row">
+            <div className="fm-349-total-row__left">
+              <KeyBadge k={k} data-testid="KeyBadge__346dd5" />
+              <span className="fm-349-total-row__label">{t(`fm.m349.key.${k}`)}</span>
+            </div>
+            <span
+              className={`fm-349-total-row__amount${num < 0 ? ' fm-349-total-row__amount--negative' : ''}`}
+              data-testid={`amount__rectifSubtotal_${k}`}
+            >
+              {formatAmount(num)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -258,12 +335,14 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [liveOperators, setLiveOperators] = useState(decl._precomputed?.operators ?? null);
   const [liveInvoices,  setLiveInvoices]  = useState(decl._precomputed?.invoices  ?? null);
   const [liveRectifications, setLiveRectifications] = useState(decl._precomputed?.rectifications ?? null);
+  const [liveRectifSummary, setLiveRectifSummary] = useState(decl._precomputed?.rectificativeSummary ?? null);
   const [viesBannerDismissed, setViesBannerDismissed] = useState(false);
 
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
+    if (decl._precomputed?.rectificativeSummary) setLiveRectifSummary(decl._precomputed.rectificativeSummary);
   }, [decl._precomputed]);
   // Only the setter is used below (no consumer reads the filtered value yet —
   // pre-existing, not introduced by this change); keeping the binding slot
@@ -295,7 +374,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
   const viesPending  = operators.filter(o => o.vies === 'pending').length;
-  const totalBase    = operators.reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
+  // Excludes corrective rows for the same reason TotalsCard does — their signed
+  // deltas must not net off against the regular base total (ETP-5027).
+  const totalBase    = operators
+    .filter(o => !isRectificativeOp(o))
+    .reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
+  const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
   const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
 
@@ -327,6 +411,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       if (res?.operators) setLiveOperators(res.operators);
       if (res?.invoices)  setLiveInvoices(res.invoices);
       if (res?.rectifications) setLiveRectifications(res.rectifications);
+      if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
     } finally {
       setComputing(false);
     }
@@ -382,7 +467,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       (o.nif  ?? '').toLowerCase().includes(searchLower)
     );
   const toggleSelect = id => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const allSelected  = filteredOps.length > 0 && filteredOps.every(o => selected.has(o.id));
+  const allSelected  = filteredOps.length > 0 && filteredOps.every(o => selected.has(rowKey(o)));
 
   const originByNif = React.useMemo(() => {
     if (!liveInvoices) return {};
@@ -617,7 +702,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
             {/* Layout: totals panel + table */}
             <div style={{ display: 'flex', gap: 0 }}>
-              <TotalsCard operators={operators} t={t} data-testid="TotalsCard__346dd5" />
+              <TotalsCard
+                operators={operators}
+                rectifSummary={rectifSummary}
+                t={t}
+                data-testid="TotalsCard__346dd5" />
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="fm-table-wrap" style={{ flex: 'none' }}>
@@ -627,7 +716,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                         <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={allSelected}
-                            onChange={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(o => o.id)))}
+                            onChange={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
                             onClick={e => e.stopPropagation()}
                             data-testid="Checkbox__346dd5" />
                         </th>
@@ -641,23 +730,37 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                     </thead>
                     <tbody>
                       {filteredOps.map(op => (
-                        <tr key={op.id} className={selected.has(op.id) ? 'fm-table__row--selected' : ''}>
+                        <tr
+                          key={rowKey(op)}
+                          className={selected.has(rowKey(op)) ? 'fm-table__row--selected' : ''}
+                          data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
+                        >
                           <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
                             <Checkbox
-                              checked={selected.has(op.id)}
-                              onChange={() => toggleSelect(op.id)}
+                              checked={selected.has(rowKey(op))}
+                              onChange={() => toggleSelect(rowKey(op))}
                               onClick={e => e.stopPropagation()}
                               data-testid="Checkbox__346dd5" />
                           </td>
                           <td>{op.nif}</td>
-                          <td style={{ fontWeight: 600 }}>{op.name}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {op.name}
+                              {isRectificativeOp(op) && <RectificativeBadge t={t} data-testid="RectificativeBadge__346dd5" />}
+                            </span>
+                          </td>
                           <td>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                               <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
                               <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
                             </span>
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(op.base)}</td>
+                          <td
+                            style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                            className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
+                          >
+                            {formatAmount(op.base)}
+                          </td>
                           <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
                           <td>
                             {formatOrigin(op)

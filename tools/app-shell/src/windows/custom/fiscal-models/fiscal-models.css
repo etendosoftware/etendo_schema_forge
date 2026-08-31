@@ -1016,6 +1016,24 @@
 .fm-349-total-row__amount { font: 500 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
 .fm-349-total-row__amount--zero { color: var(--fm-fg-4); }
 
+/* ─── 349 rectificative (corrective) rows & subtotal — ETP-5027 ─────
+   Corrective operator rows carry SIGNED deltas that are usually negative.
+   A negative amount here is the expected, valid case, so it is tinted for
+   legibility only — never treated as an error state, never Math.abs()'d. */
+.fm-349-total-row__amount--negative,
+.fm-349-amount--negative { color: var(--fm-danger-fg); }
+.fm-349-rectif-totals { margin-top: 10px; }
+.fm-349-rectif-totals .fm-349-totals__title { color: var(--status-warning-fg); }
+.fm-349-total-row--grand { border-top: 1px solid hsl(var(--foreground) / 0.12); }
+.fm-349-total-row--grand .fm-349-total-row__label { font-weight: 600; color: hsl(var(--foreground)); }
+/* Same inline-pill shape as .fm-vies above — sibling class, not a new primitive. */
+.fm-349-rectif-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+  font: 500 11px/14px var(--fm-font-sans, system-ui); white-space: nowrap;
+  background: var(--status-warning-bg); color: var(--status-warning-fg);
+  border: 1px solid var(--status-warning-border);
+}
+
 /* ─── VIES status pill ─────────────────────────────────────────────── */
 .fm-vies { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font: 500 11px/14px var(--fm-font-sans, system-ui); border: 1px solid; white-space: nowrap; }
 .fm-vies--valid   { background: var(--fm-success-bg); color: var(--fm-success-fg); border-color: transparent; }
