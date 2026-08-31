@@ -1,13 +1,9 @@
 // --- Mocks (before imports) ---
 
-const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));
-
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate,
-}));
-
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // useClientSort (wired in for AC2) pulls the active locale from here.
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('../useWarehouseStock', () => ({
@@ -248,7 +244,7 @@ describe('WarehouseTransactionsTable', () => {
 
   // --- ETP-4864 QA gap-fill: navigation + document-label edge cases ---
 
-  it('navigates to the correct route when the document link is clicked', () => {
+  it('opens the document in a new tab via window.open when the document link is clicked (AC3)', () => {
     useWarehouseStock.mockReturnValue({
       loading: false,
       error: null,
@@ -264,9 +260,15 @@ describe('WarehouseTransactionsTable', () => {
         },
       ],
     });
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
     render(<WarehouseTransactionsTable {...defaultProps} />);
     fireEvent.click(screen.getByText('1000042'));
-    expect(mockNavigate).toHaveBeenCalledWith('/return-material-receipt/HDR-123');
+    expect(openSpy).toHaveBeenCalledWith(
+      `${window.location.origin}/return-material-receipt/HDR-123`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 
   it('renders the document as plain text (no link) when etgoDocHeaderId is missing even though etgoDocWindow and a label are present', () => {
@@ -363,12 +365,289 @@ describe('WarehouseTransactionsTable', () => {
         },
       ],
     });
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
     render(<WarehouseTransactionsTable {...defaultProps} />);
     // canNavigate only checks presence of both fields, not map membership —
     // an unrecognized-but-present window key still renders a clickable link.
     fireEvent.click(screen.getByText('FUT-0001'));
-    expect(mockNavigate).toHaveBeenCalledWith('/some-future-window-key/HDR-FUTURE');
+    expect(openSpy).toHaveBeenCalledWith(
+      `${window.location.origin}/some-future-window-key/HDR-FUTURE`,
+      '_blank',
+      'noopener,noreferrer',
+    );
     // and the type label still falls back correctly since the key isn't in WINDOW_TYPE_KEY_MAP
     expect(screen.getByText('movTypeMovementTo')).toBeInTheDocument();
+    openSpy.mockRestore();
+  });
+
+  // ETP-5083 review fix: the new-tab URL must include the deployment's router base
+  // (Tomcat context path + /web/<module>), not just window.location.origin — see
+  // deploymentBasePath.js's getRouterBase(). Under jsdom's default root pathname this
+  // base is '', which is why the two tests above (asserting a bare origin-prefixed URL)
+  // keep passing unchanged; this test forces a non-root pathname to prove the prefix is
+  // actually applied.
+  it('includes the deployment router base in the new-tab URL under a non-root deployment (ETP-5083 review fix)', () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { ...originalLocation, pathname: '/etendo/web/com.etendoerp.go/warehouse/wh-1' },
+      writable: true,
+      configurable: true,
+    });
+
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      transactions: [
+        {
+          id: 'tx-1',
+          movementDate: '2025-01-15',
+          movementType: 'C-',
+          etgoDocWindow: 'return-material-receipt',
+          etgoDocHeaderId: 'HDR-123',
+          etgoDocLabel: '1000042',
+          movementQuantity: -5,
+        },
+      ],
+    });
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    try {
+      render(<WarehouseTransactionsTable {...defaultProps} />);
+      fireEvent.click(screen.getByText('1000042'));
+      expect(openSpy).toHaveBeenCalledWith(
+        `${window.location.origin}/etendo/web/com.etendoerp.go/return-material-receipt/HDR-123`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } finally {
+      openSpy.mockRestore();
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+});
+
+// --- AC1/AC2: default order + sortable column headers ---
+
+describe('WarehouseTransactionsTable — sorting (ETP-5083)', () => {
+  // Deliberately decorrelated across columns: the date-descending default order (t3, t2, t1)
+  // does not match the ascending/descending order of any other column, so a passing assertion
+  // on one column's order can't be a false positive carried over from another column or from
+  // the default order.
+  const TXNS = [
+    {
+      id: 't1',
+      movementDate: '2025-01-05',
+      'product$_identifier': 'Mango',
+      movementType: 'V+',
+      etgoDocLabel: 'D-030',
+      movementQuantity: 40,
+    },
+    {
+      id: 't2',
+      movementDate: '2025-01-15',
+      'product$_identifier': 'Apple',
+      movementType: 'I+',
+      etgoDocLabel: 'D-010',
+      // Chosen so a lexicographic ("100" < "40" < "9") sort would order these DIFFERENTLY
+      // than a numeric one — this is what proves qty sorts as a number, not a string.
+      movementQuantity: 9,
+    },
+    {
+      id: 't3',
+      movementDate: '2025-01-25',
+      'product$_identifier': 'Banana',
+      movementType: 'I-',
+      etgoDocLabel: 'D-020',
+      movementQuantity: 100,
+    },
+  ];
+
+  const productOrder = () =>
+    [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[3].textContent);
+  const documentOrder = () =>
+    [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[2].textContent);
+  const typeOrder = () =>
+    [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[1].textContent);
+  const qtyOrder = () =>
+    [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[4].textContent.replace(/[^0-9+.-]/g, ''));
+
+  beforeEach(() => {
+    useWarehouseStock.mockReturnValue({ loading: false, error: null, transactions: TXNS });
+  });
+
+  it('AC1: defaults to movementDate descending (most recent first) with no user interaction', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']); // t3 (25th), t2 (15th), t1 (5th)
+    // No header shows a direction arrow while unsorted.
+    expect(screen.getByTestId('column-header-sort-date').textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it('AC2: clicking the Date header cycles asc → desc → default, reordering by date each time', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const dateHeader = screen.getByTestId('column-header-sort-date');
+
+    fireEvent.click(dateHeader); // ascending: oldest first
+    expect(productOrder()).toEqual(['Mango', 'Apple', 'Banana']); // t1, t2, t3
+    expect(dateHeader.textContent).toContain('▲');
+
+    fireEvent.click(dateHeader); // descending: newest first (same order as the default)
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']); // t3, t2, t1
+    expect(dateHeader.textContent).toContain('▼');
+
+    fireEvent.click(dateHeader); // back to default: no arrow, default order restored
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']);
+    expect(dateHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it('AC2: clicking the Product header cycles asc → desc → default, reordering alphabetically', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const productHeader = screen.getByTestId('column-header-sort-product');
+
+    fireEvent.click(productHeader); // ascending
+    expect(productOrder()).toEqual(['Apple', 'Banana', 'Mango']);
+    expect(productHeader.textContent).toContain('▲');
+
+    fireEvent.click(productHeader); // descending
+    expect(productOrder()).toEqual(['Mango', 'Banana', 'Apple']);
+    expect(productHeader.textContent).toContain('▼');
+
+    fireEvent.click(productHeader); // back to default (date descending)
+    expect(productOrder()).toEqual(['Banana', 'Apple', 'Mango']);
+    expect(productHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it('AC2: clicking the Document header cycles asc → desc → default', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const documentHeader = screen.getByTestId('column-header-sort-document');
+
+    fireEvent.click(documentHeader); // ascending
+    expect(documentOrder()).toEqual(['D-010', 'D-020', 'D-030']);
+    expect(documentHeader.textContent).toContain('▲');
+
+    fireEvent.click(documentHeader); // descending
+    expect(documentOrder()).toEqual(['D-030', 'D-020', 'D-010']);
+    expect(documentHeader.textContent).toContain('▼');
+
+    fireEvent.click(documentHeader); // back to default (date descending)
+    expect(documentOrder()).toEqual(['D-020', 'D-010', 'D-030']);
+    expect(documentHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it('AC2: clicking the Qty header sorts numerically, not lexicographically', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const qtyHeader = screen.getByTestId('column-header-sort-qty');
+
+    fireEvent.click(qtyHeader); // ascending: 9 < 40 < 100 numerically
+    expect(qtyOrder()).toEqual(['+9', '+40', '+100']);
+    expect(qtyHeader.textContent).toContain('▲');
+
+    fireEvent.click(qtyHeader); // descending
+    expect(qtyOrder()).toEqual(['+100', '+40', '+9']);
+    expect(qtyHeader.textContent).toContain('▼');
+
+    fireEvent.click(qtyHeader); // back to default (date descending: t3=100, t2=9, t1=40)
+    expect(qtyOrder()).toEqual(['+100', '+9', '+40']);
+    expect(qtyHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it('AC2: sorting one column does not mark another column as active', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('column-header-sort-product'));
+    expect(screen.getByTestId('column-header-sort-product').textContent).toContain('▲');
+    expect(screen.getByTestId('column-header-sort-date').textContent).not.toMatch(/[▲▼]/);
+    expect(screen.getByTestId('column-header-sort-qty').textContent).not.toMatch(/[▲▼]/);
+  });
+
+  // Sentinel/QA gap-fill (ETP-5083): the Type column was never exercised through an actual
+  // click cycle — only its header label presence was asserted elsewhere. TXNS' three movement
+  // types resolve (via TYPE_KEY_MAP, no etgoDocWindow on any of these rows) to distinct,
+  // alphabetically-decorrelated-from-date keys, so this proves the "type" accessor sorts on the
+  // resolved/translated label, not on the raw movementType code.
+  it('AC2: clicking the Type header cycles asc -> desc -> default, sorting by the resolved label', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const typeHeader = screen.getByTestId('column-header-sort-type');
+
+    fireEvent.click(typeHeader); // ascending: In < Out < Vendor (t2, t3, t1)
+    expect(typeOrder()).toEqual(['movTypeInventoryIn', 'movTypeInventoryOut', 'movTypeVendorReceipt']);
+    expect(typeHeader.textContent).toContain('▲');
+
+    fireEvent.click(typeHeader); // descending
+    expect(typeOrder()).toEqual(['movTypeVendorReceipt', 'movTypeInventoryOut', 'movTypeInventoryIn']);
+    expect(typeHeader.textContent).toContain('▼');
+
+    fireEvent.click(typeHeader); // back to default (date descending: t3, t2, t1)
+    expect(typeOrder()).toEqual(['movTypeInventoryOut', 'movTypeInventoryIn', 'movTypeVendorReceipt']);
+    expect(typeHeader.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  // Sentinel/QA gap-fill (ETP-5083): a row missing `etgoDocWindow`/`etgoDocHeaderId` (the
+  // `canNavigate` guard) must keep rendering its document as plain, non-clickable text even
+  // while a DIFFERENT column is actively sorted — proving the guard and the sort machinery are
+  // independent (sorting doesn't touch, and isn't broken by, a row that can't navigate).
+  it('AC2: a non-navigable row keeps rendering plain document text while sorted by a different column', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      transactions: [
+        {
+          id: 't1', movementDate: '2025-01-05', 'product$_identifier': 'Mango', movementType: 'M+',
+          etgoDocLabel: 'D-030', etgoDocWindow: 'goods-shipment', etgoDocHeaderId: 'HDR-030', movementQuantity: 1,
+        },
+        {
+          id: 't2', movementDate: '2025-01-15', 'product$_identifier': 'Apple', movementType: 'M+',
+          etgoDocLabel: 'D-010', movementQuantity: 2, // has a label but no window/headerId -> not navigable
+        },
+        {
+          id: 't3', movementDate: '2025-01-25', 'product$_identifier': 'Banana', movementType: 'M+',
+          etgoDocLabel: 'D-020', etgoDocWindow: 'goods-shipment', etgoDocHeaderId: 'HDR-020', movementQuantity: 3,
+        },
+      ],
+    });
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('column-header-sort-product')); // sort by Product, not Document
+
+    expect(productOrder()).toEqual(['Apple', 'Banana', 'Mango']);
+    // D-010 (Apple/t2) is still plain text: present, but not inside the icon-bearing link.
+    // (The mocked ArrowUpRight renders with the caller's own `data-testid` prop, which
+    // overrides the mock's default via prop spread — see the existing convention used
+    // throughout this file, e.g. 'icon-arrow-up-right' vs the literal id below.)
+    expect(screen.getByText('D-010')).toBeInTheDocument();
+    const links = screen.getAllByTestId('ArrowUpRight__4dd2db');
+    expect(links).toHaveLength(2); // only t1 (D-030) and t3 (D-020) are navigable
+  });
+
+  // Sentinel/QA (ETP-5083) — BUG-1: `sortRows` (tools/app-shell/src/lib/clientSort.js) applies
+  // `sign * compareCellValues(...)` uniformly, which also flips the blank-handling branches of
+  // `compareCellValues` whenever direction is 'desc'. Its own doc comment promises blanks
+  // "always sort LAST, in both directions", but under a descending sort a blank floats to the
+  // TOP instead. This is pre-existing shared infrastructure (also used by the financial-account
+  // detail tabs), not introduced by this PR's diff, but the Documento column makes it directly
+  // observable in the Warehouse Transactions table this ticket ships: any warehouse with an
+  // undocumented movement (e.g. a goods-movement or physical-inventory line with no linked
+  // document) will show that row jump to the TOP when the user descending-sorts Documento,
+  // burying the very transactions the sort was meant to surface. Assertions below encode the
+  // SPEC (blank-last, both directions) per clientSort.js's own doc comment, so this test is
+  // EXPECTED TO FAIL against the current implementation — see QA report BUG-1.
+  it('BUG-1 (ETP-5083 QA): descending Documento sort should keep an undocumented row last, not float it to the top', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      transactions: [
+        { id: 't1', movementDate: '2025-01-05', 'product$_identifier': 'Mango', movementType: 'M+', etgoDocLabel: 'D-030', movementQuantity: 1 },
+        { id: 't2', movementDate: '2025-01-15', 'product$_identifier': 'Apple', movementType: 'M+', movementQuantity: 2 }, // no document at all
+        { id: 't3', movementDate: '2025-01-25', 'product$_identifier': 'Banana', movementType: 'M+', etgoDocLabel: 'D-020', movementQuantity: 3 },
+      ],
+    });
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    const documentHeader = screen.getByTestId('column-header-sort-document');
+
+    fireEvent.click(documentHeader); // ascending: real labels ordered, blank last (this direction is correct today)
+    expect(documentOrder()).toEqual(['D-020', 'D-030', '—']);
+
+    fireEvent.click(documentHeader); // descending: real labels reverse, blank should STAY last
+    expect(documentOrder()).toEqual(['D-030', 'D-020', '—']);
   });
 });
