@@ -763,9 +763,12 @@ export async function generate349File(decl, {
     // instead of unconditionally, which would yield "foo.txt.txt".
     // .txt to match the Etendo classic Tax Report Launcher output extension
     const typedName = fileName?.trim();
-    const downloadName = typedName
-      ? (/\.txt$/i.test(typedName) ? typedName : `${typedName}.txt`)
-      : `349_${decl.period}_${decl.year}.txt`;
+    let downloadName;
+    if (typedName) {
+      downloadName = /\.txt$/i.test(typedName) ? typedName : `${typedName}.txt`;
+    } else {
+      downloadName = `349_${decl.period}_${decl.year}.txt`;
+    }
     triggerDownload(blob, downloadName);
     return { ok: true };
   } catch (_) {

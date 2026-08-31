@@ -51,7 +51,7 @@ function parseNeoError(json) {
 // something" from "this is the exact draft that already failed"
 function draftSignature(draft) {
   const d = draft ?? {};
-  return JSON.stringify(Object.keys(d).sort().map(k => [k, d[k]]));
+  return JSON.stringify(Object.keys(d).sort((a, b) => a.localeCompare(b)).map(k => [k, d[k]]));
 }
 
 // NEO does not send expanded reversedInvoice$documentNo/$invoiceDate/$grandTotalAmt

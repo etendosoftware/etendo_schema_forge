@@ -346,6 +346,15 @@ function KeyFilterDropdown({ value, onChange, t }) {
 //                       what the banner shows on the next render, so a re-run is the right
 //                       follow-up — the only hint this fragment offers. It still attributes no
 //                       cause: blaming the VIES service would be wrong for the deferred case.
+// Pushes the "N of this outcome" sentence onto `parts` when count > 0, picking the
+// singular/plural key. Factored out of buildViesResultMessage purely to keep that
+// function's cognitive complexity under Sonar's threshold (S3776) — behavior unchanged.
+function pushViesCountPart(parts, t, count, singularKey, pluralKey) {
+  if (count > 0) {
+    parts.push(t(count === 1 ? singularKey : pluralKey, { count }));
+  }
+}
+
 function buildViesResultMessage(t, {
   validated = 0, valid = 0, invalid = 0, notEligible = 0, failed = 0, stillPending = 0,
 } = {}) {
@@ -357,21 +366,11 @@ function buildViesResultMessage(t, {
   }
 
   const parts = [];
-  if (valid > 0) {
-    parts.push(t(valid === 1 ? 'fm.m349.vies.result.valid_one' : 'fm.m349.vies.result.valid_many', { count: valid }));
-  }
-  if (invalid > 0) {
-    parts.push(t(invalid === 1 ? 'fm.m349.vies.result.invalid_one' : 'fm.m349.vies.result.invalid_many', { count: invalid }));
-  }
-  if (failed > 0) {
-    parts.push(t(failed === 1 ? 'fm.m349.vies.result.failed_one' : 'fm.m349.vies.result.failed_many', { count: failed }));
-  }
-  if (notEligible > 0) {
-    parts.push(t(notEligible === 1 ? 'fm.m349.vies.result.not_eligible_one' : 'fm.m349.vies.result.not_eligible_many', { count: notEligible }));
-  }
-  if (stillPending > 0) {
-    parts.push(t(stillPending === 1 ? 'fm.m349.vies.result.pending_one' : 'fm.m349.vies.result.pending_many', { count: stillPending }));
-  }
+  pushViesCountPart(parts, t, valid, 'fm.m349.vies.result.valid_one', 'fm.m349.vies.result.valid_many');
+  pushViesCountPart(parts, t, invalid, 'fm.m349.vies.result.invalid_one', 'fm.m349.vies.result.invalid_many');
+  pushViesCountPart(parts, t, failed, 'fm.m349.vies.result.failed_one', 'fm.m349.vies.result.failed_many');
+  pushViesCountPart(parts, t, notEligible, 'fm.m349.vies.result.not_eligible_one', 'fm.m349.vies.result.not_eligible_many');
+  pushViesCountPart(parts, t, stillPending, 'fm.m349.vies.result.pending_one', 'fm.m349.vies.result.pending_many');
 
   // "procesado", not "comprobado": `validated` is every pending operator the call ACCOUNTED
   // FOR (deduplicated by bpId — one partner spans several rows, one per AEAT key plus
