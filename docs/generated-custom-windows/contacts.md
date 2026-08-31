@@ -621,3 +621,39 @@ Regression coverage: `importRowValidators.vitest.js`, the extended
 `importTemplateRoundTrip.vitest.js`, and in app-shell-core `existingRecordLookup.test.js`,
 `parseImportNumber.test.js`, `rowValidators.test.js`, plus the ETP-4996 block in
 `ImportDialog.test.jsx`.
+
+## ETP-4992 — Tax ID field relabelled "CIF/NIF" -> "NIF" (Spanish locale)
+
+CIF was abolished in Spain and folded into NIF in 2008, so the header's tax-identification
+field ("CIF/NIF") no longer matches the correct terminology. The field itself
+(`taxID` on `businessPartner`, AD column `TaxID`) is unchanged; only its Spanish display
+label is renamed to **NIF**, in every place it is rendered by this window: the General tab
+form field, the grid column (if ever surfaced), the advanced-filter field list, and the
+CSV/TXT import's column-mapping step and review-queue column header.
+
+**Mechanism.** `useLabel()`'s resolution chain (`labelOverrides[locale][column] →
+dictionary.fields[column].label → raw spec label`) always finds the global AD dictionary
+entry for `TaxID` (`"CIF/NIF"`, shared by every other window that exposes this column), so a
+plain per-field `label` in `decisions.json` would never be reached and would not change what
+renders. The window-scoped override that actually wins is
+`decisions.json → window.labelOverrides.es_ES.TaxID: "NIF"` — the same mechanism already used
+for `C_BP_Group_ID` -> "Contact Category" (see the ETP-4566 note above). The global
+`es_ES.json`/`es_AR.json` dictionary entries for `TaxID`/`Taxid` were left untouched, since
+they are shared by other windows. English (`en_US`) and `es_AR` are unchanged — this is a
+Spain-specific fiscal-terminology fix.
+
+The import field-mapping entry (`window.import.fields`, `target: "taxID"`) also had its
+`label` changed from `"CIF/NIF"` to `"NIF"`, since `ImportColumnMapping.jsx` and
+`ImportReviewQueue.jsx` (both in the published `@etendosoftware/app-shell-core` import
+components) render `field.label` directly in the column-mapping dropdown and the review
+queue's column header — both are part of this window's own Import flow.
+
+**Out of scope, deliberately.** The shared `CreateContactModal.jsx` quick-create modal (its
+own `taxIDField: "CIF/NIF"` locale key) is used by the partner-selector "+ crear contacto"
+flow inside *other* windows (Sales Order, Sales Quotation, Purchase Order, Purchase Invoice,
+Goods Shipment — see the ETP-4700 E2E coverage in
+`e2e/tests/flows/contacts-integration.spec.js`), not by `/contacts` itself, so it is a
+different feature and was left unchanged. The import's `TAX_ID_KEY_VALUES` alias list in
+`contactsImportDescriptor.js` (accepting user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as
+synonyms for the *Tax ID Type* enum value `NIF`) was also left unchanged — it recognizes
+what users type in their own CSV files and is unrelated to the displayed field label.
