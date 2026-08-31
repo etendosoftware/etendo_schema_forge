@@ -80,7 +80,7 @@ async function extractErrorMessage(res) {
  *   loading: boolean,
  *   error: Error|null,
  *   uploadingFiles: Map<string, { name: string, size: number }>,
- *   list: () => Promise<void>,
+ *   list: (opts?: { recordId?: string }) => Promise<void>,
  *   upload: (file: File, opts?: { recordId?: string }) => Promise<void>,
  *   download: (attachment: object) => Promise<void>,
  *   downloadAll: () => Promise<void>,
@@ -101,13 +101,33 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     : '';
   const apiFetch = useApiFetch(attachmentsBase);
 
+  // DetailView routes a not-yet-saved record as the literal string "new" —
+  // truthy, so a plain `!recordId` guard misses it. Nothing can be attached
+  // to a record that doesn't exist yet, and firing this GET anyway is worse
+  // than a wasted request: it can resolve *after* a real upload's own list()
+  // (ETP-4315 QA follow-up's saveBeforeAttach path) and clobber the correct
+  // items with an empty result.
+  const hasRealRecord = !!(tableName && recordId && recordId !== 'new');
+
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(!!(tableName && recordId));
+  const [loading, setLoading] = useState(hasRealRecord);
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
 
   // AbortController shared by all read requests for the current record.
   const abortRef = useRef(null);
+
+  // Monotonic guard against out-of-order writes to `items` (ETP-4315 QA
+  // follow-up): the saveBeforeAttach path force-saves the header, which
+  // updates this hook's own `recordId` prop mid-flight (before the upload
+  // that triggered the save has even resolved) and re-fires the mount
+  // effect's list() below. If that list() call resolves *after* upload()'s
+  // own setItems, it silently overwrites the correct (just-uploaded) state
+  // with a now-stale read. Every write bumps this ref first and only
+  // commits if it's still the most recent write by the time its async work
+  // resolves — a request that started earlier but resolves later is
+  // discarded rather than allowed to clobber a newer one.
+  const stateGenerationRef = useRef(0);
 
   // Identity used to skip our own change notifications (ETP-4855): this hook
   // already updates `items` optimistically, so reloading on its own event would
@@ -133,14 +153,25 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   }, []);
 
   // ── list ────────────────────────────────────────────────────────────────
-  const list = useCallback(async () => {
-    if (!tableName || !recordId) return;
+  // `opts.recordId` mirrors upload()'s override (ETP-4315 QA follow-up): the
+  // list() closure captured by a caller from an earlier render (e.g. the
+  // saveBeforeAttach flow, whose whole async chain runs against the "new"
+  // AttachmentsTab render it started from) still has `hasRealRecord` bound
+  // to that render's "new" recordId, so calling the bare `list()` it holds
+  // would silently no-op on its own stale guard — passing the just-saved id
+  // through here instead of relying on the hook's own (stale) closure fixes
+  // that without waiting for a re-render to hand out a fresh `list`.
+  const list = useCallback(async (opts = {}) => {
+    const targetRecordId = opts.recordId || recordId;
+    const targetHasRealRecord = !!(tableName && targetRecordId && targetRecordId !== 'new');
+    if (!targetHasRealRecord) return;
+    const generation = ++stateGenerationRef.current;
     const ctrl = resetAbortController();
     setLoading(true);
     setError(null);
     try {
       const res = await apiFetch(
-        `/sws/neo/attachments/${tableName}/${recordId}`,
+        `/sws/neo/attachments/${tableName}/${targetRecordId}`,
         { signal: ctrl.signal, token },
       );
       if (!res.ok) {
@@ -149,13 +180,19 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       }
       const json = await res.json();
       const data = json?.items ?? json?.response?.data ?? json?.data ?? json;
-      setItems(Array.isArray(data) ? data : []);
+      if (generation === stateGenerationRef.current) {
+        setItems(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       if (err.name === 'AbortError') return;
-      setError(err);
-      toast.error(err.message || ui('attachmentsListError'));
+      if (generation === stateGenerationRef.current) {
+        setError(err);
+        toast.error(err.message || ui('attachmentsListError'));
+      }
     } finally {
-      setLoading(false);
+      if (generation === stateGenerationRef.current) {
+        setLoading(false);
+      }
     }
   }, [apiFetch, tableName, recordId, token, resetAbortController, ui]);
 
@@ -166,13 +203,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
 
   // Eager load when record is available (same pattern as secondary tabs).
   useEffect(() => {
-    if (tableName && recordId) {
+    if (hasRealRecord) {
       list();
     }
     // Intentionally not depending on `list` to avoid extra re-runs when
     // its identity changes due to unrelated deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableName, recordId]);
+  }, [tableName, recordId, hasRealRecord]);
 
   // Reload when another view attaches or deletes a file on this record — e.g.
   // the OCR side panel, which is mounted alongside this tab in form view.
@@ -208,10 +245,20 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       const json = await res.json();
       const created = json?.response?.data ?? json?.data ?? json;
       if (created && created.id) {
+        // Bump first: invalidates any list() already in flight (e.g. the one
+        // saveBeforeAttach's force-save just re-triggered via the recordId
+        // prop update) so it can't overwrite this with a stale read.
+        stateGenerationRef.current += 1;
         setItems((prev) => [created, ...prev]);
       } else {
         // Fallback: reload list when the server did not return the new item.
-        await list();
+        // Pass targetRecordId explicitly rather than calling list() bare:
+        // this closure's own `list` can still be bound to the "new" record
+        // from the render that started this call chain (ETP-4315 QA
+        // follow-up's saveBeforeAttach flow runs its whole async sequence
+        // against the closures captured at drop time, before the force-save
+        // hands out a fresh recordId on the next render).
+        await list({ recordId: targetRecordId });
       }
       announceChange();
       toast.success(ui('attachmentsUploadSuccess'));
