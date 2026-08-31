@@ -1582,3 +1582,163 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   letter/number, grep BOTH `onboarding-gaps.md` (`^### [A-Z][0-9]`) AND
   `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
   doc you happen to be editing.
+
+## ETP-4872 — A7 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+
+- **2026-08-30 (review correction) — Originally filed as `A6`; caught in review as a collision
+  with the pre-existing `A6` (ETP-4539 "Asset group Genérico consolidation", documented above in
+  this same file) — a completely unrelated table (`A_Asset_Group`). Relabeled `A7` here, in
+  `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and the `.sql` header's `@gap:` line.**
+  Root cause: the letter was assigned without cross-checking the SQL headers directly (`grep
+  "@gap:" cli/src/data-fixes/sql/*.sql`), only against this doc's own prose — the exact check
+  `onboarding-and-datafixes-map.md`'s own `L1` collision note (2026-08-27, above) already flagged
+  as mandatory. **Apply generally:** grep the actual `.sql` `@gap:` headers, not just the docs,
+  before assigning any new letter/number — a doc can drift from the SQL it describes.
+
+- **2026-08-30 — `R29` was already claimed AND already `APPLIED` live on the shared DB by an
+  unmerged sibling branch (`feature/ETP-4947`) before this session started — confirmed via
+  `git branch -a` + `git ls-tree` (found `20260828T140000Z__R29-acctschema-allownegative-revert.sql`
+  on `feature/ETP-4947`/`origin/feature/ETP-4947`, absent from this branch) AND independently via
+  a direct `SELECT DISTINCT fix_id FROM etgo_data_fix_history WHERE fix_id LIKE '%R29%'`, which
+  returned that exact fix_id already `APPLIED`. **Apply generally:** the ledger check alone would
+  have been sufficient here (it directly proves the id is live-taken, no branch archaeology
+  needed) — when both checks are available, the ledger query is the faster/more authoritative
+  one; `git branch -a` is still worth running too since a claimed-but-not-yet-applied id (still
+  only on a branch, no ledger row yet) wouldn't show up in the ledger at all. Used `R30` +
+  timestamp `2026-08-30T12:00:00Z` (after both R29's `20260828T140000Z` and the newest same-day
+  file `R26-acct-rpt-definitions` at `20260828T120000Z`).
+- **2026-08-30 — The account code width for the "572" bank-account family is genuinely NOT
+  uniform fleet-wide, confirmed by direct query across all 20 real+demo tenants with a wired `AC`
+  element, not assumed from any single source file.** 18/20 tenants (incl. GOClient,
+  SantoEmpresa) carry the R8-padded 8-digit leaf (`57200000`); exactly 2 (F&B International
+  Group, QA Testing) never got R8 applied and still carry the plain 5-digit PGC form (`57200`).
+  `GROUP BY length(value)` across every `572%` `issummary='N'` row on the whole DB confirms only
+  these two widths exist — no third. A fix that hardcodes either width (as R9's own
+  `41700000` did, reasonably, since it happened to only ever run against GOClient-family tenants)
+  would have silently corrupted the other family here. **Apply generally:** for any future
+  new-account gap, verify the sibling account's width per-tenant via direct query before writing
+  `@apply` — do not assume R9's single-width precedent generalizes.
+- **2026-08-30 — Confirmed live: `C_ELEMENTVALUE_TRL`, `C_VALIDCOMBINATION`, and one
+  `AD_TREENODE` row per new `C_ELEMENTVALUE` are ALL auto-created by the standard
+  `c_elementvalue_trg()` trigger firing reliably inside the data-fix runner's plain-SQL
+  transaction — do not manually INSERT any of the three (would violate their UNIQUE
+  constraints against the trigger's own rows).** This reconfirms the ETP-4402/R9 finding
+  (2026-07-02, same file, `c_elementvalue code structure` section) on a second, independent gap.
+  New corollary this session: the trigger's auto-created `C_VALIDCOMBINATION` sets
+  `ALIAS=COMBINATION=new.VALUE` **verbatim** — the FULL, possibly-8-digit value, never truncated.
+  On an 8-digit tenant this produces `'57210000'`, inconsistent with the sibling `57200`
+  account's own actual `ALIAS='57200'` (5-digit) shape on the SAME chart — itself an artifact of
+  R8 apparently having disabled triggers during its bulk 8-digit-padding UPDATE, so the
+  pre-existing combinations were never widened to match. **Apply generally:** any future fix that
+  inserts a NEW postable leaf onto an R8-padded (8-digit) chart must add an explicit follow-up
+  `UPDATE c_validcombination SET alias = LEFT(value,5), combination = LEFT(value,5) ...` after the
+  INSERT — the trigger's own output will NOT match the tenant's established convention on its own.
+  Verified empirically: on the 2 non-R8 (5-digit) tenants, `LEFT(value,5)` trivially equals
+  `value`, so this normalize step correctly no-ops there (`APPLIED (4 rows)` vs. `(5 rows)` on the
+  8-digit branch — the row-count difference is itself a clean signal the branch logic is correct).
+- **2026-08-30 — Self-caught authoring bug: typed the Spanish account name without its accent
+  ("Tarjetas de credito, euros" instead of "Tarjetas de crédito, euros") when transcribing it into
+  the `.sql` file by hand, diverging from both the preventive-side XML and the live DB's own
+  existing `572`-family names.** Caught only by re-querying the just-applied live row and diffing
+  its `name` against the preventive fix's committed XML — the SQL file itself doesn't fail any
+  syntax/idempotency check for a plain string content difference. Fixed the `.sql` file, then
+  cleaned up (manually deleted) the wrongly-accented test rows already committed to the shared DB
+  (`c_validcombination` → `ad_treenode` → `c_elementvalue_trl` → `c_elementvalue` → the
+  `etgo_data_fix_history` ledger row, in that FK-safe order) before re-running the corrected fix.
+  **Apply generally:** when a fix's `.sql` file hand-transcribes a name/description string that
+  must byte-match another artifact (a preventive XML, a sibling account's existing name), diff the
+  actual applied row's content against that source AFTER a real test run, not just eyeball the
+  `.sql` source — accented/non-ASCII characters are exactly the class of error that survives a
+  visual review of the file but not a live data diff.
+- **2026-08-30 — CUT (`ONBOARDING_PROVISIONED_THROUGH`) intentionally left unbumped for a
+  different reason than the ETP-5019/R28 precedent: the preventive front for THIS gap lives on an
+  UNMERGED sibling branch in a DIFFERENT repo (`com.etendoerp.go` `feat/ledger-account-57210`),
+  which this session could not safely edit (out of scope, explicitly read-only per the task
+  brief) even if the CUT-chain-verification concern didn't also apply.** Both reasons compound:
+  even setting aside the intervening-unbumped-fixes risk (R27/R28/R26-acct-rpt-definitions/the
+  sibling R29, none individually re-verified this session), bumping a Java constant that lives on
+  an unmerged branch this session has no write access to is a structurally separate blocker.
+  Flagged explicitly as a follow-up for whoever merges both the preventive dataset branch and this
+  corrective `.sql` — do not silently skip noting this, and do not bump it from a worktree that
+  cannot see the preventive branch's actual merged state.
+
+## ETP-4872 — R30 QA rejection (Sentinel): multi-chain hazard, live-verified, zero exposure (2026-08-31)
+
+QA filed two findings against R30 (BUG-2 medium, BUG-3 low), both backed by new **passing**
+pinning tests (`cli/test/data-fixes-r30-financial-account-card-ledger-account.test.js`, describing
+current behavior, not failing it). Investigated both against the SAME shared dev DB R30 was
+originally validated against. R30 is already `APPLIED` for 19/19 real+demo tenants in that DB
+(confirmed via `SELECT ... FROM etgo_data_fix_history WHERE fix_id =
+'20260830T120000Z__R30-financial-account-card-ledger-account'`) — per this agent's own
+`what_i_never_do` rule ("never rename or edit an already-applied migration"), **the `.sql` file
+itself was left untouched for both findings.** Root cause of confusion the first time around: it's
+tempting to think "not yet in production" means a corrective data-fix `.sql` is still free-form
+editable during a QA cycle — it is NOT, once it has a real `APPLIED` ledger row anywhere, even a
+shared dev/experimental DB. **Apply generally:** treat the ledger row, not the git/PR merge state,
+as the immutability trigger for a data-fix `.sql` file.
+
+- **BUG-2 (multi-chain: >1 qualifying element chain per tenant, only the lowest-`c_element_id` one
+  gets fixed per `@apply` since both INSERTs share one `@uuid_<KEY>@` token) — confirmed ZERO live
+  exposure, fleet-wide, not just within the original 20-tenant sample.** Queried
+  `c_acctschema_element` (`elementtype='AC'`, `isactive='Y'`) grouped by `ad_client_id`, counting
+  `DISTINCT c_element_id`: only **2 clients in the ENTIRE fleet** are wired to more than one
+  distinct `AC` element — `F&B International Group` (`23C59575B9CF467C9620760EB255B389`, elements
+  `56E65CF592BD4DAF8A8A879810646266` + `FB577CDB95A54375AD95AE5F3B9D8458`) and `QA Testing`
+  (`4028E6C72959682B01295A070852010D`, elements `3DE10A7188234EB2898C0500B97CB495` +
+  `A0DA7C90447A412EAB5E1E4D16D1A9CA`). For BOTH, only ONE of the two wired elements carries ANY
+  `572%` row at all — the second `C_AcctSchema` on each (a US-Dollar-denominated schema) uses a
+  completely different chart with zero `572` family. So the BUG-2 precondition — two INDEPENDENTLY
+  qualifying chains (each with its own `57200`/`57200000` sibling but missing `57210`/`57210000`)
+  on the SAME tenant — cannot occur for either client, and both are already correctly `APPLIED`
+  (their one real chain's `57210`/`57210000` row exists). **Decision: accept as a known, documented
+  limitation, not worth a proactive hardening fix at this priority.** Rationale beyond
+  "zero exposure today": a second `C_AcctSchema` on an Etendo tenant is, structurally, almost
+  always there FOR a different chart of accounts (different currency/jurisdiction/reporting need)
+  — the exact reason a tenant adds a second schema in the first place tends to be the same reason
+  its element rarely shares the same `572` PGC family as the first. Not a proof of impossibility,
+  but a real reason this class of gap is unlikely to materialize, distinct from "we just haven't
+  seen it yet."
+  - **Separate, more durable observation (framework-level, not R30-specific):** `run.js` marks a
+    fix `APPLIED` unconditionally on `@apply` success — no rows-affected gate — and
+    `APPLIED`/`MANUALLY_FIXED`/`SKIPPED_NOT_NEEDED` are all in the `PROCESSED` set that a re-run
+    never revisits (see `run.js` `STATUS`/`PROCESSED` around L58-71, L408-410). So ANY future
+    single-token-per-apply fix (not just R30) that intentionally picks one of several qualifying
+    rows via `ORDER BY ... LIMIT 1` has the SAME latent gap: a tenant with N qualifying rows only
+    ever gets 1 fixed, with no ledger signal that N-1 remain and no retry path short of a brand-new
+    fix. Worth remembering as a pattern to watch for in future `ORDER BY ... LIMIT 1`-shaped fixes,
+    not something to retrofit onto R30 today.
+
+- **BUG-3 (Steps C/D/E lack a `c_acctschema_element` join, contradicting the SQL file's Background
+  point 4 claim that "every statement... resolves ONLY via `C_AcctSchema_Element`") — confirmed
+  the SAME zero-exposure result live.** Directly checked GOClient's own documented orphan chain
+  (element `91D04C02EF8F4975B9E4F5E07543B6EA`, the "GOOrg Account Tree" element, not wired to any
+  `C_AcctSchema` — see the ETP-4402 two-`C_Element`-hazard precedent above): it carries `572`,
+  `5720`, `57200000` but **NOT** `5721`/`57210`/`57210000` — the exact values Steps C/D/E actually
+  match on. A fleet-wide sweep (`SELECT ad_client_id, value, COUNT(DISTINCT c_element_id) ... value
+  IN ('572','5721','57210','57210000') ... HAVING COUNT(DISTINCT c_element_id) > 1`) found exactly
+  ONE collision anywhere: GOClient's bare `572` node (shared by both its wired and orphan
+  elements) — and Steps C/D/E never match on `572` alone, only on `5721`/`57210`/`57210000`, none
+  of which collide anywhere in the fleet. So Steps C/D/E's plain value-equality joins, while not
+  literally scoped via `C_AcctSchema_Element`, have never actually been ambiguous in practice: they
+  work because `5721`/`57210`/`57210000` happen to be unique-per-tenant values today (each row was
+  freshly minted by this fix's own Step A/B on the ONE wired element), not because of an explicit
+  guard. **Decision: since R30 is an already-applied, immutable migration (see above), do NOT edit
+  the `.sql` file — not even the Background comment — to correct the imprecise claim.** Recording
+  the correction here instead: Background point 4's blanket "every statement... ONLY via
+  `C_AcctSchema_Element`" is accurate for `@check` and Steps A/B (which DO join
+  `c_acctschema_element`) but NOT for Steps C/D/E, which resolve their target rows by
+  `ad_client_id` + plain `value` equality, paired to the SAME apply's own newly-inserted `5721`/leaf
+  row via `c_element_id` equality between the two joined `c_elementvalue` aliases — never via
+  `c_acctschema_element` itself. Correctness in practice rests on an unstated invariant (no tenant
+  has two elements sharing a `5721`/`57210`/`57210000` value), verified true fleet-wide today, not
+  on the AC-element join the comment claims. `docs/etendo-ad/onboarding-gaps.md`'s A7 entry repeats
+  the same overstated claim in its own "Fix" paragraph — annotated with a caveat there rather than
+  rewritten, for the same immutable-migration-adjacent reason (keep the historical record intact,
+  correct via annotation).
+  - **Apply generally:** a future fix using the same "insert new leaf → reparent via
+    value-matched-sibling UPDATE" pattern (Steps C/D here) should scope the sibling match
+    explicitly to the newly-inserted row's own `c_element_id` from the START (e.g. carry the
+    `@uuid_<KEY>@` token's element through, or re-derive it via the same `c_acctschema_element`
+    join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
+    OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
+    orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.

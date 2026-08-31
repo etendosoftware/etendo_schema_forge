@@ -17,6 +17,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
 | A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
+| A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -736,6 +737,88 @@ remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no
 |---|---|
 | **Corrective — every tenant** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — single guarded `UPDATE`, scoped only by `:client_id AND ad_table_id='800060' AND isactive <> 'Y'` (no chart-family marker, no allowlist). Live-validated: acreedortest/acreetest2/empresa/QA Testing (both schemas)/TaxesOrg all `APPLIED`, GOClient/F&B International Group `SKIPPED_NOT_NEEDED` (already correct); full re-run confirms idempotency (`SKIPPED_NOT_NEEDED` across all 7 tenants). |
 | **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. QA Testing and TaxesOrg have no dedicated sampledata directory (only `GOClient/` exists) — nothing further to fix preventively for either. |
+
+---
+
+### A7 — A single new named ledger account missing from an already-provisioned chart (ETP-4872, 2026-08-30)
+
+**Symptom:** ETP-4872 introduces accounting defaults for a new Tarjeta/Card `FIN_FinancialAccount`
+type. Those defaults need a brand-new ledger account, `57210` ("Tarjetas de crédito, euros"), as a
+sibling of the existing `57200` bank account under the `572` group. Tenants onboarded before this
+account existed in the chart have no such row — not a wiring gap on an existing account (A2's
+shape), and not the whole chart missing (A1's shape); the account definition itself is simply
+absent. This is a reusable gap SHAPE (a new account/document-type rollout needing a specific new
+`C_ELEMENTVALUE` added retroactively to already-provisioned tenants), of which `57210` is the first
+instance filed under this letter — ETP-4402's `417`/`4170`/`41700000` chain (`R9-bp-category-seed`,
+filed under `@gap: ETP-4402` before this letter existed) is the same shape in hindsight.
+
+> **Label note (2026-08-30):** this gap was originally filed as `A6`, which collided with the
+> pre-existing `A6` (Asset group "Genérico" consolidation, ETP-4539, §A above — see
+> `tenant-remediation-knowledge.md`) — a completely unrelated table (`A_Asset_Group`). Caught in
+> review before merge; relabeled `A7` across this doc, `tenant-remediation-knowledge.md`,
+> `onboarding-and-datafixes-map.md`, and the `.sql` header. No functional impact — `@gap` is a
+> documentation/categorization tag only, never stored in `ETGO_DATA_FIX_HISTORY` or read by the
+> runner (same class of drift as the `H1`→`H3` relabel documented above).
+
+**Root cause:** not a bug — a new account genuinely did not exist at the time earlier tenants were
+onboarded. Structural facts confirmed live against the shared dev/Experimental DB (2026-08-30, 20
+real+demo tenants with a wired `AC` accounting-schema element):
+
+- The tree is 3 levels: `572` (group) → `5720` (subgroup) → `57200` leaf — not 2. A new sibling
+  leaf needs its own new sibling subgroup (`5721`), not a leaf hung directly off `572`.
+- `C_ELEMENTVALUE.VALUE` width for the existing `57200` leaf is NOT uniform: 18/20 tenants (R8's
+  8-digit padding, ETP-4247) carry `57200000`; 2 (F&B International Group, QA Testing) never got
+  R8 applied and still carry the plain 5-digit `57200`. A fix that hardcodes either width silently
+  corrupts the other half of the fleet — the new leaf's width must be derived per-tenant from its
+  own `57200` sibling.
+- `C_VALIDCOMBINATION.ALIAS`/`COMBINATION` do NOT track `C_ELEMENTVALUE.VALUE`'s width even on
+  8-digit tenants (GOClient's own `57200000` leaf has `ALIAS=COMBINATION='57200'`, 5-digit) — an
+  artifact of R8 apparently having run with triggers disabled, so it never widened the
+  already-existing combinations. The standard `C_ElementValue_trg()` (fires reliably on an INSERT
+  made through the data-fix runner's plain-SQL transaction, per the ETP-4402/R9 precedent)
+  auto-creates the new leaf's combination with `ALIAS=COMBINATION=<full value>` — which must be
+  explicitly truncated to `LEFT(value, 5)` afterward to match the tenant's own established
+  convention, or the new account reads inconsistently next to its own sibling on the same chart.
+
+**Fix:** `cli/src/data-fixes/sql/20260830T120000Z__R30-financial-account-card-ledger-account.sql` —
+resolves the target element ONLY via `C_AcctSchema_Element.elementtype='AC'` (never a bare
+`value='572'` match, so GOClient's orphan second `C_Element` chain, see the ETP-4402/R9 precedent,
+is never touched); inserts `5721` (fixed 4-digit) and the new leaf (`57210` or `57210000`, derived
+from the tenant's own `57200` sibling); re-parents both auto-created-at-root `AD_TREENODE` rows;
+normalizes the auto-created `C_VALIDCOMBINATION`'s alias/combination width. Live-validated
+end-to-end (real run, not just a rolled-back tx) across all 19 real+demo tenants with a wired `AC`
+element on the shared dev DB: GOClient/SantoEmpresa/16 others → `APPLIED (5 rows)` (8-digit branch,
+including the combination-normalize step); F&B International Group/QA Testing → `APPLIED (4 rows)`
+(5-digit branch, where the normalize step correctly no-ops since the trigger's own output already
+matches); full re-run → 19/19 `SKIPPED_NOT_NEEDED`, confirming idempotency in both width branches.
+
+> **Caveat (2026-08-31, QA rejection follow-up — see `tenant-remediation-knowledge.md`'s "R30 QA
+> rejection" entry for the full investigation):** the "ONLY via `C_AcctSchema_Element`" claim above
+> is accurate for `@check` and Steps A/B, but NOT literally true for Steps C/D/E (the two
+> `AD_TREENODE` reparents and the `C_VALIDCOMBINATION` normalize) — those resolve their target rows
+> by plain `value` equality (`5721`/`57210`/`57210000`), paired to the row this SAME apply just
+> inserted via `c_element_id` equality between the joined aliases, never via
+> `C_AcctSchema_Element` itself. Live-verified this is harmless in practice (GOClient's own orphan
+> chain, and every other tenant's, never carries a `5721`/`57210`/`57210000` value on more than one
+> element), but that's an unstated invariant the SQL relies on, not something the joins enforce.
+> R30 is already `APPLIED` fleet-wide, so left as-is (immutable migration) rather than edited —
+> flagging here so the next reader doesn't take the "ONLY via" claim as a hard guarantee for a
+> future fix copying this pattern.
+
+**Preventive:** already shipped — ETP-4872 Task 5, `com.etendoerp.go` branch
+`feat/ledger-account-57210` (unmerged at the time this corrective fix was authored), extending
+`referencedata/sampledata/GOClient/{C_ELEMENTVALUE,C_ELEMENTVALUE_TRL,C_VALIDCOMBINATION,
+AD_TREENODE}.xml`. **`ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped by this
+corrective fix** — bumping it requires both the preventive dataset branch and this SQL to be merged
+first (the CUT is read by the LIVE onboarding path in `com.etendoerp.go`, a different repo/branch
+than this fix), and the current CUT (`2026-08-26T12:00:00Z` at authoring time) already sits behind
+several other unbumped, individually-unverified intervening fixes (R27/R28/R26-acct-rpt-definitions/
+the sibling R29) — bumping past all of them on this fix's say-so risks silently skipping one of
+theirs for a brand-new tenant, mirroring the ETP-5019/R28 precedent exactly. **Follow-up for
+whoever merges both the preventive dataset branch and this corrective `.sql`:** bump
+`ONBOARDING_PROVISIONED_THROUGH` to this fix's own timestamp (`2026-08-30T12:00:00Z`) ONLY once
+both are confirmed merged, or defer to whoever next legitimately re-verifies the whole unbumped
+chain.
 
 ---
 

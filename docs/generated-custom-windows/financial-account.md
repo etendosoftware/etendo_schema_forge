@@ -117,10 +117,12 @@ not a change.
     contable" for the same reason: the heading supplies the "de diferencias". Read back through the list payload as
     `glItemDifferenceId` / `glItemDifferenceName` (`FinancialAccountsPageHandler`), written through
     `useAccountMutations.toDalBody()` as `aprmGlitemDiff`.
-- **Contabilidad** (`financeAccountsEditTabAccounting`, ETP-4530): the accounting accounts used
-  when generating transaction journal entries — **Cuenta bancaria** (`fINAssetAcct`, required) and
-  **Cuenta transitoria** (`fINTransitoryAcct`, optional). See "Accounting configuration" below.
-  If the selectors show no options at all, check the account's organization has a **General
+- **Contabilidad** (`financeAccountsEditTabAccounting`, ETP-4530; full field set ETP-4872): the
+  accounting accounts used when generating transaction journal entries — 9 fields for Banco
+  accounts (3 sub-sections), 6 for Caja/Tarjeta (2 sub-sections), none required. Replaces the
+  original ETP-4530 pair (`fINAssetAcct`/`fINTransitoryAcct`, now retired). See "Accounting
+  configuration" below. If the selectors show no options at all, check the account's organization
+  has a **General
   Ledger** configured (`AD_Org.C_Acctschema_ID`, Classic: Organization window → General Ledger
   field) — with no ledger the handler soft-degrades (`ledgerConfigured: false`) and the tab shows
   an explanatory message instead of empty selects; this is a data/config gap, not a bug (confirmed
@@ -184,16 +186,15 @@ Field editability in the top section:
   button; not connected → a single "Connect bank" button.
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
-  (ETP-4530) the accounting configuration via `saveAccountingConfiguration`. Enabled only when
-  something is dirty, Name/IBAN are valid, and — if the Contabilidad tab was touched — Cuenta
-  bancaria is filled. Since `accounting.assetAcctMissing` can disable Save while the user is
-  looking at **either** tab (it only requires having touched Contabilidad at some point during
-  this modal session, not currently viewing it), a summary line
-  (`edit-account-accounting-error-summary`, `financeAccountsAccountingBankAssetRequiredSummary`)
-  renders near the footer whenever the General tab is active and the condition holds — otherwise a
-  disabled Save button would have no visible explanation on that tab (QA BUG-1). The field-level
-  error inside `AccountingConfigurationSection` already covers the Contabilidad tab itself, so the
-  summary line is skipped there to avoid showing the same message twice.
+  (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
+  Enabled purely on `dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid &&
+  !recon.amountToleranceInvalid` — **no accounting field can block Save** (ETP-4872 dropped the
+  old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
+  field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
+  (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
+  configuration" below. The `financeAccountsAccountingBankAssetRequiredSummary` i18n key is left
+  in both locale files, deliberately unused, pending QA confirmation that "no field required" is
+  final.
 - The consent-expiry date in the re-auth banner is formatted with the active locale (dd/MM/yyyy in
   Spanish).
 
@@ -251,15 +252,41 @@ edited away from a W-spec-seeded one still reaches `updateAccount`, that both bo
 that typing over a cleared box does not append behind a forced `0`, and that an emptied box saves
 as `0`.
 
-### Accounting configuration (Tab Contabilidad, ETP-4530)
+### Accounting configuration (Tab Contabilidad, ETP-4530; full field set ETP-4872)
 
 Backed by the `accountingConfiguration` entity of the `financial-account` spec, which maps to the
 core AD tab **"Accounting Configuration"** (`FIN_Financial_Account_Acct`, one row per
-account × active `AcctSchema`/ledger). Only the two fields the ticket requires are exposed —
-`fINAssetAcct` ("Bank Asset Account" / Cuenta bancaria) and `fINTransitoryAcct` ("Bank Transitory
-Account" / Cuenta transitoria); the rest of that AD tab's columns (deposit/withdrawal/credit/debit/
-bank-fee/revaluation accounts, `enablebankstatement`) stay `discarded` in `decisions.json` —
-out of scope for this ticket.
+account × active `AcctSchema`/ledger). ETP-4872 replaced the original two-field pair
+(`fINAssetAcct`/`fINTransitoryAcct`, "Bank Asset Account"/"Bank Transitory Account") with the full,
+account-type-dependent set of **9 properties** — the old pair is fully retired: back to
+`visibility: discarded` in `decisions.json`, no longer read or written by the handler, no longer
+rendered anywhere in the modal. `receivePaymentAccount`, `makePaymentAccount`, `creditAccount`,
+`debitAccount` and `enablebankstatement` stay `discarded` — explicitly out of scope.
+
+**Field set** (grouped exactly as the "Contabilidad" tab renders them — see `ACCOUNTING_FIELD_GROUPS`
+in `EditAccountModal.jsx`):
+
+| Group | DAL property | Label (`en_US.json`) | Applies to |
+|---|---|---|---|
+| General | `fINBankrevaluationgainAcct` | Bank revaluation gain account | Banco only |
+| General | `fINBankrevaluationlossAcct` | Bank revaluation loss account | Banco only |
+| General | `fINBankfeeAcct` | Bank fee account | Banco only |
+| Payment IN | `inTransitPaymentAccountIN` | In transit payment IN account | Banco, Caja, Tarjeta |
+| Payment IN | `depositAccount` | Deposit account | Banco, Caja, Tarjeta |
+| Payment IN | `clearedPaymentAccount` | Cleared payment account (IN) | Banco, Caja, Tarjeta |
+| Payment OUT | `fINOutIntransitAcct` | In transit payment OUT account | Banco, Caja, Tarjeta |
+| Payment OUT | `withdrawalAccount` | Withdrawal account | Banco, Caja, Tarjeta |
+| Payment OUT | `clearedPaymentAccountOUT` | Cleared payment account (OUT) | Banco, Caja, Tarjeta |
+
+**Layout is type-conditional, the backend is not:** `AccountingConfigurationSection`
+(`EditAccountModal.jsx`) renders **3 sub-sections** — General / Payment IN / Payment OUT (labels
+`financeAccountsEditTabGeneral` — reused from the General tab, not a new key —
+`financeAccountsAccountingSectionPaymentIn`/`...PaymentOut`), **9 fields total**, for a Banco
+account (`ACCOUNT_TYPE.BANK`); and **2 sub-sections** — Payment IN / Payment OUT only, **6 fields
+total** — for Caja and Tarjeta. The General sub-section is **omitted entirely** for Caja/Tarjeta
+(not merely hidden), matching the repo's "omit, don't disable" convention. `FinancialAccountAccountingHandler`
+has no notion of account type at all — GET/POST always reads/writes exactly whatever subset of the
+9 keys the request body contains; the type-conditional grouping is a pure frontend concern.
 
 The entity is **fully intercepted** by `FinancialAccountAccountingHandler`
 (`@Named("financialAccountAccountingHandler")`, `com.etendoerp.go.schemaforge`) — the generic CRUD
@@ -267,20 +294,56 @@ never runs for it:
 
 ```
 GET  /sws/neo/financial-account/accountingConfiguration?financialAccountId={id}
-  → { id, financialAccountId, fINAssetAcct, fINAssetAcct$_identifier,
-      fINTransitoryAcct, fINTransitoryAcct$_identifier, ledgerConfigured,
-      catalogs: { accounts: [{ id, code, name }, ...] } }
+  → { id, financialAccountId,
+      fINBankrevaluationgainAcct, fINBankrevaluationgainAcct$_identifier,
+      fINBankrevaluationlossAcct, fINBankrevaluationlossAcct$_identifier,
+      fINBankfeeAcct, fINBankfeeAcct$_identifier,
+      inTransitPaymentAccountIN, inTransitPaymentAccountIN$_identifier,
+      depositAccount, depositAccount$_identifier,
+      clearedPaymentAccount, clearedPaymentAccount$_identifier,
+      fINOutIntransitAcct, fINOutIntransitAcct$_identifier,
+      withdrawalAccount, withdrawalAccount$_identifier,
+      clearedPaymentAccountOUT, clearedPaymentAccountOUT$_identifier,
+      ledgerConfigured, catalogs: { accounts: [{ id, code, name }, ...] } }
 
 POST/PUT /sws/neo/financial-account/accountingConfiguration
-  body: { financialAccountId, fINAssetAcct, fINTransitoryAcct? }
-  → same shape, reflecting the persisted row
+  body: { financialAccountId, <any subset of the 9 fields above> }
+  → same shape, reflecting the persisted row. A field key OMITTED from the body leaves the
+    stored value untouched (PATCH-like semantics — `applyCombination` in the handler); a field
+    present with a null/blank value explicitly clears it. In practice `EditAccountModal.jsx`
+    always sends all 9 keys on every save regardless of the active account type — the whole tab
+    is one form (`persistAccountEdits` builds the payload from `ACCOUNTING_FIELDS`) — so the
+    omitted-key path only matters for other API/MCP consumers of this entity. (Some of those 9
+    values may be forced to `null` in the payload rather than read from state — see the
+    Type-switch note right below.)
 ```
+
+**Type-switch mid-edit — payload scoped to the type actually being saved (ETP-4872 QA fix,
+BUG-1).** `accounting.values` (the field-value map inside `useFinancialAccountAccounting`) is keyed
+on all 9 fields regardless of the account's current type, and nothing resets or filters it when the
+user changes Type on the General tab before Save — a value entered while a since-hidden group was
+still on screen is deliberately not thrown away just because the user flips Type back before saving.
+The gap this left: `persistAccountEdits` used to build the save payload by reading straight off that
+unfiltered map, so a value set for a group that no longer applies to the type being saved (e.g. a
+Banco-only "General" field such as `fINBankfeeAcct`, filled in while the account was still Banco)
+was still sent — and persisted — after the user switched Type to Caja/Tarjeta and saved, even though
+that field is invisible for the new type. The backend has no way to catch this on its own: the
+handler's PATCH-like semantics mean "field present in the body" always means "set this value,"
+never "infer whether it still applies from the account's type." Fixed in `EditAccountModal.jsx`'s
+`accountingFieldsForType()` / `persistAccountEdits`: the save payload is now built against the type
+actually being saved (the pending Type selection if `fields.typeDirty`, else the account's persisted
+type) — any of the 9 fields that does not belong to that type's rendered layout is explicitly nulled
+in the payload instead of being carried over stale. This can only surface while Type is still
+editable at all — Type locks once the account has transactions or an active bank connection
+(ETP-4581) — so it is a pre-Save-only edge case: switch Type and save, and any field belonging only
+to the previous type is gone from that row; switch Type back and forth without saving, and nothing
+is lost until Save actually fires.
 
 - **Resolution:** the handler resolves the **account's own organization's** general ledger
   (`org.getGeneralLedger()`, mirroring `GeneralLedgerConfigurationHandler`) — not the caller's
   session org — then finds (GET) or finds-or-creates (save) the single row for that
   (account, ledger) pair. The frontend never has to know whether the row already exists.
-- **No ledger configured:** GET degrades softly (`ledgerConfigured: false`, both accounts `null`,
+- **No ledger configured:** GET degrades softly (`ledgerConfigured: false`, all 9 fields `null`,
   empty catalog) instead of failing the whole edit modal; the tab shows an explanatory message
   (`financeAccountsAccountingNoLedger`) rather than the form.
 - **Catalog, no live selector call:** the GET response carries `catalogs.accounts` — every active
@@ -290,17 +353,46 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
   `GeneralLedgerConfigurationHandler.buildAccountOptions` rather than depending on the generic
   OBUISEL/`Selector` reference selector endpoint's context-param (`inpcAcctschemaId`) resolution,
   which was not something this handler could verify end-to-end in this iteration.
-- **Save:** requires `fINAssetAcct`; auto-sets `enablebankstatement = true` on the row so Classic's
-  bank-statement accounting engine actually reads the two accounts (that flag itself is not
-  exposed as a separate field in this iteration — see "Not implemented yet" below).
+- **Save — no field is required.** ETP-4872 dropped the old `fINAssetAcct`-required validation
+  entirely; none of the 9 fields carries a "required" marker in the ticket's own field tables.
+  **This is an inference from the ticket's tables, not an explicitly stated product requirement —
+  still pending product/PM confirmation** as of this writing (see the implementation plan's Open
+  Questions #4); if product later wants one or two fields mandatory again, that is a scope
+  amendment, not something this doc should be read as having settled. Save still auto-sets
+  `enablebankstatement = true` on every save (unchanged ETP-4530 mechanism — see "Not implemented
+  yet" below) so Classic's bank-statement accounting engine reads whichever accounts were set.
 - `decisions.json → entities.accountingConfiguration` carries the `javaQualifier` and field
-  visibilities; `artifacts/financial-account/contract.json`/`contract.mcp.json` reflect the new
-  entity and its two selector endpoints (`ValidCombination` reference) after `make regen
-  ONLY=financial-account`.
+  visibilities (the 9 fields `editable`/`grid: false`, the old pair back to `discarded`);
+  `artifacts/financial-account/contract.json`/`contract.mcp.json` reflect the new entity and its
+  selector endpoints (`ValidCombination` reference) after `make regen ONLY=financial-account`.
 
 **ETP-4565 review — single-record + non-deletable requirements already satisfied structurally, no change needed.** Investigated as part of ETP-4565 ("Contabilidad tab: single record + non-deletable" across 8 master-data windows). `useFinancialAccountAccounting.js`'s `fetchAccountingConfiguration`/`saveAccountingConfiguration` are both handled entirely by `FinancialAccountAccountingHandler`, which always "resolve[s]/find-or-create[s] the single per-ledger row for the account transparently" — there is no "Add new accounting row" affordance in the UI at all, and no delete affordance either (no Trash icon anywhere in `AccountingConfigurationSection`). Both requirements are therefore inherently met by the current design; no `decisions.json` or code change was made for this ticket.
 
-**Auto-creation (requirement 3) is a confirmed gap, however:** the handler's find-or-create only fires lazily on first GET (i.e., when a user with the `showAccountingFields` capability opens the Contabilidad tab), not eagerly at account-creation time, and the created row starts with no default account (`fINAssetAcct` is required with no default value shown) rather than "default accounts inherited from the Esquema Contable" as the ticket requires. DB-verified: of the 12 most-recently-created financial accounts (via the GO onboarding flow — `Caja`/`Cuenta de Banco`/`Tarjeta`), 0 have a `FIN_Financial_Account_Acct` row; only pre-existing/legacy (`APRM_*`) records created outside the current GO flow have one. Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass — see the ETP-4565 coordinator report.
+**Auto-creation (requirement 3) — closed by ETP-4872 Task 3.** The gap ETP-4565 confirmed (find-or-create only fired lazily on first GET, and the created row started with no default account) is now closed: `FinancialAccountAccountingDefaultsSupport.applyDefaultAccountingConfiguration(account)`
+(`com.etendoerp.go.schemaforge.handlers`), invoked from `FinancialAccountHandler.afterHandle`'s POST
+branch immediately after `FinancialAccountSupport.assignDefaultPaymentMethods(account)`, eagerly
+finds-or-creates the `accountingConfiguration` row at account-creation time and pre-populates it
+with PGC-España baseline defaults, resolved per account type by account **code** lookup
+(`ElementValue.SEARCHKEY`, not a stored combination id) against the account's own ledger:
+
+| Field | Banco | Caja | Tarjeta |
+|---|---|---|---|
+| `fINBankrevaluationgainAcct` | `76800000` | — | — |
+| `fINBankrevaluationlossAcct` | `66800000` | — | — |
+| `fINBankfeeAcct` | `62600000` | — | — |
+| `inTransitPaymentAccountIN` / `fINOutIntransitAcct` | `55500000` | same | same |
+| `depositAccount` / `withdrawalAccount` | `57200000` | `57001000` | `57210000` |
+| `clearedPaymentAccount` / `clearedPaymentAccountOUT` | always empty for every type — never set here | | |
+
+Same "never break account creation" contract as its sibling `assignDefaultPaymentMethods`,
+soft-degrading on both known failure modes: the account's org has no general ledger → the whole
+step no-ops; a default code that does not resolve to an active `AccountingCombination` on this
+tenant's ledger (e.g. a non-PGC-España chart) → that one field is simply left `null`, nothing
+throws or interrupts creation. Deliberately **duplicates** `findOrCreateRow`'s ~10 lines locally
+rather than extracting a helper shared with `FinancialAccountAccountingHandler`, so the two
+ETP-4872 tasks (field exposure vs. auto-defaults) stayed independently dispatchable — an
+extraction is a candidate follow-up cleanup now that both have merged, not something this pass
+did. The Tarjeta `57210000` default depends on the new ledger account described below.
 
 **Generic component fix (ETP-4530):** `CreatableSearchSelect` (`components/contract-ui/`) did not
 re-sync its `options` state when a caller passed a `staticOptions` array that started empty and
@@ -308,6 +400,52 @@ was populated later by an async fetch (the accounting catalog case) — the old 
 consumer never hit this because its array is a static module-level constant. Added a
 `useEffect` that re-syncs `options` whenever the `staticOptions` reference changes; backward
 compatible for every existing consumer.
+
+**New ledger account `57210` — "Tarjetas de crédito, euros" (ETP-4872):** the Tarjeta
+`depositAccount`/`withdrawalAccount` default above needs this account on the tenant's chart; it
+did not exist before this ticket, as a sibling of the existing `57200` bank account under the
+`572` group. Provisioning is split preventive/corrective, same pattern as every other onboarding
+gap in this codebase — see `docs/etendo-ad/onboarding-and-datafixes-map.md` for the full
+preventive/corrective mapping and `cli/src/data-fixes/sql/README.md` for the data-fix mechanism;
+not duplicated here.
+
+- **New tenants (preventive):** provisioned in the GOClient onboarding sampledata
+  (`com.etendoerp.go`, `referencedata/sampledata/GOClient/{C_ELEMENTVALUE,C_ELEMENTVALUE_TRL,
+  C_VALIDCOMBINATION,AD_TREENODE}.xml`, branch `feat/ledger-account-57210`, merged into
+  `feature/ETP-4872`). Two structural facts a future maintainer touching this dataset again needs
+  to know: **two parallel `572` element chains** exist in `C_ELEMENTVALUE.xml`, distinguished by
+  `C_ELEMENT_ID` — only the one wired to the schema via `C_ACCTSCHEMA_ELEMENT`
+  (`BB9B64C5B6534A40A36F7C0F45C2CC0B`) is live; a dangling org-specific duplicate
+  (`91D04C02EF8F4975B9E4F5E07543B6EA`) is filtered out at import time by
+  `OnboardingDatasetNormalizer.AccountElementTreeFilter` — always confirm `C_ELEMENT_ID` before
+  extending this dataset. And **the tree is 3 levels, not 2**: `572` (group) → `5720` (subgroup) →
+  `57200000` (leaf), so `57210000` needed a new sibling subgroup (`5721`) as its parent, not a leaf
+  hung directly off `572`.
+- **Existing tenants (corrective):** `cli/src/data-fixes/sql/20260830T120000Z__R30-financial-account-card-ledger-account.sql`
+  (`@gap: A7` — originally filed as `A6`, relabeled after colliding with the pre-existing ETP-4539
+  `A6`; see `docs/etendo-ad/onboarding-gaps.md` §A7's label note) mirrors the same shape — inserts
+  the `5721` subgroup and the `57210`/`57210000` leaf, deriving the leaf's exact code width
+  per-tenant from that tenant's own `57200` sibling rather than assuming one convention fleet-wide
+  (confirmed live: real tenants carry both a 5-digit and an 8-digit form). **Validated with a real
+  (non-rolled-back) apply run across every real+demo tenant on the shared dev DB backed by
+  `go.experimental.etendo.cloud`** (idempotent on re-run) — see `docs/etendo-ad/onboarding-gaps.md`
+  §A7 and `docs/etendo-ad/tenant-remediation-knowledge.md` for the full investigation, including two
+  self-caught authoring issues (an accent typo in the Spanish name, and a two-`C_Element`-chain
+  hazard specific to GOClient) fixed before that run.
+  `ONBOARDING_PROVISIONED_THROUGH` was **deliberately left unbumped** pending both this fix and the
+  preventive branch above being confirmed merged. As of this writing this doc cannot confirm
+  whether R30 has also been run against every tenant in the actual production fleet (as opposed to
+  the shared dev/experimental DB it was validated against) — check the data-fix ledger
+  (`ETGO_DATA_FIX_HISTORY`) or the data-fixes README before assuming this is closed everywhere.
+  **QA follow-up (2026-08-31):** Sentinel filed two further findings against this already-`APPLIED`,
+  immutable migration — a multi-chain edge case (a tenant wired to more than one qualifying `AC`
+  element chain would only get the lowest-`c_element_id` one fixed) and a doc-accuracy nit (Steps
+  C/D/E resolve by plain value equality, not literally via `C_AcctSchema_Element` as the file's own
+  Background comment claims). Both were investigated live and confirmed **zero exposure fleet-wide**
+  and accepted as known, documented limitations rather than reopened as fixes — the `.sql` itself
+  was left untouched (an applied migration is never edited). Full detail, including why each is safe
+  in practice: `docs/etendo-ad/onboarding-gaps.md` §A7's 2026-08-31 caveat and
+  `docs/etendo-ad/tenant-remediation-knowledge.md`'s "ETP-4872 — R30 QA rejection" entry.
 
 ### Editar from the detail view (ETP-4530)
 
@@ -517,7 +655,7 @@ The spec + entity + field source-data records live in `src-db/database/sourcedat
 | Hook | Operations |
 |------|------------|
 | `hooks/useAccountMutations.js` | `createAccount(payload)`, `updateAccount(id, payload)`, `archiveAccount(id)` (`PATCH {active: false}`), `unarchiveAccount(id)` (`PATCH {active: true}`), `deleteAccount(id)` (`DELETE`, ETP-4871 — a real delete), `fetchDefaults()` — plain `fetch` with bearer-token auth against the W CRUD endpoints. Callers keep the SPA payload `{ name, type, currencyId, iban, swiftCode, countryId }`; the hook maps it to DAL names (`currency`, `iBAN`, `country`) and parses the W envelope (`response.data[0]`). `fetchDefaults()` returns `{ currencies, defaultCurrencyId, defaultCountryId, countryIbanRules }` (ETP-4896 added the last two) backed by the generic currency selector + `/defaults`. Errors carry `.status` so callers can branch (e.g. 409 → inline message). |
-| `hooks/useFinancialAccountAccounting.js` (ETP-4530) | `fetchAccountingConfiguration(accountId)` → GET, `saveAccountingConfiguration(accountId, { fINAssetAcct, fINTransitoryAcct })` → POST, both against `/sws/neo/financial-account/accountingConfiguration`, fully owned by `FinancialAccountAccountingHandler`. |
+| `hooks/useFinancialAccountAccounting.js` (ETP-4530; 9-field set ETP-4872) | `fetchAccountingConfiguration(accountId)` → GET, `saveAccountingConfiguration(accountId, { fINBankrevaluationgainAcct, fINBankrevaluationlossAcct, fINBankfeeAcct, inTransitPaymentAccountIN, depositAccount, clearedPaymentAccount, fINOutIntransitAcct, withdrawalAccount, clearedPaymentAccountOUT })` → POST, both against `/sws/neo/financial-account/accountingConfiguration`, fully owned by `FinancialAccountAccountingHandler`. The retired `fINAssetAcct`/`fINTransitoryAcct` pair is no longer sent. |
 
 ## New utilities
 
@@ -539,7 +677,7 @@ All keys added to both `en_US.json` and `es_ES.json`.
 | `financeAccountsMenu*` | Row kebab actions (`financeAccountsMenuEdit`, `financeAccountsMenuArchive`, `financeAccountsMenuUnarchive`, `financeAccountsMenuDelete`) |
 | `bulkDeleteBlockedTooltip` (generic, ETP-4871, not `financeAccounts*`-scoped) | ListView's disabled-bulk-delete tooltip when the selection includes an undeletable row — entity-agnostic, shared by every window that passes `isRowDeletable` |
 | `financeAccountTransfer*` | Funds transfer modal (ETP-4272): action/title, source/destination, amount, currency-from/to, conversion rate, bank fee, description, confirm/cancel, success + validation errors |
-| `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, accounting section title, Cuenta bancaria/transitoria field labels + required error, empty-ledger message |
+| `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, section titles (`...SectionPaymentIn`/`...SectionPaymentOut`, plus the reused `financeAccountsEditTabGeneral` for Banco's General sub-section), the 9 field labels (`...BankRevaluationGain`/`...Loss`, `...BankFee`, `...InTransitIn`, `...Deposit`, `...ClearedIn`, `...InTransitOut`, `...Withdrawal`, `...ClearedOut`, ETP-4872), empty-ledger message. The retired `fINAssetAcct`/`fINTransitoryAcct` keys (`...BankAsset`, `...Transitory`, `...BankAssetRequired[Summary]`) are left in both locale files, unused, since nothing renders them anymore — pending confirmation the "no field required" behavior (ETP-4872) is final before deleting them |
 | `financeAccountsNewFieldCountry` / `financeAccountsBankConnectionFieldCountry` (ETP-4896) | Country field label — New Account form and Edit modal respectively (kept separate from `financeAccountsNewBankCountry`, the unrelated BankPicker flag-dropdown `aria-label`) |
 | `financeAccountsNewIbanCountryMismatch` / `financeAccountsNewIbanLengthMismatch` (ETP-4896) | IBAN validation error messages for the two country-aware checks (prefix mismatch, wrong length), shared by both forms alongside the pre-existing `financeAccountsNewIbanInvalid` (mod-97 failure) |
 | `financeAccountsNewCountryRequiredForIban` (ETP-4896 follow-up) | EditAccountModal-only: shown when Country is explicitly cleared during the edit while a real IBAN remains — mirrors the backend's "A bank account with an IBAN must have a country." 400 verbatim in translated form, and doubles as the backend-message fallback in `handleSave`'s catch block |
@@ -589,8 +727,9 @@ financeAccountsMenuArchive           "Archive account"
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
 - **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
 - **Bank catalog from endpoint**: `bankCatalog.js` is a static list; the component is designed so the data source can be swapped to a live endpoint without changing the layout.
-- **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever Cuenta bancaria/transitoria are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the two accounts at all), not a bug.
-- **Other `FIN_Financial_Account_Acct` columns** (ETP-4530): deposit/withdrawal/credit/debit/bank-fee/revaluation accounts stay `discarded` in `decisions.json` — only Cuenta bancaria/transitoria were in scope for this ticket.
+- **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever any of the 9 accounting fields, ETP-4872, are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the accounts at all), not a bug.
+- **Remaining `FIN_Financial_Account_Acct` columns** (ETP-4530/ETP-4872): `receivePaymentAccount`, `makePaymentAccount`, `creditAccount`, `debitAccount` stay `discarded` in `decisions.json` — explicitly out of scope per the ETP-4872 ticket, unlike the deposit/withdrawal/bank-fee/revaluation accounts it moved to `editable`.
+- **"No field required" is an inference, not a confirmed product decision** (ETP-4872): the ticket's field tables carry no "required" marker for any of the 9 accounting fields, so the old `fINAssetAcct`-required validation was dropped entirely rather than moved to one of the new fields. This is flagged as pending product/PM confirmation in the implementation plan's Open Questions — do not treat it as permanently settled without checking whether that confirmation has since landed.
 - **New-account "Con conexión" path is NOT country-gated** (ETP-4896): the Spain-only restriction applies to *accounts*, which is what Test Cases 5–7 specify ("una cuenta … tiene como país X"). In the New Account wizard's CONNECTION step no account and no country exist yet — the account is created *from* whichever bank account Salt Edge returns — so there is nothing to gate on. Consequence worth knowing: a user can still reach Salt Edge from that step and pick a non-Spanish provider via the BankPicker's country filter (`BANK_COUNTRIES` offers ES/IT/FR/DE/PT/GB/NL/BE/IE/AT). Whether that filter should also be restricted to ES is a **product decision left open**, deliberately not assumed here.
 - **Backend error messages are translated in the SPA, not the backend** (ETP-4896 QA follow-up): `NeoResponse.error` carries only `{message, status}` — no machine-readable `code` — so this window routes `err.message` through the shared `lib/backendErrors.js#translateBackendError`, which recognises Etendo's English literals by text (exact-match table plus prefix/suffix matchers for the interpolated ones) and maps them to `backendError.*` locale keys. Both surfaces use it: `EditAccountModal` (which previously had its own ad-hoc one-entry table, now deleted) and `NewAccountWizard` (which previously showed raw English on create). **Consequence: the Java message literals in `FinancialAccountCountrySupport` are a de facto wire contract** — rewording one silently drops the user back to English, so its matcher and locale key must change in the same commit. The frontend pre-checks are meant to catch these before the request fires; this is the safety net for what slips past (a stale/empty `countryIbanRules`, a race with another tab, an API/MCP-shaped body). A stable `error.code` contract would be sturdier — there is precedent (`MISSING_REQUIRED_FIELDS` in `NeoCrudHandler` ↔ `useEntity`) — but it touches the wire format and its MCP/API consumers, so it stays a **follow-up option**, not part of this fix.
 - **SWIFT/BIC format validation** (ETP-4896): intentionally untouched. Classic has no SWIFT format validation either — no regex, no length check, no cross-check against country — only a presence check (`FIN_FINACC_SHOWSWIFT_CHK`) when "Using the SWIFT Code" is on, unrelated to this ticket's scope. This is why the ticket's Test Case 9 ("la validación del SWIFT se aplica según el país configurado") is not implementable as written: it asks an *existing* validation to start reading the Country field, and there is no existing rule to feed it into. The **field itself** is editable in both creation and edition (the QA follow-up added it to `EditAccountModal`); only the format rule is absent.

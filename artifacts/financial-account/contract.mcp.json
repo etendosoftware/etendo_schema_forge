@@ -1,8 +1,8 @@
 {
   "version": "0.32.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-08-21T16:25:24.001Z",
-  "contractChecksum": "5dcf34be0ce1d1f5",
+  "updatedAt": "2026-08-30T19:51:34.951Z",
+  "contractChecksum": "3e8e3538e7ea8ded",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -223,19 +223,75 @@
       },
       {
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
-        "column": "FIN_Asset_Acct",
+        "field": "fINBankrevaluationgainAcct",
+        "column": "FIN_Bankrevaluationgain_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINAssetAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationgainAcct"
       },
       {
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
-        "column": "FIN_Transitory_Acct",
+        "field": "fINBankrevaluationlossAcct",
+        "column": "FIN_Bankrevaluationloss_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINTransitoryAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationlossAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "column": "FIN_Bankfee_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankfeeAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "column": "FIN_In_Intransit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/inTransitPaymentAccountIN"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "column": "FIN_Deposit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/depositAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccount",
+        "column": "FIN_In_Clear_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "column": "FIN_Out_Intransit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINOutIntransitAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "column": "FIN_Withdrawal_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/withdrawalAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccountOUT",
+        "column": "FIN_Out_Clear_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccountOUT"
       },
       {
         "entity": "bankStatementLines",
@@ -1271,10 +1327,15 @@
       },
       "accountingConfiguration": {
         "fields": {
-          "fINAssetAcct": {
-            "required": true
-          },
-          "fINTransitoryAcct": {}
+          "fINBankrevaluationgainAcct": {},
+          "fINBankrevaluationlossAcct": {},
+          "fINBankfeeAcct": {},
+          "inTransitPaymentAccountIN": {},
+          "depositAccount": {},
+          "clearedPaymentAccount": {},
+          "fINOutIntransitAcct": {},
+          "withdrawalAccount": {},
+          "clearedPaymentAccountOUT": {}
         }
       },
       "importedBankStatements": {
@@ -1460,7 +1521,6 @@
       "lineFields": [
         "etprReactivateTransaction",
         "etprRemoveTransaction",
-        "fINAssetAcct",
         "name",
         "etblkpBulkposting",
         "referenceNo",
@@ -1516,7 +1576,6 @@
         "fields": [
           "etprReactivateTransaction",
           "etprRemoveTransaction",
-          "fINAssetAcct",
           "name",
           "etblkpBulkposting",
           "referenceNo",
@@ -1538,5 +1597,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
   },
-  "checksum": "b324f219805b85a4"
+  "checksum": "7894a4d4b27d4c46"
 }

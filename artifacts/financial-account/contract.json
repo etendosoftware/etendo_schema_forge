@@ -1,8 +1,8 @@
 {
   "version": "0.32.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-08-30T01:23:09.213Z",
-  "checksum": "5dcf34be0ce1d1f5",
+  "updatedAt": "2026-08-31T13:46:13.403Z",
+  "checksum": "3e8e3538e7ea8ded",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1962,32 +1962,10 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "fINAssetAcct",
-            "apiKey": "fINAssetAcct",
-            "column": "FIN_Asset_Acct",
-            "label": "Bank Asset Account",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "validation": {
-              "required": true,
-              "maxLength": 32
-            },
-            "displayLogic": {
-              "raw": "@EnableBankStatement@='Y'",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "fINTransitoryAcct",
-            "apiKey": "fINTransitoryAcct",
-            "column": "FIN_Transitory_Acct",
-            "label": "Bank Transitory Account",
+            "name": "fINBankrevaluationgainAcct",
+            "apiKey": "fINBankrevaluationgainAcct",
+            "column": "FIN_Bankrevaluationgain_Acct",
+            "label": "Bank Revaluation Gain Account",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -1999,12 +1977,153 @@
             "validation": {
               "maxLength": 32
             },
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SE_FinancialAccount_BSAccounts"
+            "displayLogic": {
+              "raw": "@IsBank@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "fINBankrevaluationlossAcct",
+            "apiKey": "fINBankrevaluationlossAcct",
+            "column": "FIN_Bankrevaluationloss_Acct",
+            "label": "Bank Revaluation Loss Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
             },
             "displayLogic": {
-              "raw": "@EnableBankStatement@='Y'",
+              "raw": "@IsBank@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "fINBankfeeAcct",
+            "apiKey": "fINBankfeeAcct",
+            "column": "FIN_Bankfee_Acct",
+            "label": "Bank Fee Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            },
+            "displayLogic": {
+              "raw": "@IsBank@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "inTransitPaymentAccountIN",
+            "apiKey": "inTransitPaymentAccountIN",
+            "column": "FIN_In_Intransit_Acct",
+            "label": "In Transit Payment IN Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "depositAccount",
+            "apiKey": "depositAccount",
+            "column": "FIN_Deposit_Acct",
+            "label": "Deposit Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "clearedPaymentAccount",
+            "apiKey": "clearedPaymentAccount",
+            "column": "FIN_In_Clear_Acct",
+            "label": "Cleared Payment Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "fINOutIntransitAcct",
+            "apiKey": "fINOutIntransitAcct",
+            "column": "FIN_Out_Intransit_Acct",
+            "label": "In Transit Payment OUT Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "withdrawalAccount",
+            "apiKey": "withdrawalAccount",
+            "column": "FIN_Withdrawal_Acct",
+            "label": "Withdrawal Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "clearedPaymentAccountOUT",
+            "apiKey": "clearedPaymentAccountOUT",
+            "column": "FIN_Out_Clear_Acct",
+            "label": "Cleared Payment Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
             }
           }
         ],
@@ -4156,7 +4275,7 @@
             "apiKey": "fINBankrevaluationgainAcct",
             "column": "FIN_Bankrevaluationgain_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4164,7 +4283,7 @@
             "apiKey": "fINBankrevaluationlossAcct",
             "column": "FIN_Bankrevaluationloss_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4172,7 +4291,7 @@
             "apiKey": "fINBankfeeAcct",
             "column": "FIN_Bankfee_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4188,15 +4307,15 @@
             "apiKey": "fINAssetAcct",
             "column": "FIN_Asset_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
+            "visibility": "discarded",
+            "required": false
           },
           {
             "name": "fINTransitoryAcct",
             "apiKey": "fINTransitoryAcct",
             "column": "FIN_Transitory_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4204,7 +4323,7 @@
             "apiKey": "inTransitPaymentAccountIN",
             "column": "FIN_In_Intransit_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4212,7 +4331,7 @@
             "apiKey": "depositAccount",
             "column": "FIN_Deposit_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4220,7 +4339,7 @@
             "apiKey": "clearedPaymentAccount",
             "column": "FIN_In_Clear_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4228,7 +4347,7 @@
             "apiKey": "fINOutIntransitAcct",
             "column": "FIN_Out_Intransit_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4236,7 +4355,7 @@
             "apiKey": "withdrawalAccount",
             "column": "FIN_Withdrawal_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4244,7 +4363,7 @@
             "apiKey": "clearedPaymentAccountOUT",
             "column": "FIN_Out_Clear_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -5764,19 +5883,75 @@
       },
       {
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
-        "column": "FIN_Asset_Acct",
+        "field": "fINBankrevaluationgainAcct",
+        "column": "FIN_Bankrevaluationgain_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINAssetAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationgainAcct"
       },
       {
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
-        "column": "FIN_Transitory_Acct",
+        "field": "fINBankrevaluationlossAcct",
+        "column": "FIN_Bankrevaluationloss_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINTransitoryAcct"
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationlossAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "column": "FIN_Bankfee_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankfeeAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "column": "FIN_In_Intransit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/inTransitPaymentAccountIN"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "column": "FIN_Deposit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/depositAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccount",
+        "column": "FIN_In_Clear_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "column": "FIN_Out_Intransit_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINOutIntransitAcct"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "column": "FIN_Withdrawal_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/withdrawalAccount"
+      },
+      {
+        "entity": "accountingConfiguration",
+        "field": "clearedPaymentAccountOUT",
+        "column": "FIN_Out_Clear_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccountOUT"
       },
       {
         "entity": "bankStatementLines",
@@ -6832,20 +7007,28 @@
         "description": "Display logic for 'writeofflimit' in account should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-accountingConfiguration-fINAssetAcct",
+        "id": "t-displaylogic-evaluable-accountingConfiguration-fINBankfeeAcct",
         "category": "displaylogic-evaluable",
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
+        "field": "fINBankfeeAcct",
         "runner": "node",
-        "description": "Display logic for 'fINAssetAcct' in accountingConfiguration should have evaluable flag"
+        "description": "Display logic for 'fINBankfeeAcct' in accountingConfiguration should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-accountingConfiguration-fINTransitoryAcct",
+        "id": "t-displaylogic-evaluable-accountingConfiguration-fINBankrevaluationgainAcct",
         "category": "displaylogic-evaluable",
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
+        "field": "fINBankrevaluationgainAcct",
         "runner": "node",
-        "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should have evaluable flag"
+        "description": "Display logic for 'fINBankrevaluationgainAcct' in accountingConfiguration should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "displaylogic-evaluable",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINBankrevaluationlossAcct' in accountingConfiguration should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-clearedItems-ndDimension",
@@ -7248,20 +7431,28 @@
         "description": "Display logic for 'writeofflimit' in account should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-accountingConfiguration-fINAssetAcct",
+        "id": "t-displaylogic-valid-accountingConfiguration-fINBankfeeAcct",
         "category": "displaylogic-valid",
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
+        "field": "fINBankfeeAcct",
         "runner": "node",
-        "description": "Display logic for 'fINAssetAcct' in accountingConfiguration should be valid JS"
+        "description": "Display logic for 'fINBankfeeAcct' in accountingConfiguration should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-accountingConfiguration-fINTransitoryAcct",
+        "id": "t-displaylogic-valid-accountingConfiguration-fINBankrevaluationgainAcct",
         "category": "displaylogic-valid",
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
+        "field": "fINBankrevaluationgainAcct",
         "runner": "node",
-        "description": "Display logic for 'fINTransitoryAcct' in accountingConfiguration should be valid JS"
+        "description": "Display logic for 'fINBankrevaluationgainAcct' in accountingConfiguration should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "displaylogic-valid",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "Display logic for 'fINBankrevaluationlossAcct' in accountingConfiguration should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-clearedItems-ndDimension",
@@ -7768,20 +7959,76 @@
         "description": "Field 'writeofflimit' should be present in account"
       },
       {
-        "id": "t-field-presence-accountingConfiguration-fINAssetAcct",
+        "id": "t-field-presence-accountingConfiguration-clearedPaymentAccount",
         "category": "field-presence",
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
+        "field": "clearedPaymentAccount",
         "runner": "node",
-        "description": "Field 'fINAssetAcct' should be present in accountingConfiguration"
+        "description": "Field 'clearedPaymentAccount' should be present in accountingConfiguration"
       },
       {
-        "id": "t-field-presence-accountingConfiguration-fINTransitoryAcct",
+        "id": "t-field-presence-accountingConfiguration-clearedPaymentAccountOUT",
         "category": "field-presence",
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
+        "field": "clearedPaymentAccountOUT",
         "runner": "node",
-        "description": "Field 'fINTransitoryAcct' should be present in accountingConfiguration"
+        "description": "Field 'clearedPaymentAccountOUT' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-depositAccount",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "runner": "node",
+        "description": "Field 'depositAccount' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINBankfeeAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "runner": "node",
+        "description": "Field 'fINBankfeeAcct' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINBankrevaluationgainAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationgainAcct",
+        "runner": "node",
+        "description": "Field 'fINBankrevaluationgainAcct' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "Field 'fINBankrevaluationlossAcct' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-fINOutIntransitAcct",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "runner": "node",
+        "description": "Field 'fINOutIntransitAcct' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-inTransitPaymentAccountIN",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "runner": "node",
+        "description": "Field 'inTransitPaymentAccountIN' should be present in accountingConfiguration"
+      },
+      {
+        "id": "t-field-presence-accountingConfiguration-withdrawalAccount",
+        "category": "field-presence",
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "runner": "node",
+        "description": "Field 'withdrawalAccount' should be present in accountingConfiguration"
       },
       {
         "id": "t-field-presence-bankStatementLines-active",
@@ -8584,20 +8831,76 @@
         "description": "Field 'writeofflimit' should have type 'number' in account"
       },
       {
-        "id": "t-field-type-accountingConfiguration-fINAssetAcct",
+        "id": "t-field-type-accountingConfiguration-clearedPaymentAccount",
         "category": "field-type",
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
+        "field": "clearedPaymentAccount",
         "runner": "node",
-        "description": "Field 'fINAssetAcct' should have type 'string' in accountingConfiguration"
+        "description": "Field 'clearedPaymentAccount' should have type 'string' in accountingConfiguration"
       },
       {
-        "id": "t-field-type-accountingConfiguration-fINTransitoryAcct",
+        "id": "t-field-type-accountingConfiguration-clearedPaymentAccountOUT",
         "category": "field-type",
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
+        "field": "clearedPaymentAccountOUT",
         "runner": "node",
-        "description": "Field 'fINTransitoryAcct' should have type 'string' in accountingConfiguration"
+        "description": "Field 'clearedPaymentAccountOUT' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-depositAccount",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "runner": "node",
+        "description": "Field 'depositAccount' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINBankfeeAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "runner": "node",
+        "description": "Field 'fINBankfeeAcct' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINBankrevaluationgainAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationgainAcct",
+        "runner": "node",
+        "description": "Field 'fINBankrevaluationgainAcct' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "Field 'fINBankrevaluationlossAcct' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-fINOutIntransitAcct",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "runner": "node",
+        "description": "Field 'fINOutIntransitAcct' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-inTransitPaymentAccountIN",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "runner": "node",
+        "description": "Field 'inTransitPaymentAccountIN' should have type 'string' in accountingConfiguration"
+      },
+      {
+        "id": "t-field-type-accountingConfiguration-withdrawalAccount",
+        "category": "field-type",
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "runner": "node",
+        "description": "Field 'withdrawalAccount' should have type 'string' in accountingConfiguration"
       },
       {
         "id": "t-field-type-bankStatementLines-active",
@@ -11262,20 +11565,76 @@
         "description": "Selector endpoint for 'psd2Provider' in account should exist"
       },
       {
-        "id": "t-selector-endpoint-accountingConfiguration-fINAssetAcct",
+        "id": "t-selector-endpoint-accountingConfiguration-clearedPaymentAccount",
         "category": "selector-endpoint",
         "entity": "accountingConfiguration",
-        "field": "fINAssetAcct",
+        "field": "clearedPaymentAccount",
         "runner": "node",
-        "description": "Selector endpoint for 'fINAssetAcct' in accountingConfiguration should exist"
+        "description": "Selector endpoint for 'clearedPaymentAccount' in accountingConfiguration should exist"
       },
       {
-        "id": "t-selector-endpoint-accountingConfiguration-fINTransitoryAcct",
+        "id": "t-selector-endpoint-accountingConfiguration-clearedPaymentAccountOUT",
         "category": "selector-endpoint",
         "entity": "accountingConfiguration",
-        "field": "fINTransitoryAcct",
+        "field": "clearedPaymentAccountOUT",
         "runner": "node",
-        "description": "Selector endpoint for 'fINTransitoryAcct' in accountingConfiguration should exist"
+        "description": "Selector endpoint for 'clearedPaymentAccountOUT' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-depositAccount",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "depositAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'depositAccount' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-fINBankfeeAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINBankfeeAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINBankfeeAcct' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-fINBankrevaluationgainAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationgainAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINBankrevaluationgainAcct' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-fINBankrevaluationlossAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINBankrevaluationlossAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINBankrevaluationlossAcct' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-fINOutIntransitAcct",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "fINOutIntransitAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'fINOutIntransitAcct' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-inTransitPaymentAccountIN",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "inTransitPaymentAccountIN",
+        "runner": "node",
+        "description": "Selector endpoint for 'inTransitPaymentAccountIN' in accountingConfiguration should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accountingConfiguration-withdrawalAccount",
+        "category": "selector-endpoint",
+        "entity": "accountingConfiguration",
+        "field": "withdrawalAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'withdrawalAccount' in accountingConfiguration should exist"
       },
       {
         "id": "t-selector-endpoint-bankStatementLines-businessPartner",
@@ -11670,22 +12029,6 @@
         "description": "System field 'active' should exist in backend but not frontend for accountingConfiguration"
       },
       {
-        "id": "t-system-field-accountingConfiguration-clearedPaymentAccount",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "clearedPaymentAccount",
-        "runner": "node",
-        "description": "System field 'clearedPaymentAccount' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
-        "id": "t-system-field-accountingConfiguration-clearedPaymentAccountOUT",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "clearedPaymentAccountOUT",
-        "runner": "node",
-        "description": "System field 'clearedPaymentAccountOUT' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
         "id": "t-system-field-accountingConfiguration-client",
         "category": "system-field",
         "entity": "accountingConfiguration",
@@ -11726,14 +12069,6 @@
         "description": "System field 'debitAccount' should exist in backend but not frontend for accountingConfiguration"
       },
       {
-        "id": "t-system-field-accountingConfiguration-depositAccount",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "depositAccount",
-        "runner": "node",
-        "description": "System field 'depositAccount' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
         "id": "t-system-field-accountingConfiguration-enablebankstatement",
         "category": "system-field",
         "entity": "accountingConfiguration",
@@ -11742,36 +12077,20 @@
         "description": "System field 'enablebankstatement' should exist in backend but not frontend for accountingConfiguration"
       },
       {
-        "id": "t-system-field-accountingConfiguration-fINBankfeeAcct",
+        "id": "t-system-field-accountingConfiguration-fINAssetAcct",
         "category": "system-field",
         "entity": "accountingConfiguration",
-        "field": "fINBankfeeAcct",
+        "field": "fINAssetAcct",
         "runner": "node",
-        "description": "System field 'fINBankfeeAcct' should exist in backend but not frontend for accountingConfiguration"
+        "description": "System field 'fINAssetAcct' should exist in backend but not frontend for accountingConfiguration"
       },
       {
-        "id": "t-system-field-accountingConfiguration-fINBankrevaluationgainAcct",
+        "id": "t-system-field-accountingConfiguration-fINTransitoryAcct",
         "category": "system-field",
         "entity": "accountingConfiguration",
-        "field": "fINBankrevaluationgainAcct",
+        "field": "fINTransitoryAcct",
         "runner": "node",
-        "description": "System field 'fINBankrevaluationgainAcct' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
-        "id": "t-system-field-accountingConfiguration-fINBankrevaluationlossAcct",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "fINBankrevaluationlossAcct",
-        "runner": "node",
-        "description": "System field 'fINBankrevaluationlossAcct' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
-        "id": "t-system-field-accountingConfiguration-fINOutIntransitAcct",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "fINOutIntransitAcct",
-        "runner": "node",
-        "description": "System field 'fINOutIntransitAcct' should exist in backend but not frontend for accountingConfiguration"
+        "description": "System field 'fINTransitoryAcct' should exist in backend but not frontend for accountingConfiguration"
       },
       {
         "id": "t-system-field-accountingConfiguration-id",
@@ -11780,14 +12099,6 @@
         "field": "id",
         "runner": "node",
         "description": "System field 'id' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
-        "id": "t-system-field-accountingConfiguration-inTransitPaymentAccountIN",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "inTransitPaymentAccountIN",
-        "runner": "node",
-        "description": "System field 'inTransitPaymentAccountIN' should exist in backend but not frontend for accountingConfiguration"
       },
       {
         "id": "t-system-field-accountingConfiguration-makePaymentAccount",
@@ -11828,14 +12139,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for accountingConfiguration"
-      },
-      {
-        "id": "t-system-field-accountingConfiguration-withdrawalAccount",
-        "category": "system-field",
-        "entity": "accountingConfiguration",
-        "field": "withdrawalAccount",
-        "runner": "node",
-        "description": "System field 'withdrawalAccount' should exist in backend but not frontend for accountingConfiguration"
       },
       {
         "id": "t-system-field-bankStatementLines-bankStatement",
@@ -12704,25 +13007,25 @@
       }
     ],
     "summary": {
-      "total": 855,
+      "total": 871,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
-        "displaylogic-evaluable": 52,
-        "displaylogic-valid": 52,
-        "field-presence": 102,
-        "field-type": 102,
+        "displaylogic-evaluable": 53,
+        "displaylogic-valid": 53,
+        "field-presence": 109,
+        "field-type": 109,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
         "searchable-filters": 2,
-        "selector-endpoint": 28,
-        "system-field": 150,
+        "selector-endpoint": 35,
+        "system-field": 143,
         "visibility": 7
       },
       "byRunner": {
-        "node": 855,
+        "node": 871,
         "junit": 0
       }
     }
