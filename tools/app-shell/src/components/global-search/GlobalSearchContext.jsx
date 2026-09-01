@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 const GlobalSearchContext = createContext(null);
 
@@ -8,6 +8,29 @@ export function GlobalSearchProvider({ children }) {
   const inputRef = useRef(null);
   const keyboardHandlerRef = useRef(null);
   const lastKeyRef = useRef({ key: null, time: 0 });
+  const registerKeyboardHandler = useCallback((handler) => {
+    keyboardHandlerRef.current = handler;
+    return () => {
+      if (keyboardHandlerRef.current === handler) keyboardHandlerRef.current = null;
+    };
+  }, []);
+  const handleKeyDown = useCallback((event) => {
+    if (event.key === 'Escape') {
+      if (open) {
+        event.preventDefault();
+        setOpen(false);
+      }
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+    const now = Date.now();
+    if (lastKeyRef.current.key === event.key && now - lastKeyRef.current.time < 40) return;
+    lastKeyRef.current = { key: event.key, time: now };
+    if (import.meta.env.DEV) console.debug('[GlobalSearch] keydown', { key: event.key, open, hasHandler: Boolean(keyboardHandlerRef.current) });
+    if (!open) return;
+    event.preventDefault();
+    keyboardHandlerRef.current?.(event.key);
+  }, [open]);
 
   const value = useMemo(() => ({
     open,
@@ -15,23 +38,9 @@ export function GlobalSearchProvider({ children }) {
     query,
     setQuery,
     inputRef,
-    registerKeyboardHandler(handler) {
-      keyboardHandlerRef.current = handler;
-      return () => {
-        if (keyboardHandlerRef.current === handler) keyboardHandlerRef.current = null;
-      };
-    },
-    handleKeyDown(event) {
-      if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
-      const now = Date.now();
-      if (lastKeyRef.current.key === event.key && now - lastKeyRef.current.time < 40) return;
-      lastKeyRef.current = { key: event.key, time: now };
-      if (import.meta.env.DEV) console.debug('[GlobalSearch] keydown', { key: event.key, open, hasHandler: Boolean(keyboardHandlerRef.current) });
-      if (!open) return;
-      event.preventDefault();
-      keyboardHandlerRef.current?.(event.key);
-    },
-  }), [open, query]);
+    registerKeyboardHandler,
+    handleKeyDown,
+  }), [open, query, registerKeyboardHandler, handleKeyDown]);
 
   return <GlobalSearchContext.Provider value={value}>{children}</GlobalSearchContext.Provider>;
 }
@@ -54,6 +63,13 @@ export function useGlobalSearch() {
       return () => { if (fallbackHandlerRef.current === handler) fallbackHandlerRef.current = null; };
     },
     handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        if (fallbackOpen) {
+          event.preventDefault();
+          setFallbackOpen(false);
+        }
+        return;
+      }
       if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
       if (!fallbackOpen) return;
       event.preventDefault();

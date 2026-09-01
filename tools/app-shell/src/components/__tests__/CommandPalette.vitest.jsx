@@ -90,6 +90,13 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
+  it('closes on Escape from the shared search input handler', () => {
+    render(<CommandPalette />);
+    openPalette();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('cmd-dialog')).not.toBeInTheDocument();
+  });
+
   it('visible (non-hidden) item is rendered after opening', () => {
     render(<CommandPalette />);
     openPalette();
