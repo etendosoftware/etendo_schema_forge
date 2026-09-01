@@ -2104,6 +2104,70 @@ Two deliberate divergences from Classic, both documented in the tests:
 - **negative** amounts are kept. Classic's condition is "not both zero", not "positive", so
   rejecting negatives would be a new business rule rather than a consistency fix.
 
+#### The import preview showed every date one day early — only on a deployed server (ETP-4924)
+
+Reported: uploading a CSV whose first line's `Transaction Date` was `08/02/2026` showed `07/02/2026`
+in step 2 ("Revisar líneas") — every date in the preview, including the "Período" range, one day
+early. Reproduced only on a deployed ("experimental") server; never on local dev, same browser, same
+CSV. Two independent bugs, one per repo, both needed fixing (neither alone fixes the reported symptom).
+
+**Root cause 1 — backend (`modules/com.etendoerp.go`, a separate repo/module):**
+`BankStatementsSupport.formatDate(Timestamp)` (used for every date this handler serves — `datetrx`,
+`periodFrom`/`periodTo`, `importdate`, `statementdate`, both for `?action=preview` and the persisted
+grid/edit views) read the timestamp's raw epoch millis and unconditionally labelled the result as a
+UTC instant (`Instant.ofEpochMilli(ts.getTime())` formatted with `.withZone(ZoneOffset.UTC)`). But
+`datetrx`/`statementdate`/etc. are `timestamp without time zone` columns — `rs.getTimestamp(...)`
+reads that naive literal back via the JVM's default timezone (mirroring how Hibernate wrote it), so
+labelling the result "Z" is only correct when the server's default timezone happens to actually BE
+UTC. On a server whose default timezone has a POSITIVE UTC offset (e.g. `Europe/Madrid`, a plausible
+deployment default), the naive "00:00:00" literal reads back as an epoch instant that falls BEFORE
+UTC midnight of that day, so the UTC-labelled string prints the PREVIOUS calendar day. On a
+NEGATIVE-offset default (`America/Argentina/Buenos_Aires`, matching this task's own description of
+local dev) the same code reads an instant AFTER UTC midnight, so the bug was invisible there — the
+exact "wrong only on the deployed server" symptom, with zero code differences between environments.
+The write side (`BankStatementsSupport.parseIsoDate`, used by the manual create/update JSON path)
+already got this right — it explicitly re-anchors to `ZoneId.systemDefault()` on purpose, per its own
+long-standing comment describing the identical failure mode from the opposite direction. `formatDate`
+was the one place that never got the matching treatment on the READ side.
+
+Fixed by making `formatDate` read the SAME way the value was written — `ts.toLocalDateTime()`
+(which, like the JDBC read that produced `ts` in the first place, resolves via the JVM's default
+timezone) instead of `Instant.ofEpochMilli(ts.getTime())`, and dropping the formatter's
+`.withZone(ZoneOffset.UTC)` (formatting a zoneless `LocalDateTime` needs no zone at all — the quoted
+`'Z'` in the pattern is a literal character, not the offset field). The write-then-read round trip
+through the JVM's default timezone now cancels out algebraically, regardless of what that default
+timezone actually is — covered by `BankStatementsSupportTest` with the exact reported scenario
+(`Europe/Madrid` default, asserting the correct day) plus non-regression checks for the negative-offset
+and UTC cases. `GenericCsvBankStatementImporter`'s CSV-date `SimpleDateFormat` (no explicit
+`TimeZone`, JVM-default by default) did NOT need changing — it was already internally consistent
+with how Hibernate/JDBC round-trips a naive column through the SAME JVM default zone on write; the
+asymmetry was entirely in `formatDate`'s read-side UTC mislabelling.
+
+**Root cause 2 — frontend (`ImportStatementModal.jsx`, this repo), independent of the backend bug:**
+this window had its OWN local `formatDate(iso, bcpLocale)` — `new Date(iso)` (parses the ISO string
+as an absolute instant) followed by `Intl.DateTimeFormat(bcpLocale, {...}).format(d)` with no
+`timeZone` override, so the calendar day shown additionally depends on the BROWSER's own local
+timezone. This is exactly the class of bug this repo's CLAUDE.md documents as mandatory-fixed via
+`parseCalendarDate`/`formatCalendarDate` (`lib/dateOnly.js`) — already used by 10+ other windows, but
+never migrated here. Fixed by deleting the local `formatDate` and routing both the "Fecha" column and
+the "Período" range through `formatCalendarDate`, which extracts the `yyyy-MM-dd` PREFIX from the
+string via regex and builds the `Date` via the LOCAL-time constructor, deliberately ignoring any
+trailing time/zone suffix — immune to the browser's timezone by construction. Fixing backend root
+cause 1 alone would have made the STRING itself correct, but this frontend gap would still have let a
+future timezone-dependent glitch slip back in unnoticed (and stayed inconsistent with the rest of the
+window's date handling); fixing only the frontend, on its own, would NOT have fixed the reported
+symptom, since the backend was already sending the wrong day-prefix in the string.
+
+**Known related gap, not fixed here:** `StatementsTable.jsx` and `StatementLinesTable.jsx` carry the
+identical unsafe pattern (`new Date(iso)` + unforced `Intl.DateTimeFormat`) as the import preview did
+— not yet reported/triggered, likely because `StatementLinesInline.jsx` (the accordion/list view)
+already has an ad-hoc `timeZone: 'UTC'` override that happens to mask the symptom for THAT view (a
+workaround, not a fix — it only works because the backend's UTC-mislabelled string, pre-fix, was at
+least consistently reinterpreted as UTC on the way back out; post-fix, that ad-hoc override is now
+unnecessary but harmless, since the backend-fixed string's date-prefix is now correct regardless of
+the reader's zone assumption). None of these three were migrated to `parseCalendarDate`/
+`formatCalendarDate` as part of this fix — flagged, not fixed, since it wasn't reported.
+
 #### Cuaderno 43 lookup requirements (MANDATORY)
 
 The Cuaderno 43 parser does **not** read fields from `c_bank` / `c_bankaccount`. It runs an OBCriteria over `FIN_FinancialAccount` looking for an **exact match** on three fields, scoped to the **current user's client** (organization filter is disabled via `setFilterOnReadableOrganization(false)`):
