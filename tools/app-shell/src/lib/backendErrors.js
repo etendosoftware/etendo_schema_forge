@@ -56,6 +56,10 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  'Priority is required': 'backendError.matchRulePriorityRequired',
+  'Priority must be a whole number': 'backendError.matchRulePriorityNotInteger',
+  'Priority must be 1 or greater': 'backendError.matchRulePriorityTooLow',
+  'Priority is too large': 'backendError.matchRulePriorityTooLarge',
   // Bank statement lifecycle guards (BankStatementsHandler.requireDraft / .requireProcessed).
   // Shared by process/update/delete (requireDraft) and reactivate (requireProcessed) — ETP-4921:
   // a bulk-delete of a processed statement used to surface only "None of the N selected could be

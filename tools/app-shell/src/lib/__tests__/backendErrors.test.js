@@ -1118,3 +1118,136 @@ describe('translateBackendError — asset uniqueness validation (ETP-4983)', () 
     });
   });
 });
+
+// ETP-4950 follow-up — match-rule "Priority" validation.
+//
+// The reported defect was that Prioridad accepted negative values with no validation at
+// all. The product decision is "a whole number >= 1", enforced backend-side by
+// `MatchRuleHandler.validatePriority` in com.etendoerp.go:
+//   modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java
+//
+// That method emits four hardcoded English literals, and BACKEND_ERROR_MAP matches them by
+// EXACT string. So the wording is a cross-repo contract: re-word it on the Java side (or
+// mistype it here) and the lookup silently misses — the user just sees raw English, with no
+// error and no failing build anywhere. The JAVA_MESSAGES/KEYS pair below is that contract
+// written down, and `maps each ... literal to its own i18n key` is the test that breaks when
+// the two sides drift apart.
+describe('translateBackendError — match-rule priority validation (ETP-4950)', () => {
+  // Verbatim copies of the strings MatchRuleHandler.validatePriority() returns. Keep in
+  // sync with that method — it is the source of truth, this is the mirror.
+  const JAVA_MESSAGES = {
+    required: 'Priority is required',
+    notInteger: 'Priority must be a whole number',
+    tooLow: 'Priority must be 1 or greater',
+    tooLarge: 'Priority is too large',
+  };
+
+  const KEYS = {
+    required: 'backendError.matchRulePriorityRequired',
+    notInteger: 'backendError.matchRulePriorityNotInteger',
+    tooLow: 'backendError.matchRulePriorityTooLow',
+    tooLarge: 'backendError.matchRulePriorityTooLarge',
+  };
+
+  // Real values from src/locales/es_ES.json.
+  const es = fakeUiTranslator({
+    [KEYS.required]: 'La prioridad es obligatoria',
+    [KEYS.notInteger]: 'La prioridad debe ser un número entero',
+    [KEYS.tooLow]: 'La prioridad debe ser 1 o mayor',
+    [KEYS.tooLarge]: 'La prioridad es demasiado alta',
+  });
+
+  describe('exact-match entries', () => {
+    const CASES = [
+      [JAVA_MESSAGES.required, 'La prioridad es obligatoria'],
+      [JAVA_MESSAGES.notInteger, 'La prioridad debe ser un número entero'],
+      // The ticket case: a negative priority now comes back as this message.
+      [JAVA_MESSAGES.tooLow, 'La prioridad debe ser 1 o mayor'],
+      [JAVA_MESSAGES.tooLarge, 'La prioridad es demasiado alta'],
+    ];
+
+    CASES.forEach(([raw, expected]) => {
+      it(`translates "${raw}" to es_ES`, () => {
+        assert.equal(translateBackendError(raw, es), expected);
+      });
+    });
+  });
+
+  // The drift guard. Each literal must resolve to its OWN key, proven with a sentinel
+  // translator so a passthrough cannot be mistaken for a translation. If Java re-words a
+  // message (or a map entry is edited/removed), the matching literal here stops resolving
+  // and this test fails, instead of the translation quietly disappearing in production.
+  it('maps each of the four MatchRuleHandler.validatePriority literals to its own i18n key', () => {
+    Object.entries(JAVA_MESSAGES).forEach(([name, raw]) => {
+      const key = KEYS[name];
+      const sentinel = (k) => (k === key ? `translated:${key}` : k);
+      assert.equal(
+        translateBackendError(raw, sentinel),
+        `translated:${key}`,
+        `"${raw}" no longer maps to ${key}. BACKEND_ERROR_MAP and `
+          + 'MatchRuleHandler.validatePriority (com.etendoerp.go) have drifted apart — '
+          + 'align the literal with what the Java method emits.',
+      );
+    });
+  });
+
+  it('resolves the four literals to four DISTINCT keys (no copy-paste collision in the map)', () => {
+    const resolved = Object.entries(JAVA_MESSAGES).map(([, raw]) =>
+      // A translator that echoes the key back reveals which key was looked up... except
+      // the missing-translation guard then returns the raw message, so tag it instead.
+      translateBackendError(raw, (k) => `key:${k}`));
+    assert.equal(new Set(resolved).size, 4);
+    assert.deepEqual(resolved, [
+      `key:${KEYS.required}`,
+      `key:${KEYS.notInteger}`,
+      `key:${KEYS.tooLow}`,
+      `key:${KEYS.tooLarge}`,
+    ]);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    Object.values(JAVA_MESSAGES).forEach((raw) => {
+      assert.equal(translateBackendError(raw, (k) => k), raw);
+    });
+  });
+
+  it('strips surrounding whitespace before the lookup', () => {
+    assert.equal(
+      translateBackendError(`  ${JAVA_MESSAGES.tooLow}  `, es),
+      'La prioridad debe ser 1 o mayor',
+    );
+  });
+
+  // The lookup is exact and case-sensitive, so a near-miss must fall through untranslated
+  // rather than being silently absorbed by another entry or a parameterized matcher.
+  it('does not match near-miss wordings', () => {
+    [
+      'Priority is required.',
+      'priority is required',
+      'Priority must be 1 or greater.',
+      'Priority must be an integer',
+      'Priority too large',
+    ].forEach((raw) => {
+      assert.equal(translateBackendError(raw, es), raw);
+    });
+  });
+
+  it('keeps the pre-existing priority-conflict entry distinct from the four new ones', () => {
+    const raw = 'A rule with this priority already exists for the selected scope';
+    const conflict = fakeUiTranslator({
+      'backendError.matchRulePriorityConflict':
+        'Ya existe una regla con esta prioridad para el ámbito seleccionado',
+    });
+    assert.equal(
+      translateBackendError(raw, conflict),
+      'Ya existe una regla con esta prioridad para el ámbito seleccionado',
+    );
+    // ...and it must not be reachable from any of the four validation literals.
+    Object.values(JAVA_MESSAGES).forEach((validationMsg) => {
+      assert.notEqual(
+        translateBackendError(validationMsg, conflict),
+        'Ya existe una regla con esta prioridad para el ámbito seleccionado',
+      );
+    });
+  });
+});

@@ -236,3 +236,48 @@ describe('cellAlignClass', () => {
     expect(cellAlignClass({})).toBe('text-left');
   });
 });
+
+describe('ListModalCell — toggle read-only gating (ETP-4950)', () => {
+  const col = { key: 'active', cellType: 'toggle' };
+  const row = { id: '7', active: false };
+  // ToggleCell forwards its testid to the PillToggle button.
+  const TOGGLE_ID = `list-modal-toggle-${col.key}-${row.id}`;
+
+  it('disables the toggle when readOnly is set', () => {
+    const onToggle = vi.fn();
+    render(<ListModalCell row={row} col={col} tMenu={tMenu} onToggle={onToggle} readOnly />);
+
+    const toggle = screen.getByTestId(TOGGLE_ID);
+    expect(toggle).toBeDisabled();
+    fireEvent.click(toggle);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('leaves the toggle enabled when readOnly is not set', () => {
+    const onToggle = vi.fn();
+    render(<ListModalCell row={row} col={col} tMenu={tMenu} onToggle={onToggle} />);
+
+    const toggle = screen.getByTestId(TOGGLE_ID);
+    expect(toggle).toBeEnabled();
+    fireEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalledWith(row, col, true);
+  });
+
+  it('honors readOnly for the legacy `toggle: true` flag too', () => {
+    const legacyCol = { key: 'active', toggle: true };
+    const onToggle = vi.fn();
+    render(<ListModalCell row={row} col={legacyCol} tMenu={tMenu} onToggle={onToggle} readOnly />);
+
+    expect(screen.getByTestId(TOGGLE_ID)).toBeDisabled();
+    fireEvent.click(screen.getByTestId(TOGGLE_ID));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('disables the toggle while its own PATCH is in flight', () => {
+    const onToggle = vi.fn();
+    render(
+      <ListModalCell row={row} col={col} tMenu={tMenu} onToggle={onToggle} savingToggle />,
+    );
+    expect(screen.getByTestId(TOGGLE_ID)).toBeDisabled();
+  });
+});
