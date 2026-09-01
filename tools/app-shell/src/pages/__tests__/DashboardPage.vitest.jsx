@@ -307,3 +307,65 @@ describe('DashboardPage — creation CTAs need the write tier (ETP-5088)', () =>
     expect(screen.getByTestId('top-clients')).toHaveTextContent('contact:true');
   });
 });
+
+describe('DashboardPage — rows adjust to the visible widgets (ETP-5088)', () => {
+  const FINANCIAL_ACCOUNT = '94EAA455D2644E04AB25D93BE5157B6D';
+  const rowsOf = (container) => Array.from(container.querySelectorAll('.lg\\:flex-row'));
+
+  it('an admin sees the original three rows, unchanged', () => {
+    // The whole point: gating must not redesign the dashboard for whoever sees all of it.
+    const { container } = render(<DashboardPage />);
+    const rows = rowsOf(container);
+    expect(rows).toHaveLength(3);
+    // By test id, not text: the FinancialSummaryCard mock echoes its creation-gate props.
+    expect(rows[0].querySelector('[data-testid="pending-tasks"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="financial-summary"]')).not.toBeNull();
+    expect(rows[2].querySelector('[data-testid="financial-trend"]')).not.toBeNull();
+  });
+
+  it('Sales gets two fuller rows instead of two stretched widgets', () => {
+    // Reported live: with the financial widgets hidden, "Cobros y pagos" spanned the full width
+    // and "Productos más vendidos" became a band of its own. They now share the second row.
+    authState.value = {
+      token: 'test-token', username: 'testuser', logout: () => {},
+      windowAccess: { 123: 'full', 140: 'full', 143: 'full', 167: 'full', 168: 'full', 169: 'full' },
+      capabilities: { isAdminOrClientAdmin: false },
+    };
+    const { container } = render(<DashboardPage />);
+    const rows = rowsOf(container);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelector('[data-testid="collections-payments"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="best-products"]')).not.toBeNull();
+    // And the financial widgets are gone, not merely moved.
+    expect(screen.queryByTestId('financial-summary')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('financial-trend')).not.toBeInTheDocument();
+  });
+
+  it('a widget alone in a row keeps its own height', () => {
+    // Purchasing: only best products lands on the second row, and it is the 328px-tall one.
+    authState.value = {
+      token: 'test-token', username: 'testuser', logout: () => {},
+      windowAccess: { 123: 'full', 140: 'full', 181: 'full', 183: 'full', 184: 'full' },
+      capabilities: { isAdminOrClientAdmin: false },
+    };
+    const { container } = render(<DashboardPage />);
+    const rows = rowsOf(container);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelector('[data-testid="best-products"]')).not.toBeNull();
+    expect(rows[1].style.minHeight).toBe('328px');
+    // The first row holds the 234px widgets, so it must not inherit the taller height.
+    expect(rows[0].style.minHeight).toBe('234px');
+  });
+
+  it('renders no rows at all when nothing is visible', () => {
+    authState.value = {
+      token: 'test-token', username: 'testuser', logout: () => {},
+      windowAccess: {}, capabilities: { isAdminOrClientAdmin: false },
+    };
+    const { container } = render(<DashboardPage />);
+    expect(rowsOf(container)).toHaveLength(0);
+    expect(screen.getByTestId('DashboardNoWidgets__3a4535')).toBeInTheDocument();
+  });
+});

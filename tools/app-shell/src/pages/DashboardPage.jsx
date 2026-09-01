@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useDashboardWidgetAccess } from '@/hooks/useDashboardWidgetAccess.js';
+import { groupIntoRows, rowHeight } from '@/lib/dashboardRowLayout.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useUI } from '@/i18n';
@@ -92,10 +93,70 @@ function DashboardContent({ apiBaseUrl }) {
   const showPendingTasks = access.pendingTasksVisible;
   const showQuickActions = quickActions.length > 0;
 
-  const rowOneVisible = showPendingTasks || showQuickActions || showTopClients;
-  const rowTwoVisible = showKpis || showRecentInvoices || showPendingAmounts;
-  const rowThreeVisible = showTrends || showBestProducts;
-  const nothingVisible = !rowOneVisible && !rowTwoVisible && !rowThreeVisible;
+  // ETP-5088 — the dashboard is one ordered list of widgets, packed into rows by
+  // `groupIntoRows` rather than three hardcoded rows. With every widget visible the packing
+  // reproduces the original design exactly (672/213/435, 672/443/213, 901/443 — pinned by
+  // `lib/__tests__/dashboardRowLayout.test.js`); a role that sees fewer gets fewer, fuller rows
+  // instead of survivors stretching to fill the gap. `weight` IS the design's flex-basis.
+  const widgets = [
+    { key: 'pendingTasks', weight: 672, height: 234, visible: showPendingTasks, node: (
+      <PendingTasksRail tasks={pendingTasks} data-testid="PendingTasksRail__3a4535" />
+    ) },
+    { key: 'quickActions', weight: 213, height: 234, visible: showQuickActions, node: (
+      <QuickActionsList actions={quickActions} data-testid="QuickActionsList__3a4535" />
+    ) },
+    { key: 'topClients', weight: 435, height: 234, visible: showTopClients, node: (
+      <TopClientsList
+        clients={topClients}
+        canCreateContact={access.canCreateIn('contacts')}
+        currencyLabel={dashboardCurrency}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        data-testid="TopClientsList__3a4535" />
+    ) },
+    { key: 'kpis', weight: 672, height: 234, visible: showKpis, node: (
+      <FinancialSummaryCard
+        kpis={resolvedKpis}
+        currencyLabel={dashboardCurrency}
+        canCreatePurchase={access.canCreateIn('purchase-invoice')}
+        canCreateSale={access.canCreateIn('sales-invoice')}
+        data-testid="FinancialSummaryCard__3a4535" />
+    ) },
+    { key: 'recentInvoices', weight: 443, height: 234, visible: showRecentInvoices, node: (
+      <RecentSalesList
+        invoices={recentInvoices}
+        canCreateSale={access.canCreateIn('sales-invoice')}
+        currencyLabel={dashboardCurrency}
+        data-testid="RecentSalesList__3a4535" />
+    ) },
+    { key: 'pendingAmounts', weight: 213.33, height: 234, visible: showPendingAmounts, node: (
+      <CollectionsPaymentsCard
+        pendingAmounts={pendingAmounts}
+        visibility={access.pendingAmountsVisibility}
+        currencyLabel={dashboardCurrency}
+        data-testid="CollectionsPaymentsCard__3a4535" />
+    ) },
+    { key: 'trends', weight: 901, height: 328, visible: showTrends, node: (
+      <FinancialTrendChart
+        canCreatePurchase={access.canCreateIn('purchase-invoice')}
+        canCreateSale={access.canCreateIn('sales-invoice')}
+        labels={revenueTrend.labels}
+        values={revenueTrend.values}
+        expenseValues={expenseTrend}
+        currencyLabel={dashboardCurrency}
+        data-testid="FinancialTrendChart__3a4535" />
+    ) },
+    { key: 'bestProducts', weight: 443.33, height: 328, visible: showBestProducts, node: (
+      <BestProductsList
+        canCreateSale={access.canCreateIn('sales-invoice')}
+        sellers={bestSellers}
+        products={bestProducts}
+        currencyLabel={dashboardCurrency}
+        data-testid="BestProductsList__3a4535" />
+    ) },
+  ];
+  const rows = groupIntoRows(widgets.filter((w) => w.visible));
+  const nothingVisible = rows.length === 0;
 
   const [scrolled, setScrolled] = useState(false);
   const scrollRef = useRef(null);
@@ -118,15 +179,6 @@ function DashboardContent({ apiBaseUrl }) {
     minHeight: '234px',
   };
 
-  const dashboardRow3Style = {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: '0px',
-    gap: '16px',
-    width: '100%',
-    minHeight: '328px',
-  };
 
   return (
     <div className="h-full flex flex-col">
@@ -172,94 +224,23 @@ function DashboardContent({ apiBaseUrl }) {
             </div>
           )}
 
-          {/* Row 1: Pending tasks | Quick access | Top clients */}
-          {rowOneVisible && (
-          <div className="flex flex-col gap-4 lg:flex-row" style={dashboardRowStyle}>
-            {showPendingTasks && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '672 1 0' }}>
-              <PendingTasksRail tasks={pendingTasks} data-testid="PendingTasksRail__3a4535" />
+          {rows.map((row) => (
+            <div
+              key={row.map((w) => w.key).join('-')}
+              className="flex flex-col gap-4 lg:flex-row"
+              style={{ ...dashboardRowStyle, minHeight: `${rowHeight(row)}px` }}
+            >
+              {row.map((w) => (
+                <div
+                  key={w.key}
+                  className="flex flex-col w-full min-w-0"
+                  style={{ flex: `${w.weight} 1 0`, height: `${w.height}px` }}
+                >
+                  {w.node}
+                </div>
+              ))}
             </div>
-            )}
-            {showQuickActions && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '213 1 0' }}>
-              <QuickActionsList actions={quickActions} data-testid="QuickActionsList__3a4535" />
-            </div>
-            )}
-            {showTopClients && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '435 1 0' }}>
-              <TopClientsList
-                clients={topClients}
-                canCreateContact={access.canCreateIn('contacts')}
-                currencyLabel={dashboardCurrency}
-                token={token}
-                apiBaseUrl={apiBaseUrl}
-                data-testid="TopClientsList__3a4535" />
-            </div>
-            )}
-          </div>
-          )}
-
-          {/* Row 2: Financial summary | Recent sales | Collections & payments */}
-          {rowTwoVisible && (
-          <div className="flex flex-col gap-4 lg:flex-row" style={dashboardRowStyle}>
-            {showKpis && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '672 1 0' }}>
-              <FinancialSummaryCard
-                kpis={resolvedKpis}
-                currencyLabel={dashboardCurrency}
-                canCreatePurchase={access.canCreateIn('purchase-invoice')}
-                canCreateSale={access.canCreateIn('sales-invoice')}
-                data-testid="FinancialSummaryCard__3a4535" />
-            </div>
-            )}
-            {showRecentInvoices && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '443 1 0' }}>
-              <RecentSalesList
-                invoices={recentInvoices}
-                canCreateSale={access.canCreateIn('sales-invoice')}
-                currencyLabel={dashboardCurrency}
-                data-testid="RecentSalesList__3a4535" />
-            </div>
-            )}
-            {showPendingAmounts && (
-            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '213.33 1 0' }}>
-              <CollectionsPaymentsCard
-                pendingAmounts={pendingAmounts}
-                visibility={access.pendingAmountsVisibility}
-                currencyLabel={dashboardCurrency}
-                data-testid="CollectionsPaymentsCard__3a4535" />
-            </div>
-            )}
-          </div>
-          )}
-
-          {/* Row 3: Financial trend | Best products */}
-          {rowThreeVisible && (
-          <div className="flex flex-col gap-4 lg:flex-row" style={dashboardRow3Style}>
-            {showTrends && (
-            <div className="flex flex-col w-full h-[328px] min-w-0" style={{ flex: '901 1 0' }}>
-              <FinancialTrendChart
-                canCreatePurchase={access.canCreateIn('purchase-invoice')}
-                canCreateSale={access.canCreateIn('sales-invoice')}
-                labels={revenueTrend.labels}
-                values={revenueTrend.values}
-                expenseValues={expenseTrend}
-                currencyLabel={dashboardCurrency}
-                data-testid="FinancialTrendChart__3a4535" />
-            </div>
-            )}
-            {showBestProducts && (
-            <div className="flex flex-col w-full h-[328px] min-w-0" style={{ flex: '443.33 1 0' }}>
-              <BestProductsList
-                canCreateSale={access.canCreateIn('sales-invoice')}
-                sellers={bestSellers}
-                products={bestProducts}
-                currencyLabel={dashboardCurrency}
-                data-testid="BestProductsList__3a4535" />
-            </div>
-            )}
-          </div>
-          )}
+          ))}
         </div>
       </div>
       )}
