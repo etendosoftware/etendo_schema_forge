@@ -9,14 +9,13 @@ import WarehouseCustomTable from './WarehouseCustomTable';
 import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
 import AccountingForm from '@generated/warehouse/generated/web/warehouse/AccountingForm';
 
-async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
+import { useApiFetch } from '@/auth/useApiFetch.js';
+async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }, apiFetch) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
-  const res = await fetch(`${apiBaseUrl}/storageBin`, {
+  const res = await apiFetch('/storageBin', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    token,
+    baseUrl: apiBaseUrl,
     body: JSON.stringify({
       warehouse: warehouse.id,
       organization: warehouse.organization,
@@ -43,6 +42,7 @@ async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }) {
 export default function WarehouseWindow(props) {
   const { token, apiBaseUrl } = props;
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const secondaryTabs = [
     { key: 'products', label: ui('warehouseProductsTab'), Panel: WarehouseProductsTab },
@@ -52,7 +52,7 @@ export default function WarehouseWindow(props) {
 
   const handleAfterCreate = async (warehouse, context) => {
     try {
-      await createDefaultStorageBin(warehouse, context);
+      await createDefaultStorageBin(warehouse, context, apiFetch);
     } catch (err) {
       toast.warning('Warehouse created, but default storage bin could not be created automatically.', {
         description: err.message || undefined,

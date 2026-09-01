@@ -1,4 +1,11 @@
 // Mocks BEFORE imports
+// ETP-5022 — the component's requests now come from `useApiFetch`, which reads the bearer
+// token from the session instead of from the `token` prop.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
     if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
@@ -122,6 +129,19 @@ describe('CreateInvoiceConfirmModal', () => {
     const { documentNo: _dn, grandTotalAmount: _gt, ...rest } = makeData();
     renderModal({ data: { ...rest, documentNo: 'SO-NULL' } });
     expect(screen.getByText('SO-NULL')).toBeInTheDocument();
+  });
+
+  // ETP-4567 (QA finding — bug A): `displayAmount = grandTotal > 0 ? formattedTotal
+  // : documentNo` falls back to the document number for a NEGATIVE grand total too
+  // (a return/credit scenario), even though `formattedTotal` is a perfectly valid
+  // signed amount. The fix drops the `> 0` gate entirely so the real (possibly
+  // negative) total is always shown — mirroring how the working subtotal line
+  // elsewhere in the app already renders signed totals unconditionally.
+  it('shows the real formatted NEGATIVE grandTotal, not documentNo and not a zeroed amount (ETP-4567)', () => {
+    renderModal({ data: makeData({ grandTotalAmount: -450.75, documentNo: 'SO-NEG', 'currency$_identifier': 'EUR' }) });
+    expect(screen.getByText(/-450,75\s€/)).toBeInTheDocument();
+    expect(screen.queryByText('SO-NEG')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^0([.,]00)?$/)).not.toBeInTheDocument();
   });
 
   it('uses linkedOrders grandTotal, falling back to linkedOrder currency when the document has none of its own', () => {
@@ -262,7 +282,10 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
     });
 
-    expect(fetch).toHaveBeenCalledWith('/api/pending', { headers: { Authorization: 'Bearer test-token' } });
+    expect(fetch).toHaveBeenCalledWith('/api/pending', {
+      credentials: 'include',
+      headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
+    });
   });
 
   it('falls back to generic subtitle when pendingQtyUrl fetch fails', async () => {
@@ -351,9 +374,16 @@ describe('CreateInvoiceConfirmModal', () => {
       mockPriceListFetch([makePriceList()]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, token: 'test-token' });
       await waitFor(() => {
+        // ETP-5022 — the request goes through the shared apiFetch: same URL and same
+        // headers, plus the `credentials: 'include'` every call site used to have to
+        // remember on its own. The token comes from the session (mocked above) rather
+        // than from the `token` prop.
         expect(fetch).toHaveBeenCalledWith(
           '/sws/neo/goods-shipment/price-list/priceList?_startRow=0&_endRow=200',
-          { headers: { Authorization: 'Bearer test-token' } },
+          {
+            credentials: 'include',
+            headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
+          },
         );
       });
     });

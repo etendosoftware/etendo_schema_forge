@@ -20,6 +20,8 @@
 
 // --- Mocks must be declared before any imports that trigger module resolution ---
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('@generated/dashboard/generated/config', () => ({
   kpisConfig: [],
   actions: [],
@@ -27,6 +29,10 @@ vi.mock('@generated/dashboard/generated/config', () => ({
 
 vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ token: 'test-token' }),
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({
