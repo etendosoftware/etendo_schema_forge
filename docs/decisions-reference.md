@@ -208,6 +208,18 @@ buttons looked like *before* your change, and make sure they still look the same
 match to the pre-existing `hidePrint: true` (→ add `listViewOptions.hidePrint: true`) or absence
 (→ use `hidePrintWhen: true`/an object condition, never the plain `hidePrint`) case above.
 
+**The idle-toolbar Print button hides during a selection.** `ListView.jsx`'s top-right toolbar
+Print button (opens the whole-list report via `setShowReport(true)`) is gated by
+`selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint)` — as soon as one or
+more rows are selected, it disappears, leaving only the bottom `SelectionToolbar`'s own Print
+icon (bulk-prints just the selected rows via `printDocuments()`). Before this, both Print
+affordances stayed visible at once during a selection — confusing, since they print different
+things (the whole filtered list vs. only the selected rows). This is a **generic `ListView.jsx`
+behavior**, not a per-window flag — it applies uniformly to every window using `ListView`,
+regardless of `hidePrint`/`hidePrintWhen`/`listViewOptions.hidePrint` configuration. Do not add a
+per-window opt-out; if a window genuinely needs both prints visible during a selection, that is a
+product decision to revisit here, not to route around locally.
+
 ### Send Document (`window.sendDocument`)
 
 Recipient-edit policy overrides (ETP-4226). The generator copies these keys
