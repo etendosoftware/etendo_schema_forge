@@ -16,6 +16,10 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
+      // Before the spread, never after: every menu entry passes its own
+      // `data-testid` through `rest`, and an attribute placed after `{...rest}`
+      // silently overwrites it — which blanked `menu-item-*` across the sidebar.
+      data-testid="NavLink__1b6d6d"
       {...rest}
       to={to}
       onClick={(event) => {
@@ -27,8 +31,7 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
         if (typeof event.button === 'number' && event.button !== 0) return;
         event.preventDefault();
         requestNavigation(() => navigate(to));
-      }}
-      data-testid="NavLink__1b6d6d" />
+      }} />
   );
 }
 
