@@ -152,6 +152,23 @@ async function fillNewContactForm(page, { name, email }) {
   }
 }
 
+/**
+ * Fill the "NIF" field in the "Nuevo contacto" modal (CreateContactModal.jsx /
+ * EntityCreationModal.jsx — renamed from "CIF/NIF", ETP-4992).
+ *
+ * Anchored to a <label> and matched exactly so it does not also match the
+ * "NIF" <option> inside the sibling "Clave NIF país residencia" select. The
+ * field is required, so EntityCreationModal.jsx appends a trailing "*" span
+ * to the label's own textContent ("NIF*", no space) — tolerate that (and
+ * incidental whitespace) without loosening the anchor enough to match "NIF"
+ * inside unrelated longer labels.
+ */
+async function fillNifField(page, value) {
+  const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
+  const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+  await taxIdInput.fill(value);
+}
+
 
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
@@ -744,16 +761,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // NIF (renamed from "CIF/NIF" — ETP-4992). Anchored to a <label> and matched
-    // exactly so it does not also match the "NIF" <option> inside the sibling
-    // "Clave NIF país residencia" select. The field is required, so
-    // EntityCreationModal.jsx appends a trailing "*" span to the label's own
-    // textContent ("NIF*", no space) — tolerate that (and incidental
-    // whitespace) without loosening the anchor enough to match "NIF" inside
-    // unrelated longer labels.
-    const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
-    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
-    await taxIdInput.fill(TAX_ID);
+    // NIF (see fillNifField's own doc comment for the anchoring rationale)
+    await fillNifField(page, TAX_ID);
 
     // País — opens a search dialog (Dirección tab, active by default).
     // Unlike the Contacts window's own address modal, country IS required here
@@ -867,16 +876,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // NIF (renamed from "CIF/NIF" — ETP-4992). Anchored to a <label> and matched
-    // exactly so it does not also match the "NIF" <option> inside the sibling
-    // "Clave NIF país residencia" select. The field is required, so
-    // EntityCreationModal.jsx appends a trailing "*" span to the label's own
-    // textContent ("NIF*", no space) — tolerate that (and incidental
-    // whitespace) without loosening the anchor enough to match "NIF" inside
-    // unrelated longer labels.
-    const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
-    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
-    await taxIdInput.fill(TAX_ID);
+    // NIF (see fillNifField's own doc comment for the anchoring rationale)
+    await fillNifField(page, TAX_ID);
 
     // País
     const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
