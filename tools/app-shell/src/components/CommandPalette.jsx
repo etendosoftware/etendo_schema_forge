@@ -68,6 +68,8 @@ export function CommandPalette() {
   const openRef = useRef(false);
   const keyboardIndexRef = useRef(-1);
   const dropdownInteractionRef = useRef(false);
+  const targetPickerRef = useRef(null);
+  const targetPickerTriggerRef = useRef(null);
   const [vectorMatches, setVectorMatches] = useState([]);
   const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
   const [isVectorSearchLoading, setIsVectorSearchLoading] = useState(false);
@@ -154,6 +156,21 @@ export function CommandPalette() {
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, []);
+
+  useEffect(() => {
+    if (!isTargetPickerOpen) return undefined;
+    const closePickerOutside = (event) => {
+      if (targetPickerRef.current?.contains(event.target)) return;
+      if (targetPickerTriggerRef.current?.contains(event.target)) return;
+      setIsTargetPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', closePickerOutside, true);
+    document.addEventListener('focusin', closePickerOutside, true);
+    return () => {
+      document.removeEventListener('pointerdown', closePickerOutside, true);
+      document.removeEventListener('focusin', closePickerOutside, true);
+    };
+  }, [isTargetPickerOpen]);
 
   useEffect(() => {
     const preserveDropdownClick = (event) => {
@@ -354,6 +371,7 @@ export function CommandPalette() {
           <button
             type="button"
             onClick={() => setIsTargetPickerOpen((isOpen) => !isOpen)}
+            ref={targetPickerTriggerRef}
             className="rounded-full bg-muted px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-expanded={isTargetPickerOpen}
             data-testid="vector-search-target-picker-trigger"
@@ -362,7 +380,7 @@ export function CommandPalette() {
           </button>
         </div>
         {isTargetPickerOpen && (
-          <div className="absolute left-[380px] top-16 z-20 w-80 rounded-2xl border bg-popover p-3 shadow-lg" data-testid="vector-search-target-picker">
+          <div ref={targetPickerRef} className="absolute left-[380px] top-16 z-20 w-80 rounded-2xl border bg-popover p-3 shadow-lg" data-testid="vector-search-target-picker">
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
               const label = tMenu(target.label) || target.label;
