@@ -76,6 +76,12 @@ function openPalette() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
 }
 
+function SetSearchQuery({ value }) {
+  const { setQuery } = useGlobalSearch();
+  useEffect(() => setQuery(value), [setQuery, value]);
+  return null;
+}
+
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,6 +112,21 @@ describe('CommandPalette', () => {
     // translatedLabel = 'translated:Sales Order', label = 'Sales Order', name = 'sales-order'
     const expectedValue = 'translated:Sales Order Sales Order sales-order';
     expect(screen.getByTestId(`cmd-item-${expectedValue}`)).toBeInTheDocument();
+  });
+
+  it('highlights the matching text in textual search results', async () => {
+    render(
+      <GlobalSearchProvider>
+        <SetSearchQuery value="sales" />
+        <CommandPalette />
+      </GlobalSearchProvider>,
+    );
+    openPalette();
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('search-text-highlight').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByTestId('search-text-highlight')[0]).toHaveTextContent(/sales/i);
   });
 
   it('hidden items are not rendered after opening', () => {
