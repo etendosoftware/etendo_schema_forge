@@ -1,4 +1,13 @@
 const BACKEND_ERROR_MAP = {
+  // ETP-5073 / DOC-04. The lines sidebar renders the server's message verbatim rather than going
+  // through the concurrency-conflict dialog the main form uses, so without this entry the user
+  // reads it in English. Both spellings are mapped: the sentence Etendo GO now sends, and core's
+  // own wording, which still reaches this path on a write that does not go through
+  // NeoCrudHandler's pre-check.
+  'This record was modified by someone else after you read it. Your changes were not saved.':
+    'backendError.staleRecord',
+  'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
+    'backendError.staleRecord',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
@@ -27,6 +36,12 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  // Bank statement lifecycle guards (BankStatementsHandler.requireDraft / .requireProcessed).
+  // Shared by process/update/delete (requireDraft) and reactivate (requireProcessed) — ETP-4921:
+  // a bulk-delete of a processed statement used to surface only "None of the N selected could be
+  // deleted", with no hint that the reason was the statement being processed already.
+  'Only draft (unprocessed) statements can be modified': 'backendError.statementNotDraft',
+  'Only processed statements can be reactivated': 'backendError.statementNotProcessed',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
@@ -39,6 +54,10 @@ const BACKEND_ERROR_MAP = {
   // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
   // recursively re-parse the nested placeholder), so it's a stable exact match.
   'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
+  // Core `InvalidCostWhichProduct` AD_MESSAGE. The posting engine can return this with the
+  // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
+  // same actionable retry-later copy as the other transient costing message, not costing internals.
+  'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
