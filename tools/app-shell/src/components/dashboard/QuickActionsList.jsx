@@ -37,15 +37,19 @@ export function QuickActionsList({ actions = [] }) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 alignSelf: 'flex-start',
-                // `alignSelf: flex-start` sizes the pill to its content, so without these two it
-                // grows past the card and the label is chopped mid-word (no ellipsis) as soon as
-                // the sidebar opens and the column narrows. `maxWidth` caps the pill at the card;
-                // `minWidth: 0` lets a flex item shrink below its content, which is what actually
-                // enables the span's `text-overflow: ellipsis` below.
+                // `alignSelf: flex-start` sizes the pill to its content, so without `maxWidth` it
+                // grows past the card and gets clipped as soon as the sidebar opens and the column
+                // narrows. `minWidth: 0` lets a flex item shrink below its content at all.
                 maxWidth: '100%',
                 minWidth: 0,
                 padding: '4px 8px',
-                height: '28px',
+                // Grows to a second line instead of staying at 28px: this is the narrowest column
+                // of the row (`flex: 213` against 672 and 435), and with the sidebar open it has
+                // roughly 130px for "Nuevo pedido de venta". Truncating it read as broken, and the
+                // alternatives are worse — shortening the copy to "Nuevo pedido" turns ambiguous
+                // the moment purchase actions exist, and widening this column steals from the
+                // other widgets.
+                minHeight: '28px',
                 backgroundColor: 'hsl(var(--muted))',
                 borderRadius: '8px',
                 gap: '8px',
@@ -62,11 +66,15 @@ export function QuickActionsList({ actions = [] }) {
                 fontSize: '14px',
                 lineHeight: '20px',
                 color: 'hsl(var(--muted-foreground))',
-                whiteSpace: 'nowrap',
+                // Two lines, then ellipsis — a safety net for a label longer than any current one
+                // (or a translation that runs long), so it can never grow the card unbounded.
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 2,
                 overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                // Required for the ellipsis: a flex item defaults to `min-width: auto`, which
-                // refuses to shrink below its text and pushes the overflow outside instead.
+                overflowWrap: 'anywhere',
+                // A flex item defaults to `min-width: auto` and refuses to shrink below its text,
+                // which would push the overflow outside the pill instead of wrapping inside it.
                 minWidth: 0,
               }}>
                 {action.label}

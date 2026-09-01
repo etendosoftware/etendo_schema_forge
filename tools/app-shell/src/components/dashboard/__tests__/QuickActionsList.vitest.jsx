@@ -54,16 +54,17 @@ describe('QuickActionsList', () => {
     });
   });
 
-  it('keeps a long label inside the card so it truncates instead of being chopped', () => {
-    // Reported live: with the sidebar open the column narrows and "Nuevo pedido de venta" was cut
-    // mid-word. The span already had `text-overflow: ellipsis`, but it could never apply — the
-    // pill uses `align-self: flex-start`, so it sized to its content and overflowed the card, and
-    // a flex item defaults to `min-width: auto`, which refuses to shrink below its text.
+  it('wraps a long label to a second line instead of cutting it off', () => {
+    // Reported live, twice. First the label was chopped mid-word: the pill uses
+    // `align-self: flex-start`, so it sized to its content and overflowed the card, and a flex
+    // item defaults to `min-width: auto` and will not shrink below its text. Capping the pill
+    // fixed the clipping but left "Nuevo pedido d..." — this is the narrowest column of the row
+    // and the label simply does not fit on one line, so it now wraps to two.
     render(
       <QuickActionsList
         actions={[
           {
-            label: 'Nuevo pedido de venta con un nombre larguísimo',
+            label: 'Nuevo pedido de venta',
             to: '/sales-order/new',
             testId: 'quick-action-sales-order-new',
             analyticsAction: 'create_sales_order',
@@ -73,13 +74,20 @@ describe('QuickActionsList', () => {
     );
 
     const pill = screen.getByTestId('quick-action-sales-order-new');
+    // Never wider than the card, and free to shrink so the text wraps inside it.
     expect(pill.style.maxWidth).toBe('100%');
     expect(pill.style.minWidth).toBe('0px');
-    // The full text stays reachable on hover once it is visually truncated.
-    expect(pill).toHaveAttribute('title', 'Nuevo pedido de venta con un nombre larguísimo');
+    // Grows past 28px when it needs a second line, rather than being locked to one.
+    expect(pill.style.minHeight).toBe('28px');
+    expect(pill.style.height).toBe('');
+    expect(pill).toHaveAttribute('title', 'Nuevo pedido de venta');
 
     const label = pill.querySelector('span');
+    // Two lines, then ellipsis: wrapping must not let an unusually long label grow the card
+    // without bound.
+    expect(label.style.webkitLineClamp).toBe('2');
     expect(label.style.minWidth).toBe('0px');
-    expect(label.style.textOverflow).toBe('ellipsis');
+    // The old single-line clamp is gone — that is what produced "Nuevo pedido d...".
+    expect(label.style.whiteSpace).not.toBe('nowrap');
   });
 });
