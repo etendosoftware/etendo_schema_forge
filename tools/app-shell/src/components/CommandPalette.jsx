@@ -182,6 +182,9 @@ export function CommandPalette() {
       item.setAttribute('aria-selected', selected ? 'true' : 'false');
       item.classList.toggle('bg-accent', selected);
       item.classList.toggle('text-accent-foreground', selected);
+      if (selected) {
+        item.scrollIntoView?.({ block: 'nearest' });
+      }
     });
   }, [keyboardIndex, query, vectorMatches, recentSearches, open, isTargetPickerOpen]);
 
