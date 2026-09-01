@@ -12,6 +12,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
@@ -61,7 +62,12 @@ const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: tr
 // ─── PIS (bank transfer via Salt Edge) — ETP-4406 ─────────────────────────────
 const PIS_AMBER_TEXT = 'var(--status-warning-fg)';
 const PIS_ALERT_BG = 'var(--status-warning-bg)';
-const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
+// Currencies a PIS transfer can be instructed in, keyed by the currency of the selected BANK
+// ACCOUNT — not the invoice's (ETP-5084). A transfer leaves the bank in the account's own currency,
+// so that decides both eligibility and the template. An invoice in any other currency is payable:
+// the backend converts the amount with the rate in this modal's conversion field.
+// Mirrors PIS_ELIGIBLE_ACCOUNT_CURRENCIES in PisPaymentService.java — keep the two in lockstep.
+const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'USD', 'GBP']);
 // The authoritative status vocabulary is the AD ref-list "PIS Payment Status"
 // (AD_REFERENCE_ID D5483E7D91134499B42BBD963BC2F9CC, Bank Integration module), which has exactly
 // these 8 values. An earlier version of this list was transcribed wrong: it carried an invented
@@ -168,9 +174,15 @@ function pisTemplateFields(template) {
   };
 }
 
-/** Default template search-key for a currency (EUR→SEPA, GBP→FPS); the user can change it. */
-function defaultPisTemplate(currency) {
-  return currency === 'GBP' ? PIS_TEMPLATE_FPS : PIS_TEMPLATE_SEPA;
+/**
+ * Default template search-key for the currency the transfer is instructed in — i.e. the BANK
+ * ACCOUNT's currency, never the invoice's (ETP-5084): EUR→SEPA, USD→DOMESTIC, GBP→FPS.
+ * The user can still change it. Mirrors templateForCurrency in PisPaymentBridge.java.
+ */
+function defaultPisTemplate(accountCurrency) {
+  if (accountCurrency === 'GBP') return PIS_TEMPLATE_FPS;
+  if (accountCurrency === 'USD') return PIS_TEMPLATE_DOMESTIC;
+  return PIS_TEMPLATE_SEPA; // EUR and anything unforeseen
 }
 
 /**
@@ -410,12 +422,27 @@ async function fetchPendingSchedule(apiFetch, specName, invoiceId) {
   return pending ? (pending.finPaymentScheduleID || pending.id || '') : '';
 }
 
-/** Extracts a user-facing error message from a failed register response. */
+/**
+ * Extracts a user-facing error message from a failed register response.
+ *
+ * The FIRST shape checked is NEO Headless's own top-level `{ error: { message, status } }`, which is
+ * what this endpoint actually returns for a 400 — it used to be missing here, so every backend
+ * rejection (an unsupported PIS template, a bad conversion rate, a failed eligibility check) was
+ * swallowed into the generic "no se pudo guardar" and the user had to open the network tab to find
+ * out what was wrong. The `response.*` shapes below are Etendo's JsonDataService envelope, kept for
+ * the other callers that still speak it.
+ *
+ * The raw message is then run through `translateBackendError` so it is shown in the UI language:
+ * these strings arrive in English whenever the owning module ships no real `AD_MESSAGE_TRL` (most of
+ * `com.etendoerp.psd2`) or resolves in the AD language rather than the session's.
+ */
 function extractSaveError(json, ui) {
-  return json?.response?.error?.message
+  const raw = json?.error?.message
+    || json?.response?.error?.message
     || json?.response?.message?.text
-    || json?.response?.message
-    || ui('cpSaveFailed');
+    || json?.response?.message;
+  if (!raw || typeof raw !== 'string') return ui('cpSaveFailed');
+  return translateBackendError(raw, ui) || raw;
 }
 
 /**
@@ -429,18 +456,23 @@ function blocksPsd2Confirm(psd2Blocked, process) {
 }
 
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
-function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
   // states split three ways here, and only for Payment OUT (PIS never initiates inbound money):
   //   connected            → pisEligible, full PIS form
   //   reconnectable        → psd2Blocked, warning instead of the form (revive it from Editar Cuenta)
   //   never connected      → neither, ordinary manual payment as before
+  // The currency test is on the ACCOUNT, not the invoice (ETP-5084): the transfer is instructed in
+  // the account's currency, so an invoice in another currency is payable — the backend converts the
+  // amount with the rate below before it reaches the bank. Falls back to the invoice currency when
+  // the account's is unknown (an older backend omits `currency` on the account list), which keeps
+  // the pre-ETP-5084 behavior instead of silently hiding the PIS block everywhere.
   const isTransfer = isTransferMethod(selectedMethodObj);
   const psd2Blocked = dir === 'out' && isTransfer && !!selectedAccount?.bankReconnectable;
   const pisEligible = dir === 'out'
     && !!selectedAccount?.bankConnected
     && isTransfer
-    && PIS_ELIGIBLE_CURRENCIES.has(currency);
+    && PIS_ELIGIBLE_CURRENCIES.has(accountCurrency || currency);
   // A foreign-currency payment (invoice ≠ account currency) MUST carry a positive conversion
   // rate — otherwise the backend would silently apply 1:1 and post the wrong ledger amount.
   // The backend also rejects a rate of exactly 1 for a foreign payment (compareTo(ONE)==0 →
@@ -761,6 +793,7 @@ function Psd2InactiveWarning({ ui, accountId }) {
 // pisEligible in NewPaymentEntryModal for the visibility gate.
 function PisTransferSection({
   balance, currency, ui, party, account,
+  accountCurrency, isForeign, bankAmount, rate,
   templateOptions, template, onTemplateChange,
   ibanOptions, iban, onIbanChange,
   bban, onBbanChange, accountNumber, onAccountNumberChange, sortCode, onSortCodeChange,
@@ -769,14 +802,27 @@ function PisTransferSection({
   // The IBAN comes from a selector (supplier IBANs) but is also hand-typeable via onCreateRequest;
   // flag a structurally invalid entry so the user sees an inline error and Confirm stays disabled.
   const ibanInvalid = (iban || '').trim() !== '' && !isValidIban(iban);
+  // The money leaves the account in the ACCOUNT's currency (ETP-5084), so that — not the invoice
+  // amount — is what the header chip and the alert must state on a cross-currency transfer.
+  // Otherwise the user authorizes a figure at the bank that the modal never showed them.
+  const showsConverted = isForeign && bankAmount != null;
+  const transferAmount = showsConverted ? bankAmount : balance.amount;
+  const transferCurrency = showsConverted ? accountCurrency : currency;
   const alertParts = [
     ui('cpPisAlertTransfer', {
-      dinero: fmtCur(balance.amount, currency),
+      dinero: fmtCur(transferAmount, transferCurrency),
       cuenta: account?.name || '',
       maskedPan: account?.maskedPan || '',
       proveedor: party || '',
     }),
   ];
+  if (showsConverted) {
+    alertParts.push(ui('cpPisAlertConverted', {
+      importeFactura: fmtCur(balance.amount, currency),
+      tasa: formatPlain(rate),
+      monedaBanco: accountCurrency,
+    }));
+  }
   if (balance.usedCredit > 0) {
     alertParts.push(ui('cpPisAlertCredit', { credito: fmtCur(balance.usedCredit, currency) }));
   }
@@ -800,7 +846,7 @@ function PisTransferSection({
             <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
           </svg>
           <span style={{ font: '400 14px/20px Inter', color: FG2 }}>
-            <MoneyAmount value={balance.amount} currency={currency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pis-amount" />
+            <MoneyAmount value={transferAmount} currency={transferCurrency} tone="neutral" currencyDisplay="narrowSymbol" data-testid="MoneyAmount__cp-pis-amount" />
           </span>
         </div>
       </div>
@@ -1060,6 +1106,16 @@ export default function NewPaymentEntryModal({
   const [pisPolling, setPisPolling] = useState(null); // { pisPaymentId, status } | null
   const [pisWindowClosed, setPisWindowClosed] = useState(false);
   const pisAccountsFetchedRef = useRef(false);
+  // Set once the user picks a template by hand, so the currency-driven default (ETP-5084) stops
+  // re-deriving over their choice when the selected account changes.
+  const pisTemplateTouchedRef = useRef(false);
+  // CreatableSearchSelect's contract is onChange(id, label, opt?). Only a real pick counts as
+  // "touched": the select also fires ('', '') on its own resets (clear, remount when the async
+  // ref-list arrives), and treating those as a user choice would freeze the template at empty.
+  const onPisTemplateChange = useCallback((id) => {
+    if (id) pisTemplateTouchedRef.current = true;
+    setPisTemplate(id);
+  }, []);
   // registerPayment's response.data captured at confirm time, replayed into
   // onSaved once polling reaches the "executed" terminal status.
   const pisResultRef = useRef(null);
@@ -1263,6 +1319,16 @@ export default function NewPaymentEntryModal({
     const n = parseFloat(String(rateStr).replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
+  // What will actually leave the bank (ETP-5084): a PIS transfer is instructed in the ACCOUNT's
+  // currency, so on a cross-currency payment the figure to show — and the one the backend sends to
+  // Salt Edge — is the converted one, not the invoice amount. Same product (amount x rate) and the
+  // same rate the backend converts and books with, so the PIS block cannot show one number while
+  // another is transferred. null while the rate is still missing/invalid: Confirm is disabled then
+  // anyway (rateInvalid), so there is no amount worth claiming.
+  const pisBankAmount = useMemo(() => {
+    if (!isForeign) return balance.amount;
+    return rate != null ? round2(balance.amount * rate) : null;
+  }, [isForeign, rate, balance.amount]);
   // Recompute the converted amount from the rate whenever the rate changes (typed directly, or
   // re-seeded from the system/persisted value) or the invoice-currency amount changes (e.g. via
   // "Igualar" or the Importe field) — in both cases the rate is the value to keep fixed, matching
@@ -1301,9 +1367,9 @@ export default function NewPaymentEntryModal({
   const {
     pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
   } = computePaymentModalState({
-      dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId,
-      accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber,
-      pisSortCode, ui,
+      dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance,
+      date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban,
+      pisAccountNumber, pisSortCode, ui,
     });
 
   // Fetch the supplier's PIS-eligible bank accounts + the payment-template ref-list once,
@@ -1323,18 +1389,30 @@ export default function NewPaymentEntryModal({
         const def = items.find(a => a.default) || items[0];
         if (def) setPisIban(def.iban);
 
-        const templates = mapPisTemplates(await readJson(tplRes));
-        setPisTemplates(templates);
-        // Default the template by currency (EUR→SEPA, GBP→FPS) when that value exists.
-        const preferred = defaultPisTemplate(currency);
-        const initial = templates.find(t => t.id === preferred) || templates[0];
-        if (initial) setPisTemplate(initial.id);
+        setPisTemplates(mapPisTemplates(await readJson(tplRes)));
+        // The template itself is chosen by the effect below, which also re-chooses it when the user
+        // switches to an account in another currency.
       } catch { /* silent — the block degrades to empty; user can't confirm PIS */ }
     })();
-    // apiFetch/specName/invoiceId/currency intentionally excluded — same rationale as the
+    // apiFetch/specName/invoiceId intentionally excluded — same rationale as the
     // catalog effect above; this must run once per eligibility flip, not per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pisEligible]);
+
+  // Choose the payment template from the ACCOUNT currency (ETP-5084) — the currency the transfer is
+  // actually instructed in. Deliberately its own effect, keyed on that currency: switching to a
+  // connected account in another currency must re-derive the template (a GBP account needs FPS, not
+  // the SEPA the previous EUR account defaulted to), which the once-per-eligibility-flip catalog
+  // effect above could never do. A manual pick wins from then on — re-deriving over the user's own
+  // choice would silently discard it.
+  useEffect(() => {
+    if (!pisEligible || !pisTemplates.length || pisTemplateTouchedRef.current) return;
+    // Same fallback as pisEligible: an older backend that omits the account currency keeps the
+    // previous invoice-currency behavior rather than defaulting everything to SEPA.
+    const preferred = defaultPisTemplate(accountCurrency || currency);
+    const initial = pisTemplates.find(t => t.id === preferred) || pisTemplates[0];
+    if (initial) setPisTemplate(initial.id);
+  }, [pisEligible, pisTemplates, accountCurrency, currency]);
 
   // Listen for the "pis-completed" message the PIS callback popup (PisCallbackPage.jsx) posts to
   // its opener right before closing itself. This marks the bank authorization as actually reached,
@@ -1827,9 +1905,13 @@ export default function NewPaymentEntryModal({
                 ui={ui}
                 party={party}
                 account={selectedAccount}
+                accountCurrency={accountCurrency}
+                isForeign={isForeign}
+                bankAmount={pisBankAmount}
+                rate={rate}
                 templateOptions={pisTemplates}
                 template={pisTemplate}
-                onTemplateChange={setPisTemplate}
+                onTemplateChange={onPisTemplateChange}
                 ibanOptions={pisAccounts}
                 iban={pisIban}
                 onIbanChange={setPisIban}
