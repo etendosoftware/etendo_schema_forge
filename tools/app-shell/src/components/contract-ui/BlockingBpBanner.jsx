@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * ETP-5024 — persistent inline warning for the two Business-Partner blocking
@@ -31,8 +32,18 @@ import { InfoBanner } from '@/components/InfoBanner.jsx';
  *
  * `recordId` resets the banner when the user navigates to a different record — a
  * blocking condition on one document must never bleed into the next one opened.
+ *
+ * `currencyCode` — the document's currency (`data['currency$_identifier']`, with
+ * the session-level fallback DetailView.jsx already resolves for line rows —
+ * see `sessionCurrencyCode` there) — is threaded down so the `creditLimit`
+ * condition's `amount` (see `lib/blockingBpConditions.js`) can be rendered through
+ * the canonical `formatCurrency` util instead of the raw, unformatted backend
+ * number. If the currency isn't available for some reason, the amount is dropped
+ * entirely rather than shown unformatted (mirrors the `matchCashCloseNoConcept`
+ * precedent in `lib/backendErrors.js`) — a banner that says "credit limit
+ * exceeded" without the exact figure is still correct and useful.
  */
-export function BlockingBpBanner({ calloutResult, blockingCondition, completionSignal, recordId }) {
+export function BlockingBpBanner({ calloutResult, blockingCondition, completionSignal, recordId, currencyCode }) {
   const [banner, setBanner] = useState(null);
   const completionSignalRef = useRef(completionSignal);
 
@@ -65,9 +76,24 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
 
   return (
     <InfoBanner tone="warning" icon={AlertTriangle} className="mb-4" data-testid="bp-blocking-banner">
-      {banner.text}
+      {resolveBannerText(banner, currencyCode)}
     </InfoBanner>
   );
+}
+
+/**
+ * Builds the visible banner sentence. `onHold` messages carry no interpolated
+ * number, so `banner.text` is shown as-is. `creditLimit` messages had their
+ * trailing raw amount stripped out by `detectBlockingBpCondition` (see
+ * `lib/blockingBpConditions.js`) — it is rebuilt here, through `formatCurrency`,
+ * with an explicit space (the backend's own spacing is unreliable — that's the
+ * root cause of this bug). When `currencyCode` isn't available, the amount is
+ * dropped rather than shown unformatted.
+ */
+function resolveBannerText(banner, currencyCode) {
+  if (banner.kind !== 'creditLimit' || banner.amount == null) return banner.text;
+  if (!currencyCode) return banner.text;
+  return `${banner.text} ${formatCurrency(currencyCode, banner.amount)}`;
 }
 
 export default BlockingBpBanner;

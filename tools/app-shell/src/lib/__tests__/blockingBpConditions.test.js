@@ -9,6 +9,7 @@ describe('detectBlockingBpCondition', () => {
       assert.deepEqual(result, {
         kind: 'creditLimit',
         text: 'Business Partner credit limit exceeded.',
+        amount: null,
       });
     });
 
@@ -32,6 +33,58 @@ describe('detectBlockingBpCondition', () => {
     it('matches unaccented "limite"/"credito" variants', () => {
       const result = detectBlockingBpCondition('limite de credito superado');
       assert.equal(result?.kind, 'creditLimit');
+    });
+  });
+
+  describe('creditLimit — trailing amount extraction (ETP-5024 follow-up bug)', () => {
+    // SE_Order_BPartner.java (core Etendo) builds the message as raw
+    // concatenation with NO separating space and an unformatted
+    // `Double.toString()` amount — e.g. the real repro from the bug report:
+    // "Aviso: Crédito limite superado4912.6". The amount must be pulled out
+    // separately so the UI layer can format it, never paste it back raw.
+    it('extracts the amount and strips it (with the backend text) from a Spanish message with no separating space', () => {
+      const result = detectBlockingBpCondition('Aviso: Crédito limite superado4912.6');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'Aviso: Crédito limite superado',
+        amount: 4912.6,
+      });
+    });
+
+    it('extracts the amount from an English message with a trailing space (trims it off the label)', () => {
+      const result = detectBlockingBpCondition('Credit Limit over by 4912.6');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'Credit Limit over by',
+        amount: 4912.6,
+      });
+    });
+
+    it('treats a comma decimal separator the same as a period', () => {
+      const result = detectBlockingBpCondition('limite de credito superado por 4912,60');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'limite de credito superado por',
+        amount: 4912.6,
+      });
+    });
+
+    it('extracts a negative amount', () => {
+      const result = detectBlockingBpCondition('credito limite superado-4912.6');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'credito limite superado',
+        amount: -4912.6,
+      });
+    });
+
+    it('leaves amount null when the message has no trailing number', () => {
+      const result = detectBlockingBpCondition('limite de credito superado');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'limite de credito superado',
+        amount: null,
+      });
     });
   });
 

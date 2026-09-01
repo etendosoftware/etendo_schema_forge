@@ -912,12 +912,20 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
 // inline warning (BlockingBpBanner.jsx) above the resolved header content. Optional
 // so every call site that has nothing to report (no BP-related callout/process
 // wiring in scope) keeps behaving exactly as before.
+//
+// `currencyCode` is derived from `data['currency$_identifier']` here (not threaded
+// through the DetailView.jsx call site — `data` is already an argument of this
+// function) so BlockingBpBanner can format the creditLimit condition's extracted
+// amount via `formatCurrency` instead of showing the backend's raw unformatted
+// number. The header endpoint always returns `currency$_identifier` (only line/child
+// endpoints omit it — see DetailView.jsx's `sessionCurrencyCode` fallback, which
+// does not apply here), so no session-level fallback is needed at this level.
 export function resolveHeaderContent(headerContent, data, bpBanner) {
   const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
   if (!bpBanner) return resolvedHeader;
   return (
     <>
-      <BlockingBpBanner {...bpBanner} />
+      <BlockingBpBanner {...bpBanner} currencyCode={data?.['currency$_identifier'] ?? null} />
       {resolvedHeader}
     </>
   );
