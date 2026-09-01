@@ -65,11 +65,12 @@
  *   - `apiBaseUrl` shape: `App.jsx`'s `API_BASE_URL` (`${apiBase}/sws/neo`,
  *     `apiBase` empty at the dev-server root) plus `WindowLoader.jsx`
  *     appending `/${windowName}` — i.e. `/sws/neo/physical-inventory`.
- *   - the bearer token lives in `localStorage['sf_auth_token']` in BOTH mock
- *     mode (`e2e/tests/helpers/auth.js`) and real mode (session.js's
- *     `sf_auth` prefix + `token` key in `@etendosoftware/app-shell-core`),
- *     so `page.evaluate(() => localStorage.getItem('sf_auth_token'))` after
- *     `login(page)` always yields a usable token — no separate login call.
+ *   - the credential is whatever the application itself sends: ETP-4576 moved
+ *     the session out of `localStorage` into memory (bearer) or an HttpOnly
+ *     cookie, so `apiAuthHeaders(page)` from `e2e/tests/helpers/auth.js`
+ *     replays it after `login(page)` — no separate login call. It comes back
+ *     empty under the cookie scheme, which is correct: `page.request` shares
+ *     the browser context's cookie jar.
  *   - `parentId`/`product`/`storageBin`/`bookQuantity` field names on
  *     `inventoryLine`, and the fact that `InventoryLineHandler.handlePostPreHook`
  *     (com.etendoerp.go's `InventoryLineHandler.java`) computes `bookQuantity`
@@ -122,6 +123,8 @@
  * stock movement the caller asked for.
  */
 
+import { apiAuthHeaders } from './auth.js';
+
 const SPEC = 'physical-inventory';
 const HEADER_ENTITY = 'inventory';
 const LINE_ENTITY = 'inventoryLine';
@@ -136,15 +139,11 @@ function normalize(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
-async function getAuthHeaders(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureStockOnHand could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureStockOnHand(page, ...).',
-    );
-  }
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+// ETP-4576: the session is no longer readable from localStorage — replay what
+// the application itself authenticates with (see `apiAuthHeaders`). Empty under
+// the cookie scheme, which is correct: page.request shares the context's jar.
+function getAuthHeaders(page) {
+  return { ...apiAuthHeaders(page), 'Content-Type': 'application/json' };
 }
 
 /** Extracts the single record object NEO wraps CRUD create/update responses in
@@ -257,7 +256,7 @@ export async function ensureStockOnHand(page, { productName, warehouseName, minQ
     throw new Error('ensureStockOnHand requires a positive minQty.');
   }
 
-  const headers = await getAuthHeaders(page);
+  const headers = getAuthHeaders(page);
 
   const warehouseId = await resolveWarehouseId(page, { warehouseName, headers });
   const { productId, uomId } = await resolveProduct(page, { productName, warehouseName, headers });

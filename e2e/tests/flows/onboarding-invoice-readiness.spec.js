@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiAuthHeaders, captureApiCredentials } from '../helpers/auth.js';
 
 const RUN_ONBOARDING_E2E = process.env.RUN_ONBOARDING_E2E === '1';
 function buildDisposablePassword(suffix) {
@@ -16,6 +17,9 @@ test.describe('Onboarding invoice readiness', () => {
     const clientName = `QA Payment Term Seed ${suffix}`;
     const password = buildDisposablePassword(suffix);
 
+    // ETP-4576 — this spec onboards its own account instead of calling login(),
+    // so it arms the credential capture itself before the first request.
+    captureApiCredentials(page);
     await page.goto('/onboarding');
 
     await page.getByRole('textbox', { name: 'Nombre*' }).fill('QA Payment Term User');
@@ -37,16 +41,11 @@ test.describe('Onboarding invoice readiness', () => {
 
     await expect(page.getByRole('button', { name: email })).toBeVisible({ timeout: 30_000 });
 
-    const selectorResponse = await page.evaluate(async () => {
-      const token = window.localStorage.getItem('sf_auth_token');
-      const response = await fetch('/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return {
-        status: response.status,
-        body: await response.json(),
-      };
-    });
+    const selectorRes = await page.request.get(
+      '/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0',
+      { headers: apiAuthHeaders(page) },
+    );
+    const selectorResponse = { status: selectorRes.status(), body: await selectorRes.json() };
 
     expect(selectorResponse.status).toBe(200);
     expect(selectorResponse.body.items, JSON.stringify(selectorResponse.body)).toEqual(
