@@ -4,6 +4,52 @@ import { useUI, useLocale } from '@/i18n';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+// ETP-5073 / DOC-09 + DOC-10: the dirty-state gate reads the SAME registry the beforeunload
+// guard and the locale switcher read. Gating HERE rather than in each window's topbar is what
+// makes one fix cover all of them: every window that offers cloning renders this very component
+// (sales-invoice, purchase-order, goods-shipment, goods-receipt, ReturnWindowShell, the grid's
+// row action), and each one had its own enable/disable decision — which is precisely why Clone
+// was reachable over a dirty form.
+import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
+
+// Re-reads each freshly cloned header so State 2 can list them with their own documentNo /
+// business partner / status instead of bare ids. A failed or unparseable read degrades to
+// `{ id }` — the row still renders and stays clickable, which beats failing the whole clone
+// after the records were already created server-side.
+async function fetchClonedRecords(apiFetch, headerEntity, newIds) {
+  return Promise.all(newIds.map(id =>
+    apiFetch(`/${headerEntity}/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const raw = json?.response?.data;
+        const record = Array.isArray(raw) ? raw[0] : raw;
+        return { id, ...(record ?? {}) };
+      })
+      .catch(() => ({ id }))
+  ));
+}
+
+// Singular/plural copy for the two states. Kept together (and out of the component) because all
+// three strings switch on the same count and the many-variants share the {count} placeholder.
+function buildCloneTitles(n, ui) {
+  const one = n === 1;
+  return {
+    confirmTitle: one ? ui('cloneConfirmTitleOne') : ui('cloneConfirmTitleMany').replace('{count}', n),
+    confirmSub: one ? ui('cloneConfirmSubtitleOne') : ui('cloneConfirmSubtitleMany').replace('{count}', n),
+    doneTitle: one ? ui('cloneDoneTitleOne') : ui('cloneDoneTitleMany').replace('{count}', n),
+  };
+}
+
+// NEO reports a failed action at one of several depths depending on where it was raised
+// (handler, servlet, DAL), so all four shapes are tried before the generic i18n fallback.
+function extractCloneErrorMessage(json, fallback) {
+  return json?.error?.message
+    || json?.response?.error?.message
+    || json?.response?.message
+    || json?.message
+    || fallback;
+}
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -99,18 +145,21 @@ export default function CloneOrderModal({
   const navigate = useNavigate();
   const ui = useUI();
   const dictionary = useLocale();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const items = recordsProp ?? (recordId ? [{ id: recordId, ...data }] : []);
   const n = items.length;
 
   const [phase, setPhase]           = useState('confirm'); // 'confirm' | 'cloning' | 'done'
+  // Snapshotted at mount (i.e. when the modal opens) rather than read on every render: while this
+  // modal is up the form behind it cannot be edited or saved, so the answer cannot legitimately
+  // change, and a stable value keeps the banner from flickering on unrelated re-renders.
+  const [blockedByUnsaved] = useState(() => hasUnsavedChanges());
   const [error, setError]           = useState(null);
   const [clonedRecords, setCloned]  = useState([]);
   const [hoveredId, setHoveredId]   = useState(null);
 
-  const confirmTitle   = n === 1 ? ui('cloneConfirmTitleOne')   : ui('cloneConfirmTitleMany').replace('{count}', n);
-  const confirmSub     = n === 1 ? ui('cloneConfirmSubtitleOne') : ui('cloneConfirmSubtitleMany').replace('{count}', n);
-  const doneTitle      = n === 1 ? ui('cloneDoneTitleOne')       : ui('cloneDoneTitleMany').replace('{count}', n);
+  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui);
 
   const handleClone = async () => {
     setPhase('cloning');
@@ -118,10 +167,10 @@ export default function CloneOrderModal({
     try {
       const newIds = [];
       for (const item of items) {
-        const res  = await fetch(`${apiBaseUrl}/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST', headers });
+        const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
         const json = await res.json();
         if (!res.ok) {
-          setError(json?.error?.message || json?.response?.error?.message || ui(errorKey));
+          setError(extractCloneErrorMessage(json, ui(errorKey)));
           setPhase('confirm');
           return;
         }
@@ -131,18 +180,7 @@ export default function CloneOrderModal({
 
       const result = n > 1 ? newIds : newIds[0];
       if (routePrefix) {
-        const fetched = await Promise.all(
-          newIds.map(id =>
-            fetch(`${apiBaseUrl}/${headerEntity}/${id}`, { headers })
-              .then(r => r.ok ? r.json() : null)
-              .then(json => {
-                const raw = json?.response?.data;
-                const record = Array.isArray(raw) ? raw[0] : raw;
-                return { id, ...(record ?? {}) };
-              })
-              .catch(() => ({ id }))
-          )
-        );
+        const fetched = await fetchClonedRecords(apiFetch, headerEntity, newIds);
         setCloned(fetched);
         setPhase('done');
         onCloned?.(result);
@@ -242,11 +280,19 @@ export default function CloneOrderModal({
               ))}
             </div>
             <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Info banner */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
-                <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
-                <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
-              </div>
+              {/* Info banner — or the unsaved-changes refusal, which replaces it: showing both
+                  would bury the one thing the user has to act on. */}
+              {blockedByUnsaved ? (
+                <div data-testid="clone-blocked-unsaved" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-warning-bg)', borderRadius: 8, border: '1px solid var(--status-warning-border)' }}>
+                  <span style={{ color: 'var(--status-warning-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+                  <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.5 }}>{ui('cloneBlockedUnsavedChanges')}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
+                  <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+                  <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
+                </div>
+              )}
 
               {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
@@ -255,8 +301,9 @@ export default function CloneOrderModal({
                 type="button"
                 data-testid="action-clone-record"
                 onClick={handleClone}
-                disabled={phase === 'cloning'}
-                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: phase === 'cloning' ? 0.6 : 1, cursor: phase === 'cloning' ? 'not-allowed' : 'pointer' }}
+                disabled={phase === 'cloning' || blockedByUnsaved}
+                title={blockedByUnsaved ? ui('cloneBlockedUnsavedChanges') : undefined}
+                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: (phase === 'cloning' || blockedByUnsaved) ? 0.6 : 1, cursor: (phase === 'cloning' || blockedByUnsaved) ? 'not-allowed' : 'pointer' }}
               >
                 {phase === 'cloning' ? <Spinner data-testid="Spinner__66b049" /> : <CloneIcon size={15} data-testid="CloneIcon__66b049" />}
                 {phase === 'cloning' ? ui(processingKey) : confirmTitle}

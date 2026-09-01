@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-06-11T18:36:13.442Z",
-  "updatedAt": "2026-07-28T13:51:31.344Z",
-  "contractChecksum": "858dddea9ad9fee5",
+  "updatedAt": "2026-08-29T21:27:17.467Z",
+  "contractChecksum": "9287d166f9dcd72a",
   "apiPrediction": {
     "specName": "match-rule",
     "baseUrl": "/sws/neo/match-rule",
@@ -104,7 +104,7 @@
         "TextCondition": "Condición sobre el concepto",
         "TextPattern": "Patrón a buscar",
         "ETGO_Transaction_Type_ID": "Tipo de transacción",
-        "C_GLItem_ID": "Concepto contable",
+        "C_GLItem_ID": "Cuenta contable",
         "MatchCount": "Conciliaciones",
         "Isactive": "Activa",
         "C_BPartner_ID": "Contacto",
@@ -119,7 +119,7 @@
         "TextCondition": "Concept condition",
         "TextPattern": "Pattern to match",
         "ETGO_Transaction_Type_ID": "Transaction type",
-        "C_GLItem_ID": "Accounting concept",
+        "C_GLItem_ID": "Accounting account",
         "MatchCount": "Reconciliations",
         "Isactive": "Active",
         "C_BPartner_ID": "Contact",
@@ -215,5 +215,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "9cc91b73df3c7fdc"
+  "checksum": "9cc546129394a958"
 }

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useNeoResource, getApiBase } from './useNeoResource';
 
 const BASE_PATH = '/sws/neo/bank-reconciliation';
@@ -25,7 +25,7 @@ function buildQuery(params) {
  * @returns {{ post: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */
 function useNeoPost(action) {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -33,13 +33,8 @@ function useNeoPost(action) {
     setLoading(true);
     setError(null);
     try {
-      const url = `${getApiBase()}${BASE_PATH}?action=${action}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`${BASE_PATH}?action=${action}`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload),
       });
 
@@ -59,7 +54,7 @@ function useNeoPost(action) {
     } finally {
       setLoading(false);
     }
-  }, [token, action]);
+  }, [apiFetch, action]);
 
   return { post, loading, error };
 }
