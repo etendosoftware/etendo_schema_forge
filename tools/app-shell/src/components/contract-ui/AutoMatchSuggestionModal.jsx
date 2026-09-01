@@ -279,8 +279,17 @@ export function AutoMatchSuggestionModal({
           ...(g.createPayment ? { createPayment: g.createPayment } : {}),
         })),
       };
-      await apply(payload);
-      toast.success(ui('financeReconcileAutomatchToastSuccess', { count: checkedGroups.length }));
+      const response = await apply(payload);
+      const results = response?.results ?? [];
+      const failedCount = results.filter((r) => r?.error).length;
+      const successCount = results.length - failedCount;
+      if (failedCount === 0) {
+        toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
+      } else if (successCount > 0) {
+        toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
+      } else {
+        toast.error(ui('financeReconcileAutomatchToastError'));
+      }
       onSuccess?.();
       onClose();
     } catch (err) {

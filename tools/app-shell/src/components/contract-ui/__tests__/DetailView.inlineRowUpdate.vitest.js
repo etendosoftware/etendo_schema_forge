@@ -130,6 +130,7 @@ function build(args) {
     extractErrorMessage: args.extractErrorMessage,
     ui: args.ui,
     fields: args.fields,
+    raiseRowSaveConflict: args.raiseRowSaveConflict,
   });
 }
 
@@ -470,5 +471,79 @@ describe('buildInlineRowUpdateHandler — server-wins update from PATCH response
     const handler2 = build(args);
     await handler2({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
     expect(handleUpdateChild).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildInlineRowUpdateHandler — save-conflict handoff (ETP-5073 / DOC-04)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue(errResponse());
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete global.fetch;
+  });
+
+  it('when raiseRowSaveConflict raises the dialog (true), does NOT toast.error, but still throws with userNotified: true', async () => {
+    const raiseRowSaveConflict = vi.fn().mockResolvedValue(true);
+    const extractErrorMessage = vi.fn().mockResolvedValue('OBJSON_StaleDate');
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    let caught;
+    try {
+      await handler({ id: 'L1' }, 'unitPrice', '42', {});
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.userNotified).toBe(true);
+  });
+
+  it('when raiseRowSaveConflict reports false (a non-stale error, or no dialog host), toasts and still throws with userNotified: true', async () => {
+    const raiseRowSaveConflict = vi.fn().mockResolvedValue(false);
+    const extractErrorMessage = vi.fn().mockResolvedValue('Duplicate record');
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    let caught;
+    try {
+      await handler({ id: 'L1' }, 'unitPrice', '42', {});
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(toast.error).toHaveBeenCalledWith('Duplicate record');
+    expect(caught.userNotified).toBe(true);
+  });
+
+  it('without a raiseRowSaveConflict prop at all (optional chaining), falls back to the plain toast — preexisting contract', async () => {
+    const extractErrorMessage = vi.fn().mockResolvedValue('server boom');
+    const args = makeArgs({ extractErrorMessage }); // no raiseRowSaveConflict override
+    const handler = build(args);
+
+    await expect(handler({ id: 'L1' }, 'unitPrice', '42', {})).rejects.toThrow('server boom');
+    expect(toast.error).toHaveBeenCalledWith('server boom');
+  });
+
+  it('calls raiseRowSaveConflict with the raw response and the row id BEFORE extractErrorMessage — the clone/consume ordering matters', async () => {
+    const order = [];
+    const raiseRowSaveConflict = vi.fn(async (res, rowId) => {
+      order.push(['raise', res, rowId]);
+      return false;
+    });
+    const extractErrorMessage = vi.fn(async () => {
+      order.push(['extract']);
+      return 'boom';
+    });
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    await expect(handler({ id: 'L42' }, 'unitPrice', '1', {})).rejects.toThrow();
+
+    expect(order.map(e => e[0])).toEqual(['raise', 'extract']);
+    expect(order[0][2]).toBe('L42');
   });
 });

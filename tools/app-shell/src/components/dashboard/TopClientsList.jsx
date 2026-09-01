@@ -7,7 +7,8 @@ import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
-async function resolveClientRoute({ client, token, apiBaseUrl }) {
+import { useApiFetch } from '@/auth/useApiFetch.js';
+async function resolveClientRoute({ client, token, apiBaseUrl, apiFetch }) {
   const directRoute = resolveDashboardNavigation(client?.navigation);
   if (directRoute) return directRoute;
   if (client?.id) return `/contacts/${client.id}`;
@@ -21,9 +22,8 @@ async function resolveClientRoute({ client, token, apiBaseUrl }) {
   }));
 
   try {
-    const res = await fetch(
-      `${apiBaseUrl}/contacts/businessPartner?_sortBy=name asc&_startRow=0&_endRow=10&criteria=${criteria}`,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    const res = await apiFetch(
+      `/contacts/businessPartner?_sortBy=name asc&_startRow=0&_endRow=10&criteria=${criteria}`
     );
     if (!res.ok) return '/contacts';
     const json = await res.json();
@@ -41,6 +41,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
   const { locale } = useLocaleSwitch();
   const numberLocale = localeFromUi(locale);
   const { open: openCopilot } = useCopilot();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const handleClick = async (client) => {
     trackDashboardKpi('dashboard_document_opened', {
@@ -48,7 +49,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
       entityType: 'business_partner',
       source: 'dashboard_top_clients',
     });
-    const route = await resolveClientRoute({ client, token, apiBaseUrl });
+    const route = await resolveClientRoute({ client, token, apiBaseUrl, apiFetch });
     navigate(route);
   };
 

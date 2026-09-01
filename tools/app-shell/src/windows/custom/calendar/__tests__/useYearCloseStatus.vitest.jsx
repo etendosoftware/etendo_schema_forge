@@ -11,7 +11,7 @@ describe('useYearCloseStatus', () => {
     await waitFor(() => expect(result.current).toBe(true));
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/end-year-close/accounting?year=year1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) })
     );
   });
 

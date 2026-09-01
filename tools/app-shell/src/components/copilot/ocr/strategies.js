@@ -2,6 +2,7 @@ import CreateContactModalAdapter from './CreateContactModalAdapter.jsx';
 import { findBp as findBpLegacy, findTax } from './ingest/purchaseInvoiceDescriptor.js';
 import { deriveContactsApiBase } from './contactApi.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 function escHql(value) {
   return String(value).replace(/'/g, "''");
 }
@@ -18,7 +19,7 @@ async function findBpFuzzy({ token, apiBaseUrl, name }) {
   );
   const url = `${contactsBase}/businessPartner?_neoWhere=${where}&limit=2`;
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];

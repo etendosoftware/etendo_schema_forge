@@ -288,19 +288,75 @@ export const api = {
     },
     {
       "entity": "accountingConfiguration",
-      "field": "fINAssetAcct",
-      "column": "FIN_Asset_Acct",
+      "field": "fINBankrevaluationgainAcct",
+      "column": "FIN_Bankrevaluationgain_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINAssetAcct"
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationgainAcct"
     },
     {
       "entity": "accountingConfiguration",
-      "field": "fINTransitoryAcct",
-      "column": "FIN_Transitory_Acct",
+      "field": "fINBankrevaluationlossAcct",
+      "column": "FIN_Bankrevaluationloss_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINTransitoryAcct"
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankrevaluationlossAcct"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINBankfeeAcct",
+      "column": "FIN_Bankfee_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINBankfeeAcct"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "inTransitPaymentAccountIN",
+      "column": "FIN_In_Intransit_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/inTransitPaymentAccountIN"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "depositAccount",
+      "column": "FIN_Deposit_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/depositAccount"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "clearedPaymentAccount",
+      "column": "FIN_In_Clear_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccount"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "fINOutIntransitAcct",
+      "column": "FIN_Out_Intransit_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/fINOutIntransitAcct"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "withdrawalAccount",
+      "column": "FIN_Withdrawal_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/withdrawalAccount"
+    },
+    {
+      "entity": "accountingConfiguration",
+      "field": "clearedPaymentAccountOUT",
+      "column": "FIN_Out_Clear_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/accounts/accountingConfiguration/selectors/clearedPaymentAccountOUT"
     },
     {
       "entity": "bankStatementLines",

@@ -10,12 +10,14 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
     onCloneRow,
     renderPreview,
     refreshTrigger,
+    refetchAfterSave,
   }) => (
     <div
       data-testid="generated-app"
       data-initial-filters={initialColumnFilters ? JSON.stringify(initialColumnFilters) : ''}
       data-hide-delete-when-complete={String(!!rowQuickActions?.hideDeleteWhenComplete)}
       data-refresh-trigger={String(refreshTrigger)}
+      data-refetch-after-save={String(!!refetchAfterSave)}
     >
       {/* Renders the custom Table/bulkActions wrapper components so their JSX bodies execute */}
       {Table && (
@@ -219,6 +221,15 @@ describe('GoodsReceiptWindow', () => {
   it('renders the generated app', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
+  });
+
+  // ── ETP-5058: refetchAfterSave ─────────────────────────────────────────────
+  // Without this prop, saving the header (e.g. changing Warehouse) uses the bare
+  // PATCH response to update local state, wiping the linked-invoices panel that
+  // GoodsReceiptHeaderHandler only enriches on GET responses.
+  it('ETP-5058: passes refetchAfterSave to the generated app so a save refetches enriched linked-document data', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} recordId="receipt-1" />);
+    expect(screen.getByTestId('generated-app')).toHaveAttribute('data-refetch-after-save', 'true');
   });
 
   it('does NOT wire an email row quick action (out-of-scope window)', () => {

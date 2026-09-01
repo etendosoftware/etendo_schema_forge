@@ -14,7 +14,7 @@ describe('AccountingPanel', () => {
     await waitFor(() => expect(screen.getByText('20000000')).toBeInTheDocument());
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/accounting?year=year1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) })
     );
     expect(screen.getByText('100.00')).toBeInTheDocument();
   });

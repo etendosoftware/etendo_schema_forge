@@ -52,6 +52,44 @@ describe('PaymentDetailSidebarBase — amount formatting', () => {
   });
 });
 
+/**
+ * What the activity rows say the clock said. Pinned to Buenos Aires (UTC−3, no DST) because these
+ * assert what a viewer sees, and the bug was reported from there: a payment confirmed at 08:32
+ * showed 11:32, the server's UTC digits planted verbatim as local time (ETP-4895).
+ */
+describe('PaymentDetailSidebarBase — timestamps in the viewer clock', () => {
+  const originalTz = process.env.TZ;
+
+  beforeEach(() => {
+    process.env.TZ = 'America/Argentina/Buenos_Aires';
+    window.localStorage.clear();
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+  });
+  afterEach(() => { process.env.TZ = originalTz; });
+
+  it('converts the audit timestamp NEO sends without a zone', async () => {
+    // No stored event (the transfer was registered server-side with the modal closed), so the
+    // row is backfilled from `updated` — the path that showed the server's hour.
+    const data = baseData({ status: 'PWNC', processed: true, updated: '2026-08-28T11:32:00' });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    expect(await panel.findByText(/· 08:32/)).toBeInTheDocument();
+    expect(panel.queryByText(/· 11:32/)).toBeNull();
+  });
+
+  it('leaves a business date on its own day', async () => {
+    // paymentDate is a calendar day, not an instant: reading it as midnight UTC would show the
+    // 27th here, which is the shift dateOnly.js exists to prevent.
+    const data = baseData({ status: 'PWNC', processed: true, paymentDate: '2026-08-28' });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    expect(await panel.findByText(/28 ago 2026$/)).toBeInTheDocument();
+    expect(panel.queryByText(/27 ago 2026/)).toBeNull();
+  });
+});
+
 describe('PaymentDetailSidebarBase — activity history', () => {
   beforeEach(() => {
     window.localStorage.clear();

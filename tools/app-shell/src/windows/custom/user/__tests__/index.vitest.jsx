@@ -64,6 +64,25 @@ vi.mock('@/lib/resendInvitationApi.js', () => ({
   resendInvitation: vi.fn(),
 }));
 
+vi.mock('@/lib/promoteUserRoleApi.js', () => ({
+  promoteUserToAdmin: vi.fn(),
+  demoteUserFromAdmin: vi.fn(),
+}));
+
+// ETP-5019 — `useAdminRoleId` (index.jsx) resolves the client's Admin role id via
+// this same webhook `AssignTemplateRolesControl.jsx`'s own effect already uses.
+// Defaulted to no admin role in `beforeEach` below so every pre-existing test in
+// this file (none of which care about admin promotion) keeps behaving exactly as
+// before; individual ETP-5019 tests override it with `mockResolvedValue`.
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchRolesOverview: vi.fn(),
+}));
+
+const mockUseViewerRole = vi.fn();
+vi.mock('@/hooks/useViewerRole.js', () => ({
+  useViewerRole: () => mockUseViewerRole(),
+}));
+
 import { useRoleSelection } from '../roleSelectionContext.js';
 
 /** Renders inside the mocked UserPage, giving tests a hook to drive the shared
@@ -143,6 +162,8 @@ import { render, screen, within, waitFor, fireEvent } from '@testing-library/rea
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
+import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
+import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -150,6 +171,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 beforeEach(() => {
   vi.clearAllMocks();
   lastUserPageProps = null;
+  // No admin role by default — see the `vi.mock('@/lib/rolesApi.js', ...)` comment above.
+  fetchRolesOverview.mockResolvedValue({ roles: [] });
+  // Viewer-role gating follow-up (ETP-5019) — default every test to an admin viewer so the
+  // pre-existing promote/demote tests (which never asserted on the VIEWER's own role) keep
+  // exercising exactly what they always did; tests for the new gating itself override this.
+  mockUseViewerRole.mockReturnValue({ roleId: 'admin-role', isClientAdmin: true });
 });
 
 describe('UserWindow — fetching applied roles on load', () => {
@@ -824,5 +851,178 @@ describe('UserWindow — "Resend invitation" button (ETP-4999 — moved from top
 
     resolveResend({ status: 'success', invitation: { status: 'SENT' } });
     await waitFor(() => expect(screen.getByTestId('ResendInvitationButton').closest('button')).not.toBeDisabled());
+  });
+});
+
+describe('UserWindow — admin promote/demote buttons (ETP-5019, merged into the same extraActions toolbar as Resend invitation)', () => {
+  it('shows "Make administrator" for a non-owner, non-admin existing user, and calls the API on click', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'admin-role' });
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }}
+        onRefresh={onRefresh} />,
+    );
+
+    const button = await screen.findByTestId('PromoteToAdminButton');
+    fireEvent.click(button);
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('promoteToAdminSuccessToast'));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('shows "Remove administrator role" for a non-owner user currently holding the Admin role', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    demoteUserFromAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'personal-role' });
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }}
+        onRefresh={onRefresh} />,
+    );
+
+    const button = await screen.findByTestId('DemoteFromAdminButton');
+    fireEvent.click(button);
+
+    await waitFor(() => expect(demoteUserFromAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('demoteFromAdminSuccessToast'));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('shows neither button for the owner', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: true, defaultRole: 'admin-role' }} />);
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both promote and demote buttons while viewer role is still loading', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue(undefined);
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both buttons when viewer role resolves to null (unauthenticated/unknown)', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue(null);
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('hides both buttons when the viewer is authenticated but not client-admin', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue({ roleId: 'some-role', isClientAdmin: false });
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }} />,
+    );
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('shows the promote button for a non-admin target when the viewer IS client-admin', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    mockUseViewerRole.mockReturnValue({ roleId: 'admin-role', isClientAdmin: true });
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    await screen.findByTestId('PromoteToAdminButton');
+  });
+
+  it('renders nothing on a brand-new, not-yet-saved record (no id to promote/demote)', async () => {
+    render(<UserWindow recordId="new" />);
+
+    await screen.findByTestId('user-page');
+    expect(screen.queryByTestId('PromoteToAdminButton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DemoteFromAdminButton')).not.toBeInTheDocument();
+  });
+
+  it('coexists with the Resend invitation button in the same extraActions toolbar', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1', invitationStatus: 'PENDING' }} />,
+    );
+
+    await screen.findByTestId('PromoteToAdminButton');
+    expect(screen.getByTestId('ResendInvitationButton')).toBeInTheDocument();
+  });
+
+  it('shows an error toast with the rejection message and does not refresh when promoteUserToAdmin fails', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockRejectedValue(new Error('Only the owner can grant admin access'));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Only the owner can grant admin access'));
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic i18n error key when promoteUserToAdmin rejects with no message', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockRejectedValue(new Error());
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('promoteToAdminErrorFallback'));
+  });
+
+  it('shows an error toast with the rejection message and does not refresh when demoteUserFromAdmin fails', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    demoteUserFromAdmin.mockRejectedValue(new Error('Cannot demote the last remaining admin'));
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Cannot demote the last remaining admin'));
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('disables the clicked button while a promote/demote request is in flight', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    let resolvePromote;
+    promoteUserToAdmin.mockReturnValue(new Promise((resolve) => { resolvePromote = resolve; }));
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(screen.getByTestId('PromoteToAdminButton').closest('button')).toBeDisabled());
+
+    resolvePromote({ success: true, userId: 'u1', roleId: 'admin-role' });
+    await waitFor(() => expect(screen.getByTestId('PromoteToAdminButton').closest('button')).not.toBeDisabled());
   });
 });

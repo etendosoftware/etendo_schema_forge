@@ -162,7 +162,7 @@ describe('FmOverlays interactive coverage', () => {
     render(<ConfigDrawer model="349" token="tkn" apiBaseUrl="/sws/neo/fiscal-models" onClose={onClose} />);
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/sws/neo/session', expect.objectContaining({
-      headers: { Authorization: 'Bearer tkn' },
+      headers: { Authorization: 'Bearer tkn', 'Accept-Language': 'es_ES' },
     })));
     expect(await screen.findByDisplayValue('Etendo Org')).toBeInTheDocument();
     expect(screen.getByDisplayValue('28001')).toBeInTheDocument();

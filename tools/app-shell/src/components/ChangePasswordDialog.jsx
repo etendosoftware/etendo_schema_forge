@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
-import { changePassword } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { changePassword, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
 const EMPTY_FORM = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -57,7 +57,17 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
       // re-authenticate with the new password.
       onSuccess?.();
     } catch (err) {
-      setError(err.userMessage || ui(err.code || 'onboardingCredentialChangeFailed'));
+      // AUTH-07 / ETP-5022: `err.userMessage` is the backend's English developer text and used
+      // to win here, which is why even WEAK_PASSWORD — a code explicitly documented as
+      // "translate on the frontend" — showed in English. Resolve the code through
+      // AUTH_ERROR_UI_KEYS (a raw code is NOT a dictionary key, so `ui(err.code)` never
+      // matched either) and keep userMessage only as the last resort for an unmapped code.
+      const uiKey = AUTH_ERROR_UI_KEYS[err.code];
+      setError(
+        (uiKey && ui(uiKey))
+        || err.userMessage
+        || ui('onboardingCredentialChangeFailed')
+      );
       setLoading(false);
     }
   };

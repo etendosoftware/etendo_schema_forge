@@ -79,6 +79,31 @@ async function installQuotationMocks(page, state) {
     const idOrSubpath = segments[idx + 2];
     const action = segments[idx + 4];
 
+    // The `partnerAddress` selector must echo the address the quotation ALREADY holds.
+    // `partnerAddress` is a dependent field (dependsOn businessPartner): EntityForm refetches its
+    // options on mount and, when the stored value is absent from the returned list, auto-selects
+    // the first option (ETP-3894, FIC parity). The generic `/selectors/` stub in helpers/auth.js
+    // answers EVERY selector with a PRODUCT (`prod-e2e`/"Test Product"), so without this override
+    // the header's partnerAddress silently became a product id on load — leaving the form dirty
+    // before the user touched anything, which since ETP-5073 disables Clone behind the
+    // unsaved-changes gate. Production never sees it: the real selector returns the address.
+    if (entity === 'quotation' && idOrSubpath === 'selectors'
+        && segments[idx + 3] === 'C_BPartner_Location_ID') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{
+            id: BASE_DRAFT.partnerAddress,
+            label: BASE_DRAFT['partnerAddress$_identifier'],
+            name: BASE_DRAFT['partnerAddress$_identifier'],
+            _identifier: BASE_DRAFT['partnerAddress$_identifier'],
+          }],
+        }),
+      });
+      return;
+    }
+
     if (entity === 'quotationLine' && req.method() === 'GET') {
       await route.fulfill({
         status: 200,

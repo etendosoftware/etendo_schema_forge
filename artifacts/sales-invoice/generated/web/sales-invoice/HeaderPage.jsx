@@ -612,13 +612,15 @@ export const api = {
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de entrega",
       "C_DocTypeTarget_ID": "Tipo de documento",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "Foreign_Amount": "Importe en Moneda Objetivo"
     },
     "en_US": {
       "OutstandingAmt": "Pending Payment",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Delivery Status",
-      "C_DocTypeTarget_ID": "Document Type"
+      "C_DocTypeTarget_ID": "Document Type",
+      "Foreign_Amount": "Target Currency Amount"
     }
   }
 };
@@ -656,7 +658,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange Rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
+          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
         formFooter={SifErrorBanner}
         hideDeleteWhenComplete

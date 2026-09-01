@@ -6,6 +6,7 @@ import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
+import { RefreshButton } from '@/components/financial-accounts';
 import { applyConditions } from '../advancedFilterApply';
 import {
   ReconciliationListTable,
@@ -13,6 +14,7 @@ import {
   buildReconciliationSortColumns,
 } from './ReconciliationListTable.jsx';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 
 /**
@@ -34,7 +36,9 @@ import { useClientSort } from '@/hooks/useClientSort';
  * badge whether or not this tab is mounted, and fetching in both places would double the request.
  * Filtering stays local — it is view state, not data.
  */
-export function ReconciliationListTab({ account, reconciliations = [], loading = false }) {
+export function ReconciliationListTab({
+  account, reconciliations = [], loading = false, onRefresh,
+}) {
   const ui = useUI();
   const navigate = useNavigate();
   // Same default as the Movements tab: last 30 days rather than the whole history.
@@ -94,6 +98,10 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
           onClear={clearSort}
           isDefaultSort={isDefaultSort}
           data-testid="ListSortPopover__f4e9e1" />
+        <RefreshButton
+          onRefresh={onRefresh}
+          label={ui('refresh')}
+          data-testid="RefreshButton__f4e9e1" />
         <input
           type="search"
           placeholder={ui('financeAccountReconciliationsSearch')}
@@ -103,6 +111,11 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
           className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground)_/_0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
+      {/* Same refresh affordance a generated list gets from ListView — only once rows are on
+          screen; the first fetch shows the table's own skeleton instead. */}
+      {loading && reconciliations.length > 0 ? (
+        <ListProgressBar testId="reconciliation-list-progress-bar" data-testid="ListProgressBar__f4e9e1" />
+      ) : null}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <ReconciliationListTable
           reconciliations={sorted}

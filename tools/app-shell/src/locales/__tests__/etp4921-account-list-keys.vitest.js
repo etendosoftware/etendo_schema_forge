@@ -20,12 +20,28 @@ import esES from '../es_ES.json';
  *  - `financeAccountMovementsColPosted` labels the posting-status segment of the Movimientos Tipo
  *    header. The pre-existing `financeAccountMovementsPosted` is a VALUE label ("Contabilizado"
  *    on the dot), not a column header, so it could not be reused.
+ *  - `backendError.statementNotDraft` / `backendError.statementNotProcessed` are the translated
+ *    reasons a bulk/single statement delete-or-modify now shows instead of the flat generic
+ *    "could not delete" toast (ImportedStatementsTab.runConfirm, via translateBackendError).
+ *    Exact-match keys in backendErrors.js's BACKEND_ERROR_MAP, so a missing locale entry would
+ *    make the raw English backend sentence reach the toast, not the key itself.
+ *  - `financeAccountStatementsManualLineMatchedTooltip` labels the lock that replaces the delete
+ *    button on a matched line in the statement edit modal. It is the only thing explaining why
+ *    that row offers no actions, so an untranslated key here reads as a broken row.
+ *  - `financeAccountStatementsRowBankSyncedTooltip` explains why Reactivar and the bulk trash are
+ *    disabled on a PSD2-connected account. Deliberately NOT the "already processed" copy: this
+ *    block is unconditional, and pointing the user at a state they could try to change would send
+ *    them chasing something no action in this window unblocks.
  */
 const ETP_4921_KEYS = [
   'financeReconcileEmpty',
   'financeReconcileEmptyHint',
   'financeAccountsColIban',
   'financeAccountMovementsColPosted',
+  'backendError.statementNotDraft',
+  'backendError.statementNotProcessed',
+  'financeAccountStatementsManualLineMatchedTooltip',
+  'financeAccountStatementsRowBankSyncedTooltip',
 ];
 const LOCALES = ['en_US', 'es_ES', 'es_AR'];
 
@@ -86,6 +102,28 @@ describe('ETP-4921 — accounts list / reconciliation UI key coverage', () => {
       expect(typeof g.financeAccountMovementsColPosted).toBe('string');
       expect(typeof g.financeAccountMovementsNotPosted).toBe('string');
       expect(g.financeAccountMovementsColPosted).not.toBe(g.financeAccountMovementsNotPosted);
+    }
+  });
+
+  // Both messages share the vocabulary the kebab's disabled-item tooltip already uses
+  // (StatementRowKebab's financeAccountStatementsRowProcessedTooltip / RowReactivateTooltip), so
+  // the bulk-delete tooltip and the failure toast never disagree on the wording for one rule.
+  it('keeps the statement-lifecycle backend errors distinct from each other', () => {
+    for (const locale of LOCALES) {
+      const g = dictionaries[locale].genericLabels;
+      expect(g['backendError.statementNotDraft']).not.toBe(g['backendError.statementNotProcessed']);
+    }
+  });
+
+  // The bank-connected block must not read like the processed one — that is the whole reason it
+  // got its own key instead of reusing financeAccountStatementsRowProcessedTooltip.
+  it('words the bank-connected block differently from the processed one', () => {
+    for (const locale of LOCALES) {
+      const g = dictionaries[locale].genericLabels;
+      expect(g.financeAccountStatementsRowBankSyncedTooltip)
+        .not.toBe(g.financeAccountStatementsRowProcessedTooltip);
+      expect(g.financeAccountStatementsRowBankSyncedTooltip)
+        .not.toBe(g.financeAccountStatementsRowReactivateTooltip);
     }
   });
 });

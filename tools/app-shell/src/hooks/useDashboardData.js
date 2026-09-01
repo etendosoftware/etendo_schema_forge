@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { kpisConfig, actions } from '@generated/dashboard/generated/config';
 import { useAuth } from '@/auth/AuthContext';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { createDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { useDashboardDateRange } from '@/components/dashboard/DashboardDateRangeContext';
 
@@ -14,29 +15,22 @@ const FETCH_TIMEOUT_MS = 10000;
  * Low-level helpers
  * ----------------------------------------------------------------*/
 
-/** Detect the Etendo context path for building API URLs. */
-function getApiBase() {
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-  if (webIdx === -1) return import.meta.env.VITE_API_BASE || '';
-  return path.substring(0, webIdx);
-}
-
 /**
  * Fetch a dashboard widget endpoint.
  * All widget endpoints live under /sws/neo/dashboard/{entity}.
+ *
+ * 401 is treated as "unavailable" rather than an expired session — a single failed
+ * widget must not log the whole dashboard out — so it is passed through via
+ * `on401: 'ignore'` and falls into the same !res.ok handling as any other failure.
  */
-async function fetchWidget(apiBase, token, entity, range) {
+async function fetchWidget(apiFetch, entity, range) {
   const qs = range ? `?range=${encodeURIComponent(range)}` : '';
-  const url = `${apiBase}/sws/neo/dashboard/${entity}${qs}`;
+  const path = `/sws/neo/dashboard/${entity}${qs}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: ctrl.signal,
-    });
+    const res = await apiFetch(path, { signal: ctrl.signal, on401: 'ignore' });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -276,6 +270,8 @@ function mapPendingAmounts(handlerData) {
   // Handler returns data as object (not array) or as first element of array
   const obj = Array.isArray(handlerData) ? handlerData[0] : handlerData;
   if (!obj) return null;
+  // ETP-5012: toCollect/toPay are TOTAL pending balances (any due date), so
+  // their default drill-down is 'pending', not the now-stricter 'overdue'.
   return {
     toCollect: {
       count: obj.toCollect?.count ?? 0,
@@ -283,7 +279,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toCollect?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'sales-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
     toPay: {
@@ -292,7 +288,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toPay?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'purchase-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
   };
@@ -342,7 +338,7 @@ export function useDashboardData() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch();
 
   const fetchData = useCallback(async () => {
     if (!token) {
@@ -358,15 +354,17 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        fetchWidget(apiBase, token, 'kpis', range),
-        fetchWidget(apiBase, token, 'trends', range),
-        fetchWidget(apiBase, token, 'pending-tasks', range),
-        fetchWidget(apiBase, token, 'activity', range),
-        fetchWidget(apiBase, token, 'recent-invoices', range),
-        fetchWidget(apiBase, token, 'best-products', range),
-        fetchWidget(apiBase, token, 'best-sellers', range),
-        fetchWidget(apiBase, token, 'pending-amounts', range),
-        fetchWidget(apiBase, token, 'top-clients', range),
+        // ETP-5011: the Financial Summary widget is always a calendar-year figure
+        // and does not follow the date-range selector, so `kpis` is fetched without `range`.
+        fetchWidget(apiFetch, 'kpis', null),
+        fetchWidget(apiFetch, 'trends', range),
+        fetchWidget(apiFetch, 'pending-tasks', range),
+        fetchWidget(apiFetch, 'activity', range),
+        fetchWidget(apiFetch, 'recent-invoices', range),
+        fetchWidget(apiFetch, 'best-products', range),
+        fetchWidget(apiFetch, 'best-sellers', range),
+        fetchWidget(apiFetch, 'pending-amounts', range),
+        fetchWidget(apiFetch, 'top-clients', range),
       ]);
 
       const kpisData    = kpisRes.status    === 'fulfilled' ? kpisRes.value    : null;
@@ -424,7 +422,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false);
     }
-  }, [token, apiBase, range]);
+  }, [token, apiFetch, range]);
 
   useEffect(() => {
     fetchData();

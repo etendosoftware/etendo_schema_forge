@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -10,6 +10,10 @@ import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
 import { createMockFetch } from './lib/mockFetch.js';
 import { useLocaleState } from './i18n/useLocaleState.js';
+import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from './lib/unsavedChanges.js';
+import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
+import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
+import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
@@ -18,6 +22,8 @@ import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
+import { apiFetch } from '@/auth/api.js';
+import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -75,10 +81,10 @@ export async function fetchWindowAccess(session) {
     // class javadoc in com.etendoerp.go for the full rationale. Same backend
     // Java class (SFWindowAccessMap) and response shape either way, only the
     // transport changed.
-    const res = await fetch(`${apiBase}/sws/neo/windowaccessmap`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
+    const res = await apiFetch(`${apiBase}/sws/neo/windowaccessmap`, {
+      baseUrl: '',
+      token: session?.token ?? null,
+      on401: 'ignore',
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -152,7 +158,6 @@ async function loadAllMockData() {
     import('@generated/fiscal-monitor/custom/mockData.js'),
     import('@generated/fiscal-models/custom/mockData.js'),
     import('@generated/conversion-rates/generated/web/conversion-rates/mockData.js'),
-    import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/mockData.js'),
     import('@generated/open-close-period-control/generated/web/open-close-period-control/mockData.js'),
     import('@generated/asset-group/generated/web/asset-group/mockData.js'),
     import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
@@ -219,6 +224,16 @@ function SurveyManager() {
   );
 }
 
+// ETP-4492 / ETP-5022 — session-scoped UI state that must not survive a logout. Wired into
+// AuthProvider's `onSessionChange` rather than only into the explicit logout paths, because
+// the automatic 401 auto-logout inside the shared request helper does not go through them:
+// after the raw-`fetch` sweep, ANY of ~290 call sites can be the one that discovers the
+// expired session. Reacting to the session losing its token covers every path at once, and
+// `useLogout` stays as the explicit clear-then-logout choke point for the UI entry points.
+function clearSessionScopedState(session) {
+  if (!session?.token) clearStoredDateRange();
+}
+
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
@@ -232,6 +247,34 @@ export default function App() {
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
   const { dictionaries, renderedLocale } = useLocaleDictionaries(locale, coreLoaders);
+
+  // ETP-5022 — changing the language must reload the page. Translated reference data
+  // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
+  // Accept-Language, so anything already fetched keeps the OLD language until it is
+  // re-fetched. Re-fetching selectively is not reliable here: HTTP access is spread over
+  // ~297 call sites in ~121 files, so a reload is the only way to guarantee every surface
+  // comes back in the new locale.
+  const [pendingLocale, setPendingLocale] = useState(null);
+
+  const applyLocaleAndReload = useCallback((next) => {
+    setLocale(next);            // persists to localStorage; survives the reload
+    suppressNextUnloadPrompt(); // the user already confirmed — don't also fire beforeunload
+    window.location.reload();
+  }, [setLocale]);
+
+  // Wraps the setLocale handed to every switcher (avatar menu, LocaleSwitcher), so the
+  // unsaved-changes warning cannot be bypassed by adding another switcher later.
+  const guardedSetLocale = useCallback((next) => {
+    if (next === locale) return;
+    if (hasUnsavedChanges()) {
+      setPendingLocale(next);
+      return;
+    }
+    applyLocaleAndReload(next);
+  }, [locale, applyLocaleAndReload]);
+
+  // F5 / tab close: the browser's own prompt, for the same unsaved changes.
+  useEffect(() => installUnloadGuard(), []);
 
   useEffect(() => {
     if (import.meta.env.VITE_MOCK === 'true') {
@@ -258,9 +301,9 @@ export default function App() {
         menuGroups={menuGroups}
         routes={routes}
         layout={AppLayout}
-        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess }}
+        auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" />, fetchWindowAccess, onSessionChange: clearSessionScopedState }}
         locale={renderedLocale}
-        setLocale={setLocale}
+        setLocale={guardedSetLocale}
         dictionaries={dictionaries}
         notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
         data-testid="AppShellRuntime__ecaf3f">
@@ -268,6 +311,19 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
+        <LocaleChangeConfirmDialog
+          open={pendingLocale !== null}
+          onConfirm={() => applyLocaleAndReload(pendingLocale)}
+          onCancel={() => setPendingLocale(null)}
+          data-testid="LocaleChangeConfirmDialog__ecaf3f" />
+        {/* ETP-5073 / DOC-08 — mounted once: the navigation gate it subscribes to is a
+            module-level singleton, so a second host would fight this one for the same pending
+            navigation. Sits here, beside the locale dialog, because both answer the same
+            question about the same dirty registry. */}
+        <UnsavedChangesNavigationDialog data-testid="UnsavedChangesNavigationDialog__ecaf3f" />
+        {/* ETP-5073 / DOC-04 — mounted once, same reasoning as the dialog above: the store it
+            subscribes to is a module-level singleton. */}
+        <SaveConflictDialog data-testid="SaveConflictDialog__ecaf3f" />
       </AppShellRuntime>
     </ObservabilityProvider>
   );

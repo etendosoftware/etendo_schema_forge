@@ -399,6 +399,7 @@ export default function AccountsHeaderTable({
             onSearchChange={setSearch}
             onNewAccount={() => setWizardOpen(true)}
             onMatchingRules={() => navigate('/match-rule')}
+            onRefresh={reload}
             // The "Ordenar por" control every other list gets from ListView's idle bar. This
             // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
             // here the clickable headers would be the only sort affordance. Same component

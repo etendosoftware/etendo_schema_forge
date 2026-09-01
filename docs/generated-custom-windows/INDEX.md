@@ -111,7 +111,7 @@ This folder is the entry point for documentation that describes how generated an
 | [sii-monitor.md](sii-monitor.md) | API-only sub-window — SII invoice submission records consumed by FiscalMonitorPage |
 | [monitor-verifactu.md](monitor-verifactu.md) | API-only sub-window — Verifactu invoice submission records consumed by FiscalMonitorPage |
 | [tbai-facturas-enviadas.md](tbai-facturas-enviadas.md) | API-only sub-window — TBAI invoice submission records consumed by FiscalMonitorPage |
-| [conversion-rate-downloader-log.md](conversion-rate-downloader-log.md) | Read-only audit log of automated conversion-rate downloader runs |
+| [conversion-rate-downloader-log.md](conversion-rate-downloader-log.md) | API-only window (ETP-5068) — read-only audit log of automated conversion-rate downloader runs, retired from the Settings menu |
 
 ## Scope
 

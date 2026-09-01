@@ -1,3 +1,4 @@
+import { authHeaders, buildHeaders } from '@/auth/api.js';
 // Survey engine tunables — team-configurable via VITE_SURVEY_* env vars (build-time only,
 // requires a rebuild+redeploy to take effect). NOT a customer-facing setting: there is no UI,
 // no window, no per-org override — this is for the Etendo GO team to tune cooldowns/caps per
@@ -125,7 +126,7 @@ export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fe
   if (apiBaseUrl == null || !token) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!response.ok) return;
     const data = await response.json();
@@ -151,10 +152,7 @@ export async function submitSurveyResponse({
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/response`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: buildHeaders(token),
       body: JSON.stringify({
         surveyKey,
         ...(score != null ? { score } : {}),

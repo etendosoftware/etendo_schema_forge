@@ -164,10 +164,16 @@ describe('AmortizationLinesTable — fetch + render', () => {
     renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
     await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
     expect(screen.getByText('Mobiliario')).toBeInTheDocument();
-    // fetch URL targets the lines sub-endpoint with the parent id
+    // fetch URL targets the lines sub-endpoint with the parent id.
+    // ETP-5022 — headers are no longer built here: apiFetch (useApiFetch) attaches
+    // them itself, so asserting the canonical Accept-Language header plus
+    // credentials: 'include' is the stronger check for the shared helper's contract.
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/lines?parentId=amort-1'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) }),
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }),
+      }),
     );
   });
 

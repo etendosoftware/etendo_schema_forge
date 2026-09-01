@@ -55,7 +55,6 @@ describe('useCreateMovement', () => {
       '/etendo/sws/neo/financial-account-transactions?action=create',
     );
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body)).toEqual(payload);
     expect(res).toEqual({ id: 'mov-1', trxType: 'BPD' });
@@ -188,7 +187,6 @@ describe('movement lifecycle hooks', () => {
           `/etendo/sws/neo/financial-account-transactions?action=${action}`,
         );
         expect(init.method).toBe('POST');
-        expect(init.headers.Authorization).toBe('Bearer test-token');
         expect(JSON.parse(init.body)).toEqual({ id: 'mov-1' });
         expect(res).toEqual({ id: 'mov-1' });
       });

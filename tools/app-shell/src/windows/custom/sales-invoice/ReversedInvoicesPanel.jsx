@@ -4,6 +4,7 @@ import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 const PERIOD_VALUES = ['0A', '1T', '2T', '3T', '4T',
@@ -110,6 +111,7 @@ function InfoTooltip({ text }) {
 // NEO ignores arbitrary query-param filters, so all filtering is client-side.
 function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [search, setSearch] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +119,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
-    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch('/header?_startRow=0&_endRow=500')
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         // NEO does not expose `updated` — sort by invoiceDate desc, then
@@ -131,7 +133,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   const MAX_VISIBLE = 5;
   const { filtered, hiddenCount } = useMemo(() => {
@@ -215,13 +217,14 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
 // ── YearPickerSelect ──────────────────────────────────────────────────────────
 // Loads fiscal years from /fiscal-calendar instead of the broken NEO selector.
 function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, readOnly }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [years, setYears] = useState(null);
 
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const rows = parseRows(json);
@@ -231,7 +234,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
         setYears(opts);
       })
       .catch(() => setYears([]));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   if (readOnly) {
     return (
@@ -551,6 +554,7 @@ export default function ReversedInvoicesPanel({
   restoreDraft,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -584,12 +588,12 @@ export default function ReversedInvoicesPanel({
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-models-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`${neoBase}/fiscal-models-catalog`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(json => setActiveModels(json ?? {}))
       .catch(() => {})
       .finally(() => setCatalogLoaded(true));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   const model349Active = catalogLoaded && activeModels?.['349'] === true;
 
@@ -626,10 +630,7 @@ export default function ReversedInvoicesPanel({
     if (!recordId || !apiBaseUrl || !token) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/reversedInvoices?_startRow=0&_endRow=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
       const json = await res.json();
       // NEO ignores query-param filters — keep only rows of THIS invoice
@@ -639,7 +640,7 @@ export default function ReversedInvoicesPanel({
     } catch { /* silent */ } finally {
       setLoading(false);
     }
-  }, [recordId, apiBaseUrl, token, onCountChange]);
+  }, [recordId, apiBaseUrl, token, onCountChange, apiFetch]);
 
   // Lazy fetch on first activation
   useEffect(() => {
@@ -667,9 +668,8 @@ export default function ReversedInvoicesPanel({
   // ── PATCH helpers ──────────────────────────────────────────────────────────
   async function patchLine(lineId, payload) {
     try {
-      const res = await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
+      const res = await apiFetch(`/reversedInvoices/${lineId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -723,9 +723,8 @@ export default function ReversedInvoicesPanel({
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
-      await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
+      await apiFetch(`/reversedInvoices/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       fetchLines();
     } catch { /* silent */ } finally { setDeleting(null); }
@@ -754,9 +753,8 @@ export default function ReversedInvoicesPanel({
       // Strip the display-only identifier before POSTing the payload
       const payload = { ...newLine };
       delete payload['reversedInvoice$_identifier'];
-      const res = await fetch(`${apiBaseUrl}/reversedInvoices`, {
+      const res = await apiFetch(`/reversedInvoices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ invoice: parentId, ...payload }),
       });
       if (res.ok) {

@@ -72,7 +72,7 @@ vi.mock('../StatementsToolbar', () => ({
   StatementsToolbar: ({
     search, onSearchChange, dateRange, onDateRangeChange,
     status, onStatusChange, onAdvancedFilterChange, onImportClick, onManualClick,
-    bankConnectionSynced, onSyncClick, syncing,
+    bankConnectionSynced, onSyncClick, syncing, onRefresh,
   }) => (
     <div
       data-testid="stub-toolbar"
@@ -95,12 +95,16 @@ vi.mock('../StatementsToolbar', () => ({
       <button type="button" data-testid="toolbar-import" onClick={onImportClick} />
       <button type="button" data-testid="toolbar-manual" onClick={onManualClick} />
       <button type="button" data-testid="toolbar-sync" onClick={onSyncClick} />
+      <button type="button" data-testid="toolbar-refresh" onClick={onRefresh} />
     </div>
   ),
 }));
 
 vi.mock('../StatementsTable', () => ({
-  StatementsTable: ({ statements, loading, currency, actions, selectedIds, onSelectionChange }) => (
+  StatementsTable: ({
+    statements, loading, currency, actions, selectedIds, onSelectionChange, linesRefreshToken,
+    bankConnected,
+  }) => (
     <div
       data-testid="stub-table"
       data-len={statements.length}
@@ -108,6 +112,8 @@ vi.mock('../StatementsTable', () => ({
       data-currency={currency}
       data-has-actions={actions ? 'true' : 'false'}
       data-selected={selectedIds ? Array.from(selectedIds).join(',') : ''}
+      data-lines-token={String(linesRefreshToken)}
+      data-bank-connected={bankConnected ? 'true' : 'false'}
     >
       {statements.map((s) => (
         <div key={s.id}>
@@ -175,7 +181,7 @@ vi.mock('../ManualStatementModal', () => ({
   ),
 }));
 
-import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
+import { ImportedStatementsTab, resolveBulkDeleteBlock } from '../ImportedStatementsTab.jsx';
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'USD' };
 const NOW = new Date();
@@ -200,6 +206,17 @@ const STATEMENTS = [
     // 25 days ago: still inside the default 30-day window (so row actions can
     // reach it) but outside last7 (so the date-filter test still drops it).
     importDate: isoDaysAgo(25), status: 'RECONCILED',
+  },
+  // ETP-4921 — the only two DRAFT fixtures, i.e. the only ones the bulk-delete trigger will
+  // actually let through (see the `isDraftStatement` gate). Both older than 7 days (excluded
+  // from the last7 test) and with fileName/name that never matches the 'mayo' search test.
+  {
+    id: 's4', documentNo: 'BS-004', fileName: 'borrador.c43', name: 'Borrador de julio',
+    importDate: isoDaysAgo(10), status: 'DRAFT',
+  },
+  {
+    id: 's5', documentNo: 'BS-005', fileName: 'borrador2.c43', name: 'Borrador de agosto',
+    importDate: isoDaysAgo(11), status: 'DRAFT',
   },
 ];
 
@@ -259,8 +276,8 @@ describe('ImportedStatementsTab', () => {
     const ref = { current: null };
     render(<ImportedStatementsTab ref={ref} account={ACCOUNT} />);
 
-    // Default 30-day window keeps all three statements; none selected yet.
-    expect(ref.current.getFilteredStatements().map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+    // Default 30-day window keeps all five statements; none selected yet.
+    expect(ref.current.getFilteredStatements().map((s) => s.id)).toEqual(['s1', 's2', 's3', 's4', 's5']);
     expect(ref.current.getSelectedStatementIds()).toEqual([]);
 
     await userEvent.click(screen.getByTestId('row-select-s2'));
@@ -283,6 +300,50 @@ describe('ImportedStatementsTab', () => {
     loadingRef.value = true;
     render(<ImportedStatementsTab account={ACCOUNT} />);
     expect(screen.getByTestId('stub-table')).toHaveAttribute('data-loading', 'true');
+  });
+
+  // ETP-4921 — this tab draws its own table instead of going through ListView, so it never
+  // inherited ListView's refresh progress bar. It now renders the extracted ListProgressBar
+  // under the same gate: only once rows are already on screen, because on the true first
+  // fetch StatementsTable's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over statements already on screen', () => {
+      loadingRef.value = true;
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.getByTestId('statements-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the rows mounted underneath the bar (smooth refresh, not a remount)', () => {
+      loadingRef.value = true;
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.getByTestId('statements-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('stub-table')).toHaveAttribute(
+        'data-len', String(STATEMENTS.length),
+      );
+    });
+
+    it('hides the bar on the very first fetch, where the table skeleton is the indicator', () => {
+      statementsRef.value = [];
+      loadingRef.value = true;
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.queryByTestId('statements-progress-bar')).not.toBeInTheDocument();
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-loading', 'true');
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      loadingRef.value = false;
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.queryByTestId('statements-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid so it never collides with another tab bar', () => {
+      loadingRef.value = true;
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+      expect(screen.getByRole('progressbar')).toBe(
+        screen.getByTestId('statements-progress-bar'),
+      );
+    });
   });
 
   it('passes through all statements inside the default 30-day window', () => {
@@ -459,28 +520,34 @@ describe('ImportedStatementsTab', () => {
   // selection, via BulkDeleteSelectionBar + useBatchDeleteDialog (neither
   // mocked here — the real components render) ────────────────────────────
   describe('bulk delete selection bar', () => {
+    // s1/s2/s3 are all non-draft (PENDING/PARTIAL/RECONCILED) — a real bulk-delete attempt on
+    // them is exactly ETP-4921's reported bug, and is now blocked before it reaches the backend
+    // (see the 'blocks a processed statement' describe below). So the outcome-toast scenarios
+    // below use s4/s5, the two DRAFT fixtures, to exercise a delete that is actually allowed to
+    // fire — a partial/total failure there is some OTHER reason (network, a race), which is
+    // exactly the case the generic 3-outcome toast still needs to handle correctly.
     it('partial failure: reloads, fires ONE combined warning toast, and keeps only the failed statement selected', async () => {
       deleteStatement.mockImplementation((id) => (
-        id === 's1' ? Promise.resolve() : Promise.reject(new Error('HTTP 400'))
+        id === 's4' ? Promise.resolve() : Promise.reject(new Error('HTTP 400'))
       ));
       const user = userEvent.setup();
       render(<ImportedStatementsTab account={ACCOUNT} />);
 
-      await user.click(screen.getByTestId('row-select-s1'));
-      await user.click(screen.getByTestId('row-select-s2'));
-      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1,s2');
+      await user.click(screen.getByTestId('row-select-s4'));
+      await user.click(screen.getByTestId('row-select-s5'));
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's4,s5');
 
       await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
       await user.click(screen.getByTestId('batch-delete-confirm'));
 
-      expect(deleteStatement).toHaveBeenCalledWith('s1');
-      expect(deleteStatement).toHaveBeenCalledWith('s2');
+      expect(deleteStatement).toHaveBeenCalledWith('s4');
+      expect(deleteStatement).toHaveBeenCalledWith('s5');
       await waitFor(() => expect(toastWarning).toHaveBeenCalled());
       expect(toastSuccess).not.toHaveBeenCalled();
       expect(toastError).not.toHaveBeenCalled();
       await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
-      // Only the failed statement (s2) remains selected; s1 (succeeded) was dropped.
-      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's2');
+      // Only the failed statement (s5) remains selected; s4 (succeeded) was dropped.
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's5');
     });
 
     it('all succeed: reloads and clears the selection entirely', async () => {
@@ -488,7 +555,7 @@ describe('ImportedStatementsTab', () => {
       const user = userEvent.setup();
       render(<ImportedStatementsTab account={ACCOUNT} />);
 
-      await user.click(screen.getByTestId('row-select-s1'));
+      await user.click(screen.getByTestId('row-select-s4'));
       await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
       await user.click(screen.getByTestId('batch-delete-confirm'));
 
@@ -507,7 +574,7 @@ describe('ImportedStatementsTab', () => {
       const user = userEvent.setup();
       render(<ImportedStatementsTab account={ACCOUNT} />);
 
-      await user.click(screen.getByTestId('row-select-s1'));
+      await user.click(screen.getByTestId('row-select-s4'));
       await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
       await user.click(screen.getByTestId('batch-delete-confirm'));
 
@@ -516,7 +583,218 @@ describe('ImportedStatementsTab', () => {
       expect(toastWarning).not.toHaveBeenCalled();
       expect(reloadFn).not.toHaveBeenCalled();
       expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
-      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's4');
     });
+
+    // ETP-4921 — the actual reported bug: selecting a processed statement and hitting the bulk
+    // trigger used to fire the delete anyway and fail with an uninformative "None of the 1
+    // selected could be deleted" toast. It's now blocked BEFORE the request goes out: the
+    // trigger disables itself and explains why, mirroring the tooltip StatementRowKebab already
+    // shows for its own gated Procesar item — "don't let them touch the trash can", not "let
+    // them try and fail".
+    describe('blocks a processed statement from being attempted', () => {
+      it('disables the trigger, with the processed-statement reason as its tooltip', async () => {
+        const user = userEvent.setup();
+        render(<ImportedStatementsTab account={ACCOUNT} />);
+
+        // s1 is PENDING — processed, not a draft.
+        await user.click(screen.getByTestId('row-select-s1'));
+
+        const trigger = screen.getByTestId('bulk-delete-selection-trigger');
+        expect(trigger).toBeDisabled();
+        expect(trigger).toHaveAttribute('title', 'financeAccountStatementsRowProcessedTooltip');
+        expect(trigger).toHaveAttribute('aria-label', 'financeAccountStatementsRowProcessedTooltip');
+      });
+
+      it('never calls deleteStatement when the disabled trigger is clicked', async () => {
+        const user = userEvent.setup();
+        render(<ImportedStatementsTab account={ACCOUNT} />);
+
+        await user.click(screen.getByTestId('row-select-s1'));
+        // userEvent respects the native `disabled` attribute — this click is a no-op.
+        await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+
+        expect(deleteStatement).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument();
+      });
+
+      it('re-enables once the processed statement is deselected, leaving only drafts', async () => {
+        const user = userEvent.setup();
+        render(<ImportedStatementsTab account={ACCOUNT} />);
+
+        await user.click(screen.getByTestId('row-select-s1'));
+        await user.click(screen.getByTestId('row-select-s4'));
+        expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeDisabled();
+
+        await user.click(screen.getByTestId('row-select-s1')); // deselect s1
+        expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's4');
+        expect(screen.getByTestId('bulk-delete-selection-trigger')).not.toBeDisabled();
+      });
+    });
+  });
+
+  /**
+   * ETP-4921 — `reload()` only refetches the statement HEADERS; the lines of an EXPANDED row come
+   * from StatementLinesInline's own `useBankStatementLines(statementId)`, keyed solely on the id.
+   * Nothing invalidated it, so after editing a line the header row showed the new total while the
+   * rows underneath still showed the pre-edit amounts, and the toolbar's refresh button looked
+   * broken (it reloaded exactly the half that was already correct). Every mutation path now bumps
+   * a token that reaches the table.
+   */
+  describe('expanded rows are invalidated together with the headers', () => {
+    const token = () => screen.getByTestId('stub-table').getAttribute('data-lines-token');
+
+    it('starts at zero and bumps once the refresh button is used', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(token()).toBe('0');
+
+      await user.click(screen.getByTestId('toolbar-refresh'));
+
+      // Both halves refresh: the headers via reload(), the expanded lines via the token.
+      expect(reloadFn).toHaveBeenCalledTimes(1);
+      expect(token()).toBe('1');
+    });
+
+    it('bumps after a successful edit in the manual modal', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('manual-success'));
+
+      await waitFor(() => expect(token()).toBe('1'));
+      expect(reloadFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('bumps after a successful row action (process / reactivate / delete)', async () => {
+      reactivateStatement.mockResolvedValueOnce({ id: 's3', processed: false });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-reactivate-s3'));
+      await user.click(screen.getByTestId('confirm-run'));
+
+      await waitFor(() => expect(token()).toBe('1'));
+    });
+
+    // A failed action changes nothing on the server, so re-fetching would be noise.
+    it('does not bump when the action fails', async () => {
+      deleteStatement.mockRejectedValueOnce(new Error('Network request failed'));
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-delete-s1'));
+      await user.click(screen.getByTestId('confirm-run'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(token()).toBe('0');
+      expect(reloadFn).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * ETP-4921 — a PSD2-connected account's statements come from the bank and must not be
+   * hand-edited or deleted. The signal is ACCOUNT-level on purpose: nothing on the statement
+   * records that it came from the bank (the PSD2 module only writes `fileName` from a translated
+   * AD_MESSAGE, so its value depends on the language the sync ran in). Keying off the connection
+   * is coherent with what this tab already does — it swaps "Importar / Nuevo extracto" for
+   * "Sincronizar extractos", so a statement cannot be created by hand there either.
+   */
+  describe('bank-connected account is read-only', () => {
+    const CONNECTED = { ...ACCOUNT, bankConnected: true };
+
+    it('forwards the flag to the table so the row affordances disappear', () => {
+      render(<ImportedStatementsTab account={CONNECTED} />);
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'true');
+    });
+
+    it('leaves it off for an account that is not connected', () => {
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'false');
+    });
+
+    // Even a DRAFT selection — which is normally deletable — is blocked here.
+    it('blocks the bulk trash with the bank-connected reason', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+
+      await user.click(screen.getByTestId('row-select-s4')); // s4 is a draft
+      const trigger = screen.getByTestId('bulk-delete-selection-trigger');
+
+      expect(trigger).toBeDisabled();
+      expect(trigger).toHaveAttribute('title', 'financeAccountStatementsRowBankSyncedTooltip');
+
+      await user.click(trigger);
+      expect(deleteStatement).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The two block reasons have a deliberate precedence. Tested on the pure function rather than
+   * through the DOM: the ordering is the whole point and it reads directly here.
+   */
+  describe('resolveBulkDeleteBlock', () => {
+    const ui = (key) => key;
+
+    it('returns null when nothing blocks', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: false, selectionHasNonDraft: false,
+      })).toBeNull();
+    });
+
+    it('reports the processed reason for a non-draft selection', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: false, selectionHasNonDraft: true,
+      })).toBe('financeAccountStatementsRowProcessedTooltip');
+    });
+
+    // The connected-account reason wins: it is unconditional, whereas "processed" points at a
+    // state the user could try to change — misleading when nothing in this window unblocks it.
+    it('prefers the bank-connected reason when both apply', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: true, selectionHasNonDraft: true,
+      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
+    });
+
+    it('reports the bank-connected reason even for an all-draft selection', () => {
+      expect(resolveBulkDeleteBlock({
+        ui, bankConnectionSynced: true, selectionHasNonDraft: false,
+      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
+    });
+  });
+
+  // ETP-4921 — the single-row delete confirm (StatementRowKebab / hover trash) used to show only
+  // the flat, variant-generic 'financeAccountStatementsDeleteError' toast on ANY failure, with no
+  // hint of why. It now surfaces the backend's actual reason when backendErrors.js has a
+  // translation for it — same wiring the sync-result toast already proved (ETP-4891, see above).
+  it('translates the delete-confirm error into the actual reason instead of the generic toast', async () => {
+    uiMock.mockImplementation((key) => (key === 'backendError.statementNotDraft'
+      ? 'Los extractos procesados no se pueden modificar'
+      : key));
+    deleteStatement.mockRejectedValueOnce(new Error('Only draft (unprocessed) statements can be modified'));
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={ACCOUNT} />);
+
+    await user.click(screen.getByTestId('row-delete-s1'));
+    await user.click(screen.getByTestId('confirm-run'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+      'Los extractos procesados no se pueden modificar',
+    ));
+    expect(toastError).not.toHaveBeenCalledWith('financeAccountStatementsDeleteError');
+  });
+
+  // An unmapped reason (network error, unrelated 5xx) has no backendErrors.js entry, so
+  // translateBackendError returns it unchanged — falling through to it verbatim would show raw
+  // English/technical text instead of the flat generic key this variant already had.
+  it('falls back to the generic error toast when the backend reason has no translation', async () => {
+    deleteStatement.mockRejectedValueOnce(new Error('Network request failed'));
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={ACCOUNT} />);
+
+    await user.click(screen.getByTestId('row-delete-s1'));
+    await user.click(screen.getByTestId('confirm-run'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountStatementsDeleteError'));
   });
 });

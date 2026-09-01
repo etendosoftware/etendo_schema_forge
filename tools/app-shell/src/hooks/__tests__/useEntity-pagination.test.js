@@ -16,7 +16,7 @@ const BATCH_SIZE = 75;
  */
 async function simulateRefresh(apiBaseUrl, entity, sortColumn, sortDirection, token) {
   const headers = {
-    'Authorization': `Bearer ${token}`,
+    'Authorization': `Bearer ${token}`, 'Accept-Language': 'es_ES',
     'Content-Type': 'application/json',
   };
   const buildUrl = (includeSort) => includeSort
@@ -58,7 +58,7 @@ async function simulateRefresh(apiBaseUrl, entity, sortColumn, sortDirection, to
  */
 async function simulateLoadMore(apiBaseUrl, entity, sortColumn, sortDirection, token, currentStartRow) {
   const headers = {
-    'Authorization': `Bearer ${token}`,
+    'Authorization': `Bearer ${token}`, 'Accept-Language': 'es_ES',
     'Content-Type': 'application/json',
   };
   const start = currentStartRow;

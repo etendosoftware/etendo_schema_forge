@@ -20,10 +20,21 @@ import { useUI } from '@/i18n';
  * Reuses the same `delete`/`selected` i18n keys as the grid bulk delete — no
  * new wording.
  *
- * @param {{ count: number, onDelete: () => void, onCancel: () => void, deleting?: boolean }} props
+ * `disabledReason` (ETP-4921) lets a caller block the action up front instead of letting the
+ * user fire a request the backend is guaranteed to reject — the Statements tab uses this when
+ * the selection contains a processed statement, which `FIN_BankStatement` never allows to be
+ * deleted (mirrors the same "grey it out, don't let them try" pattern `StatementRowKebab`
+ * already uses for its own gated Procesar/Reactivar items). When absent, the button behaves
+ * exactly as before: enabled whenever something is selected.
+ *
+ * @param {{
+ *   count: number, onDelete: () => void, onCancel: () => void, deleting?: boolean,
+ *   disabledReason?: string|null,
+ * }} props
  */
-export function BulkDeleteSelectionBar({ count, onDelete, onCancel, deleting = false }) {
+export function BulkDeleteSelectionBar({ count, onDelete, onCancel, deleting = false, disabledReason = null }) {
   const ui = useUI();
+  const blocked = !!disabledReason;
 
   return (
     <SelectionToolbar
@@ -39,9 +50,9 @@ export function BulkDeleteSelectionBar({ count, onDelete, onCancel, deleting = f
       </span>
       <button
         type="button"
-        disabled={deleting}
-        title={ui('delete')}
-        aria-label={ui('delete')}
+        disabled={deleting || blocked}
+        title={blocked ? disabledReason : ui('delete')}
+        aria-label={blocked ? disabledReason : ui('delete')}
         onClick={onDelete}
         className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         data-testid="bulk-delete-selection-trigger">

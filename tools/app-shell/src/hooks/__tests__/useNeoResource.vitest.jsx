@@ -4,6 +4,23 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
+// useApiFetch resolves its token from the ambient session, not from the mocked
+// AuthContext above (see its own doc comment) — mirror it here so migrated
+// call sites keep sending the token this suite asserts on. `mockApiFetch` must
+// stay a single stable reference (not rebuilt per render/baseUrl): the real
+// hook memoizes it, and a fresh function identity on every render would churn
+// the `load` useCallback's dep array and refetch in a loop. Pattern copied
+// from useMovementLookups.vitest.jsx.
+const mockApiFetch = (path, options = {}) => globalThis.fetch(`https://base${path}`, {
+  headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', ...options.headers },
+  credentials: 'include',
+  signal: options.signal,
+});
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
+}));
+
 import { useNeoResource, getApiBase } from '../useNeoResource.js';
 
 function okResponse(payload) {
@@ -59,9 +76,8 @@ describe('useNeoResource', () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('/etendo/sws/neo/foo');
+    expect(url).toBe('https://base/sws/neo/foo');
     expect(init.headers.Authorization).toBe('Bearer test-token');
-    expect(init.headers['Content-Type']).toBe('application/json');
     expect(init.signal).toBeDefined();
   });
 

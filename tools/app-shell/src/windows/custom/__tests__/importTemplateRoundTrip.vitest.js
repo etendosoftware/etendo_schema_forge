@@ -49,11 +49,24 @@ function renameRowKeys(row, mapping) {
   return renamed;
 }
 
-function fillTemplate(config, values) {
-  const headerLine = buildTemplateCsv(config.fields);
-  const headers = headerLine.split(',');
-  const cells = headers.map((h) => values[h.trim()] ?? '');
-  return { headerLine, csv: `${headerLine}\n${cells.join(',')}` };
+/**
+ * The template is no longer a bare header line: ETP-4996 added a required-column marker
+ * ("cif/nif *") and a sample data row. Parsing it with the same parser a real upload goes
+ * through is what keeps this test honest about the file the dialog actually hands out.
+ */
+function parseTemplate(config) {
+  return parseDelimited(buildTemplateCsv(config.fields));
+}
+
+/**
+ * Fill the template keyed by TARGET rather than by header text, so the fixture does not
+ * have to restate the header spelling (marker included) that the template happens to use.
+ */
+function fillTemplate(config, valuesByTarget) {
+  const { headers } = parseTemplate(config);
+  const { mapping } = mapColumns(headers, config.fields);
+  const cells = headers.map((h) => valuesByTarget[mapping[h]] ?? '');
+  return { headerLine: headers.join(','), csv: `${headers.join(',')}\n${cells.join(',')}` };
 }
 
 afterEach(() => {
@@ -64,7 +77,7 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
   it('maps every template header back onto its own field, for both windows', () => {
     for (const window of ['contacts', 'product']) {
       const config = importConfigFor(window);
-      const headers = buildTemplateCsv(config.fields).split(',').map((h) => h.trim());
+      const { headers } = parseTemplate(config);
       const { mapping, unmappedTargets } = mapColumns(headers, config.fields);
       const unmappedHeaders = Object.entries(mapping).filter(([, target]) => !target).map(([h]) => h);
       assert.deepEqual(unmappedHeaders, [], `${window}: template headers that map to nothing`);
@@ -72,13 +85,63 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
     }
   });
 
+  // ETP-4996. The marker is what tells the user which columns are mandatory; it must not
+  // survive into matching, or the template the dialog hands out would fail to map its own
+  // required columns — the ETP-4995 blocker, reintroduced by the fix for it.
+  it('marks exactly the required columns, and the marker never breaks the mapping', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = importConfigFor(window);
+      const { headers } = parseTemplate(config);
+      const { mapping } = mapColumns(headers, config.fields);
+      const requiredTargets = config.fields.filter((f) => f.required).map((f) => f.target);
+      const markedTargets = headers.filter((h) => h.trim().endsWith('*')).map((h) => mapping[h]);
+      assert.deepEqual(markedTargets.sort(), requiredTargets.sort(), `${window}: marked columns`);
+    }
+  });
+
+  // The sample row must survive the CSV round-trip byte-for-byte. `csvField` prepends an
+  // apostrophe to any value starting with = + - @ to neutralize spreadsheet formula
+  // injection (CWE-1236) — correct, and it silently mangles our own example: a phone
+  // declared as "+34 910 000 001" came back as "'+34 910 000 001". The guard is not the
+  // bug; an example that trips it is.
+  it('ships example values that survive CSV serialization unchanged, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = importConfigFor(window);
+      const { headers, rows } = parseTemplate(config);
+      const { mapping } = mapColumns(headers, config.fields);
+      const row = renameRowKeys(rows[0], mapping);
+      for (const field of config.fields) {
+        if (field.example == null || field.example === '') continue;
+        assert.equal(row[field.target], field.example,
+          `${window}: example for "${field.target}" did not round-trip`);
+      }
+    }
+  });
+
+  // The sample row we ship has to be a row that actually imports. A template whose own
+  // example fails validation teaches the user the wrong format.
+  it('ships a sample row that passes validation, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = importConfigFor(window);
+      const { headers, rows } = parseTemplate(config);
+      assert.equal(rows.length, 1, `${window}: expected exactly one sample row`);
+      const { mapping } = mapColumns(headers, config.fields);
+      const row = renameRowKeys(rows[0], mapping);
+      const requiredTargets = config.fields.filter((f) => f.required).map((f) => f.target);
+      const emailTargets = config.fields.filter((f) => f.isEmail).map((f) => f.target);
+      const numericTargets = config.fields.filter((f) => f.isNumeric).map((f) => f.target);
+      const { errors } = validateRow(row, { requiredTargets, emailTargets, numericTargets });
+      assert.deepEqual(errors, [], `${window}: sample row must validate`);
+    }
+  });
+
   it('imports a contacts template filled in without deleting any column', async () => {
     const config = importConfigFor('contacts');
     const { csv } = fillTemplate(config, {
-      'nombre comercial': 'Acme Iberia SL',
-      email: 'contacto@acme.example',
-      telefono: '+34 910 000 001',
-      'cif/nif': 'B12345678',
+      name: 'Acme Iberia SL',
+      etgoEmail: 'contacto@acme.example',
+      etgoPhone: '+34 910 000 001',
+      taxID: 'B12345678',
     });
 
     const { headers, rows } = parseDelimited(csv);
@@ -134,9 +197,9 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
 
     const config = importConfigFor('product');
     const { csv } = fillTemplate(config, {
-      codigo: 'P-001',
-      nombre: 'Widget',
-      descripcion: 'A widget',
+      searchKey: 'P-001',
+      name: 'Widget',
+      description: 'A widget',
     });
 
     const { headers, rows } = parseDelimited(csv);

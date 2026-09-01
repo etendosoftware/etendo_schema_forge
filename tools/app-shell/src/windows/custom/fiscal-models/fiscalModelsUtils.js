@@ -1,5 +1,6 @@
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
@@ -9,7 +10,7 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
       const url = `${base}/fiscal303/boxes?${params}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch(url, { baseUrl: '', token });
       if (res.ok) return await res.json();
     } catch (_) {
       // fall through to mock
@@ -186,7 +187,7 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     if (manualOverrides) applyBoxParams(params, manualOverrides);
 
     const url = `${base}/fiscal303/generate?${params}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
       return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
@@ -219,9 +220,10 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = { status: newStatus };
     if (submissionMethod) body.submissionMethod = submissionMethod;
-    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+    const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      baseUrl: '',
+      token,
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
@@ -248,9 +250,10 @@ export async function persistManualData(id, manualData, { token, apiBaseUrl } = 
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const res = await fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+    const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      baseUrl: '',
+      token,
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ manualData }),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
@@ -292,9 +295,7 @@ export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model =
   if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const res = await fetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, { baseUrl: '', token });
     if (!res.ok) return EMPTY_INCIDENTS;
     const body = await res.json().catch(() => null);
     const rows = Array.isArray(body?.data) ? body.data : [];
@@ -593,7 +594,7 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
     const url = `${base}/fiscal303/modified?${params}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return false;
     const data = await res.json();
     return data.modified === true;
@@ -609,9 +610,7 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
-      const res = await fetch(`${base}/fiscal349/operators?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`${base}/fiscal349/operators?${params}`, { baseUrl: '', token });
       if (!res.ok) return null;
       return await res.json();
     } catch (_) {
@@ -667,10 +666,11 @@ export async function generate349File(decl, {
     body.set('guipuzcoa',    guipuzcoa    ? 'Y' : 'N');
     if (formerStatement)      body.set('formerStatement',      formerStatement);
     if (representativeTaxId)  body.set('representativeTaxId',  representativeTaxId);
-    const res = await fetch(`${base}/fiscal349/generate`, {
+    const res = await apiFetch(`${base}/fiscal349/generate`, {
+      baseUrl: '',
+      token,
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: body.toString(),
@@ -693,9 +693,7 @@ export async function checkModified349(decl, sinceMs, { token, apiBaseUrl } = {}
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
-    const res = await fetch(`${base}/fiscal349/modified?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch(`${base}/fiscal349/modified?${params}`, { baseUrl: '', token });
     if (!res.ok) return false;
     const data = await res.json();
     return data.modified === true;

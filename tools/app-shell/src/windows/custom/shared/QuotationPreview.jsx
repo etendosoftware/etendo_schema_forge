@@ -82,12 +82,14 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
     apiBaseUrl,
     token,
   });
+  // ETP-4836 — do not special-case etgoRate === 1; see resolveDualCurrencyDisplay
+  // in useDocumentCurrency.js for the full rationale. `1` is a legitimate,
+  // real rate for a genuinely different (deliberately 1:1-pegged) currency and
+  // must not be silently substituted with the system rate.
   const etgoRate = (!isSameCurrency && quotation?.eTGOCurrencyRate)
     ? parseFloat(quotation.eTGOCurrencyRate)
     : null;
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
+  const exchangeRate = etgoRate || systemExchangeRate;
   const orgGrandTotal = (!isSameCurrency && exchangeRate && quotation?.grandTotalAmount != null)
     ? Number(quotation.grandTotalAmount) / exchangeRate
     : null;

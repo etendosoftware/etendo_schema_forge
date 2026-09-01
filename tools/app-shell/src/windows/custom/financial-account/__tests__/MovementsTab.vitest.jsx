@@ -321,6 +321,40 @@ describe('MovementsTab — pass-through props', () => {
   });
 });
 
+// ETP-4921 — this tab draws its own table instead of going through ListView, so it never
+// inherited ListView's refresh progress bar. It now renders the extracted ListProgressBar
+// under the same gate ListView uses: only once rows are already on screen, because on the
+// true first fetch MovementsTable's own skeleton is the indicator.
+describe('MovementsTab — refresh progress bar', () => {
+  it('shows the bar while refreshing over movements already on screen', () => {
+    renderTab({ loading: true });
+    expect(screen.getByTestId('movements-progress-bar')).toBeInTheDocument();
+  });
+
+  it('keeps the rows mounted underneath the bar (smooth refresh, not a remount)', () => {
+    renderTab({ loading: true });
+    expect(screen.getByTestId('movements-progress-bar')).toBeInTheDocument();
+    // The last30 default window keeps a, b and c; the 40-day-old d is filtered out.
+    expect(rowIds().sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('hides the bar on the very first fetch, where the table skeleton is the indicator', () => {
+    renderTab({ loading: true, movements: [] });
+    expect(screen.queryByTestId('movements-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('hides the bar once the fetch settles', () => {
+    renderTab({ loading: false });
+    expect(screen.queryByTestId('movements-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('uses its own testid so it never collides with another tab bar', () => {
+    renderTab({ loading: true });
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBe(screen.getByTestId('movements-progress-bar'));
+  });
+});
+
 describe('MovementsTab — selection toggle', () => {
   it('selects then deselects the same id (both branches of handleSelectionChange)', () => {
     renderTab();

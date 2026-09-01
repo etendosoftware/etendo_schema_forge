@@ -943,6 +943,33 @@ describe('ListView — refresh and paging', () => {
   });
 });
 
+// ETP-4921 — the inline progress-bar JSX moved out of ListView into the shared
+// ListProgressBar so the hand-rolled tables (financial-account tabs, ListModalWindow,
+// ReconciliationSplitPanel) can render the same affordance. The extraction must be invisible
+// from ListView's side: same `list-progress-bar` testid, same gate.
+describe('ListView — refresh progress bar', () => {
+  it('shows the bar while refreshing over rows already on screen', () => {
+    hookOverrides = { loading: true, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.getByTestId('list-progress-bar')).toBeInTheDocument();
+  });
+
+  it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+    hookOverrides = { loading: true, items: [] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('hides the bar once the fetch settles', () => {
+    hookOverrides = { loading: false, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+  });
+});
+
 // ─── Modals ─────────────────────────────────────────────────────────────────
 
 describe('ListView — report drawer', () => {

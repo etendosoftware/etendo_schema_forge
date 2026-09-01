@@ -15,7 +15,7 @@ async function executeDocumentAction(apiBaseUrl, entity, token, recordId, docAct
     `${apiBaseUrl}/${entity}/${recordId}/action/documentAction`,
     {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       body: JSON.stringify({ docAction }),
     },
   );
@@ -44,8 +44,12 @@ describe('useDocumentAction source', () => {
     assert.match(src, /method:\s*['"]POST['"]/);
   });
 
-  it('sends Authorization Bearer header', () => {
-    assert.match(src, /Authorization.*Bearer/);
+  it('sends Authorization Bearer header via the shared apiFetch helper', () => {
+    // ETP-5022 — the header is no longer a literal here: it comes from useApiFetch,
+    // which also attaches Accept-Language. Asserting the hook is used is the
+    // stronger check, and test/auth-header-policy.test.js fails the build if any file
+    // goes back to hand-rolling the header.
+    assert.match(src, /useApiFetch\s*\(/);
   });
 
   it('throws when recordId is missing', () => {

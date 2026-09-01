@@ -99,6 +99,20 @@ export function useDocumentCurrency({ docCurrencyCode, orderDate, apiBaseUrl, to
  * the inverse (0.8333). `orgGrandTotal` = docTotal / eTGOCurrencyRate converts
  * doc→org.
  *
+ * ETP-4836 fix — do NOT special-case `etgoRate === 1`. That exclusion was
+ * copied from `CurrencyRatePicker.jsx`, where the *selector's* `rate` field is
+ * hardcoded to 1.0 by `CurrencyOptionsHandler.java` purely as an org-currency
+ * marker for that one dropdown option — a convention that only holds for that
+ * API response. `record.eTGOCurrencyRate` is a different, real, nullable DB
+ * column the user sets via the same picker's inline rate editor, and it can
+ * legitimately be exactly 1 for a genuinely different (deliberately 1:1
+ * pegged) currency — that case is already correctly distinguished from "this
+ * is the org currency" by the `!isSameCurrency` guard below, so treating `1`
+ * as a second, redundant "no real rate" sentinel here silently substitutes
+ * the system rate for the document's actual rate and shows the wrong total.
+ * `0` and `null`/`undefined`/`NaN` remain the only "no override" sentinels —
+ * `etgoRate`'s truthiness already excludes all of them.
+ *
  * @param {object}  params
  * @param {object}  params.record             Document record carrying `eTGOCurrencyRate` / `grandTotalAmount`.
  * @param {boolean} params.isSameCurrency     From `useDocumentCurrency`.
@@ -109,9 +123,7 @@ export function resolveDualCurrencyDisplay({ record, isSameCurrency, systemExcha
   const etgoRate = (!isSameCurrency && record?.eTGOCurrencyRate)
     ? parseFloat(record.eTGOCurrencyRate)
     : null;
-  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
-    ? etgoRate
-    : systemExchangeRate;
+  const exchangeRate = etgoRate || systemExchangeRate;
   const orgGrandTotal = (!isSameCurrency && exchangeRate && record?.grandTotalAmount != null)
     ? Number(record.grandTotalAmount) / exchangeRate
     : null;

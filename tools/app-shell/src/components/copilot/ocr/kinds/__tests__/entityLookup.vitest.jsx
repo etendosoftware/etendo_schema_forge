@@ -246,7 +246,7 @@ describe('useEntitySearch', () => {
     expect(url).toContain(`_neoWhere=${encodeURIComponent('isActive = true')}`);
   });
 
-  it('builds a lower(name) like clause and passes the Bearer token for a trimmed query', async () => {
+  it('builds a lower(name) like clause for a trimmed query', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
     renderHook(() => useEntitySearch({ ...baseParams, query: "  O'Brien  " }));
 
@@ -255,10 +255,11 @@ describe('useEntitySearch', () => {
       await vi.runOnlyPendingTimersAsync();
     });
 
-    const [url, opts] = globalThis.fetch.mock.calls[0];
+    // Auth headers are now `useApiFetch`'s responsibility, covered by its own
+    // tests — this hook only owns the HQL `where` clause it builds.
+    const [url] = globalThis.fetch.mock.calls[0];
     const expectedWhere = "lower(name) like lower('%O''Brien%') and active = true";
     expect(url).toContain(`_neoWhere=${encodeURIComponent(expectedWhere)}`);
-    expect(opts.headers.Authorization).toBe('Bearer tok');
   });
 
   it('cancels an in-flight request when params change (does not set items after cancel)', async () => {

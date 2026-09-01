@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -28,19 +29,19 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
   // to a direct fetch when no DataProvider is mounted (preserves prior behavior).
   const dataCache = useOptionalDataCache();
   const cacheScope = dataCache?.scope;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // A KPI query is identified by its endpoint kind (bp-stats / bp-trend) and the
   // business partner id, isolated by session/org/role via the provider scope.
   const runKpi = useCallback((kind, id, { force = false } = {}) => {
-    const headers = { Authorization: `Bearer ${token}` };
-    const fetcher = (signal) => fetch(`${apiBaseUrl}/${kind}?businessPartnerId=${id}`, { headers, signal })
+    const fetcher = (signal) => apiFetch(`/${kind}?businessPartnerId=${id}`, { signal })
       .then(r => (r.ok ? r.json() : null));
     if (dataCache?.cache && cacheScope) {
       const key = createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: 'contacts', entity: kind, recordId: id });
       return dataCache.cache.fetchQuery({ key, fetcher: ({ signal }) => fetcher(signal), force, staleTime: dataCache.recordStaleTime });
     }
     return fetcher();
-  }, [token, apiBaseUrl, dataCache, cacheScope]);
+  }, [apiFetch, apiBaseUrl, dataCache, cacheScope]);
 
   const load = useCallback((id, { force = false } = {}) => {
     if (!id || !token || !apiBaseUrl) {

@@ -1,22 +1,26 @@
 import ImportReturnLinesModal from '@/components/import-return-lines/ImportReturnLinesModal';
+import { apiFetch } from '@/auth/api.js';
 
 const ACTION_BASE = (base) =>
   `${base}/return-material-receipt/returnMaterialReceipt/_/action`;
 
 const SHIPMENT_CONFIG = {
+  // `headers` is kept for signature compatibility with the caller
+  // (ImportReturnLinesModal builds and passes it) but is no longer used here —
+  // apiFetch derives the auth headers from the ambient session.
   fetchSourceDocs: async (base, bpId, headers) => {
-    const res = await fetch(`${ACTION_BASE(base)}/availableShipments`, {
+    const res = await apiFetch(`${ACTION_BASE(base)}/availableShipments`, {
+      baseUrl: '',
       method: 'POST',
-      headers,
       body: JSON.stringify({ businessPartner: bpId }),
     });
     if (!res.ok) return [];
     return (await res.json())?.response?.data || [];
   },
   fetchSourceLines: async (base, docId, headers) => {
-    const res = await fetch(`${ACTION_BASE(base)}/availableShipmentLines`, {
+    const res = await apiFetch(`${ACTION_BASE(base)}/availableShipmentLines`, {
+      baseUrl: '',
       method: 'POST',
-      headers,
       body: JSON.stringify({ shipmentId: docId }),
     });
     if (!res.ok) return [];

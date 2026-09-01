@@ -42,7 +42,8 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('@/auth/api', () => ({
-  buildHeaders: (token) => ({ Authorization: `Bearer ${token}` }),
+  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
+  buildHeaders: (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES' }),
 }));
 
 vi.mock('@/hooks/useEntity', () => ({

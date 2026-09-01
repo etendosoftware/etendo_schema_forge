@@ -8,9 +8,17 @@
 </head>
 <body><div class="report-container">
   <div class="report-header">
-    <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} {{meta.ui.records}}</div></div>
+    <div><div class="report-title">{{meta.title}}</div>
+</div>
+    {{> document-branding}}
   </div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
+  </div>
+  {{/if}}
 
   {{!-- The other two dimensions (of Product/Warehouse/Category) always show as their own
         columns, right after the search key, in that fixed relative order — whichever one is
@@ -53,8 +61,7 @@
     </tbody>
   </table>
 
-  <div class="report-footer">
-    <div class="report-summary">{{meta.ui.total}}: {{meta.recordCount}} {{meta.ui.records}}</div>
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div></body></html>

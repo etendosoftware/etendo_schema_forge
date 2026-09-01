@@ -53,9 +53,15 @@ const DRAFT_HEADER = {
  * @param {function} opts.onPatch  - called with { url, body } on every PATCH to /lines/{id}
  * @param {number}   opts.patchStatus - HTTP status to return for PATCH (default 200)
  */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installMocks(page, { onPatch = null, patchStatus = 200 } = {}) {
   await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -65,7 +71,7 @@ async function installMocks(page, { onPatch = null, patchStatus = 200 } = {}) {
 
   await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
     const method = route.request().method();
-    if (method !== 'GET') return route.continue();
+    if (method !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -75,7 +81,7 @@ async function installMocks(page, { onPatch = null, patchStatus = 200 } = {}) {
 
   await page.route('**/sws/neo/sales-order/lines/**', async (route) => {
     const req = route.request();
-    if (req.method() !== 'PATCH') return route.continue();
+    if (req.method() !== 'PATCH') return route.fallback();
     const body = req.postData() ? JSON.parse(req.postData()) : {};
     onPatch?.({ url: req.url(), body });
     if (patchStatus !== 200) {
@@ -177,7 +183,7 @@ test.describe('Sales Order — inline discount regression', () => {
     await login(page);
 
     await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -185,7 +191,7 @@ test.describe('Sales Order — inline discount regression', () => {
       });
     });
     await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -194,7 +200,7 @@ test.describe('Sales Order — inline discount regression', () => {
     });
     await page.route('**/sws/neo/sales-order/lines/**', async (route) => {
       const req = route.request();
-      if (req.method() !== 'PATCH') return route.continue();
+      if (req.method() !== 'PATCH') return route.fallback();
       const body = req.postData() ? JSON.parse(req.postData()) : {};
       patches.push({ url: req.url(), body });
       await route.fulfill({

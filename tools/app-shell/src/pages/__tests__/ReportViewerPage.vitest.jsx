@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
 
 // Mutable search params — tests can override before rendering
 let mockSearchParams = new URLSearchParams();
@@ -12,11 +13,15 @@ vi.mock('react-router-dom', () => ({
   },
 }));
 
+// Mutable locale — tests can override before rendering/rerendering to
+// simulate a locale switch (used by the document.title tests below).
+let mockLocale = 'en_US';
+
 // Mock i18n hooks
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+  useLocaleSwitch: () => ({ locale: mockLocale, setLocale: vi.fn() }),
 }));
 
 // Mock auth context
@@ -272,47 +277,6 @@ describe('ReportViewerPage', () => {
     });
   });
 
-  it('shows Listing Report type label', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([
-        { id: 'r1', title: { en_US: 'Flat' }, type: 'listing', outputs: ['pdf'] },
-      ]),
-    });
-    render(<ReportViewerPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/Listing Report/)).toBeInTheDocument();
-    });
-  });
-
-  it('shows Grouped Report type label', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([
-        { id: 'r2', title: { en_US: 'Grouped' }, type: 'grouped-listing', outputs: ['pdf'] },
-      ]),
-    });
-    render(<ReportViewerPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/Grouped Report/)).toBeInTheDocument();
-    });
-  });
-
-  it('shows landscape indicator when orientation is landscape', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([
-        { id: 'r3', title: { en_US: 'Wide Report' }, type: 'listing', orientation: 'landscape', outputs: ['pdf'] },
-      ]),
-    });
-    render(<ReportViewerPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Wide Report')).toBeInTheDocument();
-    });
-    // The landscape text appears as part of the type description
-    expect(screen.getByText(/Landscape/)).toBeInTheDocument();
-  });
-
   it('handles fetch failure gracefully', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
     render(<ReportViewerPage />);
@@ -435,7 +399,7 @@ describe('ReportViewerPage', () => {
     });
   });
 
-  it('renders multiple reports with different output formats', async () => {
+  it('renders multiple reports with different output formats, hiding html (ETP-5013)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: () => Promise.resolve([
@@ -447,8 +411,11 @@ describe('ReportViewerPage', () => {
       expect(screen.getByText('pdf')).toBeInTheDocument();
       expect(screen.getByText('xlsx')).toBeInTheDocument();
       expect(screen.getByText('csv')).toBeInTheDocument();
-      expect(screen.getByText('html')).toBeInTheDocument();
     });
+    // 'html' stays a real entry in report.outputs (the preview render still
+    // uses it) — it just isn't advertised on the catalog card as a
+    // downloadable format alongside PDF/XLSX/CSV.
+    expect(screen.queryByText('html')).not.toBeInTheDocument();
   });
 
   it('renders reports with only title.en_US locale key', async () => {
@@ -483,7 +450,7 @@ describe('ReportViewerPage', () => {
     });
   });
 
-  it('renders grouped-listing type with landscape orientation', async () => {
+  it('renders a grouped-listing/landscape report without choking on those fields', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: () => Promise.resolve([
@@ -493,9 +460,178 @@ describe('ReportViewerPage', () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
       expect(screen.getByText('Grouped Land')).toBeInTheDocument();
-      expect(screen.getByText(/Grouped Report/)).toBeInTheDocument();
-      expect(screen.getByText(/Landscape/)).toBeInTheDocument();
     });
+  });
+});
+
+// -------------------------------------------------------------------
+// ReportList — list/gallery view toggle (ETP-5013)
+// -------------------------------------------------------------------
+
+describe('ReportViewerPage — list/gallery view toggle (ETP-5013)', () => {
+  // Single-category fixture — used by the basic toggle/switch tests so that
+  // only ONE list-mode header row is rendered (multi-category fixtures repeat
+  // the "report"/"format" header once per category group, which would make
+  // getByText ambiguous — see the dedicated grouping test below for that case).
+  const SINGLE_CATEGORY_REPORTS = [
+    { id: 'r1', title: { en_US: 'Finance A' }, type: 'listing', category: 'finance', outputs: ['pdf', 'html'] },
+  ];
+
+  const TWO_CATEGORY_REPORTS = [
+    { id: 'r1', title: { en_US: 'Finance A' }, type: 'listing', category: 'finance', outputs: ['pdf', 'html'] },
+    { id: 'r2', title: { en_US: 'Sales B' }, type: 'listing', category: 'sales', outputs: ['xlsx', 'csv'] },
+  ];
+
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams();
+    mockSetSearchParams.mockClear();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+  });
+
+  it('does not render the view toggle while loading', () => {
+    vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+    render(<ReportViewerPage />);
+    expect(screen.queryByTestId('view-toggle')).not.toBeInTheDocument();
+  });
+
+  it('does not render the view toggle when the filtered report list is empty', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('view-toggle')).not.toBeInTheDocument();
+  });
+
+  it('renders the view toggle once reports have loaded', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(TWO_CATEGORY_REPORTS),
+    });
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('view-toggle')).toBeInTheDocument();
+    });
+    // Both list and gallery buttons are present.
+    const buttons = screen.getByTestId('view-toggle').querySelectorAll('button');
+    expect(buttons).toHaveLength(2);
+  });
+
+  it('defaults to the gallery (card grid) view when localStorage has no stored preference', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SINGLE_CATEGORY_REPORTS),
+    });
+    const { container } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Finance A')).toBeInTheDocument();
+    });
+    // Gallery mode renders ReportCard, including its distinguishing preview
+    // block (the aspect-ratio placeholder/thumbnail) — not the list-row
+    // header ("report"/"format" i18n keys, mocked to return as-is).
+    expect(container.innerHTML).toContain('aspect-[313/180]');
+    expect(screen.queryByText('report')).not.toBeInTheDocument();
+    expect(screen.queryByText('format')).not.toBeInTheDocument();
+  });
+
+  it('switches to the list view when the list toggle button is clicked', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SINGLE_CATEGORY_REPORTS),
+    });
+    const { container } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('view-toggle')).toBeInTheDocument();
+    });
+
+    const [listBtn] = screen.getByTestId('view-toggle').querySelectorAll('button');
+    await user.click(listBtn);
+
+    // List-mode column header (i18n keys mocked to return as-is).
+    expect(screen.getByText('report')).toBeInTheDocument();
+    expect(screen.getByText('format')).toBeInTheDocument();
+    // The report renders as a ReportListRow, not a ReportCard — the
+    // gallery-only preview block is gone.
+    expect(screen.getByText('Finance A')).toBeInTheDocument();
+    expect(container.innerHTML).not.toContain('aspect-[313/180]');
+    // 'html' stays excluded from the badge row in list mode too.
+    expect(screen.getByText('pdf')).toBeInTheDocument();
+    expect(screen.queryByText('html')).not.toBeInTheDocument();
+
+    expect(window.localStorage.getItem('viewMode:report-catalog')).toBe('list');
+  });
+
+  it('switches back to the gallery view when the gallery toggle button is clicked', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SINGLE_CATEGORY_REPORTS),
+    });
+    const { container } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('view-toggle')).toBeInTheDocument();
+    });
+
+    const [listBtn, galleryBtn] = screen.getByTestId('view-toggle').querySelectorAll('button');
+    await user.click(listBtn);
+    expect(screen.getByText('report')).toBeInTheDocument();
+    expect(window.localStorage.getItem('viewMode:report-catalog')).toBe('list');
+
+    await user.click(galleryBtn);
+    expect(screen.queryByText('report')).not.toBeInTheDocument();
+    expect(container.innerHTML).toContain('aspect-[313/180]');
+    expect(window.localStorage.getItem('viewMode:report-catalog')).toBe('gallery');
+  });
+
+  it('renders directly in list mode when localStorage already has "list" stored', async () => {
+    window.localStorage.setItem('viewMode:report-catalog', 'list');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SINGLE_CATEGORY_REPORTS),
+    });
+    const { container } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('report')).toBeInTheDocument();
+    });
+    expect(screen.getByText('format')).toBeInTheDocument();
+    expect(screen.getByText('Finance A')).toBeInTheDocument();
+    expect(container.innerHTML).not.toContain('aspect-[313/180]');
+  });
+
+  it('keeps category grouping in list mode (multiple categories, each with its own group)', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(TWO_CATEGORY_REPORTS),
+    });
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('view-toggle')).toBeInTheDocument();
+    });
+
+    const [listBtn] = screen.getByTestId('view-toggle').querySelectorAll('button');
+    await user.click(listBtn);
+
+    // Mirrors the gallery-mode category-grouping assertion (see
+    // 'renders multiple categories grouped with headers' above): with 2+
+    // categories, each gets its own group header (CATEGORY_LABELS.en).
+    expect(screen.getByText('Finance')).toBeInTheDocument();
+    expect(screen.getByText('Sales')).toBeInTheDocument();
+    expect(screen.getByText('Finance A')).toBeInTheDocument();
+    expect(screen.getByText('Sales B')).toBeInTheDocument();
+    // Each category group renders its own "report"/"format" list-mode header
+    // row — one per group (2 categories → 2 header rows).
+    expect(screen.getAllByText('report')).toHaveLength(2);
+    expect(screen.getAllByText('format')).toHaveLength(2);
   });
 });
 
@@ -980,11 +1116,8 @@ describe('ReportViewer (viewer sub-component)', () => {
     await waitFor(() => {
       expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    await user.click(screen.getByText('runReport'));
     // Should show "required" error message
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
   });
 
   // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call
@@ -1420,27 +1553,35 @@ describe('ReportViewer (viewer sub-component)', () => {
   // only ever set for format 'html'/'preview' — never for 'pdf'. Fixed via
   // the independent hasGenerated state (see ReportViewerPage.jsx).
 
-  it('hides the "report ready" overlay after a direct PDF click, without generating a preview first', async () => {
+  it('keeps the "report ready" overlay visible after a direct PDF click (pure download, ETP-5013)', async () => {
     const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-pdf');
+    globalThis.URL.revokeObjectURL = vi.fn();
     try {
       const user = userEvent.setup();
       render(<ReportViewerPage />);
       await waitFor(() => {
         expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
       });
-      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
 
       await user.click(screen.getByText('PDF'));
 
-      // Before the fix, these two nodes would remain in the document forever,
-      // floating on top of the (successfully loaded) PDF iframe.
       await waitFor(() => {
-        expect(screen.queryByText('reportReadyTitle')).not.toBeInTheDocument();
+        const renderCalls = globalThis.fetch.mock.calls.filter(
+          ([url]) => typeof url === 'string' && url.includes('/render')
+        );
+        expect(renderCalls.length).toBeGreaterThanOrEqual(1);
       });
-      expect(screen.queryByText('reportReadyHint')).not.toBeInTheDocument();
+
+      // PDF now downloads like Excel/CSV instead of taking over the preview
+      // iframe (ETP-5013), so — exactly like the Excel case below — it never
+      // touches the iframe and the overlay must stay put.
+      expect(screen.getByText('reportReadyTitle')).toBeInTheDocument();
+      expect(screen.getByText('reportReadyHint')).toBeInTheDocument();
     } finally {
       globalThis.URL.createObjectURL = originalCreateObjectURL;
+      globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
     }
   });
 
@@ -1655,7 +1796,7 @@ describe('ReportList search filtering', () => {
 
   // --- Multiple output badges ---
 
-  it('renders multiple output format badges', async () => {
+  it('renders multiple output format badges, hiding html (ETP-5013)', async () => {
     mockSearchParams = new URLSearchParams();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -1667,8 +1808,8 @@ describe('ReportList search filtering', () => {
     await waitFor(() => {
       expect(screen.getByText('pdf')).toBeInTheDocument();
       expect(screen.getByText('excel')).toBeInTheDocument();
-      expect(screen.getByText('html')).toBeInTheDocument();
     });
+    expect(screen.queryByText('html')).not.toBeInTheDocument();
   });
 
   // --- Empty reports list ---
@@ -1820,5 +1961,60 @@ describe('applyProductSelectorScopeParams (extra branches)', () => {
     applyProductSelectorScopeParams('org1', params, null, '');
     expect(params.get('selectedOrgId')).toBe('org1');
     expect(params.has('warehouseIds')).toBe(false);
+  });
+});
+
+// -------------------------------------------------------------------
+// ReportViewer — document.title sync for native browser print (ETP-5013)
+// -------------------------------------------------------------------
+
+describe('ReportViewer — document.title sync (ETP-5013)', () => {
+  let originalTitle;
+
+  beforeEach(() => {
+    originalTitle = document.title;
+    document.title = 'App Shell';
+    mockSearchParams = new URLSearchParams({ report: 'report-aging' });
+    mockSetSearchParams.mockClear();
+    mockLocale = 'en_US';
+    mockReportsApiFetch();
+  });
+
+  afterEach(() => {
+    document.title = originalTitle;
+    mockLocale = 'en_US';
+    vi.restoreAllMocks();
+  });
+
+  it('sets document.title to the report title once the report is loaded', async () => {
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(document.title).toBe('Aging Report');
+    });
+  });
+
+  it('restores the previous document.title on unmount', async () => {
+    const { unmount } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(document.title).toBe('Aging Report');
+    });
+    unmount();
+    expect(document.title).toBe('App Shell');
+  });
+
+  it('updates document.title when the computed title changes while still mounted', async () => {
+    const { rerender } = render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(document.title).toBe('Aging Report');
+    });
+
+    // Simulate a locale switch — the title falls back to es_ES per the
+    // component's title-resolution chain (locale -> en_US -> es_ES -> id).
+    mockLocale = 'es_ES';
+    rerender(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(document.title).toBe('Informe de Antigüedad');
+    });
   });
 });

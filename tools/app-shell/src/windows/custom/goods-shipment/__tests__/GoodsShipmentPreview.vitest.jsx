@@ -297,7 +297,7 @@ describe('GoodsShipmentPreview', () => {
       expect(result).toEqual([{ id: 'ord-1' }]);
       expect(global.fetch).toHaveBeenCalledWith(
         `${base}/goodsShipment/${shipmentId}`,
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token}` }) }),
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES' }) }),
       );
     });
 

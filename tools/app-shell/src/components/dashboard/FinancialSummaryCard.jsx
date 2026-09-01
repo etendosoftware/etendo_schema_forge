@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowUp, ArrowDown, Plus } from 'lucide-react';
+import { Check, ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
@@ -27,6 +27,12 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
   const revenue  = kpis.find((k) => k.key === 'revenueThisMonth');
   const expenses = kpis.find((k) => k.key === 'expensesThisMonth');
   const profit   = kpis.find((k) => k.key === 'netProfit');
+
+  // ETP-5011: the headline (icon + color + copy) used to be hardcoded to the
+  // "positive" state regardless of the actual profit sign — a client whose
+  // expenses exceeded revenue still saw a green checkmark saying revenue beat
+  // expenses. Drive it off the real netProfit value instead.
+  const isProfitNegative = (profit?.value ?? 0) < 0;
 
   const metrics = [
     { key: 'revenueThisMonth',  kpi: revenue,  labelKey: 'financialSummaryIncome' },
@@ -141,13 +147,19 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               height: '20px',
               flexShrink: 0,
               padding: '0px',
-              backgroundColor: 'var(--status-success-bg)',
+              backgroundColor: isProfitNegative ? 'var(--status-destructive-bg)' : 'var(--status-success-bg)',
               borderRadius: '10px',
             }}
           >
-            <Check
-              style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
-              data-testid="Check__81e75f" />
+            {isProfitNegative ? (
+              <X
+                style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
+                data-testid="X__81e75f" />
+            ) : (
+              <Check
+                style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
+                data-testid="Check__81e75f" />
+            )}
           </div>
           <span
             style={{
@@ -158,13 +170,13 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               fontWeight: 400,
               fontSize: '12px',
               lineHeight: '16px',
-              color: 'var(--status-success-fg)',
+              color: isProfitNegative ? 'hsl(var(--destructive))' : 'var(--status-success-fg)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}
           >
-            {ui('financialSummaryPositive')}
+            {ui(isProfitNegative ? 'financialSummaryNegative' : 'financialSummaryPositive')}
           </span>
         </div>
 

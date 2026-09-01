@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, BarChart2, Check, Plus } from 'lucide-react';
+import { LineChart, BarChart2, Check, X, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import {
@@ -33,6 +33,50 @@ function toBezierPath(pts) {
 function toBezierFillPath(pts, baseY) {
   if (pts.length === 0) return '';
   return `${toBezierPath(pts)} L ${pts[pts.length - 1].x},${baseY} L ${pts[0].x},${baseY} Z`;
+}
+
+/**
+ * ETP-5011: computes the growth % shown in the widget's status line, using the
+ * first month with real activity as the baseline instead of always values[0].
+ * The trailing 12-month window can start with months that have no invoices yet
+ * (e.g. a business that only started operating mid-window), and comparing
+ * against a hard zero there always collapsed to a misleading "0%" even when
+ * revenue clearly grew from that point on. If activity only started in the
+ * very last month there is still no meaningful prior point to compare against,
+ * so it falls back to 0% in that one case.
+ */
+export function computeGrowthPct(values) {
+  if (!Array.isArray(values) || values.length < 2) return 0;
+  const firstActiveIdx = values.findIndex((v) => v > 0);
+  const hasBaseline = firstActiveIdx >= 0 && firstActiveIdx < values.length - 1;
+  if (!hasBaseline) return 0;
+  return Math.round(
+    ((values[values.length - 1] - values[firstActiveIdx]) / values[firstActiveIdx]) * 100
+  );
+}
+
+/**
+ * ETP-5011: badge background/text color for the growth status line, extracted
+ * out of FinancialTrendChart so its sign check doesn't add to that function's
+ * cognitive complexity (mirrors toBezierPath/computeGrowthPct above).
+ */
+function growthBadgeColors(isNegative) {
+  return isNegative
+    ? { background: 'var(--status-destructive-bg)', text: 'hsl(var(--destructive))' }
+    : { background: 'var(--status-success-bg)', text: 'var(--status-success-fg)' };
+}
+
+/** ETP-5011: the growth status icon (red X when declining, green Check otherwise). */
+function GrowthStatusIcon({ isNegative }) {
+  return isNegative ? (
+    <X
+      style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
+      data-testid="X__14828e" />
+  ) : (
+    <Check
+      style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
+      data-testid="Check__14828e" />
+  );
 }
 
 export function FinancialTrendChart({ labels = [], values = [], expenseValues = [], currencyLabel = '' }) {
@@ -85,9 +129,12 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
 
   const fmtVal = (n) => formatDashboardAmount(n, currencyLabel, numberLocale);
 
-  const growthPct = values.length >= 2
-    ? (values[0] > 0 ? Math.round(((values[values.length - 1] - values[0]) / values[0]) * 100) : 0)
-    : 0;
+  const growthPct = computeGrowthPct(values);
+  // ETP-5011: the status badge (icon + color) used to be hardcoded to green
+  // regardless of growthPct's sign — only the text swapped between Up/Down.
+  // Drive the icon/color off the same sign the text already uses.
+  const isGrowthNegative = growthPct < 0;
+  const growthBadge = growthBadgeColors(isGrowthNegative);
   const statusLine = growthPct >= 0
     ? ui('financialTrendGrowthUp').replace('{pct}', Math.abs(growthPct))
     : ui('financialTrendGrowthDown').replace('{pct}', Math.abs(growthPct));
@@ -297,12 +344,10 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '16px', minWidth: 0, flex: 1, overflow: 'hidden' }}>
             {/* Status badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: 'var(--status-success-bg)', borderRadius: '10px', flexShrink: 0 }}>
-                <Check
-                  style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
-                  data-testid="Check__14828e" />
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: growthBadge.background, borderRadius: '10px', flexShrink: 0 }}>
+                <GrowthStatusIcon isNegative={isGrowthNegative} data-testid="GrowthStatusIcon__14828e" />
               </div>
-              <span style={{ fontSize: '12px', lineHeight: '16px', color: 'var(--status-success-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: '12px', lineHeight: '16px', color: growthBadge.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {statusLine}
               </span>
             </div>

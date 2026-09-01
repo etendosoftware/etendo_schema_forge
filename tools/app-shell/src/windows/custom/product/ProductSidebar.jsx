@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useUI } from '@/i18n';
 import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
@@ -524,6 +525,7 @@ function StockChart({
 
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [stockRows, setStockRows] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
@@ -532,18 +534,17 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
   useEffect(() => {
     if (!recordId || !token) return;
-    const headers = { Authorization: `Bearer ${token}` };
 
-    fetch(`${apiBaseUrl}/stock?parentId=${recordId}&_startRow=0&_endRow=200`, { headers })
+    apiFetch(`/stock?parentId=${recordId}&_startRow=0&_endRow=200`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => setStockRows(data?.response?.data ?? []))
       .catch(() => setStockRows([]));
 
-    fetch(`${apiBaseUrl}/transactions?parentId=${recordId}&_startRow=0&_endRow=500`, { headers })
+    apiFetch(`/transactions?parentId=${recordId}&_startRow=0&_endRow=500`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => setTransactions(data?.response?.data ?? []))
       .catch(() => setTransactions([]));
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiFetch]);
 
   const onHand = stockRows?.reduce((s, r) => s + (Number(r.quantityOnHand) || 0), 0) ?? null;
 

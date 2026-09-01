@@ -64,6 +64,19 @@ export function describeAcceptedValues(acceptedByCode) {
 }
 
 /**
+ * The message a user sees for a cell the column cannot store. Names the accepted values,
+ * because otherwise the user only ever learns that a value was rejected, never which ones
+ * would have worked.
+ */
+function invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }) {
+  const accepted = describeAcceptedValues(acceptedByCode);
+  const field = typeof translate === 'function' ? translate(fieldLabelKey) : fieldLabelFallback;
+  return typeof translate === 'function'
+    ? translate('importErrorInvalidCodedValue', { value: raw, field, accepted })
+    : `"${raw}" is not a valid value for "${fieldLabelFallback}". Accepted values: ${accepted}.`;
+}
+
+/**
  * Resolve one AD-coded cell into the value the column stores, or fail the row.
  *
  * Blank falls back to the column's own AD default — a row that says nothing about a field
@@ -76,10 +89,24 @@ export function resolveCodedCellOrThrow(raw, acceptedByCode, { defaultCode, fiel
   const resolution = resolveCodedValue(raw, acceptedByCode);
   if (resolution.status === 'blank') return defaultCode;
   if (resolution.status === 'resolved') return resolution.code;
-  const accepted = describeAcceptedValues(acceptedByCode);
-  const field = typeof translate === 'function' ? translate(fieldLabelKey) : fieldLabelFallback;
-  const message = typeof translate === 'function'
-    ? translate('importErrorInvalidCodedValue', { value: raw, field, accepted })
-    : `"${raw}" is not a valid value for "${fieldLabelFallback}". Accepted values: ${accepted}.`;
-  throw new Error(message);
+  throw new Error(invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }));
+}
+
+/**
+ * The review-queue counterpart of `resolveCodedCellOrThrow` (ETP-4996).
+ *
+ * Same rules, same wording — but returns an error entry instead of throwing, so a
+ * descriptor's row validator can report the problem while the user is still reviewing the
+ * file. Throwing is the right shape at send time (it aborts the row's operations); it is
+ * the wrong shape during review, where every row must be checked and reported.
+ *
+ * Both paths deliberately share `resolveCodedValue` and `invalidCodedMessage`: if the
+ * preview accepted a value the send then rejected, the user would be told their file was
+ * fine and watch it fail anyway — the exact experience this ticket exists to end.
+ *
+ * @returns {{target: string, message: string}|null} `null` when the cell is fine (blank included).
+ */
+export function codedCellError(raw, acceptedByCode, { target, fieldLabelKey, fieldLabelFallback, translate }) {
+  if (resolveCodedValue(raw, acceptedByCode).status !== 'invalid') return null;
+  return { target, message: invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }) };
 }

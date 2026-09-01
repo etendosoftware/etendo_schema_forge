@@ -214,11 +214,14 @@ function formatMoney(amount, currency) {
  * Reconciliation actions ("Conciliar todas", per-line approve) are placeholders
  * until T6/T7 — the buttons render disabled with a coming-soon tooltip.
  */
-export function StatementLinesInline({ statementId, currency = 'EUR' }) {
+export function StatementLinesInline({ statementId, currency = 'EUR', refreshToken = 0 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
-  const { lines, loading } = useBankStatementLines(statementId);
+  // `refreshToken` is bumped by the tab after any statement mutation — without it these lines
+  // are fetched once per statementId and never again, so an edit made in the modal above left
+  // the expanded row showing the old amounts (ETP-4921). See useBankStatementLines.
+  const { lines, loading } = useBankStatementLines(statementId, refreshToken);
   const [txnLine, setTxnLine] = useState(null);
 
   return (
@@ -240,8 +243,12 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
           ))}
           <span className="truncate">{ui('financeAccountStatementLinesColMatched')}</span>
           <span className="truncate">{ui('financeAccountStatementLinesColTransaction')}</span>
+          {/* Right-aligned to match the cells underneath, which are already `text-right
+              tabular-nums`. This grid is hand-rolled, so it does not inherit the generic
+              DataTable rule that right-aligns a numeric column's header — the Salida / Entrada
+              labels sat left of their own figures. */}
           {AMOUNT_COLUMNS.map((col) => (
-            <span key={col.name} className="truncate">
+            <span key={col.name} className="truncate text-right">
               {LINE_CELL_RENDERERS[col.name] ? ui(LINE_CELL_RENDERERS[col.name].labelKey) : col.label}
             </span>
           ))}

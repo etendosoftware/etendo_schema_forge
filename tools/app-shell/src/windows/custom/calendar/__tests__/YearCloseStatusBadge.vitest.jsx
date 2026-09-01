@@ -39,7 +39,7 @@ describe('YearCloseStatusBadge', () => {
     await waitFor(() => expect(screen.getByTestId('year-close-status')).toBeInTheDocument());
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/accounting?year=year1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) })
     );
     const badge = screen.getByTestId('tag');
     expect(badge).toHaveAttribute('data-variant', 'green');

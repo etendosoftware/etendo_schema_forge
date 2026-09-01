@@ -1,3 +1,4 @@
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Thin client for Etendo's `AttachFile` webhook
  * (com.etendoerp.copilot.toolpack.webhooks.AttachFileWebhook).
@@ -72,13 +73,10 @@ export async function attachFile({ token, tabId, recordId, file, fileName } = {}
 
   const url = `${detectEtendoBase()}/webhooks/?name=AttachFile`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      baseUrl: '',
+      token,
       body: JSON.stringify({
         ADTabId: tabId,
         RecordId: recordId,

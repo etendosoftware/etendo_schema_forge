@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Format a byte size into a human readable string.
  *
@@ -99,6 +100,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const attachmentsBase = apiBaseUrl
     ? apiBaseUrl.split('/sws/neo/')[0]
     : '';
+  const apiFetch = useApiFetch(attachmentsBase);
 
   // ETP-4564: `undefined` isActive → treat as always-active (eager), preserving
   // the prior behavior for consumers that don't pass it; consumers that do pass
@@ -132,13 +134,6 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
 
-  // Build the Authorization header. Caller-provided token is required.
-  const authHeaders = useCallback(() => {
-    const headers = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    return headers;
-  }, [token]);
-
   const resetAbortController = useCallback(() => {
     if (abortRef.current) {
       abortRef.current.abort();
@@ -171,9 +166,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     setLoading(true);
     setError(null);
     const fetcher = async (signal) => {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { headers: authHeaders(), signal },
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}`,
+        { signal, token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -204,7 +199,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } finally {
       setLoading(false);
     }
-  }, [attachmentsBase, tableName, recordId, authHeaders, resetAbortController, ui, dataCache, cacheScope, listKey]);
+  }, [apiFetch, tableName, recordId, token, resetAbortController, ui, dataCache, cacheScope, listKey]);
 
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
@@ -239,10 +234,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       const form = new FormData();
       form.append('file', file);
-      // NOTE: do NOT set Content-Type manually — the browser sets the boundary.
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}`,
-        { method: 'POST', headers: authHeaders(), body: form },
+      // NOTE: apiFetch drops Content-Type for a FormData body — the browser sets the boundary.
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}`,
+        { method: 'POST', body: form, token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -268,15 +263,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, list, ui, invalidateList, announceChange]);
+  }, [apiFetch, tableName, recordId, token, list, ui, invalidateList, announceChange]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
     if (!attachment?.id) return;
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachment.id}`,
-        { headers: authHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachment.id}`,
+        { token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -287,15 +282,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, authHeaders, ui]);
+  }, [apiFetch, token, ui]);
 
   // ── download all (zip) ──────────────────────────────────────────────────
   const downloadAll = useCallback(async () => {
     if (!tableName || !recordId) return;
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/${tableName}/${recordId}/zip`,
-        { headers: authHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}/zip`,
+        { token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -306,7 +301,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     } catch (err) {
       toast.error(err.message || ui('attachmentsDownloadError'));
     }
-  }, [apiBaseUrl, tableName, recordId, authHeaders, ui]);
+  }, [apiFetch, tableName, recordId, token, ui]);
 
   // ── remove (optimistic) ─────────────────────────────────────────────────
   const remove = useCallback(async (attachmentId) => {
@@ -314,9 +309,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     const snapshot = itemsRef.current;
     setItems(snapshot.filter((it) => it.id !== attachmentId));
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
-        { method: 'DELETE', headers: authHeaders() },
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachmentId}`,
+        { method: 'DELETE', token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -329,7 +324,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiBaseUrl, authHeaders, ui, invalidateList, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, announceChange]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -339,9 +334,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     try {
       await Promise.all(
         snapshot.map((it) =>
-          fetch(`${attachmentsBase}/sws/neo/attachments/file/${it.id}`, {
+          apiFetch(`/sws/neo/attachments/file/${it.id}`, {
             method: 'DELETE',
-            headers: authHeaders(),
+            token,
           }).then((res) => {
             if (!res.ok) return res.text().then((t) => { throw new Error(t || `HTTP ${res.status}`); });
           })
@@ -354,7 +349,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiBaseUrl, authHeaders, ui, invalidateList, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, announceChange]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -362,12 +357,12 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     const snapshot = itemsRef.current;
     setItems(snapshot.map((it) => (it.id === attachmentId ? { ...it, description } : it)));
     try {
-      const res = await fetch(
-        `${attachmentsBase}/sws/neo/attachments/file/${attachmentId}`,
+      const res = await apiFetch(
+        `/sws/neo/attachments/file/${attachmentId}`,
         {
           method: 'PATCH',
-          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({ description }),
+          token,
         },
       );
       if (!res.ok) {
@@ -380,7 +375,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiBaseUrl, authHeaders, ui, invalidateList]);
+  }, [apiFetch, token, ui, invalidateList]);
 
   return {
     items,

@@ -443,12 +443,6 @@
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
           "favname": "Fiscal Configuration"
-        },
-        {
-          "name": "conversion-rate-downloader-log",
-          "label": "Conversion Rate Downloader Log",
-          "favname": "Conversion Rate Downloader Log",
-          "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
         }
       ]
     },

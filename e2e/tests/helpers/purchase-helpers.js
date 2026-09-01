@@ -763,8 +763,11 @@ export async function selectVendorBP(page, { name } = {}) {
 export async function saveDraft(page) {
   const saveBtn = page.getByTestId('action-save-draft')
     .or(page.getByRole('button', { name: /guardar|save/i }));
+  // Wait for the button to be enabled — it stays disabled while BP callouts
+  // (price list, payment terms, currency, address) are still propagating.
+  await expect(saveBtn.first()).toBeEnabled({ timeout: 15_000 });
   const savePromise = expectSaveResponse(page);
-  await saveBtn.click();
+  await saveBtn.first().click();
   await savePromise;
   await slow(page);
 }
@@ -813,19 +816,25 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   await slow(page);
 
   // Select the product by index — fall back to first if nth doesn't exist.
-  // Retry the whole selection if the drawer loads empty (intermittent backend timing).
+  // Retry the whole click sequence if the element detaches from the DOM mid-click
+  // (the ProductSearchDrawer re-renders its entire list when waterfall/pagination
+  // fetches complete, which can replace the <button> between locator resolution
+  // and the actual pointer event — see ETP-4567 QA flaky-test investigation).
   const allProducts = page.locator('[data-testid^="product-search-option-"]');
   await expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
-  const count = await allProducts.count();
-  const product = allProducts.nth(Math.min(productIndex, count - 1));
 
-  // Start listening for callout (price/tax fill) BEFORE clicking the product
-  const productCalloutResponse = page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-    { timeout: 30_000 },
-  );
-  await product.waitFor({ state: 'visible', timeout: 10_000 });
-  await product.click();
+  let productCalloutResponse;
+  await expect(async () => {
+    const count = await allProducts.count();
+    const product = allProducts.nth(Math.min(productIndex, count - 1));
+
+    // Start listening for callout (price/tax fill) BEFORE clicking the product
+    productCalloutResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+      { timeout: 30_000 },
+    );
+    await product.click({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
   await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
   await productCalloutResponse;
   await slow(page);
@@ -843,6 +852,16 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   await page.keyboard.press('Enter');
   await linePromise;
   await slow(page);
+
+  // Verify the line was saved: the inline-add-row must disappear (or be
+  // replaced by the next empty row) and the saved line must appear in the
+  // table body. Without this gate the caller can race into a second
+  // addProductLine() before the first line is committed to the DOM.
+  await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if already gone or immediately replaced
+  await expect(page.locator('tbody tr').first(),
+    'Saved line should appear in the lines table',
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 /**
@@ -1010,6 +1029,9 @@ export async function openDraftRow(page, { label = 'draft row' } = {}) {
 export async function clickConfirmButton(page) {
   const confirmBtn = page.getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
+  // Wait for enabled — the button stays disabled while a save is in-flight
+  // or while BP callouts are still propagating derived fields.
+  await expect(confirmBtn).toBeEnabled({ timeout: 15_000 });
   await confirmBtn.click();
   // Caller is responsible for waiting on the modal/response that follows
   await slow(page);

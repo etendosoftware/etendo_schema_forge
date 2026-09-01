@@ -1,10 +1,11 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
+import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
 import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
-import {useAuth} from '@/auth/AuthContext.jsx';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -19,6 +20,20 @@ const EMPTY_FORM = {
 };
 const SELECTOR_PAGE_SIZE = 120;
 
+/**
+ * Shallow form comparison for the unsaved-changes baseline (ETP-5022). Compares by sorted
+ * keys rather than JSON.stringify so a differing key order never reads as a change.
+ */
+function sameForm(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+        if (a[key] !== b[key]) return false;
+    }
+    return true;
+}
+
 function normalizeText(value) {
     return String(value ?? '')
         .normalize('NFD')
@@ -26,8 +41,8 @@ function normalizeText(value) {
         .toLowerCase();
 }
 
-async function fetchSelectorPage(url, headers) {
-    const response = await fetch(url, {headers});
+async function fetchSelectorPage(apiFetch, url) {
+    const response = await apiFetch(url);
     if (!response.ok) {
         throw new Error(`Selector request failed: ${response.status}`);
     }
@@ -182,8 +197,16 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
-    const {token} = useAuth();
+    const apiFetch = useApiFetch(contactsApiBase);
     const [form, setForm] = useState(EMPTY_FORM);
+    // ETP-5022: this modal holds its own form state, so DetailView's isDirty does not see it.
+    // Without registering here, a language change (which reloads) or an F5 threw the typed
+    // address away with no warning — verified in the browser before this was added.
+    const baselineRef = useRef(null);
+    const isDirty = open
+        && baselineRef.current !== null
+        && !sameForm(form, baselineRef.current);
+    useUnsavedChangesGuard(isDirty);
     const [countries, setCountries] = useState([]);
     const [countrySelectorBase, setCountrySelectorBase] = useState('');
     const [countryOffset, setCountryOffset] = useState(0);
@@ -210,8 +233,6 @@ export default function LocationEditorModal({
     const regionSearchRef = useRef(null);
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
-
-    const authHeader = {Authorization: `Bearer ${token}`};
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -245,6 +266,10 @@ export default function LocationEditorModal({
         return countryOptions.filter((country) => normalizeText(country.label).includes(q));
     }, [countryOptions, countryQuery]);
 
+    // The `form.countryLabel` fallback below is what surfaces a bad server label: it is only
+    // reached while the translated option is not yet loaded (countries page in at 120 at a time,
+    // ordered by the BASE name, so "Spain" sits ~200th and never lands in the first page). See
+    // the ETP-5022 note on countryLabel above for which Java builds that string.
     const selectedCountryLabel = useMemo(() => {
         if (!form.country) return '—';
         return countryOptions.find((country) => country.id === form.country)?.label || form.countryLabel || form.country;
@@ -281,6 +306,7 @@ export default function LocationEditorModal({
         let cancelled = false;
 
         setForm(EMPTY_FORM);
+        baselineRef.current = EMPTY_FORM;
         setRegions([]);
         setRegionSelectorBase('');
         setRegionOffset(0);
@@ -326,7 +352,7 @@ export default function LocationEditorModal({
                         limit: String(SELECTOR_PAGE_SIZE),
                         offset: '0',
                     });
-                    const {items, hasMore} = await fetchSelectorPage(`${baseUrl}?${params.toString()}`, authHeader);
+                    const {items, hasMore} = await fetchSelectorPage(apiFetch, `${baseUrl}?${params.toString()}`);
                     hasSuccessfulRequest = true;
                     if (items.length > 0 || hasMore) {
                         if (cancelled) return;
@@ -364,25 +390,43 @@ export default function LocationEditorModal({
             setInitialLoading(true);
             // The handler enriches the GET-by-ID response with C_Location fields
             // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
-            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
+            apiFetch(`/${entityPath}/${bplLinkId}`)
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
                     if (rec?.id) {
-                        setForm({
+                        const loaded = {
                             address: rec.address ?? rec.addressLine1 ?? '',
                             address2: rec.address2 ?? rec.addressLine2 ?? '',
                             postalCode: rec.postalCode ?? '',
                             city: rec.city ?? rec.cityName ?? '',
                             country: rec.country ?? '',
-                            // Store the known label so the picker shows "Spain" even if the selector
-                            // returns a different ID format or hasn't loaded yet.
+                            // Store the known label so the picker shows the country even if the
+                            // selector returns a different ID format or hasn't loaded yet.
+                            //
+                            // ETP-5022 — WHERE THIS LABEL ACTUALLY COMES FROM. Not from the
+                            // standard NEO/DataToJsonConverter path like every other FK field:
+                            // this endpoint is served by a CUSTOM Java handler,
+                            //   com.etendoerp.go/src/com/etendoerp/go/schemaforge/
+                            //     ContactsLocationAddressHandler.java  (~line 350)
+                            // which builds `country$_identifier` by hand. It used to call
+                            // Country.getName() — the plain Hibernate getter, which ignores the
+                            // request language — so this field showed "Spain" with the UI in
+                            // Spanish, and only corrected itself to "España" once the user
+                            // scrolled far enough for the translated option to load (see
+                            // selectedCountryLabel below, which prefers the loaded option).
+                            // Fixed there by switching to getIdentifier(). If this ever shows an
+                            // untranslated country again, look at that handler FIRST — the bug is
+                            // not in this file, and not in Etendo core. WarehouseLocationHandler
+                            // has the same hand-built field for the warehouse address.
                             countryLabel: rec['country$_identifier'] ?? '',
                             region: rec.region ?? '',
                             regionLabel: rec['region$_identifier'] ?? '',
                             shipToAddress: rec.shipToAddress === 'Y' || rec.shipToAddress === true,
                             invoiceToAddress: rec.invoiceToAddress === 'Y' || rec.invoiceToAddress === true,
-                        });
+                        };
+                        setForm(loaded);
+                        baselineRef.current = loaded;
                     }
                 })
                 .catch(() => {
@@ -449,8 +493,8 @@ export default function LocationEditorModal({
 
                 try {
                     const {items, hasMore} = await fetchSelectorPage(
-                        `${baseUrl}?${params.toString()}`,
-                        authHeader
+                        apiFetch,
+                        `${baseUrl}?${params.toString()}`
                     );
 
                     if (!fallbackSuccess) {
@@ -540,7 +584,7 @@ export default function LocationEditorModal({
                     offset: String(countryOffset),
                 });
 
-                fetchSelectorPage(`${countrySelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${countrySelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setCountries(prev => [...prev, ...items]);
                         setCountryOffset(prev => prev + items.length);
@@ -565,7 +609,7 @@ export default function LocationEditorModal({
         countryHasMore,
         countryOffset,
         countriesLoading,
-        token,
+        apiFetch,
     ]);
 
     useEffect(() => {
@@ -597,7 +641,7 @@ export default function LocationEditorModal({
                     offset: String(regionOffset),
                 });
 
-                fetchSelectorPage(`${regionSelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${regionSelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setRegions(prev => [...prev, ...items]);
                         setRegionOffset(prev => prev + items.length);
@@ -623,7 +667,7 @@ export default function LocationEditorModal({
         regionOffset,
         regionsLoading,
         form.country,
-        token,
+        apiFetch,
     ]);
 
     function setField(key, value) {
@@ -700,14 +744,11 @@ export default function LocationEditorModal({
                 payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
                 payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
             }
-            const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
-
             if (bplLinkId) {
                 // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
                 // 'location' updates the plain C_Location.
-                const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
+                const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
-                    headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
@@ -723,15 +764,14 @@ export default function LocationEditorModal({
             // CREATE:
             //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
             //   'location' → creates a plain C_Location, no business partner link
-            const createUrl = saveMode === 'location'
-                ? `${contactsApiBase}/${entityPath}`
-                : `${contactsApiBase}/locationAddress?parentId=${bpId}`;
+            const createPath = saveMode === 'location'
+                ? `/${entityPath}`
+                : `/locationAddress?parentId=${bpId}`;
             const createBody = saveMode === 'location'
                 ? payload
                 : {...payload, businessPartner: bpId};
-            const res = await fetch(createUrl, {
+            const res = await apiFetch(createPath, {
                 method: 'POST',
-                headers: postHeaders,
                 body: JSON.stringify(createBody),
             });
 

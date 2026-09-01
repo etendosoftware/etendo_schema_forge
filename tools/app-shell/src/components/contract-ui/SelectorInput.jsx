@@ -6,6 +6,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const SELECTOR_PAGE = 50;
 
 function buildSelectPlaceholder(ui, label) {
@@ -45,6 +46,7 @@ export function SelectorInput({
   // is mounted → falls back to a direct fetch (prior behavior).
   const dataCache = useOptionalDataCache();
   const cacheScope = dataCache?.scope;
+  const apiFetch = useApiFetch();
   const catalogOptions = selectorUrl ? [] : getCatalogOptions(catalogs, entityName, field);
   const [serverOptions, setServerOptions] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -76,7 +78,7 @@ export function SelectorInput({
       limit: SELECTOR_PAGE,
       offset,
     });
-    const fetcher = (signal) => fetch(url, { headers: { 'Authorization': `Bearer ${token}` }, signal })
+    const fetcher = (signal) => apiFetch(url, { baseUrl: '', signal })
       .then(res => (res.ok ? res.json() : null));
     // Cache pages by URL + normalized context + offset (scope-isolated); catalog
     // freshness — selectors are relatively stable lookup data.
@@ -108,7 +110,7 @@ export function SelectorInput({
         loadingRef.current = false;
         if (isMountedRef.current) setFetching(false);
       });
-  }, [selectorUrl, contextKey, token, dataCache, cacheScope]);
+  }, [selectorUrl, contextKey, token, apiFetch, dataCache, cacheScope]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually
