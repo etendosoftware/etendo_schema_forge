@@ -43,6 +43,7 @@ import {
   getInlineEditableShrinkClassName,
   sidePanelWrapperCls,
   runAddLineAction,
+  resolveAddLineLabel,
   buildInitialTabs,
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
@@ -450,6 +451,26 @@ describe('secondary tab wiring', () => {
     })).resolves.toBeUndefined();
     expect(err).toHaveBeenCalled();
     err.mockRestore();
+  });
+});
+
+describe('resolveAddLineLabel (ETP-5021)', () => {
+  const ui = (key, vars) => (vars ? `${key}(${vars.label})` : key);
+  const tMenu = (label) => `menu:${label}`;
+
+  it('uses addLineLabelKey verbatim when present, ignoring label/labelKey', () => {
+    const st = { label: 'Location', labelKey: 'someLabelKey', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addAddress');
+  });
+
+  it('falls back to the generic addEntity composition using labelKey when addLineLabelKey is absent', () => {
+    const st = { label: 'Location', labelKey: 'someLabelKey' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addEntity(someLabelKey)');
+  });
+
+  it('falls back to tMenu(label) when neither addLineLabelKey nor labelKey is set', () => {
+    const st = { label: 'Location' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addEntity(menu:Location)');
   });
 });
 

@@ -104,6 +104,7 @@
       "locationAddress": {
         "tabOrder": 3,
         "label": "Location",
+        "addLineLabelKey": "addAddress",
         "customAddModal": "LocationEditorModal",
         "requireSavedRecord": true
       },

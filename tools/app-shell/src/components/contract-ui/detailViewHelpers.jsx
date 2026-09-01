@@ -101,6 +101,23 @@ export function runAddLineAction(st, { handleCustomModalAddClick, handleSecondar
   });
 }
 
+/**
+ * Resolve a secondary tab's "add" button text (ETP-5021).
+ *
+ * `addLineLabelKey`, when set, is a full i18n key that REPLACES the generic
+ * "Añadir {label}" (`addEntity`) composition entirely — needed when a tab's
+ * add action must match a standardized CTA used elsewhere in the app (verb +
+ * "+" prefix + casing) rather than the generic tab-name-derived phrasing.
+ * E.g. `locationAddress` sets `addLineLabelKey: "addAddress"` so its button
+ * reads the same "+ Añadir dirección" as the document-header
+ * PartnerAddressPicker, instead of the generic "Añadir Dirección".
+ * Falls back to `st.labelKey` (label-only override) or `tMenu(st.label)`.
+ */
+export function resolveAddLineLabel(st, ui, tMenu) {
+  if (st.addLineLabelKey) return ui(st.addLineLabelKey);
+  return ui('addEntity', { label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label) });
+}
+
 export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
   if (gross <= 0) return null;
   const disc = lineConfig.discountField ? (parseFloat(String(selectedLine[lineConfig.discountField] ?? '')) || 0) : 0;

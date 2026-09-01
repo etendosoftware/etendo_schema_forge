@@ -1,8 +1,8 @@
 {
   "version": "0.52.0",
   "generatedAt": "2026-08-27T21:15:30.861Z",
-  "updatedAt": "2026-08-31T14:33:49.362Z",
-  "checksum": "6433bedc8fef87d0",
+  "updatedAt": "2026-09-01T12:14:47.445Z",
+  "checksum": "a1bd0b71e67266d4",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -54,6 +54,7 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
+          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
@@ -5289,6 +5290,7 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
+          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
