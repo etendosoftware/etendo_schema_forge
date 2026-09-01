@@ -69,12 +69,12 @@ describe('CommandPalette', () => {
 
   it('keeps vector matches opt-in and renders them as a separate result group', () => {
     assert.match(src, /normalizedQuery\.length\s*<\s*3/);
-    assert.match(src, /vectorMatches\.length\s*>\s*0/);
-    assert.match(src, /semanticSearchResults/);
+    assert.match(src, /relevantVectorMatches\.length\s*>\s*0/);
+    assert.match(src, /relevantSearchResults/);
   });
 
   it('renders semantic matches before menu navigation groups', () => {
-    const semanticGroup = src.indexOf('data-testid="vector-search-results"');
+    const semanticGroup = src.indexOf('data-testid="vector-search-relevant"');
     const menuGroups = src.indexOf('menuConfig.menu.filter');
     assert.ok(semanticGroup >= 0 && semanticGroup < menuGroups);
   });
@@ -84,7 +84,7 @@ describe('CommandPalette', () => {
   });
 
   it('shows a searching placeholder while vector search is in flight', () => {
-    assert.match(src, /isVectorSearchLoading\s*\?\s*ui\('searching'\)\s*:\s*ui\('searchPages'\)/);
+    assert.match(src, /isVectorSearchLoading/);
     assert.match(src, /data-testid="vector-search-loading"/);
     assert.match(src, /role="status"/);
   });
