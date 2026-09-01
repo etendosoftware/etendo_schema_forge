@@ -39,7 +39,12 @@ vi.mock('../hooks/useNeoResource', () => ({ getApiBase: () => '' }));
 
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions.js';
 import { useStatementActions } from '@/hooks/useStatementActions.js';
-import { jsonHeaders, writeHeaders } from '@/lib/sessionHeaders.js';
+// ETP-4576 — the builders come from the core: `lib/sessionHeaders.js` was this branch's own
+// indirection and does not exist on develop, where apiFetch is the single request path.
+import {
+  buildHeaders as jsonHeaders,
+  buildWriteHeaders as writeHeaders,
+} from '@etendosoftware/app-shell-core/auth/api';
 
 function okResponse(payload = {}) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
