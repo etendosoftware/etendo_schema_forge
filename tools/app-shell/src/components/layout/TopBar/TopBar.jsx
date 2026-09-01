@@ -62,7 +62,7 @@ export default function TopBar({
   const copilot = useCopilot();
   const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
   const [isCurrentWindowScopeEnabled, setIsCurrentWindowScopeEnabled] = useState(true);
-  const { setOpen: setSearchOpen, query: searchValue, setQuery: setSearchValue, inputRef: searchInputRef, handleKeyDown: handleSearchKeyDown } = useGlobalSearch();
+  const { open: searchOpen, setOpen: setSearchOpen, query: searchValue, setQuery: setSearchValue, inputRef: searchInputRef, handleKeyDown: handleSearchKeyDown } = useGlobalSearch();
   const currentPathname = window.location.pathname;
   const vectorSearchTargets = useMemo(
     () => resolveVectorSearchTargets(vectorSearchContracts),
@@ -277,6 +277,7 @@ export default function TopBar({
               }}
               onKeyDown={(event) => {
                 if (import.meta.env.DEV && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) console.debug('[TopBar search] keydown', { key: event.key, value: searchValue });
+                if (!searchOpen && event.key !== 'Escape') setSearchOpen(true);
                 if (event.key === 'Backspace' && searchValue.length === 1) {
                   event.preventDefault();
                   setSearchValue('');
