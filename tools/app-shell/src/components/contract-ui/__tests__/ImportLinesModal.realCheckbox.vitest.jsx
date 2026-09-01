@@ -63,9 +63,21 @@ function renderModal(overrides = {}) {
 }
 
 async function expandDoc() {
-  await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-  fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
-  await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+  // The modal's own "eagerly load every doc's lines" effect fires right after
+  // the doc list first arrives and briefly re-shows the loading text — an
+  // `await waitFor(...)` yields to that pending effect before the next line
+  // runs, so the doc row can vanish again between confirming it exists and
+  // clicking it. Retry the click itself until it lands, guarded so it only
+  // ever dispatches once (avoids re-toggling an already-expanded row while
+  // waiting for its lines to load).
+  let clicked = false;
+  await waitFor(() => {
+    if (!clicked) {
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      clicked = true;
+    }
+    expect(screen.getByText('Widget A')).toBeInTheDocument();
+  });
 }
 
 // Clicking the visible box (a <div> sibling of the sr-only <input>, both
