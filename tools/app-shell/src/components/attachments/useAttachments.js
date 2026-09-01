@@ -190,9 +190,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         toast.error(err.message || ui('attachmentsListError'));
       }
     } finally {
-      if (generation === stateGenerationRef.current) {
-        setLoading(false);
-      }
+      // Unconditional: this call is done (success, error, or superseded) either
+      // way, so its own loading is over regardless of whether a newer write won
+      // the race and its data got discarded above. Gating this on `generation`
+      // too — instead of just the items/error writes — left `loading` stuck
+      // true forever whenever this call went stale, since nothing else was
+      // going to clear it (caught by review on the saveBeforeAttach PR).
+      setLoading(false);
     }
   }, [apiFetch, tableName, recordId, token, resetAbortController, ui]);
 
