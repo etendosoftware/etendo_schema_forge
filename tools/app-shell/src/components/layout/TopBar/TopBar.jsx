@@ -319,8 +319,8 @@ export default function TopBar({
                   }));
                   return;
                 }
-                handleSearchKeyDown(event);
-                if (event.key === 'Enter') setSearchOpen(false);
+                const result = handleSearchKeyDown(event);
+                if (event.key === 'Enter' && !result?.keepOpen) setSearchOpen(false);
               }}
               placeholder={resolvedPlaceholder}
               aria-label={resolvedPlaceholder}
