@@ -3,7 +3,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { TBAI_SPEC, TBAI_ENTITY } from './useFiscalMonitor.js';
 
 /**
@@ -256,7 +256,7 @@ export default function TbaiMonitorSection({
                 const rowErrors = validationMap[row.id] ?? [];
                 const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
                 return (
-                  <tr key={row.id ?? i}>
+                  <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
                     <td><Checkbox
                       checked={selectedIds.has(row.id)}
                       onChange={() => handleToggleRow(row.id)}

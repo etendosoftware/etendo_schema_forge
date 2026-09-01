@@ -202,6 +202,43 @@ describe('useAttachments', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
+  it('does not leave loading stuck true when a stale list() is superseded by a successful upload (review finding)', async () => {
+    // Initial mount list() resolves immediately and empty.
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ items: [] }));
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // A second list() call is deliberately left unresolved (simulates the
+    // saveBeforeAttach flow's mount-effect list() still in flight when the
+    // triggering upload() completes and bumps the generation).
+    let resolveStaleList;
+    globalThis.fetch.mockImplementationOnce(() => new Promise((resolve) => { resolveStaleList = resolve; }));
+    let staleListPromise;
+    act(() => {
+      staleListPromise = result.current.list();
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+
+    // upload() succeeds with an id — its own generation bump makes the still-
+    // pending list() call above stale.
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ id: 'fresh', name: 'fresh.pdf' }));
+    const file = new File(['x'], 'x.pdf', { type: 'application/pdf' });
+    await act(async () => {
+      await result.current.upload(file);
+    });
+    expect(result.current.items.map((i) => i.id)).toEqual(['fresh']);
+
+    // The stale list() finally resolves — its own loading must still clear,
+    // even though its data is discarded as superseded.
+    await act(async () => {
+      resolveStaleList(jsonResponse({ items: [{ id: 'discarded' }] }));
+      await staleListPromise;
+    });
+    expect(result.current.loading).toBe(false);
+    // The discarded response never overwrote the upload's own optimistic item.
+    expect(result.current.items.map((i) => i.id)).toEqual(['fresh']);
+  });
+
   it('aborts the inflight list() request when the record changes', async () => {
     // Slow-controlled fetch lets us inspect the AbortSignal.
     let firstSignal;
