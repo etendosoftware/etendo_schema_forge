@@ -1392,7 +1392,14 @@ describe('PeriodsExpandablePanel — ETP-5030 selected-row shading', () => {
 
   async function renderExpandedDocuments() {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Jan-2027'));
+    // ETP-4948 reworked period-label rendering to the full localized month name
+    // (see formatPeriodName/formatCalendarMonthYear) — the shared top-level
+    // PERIOD fixture above renders as "January 27", matching every other test
+    // in this file. This describe block was merged in from develop's
+    // ETP-5030 commit, which predates that rework and expected the old
+    // "Jan-2027" raw-name rendering; only the label expectation is updated
+    // here, not any assertion about the actual selection-shading behaviour.
+    await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByTestId('document-select-d1'));
   }
@@ -1407,7 +1414,10 @@ describe('PeriodsExpandablePanel — ETP-5030 selected-row shading', () => {
     // keep their layout classes, so the row element is definitely still there.
     expect(backgroundUtilities(rowOf('d2'))).toEqual([]);
     expect(backgroundUtilities(rowOf('d3'))).toEqual([]);
-    expect(rowOf('d2').className).toContain('flex items-center gap-2 py-1.5');
+    // Base layout classes as of ETP-4948's Table conversion (gap-3 px-4 py-2,
+    // replacing the pre-conversion gap-2 py-1.5) — not part of the selection-
+    // shading behaviour itself, just confirming the row element is intact.
+    expect(rowOf('d2').className).toContain('flex items-center gap-3 px-4 py-2');
   });
 
   it('removes the tint when the document row is unticked', async () => {
