@@ -34,13 +34,40 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    parent-default mechanism correctly handles nested child-tab creates, but this custom route
    exposes `C_Year` directly, so its create request has no `parentId` and cannot use that mechanism.
    `YearCloseHandler` therefore validates the create request and overwrites the hidden calendar
-   field with `OBContext`'s current organization's calendar before generic CRUD persists it. This
+   field with the current organization's calendar before generic CRUD persists it. This
    prevents the org-blind first-combo fallback from choosing the global (`*`) calendar when a
    client owns more than one. The handler also rejects missing or malformed fiscal years: only
    four-digit values from 1900 through 2999 are accepted. The `decisions.json`
    `derivation: "fromParent"` declaration remains semantic documentation only; it does not reach
    the backend shape for a `system`-visibility field. The broader selector fallback issue remains
    tracked separately as Jira ETP-5086.
+   **REVIEW correction (cycle 1):** the initial fix read `Organization.getCalendar()` directly,
+   which only returns the org's own *directly-assigned* `C_Calendar_ID` — it does not walk the
+   org tree, so an org that inherits its calendar from a parent (the standard `AD_Org.
+   AD_InheritedCalendar_ID` setup) resolved to `null` and either errored or fell through to the
+   org-blind fallback anyway. Now uses `org.openbravo.erpCommon.utility.AccDefUtility.
+   getCalendar(Organization)` — the pattern already used elsewhere in classic Etendo for "the
+   calendar this org should use, walking up to the nearest ancestor that owns one" — which also
+   deliberately treats org `*` (id `"0"`) as "no usable calendar" rather than returning the
+   global one.
+   **Known residual risk, NOT fixed by this cycle:** a manual live retest after the original
+   fix still reproduced the wrong-calendar symptom. Investigation traced the NEO JWT's
+   `organization` claim (read by `NeoAuthenticator.authenticateJwt`, the sole input to every
+   handler's `OBContext.getCurrentOrganization()`, including this one) back to
+   `EtendoGoJwtServlet`'s environment-login endpoint, which mints the token for
+   `roleListData.firstRoleId` — the **oldest-created** `AD_Role` for the user (`ORDER BY
+   r.created, o.name`), not any notion of "the role/org the user is currently working in" — and
+   then resolves that role's org from an **unordered** `AD_Role_OrgAccess` list when no explicit
+   org is passed (`SecureWebServicesUtils.getOrganization`, no `@OrderBy`). For a user with more
+   than one role (e.g. one scoped to `*`/GOClient and one scoped to GOOrg), this can mint a
+   session whose `getCurrentOrganization()` never was GOOrg in the first place — no per-request
+   fix in `YearCloseHandler` can compensate for a session that already has the wrong org baked
+   into its JWT. This is a session/login-layer issue affecting every NEO handler that trusts
+   `getCurrentOrganization()` (the overwhelming majority of them), not something scoped to
+   Calendar — recommend filing it as its own platform ticket (parented to epic ETP-3504,
+   alongside ETP-5086) rather than folding a login-layer fix into this branch. Until fixed,
+   retesting this window with a single-role test user (or a user whose oldest role is the
+   GOOrg-scoped one) is the reliable way to verify the `AccDefUtility` fix above in isolation.
 - Trigger **Create Periods** on a year to generate 12 standard periods plus an optional adjustment
   period. The required **Fiscal Year Range** choice defaults to **January - December**; selecting
   **July - June** for Fiscal Year 2027 creates July 2027 through June 2028, with chronological
@@ -308,16 +335,27 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
    alphabetically-first readable row instead of the year's real parent calendar (ETP-4948 Issue 1).~~
    **Fixed** — since the custom Fiscal Calendar route creates the child-tab `C_Year` directly and
-   has no parent record id, `YearCloseHandler` injects the current organization's calendar before
-   generic CRUD runs and never trusts a caller-supplied value. It also rejects non-four-digit
-   fiscal years outside 1900-2999. The broader, still-open class of bug — the org-blind selector fallback
+   has no parent record id, `YearCloseHandler` injects the current organization's calendar (via
+   `AccDefUtility.getCalendar`, which walks the org tree to the nearest ancestor that owns a
+   calendar — see the Issue 1 note above for the cycle-1 REVIEW correction) before generic CRUD
+   runs and never trusts a caller-supplied value. It also rejects non-four-digit fiscal years
+   outside 1900-2999. The broader, still-open class of bug — the org-blind selector fallback
   (`SelectorOrgFilter`/`resolveFirstComboOption` picking the alphabetically-first org for *any*
-  combo field, not just parent-links) — is tracked separately as Jira ETP-5086.
+  combo field, not just parent-links) — is tracked separately as Jira ETP-5086. A second, distinct
+  residual risk (the JWT organization-claim/role-selection issue) is documented in the Issue 1
+  note above and is NOT fixed by this cycle.
 - No free-text search is configured on any entity (`searchableFields: []`, inherited default).
 - `YearCloseHandler`'s reflection into `CreateRegFactAcct`/`DropRegFactAcct`'s private
   `processButton(...)` method is inherently brittle across Etendo core versions — accepted
   trade-off given `CallProcess` is confirmed dead for these two processes and no less-fragile
-  officially-supported entry point exists (see the handler's javadoc).
+  officially-supported entry point exists (see the handler's javadoc). **REVIEW W2 (cycle 1):**
+  the only prior coverage of `invokeCreateRegFactAcct`/`invokeDropRegFactAcct` overrode both
+  methods with canned results, so `newServletInstance`, `findMyPoolField` and the real
+  `Method.invoke(...)` mechanics had zero test signal. `YearCloseHandlerTest` now also resolves
+  (without invoking) both servlets' `processButton` signatures via `getDeclaredMethod`, walks for
+  the `myPool` field, and exercises the real (private) `newServletInstance` end to end — so a
+  future Etendo core version that renames/reshapes either signature or the `myPool` field breaks
+  the build here instead of failing silently at runtime.
 - `AccountingPanel.jsx` doesn't render the `type` field (entry type C/D/R/O/N) even though it's
   available in the contract — a reasonable future enhancement, not a functional gap for the
   current "review the year's Fact_Acct rows" use case.
@@ -404,7 +442,16 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   defaults GET path exists on the `documents` entity), kept for convention parity. Covered by a
   new `afterHandleReturnsNullForGetWithNonCrudEndpointType` test in
   `PeriodControlDocOpenCloseHandlerTest`.
-- `artifacts/open-close-period-control/contract.json` — `periodControl`/`documents`, unchanged.
+- `artifacts/open-close-period-control/contract.json` — `periodControl`/`documents` structurally
+  unchanged; **REVIEW W1 (cycle 1):** `periodControl.status`'s `enumVariants.C` was `"neutral"`,
+  drifted from `PeriodsExpandablePanel.jsx`'s hand-maintained `PERIOD_STATUS_VARIANTS` (already
+  `"red"`) and from this same spec's `documents.periodStatus.C` (already `"red"`) — reconciled to
+  `"red"` in `decisions.json` (Closed is visually flagged the same way as Permanently Closed,
+  consistent across both period- and document-level status badges) and regenerated via `make
+  regen ONLY=open-close-period-control SKIP_EXTRACT=1` (contract `0.6.0` → `0.7.0`, additive;
+  `PeriodControlTable.jsx`'s generated `enumVariants` updated to match — that generated page is
+  otherwise dead code post-ETP-4478, since `/open-close-period-control` now redirects to
+  `/calendar`, but must still regenerate consistently with `decisions.json`).
 - `artifacts/end-year-close/contract.json` — the new single-entity `accounting` spec.
 - `tools/app-shell/src/windows/custom/calendar/index.jsx` — the aggregating custom window;
   `AccountingPanel.jsx`, `PeriodsExpandablePanel.jsx` (+ Vitest suites covering loading/error/empty

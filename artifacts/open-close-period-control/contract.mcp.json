@@ -2,7 +2,7 @@
   "version": "0.6.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
   "updatedAt": "2026-06-26T11:11:25.752Z",
-  "contractChecksum": "f5d9fa9ee28f4f14",
+  "contractChecksum": "047d3a78b16e2793",
   "apiPrediction": {
     "specName": "open-close-period-control",
     "baseUrl": "/sws/neo/open-close-period-control",
