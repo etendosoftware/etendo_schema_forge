@@ -54,6 +54,10 @@ const MAX_RECENT_SEARCHES = 5;
 const VECTOR_MIN_SCORE = 0.76;
 const VECTOR_MAX_RESULTS = 10;
 
+function normalizeSearchText(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 function readRecentSearches() {
   try {
     const value = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]');
@@ -307,7 +311,6 @@ export function CommandPalette() {
         const params = new URLSearchParams({
           query: normalizedQuery,
           targets: requestedVectorSearchTargetKeys.join(','),
-          minScore: String(VECTOR_MIN_SCORE),
           maxResults: String(VECTOR_MAX_RESULTS),
         });
         const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
@@ -317,8 +320,14 @@ export function CommandPalette() {
         if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
         const payload = await response.json();
         const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+        const normalizedTerm = normalizeSearchText(normalizedQuery);
         setVectorMatches(matches
-          .filter((match) => Number.isFinite(Number(match.score)) && Number(match.score) >= VECTOR_MIN_SCORE)
+          .filter((match) => {
+            const score = Number(match.score);
+            const lexicalMatch = Object.values(match.fields || {})
+              .some((value) => normalizeSearchText(value).includes(normalizedTerm));
+            return lexicalMatch || (Number.isFinite(score) && score >= VECTOR_MIN_SCORE);
+          })
           .sort((left, right) => Number(right.score) - Number(left.score))
           .slice(0, VECTOR_MAX_RESULTS));
         if (normalizedQuery.length >= 3) {
