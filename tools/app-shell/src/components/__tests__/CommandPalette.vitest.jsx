@@ -37,8 +37,8 @@ vi.mock('../../menu.json', () => ({
   },
 }));
 
-// Stub cmdk primitives with simple passthrough divs/inputs
-vi.mock('@/components/ui/command.jsx', () => ({
+// Stub global-search primitives with simple passthrough elements
+vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
   CommandDialog: ({ open, children }) =>
     open ? <div data-testid="cmd-dialog">{children}</div> : null,
   CommandInput: (props) => <input data-testid="cmd-input" {...props} />,
@@ -48,6 +48,19 @@ vi.mock('@/components/ui/command.jsx', () => ({
     <div data-testid={`cmd-group-${heading}`}>{children}</div>
   ),
   CommandItem: ({ value, children, onSelect }) => (
+    <div data-testid={`cmd-item-${value}`} onClick={onSelect}>
+      {children}
+    </div>
+  ),
+  GlobalSearchDialog: ({ open, children }) =>
+    open ? <div data-testid="cmd-dialog">{children}</div> : null,
+  GlobalSearchInput: (props) => <input data-testid="cmd-input" {...props} />,
+  GlobalSearchList: ({ children }) => <div data-testid="cmd-list">{children}</div>,
+  GlobalSearchEmpty: ({ children }) => <div data-testid="cmd-empty">{children}</div>,
+  GlobalSearchGroup: ({ heading, children }) => (
+    <div data-testid={`cmd-group-${heading}`}>{children}</div>
+  ),
+  GlobalSearchItem: ({ value, children, onSelect }) => (
     <div data-testid={`cmd-item-${value}`} onClick={onSelect}>
       {children}
     </div>

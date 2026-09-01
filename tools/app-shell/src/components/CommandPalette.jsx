@@ -9,12 +9,12 @@ import {
   resolveWindowSearchSuggestions,
 } from '@/lib/vectorSearchConfig.js';
 import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command.jsx';
+  GlobalSearchDialog as CommandDialog,
+  GlobalSearchEmpty as CommandEmpty,
+  GlobalSearchGroup as CommandGroup,
+  GlobalSearchItem as CommandItem,
+  GlobalSearchList as CommandList,
+} from '@/components/global-search/GlobalSearchPrimitives.jsx';
 import menuConfig from '../menu.json';
 
 import {
@@ -120,7 +120,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     const navigateKeyboard = (key) => {
-      const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [cmdk-item]:not([data-disabled="true"])'));
+      const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]:not(:disabled)'));
       if (import.meta.env.DEV) console.debug('[CommandPalette] navigate', { key, itemCount: items.length, index: keyboardIndexRef.current });
       if (items.length === 0) return;
       if (key === 'Enter') {
@@ -175,9 +175,9 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [cmdk-item]'));
+    const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]'));
     items.forEach((item, index) => {
-      const selected = index === keyboardIndex && !item.hasAttribute('data-disabled');
+      const selected = index === keyboardIndex && !item.disabled;
       item.setAttribute('data-selected', selected ? 'true' : 'false');
       item.setAttribute('aria-selected', selected ? 'true' : 'false');
       item.classList.toggle('bg-accent', selected);
@@ -385,7 +385,9 @@ export function CommandPalette() {
         </div>
       )}
       <CommandList data-testid="CommandList__73263e">
-        <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
+        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && (
+          <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
+        )}
         {query.trim().length === 0 && (
           <>
             {visibleRecentSearches.length > 0 && (
