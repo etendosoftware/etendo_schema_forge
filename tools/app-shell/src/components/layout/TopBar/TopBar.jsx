@@ -278,9 +278,10 @@ export default function TopBar({
               onKeyDown={(event) => {
                 if (import.meta.env.DEV && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) console.debug('[TopBar search] keydown', { key: event.key, value: searchValue });
                 if (!searchOpen && event.key !== 'Escape') setSearchOpen(true);
-                if (event.key === 'Backspace' && searchValue.length === 1) {
+                const atStart = event.currentTarget.selectionStart === 0
+                  && event.currentTarget.selectionEnd === 0;
+                if (event.key === 'Backspace' && atStart) {
                   event.preventDefault();
-                  setSearchValue('');
                   setIsCurrentWindowScopeEnabled(false);
                   document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
                     detail: { pathname: currentPathname, vectorSearchTarget: null },

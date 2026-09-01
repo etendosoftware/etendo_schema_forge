@@ -124,7 +124,9 @@ export function CommandPalette() {
       if (import.meta.env.DEV) console.debug('[CommandPalette] navigate', { key, itemCount: items.length, index: keyboardIndexRef.current });
       if (items.length === 0) return;
       if (key === 'Enter') {
-        items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0]?.click();
+        const selectedItem = items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0];
+        setOpen(false);
+        selectedItem?.click();
         return;
       }
       const delta = key === 'ArrowUp' ? -1 : 1;
