@@ -127,7 +127,9 @@ export default function TopBar({
   const currentWindowScope = isCurrentWindowScopeEnabled ? currentWindowVectorTarget : null;
   const selectedScope = searchSelectionTargets === null
     ? currentWindowScope
-    : searchSelectionTargets.length === 1
+    : searchSelectionTargets.length === vectorSearchTargets.length
+      ? null
+      : searchSelectionTargets.length === 1
       ? vectorSearchTargets.find((target) => target.target === searchSelectionTargets[0])
       : { label: searchSelectionTargets.length === 0 ? '' : ui('selectedWindows').replace('{count}', searchSelectionTargets.length) };
 

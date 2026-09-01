@@ -233,12 +233,11 @@ export function CommandPalette() {
     const setExternalScope = (event) => {
       const { pathname, vectorSearchTarget, vectorSearchTargets: targets } = event.detail ?? {};
       if (typeof pathname !== 'string') return;
-      setScopeOverride({
-        pathname,
-        targets: Array.isArray(targets)
-          ? targets
-          : vectorSearchTarget ? [vectorSearchTarget] : null,
-      });
+      const selectedTargets = Array.isArray(targets)
+        ? targets
+        : vectorSearchTarget ? [vectorSearchTarget] : [];
+      setSelectedVectorTargetKeys(selectedTargets);
+      setScopeOverride(vectorSearchTarget || Array.isArray(targets) ? { pathname, targets: selectedTargets } : null);
     };
     document.addEventListener('schema-forge:vector-search-scope', setExternalScope);
     return () => document.removeEventListener('schema-forge:vector-search-scope', setExternalScope);
