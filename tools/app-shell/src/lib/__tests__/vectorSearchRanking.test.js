@@ -15,6 +15,7 @@ describe('rankVectorMatches', () => {
 
     expect(result.concentrated).toBe(true);
     expect(result.relevant).toHaveLength(5);
+    expect(result.exact).toHaveLength(5);
     expect(result.related).toHaveLength(0);
   });
 
@@ -28,10 +29,11 @@ describe('rankVectorMatches', () => {
     ], 'salmon');
 
     expect(result.concentrated).toBe(false);
-    expect(result.relevant.length).toBeGreaterThan(1);
-    expect(result.related).toHaveLength(0);
-    expect(result.relevant.some(({ fields }) => fields.name === 'Marisco congelado')).toBe(true);
-    expect(result.relevant.some(({ fields }) => fields.name === 'Carne de ternera')).toBe(false);
+    expect(result.exact).toHaveLength(1);
+    expect(result.relevant).toHaveLength(1);
+    expect(result.related.length).toBeGreaterThan(1);
+    expect(result.related.some(({ fields }) => fields.name === 'Marisco congelado')).toBe(true);
+    expect(result.related.some(({ fields }) => fields.name === 'Carne de ternera')).toBe(false);
   });
 
   it('promotes an exact lexical match even with a lower vector score', () => {

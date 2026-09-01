@@ -17473,6 +17473,7 @@
     "clearSearchScope": "Search across all windows",
     "semanticSearchResults": "Semantic results",
     "relevantSearchResults": "Best matches",
+    "exactSearchResults": "Text matches",
     "relatedSearchResults": "Other matches",
     "searchMoreRelated": "Search for more related results",
     "recentSearches": "Recent searches",
