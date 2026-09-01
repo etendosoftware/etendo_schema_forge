@@ -101,7 +101,12 @@ describe('OrganizationPage', () => {
     render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
     await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
 
-    expect(screen.getByTestId('BusinessTypeCards__option-AD')).toHaveAttribute('aria-pressed', 'true');
+    // Same race as the country-pill fix (ETP-4749): `form.etgoBusinessType` (and so
+    // BusinessTypeCards' aria-pressed) is only seeded by the effect that runs after
+    // `loading` settles, one render after `name` is already on screen — wait on the
+    // card's own settled aria-pressed rather than assuming it's there once `name` renders,
+    // so this doesn't race under heavy parallel test load.
+    await waitFor(() => expect(screen.getByTestId('BusinessTypeCards__option-AD')).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByTestId('BusinessTypeCards__check-AD')).toBeInTheDocument();
     expect(screen.getByTestId('BusinessTypeCards__option-CO')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('BusinessTypeCards__check-CO')).not.toBeInTheDocument();

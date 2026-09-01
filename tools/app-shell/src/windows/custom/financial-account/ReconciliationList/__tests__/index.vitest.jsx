@@ -50,10 +50,14 @@ vi.mock('../ReconciliationListTable.jsx', () => ({
 }));
 
 import { ReconciliationListTab } from '../index.jsx';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 
 // `transactionDate` today so the toolbar's default last-30 window keeps both rows visible.
+// Must be the LOCAL calendar day, not `toISOString()`'s UTC one: the toolbar's range bounds are
+// local-time Dates, so west of UTC (UTC-3) this rolled the rows a day into the future from ~21:00
+// local onward and the filter dropped them both — a suite that passed all day and failed at night.
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayCalendarISO();
 }
 
 const ROWS = [

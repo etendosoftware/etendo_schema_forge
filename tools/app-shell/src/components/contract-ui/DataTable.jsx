@@ -2143,6 +2143,7 @@ export function DataTable({
   const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
   const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
+  // ETP-5030 — InlineLinesPanel's `computeRowClassName` mirrors the `bg-primary/5` literal for tab grids; keep the two in sync.
   const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
