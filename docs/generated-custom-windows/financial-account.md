@@ -1671,6 +1671,86 @@ per-variant generic toast. Two new `BACKEND_ERROR_MAP` entries in `backendErrors
 
 Because it is stored, `EM_ETGO_STATUS` must be kept in sync by SOMETHING every time `Processed` or the match counts change — `BankStatementHeaderStatusHandler` (`FIN_BankStatement` NEW/UPDATE observer, same `event.setCurrentState` technique as `BankStatementLinePendingAmountHandler`) does that unconditionally on every header write, whichever code path caused it (ETP-4891 follow-up). Before this handler existed, a statement imported through the PSD2 bank-connection sync (external `com.etendoerp.psd2` module, never touches this module's own handlers) could get stuck reading "Borrador" forever after being marked processed: its lines get counted correctly by the per-line observer at insert time, but `Processed` is still `false` then, so the status computed at THAT instant is correctly `DRAFT` — and nothing re-derives it once the sync flips `Processed` to `true` on the header alone, since no line event fires for that. The SPA's own "Procesar" action then 400s with "Only draft (unprocessed) statements can be modified" — a correct rejection (the real flag already says processed) that reads as a contradiction next to a "Borrador" label. `R25-bankstatement-stale-status` repairs statements already stuck from before the handler existed.
 
+#### The line date picker was unusable inside the modal (ETP-4924)
+
+Clicking a day in a line's `DateField` calendar did nothing — the popover appeared to close
+without applying the date, in manual creation, manual edit and CSV-import edit alike. Only
+typing the date worked. The header's own `DateField`s (`Fecha transacción` / `Fecha importación`)
+were never affected, which is what pointed away from `DateField` itself and at something specific
+to the lines table.
+
+**Root cause: React portals bubble through the React tree, not the DOM, and a DOM-only "did focus
+leave" check gets fooled by that.** `DateField`'s calendar is a Radix Popover portalled to
+`document.body` — a DOM sibling of the row, not a descendant — but its focus/blur/key events still
+propagate up through the row's position in the *React* tree. The editable row wrapper used
+`e.currentTarget.contains(e.relatedTarget)` (a DOM containment check) to decide whether focus had
+left the row, which is always `false` for a portalled node. So opening the calendar read as "the
+row lost focus", which toggled `focusedId` and — because the per-row `LineEditHint` ("Enter o
+clic fuera para guardar") used to mount/unmount *inside* the centered `DialogContent`
+(`top-[50%] translate-y-[-50%]`) — that ~25px height change re-centered the whole dialog by a few
+pixels mid-click, moving the calendar's anchor out from under the cursor between `mousedown` and
+`mouseup` so the day button's `click` never fired. The same DOM-only check made the row's own
+`Enter`/`Escape` handling hijack keys meant for the calendar (`preventDefault()` + `blur()` on a
+day button's `Enter`), so keyboard selection was broken too.
+
+**Fix, two parts, both in `ManualStatementModal.jsx`:**
+
+The row wrapper's `onFocusCapture` / `onBlurCapture` / `onKeyDown` now call
+`isInPortalLayer(target)` (new shared helper, `lib/portalLayers.js`) and no-op when the event
+originates inside a portalled layer: `[data-radix-popper-content-wrapper]` (the `DateField`
+calendar), `[data-lookup-dropdown]` (`LookupPicker`'s results list), or `[role="listbox"]`. This is
+the same class of fix `DataTable.jsx`'s `INLINE_ADD_IGNORED_PORTAL_SELECTORS` already applies to its
+own inline-add row — `portalLayers.js` generalizes that selector list into a reusable helper rather
+than duplicating it, but with two changes that are NOT interchangeable copy-paste from that source,
+both caught only by exercising the real components in a test (not by reading the code):
+
+- **No `[role="dialog"]` in the selector list.** `DataTable`'s row lives on a plain page, so
+  `[role="dialog"]` correctly flags "something else opened a dialog on top of me". Here the row
+  itself lives *inside* `ManualStatementModal`'s own `DialogContent`, which carries `role="dialog"`
+  — so `target.closest('[role="dialog"]')` matched on literally every element in the row (its own
+  ancestor), making `isInPortalLayer` return `true` unconditionally and silently swallowing every
+  `setFocusedId`, including the totally ordinary click on the `DateField`'s own calendar-icon
+  trigger (which isn't portalled at all).
+- **No `document.body.style.pointerEvents === 'none'` fallback.** `DataTable.jsx`'s version adds
+  that check because a *pointer* event's `target` can resolve to an ancestor like `<html>` when
+  Radix disables body pointer events for a click-blocking layer elsewhere on the page. Focus/blur
+  events don't have that problem — their target is always the real node that received focus. And a
+  row inside a modal `Dialog` sits behind `body { pointer-events: none }` for the *entire* time the
+  dialog is open (that's how Radix's modal Dialog always behaves, from the very first render), so
+  reusing the check here made it `true` unconditionally too, for the same reason as above.
+
+Both defaults independently made `isInPortalLayer` return `true` for absolutely everything the
+whole time the modal was open — so the fix looked complete by inspection (no more spurious
+`onBlurCapture`) while actually regressing further: `focusedId` could never be set at all, by
+anything, including a plain click on the trigger. Only running the real Popover/Dialog interaction
+(not the mocked spec) surfaced it.
+
+With both removed, interacting with a cell's calendar or lookup dropdown no longer toggles
+`focusedId`, so `LineEditHint` — hoisted to render **once** below the lines list instead of once
+per row, but still a plain conditional mount (`focusedId != null`) — never unmounts
+mid-interaction either; an earlier version of this fix also made the hint permanently reserve its
+height (mounted at all times, `visible`/`invisible` toggle) as a second line of defense, but that
+left a persistent empty gap between the last line and "Añadir línea" whenever no row was being
+edited, for no remaining benefit once the handlers were portal-aware — reverted in favor of the
+plain conditional mount.
+
+**General rule for any future inline-editable row inside a centered `Dialog`:** a host element's
+"focus/click left me" check must be portal-aware (`isInPortalLayer`) — that alone is what prevents
+a popover/dropdown interaction from being misread as the user leaving the row, which is what was
+shifting the dialog (and the popover's anchor with it) mid-click. Reserving layout height for a
+hint/badge that toggles near an open popover is unnecessary once that check is in place, and costs
+a permanent visual gap — prefer it only if a future case still toggles visibility on a *legitimate,
+frequent* focus change that isn't already covered by a portal exemption. And a "which selectors
+count as a portal layer" list is context-dependent, not a drop-in constant: a selector that
+correctly flags "something else opened on top of me" for a page-level row (`[role="dialog"]`,
+`document.body.style.pointerEvents === 'none'`) can instead match the row's own ancestors once
+that row lives inside a Dialog — re-derive the list for the actual DOM context, don't copy it
+verbatim from a different one, and verify against the real rendered components (a mocked spec
+would not have caught either mistake here).
+`AmortizationLinesTable.jsx` closes its edit mode on an un-exempted `document` `mousedown` and
+carries the same latent bug class; it wasn't touched here (out of scope for this fix) but is a
+candidate for the same treatment.
+
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)

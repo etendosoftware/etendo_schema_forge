@@ -8,6 +8,7 @@ import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
+import { isInPortalLayer } from '@/lib/portalLayers';
 import { useCreateStatement } from '@/hooks/useCreateStatement';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankStatementLines } from '@/hooks/useBankStatementLines';
@@ -360,8 +361,15 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   );
 }
 
-// Inline hint shown under the row whose cell is being edited.
-function LineEditHint({ ui }) {
+// Hint shown below the lines list while a row's cell has focus. Rendered once
+// (not per row) and only mounted while `active`: with the row wrapper's
+// handlers now portal-aware (ETP-4924), interacting with a cell's calendar or
+// lookup dropdown no longer toggles `focusedId`, so mounting/unmounting this
+// on real focus changes no longer shifts the dialog mid-interaction — an
+// always-reserved height here would just leave a permanent empty gap below
+// the lines list whenever no row is being edited.
+function LineEditHint({ ui, active }) {
+  if (!active) return null;
   return (
     <div className="flex items-center justify-center gap-4 px-6 pb-2 text-xs text-[hsl(var(--muted-foreground))]">
       <span className="inline-flex items-center gap-1.5">
@@ -400,13 +408,30 @@ function EditableLines({ rows, setRows, ui, money, currencySym, currencySymRight
         ) : (
           <div
             key={r.id}
-            onFocusCapture={() => setFocusedId(r.id)}
+            onFocusCapture={(e) => {
+              // A focus landing inside a portalled popover/dropdown (calendar,
+              // lookup list) still bubbles here as a React event even though
+              // it isn't a DOM descendant of this row — it belongs to this
+              // row's editing session, so it must not be ignored, but it also
+              // must not steal focusedId from whichever row actually owns it.
+              if (isInPortalLayer(e.target)) return;
+              setFocusedId(r.id);
+            }}
             onBlurCapture={(e) => {
+              // Same portal caveat applies to the relatedTarget the focus is
+              // moving to: `currentTarget.contains(relatedTarget)` is a DOM
+              // check and is always false for a portalled node, so without
+              // this exemption opening the calendar reads as "left the row".
+              if (e.relatedTarget && isInPortalLayer(e.relatedTarget)) return;
               if (!e.currentTarget.contains(e.relatedTarget)) {
                 setFocusedId((cur) => (cur === r.id ? null : cur));
               }
             }}
             onKeyDown={(e) => {
+              // Keys originating inside a portalled popover (e.g. Enter/Escape
+              // on a calendar day) belong to that popover — let Radix and
+              // react-day-picker handle them instead of hijacking focus here.
+              if (isInPortalLayer(e.target)) return;
               // Enter commits the cell (blur / move focus) — it must NOT bubble
               // up and trigger "Guardar y procesar". Escape just exits the cell.
               if (e.key === 'Enter') {
@@ -426,10 +451,10 @@ function EditableLines({ rows, setRows, ui, money, currencySym, currencySymRight
               currencySym={currencySym}
               currencySymRightSide={currencySymRightSide}
               data-testid="EditRow__6b4086" />
-            {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
           </div>
         )))}
       </div>
+      <LineEditHint ui={ui} active={focusedId != null} data-testid="LineEditHint__6b4086" />
       <div className="border-t border-[hsl(var(--border-subtle))] px-6 py-2">
         <AddLineButton
           onClick={add}
