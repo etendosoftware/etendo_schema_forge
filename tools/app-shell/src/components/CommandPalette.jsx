@@ -507,7 +507,9 @@ export function CommandPalette() {
         {vectorMatches.length > 0 && (
           <CommandGroup heading={ui('semanticSearchResults')} data-testid="vector-search-results">
             {vectorMatches.map((match) => {
-              const fields = Object.values(match.fields || {}).filter(Boolean);
+              const fields = Object.entries(match.fields || {})
+                .filter(([fieldName, value]) => value && fieldName.toLowerCase() !== 'issotrx')
+                .map(([, value]) => value);
               const label = fields.join(' · ') || match.id;
               const target = vectorSearchTargetsByKey.get(match.target);
               const entityLabel = target ? tMenu(target.label) || target.label : null;
