@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { cn } from '@/lib/utils.js';
+import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 import {
   resolveVectorSearchTargetForPath,
   resolveVectorSearchTargets,
@@ -38,10 +39,6 @@ function specNameFromContractPath(path) {
   return path.split('/').at(-2);
 }
 
-function openCommandPalette() {
-  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-open'));
-}
-
 export default function TopBar({
   onBack,
   title,
@@ -65,8 +62,7 @@ export default function TopBar({
   const copilot = useCopilot();
   const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
   const [isCurrentWindowScopeEnabled, setIsCurrentWindowScopeEnabled] = useState(true);
-  const [searchValue, setSearchValue] = useState('');
-  const searchInputRef = useRef(null);
+  const { setOpen: setSearchOpen, query: searchValue, setQuery: setSearchValue, inputRef: searchInputRef, handleKeyDown: handleSearchKeyDown } = useGlobalSearch();
   const currentPathname = window.location.pathname;
   const vectorSearchTargets = useMemo(
     () => resolveVectorSearchTargets(vectorSearchContracts),
@@ -78,7 +74,10 @@ export default function TopBar({
   );
 
   const resolvedPlaceholder = searchPlaceholder ?? ui('searchPlaceholder');
-  const handleSearchClick = onSearchClick ?? openCommandPalette;
+  const handleSearchClick = onSearchClick ?? (() => {
+    setSearchOpen(true);
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  });
   const handleAIClick = onAIClick ?? copilot?.toggle;
 
   const hasMenu = onAddToFavorites || onPageHelp || menuAction;
@@ -263,9 +262,6 @@ export default function TopBar({
               onChange={(event) => {
                 const nextValue = event.target.value;
                 setSearchValue(nextValue);
-                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-query', {
-                  detail: { query: nextValue },
-                }));
                 if (nextValue.length === 0) {
                   setIsCurrentWindowScopeEnabled(false);
                   document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
@@ -276,16 +272,16 @@ export default function TopBar({
               onFocus={handleSearchClick}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {
-                if (event.key !== 'Backspace' || searchValue.length !== 1) return;
-                event.preventDefault();
-                setSearchValue('');
-                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-query', {
-                  detail: { query: '' },
-                }));
-                setIsCurrentWindowScopeEnabled(false);
-                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
-                  detail: { pathname: currentPathname, vectorSearchTarget: null },
-                }));
+                if (event.key === 'Backspace' && searchValue.length === 1) {
+                  event.preventDefault();
+                  setSearchValue('');
+                  setIsCurrentWindowScopeEnabled(false);
+                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+                    detail: { pathname: currentPathname, vectorSearchTarget: null },
+                  }));
+                  return;
+                }
+                handleSearchKeyDown(event);
               }}
               placeholder={resolvedPlaceholder}
               aria-label={resolvedPlaceholder}
