@@ -242,6 +242,11 @@ export function CommandPalette() {
     const setExternalScope = (event) => {
       const { pathname, vectorSearchTarget, vectorSearchTargets: targets } = event.detail ?? {};
       if (typeof pathname !== 'string') return;
+      if (!Array.isArray(targets) && vectorSearchTarget === null) {
+        setSelectedVectorTargetKeys(null);
+        setScopeOverride({ pathname, targets: null });
+        return;
+      }
       const selectedTargets = Array.isArray(targets)
         ? targets
         : vectorSearchTarget ? [vectorSearchTarget] : [];

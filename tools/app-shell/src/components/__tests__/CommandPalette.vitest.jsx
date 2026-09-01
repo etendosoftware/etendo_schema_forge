@@ -155,6 +155,23 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('vector-search-scope')).toHaveTextContent('allWindows');
   });
 
+  it('treats a cleared top-bar scope as all targets, not an empty search', async () => {
+    render(<CommandPalette />);
+    openPalette();
+    await waitFor(() => expect(screen.getByTestId('vector-search-scope')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('vector-search-target-picker-trigger'));
+
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+      detail: { pathname: '/sales-invoice', vectorSearchTarget: null },
+    }));
+
+    await waitFor(() => {
+      const options = screen.getAllByTestId('vector-search-target-option');
+      expect(options.length).toBeGreaterThan(0);
+      expect(options.every((option) => option.checked)).toBe(true);
+    });
+  });
+
   it('keeps the dropdown open when a recent search is confirmed with the keyboard', async () => {
     localStorage.setItem('schema-forge:recent-searches', JSON.stringify([
       { query: 'blanquiceleste', targets: [], timestamp: 1 },
