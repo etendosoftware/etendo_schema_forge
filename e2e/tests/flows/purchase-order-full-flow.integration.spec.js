@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, navigateTo } from '../helpers/auth.js';
+import { apiAuthHeaders, login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 import {
@@ -1003,11 +1003,11 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       // — verified live. `page.request` runs outside the page lifecycle, and
       // asking the backend for the record again is a stronger check anyway:
       // it re-queries the DB instead of re-reading a body the app already had.
-      const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-      expect(token, 'An auth token should be present in localStorage after login').toBeTruthy();
-
+      // ETP-4576: the credential is no longer readable from localStorage - it
+      // lives in memory (bearer) or in an HttpOnly cookie. Replay whatever the
+      // app itself authenticates with; page.request shares the cookie jar.
       const reread = await page.request.get(`/sws/neo/purchase-order/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: apiAuthHeaders(page),
       });
       expect(reread.ok(),
         `Re-reading the saved PO should succeed (got ${reread.status()})`,

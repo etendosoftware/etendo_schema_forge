@@ -23,10 +23,52 @@ export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
  * In mock mode: seeds localStorage + intercepts /sws/* API calls.
  * In real mode: fills the onboarding login form and enters the first available environment.
  */
+/**
+ * ETP-4576 — the session no longer lives in `localStorage`.
+ *
+ * It is held in memory by `AuthProvider` (and, under the cookie scheme, by an
+ * HttpOnly cookie), so a spec that wants to call the backend itself — an
+ * independent server re-read, a lookup the UI does not expose — can no longer
+ * dig the credential out of `localStorage.sf_auth_token`; that key is gone and
+ * the read silently yields `null`, which the backend answers with a 401.
+ *
+ * Instead we let the application prove its own identity and reuse the proof:
+ * every `/sws/**` request it makes is inspected and whatever authenticates it
+ * is remembered. That is scheme-agnostic on purpose — under bearer it captures
+ * `Authorization`, under cookies there is nothing to capture and the cookie
+ * jar of `page.request` (which shares the context's) carries the session on
+ * its own. Either way the spec sends exactly what the app sends.
+ */
+const capturedApiHeaders = new WeakMap();
+
+export function captureApiCredentials(page) {
+  if (capturedApiHeaders.has(page)) return;
+  capturedApiHeaders.set(page, {});
+  page.on('request', (request) => {
+    if (!request.url().includes('/sws/')) return;
+    const headers = request.headers();
+    const captured = {};
+    if (headers.authorization) captured.Authorization = headers.authorization;
+    if (headers['x-go-csrf']) captured['X-Go-CSRF'] = headers['x-go-csrf'];
+    if (Object.keys(captured).length > 0) capturedApiHeaders.set(page, captured);
+  });
+}
+
+/**
+ * The auth headers the application itself is sending, for a spec that needs to
+ * call the backend through `page.request`. Empty under the cookie scheme — that
+ * is correct, not a failure: the context's cookie jar already carries it.
+ * `login()` starts the capture, so call this only after logging in.
+ */
+export function apiAuthHeaders(page) {
+  return { ...(capturedApiHeaders.get(page) || {}) };
+}
+
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
 } = {}) {
+  captureApiCredentials(page);
   if (IS_MOCK_MODE) {
     // Inject token before React boots so AuthContext.isAuthenticated = true.
     await page.addInitScript(() => {
