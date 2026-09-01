@@ -66,7 +66,6 @@ function HighlightedQuery({ text, query }) {
 const RECENT_SEARCHES_KEY = 'schema-forge:recent-searches';
 const MAX_RECENT_SEARCHES = 5;
 const VECTOR_MAX_RESULTS = 10;
-const VECTOR_RELATED_MAX_RESULTS = 20;
 const VECTOR_FETCH_MIN_SCORE = 0.45;
 
 function normalizeSearchText(value) {
@@ -94,7 +93,6 @@ export function CommandPalette() {
   const [vectorMatches, setVectorMatches] = useState([]);
   const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
   const [isVectorSearchLoading, setIsVectorSearchLoading] = useState(false);
-  const [showRelatedMatches, setShowRelatedMatches] = useState(false);
   const [selectedVectorTargetKeys, setSelectedVectorTargetKeys] = useState(null);
   const [isTargetPickerOpen, setIsTargetPickerOpen] = useState(false);
   const [scopeOverride, setScopeOverride] = useState(null);
@@ -157,7 +155,6 @@ export function CommandPalette() {
     keyboardIndexRef.current = -1;
     setKeyboardIndex(-1);
     document.querySelector('[data-testid="CommandList__73263e"]')?.scrollTo?.({ top: 0 });
-    setShowRelatedMatches(false);
   }, [query]);
 
   useEffect(() => {
@@ -338,7 +335,7 @@ export function CommandPalette() {
             query: normalizedQuery,
             targets: targets.join(','),
             minScore: String(VECTOR_FETCH_MIN_SCORE),
-            maxResults: String(showRelatedMatches ? VECTOR_RELATED_MAX_RESULTS : VECTOR_MAX_RESULTS),
+            maxResults: String(VECTOR_MAX_RESULTS),
           });
           const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -351,7 +348,7 @@ export function CommandPalette() {
         setVectorMatches(matches
           .filter((match) => Number.isFinite(Number(match.score)))
           .sort((left, right) => Number(right.score) - Number(left.score))
-          .slice(0, VECTOR_RELATED_MAX_RESULTS));
+          .slice(0, VECTOR_MAX_RESULTS));
         if (normalizedQuery.length >= 3) {
           setRecentSearches((current) => {
             const next = [
@@ -373,7 +370,7 @@ export function CommandPalette() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [query, requestedVectorSearchTargetKeys, selectedVectorTargetKeys, showRelatedMatches]);
+  }, [query, requestedVectorSearchTargetKeys, selectedVectorTargetKeys]);
 
   const handleSelect = (name) => {
     setQuery('');
@@ -430,7 +427,7 @@ export function CommandPalette() {
   } = rankVectorMatches(
     vectorMatches,
     query,
-    showRelatedMatches,
+    false,
   );
 
   const renderVectorMatch = (match) => {
@@ -580,16 +577,7 @@ export function CommandPalette() {
         )}
         {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
         {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {relatedVectorMatches.length > 0 && (showRelatedMatches || !vectorMatchesConcentrated) && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {relatedVectorMatches.length > 0 && !showRelatedMatches && vectorMatchesConcentrated && (
-          <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related-prompt">
-            <CommandItem value="search-more-related" onSelect={() => setShowRelatedMatches(true)} data-testid="vector-search-more-related">
-              <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
-              <span>{ui('searchMoreRelated')}</span>
-            </CommandItem>
-          </CommandGroup>
-        )}
-        {relatedVectorMatches.length > 0 && showRelatedMatches && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
         {menuConfig.menu.filter(g => !g.hidden).map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
           const visibleItems = group.items.filter(i => !i.hidden);
