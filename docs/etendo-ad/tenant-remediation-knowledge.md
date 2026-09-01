@@ -341,6 +341,13 @@
 
 ## ETP-4503 — Payment-method multicurrency defaults (G1 / R14, 2026-07-16)
 
+> **Superseded in part by ETP-5084 (2026-08-31, R29).** The bank-transfer exception recorded below —
+> multicurrency forced OFF on the transfer link of a PSD2-connected Bank account — was **removed**.
+> The findings about the two columns, the two tables and the `em_psd2_is_bank_transfer` seed-vs-live
+> divergence all still hold and are still load-bearing for R15/R24. See the ETP-5084 entry at the end
+> of this section for what changed and why.
+
+
 - **2026-07-16 — "Multicurrency" is TWO independent columns, not one.** `payin_ismulticurrency` AND
   `payout_ismulticurrency` on BOTH `fin_paymentmethod` (the method template) and
   `fin_finacc_paymentmethod` (the per-account link). Both are `character(1)` with column default
@@ -370,7 +377,9 @@
   Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
   same bank-connected account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
 - **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
-  not in each handler.** `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
+  not in each handler.** *(The exception itself was removed by ETP-5084 — see the 2026-08-31 entry
+  below. The choke-point reasoning is kept because it still governs
+  `disableAutomaticWithdrawnForTransferMethod` and anything else added to a connect path.)* `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
   call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
   `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
   lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers
@@ -426,6 +435,24 @@
   — the failure mode inverts from "missing nicety" to "blocked user".
 
 ---
+
+- **2026-08-31 (ETP-5084) — the bank-transfer exception was WRONG, and it is now gone.** The premise
+  was "a PSD2 transfer executes in the account's own currency, so multicurrency on that link would be
+  misleading". The first half is true and the conclusion does not follow: because the transfer is
+  instructed in the account currency, a foreign invoice is settled by **converting** the amount first
+  (invoice → account, with the invoice's own rate — the ETP-4502 contract), which is exactly what a
+  multi-currency link means. The exception blocked two real operations: cross-currency PIS payment of
+  an invoice, and cross-currency bank reconciliation through the transfer method (refused by
+  `ReconciliationPaymentService.assertMethodMultiCurrency`). **Removed:**
+  `FinancialAccountSupport.disableMulticurrencyForBankTransfer` (deleted) and its call from
+  `FinancialAccountBankConnectionHandler.linkAccount`. **Repaired:** `R29-transfer-link-multicurrency`
+  enables both columns on every template and every link, with no predicate and no exception — so it
+  needs none of the fragile transfer-method identification R14/R15/R24 depend on. **R14 is retired**
+  (`retired.json`), because its effect 2 would keep re-applying the exception and fight R29 on every
+  run. **Apply:** when a corrective fix's premise is an *inference* about a business rule rather than
+  an observed DB fact, record the inference explicitly — this one survived three tickets before
+  anyone questioned whether "executes in the account currency" implies "cannot settle a foreign
+  invoice".
 
 ## Imported Bank Statement "Estado" stuck at Borrador after PSD2 sync — R25 (L1)
 

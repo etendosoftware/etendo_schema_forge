@@ -253,6 +253,15 @@ The retry reuses this payment rather than registering a second one, so it posts 
 record itself (`/payment-out/header/{id}/action/retryPisPayment`) and needs no invoice context. The
 payment returns to `PPM` while the new attempt is in flight.
 
+**A cross-currency retry re-sends the converted amount (ETP-5084).** `FIN_Payment.amount` is
+denominated in the invoice currency, so on a payment whose account is in another currency it is the
+wrong figure to hand the bank. `PisPaymentBridge.bankAmountFor` sends the payment's already-converted
+`financialTransactionAmount` — the same value the ledger holds, so a retry cannot drift from it — and
+tags it with the account's currency; the template is likewise derived from the account currency
+(EUR→SEPA, USD→DOMESTIC, GBP→FPS). If that column was never populated the rate stored on the payment
+is used to recompute it, and with neither the retry is refused rather than instructing an unconverted
+amount. See the readout section below for where those two stored values are surfaced.
+
 **The retry follows its own attempt.** It used to end at `window.open`: nothing watched the new
 transfer, because the invoice modal's poll belongs to the modal, Salt Edge's webhook cannot reach a
 server that is not publicly addressable, and PSD2's `Refresh Pending Payments` is not scheduled by

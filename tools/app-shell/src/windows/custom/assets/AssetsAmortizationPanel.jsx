@@ -208,10 +208,18 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
               {lines.map((line) => {
                 const rowId = line.id ?? line.sEQNoAsset;
                 const isSelected = selectedRows.has(rowId);
+                // ETP-5030 — exactly ONE background per row, mirroring
+                // `computeRowClassName` (contract-ui/InlineLinesPanel.jsx).
+                // The `hover:` half is not optional: the pointer is over the
+                // row at the instant the checkbox is clicked, so without it
+                // `hover:bg-muted/30` would repaint over the tint at exactly
+                // the moment the user looks for feedback.
                 return (
                   <tr
                     key={rowId}
-                    className="hover:bg-muted/30"
+                    className={isSelected
+                      ? 'bg-primary/5 hover:bg-primary/5'
+                      : 'hover:bg-muted/30'}
                   >
                     <td className="py-3 pr-2" style={{ width: 40 }}>
                       <Checkbox

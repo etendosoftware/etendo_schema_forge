@@ -507,6 +507,32 @@ row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
 | Partial failure | single warning — "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse." | `bulkDeletePartialFailure` |
 | All rows fail | error — "No se pudo eliminar ninguno de los {count} registros seleccionados." | `bulkDeleteAllFailed` |
 
+**The toast names the reason when every failure shares one (ETP-5085).** Counting failures without
+saying why leaves the user with nothing to act on — selecting a single undeletable row and reading
+"No se pudo eliminar ninguno de los 1 registros seleccionados" is the worst case of it. So
+`runBatchDelete` now also returns `errors` (the rejection reason per failed item, aligned with
+`failed`), and `toastBatchDeleteOutcome` appends the reason through
+`bulkDeleteAllFailedWithReason` / `bulkDeletePartialFailureWithReason`. For a **single** selected
+row the reason **replaces** the message entirely — the backend already wrote a full sentence.
+
+Three guards keep that from leaking noise, and they are the point of the design:
+
+- **Only a 4xx counts as a reason.** `Promise.allSettled` catches every rejection alike — a dropped
+  connection, a `TypeError` from a bug in `deleteOneFn`, a 500 whose message is by design a log
+  pointer ("Please check logs for details"). A 4xx is the one case where the server answered "no,
+  because …" on purpose. So `deleteOneFn` must reject with an error carrying `status` (as
+  `useCreateMovement.postAction` does) for its message to be shown at all.
+- **A message that is just a status code** (`HTTP 409`, `409 Conflict`) is discarded — the counter
+  message is better than a code.
+- **Several distinct reasons → no reason.** One sentence cannot summarise them, and picking one
+  failure would imply it explains all of them.
+
+The reason is run through `translateBackendError`, so a backend literal shows in Spanish only if it
+has a `BACKEND_ERROR_MAP` entry + `backendError.*` key — the same contract as every per-row surface.
+Callers that build the toast themselves (`DetailView`, `contacts`, `AmortizationLinesTable`) still
+pass no `errors` and keep the counter-only wording; `useBatchDeleteDialog` (Financial Accounts,
+Movements, Statements) passes it.
+
 On a partial failure, `ListView` keeps only the failed rows selected: `DataTable`
 gained a paired `deselectTrigger`/`deselectRowIds` prop (alongside the existing
 all-or-nothing `clearSelectionTrigger`) so only the succeeded row ids drop out
@@ -521,7 +547,8 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 **New i18n keys** (all under `genericLabels`, both `en_US.json`/`es_ES.json`):
 `deleteBlockedByReferences`, `bulkDeleteConfirmTitle`, `bulkDeleteConfirmMessage`,
 `bulkDeleteSelected`, `bulkDeleteAllSucceeded`, `bulkDeletePartialFailure`,
-`bulkDeleteAllFailed`.
+`bulkDeleteAllFailed`, plus (ETP-5085) `bulkDeleteAllFailedWithReason` and
+`bulkDeletePartialFailureWithReason`.
 
 **Real examples:** the generic mechanism applies to every window using the
 standard `ListView` (nothing to declare). `contacts` is the one window that

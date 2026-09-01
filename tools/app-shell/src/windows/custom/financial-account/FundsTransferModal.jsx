@@ -12,6 +12,7 @@ import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
 
 /** Parses a user-typed amount ("1.234,56" or "1234.56") into a Number, or NaN. */
@@ -352,7 +353,9 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
       onSuccess?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || ui('financeAccountTransferError'));
+      // The hook throws the backend's own business message (ETP-5085) — translate it before
+      // showing it, or the user reads it in English.
+      setError(translateBackendError(err?.message, ui) || ui('financeAccountTransferError'));
     }
   };
 

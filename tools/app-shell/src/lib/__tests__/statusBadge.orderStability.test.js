@@ -53,3 +53,79 @@ describe('compareStatusCodes (ETP-4696 — stable status dropdown order)', () =>
     assert.equal(compareStatusCodes('foo_unknown', 'FOO_UNKNOWN'), 0);
   });
 });
+
+// ETP-4913 extended STATUS_ORDER with the remaining real docstatus codes, so a
+// whole reference list now sorts by document flow instead of leaving
+// "??, NA, RE, TEMP, WP" alphabetized at the tail.
+
+// Real AD_Ref_List code sets. 131 "All_Document Status" backs M_InOut and
+// C_Invoice (shipments, receipts, returns, invoices); FF8081…0011
+// "Order_Document Status" backs C_Order (orders and quotations), plus the
+// ETGO_CI value com.etendoerp.go adds.
+const WAREHOUSE_CODES = ['CL', 'CO', 'DR', 'NA', 'WP', 'RE', 'TEMP', 'IP', '??', 'VO'];
+const ORDER_CODES = [
+  'AE', 'CO', 'CL', 'ETGO_CI', 'CA', 'CJ', 'DR', 'ME', 'NA', 'NC',
+  'WP', 'RE', 'TMP', 'UE', 'IP', '??', 'VO',
+];
+const PAYMENT_CODES = ['RPAE', 'RPAP', 'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC', 'RPVOID', 'ETGOERR'];
+
+describe('compareStatusCodes — full document flows (ETP-4913)', () => {
+  it('orders the warehouse/invoice docstatus set by document flow', () => {
+    assert.deepEqual(
+      WAREHOUSE_CODES.slice().sort(compareStatusCodes),
+      ['TEMP', 'DR', 'IP', 'WP', 'CO', 'RE', 'CL', 'NA', 'VO', '??'],
+    );
+  });
+
+  it('orders the order/quotation docstatus set by document flow', () => {
+    assert.deepEqual(
+      ORDER_CODES.slice().sort(compareStatusCodes),
+      ['TMP', 'DR', 'NC', 'IP', 'UE', 'AE', 'ME', 'WP', 'CO', 'CA', 'ETGO_CI',
+        'RE', 'CL', 'NA', 'CJ', 'VO', '??'],
+    );
+  });
+
+  it('orders the payment status set by payment flow', () => {
+    assert.deepEqual(
+      PAYMENT_CODES.slice().sort(compareStatusCodes),
+      ['RPAE', 'RPAP', 'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC', 'RPVOID', 'ETGOERR'],
+    );
+  });
+
+  it('knows every code of every real status set (none falls to the alphabetical tail)', () => {
+    for (const code of [...WAREHOUSE_CODES, ...ORDER_CODES, ...PAYMENT_CODES]) {
+      assert.ok(STATUS_ORDER.includes(code), `${code} is missing from STATUS_ORDER`);
+    }
+  });
+
+  it('places the Unknown sentinel last among known codes, but before an unknown one', () => {
+    // The backend orders distinct values by raw code and '?' (0x3F) sorts
+    // before 'A', so without an explicit entry '??' rendered FIRST.
+    assert.deepEqual(
+      ['??', 'CO', 'DR', 'ZZZ_UNKNOWN'].sort(compareStatusCodes),
+      ['DR', 'CO', '??', 'ZZZ_UNKNOWN'],
+    );
+  });
+
+  it('keeps the two Temporal aliases adjacent and ahead of Draft', () => {
+    assert.deepEqual(['DR', 'TEMP', 'TMP'].sort(compareStatusCodes), ['TMP', 'TEMP', 'DR']);
+  });
+
+  it('orders Re-Opened after Completed and before the terminal Closed', () => {
+    assert.deepEqual(['CL', 'RE', 'CO'].sort(compareStatusCodes), ['CO', 'RE', 'CL']);
+  });
+});
+
+describe('STATUS_ORDER invariants', () => {
+  it('has no duplicate entries', () => {
+    assert.equal(new Set(STATUS_ORDER).size, STATUS_ORDER.length);
+  });
+
+  it('holds every entry in upper case', () => {
+    // compareStatusCodes upper-cases its inputs before the indexOf lookup, so a
+    // lower-case entry would be permanently unreachable.
+    for (const code of STATUS_ORDER) {
+      assert.equal(code, code.toUpperCase(), `${code} is not upper case`);
+    }
+  });
+});

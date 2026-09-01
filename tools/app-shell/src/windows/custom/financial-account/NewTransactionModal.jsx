@@ -15,6 +15,7 @@ import { X, Check, Save, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
 import { Field, DateInput, AmountInput, ChipSelect } from '@/components/forms/fields';
 import { eur, parseEur, todayISO } from './NewMovementWizard/movementWizardData';
@@ -200,7 +201,9 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
       onSuccess?.();
       onClose();
     } catch (e) {
-      toast.error(e?.message || ui('financeAccountTxNewError'));
+      // The hook throws the backend's own business message (ETP-5085) — translate it before
+      // showing it, or the user reads it in English.
+      toast.error(translateBackendError(e?.message, ui) || ui('financeAccountTxNewError'));
     }
   };
 

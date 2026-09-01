@@ -23,10 +23,12 @@
       <th>{{meta.labels.amtacctdr}}</th>
       <th>{{meta.labels.amtacctcr}}</th>
       <th>{{meta.descriptionLabel}}</th>
+      {{#ifCond meta.params.showDimensions '===' 'true'}}
       <th>{{meta.labels.bPartnerId}}</th>
       <th>{{meta.labels.productId}}</th>
       <th>{{meta.labels.projectId}}</th>
       <th>{{meta.labels.costCenterId}}</th>
+      {{/ifCond}}
     </tr></thead>
     <tbody>
       {{#each rows}}
@@ -37,10 +39,12 @@
         <td data-cell-type="number">{{lookup this 'amtacctdr'}}</td>
         <td data-cell-type="number">{{lookup this 'amtacctcr'}}</td>
         <td>{{lookup this 'groupbyname'}}</td>
+        {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
         <td>{{lookup this 'bpname'}}</td>
         <td>{{lookup this 'productname'}}</td>
         <td>{{lookup this 'projectname'}}</td>
         <td>{{lookup this 'costcentername'}}</td>
+        {{/ifCond}}
       </tr>
       {{/each}}
     </tbody>

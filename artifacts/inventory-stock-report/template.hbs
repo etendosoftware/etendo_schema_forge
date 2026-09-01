@@ -3,7 +3,21 @@
 <html><head><meta charset="UTF-8">
 <style>
 {{{css}}}
-.group-header td { border: none !important; }
+/* Grouped layout (ETP-5013 follow-up) — one bordered card per group, each
+   with its own header row, matching report-general-ledger's account cards.
+   Was a single shared header over one continuous body with a plain
+   text row marking each group break — with the group band now the same
+   muted-yellow-turned-gray fill as every other row (post-grayscale
+   redesign), the break barely stood out (image #44 in the ETP-5013
+   follow-up request: "no se llega a diferenciar bien"). */
+.stock-cards { display: flex; flex-direction: column; gap: 3mm; }
+.stock-card { border: 1px solid #e2e8f0; border-radius: 1.5mm; overflow: hidden; }
+/* value (left, bold) + a "Producto"/"Almacén"/"Categoría" chip (right) —
+   same layout as report-general-ledger's .dim-group-head, so the "this is
+   what we grouped by" context reads the same across reports. */
+.stock-card-head { display: flex; align-items: center; justify-content: space-between; gap: 3mm; background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; }
+.stock-card-head .value { font-weight: 700; font-size: 10.5pt; }
+.stock-card-head .chip { display: inline-block; line-height: 1; font-size: 8pt; font-weight: 600; color: var(--color-primary); background: var(--color-bg-stripe); border: 1px solid rgba(18,18,23,0.15); border-radius: 3mm; padding: 1mm 3mm; }
 </style>
 </head>
 <body><div class="report-container">
@@ -22,15 +36,58 @@
 
   {{!-- The other two dimensions (of Product/Warehouse/Category) always show as their own
         columns, right after the search key, in that fixed relative order — whichever one is
-        the CURRENT grouping is skipped there since its band already carries that value. This
-        keeps the column count constant (5 fixed + 2 of the 3 dimensions = 7) regardless of
-        which "Agrupar por" option is chosen, so the colspan below never needs to change. --}}
+        the CURRENT grouping is skipped there since its band already carries that value. --}}
+  {{#if meta.dimensionField}}
+  {{!-- Grouped layout (ETP-5013 follow-up) — one bordered card per group,
+        each with its OWN header row and its OWN <table>/<thead>, instead of
+        a single shared thead over one continuous tbody with a plain
+        group-break row. A card opens right before the FIRST row of its
+        group (isGroupBreak fires) and closes right after the LAST row of
+        the PREVIOUS group (the same isGroupBreak firing, guarded by
+        `unless @first` so the very first group doesn't try to close a card
+        that was never opened) — the trailing card is closed once,
+        unconditionally, after the loop. --}}
+  <div class="stock-cards">
+    {{#each rows}}
+      {{#if (isGroupBreak @root.meta.dimensionField (lookup this @root.meta.dimensionField))}}
+        {{#unless @first}}</tbody></table></div>{{/unless}}
+    <div class="stock-card">
+      <div class="stock-card-head"><span class="value">{{lookup this @root.meta.dimensionField}}</span><span class="chip">{{@root.meta.dimensionLabel}}</span></div>
+      <table class="report-table">
+        <thead><tr>
+          <th style="width: 12%">{{@root.meta.labels.productSearchKey}}</th>
+          {{#unless (eq @root.meta.dimensionField 'product')}}<th style="width: 18%">{{@root.meta.labels.product}}</th>{{/unless}}
+          {{#unless (eq @root.meta.dimensionField 'warehouse')}}<th style="width: 14%">{{@root.meta.labels.warehouse}}</th>{{/unless}}
+          {{#unless (eq @root.meta.dimensionField 'category')}}<th style="width: 14%">{{@root.meta.labels.category}}</th>{{/unless}}
+          <th style="width: 8%">{{@root.meta.labels.uom}}</th>
+          <th style="width: 14%" class="cell-amount">{{@root.meta.labels.qtyOnHand}}</th>
+          <th style="width: 12%" class="cell-amount">{{@root.meta.labels.unitCost}}</th>
+          <th style="width: 18%" class="cell-amount">{{@root.meta.labels.totalValuation}}</th>
+        </tr></thead>
+        <tbody>
+      {{/if}}
+          <tr>
+            <td>{{lookup this 'productSearchKey'}}</td>
+            {{#unless (eq @root.meta.dimensionField 'product')}}<td>{{lookup this 'product'}}</td>{{/unless}}
+            {{#unless (eq @root.meta.dimensionField 'warehouse')}}<td>{{lookup this 'warehouse'}}</td>{{/unless}}
+            {{#unless (eq @root.meta.dimensionField 'category')}}<td>{{lookup this 'category'}}</td>{{/unless}}
+            <td>{{lookup this 'uom'}}</td>
+            <td class="cell-amount">{{formatCurrency (lookup this 'qtyOnHand')}}</td>
+            <td class="cell-amount">{{formatCurrency (lookup this 'unitCost')}}</td>
+            <td class="cell-amount">{{formatCurrency (lookup this 'totalValuation')}}</td>
+          </tr>
+    {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {{else}}
   <table class="report-table">
     <thead><tr>
       <th style="width: 12%">{{meta.labels.productSearchKey}}</th>
-      {{#unless (eq meta.dimensionField 'product')}}<th style="width: 18%">{{meta.labels.product}}</th>{{/unless}}
-      {{#unless (eq meta.dimensionField 'warehouse')}}<th style="width: 14%">{{meta.labels.warehouse}}</th>{{/unless}}
-      {{#unless (eq meta.dimensionField 'category')}}<th style="width: 14%">{{meta.labels.category}}</th>{{/unless}}
+      <th style="width: 18%">{{meta.labels.product}}</th>
+      <th style="width: 14%">{{meta.labels.warehouse}}</th>
+      <th style="width: 14%">{{meta.labels.category}}</th>
       <th style="width: 8%">{{meta.labels.uom}}</th>
       <th style="width: 14%" class="cell-amount">{{meta.labels.qtyOnHand}}</th>
       <th style="width: 12%" class="cell-amount">{{meta.labels.unitCost}}</th>
@@ -38,28 +95,20 @@
     </tr></thead>
     <tbody>
       {{#each rows}}
-        {{#if @root.meta.dimensionField}}
-        {{#if (isGroupBreak @root.meta.dimensionField (lookup this @root.meta.dimensionField))}}
-        <tr class="group-header">
-          <td colspan="7" style="background: #000000; color: #ffffff; font-weight: 600; padding: 2mm 4mm; font-size: 11pt;">
-            {{lookup this @root.meta.dimensionField}}
-          </td>
-        </tr>
-        {{/if}}
-        {{/if}}
-        <tr>
-          <td>{{lookup this 'productSearchKey'}}</td>
-          {{#unless (eq @root.meta.dimensionField 'product')}}<td>{{lookup this 'product'}}</td>{{/unless}}
-          {{#unless (eq @root.meta.dimensionField 'warehouse')}}<td>{{lookup this 'warehouse'}}</td>{{/unless}}
-          {{#unless (eq @root.meta.dimensionField 'category')}}<td>{{lookup this 'category'}}</td>{{/unless}}
-          <td>{{lookup this 'uom'}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'qtyOnHand')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'unitCost')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'totalValuation')}}</td>
-        </tr>
+      <tr>
+        <td>{{lookup this 'productSearchKey'}}</td>
+        <td>{{lookup this 'product'}}</td>
+        <td>{{lookup this 'warehouse'}}</td>
+        <td>{{lookup this 'category'}}</td>
+        <td>{{lookup this 'uom'}}</td>
+        <td class="cell-amount">{{formatCurrency (lookup this 'qtyOnHand')}}</td>
+        <td class="cell-amount">{{formatCurrency (lookup this 'unitCost')}}</td>
+        <td class="cell-amount">{{formatCurrency (lookup this 'totalValuation')}}</td>
+      </tr>
       {{/each}}
     </tbody>
   </table>
+  {{/if}}
 
   {{#if meta.isInteractive}}
   <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>

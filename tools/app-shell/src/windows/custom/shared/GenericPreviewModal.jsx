@@ -262,9 +262,15 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
   }, [onClose]);
 
   const triggerEdit = useCallback(() => {
+    if (!onEdit) {
+      // No edit handler supplied: fall back to a plain close so the overlay
+      // always unmounts instead of leaving the page blocked by a dead scrim.
+      triggerClose();
+      return;
+    }
     setAnimState('closingUp');
-    setTimeout(() => onEdit?.(), 280);
-  }, [onEdit]);
+    setTimeout(() => onEdit(), 280);
+  }, [onEdit, triggerClose]);
 
   useImperativeHandle(ref, () => ({ triggerEdit }), [triggerEdit]);
 

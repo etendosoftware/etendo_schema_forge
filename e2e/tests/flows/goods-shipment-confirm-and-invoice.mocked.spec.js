@@ -43,6 +43,11 @@ function makeShipment(overrides) {
   };
 }
 
+// ETP-5052 (post-ETP-4942 QA fix) — the price list the backend resolved via
+// GoodsShipmentHeaderHandler#enrichResolvedPriceList (linked order's tariff, or
+// the Business Partner's own), which the picker must preselect over the system
+// `default` flag. See makeShipment() overrides below for how each test wires it.
+
 /**
  * Install a mock for the goods-shipment entity endpoints (lines + header).
  * Must be called AFTER login() so it takes priority over the generic /sws/** catch-all.
@@ -229,6 +234,10 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
       processed: false,
       'businessPartner$_identifier': 'Cliente Sin Pedido S.L.',
       linkedOrders: [], // no linked sales order
+      // ETP-5052: resolved server-side from the Business Partner's own tariff
+      // (no linked order to derive it from) — deliberately the tariff NOT
+      // flagged `default` below, to prove the resolved id wins over the flag.
+      resolvedPriceListId: 'pl-vip',
     });
 
     await login(page);
@@ -265,9 +274,11 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
     // usePriceListPicker hits `${base}/price-list/priceList` where base is one
     // level up from the goods-shipment spec root (`/sws/neo`) — same
     // spec-swapped endpoint the "Crear Factura" describe block below mocks.
-    // No entry is flagged `default`, so the hook still auto-selects the FIRST
-    // match once the fetch resolves — matching real usePriceListPicker behavior
-    // (see PriceListPicker.jsx: `matches.find(p => p.default) || matches[0]`).
+    // ETP-5052: pl-general is flagged `default` (the system default) while
+    // shipmentNoOrder.resolvedPriceListId points at pl-vip — proving the
+    // resolved id wins over the `default` flag (see PriceListPicker.jsx:
+    // `matches.find(p => p.id === defaultPriceListId) || matches.find(p =>
+    // p.default) || matches[0]`).
     await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
@@ -276,7 +287,7 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
         body: JSON.stringify({
           response: {
             data: [
-              { id: 'pl-general', name: 'Tarifa General', active: true, salesPriceList: true, default: false },
+              { id: 'pl-general', name: 'Tarifa General', active: true, salesPriceList: true, default: true },
               { id: 'pl-vip', name: 'Tarifa VIP', active: true, salesPriceList: true, default: false },
             ],
           },
@@ -303,20 +314,23 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
 
     const confirmBtn = page.getByTestId('confirm-modal-confirm-btn');
 
-    // Once the price-list fetch resolves, the hook auto-selects the first match
-    // — the picker never leaves the user stuck with no option to confirm — so
-    // the button ends up enabled without a manual pick.
+    // Once the price-list fetch resolves, the hook auto-selects the resolved
+    // tariff (shipmentNoOrder.resolvedPriceListId = 'pl-vip') — NOT pl-general,
+    // even though pl-general is the one flagged `default` above. This is the
+    // ETP-5052 regression assertion: the exact preselected VALUE, not just that
+    // the picker renders or doesn't block confirm.
     await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+    await expect(priceListSelect).toContainText('Tarifa VIP');
 
-    // Explicitly choose the OTHER tariff to prove the manual-selection path
-    // (onChange → setPriceListId) drives the request body, not just whatever
-    // the hook auto-selected.
+    // Explicitly choose the OTHER tariff to prove a manual user selection
+    // (onChange → setPriceListId) persists over the server-resolved default and
+    // drives the request body — not just whatever was auto-selected.
     await priceListSelect.click();
-    await page.getByTestId('option-confirm-modal-price-list-pl-vip').click();
+    await page.getByTestId('option-confirm-modal-price-list-pl-general').click();
 
     await confirmBtn.click();
     await expect.poll(() => createDraftInvoiceBody, { timeout: 8_000 }).not.toBeNull();
-    expect(createDraftInvoiceBody).toEqual({ priceListId: 'pl-vip' });
+    expect(createDraftInvoiceBody).toEqual({ priceListId: 'pl-general' });
 
     // ── Case 2: shipment WITH a linked order — picker is optional ──────────
     const shipmentWithOrder = makeShipment({
@@ -329,6 +343,11 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
       linkedOrders: [
         { id: 'order-002', grandTotalAmount: 2500, 'currency$_identifier': 'EUR' },
       ],
+      // ETP-5052: resolved server-side from the linked order's own tariff —
+      // deliberately the OTHER mocked price list than case 1's resolvedPriceListId
+      // ('pl-vip'), to prove the preselection is actually driven by this field
+      // and not a hardcoded value carried over from the previous case.
+      resolvedPriceListId: 'pl-general',
     });
 
     await installGoodsShipmentMock(page, [shipmentWithOrder]);
@@ -373,7 +392,8 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
 
     // The picker still renders (showPriceListPicker is unconditional on
     // GoodsShipmentConfirmModal) ...
-    await expect(page.getByTestId('confirm-modal-price-list-select')).toBeVisible({ timeout: 5_000 });
+    const priceListSelectWithOrder = page.getByTestId('confirm-modal-price-list-select');
+    await expect(priceListSelectWithOrder).toBeVisible({ timeout: 5_000 });
 
     // ...but with a linked order, hasLinkedOrder=true means the backend can
     // resolve the tariff on its own — the confirm button is never blocked by
@@ -382,6 +402,12 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
     // settled, and regardless of whatever it resolves to).
     const confirmBtnWithOrder = page.getByTestId('confirm-modal-confirm-btn');
     await expect(confirmBtnWithOrder).toBeEnabled({ timeout: 1_000 });
+
+    // ETP-5052: once the price-list fetch resolves, the picker preselects
+    // shipmentWithOrder.resolvedPriceListId ('pl-general') — the linked order's
+    // own tariff — not pl-vip and not whatever the "first match" fallback would
+    // have picked.
+    await expect(priceListSelectWithOrder).toContainText('Tarifa General', { timeout: 8_000 });
 
     await confirmBtnWithOrder.click();
     await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0, { timeout: 8_000 });
@@ -408,6 +434,7 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
       linkedOrders: [
         { id: 'order-001', grandTotalAmount: 750, 'currency$_identifier': 'EUR' },
       ],
+      resolvedPriceListId: 'pl-001',
     });
 
     await login(page);

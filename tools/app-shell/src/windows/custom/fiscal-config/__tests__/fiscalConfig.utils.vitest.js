@@ -10,6 +10,8 @@ import {
   normalizeVerifactuTaxType,
   getVerifactuTaxTypeLabel,
   getAllowedSystemsForTerritory,
+  isProductionEnvironment,
+  resolveRecordEnvironment,
   getCertificateContext,
   todayIsoDate,
   buildOnboardingPayloads,
@@ -794,5 +796,52 @@ describe('parseApiError', () => {
       statusText: 'Bad Gateway',
     };
     expect(await parseApiError(res)).toBe('Bad Gateway');
+  });
+});
+
+describe('resolveRecordEnvironment (ETP-5027)', () => {
+  it('returns null when there is no record', () => {
+    expect(resolveRecordEnvironment('sii', null)).toBeNull();
+  });
+
+  it('reads entornoDeProduccin for SII (Y = production)', () => {
+    expect(resolveRecordEnvironment('sii', { entornoDeProduccin: 'Y' })).toBe(true);
+    expect(resolveRecordEnvironment('sii', { entornoDeProduccin: 'N' })).toBe(false);
+  });
+
+  it('reads productionEnv for TicketBAI (Y = production)', () => {
+    expect(resolveRecordEnvironment('tbai', { productionEnv: true })).toBe(true);
+    expect(resolveRecordEnvironment('tbai', { productionEnv: false })).toBe(false);
+  });
+
+  it('inverts isDevEnv for VERI*FACTU (Y = developer/test env)', () => {
+    expect(resolveRecordEnvironment('verifactu', { isDevEnv: 'Y' })).toBe(false);
+    expect(resolveRecordEnvironment('verifactu', { isDevEnv: 'N' })).toBe(true);
+  });
+
+  it('returns null when the record carries no environment value', () => {
+    expect(resolveRecordEnvironment('verifactu', {})).toBeNull();
+    expect(resolveRecordEnvironment('sii', { entornoDeProduccin: '' })).toBeNull();
+  });
+});
+
+describe('isProductionEnvironment (ETP-5027)', () => {
+  it('resolves each single-system profile from its own record', () => {
+    expect(isProductionEnvironment('VERIFACTU', { verifactu: { isDevEnv: 'N' } })).toBe(true);
+    expect(isProductionEnvironment('VERIFACTU', { verifactu: { isDevEnv: 'Y' } })).toBe(false);
+    expect(isProductionEnvironment('SII', { sii: { entornoDeProduccin: 'Y' } })).toBe(true);
+    expect(isProductionEnvironment('TBAI', { tbai: { productionEnv: 'Y' } })).toBe(true);
+  });
+
+  it('requires every record of a combined profile to be in production', () => {
+    const records = { sii: { entornoDeProduccin: 'Y' }, tbai: { productionEnv: 'Y' } };
+    expect(isProductionEnvironment('SII+TBAI', records)).toBe(true);
+    expect(isProductionEnvironment('SII+TBAI', { ...records, tbai: { productionEnv: 'N' } })).toBe(false);
+  });
+
+  it('never claims production when the flag is unknown', () => {
+    expect(isProductionEnvironment('VERIFACTU', {})).toBe(false);
+    expect(isProductionEnvironment('VERIFACTU', null)).toBe(false);
+    expect(isProductionEnvironment(null, { verifactu: { isDevEnv: 'N' } })).toBe(false);
   });
 });

@@ -781,3 +781,69 @@ describe('custom-column exclusion from filterableColumns (ETP-4609)', () => {
     expect(fieldOptionValues).toContain('computedTotal');
   });
 });
+
+// ============================================================
+// ETP-4913 — the status value picker's OPTION ORDER, exercised through the
+// local shim so this asserts on the app-shell-core ARTIFACT the app actually
+// renders, not just on the core source.
+//
+// The behaviour itself is unit-tested in the core repo
+// (packages/app-shell-core/src/components/contract-ui/__tests__/AdvancedFilterBuilder.test.jsx,
+// "DistinctEnumPicker option order"). What this adds is consumer-side coverage:
+// without it, nothing in THIS repo notices if a core release ships without the
+// sort — statusBadge.coreParity.test.js only compares the STATUS_ORDER catalog,
+// not whether the picker applies it.
+//
+// Skipped until the core release carrying the fix is published and the
+// dependency bumped; runs immediately under `LOCAL_CORE=1`, which aliases the
+// package to the sibling core checkout. Capability is probed via the same
+// signal coreParity uses, since the catalog and the sort ship together.
+// ============================================================
+
+let corePickerSorts = false;
+try {
+  const mod = await import('@etendosoftware/app-shell-core/lib/statusBadge.js');
+  corePickerSorts = !!(mod.STATUS_ORDER && mod.compareStatusCodes);
+} catch {
+  // Subpath not resolvable (pre-publish) — suite is skipped.
+}
+
+describe.skipIf(!corePickerSorts)('DistinctEnumPicker status order via the core shim (ETP-4913)', () => {
+  // No enumLabels and a `useLocale` mock returning `{ statuses: {} }` make
+  // labelFor(code) fall through to the raw code, so each option's text is its
+  // own code and the order assertion needs no translation catalog.
+  const DOC_STATUS_COL = {
+    key: 'documentStatus',
+    label: 'Doc Status',
+    type: 'status',
+    column: 'DocStatus',
+  };
+
+  afterEach(() => {
+    distinctState.values = [];
+  });
+
+  it('renders a shuffled warehouse docstatus set in fixed document-flow order', async () => {
+    const user = userEvent.setup();
+    // Alphabetical-by-code, the order the backend's `order by <code> asc` yields.
+    distinctState.values = ['??', 'CL', 'CO', 'DR', 'IP', 'NA', 'RE', 'TEMP', 'VO', 'WP']
+      .map((id) => ({ id }));
+
+    render(
+      <AdvancedFilterBuilder
+        columns={[DOC_STATUS_COL]}
+        value={{
+          rowOperator: 'and',
+          conditions: [{ field: 'documentStatus', operator: 'equals', value: '' }],
+        }}
+        entity="return-material-receipt"
+        apiBaseUrl="/api"
+      />,
+    );
+
+    await user.click(screen.getByText('advancedFilterSelectValue'));
+
+    const labels = (await screen.findAllByTestId('distinct-option')).map((o) => o.textContent);
+    expect(labels).toEqual(['TEMP', 'DR', 'IP', 'WP', 'CO', 'RE', 'CL', 'NA', 'VO', '??']);
+  });
+});

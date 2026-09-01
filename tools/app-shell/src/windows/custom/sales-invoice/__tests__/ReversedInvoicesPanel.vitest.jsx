@@ -15,8 +15,13 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() },
+}));
+
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
 
 const RECORD_ID = 'rec-1';
@@ -34,7 +39,7 @@ let fetchCalls;
 // `activeModels`.
 function installFetch({
   lines = [], headerInvoices = [], years = [], postResponse = null, patchResponse = null,
-  activeModels = { '349': true }, catalogOk = true,
+  deleteResponse = null, activeModels = { '349': true }, catalogOk = true,
 } = {}) {
   fetchCalls = [];
   global.fetch = vi.fn(async (url, opts = {}) => {
@@ -50,7 +55,7 @@ function installFetch({
     if (method === 'GET' && String(url).includes('/header')) return ok(headerInvoices);
     if (method === 'POST') return postResponse ?? { ok: true, json: async () => ({}) };
     if (method === 'PATCH') return patchResponse ?? { ok: true, json: async () => ({}) };
-    if (method === 'DELETE') return { ok: true, json: async () => ({}) };
+    if (method === 'DELETE') return deleteResponse ?? { ok: true, json: async () => ({}) };
     return { ok: false, json: async () => ({}) };
   });
 }
@@ -307,7 +312,7 @@ describe('TC-07 — draft save POSTs only invoice + reversedInvoice', () => {
     expect(post.body).toEqual({ invoice: RECORD_ID, reversedInvoice: 'inv-orig-9' });
   });
 
-  it('TC-07: a failed POST surfaces the backend message in text__saveError', async () => {
+  it('TC-07: a failed POST surfaces the backend message as a toast', async () => {
     renderPanel({
       headerInvoices: [CANDIDATE],
       postResponse: { ok: false, json: async () => ({ error: { message: 'BP distinto al de la factura original' } }) },
@@ -317,7 +322,11 @@ describe('TC-07 — draft save POSTs only invoice + reversedInvoice', () => {
     fireEvent.click(await screen.findByText('10000090'));
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
-    expect(await screen.findByTestId('text__saveError')).toHaveTextContent('BP distinto al de la factura original');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('BP distinto al de la factura original'));
+    // ETP-5027: toast ONLY — one error, one toast, on every path. The inline
+    // paragraph is gone, so the same message is never rendered twice.
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
   });
 });
 
@@ -435,5 +444,155 @@ describe('TC-13 — isRectificative=false blocks add/delete inside the panel', (
     expect(screen.queryByTestId('btn__addReversedInvoice')).not.toBeInTheDocument();
     expect(screen.queryByText('rectAddInvoice')).not.toBeInTheDocument();
     expect(screen.queryByTestId('btn__deleteLine')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5027 — a rejected PATCH/DELETE must surface a toast instead of failing silently
+// ---------------------------------------------------------------------------
+
+const TRIGGER_MSG = 'La rectificativa dejaría el importe declarado de entregas '
+  + '(clave E/A) en negativo para el período indicado.';
+
+describe('ETP-5027 — rejected PATCH surfaces the backend message as a toast', () => {
+  const YEARS = [{ id: 'y2026', fiscalYear: '2026' }];
+
+  it('toasts the AEAT349 trigger message when the corrective group PATCH is rejected', async () => {
+    renderPanel({
+      lines: [LINE()],
+      years: YEARS,
+      patchResponse: { ok: false, json: async () => ({ error: { message: TRIGGER_MSG } }) },
+    });
+    await expandFirstRow();
+
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+    const yearSelect = findYearSelect();
+    await waitFor(() => expect(within(yearSelect).getAllByRole('option').length).toBeGreaterThan(1));
+    fireEvent.change(yearSelect, { target: { value: 'y2026' } });
+    fireEvent.change(findPeriodSelect(), { target: { value: '1T' } });
+
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    // Before this fix patchLine did nothing at all on !res.ok — the checkbox just
+    // reverted on the next fetchLines() with no message anywhere.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
+    // Toast ONLY: an existing row has no draft form to anchor an inline message
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the generic message when the rejected PATCH body is unparseable', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', aEAT349Period: '1T' })],
+      years: YEARS,
+      patchResponse: { ok: false, json: async () => { throw new Error('not json'); } },
+    });
+    await expandFirstRow();
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('rectSaveError'));
+  });
+
+  it('does not toast when the PATCH succeeds', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', aEAT349Period: '1T' })],
+      years: YEARS,
+    });
+    await expandFirstRow();
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('toasts the backend message when a line DELETE is rejected', async () => {
+    renderPanel({
+      lines: [LINE()],
+      deleteResponse: { ok: false, json: async () => ({ error: { message: TRIGGER_MSG } }) },
+    });
+    await screen.findAllByText('10000067');
+    fireEvent.click(screen.getByTestId('btn__deleteLine'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
+    // Toast ONLY — the delete path has no inline anchor either
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
+  });
+
+  it('does not toast when the DELETE succeeds', async () => {
+    renderPanel({ lines: [LINE()] });
+    await screen.findAllByText('10000067');
+    fireEvent.click(screen.getByTestId('btn__deleteLine'));
+
+    await waitFor(() => expect(fetchCalls.some(c => c.method === 'DELETE')).toBe(true));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5027 regression — a rejected draft POST must not be retried on tab change
+//
+// DetailView keeps inactive custom tabs MOUNTED (display:none), so the panel's
+// document-level capture-phase mousedown "click-outside" handler still fires
+// when the user clicks another tab. It used to re-run handleSaveNewLine() with
+// the very same already-rejected draft: one extra failed POST — and one extra
+// error toast — per tab click, unbounded. Now that the POST path toasts again
+// (the inline paragraph was dropped), a regression here is directly visible as
+// stacking toasts, so both counts are asserted.
+// ---------------------------------------------------------------------------
+
+describe('ETP-5027 — the rejected draft is not re-saved on every outside click', () => {
+  const CANDIDATE_A = {
+    id: 'inv-orig-9', documentNo: '10000090', invoiceDate: '2026-05-01',
+    documentStatus: 'CO', 'businessPartner$_identifier': 'Cliente SL', grandTotalAmount: 50,
+  };
+  const CANDIDATE_B = {
+    id: 'inv-orig-8', documentNo: '10000080', invoiceDate: '2026-04-01',
+    documentStatus: 'CO', 'businessPartner$_identifier': 'Cliente SL', grandTotalAmount: 40,
+  };
+  const REJECTED = { ok: false, json: async () => ({ error: { message: TRIGGER_MSG } }) };
+
+  /** What a tab click does before React unmounts/hides anything: a capture-phase
+   *  mousedown on a node outside the draft row. */
+  const clickAnotherTab = () => fireEvent.mouseDown(document.body);
+
+  async function failFirstSave(headerInvoices) {
+    renderPanel({ headerInvoices, postResponse: REJECTED });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    fireEvent.click(screen.getByText('Seleccionar...'));
+    fireEvent.click(await screen.findByText('10000090'));
+    fireEvent.click(screen.getByTestId('btn__saveNewLine'));
+    await waitFor(() => expect(postCalls()).toHaveLength(1));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
+  }
+
+  it('three tab switches after a failed save fire exactly 1 POST and 1 toast', async () => {
+    await failFirstSave([CANDIDATE_A]);
+
+    clickAnotherTab();
+    clickAnotherTab();
+    clickAnotherTab();
+
+    // Give any re-triggered save a chance to land before asserting
+    await waitFor(() => expect(screen.getByTestId('btn__saveNewLine')).toBeInTheDocument());
+    expect(postCalls()).toHaveLength(1);
+    // The user-visible symptom of a re-fire: stacking toasts. Exactly one.
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    // The draft form stays open so the user can fix the fields
+    expect(screen.getByTestId('btn__saveNewLine')).toBeInTheDocument();
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
+  });
+
+  it('re-arms once the draft changes: editing then clicking outside saves again', async () => {
+    await failFirstSave([CANDIDATE_A, CANDIDATE_B]);
+    clickAnotherTab();
+    expect(postCalls()).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+
+    // Pick a DIFFERENT original invoice → the draft is no longer the rejected one
+    fireEvent.click(screen.getByText('10000090'));   // reopen the picker
+    fireEvent.click(await screen.findByText('10000080'));
+
+    clickAnotherTab();
+    await waitFor(() => expect(postCalls()).toHaveLength(2));
+    expect(postCalls()[1].body).toEqual({ invoice: RECORD_ID, reversedInvoice: 'inv-orig-8' });
   });
 });

@@ -6,7 +6,7 @@ const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
   { key: 'offsetMonthDue', column: 'FixMonthOffset', type: 'number', label: 'Offset Month Due', required: true, section: 'principal' },
   { key: 'overduePaymentDaysRule', column: 'NetDays', type: 'number', label: 'Overdue Payment Days Rule', required: true, section: 'principal' },
-  { key: 'default', column: 'IsDefault', type: 'checkbox', label: 'Default', section: 'principal' },
+  { key: 'default', column: 'IsDefault', type: 'checkbox', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', section: 'principal' },
 ];
 // @sf-generated-end fields:header
 
