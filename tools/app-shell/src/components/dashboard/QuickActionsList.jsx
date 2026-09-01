@@ -30,11 +30,20 @@ export function QuickActionsList({ actions = [] }) {
                 source: 'dashboard_quick_actions',
               })}
               data-testid={action.testId}
+              // The full label on hover, since a narrow sidebar-open layout truncates it.
+              title={action.label}
               style={{
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
                 alignSelf: 'flex-start',
+                // `alignSelf: flex-start` sizes the pill to its content, so without these two it
+                // grows past the card and the label is chopped mid-word (no ellipsis) as soon as
+                // the sidebar opens and the column narrows. `maxWidth` caps the pill at the card;
+                // `minWidth: 0` lets a flex item shrink below its content, which is what actually
+                // enables the span's `text-overflow: ellipsis` below.
+                maxWidth: '100%',
+                minWidth: 0,
                 padding: '4px 8px',
                 height: '28px',
                 backgroundColor: 'hsl(var(--muted))',
@@ -56,6 +65,9 @@ export function QuickActionsList({ actions = [] }) {
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
+                // Required for the ellipsis: a flex item defaults to `min-width: auto`, which
+                // refuses to shrink below its text and pushes the overflow outside instead.
+                minWidth: 0,
               }}>
                 {action.label}
               </span>

@@ -53,4 +53,33 @@ describe('QuickActionsList', () => {
       source: 'dashboard_quick_actions',
     });
   });
+
+  it('keeps a long label inside the card so it truncates instead of being chopped', () => {
+    // Reported live: with the sidebar open the column narrows and "Nuevo pedido de venta" was cut
+    // mid-word. The span already had `text-overflow: ellipsis`, but it could never apply — the
+    // pill uses `align-self: flex-start`, so it sized to its content and overflowed the card, and
+    // a flex item defaults to `min-width: auto`, which refuses to shrink below its text.
+    render(
+      <QuickActionsList
+        actions={[
+          {
+            label: 'Nuevo pedido de venta con un nombre larguísimo',
+            to: '/sales-order/new',
+            testId: 'quick-action-sales-order-new',
+            analyticsAction: 'create_sales_order',
+          },
+        ]}
+      />,
+    );
+
+    const pill = screen.getByTestId('quick-action-sales-order-new');
+    expect(pill.style.maxWidth).toBe('100%');
+    expect(pill.style.minWidth).toBe('0px');
+    // The full text stays reachable on hover once it is visually truncated.
+    expect(pill).toHaveAttribute('title', 'Nuevo pedido de venta con un nombre larguísimo');
+
+    const label = pill.querySelector('span');
+    expect(label.style.minWidth).toBe('0px');
+    expect(label.style.textOverflow).toBe('ellipsis');
+  });
 });
