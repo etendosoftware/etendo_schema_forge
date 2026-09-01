@@ -70,4 +70,21 @@ describe('TopBar title', () => {
     document.removeEventListener('schema-forge:vector-search-scope', recordScopeEvent);
     window.history.pushState({}, '', '/');
   });
+
+  it('clears the scope pill when Backspace is pressed at the start of a non-empty query', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId('global-search-input');
+    fireEvent.change(input, { target: { value: 'texto largo' } });
+    input.setSelectionRange(0, 0);
+    fireEvent.keyDown(input, { key: 'Backspace' });
+
+    expect(input).toHaveValue('texto largo');
+    expect(screen.queryByTestId('topbar-vector-search-scope')).not.toBeInTheDocument();
+    window.history.pushState({}, '', '/');
+  });
 });
