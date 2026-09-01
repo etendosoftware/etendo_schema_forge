@@ -1,15 +1,15 @@
 {
   "version": "0.50.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-09-01T12:14:44.661Z",
-  "checksum": "faf76f527068a725",
+  "updatedAt": "2026-08-25T18:09:16.378Z",
+  "checksum": "397296243d877390",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -5195,7 +5195,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
+      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -11947,152 +11947,50 @@
     ],
     "actions": [
       {
-        "name": "setNewCurrency",
-        "actionType": "utilityAction",
         "entity": "businessPartner",
+        "field": "setNewCurrency",
         "column": "Update_Currency",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/contacts/businessPartner/{id}/action/setNewCurrency",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
-        "name": "setNewCurrency",
-        "actionType": "utilityAction",
         "entity": "customer",
+        "field": "setNewCurrency",
         "column": "Update_Currency",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/contacts/customer/{id}/action/setNewCurrency",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
-        "name": "setNewCurrency",
-        "actionType": "utilityAction",
         "entity": "vendorCreditor",
+        "field": "setNewCurrency",
         "column": "Update_Currency",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/contacts/vendorCreditor/{id}/action/setNewCurrency",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
-        "name": "setNewCurrency",
-        "actionType": "utilityAction",
         "entity": "employee",
+        "field": "setNewCurrency",
         "column": "Update_Currency",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/contacts/employee/{id}/action/setNewCurrency",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
-        "name": "grantPortalAccess",
-        "actionType": "utilityAction",
         "entity": "contact",
+        "field": "grantPortalAccess",
         "column": "Grant_Portal_Access",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/contacts/contact/{id}/action/grantPortalAccess",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "97FFD59B991D49BFB5153C309B009272",
         "processType": "obuiapp"
       },
       {
-        "name": "processNow",
-        "actionType": "documentAction",
         "entity": "contact",
+        "field": "processNow",
         "column": "Processing",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/contacts/contact/{id}/action/processNow",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
+        "url": "/sws/neo/contacts/contact/{id}/action/processNow"
       }
     ],
     "queryParams": {
@@ -12132,572 +12030,6 @@
         "C_BP_Group_ID": "Categoría de contacto"
       }
     }
-  },
-  "formState": {
-    "entities": {
-      "businessPartner": {
-        "fields": {
-          "etgoIdentifier": {
-            "readOnly": true
-          },
-          "searchKey": {
-            "required": true
-          },
-          "name": {
-            "required": true
-          },
-          "businessPartnerCategory": {
-            "required": true,
-            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
-          },
-          "etgoFirstname": {
-            "required": true
-          },
-          "etgoLastname": {
-            "required": true
-          },
-          "oBTIKTaxIDKey": {
-            "required": true,
-            "defaultValue": "'1'"
-          },
-          "taxID": {},
-          "oBTIKVIESStatus": {
-            "readOnly": true,
-            "defaultValue": "P"
-          },
-          "etgoWeb": {},
-          "etgoEmail": {},
-          "etgoPhone": {},
-          "etgoIsperson": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "name2": {},
-          "description": {},
-          "uRL": {},
-          "referenceNo": {},
-          "consumptionDays": {
-            "defaultValue": "1000"
-          },
-          "active": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "greeting": {},
-          "customer": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "vendor": {
-            "required": true
-          },
-          "employee": {
-            "required": true
-          },
-          "setNewCurrency": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "creditLimit": {
-            "required": true
-          },
-          "bPCurrencyID": {},
-          "isCustomerConsent": {
-            "defaultValue": "N"
-          },
-          "tbaiIssimplifiedinv": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "operator": {
-            "defaultValue": "N"
-          },
-          "creditUsed": {
-            "readOnly": true,
-            "required": true
-          },
-          "paymentTerms": {},
-          "salaryCategory": {
-            "readOnly": true
-          },
-          "customerBlocking": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "aeatsiiDefaultsiikey": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "aeatsiiSiikeylist": {
-            "defaultValue": "F1"
-          },
-          "account": {},
-          "paymentMethod": {},
-          "isSalesRepresentative": {
-            "required": true
-          },
-          "priceList": {},
-          "pOFinancialAccount": {},
-          "pOPaymentTerms": {},
-          "pOPaymentMethod": {},
-          "purchasePricelist": {},
-          "vendorBlocking": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "eTGOLocation": {
-            "readOnly": true
-          }
-        }
-      },
-      "customer": {
-        "fields": {
-          "customer": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "priceList": {},
-          "paymentMethod": {},
-          "paymentTerms": {},
-          "account": {},
-          "salesRepresentative": {},
-          "invoiceTerms": {
-            "defaultValue": "I"
-          },
-          "invoiceSchedule": {},
-          "taxExempt": {},
-          "customerBlocking": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "salesOrder": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "goodsShipment": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "salesInvoice": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "paymentIn": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "sOBPTaxCategory": {},
-          "maturityDate1": {},
-          "maturityDate2": {},
-          "maturityDate3": {},
-          "birthDay": {},
-          "birthPlace": {},
-          "aeatsiiDefaultsiikey": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "aeatsiiSiikeylist": {
-            "defaultValue": "F1"
-          }
-        }
-      },
-      "customerAccounting": {
-        "fields": {
-          "customerReceivablesNo": {
-            "required": true
-          },
-          "customerPrepayment": {}
-        }
-      },
-      "intrastatShipments": {
-        "fields": {
-          "businessPartner": {
-            "readOnly": true,
-            "required": true
-          },
-          "sOTransportationType": {},
-          "port": {},
-          "statisticalAmtPercentSo": {},
-          "privateCustomer": {
-            "required": true,
-            "defaultValue": "N"
-          }
-        }
-      },
-      "vendorCreditor": {
-        "fields": {
-          "vendor": {
-            "required": true
-          },
-          "purchasePricelist": {},
-          "pOPaymentMethod": {},
-          "pOPaymentTerms": {},
-          "pOFinancialAccount": {},
-          "pOMaturityDate1": {},
-          "pOMaturityDate2": {},
-          "pOMaturityDate3": {},
-          "taxCategory": {},
-          "cashVAT": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "vendorBlocking": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "purchaseOrder": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "goodsReceipt": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "purchaseInvoice": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "paymentOut": {
-            "required": true,
-            "defaultValue": "Y"
-          }
-        }
-      },
-      "vendorAccounting": {
-        "fields": {
-          "vendorLiability": {
-            "required": true
-          },
-          "vendorPrepayment": {}
-        }
-      },
-      "intrastatAdquisitions": {
-        "fields": {
-          "businessPartner": {
-            "readOnly": true,
-            "required": true
-          },
-          "country": {},
-          "transportationType": {},
-          "portAirport": {},
-          "statisticalAmtPercentPo": {}
-        }
-      },
-      "employee": {
-        "fields": {
-          "employee": {
-            "required": true
-          },
-          "isSalesRepresentative": {
-            "required": true
-          },
-          "operator": {
-            "defaultValue": "N"
-          },
-          "salaryCategory": {
-            "readOnly": true
-          }
-        }
-      },
-      "employeeAccounting": {
-        "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          }
-        }
-      },
-      "costSalaryCategory": {
-        "fields": {
-          "startingDate": {
-            "required": true
-          },
-          "salaryCategory": {
-            "required": true
-          }
-        }
-      },
-      "bankAccount": {
-        "fields": {
-          "bankName": {},
-          "country": {
-            "defaultValue": "@COUNTRYDEF@"
-          },
-          "userContact": {},
-          "bankFormat": {
-            "required": true,
-            "defaultValue": "GENERIC"
-          },
-          "accountNo": {},
-          "iBAN": {},
-          "swiftCode": {},
-          "displayedAccount": {
-            "readOnly": true
-          }
-        }
-      },
-      "documentType": {
-        "fields": {
-          "documentcategory": {
-            "required": true
-          },
-          "issotrx": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "cDoctypeID": {
-            "required": true
-          },
-          "active": {
-            "required": true,
-            "defaultValue": "Y"
-          }
-        }
-      },
-      "locationAddress": {
-        "fields": {
-          "locationAddress": {
-            "required": true
-          },
-          "phone": {},
-          "alternativePhone": {},
-          "name": {
-            "required": true,
-            "defaultValue": "."
-          },
-          "fax": {},
-          "shipToAddress": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "invoiceToAddress": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "active": {
-            "readOnly": true,
-            "required": true
-          },
-          "taxLocation": {
-            "required": true,
-            "defaultValue": "N"
-          }
-        }
-      },
-      "contact": {
-        "fields": {
-          "firstName": {},
-          "lastName": {},
-          "name": {
-            "readOnly": true,
-            "required": true
-          },
-          "email": {},
-          "phone": {},
-          "alternativePhone": {},
-          "position": {},
-          "comments": {},
-          "active": {
-            "readOnly": true,
-            "required": true
-          },
-          "isdefaultfordocs": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "grantPortalAccess": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "commercialauth": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "viasms": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "viaemail": {
-            "required": true,
-            "defaultValue": "N"
-          }
-        }
-      },
-      "basicDiscount": {
-        "fields": {
-          "lineNo": {
-            "required": true,
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
-          },
-          "discount": {
-            "required": true
-          },
-          "customer": {
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "vendor": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "applyInOrder": {
-            "required": true,
-            "defaultValue": "N"
-          },
-          "cascade": {
-            "required": true,
-            "defaultValue": "N"
-          }
-        }
-      }
-    },
-    "requiredSessionVariables": [],
-    "evaluationMode": "runtime"
-  },
-  "agentProfile": {
-    "purpose": "Manage contacts records.",
-    "whenToUse": [
-      "Use for contacts management."
-    ],
-    "minimumCreate": {
-      "headerFields": [
-        "searchKey",
-        "name",
-        "businessPartnerCategory",
-        "etgoFirstname",
-        "etgoLastname",
-        "oBTIKTaxIDKey",
-        "etgoIsperson",
-        "customer",
-        "vendor",
-        "employee",
-        "setNewCurrency",
-        "creditLimit",
-        "tbaiIssimplifiedinv",
-        "customerBlocking",
-        "aeatsiiDefaultsiikey",
-        "isSalesRepresentative",
-        "vendorBlocking"
-      ],
-      "lineFields": [
-        "customer",
-        "customerBlocking",
-        "salesOrder",
-        "goodsShipment",
-        "salesInvoice",
-        "paymentIn",
-        "aeatsiiDefaultsiikey",
-        "customerReceivablesNo",
-        "privateCustomer",
-        "vendor",
-        "cashVAT",
-        "vendorBlocking",
-        "purchaseOrder",
-        "goodsReceipt",
-        "purchaseInvoice",
-        "paymentOut",
-        "vendorLiability",
-        "employee",
-        "isSalesRepresentative",
-        "startingDate",
-        "salaryCategory",
-        "bankFormat",
-        "documentcategory",
-        "issotrx",
-        "cDoctypeID",
-        "active",
-        "locationAddress",
-        "name",
-        "shipToAddress",
-        "invoiceToAddress",
-        "taxLocation",
-        "isdefaultfordocs",
-        "grantPortalAccess",
-        "commercialauth",
-        "viasms",
-        "viaemail",
-        "lineNo",
-        "discount",
-        "customer",
-        "vendor",
-        "applyInOrder",
-        "cascade"
-      ],
-      "recommendedOrder": [
-        "createHeader",
-        "createLines"
-      ]
-    },
-    "selectorContexts": [
-      {
-        "entity": "businessPartner",
-        "field": "pOFinancialAccount",
-        "context": {
-          "required": [
-            {
-              "param": "PO_Paymentmethod_ID",
-              "source": "field",
-              "field": "pOPaymentMethod"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "vendorCreditor",
-        "field": "pOFinancialAccount",
-        "context": {
-          "required": [
-            {
-              "param": "PO_Paymentmethod_ID",
-              "source": "parentField",
-              "field": "pOPaymentMethod"
-            }
-          ]
-        }
-      }
-    ],
-    "actions": [
-      "processNow"
-    ],
-    "workflow": [],
-    "edgeCases": [
-      "Required context is missing",
-      "User lacks permission",
-      "Record is in an incompatible state",
-      "Document is already completed or closed",
-      "Document has pending lines or missing required fields",
-      "User lacks permission to execute the action"
-    ],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "searchKey",
-          "name",
-          "businessPartnerCategory",
-          "etgoFirstname",
-          "etgoLastname",
-          "oBTIKTaxIDKey",
-          "etgoIsperson",
-          "customer",
-          "vendor",
-          "employee",
-          "setNewCurrency",
-          "creditLimit",
-          "tbaiIssimplifiedinv",
-          "customerBlocking",
-          "aeatsiiDefaultsiikey",
-          "isSalesRepresentative",
-          "vendorBlocking"
-        ]
-      }
-    ],
-    "warnings": [],
-    "knownLimitations": [],
-    "dangerousOperations": [],
-    "agentPrompt": "#REF#agent-prompts/contacts/spec.md"
   },
   "testManifest": {
     "tests": [
