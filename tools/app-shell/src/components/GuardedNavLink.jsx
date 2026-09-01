@@ -16,6 +16,7 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
+      data-testid="NavLink__1b6d6d"
       {...rest}
       to={to}
       onClick={(event) => {
