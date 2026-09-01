@@ -279,10 +279,15 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
    ReDoS/DoS hotspot (`javascript:S5852`); linear-time slicing has no backtracking surface at all.
    `t(key, { param: captured })` then re-interpolates the extracted parts through the frontend's own
    i18n, the same way `ui('linkedToInvoice', { number })` would. See `matchAccountNotFound` (ETP-4706,
-   Account-not-found enrichment) and `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
-   `ETGO_InvoiceLineAlreadyInvoiced`) in `backendErrors.js` for the pattern: order matters — try the
-   more specific matcher before the more general one, and add a code comment linking the matcher back
-   to the server-side `AD_MESSAGE` entry it mirrors.
+   Account-not-found enrichment), `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
+   `ETGO_InvoiceLineAlreadyInvoiced`), and `matchFieldTooLong` (ETP-4984, the Hibernate
+   `StringPropertyValidator` "Value too long" message → `backendError.fieldTooLong`) in
+   `backendErrors.js` for the pattern: order matters — try the more specific matcher before the more
+   general one, and add a code comment linking the matcher back to the server-side `AD_MESSAGE` entry
+   (or, for `matchFieldTooLong`, the core validator) it mirrors. Note `matchFieldTooLong` is
+   deliberately repo-wide — it fires for this backend message on any entity/field, not just the window
+   that first added the field-level `maxLength` prevention (see `docs/generated-custom-windows/assets.md`
+   § ETP-4984 for the paired client-side cap).
 
 `translateBackendError` tries the exact-match map first, then falls through to the parameterized
 matchers, and returns the original (untranslated) message if neither matches — never throws and

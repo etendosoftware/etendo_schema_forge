@@ -174,7 +174,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
 
   const group1Fields = [
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
-    { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
+    { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal', maxLength: 60 },
     // TEMPORARY opt-out (searchSelect: false) — keeps this field on the OLD plain
     // SelectorInput instead of ETP-4600's unified CreatableSearchSelect. The unified
     // component's interaction timing exposes a pre-existing DetailView save→refetch/
@@ -197,7 +197,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Producto,
     // Valor del Activo, Descripcion — assetValue must render BEFORE description.
     { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
-    { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
+    { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other', maxLength: 255 },
   ];
 
   const group2Fields = [

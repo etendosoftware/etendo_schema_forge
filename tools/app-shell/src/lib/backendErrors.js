@@ -332,6 +332,35 @@ function matchSyncFetchFailed(msg) {
   return detail ? { detail } : null;
 }
 
+// StringPropertyValidator.validate() (core, org.openbravo.base.validation) — raised whenever a
+// saved string value exceeds its AD column's field length. The raw message has no
+// AD_Message/i18n involvement at all: `ValidationException.getMessage()` prefixes it with
+// "<EntityName>.<PropertyName>: " and the validator itself appends "Value too long. Length <N>,
+// maximum allowed <M> [<value, possibly truncated to 100 chars>]" (ETP-4984, Assets Name/
+// Description). The entity/field prefix and the truncated value are dynamic and not needed for
+// the toast, so this matcher locates the fixed "Value too long. Length " / ", maximum allowed "
+// markers with indexOf rather than requiring a startsWith match on the whole message — same
+// plain-string-slicing rationale as the matchers above (no regex, no ReDoS surface over
+// entity/field/value names).
+const FIELD_TOO_LONG_MARKER = 'Value too long. Length ';
+const FIELD_TOO_LONG_MID = ', maximum allowed ';
+const FIELD_TOO_LONG_VALUE_OPEN = ' [';
+
+function matchFieldTooLong(msg) {
+  const markerIdx = msg.indexOf(FIELD_TOO_LONG_MARKER);
+  if (markerIdx === -1 || !msg.endsWith(']')) return null;
+  const afterMarker = msg.slice(markerIdx + FIELD_TOO_LONG_MARKER.length);
+  const midIdx = afterMarker.indexOf(FIELD_TOO_LONG_MID);
+  if (midIdx === -1) return null;
+  const length = afterMarker.slice(0, midIdx);
+  const afterMid = afterMarker.slice(midIdx + FIELD_TOO_LONG_MID.length);
+  const valueOpenIdx = afterMid.indexOf(FIELD_TOO_LONG_VALUE_OPEN);
+  if (valueOpenIdx === -1) return null;
+  const maxLength = afterMid.slice(0, valueOpenIdx);
+  if (!length || !maxLength) return null;
+  return { maxLength };
+}
+
 // Runs the parameterized matchers in order and returns the winning translation
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
@@ -422,6 +451,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
   [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
   [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+  [matchFieldTooLong, 'backendError.fieldTooLong'],
 ];
 
 function resolveParameterizedMatch(msg) {

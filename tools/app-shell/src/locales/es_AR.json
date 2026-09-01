@@ -19376,7 +19376,7 @@
     "poBulkOrderHasDraftReceipt": "Pedido {documentNo} ya tiene un albarán en borrador.",
     "cloneOrderBtn": "Clonar",
     "quickAction.edit": "Editar",
-    "quickAction.clone": "Duplicar",
+    "quickAction.clone": "Clonar",
     "quickAction.email": "Enviar / Descargar",
     "quickAction.more": "Más acciones",
     "quickAction.delete": "Eliminar",

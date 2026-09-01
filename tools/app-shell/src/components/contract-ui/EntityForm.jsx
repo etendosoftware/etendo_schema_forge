@@ -545,7 +545,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled, maxLength }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -612,6 +612,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
       className={className}
       required={required}
       disabled={disabled}
+      maxLength={maxLength}
     />
   );
 }
@@ -1118,6 +1119,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
     ) : (
       <Input
@@ -1137,6 +1139,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
       />
     );
     return (
@@ -1180,6 +1183,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           onBlur={() => onFieldBlur?.(f.key)}
           placeholder={placeholder}
           disabled={isReadOnly}
+          maxLength={f.maxLength}
           className={[
             'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
