@@ -7,7 +7,7 @@
 // these tests stay focused on ListModalWindow behaviour; the children get their
 // own dedicated test files.
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // react-router-dom: capture the navigate mock so we can assert the back button.
@@ -19,7 +19,10 @@ vi.mock('react-router-dom', () => ({
 // i18n: useUI echoes the key (so banner / titles assert against the key name);
 // useMenuLabel echoes the label.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // Echoes the key. When the caller interpolates a `count` (the bulk-delete selection
+  // bar's "N selected" pill, the bulk confirm dialog) the count is appended, so the
+  // selection counter is assertable without shipping real translations into the test.
+  useUI: () => (key, params) => (params?.count != null ? `${key} (${params.count})` : key),
   useMenuLabel: () => (label) => label,
   // useLabel echoes the column name so footer-toggle label assertions are predictable.
   useLabel: () => (column) => column,
@@ -44,7 +47,7 @@ vi.mock('@/lib/backendErrors.js', () => ({
 }));
 
 // toast: collect calls.
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 // useNeoResource is driven per-test via this mutable holder.
 const neoState = { data: [], loading: false, reload: vi.fn() };
@@ -67,11 +70,12 @@ vi.mock('@/lib/utils', () => ({
 // onToggle(row, col, true) so the inline-toggle PATCH path can be asserted
 // without pulling in the real Switch / resolveIdentifier UI deps.
 vi.mock('../listModalCells.jsx', () => ({
-  ListModalCell: ({ row, col, onToggle }) =>
+  ListModalCell: ({ row, col, onToggle, readOnly }) =>
     col.toggle || col.cellType === 'toggle' ? (
       <button
         type="button"
         data-testid={`cell-toggle-${col.key}-${row.id}`}
+        data-readonly={String(!!readOnly)}
         onClick={() => onToggle?.(row, col, true)}
       >
         toggle
@@ -109,12 +113,20 @@ vi.mock('../ListModalToolbarFilter.jsx', () => ({
 }));
 
 // Lightweight EntityForm stub: records props (so tests can read the seeded
-// form `data`, e.g. the auto-priority value, and drive onChange).
+// form `data`, e.g. the auto-priority value, and drive onChange) and renders a
+// marker per received field, so tests can assert which descriptors actually
+// reached the form (accounting-dimension gating).
 let lastEntityFormProps = null;
 vi.mock('../EntityForm.jsx', () => ({
   EntityForm: (props) => {
     lastEntityFormProps = props;
-    return <div data-testid="entity-form" />;
+    return (
+      <div data-testid="entity-form">
+        {(props.fields ?? []).map(f => (
+          <span key={f.key} data-testid={`form-field-${f.key}`} />
+        ))}
+      </div>
+    );
   },
 }));
 
@@ -199,6 +211,81 @@ describe('ListModalWindow — toolbar & banner', () => {
     expect(screen.getByText('matchRuleBanner')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('list-modal-banner-dismiss'));
     expect(screen.queryByText('matchRuleBanner')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-4921 — this window draws its own toolbar, so it never inherited ListView's refresh
+// button nor ListView's refresh progress bar. Both were added back explicitly; these two
+// blocks lock the wiring (reload handler) and the gate (rows already on screen).
+describe('ListModalWindow — refresh button', () => {
+  it('renders the shared refresh control in the toolbar', () => {
+    renderWindow();
+    expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+  });
+
+  it('labels it from useUI("refresh") rather than a hardcoded string', () => {
+    renderWindow();
+    expect(screen.getByTestId('finance-refresh-button')).toHaveAttribute('aria-label', 'refresh');
+  });
+
+  it('sits between the sort popover and the "+ New" button', () => {
+    renderWindow();
+    const refresh = screen.getByTestId('finance-refresh-button');
+    const create = screen.getByTestId('list-modal-new');
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4 → create comes after refresh.
+    expect(refresh.compareDocumentPosition(create) & 4).toBeTruthy();
+  });
+
+  it('calls the useNeoResource reload when clicked', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    renderWindow();
+    expect(neoState.reload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    expect(neoState.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches without unmounting the rows already on screen', () => {
+    neoState.data = [
+      { id: '1', name: 'Alpha' },
+      { id: '2', name: 'Beta' },
+    ];
+    renderWindow();
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    // The click is a pure refetch: the grid must not be torn down or reset to the skeleton.
+    expect(rowCount()).toBe(2);
+  });
+});
+
+describe('ListModalWindow — refresh progress bar', () => {
+  it('shows the progress bar while refreshing over rows already on screen', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.getByTestId('list-modal-progress-bar')).toBeInTheDocument();
+    // Rows stay mounted during the refresh — that is the whole point of the bar.
+    expect(rowCount()).toBe(1);
+  });
+
+  it('hides it on the very first fetch, where the skeletons are the indicator', () => {
+    neoState.data = [];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.queryByTestId('list-modal-progress-bar')).not.toBeInTheDocument();
+    expect(rowCount()).toBe(0);
+  });
+
+  it('hides it once the fetch settles', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = false;
+    renderWindow();
+    expect(screen.queryByTestId('list-modal-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('uses its own testid, not the default ListView one', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
   });
 });
 
@@ -544,5 +631,452 @@ describe('ListModalWindow — submit button', () => {
     renderWindow({ config: { submitLabelKey: 'matchRuleSubmitCreate' } });
     fireEvent.click(screen.getByTestId('list-modal-new'));
     expect(screen.getByTestId('list-modal-submit')).toHaveTextContent('matchRuleSubmitCreate');
+  });
+});
+
+describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
+  // A dimension descriptor is recognised by its AD column alone, so these fields need no
+  // per-window opt-in: `C_Project_ID` is the project dimension everywhere in Etendo.
+  const DIMENSION_FIELDS = [
+    { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+    { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'dimensions' },
+  ];
+  const DIMENSION_SECTIONS = [
+    { key: 'general', label: 'sectionGeneral' },
+    { key: 'dimensions', label: 'sectionDimensions' },
+  ];
+
+  const isDimensionRequest = (url) => String(url).includes('action=activeDimensions');
+
+  // Route the `?action=activeDimensions` GET to `dimensionsResponse`; everything else gets the
+  // generic ok/{} answer the other suites rely on.
+  function mockFetch(dimensionsResponse) {
+    global.fetch = vi.fn((url) => {
+      if (isDimensionRequest(url)) return Promise.resolve(dimensionsResponse());
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+  }
+
+  function dimensionRequestCount() {
+    return global.fetch.mock.calls.filter(([url]) => isDimensionRequest(url)).length;
+  }
+
+  it('hides a dimension field whose dimension is not active in the Accounting Schema', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    // Project is not among the active dimensions → dropped from the form...
+    await waitFor(() => {
+      expect(screen.queryByTestId('form-field-project')).not.toBeInTheDocument();
+    });
+    // ...while the non-dimension field is untouched.
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('drops the section heading once the section has no visible field left', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('list-modal-section-dimensions')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('list-modal-section-general')).toBeInTheDocument();
+  });
+
+  it('keeps a dimension field whose dimension IS active', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['project', 'product'] } } }),
+    }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
+  });
+
+  it('fails open: keeps the dimension field when the dimensions request is not ok', async () => {
+    mockFetch(() => ({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
+  });
+
+  it('fails open: keeps the dimension field when the dimensions request throws', async () => {
+    global.fetch = vi.fn((url) => {
+      if (isDimensionRequest(url)) return Promise.reject(new Error('network down'));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-project')).toBeInTheDocument();
+  });
+
+  it('does not request the active dimensions when no field carries a dimension column', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    // The default FIELDS are Name + Priority — no dimension column, so gating is skipped
+    // entirely and the window costs no extra request.
+    renderWindow();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    expect(dimensionRequestCount()).toBe(0);
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('does not treat the contact column as a gated dimension', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+        { key: 'bpartner', column: 'C_BPartner_ID', type: 'selector', section: 'general' },
+      ],
+      sections: [{ key: 'general', label: 'sectionGeneral' }],
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    // No dimension column at all → no request, and the contact stays visible.
+    expect(dimensionRequestCount()).toBe(0);
+    expect(screen.getByTestId('form-field-bpartner')).toBeInTheDocument();
+  });
+
+  it('hides every dimension field when the tenant has all dimensions switched off', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        ...DIMENSION_FIELDS,
+        { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'dimensions' },
+        { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', section: 'dimensions' },
+      ],
+      sections: DIMENSION_SECTIONS,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('list-modal-section-dimensions')).not.toBeInTheDocument();
+    });
+    for (const key of ['project', 'product', 'costcenter']) {
+      expect(screen.queryByTestId(`form-field-${key}`)).not.toBeInTheDocument();
+    }
+    expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
+  });
+
+  it('excludes a hidden dimension field from the required-field gate', async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
+    }));
+    renderWindow({
+      fields: [
+        { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+        { key: 'project', column: 'C_Project_ID', type: 'selector', required: true, section: 'dimensions' },
+      ],
+      sections: DIMENSION_SECTIONS,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('form-field-project')).not.toBeInTheDocument();
+    });
+
+    // Only the visible required field remains, so filling it must enable the submit —
+    // a hidden dimension can never be filled and would otherwise deadlock the modal.
+    await act(async () => {
+      lastEntityFormProps.onChange('name', 'Rule A');
+    });
+    expect(screen.getByTestId('list-modal-submit')).toBeEnabled();
+  });
+});
+
+// --- Multi-select + bulk delete helpers ------------------------------------
+//
+// `Checkbox` (app-shell-core) puts the forwarded `data-testid` on its <label> and the
+// state (`checked` / `aria-checked="mixed"`) on the sr-only <input> inside it, so every
+// assertion and every click goes through that inner input.
+function checkboxInput(testId) {
+  return screen.getByTestId(testId).querySelector('input');
+}
+
+function selectAllInput() {
+  return checkboxInput('list-modal-select-all');
+}
+
+function rowSelectInput(id) {
+  return checkboxInput(`list-modal-select-${id}`);
+}
+
+// Text of the floating selection pill, or null when the pill is not rendered.
+// `BulkDeleteSelectionBar` renders through `SelectionToolbar`, which is `visible`
+// only while count > 0 — so a null here means "nothing is selected".
+function selectionPillText() {
+  return screen.queryByTestId('bulk-delete-selection-count')?.textContent ?? null;
+}
+
+function deleteCalls() {
+  return global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
+}
+
+const TWO_ROWS = [
+  { id: 'ROW-1', name: 'Alpha rule', active: true },
+  { id: 'ROW-2', name: 'Beta rule', active: true },
+];
+
+describe('ListModalWindow — multi-select + bulk delete', () => {
+  it('renders the checkbox column and shows the selection pill with the checked count', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    // Header checkbox + one per row.
+    expect(screen.getByTestId('list-modal-select-all-head')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-cell-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-ROW-2')).toBeInTheDocument();
+
+    // Nothing checked yet → no floating pill.
+    expect(selectionPillText()).toBeNull();
+
+    fireEvent.click(rowSelectInput('ROW-1'));
+
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(rowSelectInput('ROW-2')).not.toBeChecked();
+    expect(selectionPillText()).toBe('selected (1)');
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeInTheDocument();
+  });
+
+  it('select-all checks every visible row, and clicking it again clears the selection', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(rowSelectInput('ROW-2')).toBeChecked();
+    expect(selectAllInput()).toBeChecked();
+    expect(selectionPillText()).toBe('selected (2)');
+
+    fireEvent.click(selectAllInput());
+    expect(rowSelectInput('ROW-1')).not.toBeChecked();
+    expect(rowSelectInput('ROW-2')).not.toBeChecked();
+    expect(selectionPillText()).toBeNull();
+  });
+
+  it('select-all only spans the rows the active search leaves visible', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ filters: ['name'] });
+
+    fireEvent.change(screen.getByTestId('list-modal-search'), { target: { value: 'Alpha' } });
+    expect(rowCount()).toBe(1);
+
+    fireEvent.click(selectAllInput());
+    // Only the visible row got checked — the filtered-out one is not silently selected.
+    expect(selectionPillText()).toBe('selected (1)');
+    expect(rowSelectInput('ROW-1')).toBeChecked();
+    expect(screen.queryByTestId('list-modal-select-ROW-2')).not.toBeInTheDocument();
+  });
+
+  it('puts the header checkbox in the indeterminate state when only some rows are checked', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    // 1 of 2 → someSelected → aria-checked="mixed" on the inner input.
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'mixed');
+
+    // 2 of 2 → allSelected → no longer indeterminate.
+    fireEvent.click(rowSelectInput('ROW-2'));
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'true');
+
+    // 0 of 2 → neither.
+    fireEvent.click(selectAllInput());
+    expect(selectAllInput()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('confirming the bulk delete issues one DELETE per selected row and reloads the list', async () => {
+    neoState.data = TWO_ROWS;
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    });
+    // The confirm dialog is owned by useBulkRowDelete and rendered by the window.
+    expect(screen.getByTestId('bulk-delete-confirm')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+    });
+
+    const urls = deleteCalls().map(([url]) => url).sort();
+    expect(urls).toEqual([
+      `${API_BASE}/${ENTITY}/ROW-1`,
+      `${API_BASE}/${ENTITY}/ROW-2`,
+    ]);
+    await waitFor(() => expect(neoState.reload).toHaveBeenCalled());
+    // Everything succeeded → the selection is cleared and the pill disappears.
+    await waitFor(() => expect(selectionPillText()).toBeNull());
+  });
+
+  it('prunes the selection when a search hides the checked row', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ filters: ['name'] });
+
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(selectionPillText()).toBe('selected (1)');
+
+    // Searching for the OTHER row hides the checked one — it must not stay silently
+    // selected (and thus deletable) while invisible.
+    fireEvent.change(screen.getByTestId('list-modal-search'), { target: { value: 'Beta' } });
+
+    expect(rowCount()).toBe(1);
+    expect(screen.queryByTestId('list-modal-select-ROW-1')).not.toBeInTheDocument();
+    expect(selectionPillText()).toBeNull();
+  });
+
+  it('keeps only the failed rows checked after a partial bulk-delete failure', async () => {
+    neoState.data = TWO_ROWS;
+    // ROW-2's DELETE fails; ROW-1's succeeds.
+    global.fetch = vi.fn((url, opts) => {
+      if (opts?.method === 'DELETE' && String(url).endsWith('/ROW-2')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: { message: 'row is referenced' } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderWindow();
+
+    fireEvent.click(selectAllInput());
+    expect(selectionPillText()).toBe('selected (2)');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-selection-trigger'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('bulk-delete-confirm'));
+    });
+
+    expect(deleteCalls()).toHaveLength(2);
+    // One row went through → the list is reloaded...
+    await waitFor(() => expect(neoState.reload).toHaveBeenCalled());
+    // ...and the failed row stays checked so the user can retry just that one.
+    await waitFor(() => expect(selectionPillText()).toBe('selected (1)'));
+    expect(rowSelectInput('ROW-2')).toBeChecked();
+    expect(rowSelectInput('ROW-1')).not.toBeChecked();
+  });
+});
+
+describe('ListModalWindow — read-only window access (ETP-4950)', () => {
+  const READ_ONLY = { readOnly: true };
+
+  it('hides every write affordance when window.readOnly is true', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ window: READ_ONLY, config: { allowClone: true } });
+
+    // Toolbar create action.
+    expect(screen.queryByTestId('list-modal-new')).not.toBeInTheDocument();
+    // Per-row actions (the whole actions cell is gone).
+    for (const id of ['ROW-1', 'ROW-2']) {
+      expect(screen.queryByTestId(`list-modal-edit-${id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`list-modal-clone-${id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`list-modal-delete-${id}`)).not.toBeInTheDocument();
+    }
+    // Selection column + floating bulk-delete pill.
+    expect(screen.queryByTestId('list-modal-select-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-all-head')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-ROW-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-select-cell-ROW-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(selectionPillText()).toBeNull();
+    // The rows themselves are still listed — read-only means read, not blank.
+    expect(rowCount()).toBe(2);
+  });
+
+  it('renders every write affordance when no window config is passed', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ config: { allowClone: true } });
+
+    expect(screen.getByTestId('list-modal-new')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-edit-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-clone-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-delete-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-ROW-1')).toBeInTheDocument();
+
+    // ...and the selection bar does show up once a row is checked (so the negative
+    // assertions above are not vacuous).
+    fireEvent.click(rowSelectInput('ROW-1'));
+    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(selectionPillText()).toBe('selected (1)');
+  });
+
+  it('renders every write affordance when window.readOnly is explicitly false', () => {
+    neoState.data = TWO_ROWS;
+    renderWindow({ window: { readOnly: false }, config: { allowClone: true } });
+
+    expect(screen.getByTestId('list-modal-new')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-edit-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-delete-ROW-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-select-all')).toBeInTheDocument();
+  });
+
+  it('forwards readOnly to the grid cells so the inline toggle is locked', () => {
+    neoState.data = [{ id: 'ROW-7', name: 'A', active: false }];
+
+    const { unmount } = renderWindow({ window: READ_ONLY });
+    expect(screen.getByTestId('cell-toggle-active-ROW-7')).toHaveAttribute('data-readonly', 'true');
+    unmount();
+
+    renderWindow();
+    expect(screen.getByTestId('cell-toggle-active-ROW-7')).toHaveAttribute('data-readonly', 'false');
   });
 });

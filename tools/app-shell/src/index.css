@@ -12,10 +12,134 @@
  *
  * Same value in both themes on purpose: a scrim darkens whatever sits behind it, so it does not
  * follow the surface palette the way `--background` / `--card` do.
+ *
+ * Floating selection toolbar (ETP-4972) — the "Floating Toolbar | Dark" Figma
+ * component, in the same theme-invariant `:root, .dark` block above (Sonar
+ * css:S4666 flags a second block reusing this selector) rather than a
+ * separate rule. It is a fixed dark pill regardless of the active app theme
+ * (it does NOT invert like --inverse does), so it needs its own
+ * theme-invariant tokens rather than --foreground/--background — those flip
+ * per theme and would leave the pill's own text nearly unreadable against its
+ * own background in one of the two themes. Used by SelectionToolbar.jsx.
  */
 :root,
 .dark {
   --scrim: 0 0% 0%;
+  --floating-toolbar-bg: 222 47% 11%;
+  --floating-toolbar-fg: 210 20% 98%;
+  --floating-toolbar-muted: 215 16% 72%;
+}
+
+/*
+ * Enter/exit slide animation for SelectionToolbar.jsx (ETP-4972). These class
+ * names were referenced by the pre-ETP-4972 LinesSelectionBar.jsx but never
+ * actually defined anywhere in the codebase (verified — no matching keyframes
+ * existed), so the bar never animated in or out. Authored from scratch here.
+ */
+@keyframes lines-bar-appear {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lines-bar-dismiss {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.lines-bar-appear {
+  animation: lines-bar-appear 200ms ease-out both;
+}
+
+.lines-bar-dismiss {
+  animation: lines-bar-dismiss 200ms ease-in both;
+}
+
+/*
+ * SelectionToolbar contrast fix (ETP-4972 review round — Alex/live-QA finding).
+ *
+ * Callers frequently pass a shared shadcn `<Button>` as SelectionToolbar
+ * children (ListView's Print/Clone/Delete, `bulkActions`,
+ * `selectionBarRightActions` — used by many windows, e.g. Contacts). That
+ * component's `default`/`outline` variants assume a light card/page
+ * background:
+ *   - default:  bg-primary text-primary-foreground ...
+ *   - outline:  border border-input bg-background ...
+ * `--primary` (light theme) is LITERALLY the same HSL triplet as
+ * `--floating-toolbar-bg` (both `222 47% 11%`), so a default-variant button
+ * disappears into the pill entirely; an outline-variant button renders as a
+ * near-white `bg-background` chip. Both are illegible against the dark pill.
+ *
+ * Scoped generically to `.selection-toolbar` (the pill SelectionToolbar.jsx
+ * renders) and keyed off the exact shadcn variant classes, so this fixes
+ * every current and future caller's injected <Button> without touching that
+ * caller's own className — no per-window patch needed. Deliberately written
+ * OUTSIDE any `@layer` block: Tailwind's utilities (bg-primary, bg-background,
+ * border-input, hover:*) live inside `@layer utilities`, and an unlayered
+ * rule always wins over a layered one regardless of selector specificity or
+ * source order — so this reliably overrides them without `!important`.
+ *
+ * Hand-styled buttons elsewhere in this codebase (e.g. the explicit
+ * `text-destructive border-destructive` buttons SelectionToolbar callers
+ * already hand-roll) don't carry `bg-primary`/`bg-background` and are
+ * untouched by this rule.
+ */
+.selection-toolbar button[class*="bg-primary"],
+.selection-toolbar button[class*="bg-background"] {
+  background-color: transparent;
+  border-color: hsl(var(--floating-toolbar-fg) / 0.3);
+  color: hsl(var(--floating-toolbar-fg));
+  box-shadow: none;
+}
+
+.selection-toolbar button[class*="bg-primary"]:hover,
+.selection-toolbar button[class*="bg-background"]:hover {
+  background-color: hsl(var(--floating-toolbar-fg) / 0.12);
+  color: hsl(var(--floating-toolbar-fg));
+}
+
+/* Ghost-variant icon buttons (Print/Clone/Confirmar/kebab — ETP-4972 second
+   review round: these previously used `outline`, whose `border-input`
+   became a visible box around every one of them once the rule above made
+   that border legible against the dark pill — Figma only borders the
+   destructive "Eliminar" button, everything else sits flush on the pill and
+   only highlights on hover). `ghost`'s only static styling is
+   `hover:bg-accent hover:text-accent-foreground`; `--accent` is a light
+   near-white made for a light page background, so left alone it flashes
+   white against the dark pill on hover. Swap it for the same subtle
+   floating-toolbar-fg tint the close button and the rule above already use,
+   for one consistent hover feel across every icon in the pill. */
+.selection-toolbar button[class*="hover:bg-accent"]:hover {
+  background-color: hsl(var(--floating-toolbar-fg) / 0.1);
+  color: hsl(var(--floating-toolbar-fg));
+}
+
+/* Delete-flavored shadcn buttons read as destructive red, matching the
+   hand-styled "Eliminar" buttons at every other SelectionToolbar call site
+   (see e.g. AssetsAmortizationPanel.jsx, detailViewHelpers.jsx). Keyed off
+   the existing, unchanged `bulk-delete-selected` data-testid (ListView.jsx)
+   rather than editing that call site's className. No border: zoomed into the
+   applied Figma instance's own canvas render and confirmed the trash icon
+   has no stroke/box at all, just red icon color — ghost, like every other
+   secondary action here. */
+.selection-toolbar button[data-testid="bulk-delete-selected"] {
+  color: hsl(var(--destructive));
+}
+
+.selection-toolbar button[data-testid="bulk-delete-selected"]:hover {
+  background-color: hsl(var(--destructive) / 0.15);
+  color: hsl(var(--destructive));
 }
 
 /*
@@ -44,3 +168,37 @@
   to   { opacity: 0; transform: translateY(6px) scale(0.985); }
 }
 .inset-panel-exit { animation: inset-panel-exit 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/*
+ * Switch (ToggleRow) disabled-track colours — ETP-4879.
+ *
+ * The core `Switch` primitive derives its disabled look purely from
+ * `disabled:opacity-50` layered on top of `bg-primary` / `bg-input`. That makes the
+ * disabled-checked colour a side effect of opacity math instead of a deliberate value,
+ * and it lands at the wrong shade (measured live on a mandatory, checked-and-disabled
+ * toggle: a muddy mid-grey instead of the intended one). Figma calls for 4 distinct
+ * track colours (off-enabled, off-disabled, on-enabled, on-disabled); off-enabled and
+ * on-enabled already match via `--input` / `--primary`, so only the two disabled
+ * states need an explicit value here.
+ *
+ * These are NOT derived from opacity — each is a deliberate colour, faded toward the
+ * theme's own background/card (same "reduced contrast toward the surface" relationship
+ * `--text-disabled` already uses relative to `--foreground` in both light and dark).
+ * Kept in this app's own index.css (not the core's styles.css) because ToggleRow is the
+ * only consumer and the fix must not touch the shared `Switch` primitive.
+ *
+ * Light values match the Figma export almost exactly (off-disabled within one hex step,
+ * on-disabled exact). Dark values are not from a Figma export (none was provided) — they
+ * apply the same fade-toward-surface ratio to `--input`/`--primary`'s dark HSL, then
+ * desaturate, so the two disabled tracks stay visually distinct from their enabled
+ * counterparts and from each other without ever reproducing `disabled:opacity-50`.
+ */
+:root {
+  --switch-track-off-disabled: 223 18% 92%;
+  --switch-track-on-disabled: 224 12% 70%;
+}
+
+.dark {
+  --switch-track-off-disabled: 218 14% 30%;
+  --switch-track-on-disabled: 219 24% 38%;
+}

@@ -392,7 +392,7 @@ handled zero correctly.
 ### Amortization Plan tab — row selection and bulk delete
 
 `AssetsAmortizationPanel.jsx` now supports full row selection on the "Plan de amortización"
-tab, using the same `LinesSelectionBar` portal pattern as Sales Order and Physical Inventory.
+tab, using the same shared `SelectionToolbar` component as Sales Order and Physical Inventory.
 
 **Select-all checkbox** — first column header contains a `Checkbox` with three states:
 unchecked (nothing selected), checked (all rows selected), and indeterminate (some rows
@@ -402,14 +402,21 @@ and the current `lines` array length.
 **Per-row checkbox** — each row has a `Checkbox` in the first column. Clicking toggles the
 row's id in `selectedRows`.
 
-**`LinesSelectionBar` floating bar** — rendered via portal (position tracked by a
-`ResizeObserver` on a `barAnchorRef` div inside the table container). Appears when
-`selectedRows.size > 0`, with a 250 ms exit animation when selection drops to zero. Displays
-selection count, a **Delete** button, and a **Close** button.
+**`SelectionToolbar` floating bar (ETP-4972)** — rendered via portal to `document.body` with
+true `position: fixed` coordinates (bottom-center of the viewport, `bottom: 24px; left: 50%;
+transform: translateX(-50%)`) — no rect-measuring, no `ResizeObserver`/`barAnchorRef`. (An
+earlier version of this component tracked the bar's position off a `ResizeObserver` on a
+`barAnchorRef` sentinel div in the table container — the same anchor-rect pattern the old,
+now-retired `LinesSelectionBar` used everywhere; it broke once the sentinel scrolled out of
+view on a long list. `SelectionToolbar` owns its position outright, so that bug class cannot
+recur here.) Appears when `selectedRows.size > 0`, with a 250 ms exit animation when
+selection drops to zero. Displays selection count, an icon-only red **Delete** button (no
+visible "Eliminar" label, `title` tooltip only — ETP-4972 Figma-driven restyle), and the
+shell's own built-in **Close** (×) button.
 
 **Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
 /amortizationLine/{id}` requests for every selected row id. On completion, selection is
-cleared and `fetchLines()` is called to refresh the table. The `LinesSelectionBar` shows a
+cleared and `fetchLines()` is called to refresh the table. The delete button shows a
 loading spinner (`deleting` flag) while requests are in flight.
 
 **Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`
@@ -908,3 +915,73 @@ Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition
 1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
 2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
 3. End-to-end: create an asset omitting `usableLifeMonths` with a Time/non-yearly setup, invoke Create Amortization, and confirm the gate still returns `PRECONDITIONS_UNMET` (the proactive hint does not replace enforcement).
+
+## ETP-4983 — Search Key uniqueness validation per Organization
+
+### Problem
+
+Classic Etendo maintained document-number uniqueness at the database level via sequences. When the Assets window was migrated to Etendo GO (no document sequence, no built-in uniqueness for `searchKey`), the Identificador field became freely duplicable within the same client and organization — a data integrity gap. Creating two assets with identical Search Keys was possible but not validated. This ticket enforces **per-organization uniqueness** of the `searchKey` (Identificador) at the backend layer.
+
+### Solution
+
+A new `AssetSearchKeyUniqueHandler` (in `com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/AssetSearchKeyUniqueHandler.java`) implements the validation as a CDI-managed `EntityPersistenceEventObserver`:
+
+- **Observes:** Asset (`A_Asset`) create and update events
+- **Scope:** Per-organization (not client-wide) — two assets CAN share the same Search Key if they belong to different organizations of the same client
+- **Enforcement:** On every save attempt (both Classic AD window direct OBDal and Etendo GO NEO routes), the handler queries for existing assets in the same organization with the same search key. If found (excluding the current record's own id on update), an `OBException` is thrown.
+- **Ignores:** Active flag — an inactive duplicate still blocks the search key, matching database-level unique constraint semantics
+- **Error message:** New AD_MESSAGE `ETGO_AssetSearchKeyDuplicate` with English text "There is already an asset with this identifier in this organization."
+
+### Frontend error mapping
+
+The backend exception message is translated at the frontend via the existing `backendErrors.js` mechanism:
+
+- **backendErrors.js:** Maps the AD_MESSAGE text to `backendError.assetSearchKeyDuplicate` (line 33)
+- **i18n keys added to all three locales:**
+  - `en_US.json`: `"backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization."`
+  - `es_ES.json`: `"Ya existe un activo con este identificador en esta organización."`
+  - `es_AR.json`: Same as `es_ES`
+
+When a user attempts to create or update an asset with a duplicate Search Key in the same org, the validation fires before the record is persisted, and a Spanish error toast appears: **"Ya existe un activo con este identificador en esta organización."**
+
+### Architecture note
+
+The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pattern employed by `AssetGroupNameUniqueHandler` for enforcing Asset Category name uniqueness (Client-scoped, not Organization-scoped). Both handlers respond to OBDal persistence events at the model layer, ensuring the validation applies regardless of whether the save originated from the Classic AD window, NEO Headless, or any direct API call. This is distinct from the `NeoHandler` pattern (which hooks the NEO HTTP request layer only).
+
+### Tests
+
+- **Backend (`com.etendoerp.go`):** `AssetSearchKeyUniqueHandlerTest.java` covers:
+  - Same org, duplicate key → throws `OBException`
+  - Different org, same key → succeeds (allows duplication across orgs)
+  - Update with own key → succeeds (self-update excluded)
+  - Null or blank search key → succeeds (validation skipped for empty values)
+  - Missing organization → succeeds (validation skipped if org is null)
+- **Frontend (`tools/app-shell`):** `backendErrors.test.js` verifies:
+  - Error message mapping from backend text to `backendError.assetSearchKeyDuplicate` key
+  - Regression coverage for the sibling `assetGroupNameDuplicate` mapping (closed a pre-existing test gap)
+
+### Manual verification (ETP-4983)
+
+1. **Create an asset with a given Search Key in Organization A:**
+   - Open `/assets` or navigate to Assets from the Finance menu
+   - Create a new asset record with **Identificador** = `"ASSET-001"`, **Name** = "Test Asset 1", and **Organization** = Organization A
+   - Save and confirm the record is persisted
+
+2. **Attempt to create a duplicate in the same organization — expect rejection:**
+   - Create a second asset with **Identificador** = `"ASSET-001"`, different **Name** = "Test Asset 2", same **Organization** = Organization A
+   - Click **Save** and confirm an error toast appears: **"Ya existe un activo con este identificador en esta organización."** (Spanish) or **"There is already an asset with this identifier in this organization."** (English, depending on session locale)
+   - Confirm the record is NOT saved (the form remains in edit mode, no success toast)
+
+3. **Verify that the same key IS allowed in a different organization:**
+   - Create a new asset with **Identificador** = `"ASSET-001"`, different **Name** = "Test Asset 3", **Organization** = Organization B (a different organization of the same client)
+   - Click **Save** and confirm the record is saved successfully (no error)
+   - This confirms the uniqueness check is scoped by organization, not client-wide
+
+4. **Update an existing asset without changing its Search Key — expect success:**
+   - Open an existing asset with **Identificador** = `"ASSET-001"`
+   - Edit another field (e.g. **Nombre** / Name)
+   - Click **Save** and confirm the save succeeds (no false-positive duplicate error)
+
+5. **Verify translation in both locales:**
+   - Switch the session locale to Spanish and repeat steps 2–3 — confirm the error message reads **"Ya existe un activo con este identificador en esta organización."**
+   - Switch the session locale to English — confirm it reads **"There is already an asset with this identifier in this organization."**

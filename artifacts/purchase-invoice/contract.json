@@ -1,8 +1,8 @@
 {
   "version": "0.90.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-24T15:27:51.866Z",
-  "checksum": "e81504d14bd7d267",
+  "updatedAt": "2026-08-31T14:41:45.062Z",
+  "checksum": "b156bba720b1e3c4",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -40,7 +40,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -58,14 +58,16 @@
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "POReference": "Document No.",
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
         }
       },
       "subsetFilters": [
@@ -100,6 +102,9 @@
           "placement": "tab"
         }
       ],
+      "attachments": {
+        "saveBeforeAttach": true
+      },
       "sendDocument": {
         "allowEmail": false
       },
@@ -4461,6 +4466,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "noTrailing": true,
             "validation": {
               "required": true,
               "maxLength": 15
@@ -5184,7 +5190,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -5202,14 +5208,16 @@
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "POReference": "Document No.",
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
         }
       },
       "subsetFilters": [
@@ -5244,6 +5252,9 @@
           "placement": "tab"
         }
       ],
+      "attachments": {
+        "saveBeforeAttach": true
+      },
       "sendDocument": {
         "allowEmail": false
       },
@@ -10556,14 +10567,16 @@
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "Foreign_Amount": "Importe en Moneda Objetivo"
       },
       "en_US": {
         "POReference": "Document No.",
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
-        "C_DocTypeTarget_ID": "Document Type"
+        "C_DocTypeTarget_ID": "Document Type",
+        "Foreign_Amount": "Target Currency Amount"
       }
     }
   },

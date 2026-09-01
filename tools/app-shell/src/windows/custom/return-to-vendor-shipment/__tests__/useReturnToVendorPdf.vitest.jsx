@@ -52,7 +52,7 @@ describe('getReturnToVendorPdfLabels', () => {
     expect(labels).toHaveProperty('taxId', 'invoicePdfTaxId');
     expect(labels).toHaveProperty('page', 'invoicePdfPage');
     expect(labels).toHaveProperty('issuerSection', 'shipmentPdfIssuerSection');
-    expect(labels).toHaveProperty('vendorSection', 'returnToVendorPdfVendorSection');
+    expect(labels).toHaveProperty('deliverySection', 'shipmentPdfDeliverySection');
     expect(labels).toHaveProperty('sourceReceipt', 'returnToVendorPdfSourceReceipt');
     expect(labels).toHaveProperty('date', 'shipmentPdfDate');
     expect(labels).toHaveProperty('warehouse', 'shipmentPdfWarehouse');
@@ -61,6 +61,10 @@ describe('getReturnToVendorPdfLabels', () => {
     expect(labels).toHaveProperty('colReturned', 'returnToVendorPdfColReturned');
     expect(labels).toHaveProperty('colOriginalQty', 'returnToVendorPdfColOriginalQty');
     expect(labels).toHaveProperty('notes', 'invoicePdfNotes');
+    // ETP-4939 — the shared MOVEMENT_TEMPLATE_SIGNATURE fragment (which the
+    // template must compose, see below) reads these two label keys.
+    expect(labels).toHaveProperty('signatureReceiver', 'shipmentPdfSignatureReceiver');
+    expect(labels).toHaveProperty('signatureDate', 'shipmentPdfSignatureDate');
   });
 
   it('each value is a string when ui is a passthrough', () => {
@@ -74,6 +78,16 @@ describe('getReturnToVendorPdfLabels', () => {
     const t = (key) => `[${key}]`;
     const labels = getReturnToVendorPdfLabels(t);
     expect(labels.title).toBe('[returnToVendorPdfTitle]');
+  });
+
+  // ETP-4939 — pre-ETP-4034 regression: the label used to be named `signatureIssuer`
+  // and pointed at the wrong placeholder. It must stay named `signatureReceiver`,
+  // matching the sibling hooks (useShipmentPdf, useReturnReceiptPdf) and the
+  // {{labels.signatureReceiver}} placeholder in MOVEMENT_TEMPLATE_SIGNATURE.
+  it('does NOT resurrect the legacy signatureIssuer key', () => {
+    const labels = getReturnToVendorPdfLabels(ui);
+    expect(labels).not.toHaveProperty('signatureIssuer');
+    expect(labels).toHaveProperty('signatureReceiver');
   });
 });
 
@@ -116,5 +130,109 @@ describe('useReturnToVendorPdf', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.pdfUrl).toBe('blob:http://localhost/test');
+  });
+});
+
+// ── ETP-4939 regression: DESTINATARIO card must resolve (bug 2) ────────────────
+//
+// MOVEMENT_TEMPLATE_PARTIES (the shared fragment every movement-doc hook composes
+// into its TEMPLATE) only ever reads `{{customerName}}` / `{{#each customerAddressLines}}`
+// for the DESTINATARIO card. buildReturnToVendorData currently emits `vendorName` /
+// `vendorAddressLines` instead — names the shared template never reads — so the
+// card renders empty. These assertions inspect the actual `data` object handed to
+// renderPdf (mockRenderPdf.mock.calls[0]), not just the label strings, which is the
+// gap the previous version of this suite left open.
+describe('useReturnToVendorPdf — data passed to the shared parties template (bug 2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchJson.mockResolvedValue(HEADER_STUB);
+    mockFetchAll.mockResolvedValue([]);
+    mockFetchOptionalJson.mockResolvedValue(null);
+    mockFetchLocationAddress.mockResolvedValue(null);
+    mockFetchImageDataUrl.mockResolvedValue(null);
+    mockBuildLocationAddressLines.mockReturnValue(['Calle Falsa 123', '28080 Madrid']);
+    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test');
+    global.URL.revokeObjectURL = vi.fn();
+  });
+
+  async function renderAndGetRenderPdfData() {
+    const { result } = renderHook(() =>
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockRenderPdf).toHaveBeenCalledTimes(1);
+    // renderPdf(content, css, helpers, data)
+    return mockRenderPdf.mock.calls[0];
+  }
+
+  it('populates data.customerName from the vendor business-partner identifier', async () => {
+    const [, , , data] = await renderAndGetRenderPdfData();
+    expect(data.customerName).toBe('Vendor A');
+  });
+
+  it('populates data.customerAddressLines from the vendor location', async () => {
+    const [, , , data] = await renderAndGetRenderPdfData();
+    expect(data.customerAddressLines).toEqual(['Calle Falsa 123', '28080 Madrid']);
+  });
+
+  it('does NOT emit vendorName / vendorAddressLines (the shared template never reads them)', async () => {
+    const [, , , data] = await renderAndGetRenderPdfData();
+    expect(data).not.toHaveProperty('vendorName');
+    expect(data).not.toHaveProperty('vendorAddressLines');
+  });
+
+  it('includes labels.deliverySection so the DESTINATARIO card eyebrow renders', async () => {
+    const [, , , data] = await renderAndGetRenderPdfData();
+    expect(data.labels).toHaveProperty('deliverySection', 'shipmentPdfDeliverySection');
+  });
+});
+
+// ── ETP-4939 regression: signature section missing from the template (bug 1) ──
+//
+// The signature fragment was dropped in a pre-ETP-4034 commit; the sibling hooks
+// (useShipmentPdf, useReturnReceiptPdf) both compose MOVEMENT_TEMPLATE_SIGNATURE
+// into their TEMPLATE, this one does not. Inspect the actual `content` string
+// handed to renderPdf — the compiled TEMPLATE — rather than trusting that a label
+// existing means it is used somewhere.
+describe('useReturnToVendorPdf — TEMPLATE must compose the shared signature fragment (bug 1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchJson.mockResolvedValue(HEADER_STUB);
+    mockFetchAll.mockResolvedValue([]);
+    mockFetchOptionalJson.mockResolvedValue(null);
+    mockFetchLocationAddress.mockResolvedValue(null);
+    mockFetchImageDataUrl.mockResolvedValue(null);
+    mockBuildLocationAddressLines.mockReturnValue([]);
+    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test');
+    global.URL.revokeObjectURL = vi.fn();
+  });
+
+  it('the rendered content includes the doc-signature block', async () => {
+    const { result } = renderHook(() =>
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const [content] = mockRenderPdf.mock.calls[0];
+    expect(content).toContain('doc-signature');
+  });
+
+  it('the rendered content references {{labels.signatureReceiver}}', async () => {
+    const { result } = renderHook(() =>
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const [content] = mockRenderPdf.mock.calls[0];
+    expect(content).toContain('{{labels.signatureReceiver}}');
+  });
+
+  it('the rendered content references {{labels.signatureDate}}', async () => {
+    const { result } = renderHook(() =>
+      useReturnToVendorPdf('rtv-1', '/api/return-to-vendor', 'tok'),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const [content] = mockRenderPdf.mock.calls[0];
+    expect(content).toContain('{{labels.signatureDate}}');
   });
 });

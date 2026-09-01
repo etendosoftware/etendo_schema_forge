@@ -13,6 +13,7 @@ import {
   buildStatementSortColumns,
 } from './StatementsTable';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { StatementLinesView } from './StatementLinesView';
 import { ImportStatementModal } from './ImportStatementModal';
@@ -21,7 +22,30 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { isDraftStatement } from './statementStatus.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
+
+/**
+ * Why the bulk-delete trigger is blocked, as a ready-to-show tooltip, or `null` when it is free
+ * to fire. Two independent reasons, checked in order of how absolute they are (ETP-4921):
+ *
+ *  1. The account is connected to the bank (PSD2). Its statements come from the bank and are
+ *     read-only, whatever their state — nothing the user does in this window unblocks it, so this
+ *     wins over the per-statement reason below, which would otherwise point them at a state they
+ *     could try to change.
+ *  2. The selection contains a processed statement. That one IS state-dependent: reactivating it
+ *     first makes it deletable.
+ *
+ * A plain function rather than inline ternaries so the precedence is stated once and testable.
+ *
+ * @param {{ ui: Function, bankConnectionSynced: boolean, selectionHasNonDraft: boolean }} args
+ * @returns {string|null}
+ */
+export function resolveBulkDeleteBlock({ ui, bankConnectionSynced, selectionHasNonDraft }) {
+  if (bankConnectionSynced) return ui('financeAccountStatementsRowBankSyncedTooltip');
+  if (selectionHasNonDraft) return ui('financeAccountStatementsRowProcessedTooltip');
+  return null;
+}
 
 /**
  * Imported Statements tab for the Financial Account detail view.
@@ -92,14 +116,50 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // ETP-4656 (Gap 3) — bulk "Delete selected" for the imported-statements grid,
   // wired onto the checkbox selection that already existed here. Reuses the same
   // deleteStatement(id) call the per-row hover quick-action already makes (see
-  // StatementsTable) — not every statement is deletable (drafts only, per
-  // StatementRowKebab's comment), so a non-draft in the selection surfaces as a
-  // normal per-row failure in the 3-outcome toast rather than being pre-filtered.
+  // StatementsTable).
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4921 — `reload()` only refetches the statement HEADERS. The lines of an EXPANDED row come
+  // from StatementLinesInline's own `useBankStatementLines(statementId)`, keyed solely on the id,
+  // so nothing ever invalidated it: after editing a line in the modal the header row showed the
+  // new total while the rows underneath still showed the pre-edit amounts, and the toolbar's
+  // refresh button looked broken (it reloaded exactly the half that was already correct). This
+  // token is bumped alongside every reload; `refreshStatements` is what all mutation paths and
+  // the refresh button call, so the two halves can no longer drift apart.
+  const [linesRefreshToken, setLinesRefreshToken] = useState(0);
+  const refreshStatements = useCallback(() => {
+    reload();
+    setLinesRefreshToken((t) => t + 1);
+  }, [reload]);
+
+  // ETP-4921 — a processed statement can never be deleted (Classic parity: once downloaded it's
+  // processed, and reversing that takes an explicit Reactivar first). The per-row hover trash
+  // was already hidden for those rows (StatementsTable's own isDraftStatement gate), but the
+  // SELECTION checkboxes have no such gate — they double as the source for the tab's Export
+  // button, so hiding them would break exporting a processed statement's lines. The bulk-delete
+  // trigger is what actually attempts the delete, so THAT is what gets blocked here: whenever the
+  // current selection includes a non-draft statement, the button disables with the same "cannot
+  // be modified while processed" tooltip StatementRowKebab already shows for Procesar — "don't
+  // let them touch the trash can", not "let them try and fail".
+  const selectionHasNonDraft = useMemo(
+    () => Array.from(selectedIds).some((id) => {
+      const s = statements.find((st) => st.id === id);
+      return s ? !isDraftStatement(s) : false;
+    }),
+    [selectedIds, statements],
+  );
+  // Two independent reasons the bulk trash refuses to fire. The connected-account one is checked
+  // FIRST because it is unconditional: on a PSD2 account no statement is deletable at all, so
+  // saying "processed statements cannot be modified" there would point the user at a state they
+  // could try to change, when nothing in this window unblocks it.
+  const bulkDeleteDisabledReason = resolveBulkDeleteBlock({
+    ui, bankConnectionSynced, selectionHasNonDraft,
+  });
+
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteStatement(id),
     onOutcome: (succeeded, failed) => {
-      if (succeeded.length > 0) reload();
+      if (succeeded.length > 0) refreshStatements();
       if (failed.length === 0) {
         clearSelection();
       } else {
@@ -116,7 +176,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     setSyncing(true);
     try {
       const res = await sync(accountId);
-      reload();
+      refreshStatements();
       // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
       // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
       // through the same frontend translation map every other untranslated backend message uses.
@@ -166,9 +226,15 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
       await cfg.run(statement.id);
       toast.success(ui(cfg.success));
       closeConfirm();
-      reload();
-    } catch {
-      toast.error(ui(cfg.error));
+      refreshStatements();
+    } catch (err) {
+      // ETP-4921 — show the backend's actual reason (e.g. "processed statements can't be
+      // modified") when there is one to translate, instead of the flat generic-per-variant
+      // toast, which used to say only "Could not delete/reactivate/process the statement"
+      // with no hint of why. Falls back to that generic key for a message the map has no
+      // translation for (network errors, unmapped 5xx) rather than showing raw English.
+      const reason = translateBackendError(err?.message, ui);
+      toast.error(reason && reason !== err?.message ? reason : ui(cfg.error));
     }
   };
 
@@ -230,16 +296,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {selectedIds.size > 0 && (
-        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
-          <BulkDeleteSelectionBar
-            count={selectedIds.size}
-            deleting={bulkDeleting}
-            onCancel={clearSelection}
-            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-            data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
-        </div>
-      )}
+      {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
+          viewport-fixed pill via SelectionToolbar; it no longer occupies a
+          slot in this flow. */}
+      <BulkDeleteSelectionBar
+        count={selectedIds.size}
+        deleting={bulkDeleting}
+        onCancel={clearSelection}
+        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+        disabledReason={bulkDeleteDisabledReason}
+        data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -255,6 +321,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         bankConnectionSynced={bankConnectionSynced}
         onSyncClick={handleSyncStatements}
         syncing={syncing}
+        onRefresh={refreshStatements}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}
@@ -266,6 +333,11 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
             data-testid="ListSortPopover__6f147a" />
         )}
         data-testid="StatementsToolbar__6f147a" />
+      {/* Same refresh affordance a generated list gets from ListView — only once rows are on
+          screen; the first fetch shows the table's own skeleton instead. */}
+      {loading && statements.length > 0 ? (
+        <ListProgressBar testId="statements-progress-bar" data-testid="ListProgressBar__6f147a" />
+      ) : null}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <StatementsTable
           statements={sortedStatements}
@@ -277,6 +349,8 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           actions={rowActions}
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}
+          linesRefreshToken={linesRefreshToken}
+          bankConnected={bankConnectionSynced}
           data-testid="StatementsTable__6f147a" />
       </div>
       {batchDeleteDialog}
@@ -285,7 +359,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         accountId={accountId}
         accountCurrency={currency}
         onClose={() => setImportOpen(false)}
-        onSuccess={reload}
+        onSuccess={refreshStatements}
         data-testid="ImportStatementModal__6f147a" />
       <ManualStatementModal
         open={manualOpen || !!editingStatement}
@@ -293,7 +367,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         accountCurrency={currency}
         statement={editingStatement}
         onClose={() => { setManualOpen(false); setEditingStatement(null); }}
-        onSuccess={reload}
+        onSuccess={refreshStatements}
         data-testid="ManualStatementModal__6f147a" />
       <StatementConfirmDialog
         variant={confirm.variant}

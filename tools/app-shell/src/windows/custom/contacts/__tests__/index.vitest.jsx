@@ -15,8 +15,17 @@
  *      `hideLink` flags (JSX last-prop-wins — see the comment
  *      above the prop in the source).
  *   2. `selectionBarRightActions` — the window's own bespoke delete
- *      affordance (trash + X buttons) that this window relies on INSTEAD of
- *      the generic bulk-delete button — was entirely untested.
+ *      affordance that this window relies on INSTEAD of the generic
+ *      bulk-delete button — was entirely untested. ETP-4972 — this used to
+ *      render its own trash + X (clear-selection) pair; the X was removed
+ *      once the floating `SelectionToolbar` grew its own built-in close
+ *      button (see contacts/index.jsx's comment above `selectionBarRightActions`),
+ *      so `selectionBarRightActions` now renders only the trash button. This
+ *      harness invokes `selectionBarRightActions()` directly without
+ *      mounting `SelectionToolbar`, so the close-button behavior itself is
+ *      out of scope here — it's generic (ListView → SelectionToolbar
+ *      `onClose`), already covered by ListView.bulkDelete.vitest.jsx /
+ *      SelectionToolbar.vitest.jsx.
  *
  * ETP-4656 (QA fix, this file's rewrite): the original version of this test
  * asserted a BUG — a sequential per-row DELETE loop that stopped on the
@@ -148,22 +157,19 @@ describe('ContactsWindow — listViewOptions.hideBulkDelete opt-out (ETP-4656)',
 });
 
 describe('ContactsWindow — bespoke selectionBarRightActions delete affordance', () => {
-  it('renders a trash button and a clear-selection (X) button', () => {
+  // ETP-4972 — selectionBarRightActions now renders only the trash button;
+  // the standalone X (clear-selection) button it used to render alongside it
+  // was removed once SelectionToolbar grew its own built-in close button
+  // (see the file header comment above). `clearSelection` is still handed to
+  // this callback (unused by contacts/index.jsx itself now) — kept in the
+  // fixture below since ListView always passes it, matching the real
+  // `selectionBarRightActions` contract every other consumer gets.
+  it('renders only a trash button (the clear-selection X is now owned by SelectionToolbar, not this callback)', () => {
     renderWindow();
 
     const page = screen.getByTestId('business-partner-page');
     expect(page.querySelector('[data-testid="Trash2__ef097c"]')).toBeTruthy();
-    expect(page.querySelector('[data-testid="X__ef097c"]')).toBeTruthy();
-  });
-
-  it('clicking the X button clears the selection directly (no confirm dialog)', async () => {
-    const user = userEvent.setup();
-    renderWindow();
-
-    await user.click(screen.getByTestId('X__ef097c').closest('button'));
-
-    expect(mockClearSelection).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('Dialog__ef097c')).not.toBeInTheDocument();
+    expect(page.querySelector('[data-testid="X__ef097c"]')).toBeNull();
   });
 
   it('clicking the trash button opens a confirm dialog; confirming when every row succeeds toasts a single success message and reselects nothing as failed', async () => {

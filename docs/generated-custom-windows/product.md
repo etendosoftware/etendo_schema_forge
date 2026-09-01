@@ -46,7 +46,8 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 ## Reactive behavior and dependencies
 - **Master/child dependency:** the selected product drives price, stock, and transaction loading through `parentId=<productId>`.
 - **Gallery/detail dependency:** selecting a product card in the gallery navigates into that product's detail route.
-- **Additional Info grouping:** the `Additional Info` tab is a custom panel rendered as two-column row sections. Each row section has a left column (148 px wide) containing a section title and description, and a right column (`flex-1`) holding an `EntityForm`. The `Commercial` row groups `Tax Category`, `Sale`, and `Purchase`; an HR divider separates it from the `Logistics` row, which groups `Stocked`, `Returnable`, `Weight`, and `UOM for Weight`. The outer wrapper applies `[&_input]:bg-white` so all input fields, including `Weight`, render on a white background.
+- **Additional Info grouping:** the `Additional Info` tab is a custom panel rendered as two-column row sections. Each row section has a left column (148 px wide) containing a section title and description, and a right column (`flex-1`) holding an `EntityForm`. The `Commercial` row groups `Tax Category`, `Sale`, and `Purchase`; an HR divider separates it from the `Logistics` row, which groups `Almacenable` ("Stocked"/`IsStocked` — relabeled from "Almacenado" in ETP-4943), `Returnable`, `Weight`, and `UOM for Weight`. The outer wrapper applies `[&_input]:bg-white` so all input fields, including `Weight`, render on a white background.
+- **Logistics hidden for Service products (ETP-4943):** the entire `Logistics` row (divider included) does not render when `productType === 'S'` — a Service product has no physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for Service products (ETP-4606). While editing, switching the type to Service also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so a Service product can never be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
 - **Selector dependencies:** the current evidence shows selector-backed maintenance for category, tax category, UOM, UOM for weight, attribute set, brand, lifecycle status, warehouse, currency, characteristic, characteristic subset, storage bin, and price-list-version references where relevant.
 - **Pricing tab states:**
   - When the product has not been saved yet, the `Price` tab shows a save-first message and blocks pricing maintenance.
@@ -84,7 +85,8 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
-4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Stocked`, `Returnable`, `Weight`, and `UOM for Weight`. All input backgrounds should be white.
+4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
+4a. Set the product's `Tipo` to `Servicio` and confirm the `Logistics`/`Logística` section (and its divider) disappears entirely from `Additional Info`. If `Almacenable`/`Retornable` were checked, confirm they are cleared to unchecked as soon as the type switches. Switch the type back to `Artículo` and confirm the section reappears.
 5. Open `/product/new` and confirm the `Price` tab says the product must be saved before pricing can be maintained.
 6. For a saved product, confirm the `Price` tab shows the `Venta` / `Compra` toggle and that the active section lists only the tariffs of that side. Change a `Unit price` and blur: only that column must be sent. Delete a row and confirm it disappears and the count badge drops.
 7. Open a product whose tariff name differs from its version name (any product priced in `Lista de venta (sin impuestos)`) and confirm the row shows **`Lista de venta (sin impuestos)`**, not `Version Lista de venta (sin impuestos)`. Open the add-tariff selector and confirm the options use tariff names too.
@@ -103,7 +105,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - Shared shell/route behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`, especially the generated/custom window loading flow and the shared entity list/detail flow.
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
-  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them
+  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType === 'S'`
   - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
@@ -408,6 +410,22 @@ Extended the Products CSV/TXT import descriptor (`productImportDescriptor.js`) a
 - **Reuse & Concurrency Protection:** In-flight resolutions are cached per import run (`getResolutionCache`), ensuring that multiple rows referencing the same new category create it exactly once and reuse its ID across concurrent workers.
 - **Backward Compatibility:** Files without category columns retain existing behavior (server-side default category injection). Composite product-and-price batch operations remain fully functional.
 
+## Logistics hidden for Service products + "Almacenable" label — ETP-4943
+
+Two bugs reported against `Additional Info`. Frontend fix in `ProductAdditionalInfoPanel.jsx` + `es_ES.json`/`es_AR.json`; no `decisions.json`, contract, or generated-file change, so no `make regen`/`export.database` for those. A third, initially-unplanned fix landed server-side in `com.etendoerp.go` (`ProductDefaultsHandler.java`) once the frontend-only approach was found insufficient — see below.
+
+- **Logistics section stayed visible/editable for Service-type products (real).** `ProductAdditionalInfoPanel.jsx` rendered the `Logistics` row (weight, UOM for weight, `Almacenable`/`Returnable`) unconditionally, with no check against `productType`. A Service product has no physical existence, so the row does not apply to it. `ProductSidebar.jsx` already applies the equivalent rule to hide the stock sidebar for Service products (ETP-4606: `if (data?.productType === 'S') return null`) — this fix brings `ProductAdditionalInfoPanel.jsx` in line with that precedent instead of introducing a new one. The whole row (title, description, both `EntityForm`s, `WeightStepper`, and the `CheckboxGroup`) plus its leading `<hr>` divider are now wrapped in `{!isService && (...)}`.
+- **`stocked`/`returnable` were not forced to `false` for Service products (real).** Nothing anywhere — frontend or backend — reset these flags when the type switched to Service, so a product could be saved as Service while still flagged storable/returnable, producing inconsistent data. First fixed with a `useEffect` in `ProductAdditionalInfoPanel.jsx` (fires only while `editing` and `productType === 'S'`, calling `onChange('stocked', false, 'IsStocked')` / `onChange('returnable', false, 'Returnable')`, guarded by `isCheckedYN` — `CheckboxGroup.jsx`'s truthiness helper for `'Y'`/`true`/`"true"` — so it doesn't loop or fire in read-only mode).
+  - **That frontend fix alone was insufficient (caught before delivery, not by the reporter).** `DetailView.jsx`'s primary-tab rendering (`isCustomPrimaryTabActive(...) ? <activeTab.Panel/> : <general form>`) mounts only the *active* primary tab — `ProductAdditionalInfoPanel.jsx` is unmounted while `General` is showing. A user who sets `Tipo = Servicio` on `General` and clicks `Guardar` without ever opening `Additional Info` never mounts the panel, so its `useEffect` never runs, and the record would save with `stocked`/`returnable` still `true` — violating the ticket's own first Given/When/Then case ("When: el usuario guarda ... Then: el sistema establece Almacenable = false").
+  - **Fixed authoritatively server-side.** `ProductDefaultsHandler.java` (`@Named("productDefaultsHandler")`, the existing `NeoHandler` pre-hook for the `product` spec, previously POST-only for the uOM/taxCategory defaults) now also runs on `PATCH`, and unconditionally forces `stocked`/`returnable` to `false` whenever the request body itself declares `productType = "S"` — whether or not the caller sent a value for those flags, so an omitted one can't resolve to `true` downstream. Mirrors the ETP-4606 `ServiceProductGuard` defense-in-depth precedent, but as an auto-correction (the product record has no valid fallback to reject to, unlike a stock-movement line referencing a Service product). Deliberately scoped to requests that mention `productType`: a PATCH that edits something unrelated (e.g. weight) on an already-Service product and never touches the type is left alone — resolving the persisted type would need a DB lookup, out of scope for this ticket's reported cases (all of which change `productType` in the same request). The frontend `useEffect` stays too — same-session UX (immediate feedback if the user revisits `Additional Info` before saving), now backed by the server as the actual guarantee rather than the only line of defense.
+- **Checkbox mislabeled "Almacenado" instead of "Almacenable" (real).** `genericLabels.productStocked` in `es_ES.json` and `es_AR.json` read "Almacenado" (a state — "is currently stored") instead of "Almacenable" (a capability — "can be stored"), which is the functionally correct term regardless of current stock. Both locale files corrected to `"Almacenable"`. `en_US.json`'s `"Stocked"` was left as-is — out of scope for this ticket, which reported the Spanish label only.
+
+**Reproduced live** with Playwright against a running instance before the fix: created a product, set `Tipo` to `Servicio`, confirmed the `Logistics` row stayed visible with both checks still checked and the checkbox read "Almacenado" — matching the ticket's steps exactly. Post-fix live re-verification against the reported test cases is tracked separately (pending an environment built from this branch).
+
+Coverage:
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductAdditionalInfoPanel.vitest.jsx` (hide/show on type switch, force-false on becoming Service, no-op when already false, no-op in read-only mode, section + values reappear when switching back to a stockable type)
+- `tools/app-shell/src/locales/__tests__/etp4943-product-storable-label.vitest.js` (exact label value in `es_ES`/`es_AR`)
+- `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` (force-false on POST and on PATCH when `productType = "S"`, force-false even when the flags are absent from the body, Article-type requests left untouched, a type-agnostic PATCH left untouched)
 ## ETP-4995 — CSV import fixes and cleanup
 
 **Services are importable (`productType`).** `M_Product.ProductType` is an AD List
@@ -454,3 +472,39 @@ reject the untouched template.
 Regression coverage: `productImportDescriptor.vitest.js`, plus
 `windows/custom/__tests__/importTemplateRoundTrip.vitest.js` (template → map → validate →
 build operations, for both windows).
+
+## ETP-4996 — Import engine: duplicate policy, review-time validation, template i18n
+
+Engine-level work shared with Contacts. See `contacts.md` for the same section; only the
+product-specific points are repeated here.
+
+**Duplicates are detected before the send, not after.** `window.import.dedupe.scope` is now
+`"database"`. The review queue queries the entity for the rows' `searchKey` values through the
+same `criteria=` list request the grid uses, so re-importing an already-imported file shows
+**0 rows in Correctas and N in Saltadas** before the user confirms. Previously every row showed
+as Correcta and the duplicate only surfaced after the send, when the unique index on
+`(value, ad_org_id, ad_client_id)` rejected it and `importEngine.js` reclassified the failure as
+a benign duplicate — the right outcome, reported far too late. **Upsert/overwrite remains out of
+scope**: skip is still the only policy. If the lookup cannot reach the server the check comes
+back empty and the send-time handling stays the backstop, so a failed pre-flight never blocks an
+import the server would have accepted.
+
+**Price and product-type errors now fail the row during review.** `salesPrice`/`purchasePrice`
+declare `isNumeric: true`, which `validateRow` reads, and `productType` is checked by the
+descriptor's registered row validator (`registerImportRowValidator('product', …)`). A price cell
+reading `abc` used to sit in Correctas until the user confirmed the import and only then failed
+inside `buildPriceOperation`. Both the preview and the send now parse the amount through the same
+`parseImportNumber` (app-shell-core), so the preview cannot accept a value the send would reject.
+`parseImportNumber` replaced the descriptor's local `parsePrice`; behaviour is unchanged
+(`"1.234,56"` → 1234.56, blank → no price, non-numeric → row error).
+
+**Template.** Required columns carry a trailing `*` and the file ships a sample row built from
+each field's `example` in `decisions.json` (`SKU-1001,Tornillo hexagonal M8,…`). Headers are
+written in the session language via the field's AD `column`, which `generate-contract.js` now
+backfills into `window.import.fields`. `mapColumns` strips the `*` before matching, and the
+localized header is added to the field's aliases, so the template round-trips in any language.
+
+Regression coverage: `importRowValidators.vitest.js`, the extended
+`importTemplateRoundTrip.vitest.js` (which now also asserts the shipped sample row validates),
+and in app-shell-core `existingRecordLookup.test.js`, `parseImportNumber.test.js`,
+`rowValidators.test.js` plus the ETP-4996 block in `ImportDialog.test.jsx`.

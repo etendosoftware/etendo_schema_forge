@@ -155,6 +155,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     });
 
     let poDocNo;
+    let invoiceId;
 
     await test.step('Verify PO is Completed and capture document number', async () => {
       await safeReload(page);
@@ -163,9 +164,11 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       await expectStatusPill(page, /completado|registrado|booked|completed/i,
         'PO status pill should show Completed after confirmation');
 
+      // After a reload the lines count badge may briefly show "0" while the
+      // lines fetch is in-flight — allow enough time for the real count to land.
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
         'PO should still show 2 lines after completion',
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 20_000 });
 
       // [Plan 9.4] Verify the PO is not editable after confirming
       const saveAfterConfirm = page.getByRole('button', { name: /guardar|save/i });
@@ -220,6 +223,12 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         'After saving draft, URL should include the invoice record ID',
       ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });
       await waitForDetailReady(page);
+
+      // Captured so the post-confirmation check can target THIS invoice's row
+      // (`row-{id}`) instead of "the first Completed row", which any leftover
+      // invoice from an earlier run also satisfies.
+      invoiceId = (page.url().match(/\/purchase-invoice\/([^/?]+)/) || [])[1];
+      expect(invoiceId, 'Should have captured the invoice record id from the URL').toBeTruthy();
 
       await expectStatusPill(page, /borrador|draft/i,
         'Invoice should be in Draft status after saving');
@@ -320,11 +329,24 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (!onDetailView) {
+        // Confirming navigated back to the list. Wait for the list itself before
+        // asserting on a row — safeReload() only awaits domcontentloaded, so the
+        // row query used to race the list's own data fetch.
         await safeReload(page);
-        const completedRow = page.locator('tbody tr').filter({ hasText: /completado|completed/i }).first();
-        await expect(completedRow,
+        await expect(page.getByTestId('list-view'),
+          'Reloading after confirmation should land on the purchase-invoice list',
+        ).toBeVisible({ timeout: 20_000 });
+
+        // Target THIS invoice by record id, and read its status from the
+        // language-independent `data-row-status` attribute (DataTable) rather
+        // than from translated cell text.
+        const invoiceRow = page.getByTestId(`row-${invoiceId}`);
+        await expect(invoiceRow,
+          'The confirmed invoice should appear in the list view',
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(invoiceRow,
           'Invoice should appear as Completed in the list view',
-        ).toBeVisible({ timeout: 10_000 });
+        ).toHaveAttribute('data-row-status', 'CO', { timeout: 10_000 });
       } else {
         await waitForDetailReady(page);
         await expectStatusPill(page, /completado|registrado|booked|completed/i,

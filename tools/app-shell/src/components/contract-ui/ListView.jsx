@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -15,6 +16,8 @@ import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
@@ -152,12 +155,19 @@ function ListTableRegion({
   onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
 }) {
   if (ownScroll) {
+    // Only the TRUE initial fetch (no items yet) hands `loading` to the Table, which renders
+    // it as a full skeleton (DataTable: `if (loading) return <TableSkeleton />`, unconditional
+    // on row count). A later refresh — the button next to sort, or any reload() after an
+    // edit/CRUD action — already has rows to show, so it stays smooth via the opacity dim
+    // below instead, matching the non-ownScroll branch just below (which never even forwards
+    // `loading` once `hook.items.length > 0`).
+    const showInitialSkeleton = hook.loading && hook.items.length === 0;
     return (
       <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
         <div
           className={tableOpacityClass(hook)}
           style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
-          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+          <Table {...tableProps} loading={showInitialSkeleton} data-testid="Table__620cbc" />
         </div>
       </div>
     );
@@ -219,8 +229,12 @@ function TableRowsIcon({ size = 24, color = 'currentColor' }) {
   );
 }
 
-function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
-  if (!galleryRenderer) return null;
+// `forceShow` lets a caller outside ListView (the report catalog, ETP-5013)
+// render this same list/gallery switch without a `galleryRenderer` — ListView's
+// own callers never pass it, so their gate (hide the toggle when the window
+// declares no gallery layout) is unchanged.
+export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode, forceShow }) {
+  if (!galleryRenderer && !forceShow) return null;
   return (
     <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
       <button
@@ -386,6 +400,7 @@ export function ListView({
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { runBatch } = useBatch({ apiBaseUrl, token });
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into
@@ -628,6 +643,50 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+
+  // ETP-4996 — the import dialog's two injected capabilities.
+  //
+  // `importFieldLabel` writes the downloaded CSV template's headers in the SESSION language.
+  //
+  // The base comes from the AD label dictionary (`t(column)`, which already applies the
+  // window's own `labelOverrides`) — those translations exist and are maintained, so the
+  // template should not carry a second copy of them. `labelKey` is the escape hatch for the
+  // handful of columns AD cannot serve: `EM_Etgo_Isperson` has no dictionary entry, and
+  // address/city/postal/region are C_Location columns the descriptor writes directly, so they
+  // are not entity fields and have no AD label at all.
+  //
+  // `headerScope: "contact"` appends a localized qualifier. A Contacts row is split across the
+  // business partner and its contact person, and the AD label for both halves is identical
+  // ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
+  // qualifier the template writes the same header twice, which `parseDelimited` rejects
+  // outright — the file could not be uploaded at all.
+  const importFieldLabel = useCallback((field) => {
+    const base = (field.labelKey ? ui(field.labelKey) : null)
+      || (field.column ? t(field.column) : null)
+      || field.label || field.target;
+    return field.headerScope === 'contact'
+      ? `${base} (${ui('importHeaderScopeContact')})`
+      : base;
+  }, [t, ui]);
+
+  // `importExistingKeys` answers "which of these rows already exist?" before the user
+  // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
+  // post-send duplicates. Goes through the same `criteria=` list query the grid itself
+  // uses, so it inherits the window's org/client security filtering for free.
+  const importExistingKeys = useCallback(async (criteria, keyTargets) => {
+    const params = new URLSearchParams();
+    params.append('criteria', JSON.stringify(criteria));
+    params.append('_startRow', '0');
+    params.append('_endRow', '1000');
+    const res = await apiFetch(`/${importConfig.entity}?${params.toString()}`);
+    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data ?? json?.data ?? [];
+    // Only the key columns are read back; anything else the endpoint returns is ignored.
+    return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
+      keyTargets.map((target) => [target, record[target]]),
+    ));
+  }, [apiFetch, importConfig?.entity]);
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -910,10 +969,17 @@ export function ListView({
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
         {/* White content card with rounded top-left corner */}
         <div className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0">
-          {/* Selection bar or filter bar */}
-          {/* Selection bar when rows are picked, otherwise the filter bar. Kept as a
-              ternary whose alternate is a plain `&&`: nesting one ternary inside
-              another here is what Sonar S3358 flags.
+          {/* Selection toolbar AND filter/idle bar — rendered independently, not as
+              either/or branches of one ternary (ETP-4972 Finding 4). Before ETP-4972
+              the selection bar occupied this same DOM slot as the idle bar (an inline
+              "replace the toolbar" design), so a ternary made sense. Now that
+              SelectionToolbar is a viewport-fixed portal to document.body, the two
+              no longer compete for the same space — and per ETP-4972's own "Floating
+              Toolbar vs Gmail/Drive-style replace" decision, the floating pill is
+              explicitly ADDITIVE: the idle bar (Filtros, ViewToggle, Nuevo, etc.) must
+              stay visible while rows are selected, not disappear behind the pill.
+              Rendering both as independent `&&` expressions below achieves that with
+              no nested-ternary risk (Sonar S3358 doesn't apply to two siblings).
 
               ETP-4658/ETP-4656 — `hideListBar` gates ONLY the idle filter bar, not the
               selection bar. The flag exists because a custom headerTable draws the
@@ -927,31 +993,42 @@ export function ListView({
               unreachable unless the grid is selectable, so a custom headerTable that
               wants no selection at all simply keeps `selectable={false}` on its own
               DataTable and never renders rows that can be picked. */}
-          {selectedRows.length > 0 ? (
-            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY} border-b border-border/30`}>
+          {selectedRows.length > 0 && (
+            <SelectionToolbar
+              visible={selectedRows.length > 0}
+              onClose={clearSelection}
+              closeTitle={ui('close')}
+              data-testid="SelectionToolbar__620cbc">
               <div className="flex items-center gap-3 h-10">
-                <span role="status" className="text-sm font-semibold" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
+                <span role="status" className="text-sm font-medium" data-testid="selection-count">{ui('selected').replace('{count}', selectedRows.length)}</span>
               </div>
               <div className="flex items-center gap-2 h-10">
+                {/* ETP-4972 — ghost variant, icon-only (title tooltip, no visible
+                    label, no border/box): Figma's floating pill keeps only the
+                    destructive "Eliminar" action bordered; secondary actions like
+                    this one sit directly on the pill background and only highlight
+                    on hover. Nothing is hidden behind a menu — just narrower and
+                    borderless. */}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('print')}
+                    aria-label={ui('print')}
                     onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
-                    {ui('print')} ({selectedRows.length})
                   </Button>
                 )}
                 {onCloneRow && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
+                    title={ui('cloneOrderBtn')}
+                    aria-label={ui('cloneOrderBtn')}
                     onClick={() => onCloneRow(selectedRows)}
                     data-testid="Button__620cbc">
                     <Copy className={iconSizeClass(selectionBarSize)} data-testid="Copy__620cbc" />
-                    {ui('cloneOrderBtn')} ({selectedRows.length})
                   </Button>
                 )}
                 {/* ETP-4656 — generic "Delete selected". Suppressed when the window is
@@ -964,19 +1041,24 @@ export function ListView({
                     ETP-4871 — additionally disabled (with an explanatory tooltip) once the
                     selection includes a row the host's `isRowDeletable` rejects; absent, this
                     never differs from the pre-existing behavior. */}
+                {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
+                    zoomed straight into the applied Figma instance's canvas
+                    render (not just the Dev Mode property panel) and confirmed
+                    no stroke/box around the trash icon at all — ghost, same as
+                    every other secondary action, distinguished only by its red
+                    icon color. */}
                 {!windowReadOnly && !(listViewOptions?.hideBulkDelete) && (
                   <Button
-                    variant="outline"
-                    size={selectionBarSize}
-                    className="gap-1.5"
+                    variant="ghost"
+                    size="icon"
                     disabled={bulkDeleting || blockedDeleteCount > 0}
                     onClick={() => requestBulkDelete(selectedRows)}
                     title={blockedDeleteCount > 0
                       ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : undefined}
+                      : ui('delete')}
+                    aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
-                    {ui('bulkDeleteSelected')} ({selectedRows.length})
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
@@ -996,8 +1078,9 @@ export function ListView({
                   reselectFailed: applyBulkDeleteOutcome,
                 })}
               </div>
-            </div>
-          ) : !listBarHidden && (
+            </SelectionToolbar>
+          )}
+          {!listBarHidden && (
             <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
               <div className="flex items-center gap-2">
                 {subsetFilters && (
@@ -1101,7 +1184,7 @@ export function ListView({
                     <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
                   </Button>
                 )}
-                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1163,17 +1246,11 @@ export function ListView({
             </div>
           )}
 
-          {/* Indeterminate top progress bar — visible while refreshing existing data */}
+          {/* Indeterminate top progress bar — visible while refreshing existing data. Extracted
+              to ListProgressBar so the hand-rolled tables that never reach ListView (the
+              financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
-            <>
-              <div role="progressbar" className="h-0.5 w-full overflow-hidden bg-primary/10" data-testid="list-progress-bar">
-                <div
-                  className="h-full w-1/3 bg-primary"
-                  style={{ animation: 'sf-list-progress 1.1s ease-in-out infinite' }}
-                />
-              </div>
-              <style>{`@keyframes sf-list-progress { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }`}</style>
-            </>
+            <ListProgressBar data-testid="ListProgressBar__620cbc" />
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its
@@ -1238,6 +1315,8 @@ export function ListView({
             simSearchFn={simSearch}
             labels={importLabels}
             translate={ui}
+            fieldLabelFn={importFieldLabel}
+            existingKeyFetchFn={importExistingKeys}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

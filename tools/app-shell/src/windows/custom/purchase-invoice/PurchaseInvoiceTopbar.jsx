@@ -11,6 +11,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
+import { buildHeaders } from '@/auth/api.js';
 export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
   const ui = useUI();
@@ -19,10 +20,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
 
   useInvoiceUpdatedListener('purchase-invoice', recordId, onRefresh);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   if (!data) return null;
 

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowLeftRight, ChevronDown, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
+import { RefreshButton } from '@/components/financial-accounts';
 import { DateRangeFilter } from './DateRangeFilter';
 import { TypeFilter } from './TypeFilter';
 import { buildMovementFilterColumns } from '../movementAdvancedFilter';
@@ -74,6 +75,7 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
  *   advancedFilter: object|null,
  *   onAdvancedFilterChange: (next: object|null) => void,
  *   onNewMovement?: () => void,
+ *   onRefresh?: () => void,
  * }} props
  */
 export function MovementsToolbar({
@@ -83,6 +85,7 @@ export function MovementsToolbar({
   onAdvancedFilterChange,
   onNewMovement,
   onTransfer,
+  onRefresh,
   rows = [],
   // Rendered node, not sort props: the toolbar stays presentational and the tab that owns the
   // sort state decides what goes here. Absent = nothing rendered.
@@ -135,6 +138,10 @@ export function MovementsToolbar({
         />
       </div>
       {sortControl}
+      <RefreshButton
+        onRefresh={onRefresh}
+        label={ui('refresh')}
+        data-testid="RefreshButton__f863ac" />
       {/* Split button: primary "Nuevo movimiento" (opens the GL-item modal) +
           a ▾ menu with "Transferir fondos". */}
       <MovementsSplitButton

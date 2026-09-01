@@ -507,7 +507,8 @@ export const api = {
     },
     "es_ES": {
       "M_Product_Category_ID": "Categoría",
-      "ProductType": "Tipo"
+      "ProductType": "Tipo",
+      "Value": "Código"
     }
   }
 };
@@ -597,7 +598,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"file","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"type":"string"},{"target":"description","aliases":["descripcion","descripción"],"label":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","required":false,"type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra","coste","costo"],"label":"Purchase Price"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category"}]}}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"database","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"example":"SKU-1001","column":"Value","type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"example":"Tornillo hexagonal M8","column":"Name","type":"string"},{"target":"description","aliases":["descripcion","descripción"],"example":"Tornillería inoxidable","label":"Description","column":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"example":"Item","column":"ProductType","type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","required":false,"example":"Unidad","column":"C_UOM_ID","type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price","isNumeric":true,"example":"12,50","labelKey":"importHeaderSalesPrice"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra","coste","costo"],"label":"Purchase Price","isNumeric":true,"example":"8,20","labelKey":"importHeaderPurchasePrice"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category","example":"Herramientas","column":"M_Product_Category_ID"}]}}
       {...props} window={effectiveWindow}
     />
   );

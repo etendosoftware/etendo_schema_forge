@@ -21,7 +21,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RowActionBtn, ExportIcon, WipBadge, ScrollSentinel } from '../FmPrimitives.jsx';
+import { RowActionBtn, ExportIcon, WipBadge, ScrollSentinel, StatusPill } from '../FmPrimitives.jsx';
 
 // RowActionBtn -----------------------------------------------------------------
 
@@ -131,5 +131,25 @@ describe('ScrollSentinel', () => {
     expect(() =>
       render(<ScrollSentinel hasMore={false} loading={false} onVisible={() => {}} />)
     ).not.toThrow();
+  });
+});
+
+// StatusPill -------------------------------------------------------------------
+
+describe('StatusPill', () => {
+  it('renders the Verifactu pending status with the pending style and its label key', () => {
+    render(<StatusPill estado="vf_pending" />);
+    const pill = screen.getByTestId('status-pill');
+    expect(pill).toHaveAttribute('data-status', 'pending');
+    // Before ETP-5027 the mapped key was 'pending', which had no STATUS_CONFIG
+    // entry and rendered the literal word "pending" on screen.
+    expect(pill).toHaveTextContent('fiscalMonitor.status.vf.pending');
+  });
+
+  it('renders the Verifactu accepted status with the success style', () => {
+    render(<StatusPill estado="accepted" />);
+    const pill = screen.getByTestId('status-pill');
+    expect(pill).toHaveAttribute('data-status', 'success');
+    expect(pill).toHaveTextContent('fiscalMonitor.status.vf.accepted');
   });
 });

@@ -203,6 +203,49 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByText('Transfer ACME')).toBeInTheDocument();
   });
 
+  // ETP-4921 — this panel never goes through ListView, so it never inherited ListView's
+  // refresh progress bar. It renders the extracted ListProgressBar above the split, under the
+  // same gate ListView uses: only once lines are already on screen, because on the true first
+  // fetch the panel's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over lines already on screen', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the lines mounted underneath the bar (smooth refresh, not a remount)', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
+    });
+
+    it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+      setLines([]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = false;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid, not the default ListView one', () => {
+      setLines([LINE_A]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the empty state on the right until a line is selected', () => {
     setLines([LINE_A]);
     renderPanel();
@@ -1141,8 +1184,10 @@ describe('ReconciliationSplitPanel', () => {
       });
       setUpPartialLineWithCandidate();
 
+      // No `failureReason` in this response, so the toast carries no description at all
+      // (`undefined`, never an empty options object that would render a blank description row).
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
       // Verify the EXACT interpolation values the component computed from the resolved result.
@@ -1154,19 +1199,85 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
     });
 
-    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+    it('total failure (successful HTTP, everything failed): the UN-RECONCILE error copy, reload/selection-clear STILL run', async () => {
       removeState.removeOperation = vi.fn().mockResolvedValue({
         transactionIds: [], failedTransactionIds: ['A', 'B'],
       });
       setUpPartialLineWithCandidate();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      // The action-specific key. This branch used to fall back to `financeReconcileToastError`,
+      // whose copy reads "Error al conciliar" — the wrong action entirely for an un-reconcile.
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoveError', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.warning).not.toHaveBeenCalled();
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
       await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    // ── the backend-supplied CAUSE ────────────────────────────────────────────
+    // The un-reconcile helpers swallow their exceptions so one failure does not abort the batch, so
+    // the response has always been able to say WHICH ids failed. What it could not say is WHY — the
+    // reason stayed in the server log. It now travels as `failureReason` on the same 200, and the
+    // panel shows it verbatim as the sonner description under the action-specific title.
+    const CLOSED_PERIOD = 'The accounting period is closed and the document cannot be unposted';
+
+    it('total failure: shows the backend failureReason as the toast description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: CLOSED_PERIOD }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure: never falls back to the generic "Error al conciliar" key', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // Regression guard: the generic reconcile-error copy is not merely un-toasted, it is never
+      // even requested from i18n on this (resolved-response) path. It stays reserved for the catch
+      // branch, where the request itself failed and no action can be named.
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError');
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError', undefined);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+    });
+
+    it('partial failure: keeps the partial key and adds the reason as the description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        'financeReconcileToastOperationPartiallyRemoved', { description: CLOSED_PERIOD }));
+      expect(toast.error).not.toHaveBeenCalled();
+      // The counts are unchanged by the added description.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+    });
+
+    it('full success: never attaches a description, even if the backend echoes a reason', async () => {
+      // Defensive: `failureReason` is only meaningful alongside failed ids. With none, the success
+      // branch runs and the toast keeps its single-argument shape.
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1347,11 +1458,62 @@ describe('ReconciliationSplitPanel', () => {
       await user.click(screen.getByTestId('recon-remove-accept'));
 
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
       expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
       // Always reload, even on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    // ── total failure on the REACTIVATE path ──────────────────────────────────
+    // Same accumulator and same 200 envelope as the un-reconcile path, but the title must name the
+    // action the user actually chose: `...ReactivateError`, not `...RemoveError` — and least of all
+    // the old generic `financeReconcileToastError` ("Reconciliation error").
+    const REACTIVATE_BLOCKED = 'The accounting period is closed and cannot be reactivated';
+
+    /** Selects the 2-doc reconciled line and confirms the Reactivar cartel. */
+    async function confirmReactivate() {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+    }
+
+    it('total failure: the REACTIVATE error copy with the backend reason as description', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+        failureReason: REACTIVATE_BLOCKED,
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', { description: REACTIVATE_BLOCKED }));
+      // Not the un-reconcile copy, and not the generic reconcile copy either.
+      expect(toast.error).not.toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: REACTIVATE_BLOCKED });
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastOperationRemoveError')).toBe(false);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure with no failureReason: same key, and NO description object at all', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', undefined));
+      // Explicitly `undefined`, not `{}` / `{ description: undefined }` — sonner renders an empty
+      // description row for the latter, which reads as a truncated message.
+      const [, options] = toast.error.mock.calls[0];
+      expect(options).toBeUndefined();
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
     });
 
@@ -1719,6 +1881,106 @@ describe('ReconciliationSplitPanel', () => {
       const btn = screen.getByTestId('recon-action-reconcile');
       expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
       expect(btn).not.toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+  });
+
+
+  // ETP-4921 QA — "la vista de conciliación se ve cortada; si cambio el zoom se ve bien".
+  // A long statement description stretched the auto-layout table past the panel, so Progreso and
+  // Importe ended up behind a horizontal scrollbar. The fix is structural (fixed table layout +
+  // an ellipsised description), which is why these assert on the layout contract rather than on
+  // pixels: jsdom does no layout, so nothing here can measure the overflow itself.
+  describe('column layout — Progreso and Importe stay in view', () => {
+    const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE Galder Romo CONCEPTO Factura Nº : 10001754 1000896';
+
+    it('lays both tables out with fixed columns, so the free column absorbs the overflow', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const tables = screen.getAllByTestId('Table__d0f4d5');
+      expect(tables.length).toBeGreaterThan(0);
+      for (const table of tables) {
+        expect(table.className).toContain('table-fixed');
+      }
+    });
+
+    // Every column but the description declares a width; under `table-fixed` those widths are
+    // what the browser honours, so Progreso (90px) and Importe (139px) can no longer be pushed out.
+    it('keeps a declared width on the Progreso and Importe columns', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const classes = heads.map((h) => h.className);
+      expect(classes.some((c) => c.includes('w-[90px]'))).toBe(true);
+      expect(classes.some((c) => c.includes('w-[139px]'))).toBe(true);
+    });
+
+    it('ellipsises the statement description instead of widening the row', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      expect(desc).toHaveTextContent(LONG_DESC);
+      expect(desc.className).toContain('truncate');
+    });
+
+    // The full text is not lost — it comes back on hover, which is the whole point of clipping it.
+    it('offers the full description in a tooltip once it is clipped', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      // jsdom reports 0 for both metrics, so the overflow has to be stated explicitly.
+      Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+      Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 300 });
+
+      fireEvent.focus(desc);
+
+      expect(screen.getByTestId('recon-line-desc-L1-tooltip')).toHaveTextContent(LONG_DESC);
+    });
+
+    // The row still falls back through partnerName / referenceNo when there is no description.
+    /**
+     * ETP-4921 — the money headers carried an explicit `text-left` while every MoneyCell under
+     * them is `text-right`, so "Importe" / "Saldo pendiente" labelled the opposite edge of their
+     * own column. The generic DataTable right-aligns a numeric column's header; these two
+     * hand-rolled panels never inherited that.
+     */
+    it('right-aligns the money headers over their own figures', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const moneyHeads = heads.filter((h) => /financeReconcileCol(Amount|PendingBalance)/
+        .test(h.textContent));
+      // Left panel Importe + right panel Saldo pendiente & Importe.
+      expect(moneyHeads.length).toBeGreaterThan(0);
+      for (const h of moneyHeads) {
+        expect(h.className, h.textContent).toContain('text-right');
+        expect(h.className, h.textContent).not.toContain('text-left');
+      }
+    });
+
+    // Fecha / Descripción / Progreso name text or a bar, not a figure — they stay left.
+    it('leaves the non-money headers alone', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const textHeads = heads.filter((h) => /financeReconcileCol(Date|Description|Progress)/
+        .test(h.textContent));
+      expect(textHeads.length).toBeGreaterThan(0);
+      for (const h of textHeads) {
+        expect(h.className, h.textContent).not.toContain('text-right');
+      }
+    });
+
+    it('keeps the description fallback chain', () => {
+      setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
+      renderPanel();
+
+      expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
     });
   });
 

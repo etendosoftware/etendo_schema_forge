@@ -1,10 +1,39 @@
 const BACKEND_ERROR_MAP = {
+  // ETP-5073 / DOC-04. The lines sidebar renders the server's message verbatim rather than going
+  // through the concurrency-conflict dialog the main form uses, so without this entry the user
+  // reads it in English. Both spellings are mapped: the sentence Etendo GO now sends, and core's
+  // own wording, which still reaches this path on a write that does not go through
+  // NeoCrudHandler's pre-check.
+  'This record was modified by someone else after you read it. Your changes were not saved.':
+    'backendError.staleRecord',
+  'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
+    'backendError.staleRecord',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
   'Usable Life - Years field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeYearsRequired',
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
+  // PSD2 PIS bank transfer (com.etendoerp.psd2.bank.integration AD_MESSAGE
+  // 0629302ABBB04612BEF87B7EB64E7A8E), raised by GenerateBankPayment when the connected provider does
+  // not offer the chosen payment template — e.g. a Salt Edge sandbox provider that supports SEPA but
+  // not DOMESTIC. Unlike most of that module's messages this one DOES ship a real es_ES
+  // AD_MESSAGE_TRL (in the separate `.es_es` translation module), so the backend returns Spanish when
+  // that module is installed and English when it is not; mapping the English form covers the second
+  // case and is a harmless no-op in the first (ETP-5084).
+  'The selected template is not supported by the chosen provider. Please select a different template.':
+    'backendError.pisTemplateNotSupportedByProvider',
+  // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
+  // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
+  // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
+  // not, and all four became newly VISIBLE when ETP-5084 fixed the NEO error shape the payment modal
+  // was failing to read (before that they all rendered as the generic "could not save").
+  'A conversion rate is required when the invoice and account currencies differ':
+    'backendError.conversionRateRequired',
+  'A conversion rate other than 1 is required when the invoice and account currencies differ':
+    'backendError.conversionRateMustDifferFromOne',
+  'Invalid conversion rate format': 'backendError.conversionRateInvalidFormat',
+  'Conversion rate must be greater than zero': 'backendError.conversionRateNotPositive',
   'Country needed in an IBAN account.': 'backendError.countryIban',
   // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
   // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
@@ -27,9 +56,27 @@ const BACKEND_ERROR_MAP = {
   'The regular expression is too complex (possible catastrophic backtracking)': 'backendError.matchRuleRegexComplex',
   'Invalid regular expression': 'backendError.matchRuleRegexInvalid',
   'A rule with this priority already exists for the selected scope': 'backendError.matchRulePriorityConflict',
+  'Priority is required': 'backendError.matchRulePriorityRequired',
+  'Priority must be a whole number': 'backendError.matchRulePriorityNotInteger',
+  'Priority must be 1 or greater': 'backendError.matchRulePriorityTooLow',
+  'Priority is too large': 'backendError.matchRulePriorityTooLarge',
+  // Bank statement lifecycle guards (BankStatementsHandler.requireDraft / .requireProcessed).
+  // Shared by process/update/delete (requireDraft) and reactivate (requireProcessed) — ETP-4921:
+  // a bulk-delete of a processed statement used to surface only "None of the N selected could be
+  // deleted", with no hint that the reason was the statement being processed already.
+  'Only draft (unprocessed) statements can be modified': 'backendError.statementNotDraft',
+  'Only processed statements can be reactivated': 'backendError.statementNotProcessed',
+  // Funds-transfer leg delete guard (FinancialAccountTransactionsHandler.handleDelete, ETP-5085).
+  // The two legs of a transfer reference each other through RESTRICT self-FKs, so removing either
+  // one is rejected with a 409 instead of the JDBC constraint violation that used to surface as an
+  // opaque HTTP 500. The movements kebab hides the action, so this mainly covers the bulk path and
+  // direct API/MCP callers.
+  'Movements generated by a funds transfer cannot be deleted.':
+    'backendError.transferMovementNotDeletable',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
+  'There is already an asset with this identifier in this organization.': 'backendError.assetSearchKeyDuplicate',
   // Goods Movements line (GoodsMovementLineHandler) validation messages
   'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
   // Product category (ProductCategoryDefaultHandler) validation messages
@@ -39,6 +86,10 @@ const BACKEND_ERROR_MAP = {
   // (OBMessageUtils.parseTranslation() resolves the outer message but doesn't
   // recursively re-parse the nested placeholder), so it's a stable exact match.
   'The cost of the product @product@ has not been calculated.': 'backendError.costNotCalculated',
+  // Core `InvalidCostWhichProduct` AD_MESSAGE. The posting engine can return this with the
+  // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
+  // same actionable retry-later copy as the other transient costing message, not costing internals.
+  'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
