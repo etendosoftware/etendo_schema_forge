@@ -68,7 +68,7 @@ export default function CreateInvoiceConfirmModal({
     v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
 
   const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
-  const displayAmount = grandTotal > 0 ? formattedTotal : documentNo;
+  const displayAmount = grandTotal !== 0 ? formattedTotal : documentNo;
 
   useEffect(() => {
     if (!pendingQtyUrl) return;

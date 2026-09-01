@@ -87,6 +87,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 |------|-------------|
 | [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
 | [request-policy.md](request-policy.md) | **Request reference**: the single authenticated-`fetch` helper (`useApiFetch` / `apiFetch`), its options (`on401`, `baseUrl`, `token`), 401-to-logout wiring, how to give a test a session, and the two guardrails that keep raw `fetch` out |
+| [unsaved-changes-guard.md](unsaved-changes-guard.md) | **Unsaved-changes reference**: the single dirty-state registry, how to register a form (and give it a saver), the five consumers (unload, locale, navigation, clone, confirm), `GuardedNavLink` / `useGuardedNavigate`, and why react-router's `useBlocker` is not usable here |
 
 ## Feature Flags
 
