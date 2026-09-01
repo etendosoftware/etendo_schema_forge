@@ -1,6 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { requestNavigation } from '@/lib/unsavedChanges.js';
 
+// @data-testid-ignore — the rendered NavLink deliberately carries no fixed data-testid. It sits
+// after `{...rest}` in JSX prop order, so a codemod-injected literal here would render AFTER (and
+// override) any data-testid the caller passes through `rest` — reintroducing the exact bug fixed
+// by "Keep the caller data-testid on GuardedNavLink" (ETP-4950).
+
 /**
  * A `NavLink` that asks before leaving a form with unsaved changes (ETP-5073 / DOC-08).
  *
