@@ -326,9 +326,11 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
       <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
         placeholder={ui('financeAccountStatementsManualDescPlaceholder')}
+        title={row.description}
         className={cellInput} data-testid="manual-line-description" />
       <input type="text" value={row.contactName} onChange={set('contactName')}
         placeholder={ui('financeAccountStatementsManualCounterpartyPlaceholder')}
+        title={row.contactName}
         className={cellInput} data-testid="manual-line-contactname" />
       <ChipSelect
         value={row.contact}

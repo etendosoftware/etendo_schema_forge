@@ -1534,6 +1534,18 @@ amount cells beneath (`EditRow`'s inputs and `MatchedRow`'s read-only spans) wer
 `text-right tabular-nums`. Fixed the same way: `className="text-right"` on those two `ColHead`
 calls in `LinesHeader`.
 
+#### Editable Descripción / Nombre del contacto lack a hover tooltip for long values (ETP-4924)
+
+`MatchedRow` (the read-only rendering for matched lines) already carries `title={row.description}`
+on its description `<span>` — a native browser tooltip so a value wider than the cell can still be
+read on hover — but the equivalent inputs in `EditRow` (the always-editable row every unmatched line
+uses) never had it: a long description or counterparty name typed into those cells just scrolls
+inside the `<input>`, with no way to see the full value without focusing it. Added the same native
+`title={row.description}` / `title={row.contactName}` to `EditRow`'s description and Nombre del
+contacto inputs, matching the existing `MatchedRow` precedent exactly (no new component — Reference
+No wasn't included, having asked for and confirmed only these two fields; that column is expected to
+stay short, `REF-####`).
+
 #### The expanded row and the header row refresh together (ETP-4921)
 
 A statement's header row and its expanded accordion are fed by **two independent fetches**:
