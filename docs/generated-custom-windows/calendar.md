@@ -76,10 +76,11 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    fix in `YearCloseHandler` can compensate for a session that already has the wrong org baked
    into its JWT. This is a session/login-layer issue affecting every NEO handler that trusts
    `getCurrentOrganization()` (the overwhelming majority of them), not something scoped to
-   Calendar — recommend filing it as its own platform ticket (parented to epic ETP-3504,
-   alongside ETP-5086) rather than folding a login-layer fix into this branch. Until fixed,
-   retesting this window with a single-role test user (or a user whose oldest role is the
-   GOOrg-scoped one) is the reliable way to verify the `AccDefUtility` fix above in isolation.
+   Calendar — filed as its own platform ticket, **Jira ETP-5096** (parented to epic ETP-3504,
+   alongside ETP-5086), rather than folding a login-layer fix into this branch. Out of scope for
+   ETP-4948, not fixed by this cycle. Until fixed, retesting this window with a single-role test
+   user (or a user whose oldest role is the GOOrg-scoped one) is the reliable way to verify the
+   `AccDefUtility` fix above in isolation.
 - Trigger **Create Periods** on a year to generate 12 standard periods plus an optional adjustment
   period. The required **Fiscal Year Range** choice defaults to **January - December**; selecting
   **July - June** for Fiscal Year 2027 creates July 2027 through June 2028, with chronological
@@ -415,7 +416,8 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    their actual dates.
 7. Run Create Periods again for an already-populated year and confirm the existing periods are
    retained rather than moved or duplicated. Do not change range on a populated year.
-8. Switch to the **Periods** tab, confirm the period list renders chronologically by starting date
+8. Open a year's detail and confirm **Periods** is the first secondary tab (before **Accounting**,
+   ETP-4948). Switch to it and confirm the period list renders chronologically by starting date
    with aggregate status badges.
 9. Expand a period row and confirm its per-document-type rows appear (fetched only on expand).
 10. Click **Abrir/Cerrar Periodo** on a period and confirm the process dialog / status update.
@@ -475,7 +477,18 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   (`docs/neo-headless-extensibility.md`) exactly. Currently a no-op in practice (no selector/
   defaults GET path exists on the `documents` entity), kept for convention parity. Covered by a
   new `afterHandleReturnsNullForGetWithNonCrudEndpointType` test in
-  `PeriodControlDocOpenCloseHandlerTest`.
+  `PeriodControlDocOpenCloseHandlerTest`, alongside the Issue 3 filtering behavior itself
+  (accounting-relevant categories kept, everything else dropped from the list response).
+- `com.etendoerp.go/src/com/etendoerp/go/schemaforge/util/AccountingDocumentTypeSupport.java` —
+  the shared predicate extracted for Issue 3 (see Reactive behavior above and
+  [`not-posted-documents.md`](not-posted-documents.md#document-type-accounting-support) for the
+  other side). Covered by `AccountingDocumentTypeSupportTest.java`.
+- `com.etendoerp.go/src/com/etendoerp/go/schemaforge/FiscalYearPeriodsHandler.java` — the July-June
+  period-creation logic (see Reactive behavior above). Package-private, invoked only from
+  `YearCloseHandler.handle` via `fiscalYearPeriodsHandler.handles(context)`. Covered by
+  `FiscalYearPeriodsHandlerTest.java` (range validation, duplicate-periods rejection, the 12
+  standard periods plus the optional 13th adjustment period, and the distinct `"13th Period - YY"`
+  naming).
 - `artifacts/open-close-period-control/contract.json` — `periodControl`/`documents` structurally
   unchanged; **REVIEW W1 (cycle 1):** `periodControl.status`'s `enumVariants.C` was `"neutral"`,
   drifted from `PeriodsExpandablePanel.jsx`'s hand-maintained `PERIOD_STATUS_VARIANTS` (already
@@ -500,8 +513,13 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 - `com.etendoerp.go/src/com/etendoerp/go/schemaforge/YearCloseHandler.java` (`year-close`) and
   `.../handlers/YearAccountingHandler.java` (`year-accounting`), each with a Mockito-only JUnit
   suite (no `OBBaseTest`/real DB — see each class's test file javadoc for why). Neither class
-  changed during the three-spec rework — only which spec's `ETGO_SF_ENTITY` row carries their
-  `javaQualifier` changed.
+  changed when the entities were regrouped into the three-spec shape (only which spec's
+  `ETGO_SF_ENTITY` row carries their `javaQualifier` changed) — `YearCloseHandler.java` was,
+  however, substantially extended by ETP-4948 itself: `validateAndEnrichFiscalCalendarCreate`
+  (Issue 1), `validateFiscalYearForUpdate`/`isValidFiscalYear` (Issue 5), and the
+  `fiscalYearPeriodsHandler.handles(context)` delegation (July-June periods) are all new methods
+  on this same class, covered by the expanded `YearCloseHandlerTest.java`. `YearAccountingHandler.java`
+  was not touched by ETP-4948.
 - `npx sf-validate-pipeline --scope=fiscal-calendar` and `--scope=open-close-period-control` both
   report 0 violations; `--scope=end-year-close` reports 1 accepted, non-blocking F3 (see Gap
   assessment).
@@ -513,4 +531,9 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   `accountingNoEntries`, `closeYearTitle`, `closeYearBody`, `undoCloseYearTitle`,
   `undoCloseYearBody`, `calendarAccountingTab`, `calendarPeriodsTab` added to both
   `tools/app-shell/src/locales/en_US.json` and `es_ES.json` (`genericLabels`); `account`,
-  `description`, `cancel` were already present and reused as-is.
+  `description`, `cancel` were already present and reused as-is. ETP-4948 added `calendarPeriod`,
+  `calendarStatus`, `calendarActions` (the Periods tab's new table header), and
+  `calendarAdjustmentPeriod` (the 13th-period badge) to the same `genericLabels` block in both
+  files, plus the `Fiscal Year Range`/`January - December`/`July - June` literal-label entries for
+  the new `FISCALYEARSTART` process parameter (label-keyed, same convention as the pre-existing
+  `Create Periods`/`Create Adjustment Period` entries in this same table).
