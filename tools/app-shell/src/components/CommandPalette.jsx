@@ -359,7 +359,12 @@ export function CommandPalette() {
     const target = vectorSearchTargets.find((item) => item.specName === suggestion.specName);
     return !target || requestedVectorSearchTargetKeys.includes(target.target);
   });
-  const visibleRecentSearches = recentSearches.filter((item) => item.query.trim().length > 0);
+  const visibleRecentSearches = recentSearches.filter((item) => {
+    if (item.query.trim().length === 0) return false;
+    if (requestedVectorSearchTargetKeys.length === vectorSearchTargetKeys.length) return true;
+    if (!Array.isArray(item.targets) || item.targets.length === 0) return true;
+    return item.targets.some((target) => requestedVectorSearchTargetKeys.includes(target));
+  });
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} data-testid="CommandDialog__73263e">
@@ -426,10 +431,15 @@ export function CommandPalette() {
             {visibleRecentSearches.length > 0 && (
               <CommandGroup heading={ui('recentSearches')} data-testid="recent-searches">
                 {visibleRecentSearches.map((item) => (
-                  <CommandItem
-                    key={`${item.query}:${item.timestamp}`}
-                    value={item.query}
-                    onSelect={() => setQuery(item.query)}
+                    <CommandItem
+                      key={`${item.query}:${item.timestamp}`}
+                      value={item.query}
+                      onSelect={() => {
+                        if (Array.isArray(item.targets)) {
+                          setSelectedVectorTargetKeys(item.targets.length === vectorSearchTargetKeys.length ? null : item.targets);
+                        }
+                        setQuery(item.query);
+                      }}
                     data-testid="recent-search-item"
                   >
                     <Clock3 className="mr-2 h-4 w-4 text-muted-foreground" />
