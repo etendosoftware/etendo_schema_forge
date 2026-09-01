@@ -612,6 +612,65 @@ describe('ReconciliationSplitPanel', () => {
     expect(candidateCallArgs.docType).toBe('receipts');
   });
 
+  // ── "Tipo" (source) filter dropdown — no fake "all" row (bug fix regression) ──
+  // The Tipo filter always has a concrete value (SOURCE_CODES has no genuine "all" state,
+  // unlike the sibling status filter). Previously `allLabel={ui('financeReconcileSourceLabel')}`
+  // was passed to DistinctValuesFilter, which made DistinctValuesList render the field's own
+  // header/placeholder text as a clickable — but functionally inert — row. That prop was removed.
+
+  it('does not offer the field label as a selectable "Tipo" option, only the four real source values', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+    // Open the "Tipo" dropdown via its trigger (shows the current source label).
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+
+    const popover = screen.getByTestId('PopoverContent__cd3aa9');
+    // Regression: the field's own label/placeholder key must never render as a selectable
+    // row — it is not a real filter value and selecting it used to do nothing.
+    expect(within(popover).queryByText('financeReconcileSourceLabel')).not.toBeInTheDocument();
+    expect(
+      within(popover).queryByRole('button', { name: /financeReconcileSourceLabel/ }),
+    ).not.toBeInTheDocument();
+
+    // All four real source options are present as selectable rows.
+    expect(within(popover).getByText(/financeReconcileSourceSalesInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePurchaseInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourceReceipts/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+  });
+
+  it('selects each real "Tipo" option and flows the mapped (kind, docType) through to the candidates hook', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+
+    // receipts (default) → payments: (kind null, docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('payments');
+    expect(screen.getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+
+    // payments → salesInvoices: (kind 'invoices', docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('receipts');
+
+    // salesInvoices → purchaseInvoices: (kind 'invoices', docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('payments');
+
+    // purchaseInvoices → receipts: back to (kind null, docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('receipts');
+  });
+
   // ── Invoice candidate badge ───────────────────────────────────────────────────
 
   it('renders the "Factura" badge on an invoice-kind candidate', () => {

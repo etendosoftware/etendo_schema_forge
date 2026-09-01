@@ -152,11 +152,9 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
   return (
     <DistinctValuesFilter
       value={value}
-      // Always keep a concrete selection — ignore the "clear" (all) action.
-      onChange={(v) => onChange(v || value)}
+      onChange={onChange}
       codes={SOURCE_CODES}
       labelFor={(code) => `${ui(SOURCE_META[code]?.labelKey ?? code)} (${counts[code] ?? 0})`}
-      allLabel={ui('financeReconcileSourceLabel')}
       searchPlaceholder={ui('financeReconcileSourceLabel')}
       popoverWidth="w-64"
       data-testid="recon-source-filter" />
