@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import {
   resolveVectorSearchTargetForPath,
@@ -61,8 +62,7 @@ function readRecentSearches() {
 }
 
 export function CommandPalette() {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const { open, setOpen, query, setQuery, registerKeyboardHandler } = useGlobalSearch();
   const [recentSearches, setRecentSearches] = useState(readRecentSearches);
   const [keyboardIndex, setKeyboardIndex] = useState(-1);
   const openRef = useRef(false);
@@ -119,6 +119,22 @@ export function CommandPalette() {
   useEffect(() => { keyboardIndexRef.current = keyboardIndex; }, [keyboardIndex]);
 
   useEffect(() => {
+    const navigateKeyboard = (key) => {
+      const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [cmdk-item]:not([data-disabled="true"])'));
+      if (items.length === 0) return;
+      if (key === 'Enter') {
+        items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0]?.click();
+        return;
+      }
+      const delta = key === 'ArrowUp' ? -1 : 1;
+      const next = (keyboardIndexRef.current + delta + items.length) % items.length;
+      keyboardIndexRef.current = next;
+      setKeyboardIndex(next);
+    };
+    return registerKeyboardHandler(navigateKeyboard);
+  }, [registerKeyboardHandler]);
+
+  useEffect(() => {
     const down = (e) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -130,26 +146,9 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    const openFromTopBar = () => {
-      setOpen(true);
-      requestAnimationFrame(() => document.querySelector('[data-testid="global-search-input"]')?.focus());
-    };
-    const queryFromTopBar = (event) => {
-      setQuery(event.detail?.query ?? '');
-      setKeyboardIndex(-1);
-    };
-    const keyFromTopBar = (event) => {
-      if (!openRef.current) return;
-      const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [cmdk-item]:not([data-disabled="true"])'));
-      if (items.length === 0) return;
-      if (event.detail?.key === 'Enter') {
-        items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0]?.click();
-        return;
-      }
-      const delta = event.detail?.key === 'ArrowUp' ? -1 : 1;
-      const next = (keyboardIndexRef.current + delta + items.length) % items.length;
-      keyboardIndexRef.current = next;
-      setKeyboardIndex(next);
+    const preserveDropdownClick = (event) => {
+      const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
+      if (dropdown?.contains(event.target)) dropdownInteractionRef.current = true;
     };
     const closeOnFocusOut = () => {
       window.setTimeout(() => {
@@ -164,32 +163,11 @@ export function CommandPalette() {
         if (!input?.contains(active) && !dropdown?.contains(active)) setOpen(false);
       }, 0);
     };
-    const preserveDropdownClick = (event) => {
-      const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-      if (dropdown?.contains(event.target)) dropdownInteractionRef.current = true;
-    };
-    const nativeKeyDown = (event) => {
-      if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
-      const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-      if (!dropdown) return;
-      const input = document.querySelector('[data-testid="global-search-input"]');
-      if (event.target !== input) return;
-      event.preventDefault();
-      keyFromTopBar({ detail: { key: event.key } });
-    };
-    document.addEventListener('schema-forge:vector-search-open', openFromTopBar);
-    document.addEventListener('schema-forge:vector-search-query', queryFromTopBar);
-    document.addEventListener('schema-forge:vector-search-key', keyFromTopBar);
     document.addEventListener('focusout', closeOnFocusOut);
     document.addEventListener('pointerdown', preserveDropdownClick, true);
-    document.addEventListener('keydown', nativeKeyDown, true);
     return () => {
-      document.removeEventListener('schema-forge:vector-search-open', openFromTopBar);
-      document.removeEventListener('schema-forge:vector-search-query', queryFromTopBar);
-      document.removeEventListener('schema-forge:vector-search-key', keyFromTopBar);
       document.removeEventListener('focusout', closeOnFocusOut);
       document.removeEventListener('pointerdown', preserveDropdownClick, true);
-      document.removeEventListener('keydown', nativeKeyDown, true);
     };
   }, []);
 
