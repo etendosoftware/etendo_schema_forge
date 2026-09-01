@@ -16,6 +16,10 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
+      // Default id for the data-testid codemod, BEFORE the spread on purpose: every caller
+      // (SideMenu, notably) passes its own data-testid, and placing this after `{...rest}`
+      // would silently override it and break their queries.
+      data-testid="NavLink__1b6d6d"
       {...rest}
       to={to}
       onClick={(event) => {
