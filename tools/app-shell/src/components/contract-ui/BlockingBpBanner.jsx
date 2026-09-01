@@ -30,17 +30,30 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
  * its own ref-based "did it change" effect rather than folded into a plain value
  * comparison (0 → 0 must not look like a change on mount).
  *
- * `recordId` resets the banner when the user navigates to a different EXISTING
- * record — a blocking condition on one document must never bleed into the next
- * one opened. But a brand-new/unsaved document has no id yet, so `recordId` is
- * falsy until the first Save assigns one; `DetailView.jsx` never remounts this
- * component for that transition (`:windowName/:recordId` route keeps the same
- * static React Router `key`, only the param re-renders in place — verified by
- * reading `runtime-routes.jsx`), so the naive "clear on any recordId change"
- * effect used to wipe the banner on first Save even though it is still the same
- * in-progress record. `prevRecordIdRef` tracks the last SEEN value so the clear
- * only fires on a genuine truthy → different-truthy switch, never on the
- * falsy/absent → truthy transition a first save produces.
+ * `recordId` resets the banner when the user navigates to a different document
+ * — a blocking condition on one document must never bleed into the next one
+ * opened, whether that "next one" is another existing record or a brand-new
+ * draft. `DetailView.jsx` never remounts this component across any of those
+ * transitions (`:windowName/:recordId` route keeps the same static React
+ * Router `key`, only the param re-renders in place — verified by reading
+ * `runtime-routes.jsx`), so a plain "clear on any recordId change" effect has
+ * to tell "the user switched documents" apart from "the SAME in-progress
+ * document just got assigned its first real id".
+ *
+ * That second case is trickier than it looks: `recordId` here is
+ * `data?.id || recordId`, and the OUTER `recordId` is React Router's
+ * `:recordId` param — which is the literal STRING `'new'` while creating a
+ * document, never falsy/undefined (see `DetailView.jsx`'s own
+ * `const isNew = recordId === 'new'`). A first fix here (ETP-5024) assumed
+ * the pre-save value was falsy and only guarded a falsy → truthy transition;
+ * live testing showed the banner still vanished on a plain Save because
+ * `'new'` IS truthy, so `'new'` → `<real id>` still read as "two different
+ * truthy ids → genuine switch" and wiped the banner every time. `isRealId()`
+ * below excludes `'new'` explicitly, and `isFirstSaveOfNewRecord` is the one
+ * transition — `'new'` becoming the id Save just assigned to that SAME
+ * document — that must NOT clear. Every other change between two different
+ * values (including a real id going back to `'new'` via "Nuevo", or one real
+ * id switching to a different real id) still clears, exactly as before.
  *
  * `currencyCode` — the document's currency (`data['currency$_identifier']`, with
  * the session-level fallback DetailView.jsx already resolves for line rows —
@@ -60,10 +73,13 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
   useEffect(() => {
     const prevRecordId = prevRecordIdRef.current;
     prevRecordIdRef.current = recordId;
-    // Only a genuine switch between two EXISTING records clears the banner.
-    // A falsy/absent recordId turning truthy is the first-Save id assignment
-    // for the SAME record — must not clear (see the doc comment above).
-    if (prevRecordId && recordId && String(prevRecordId) !== String(recordId)) {
+    const isRealId = id => id != null && id !== 'new';
+    const prevStr = prevRecordId != null ? String(prevRecordId) : prevRecordId;
+    const nextStr = recordId != null ? String(recordId) : recordId;
+    // The one transition that must NOT clear: the sentinel 'new' becoming the
+    // real id Save just assigned to that SAME in-progress document.
+    const isFirstSaveOfNewRecord = prevStr === 'new' && isRealId(nextStr);
+    if (prevStr && nextStr && prevStr !== nextStr && !isFirstSaveOfNewRecord) {
       setBanner(null);
     }
   }, [recordId]);

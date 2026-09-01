@@ -142,15 +142,48 @@ describe('BlockingBpBanner (ETP-5024)', () => {
 
   // Bug found in manual testing: on a NEW (unsaved, "Nuevo") record, the banner
   // correctly appeared after selecting a blocked BP — then hitting Guardar (Save)
-  // made it disappear. Root cause: DetailView.jsx passes `recordId: data?.id ||
-  // recordId`; on an unsaved record `data?.id` is falsy, so the first Save
-  // assigning the record its real id flips `recordId` from falsy to truthy. The
-  // naive "clear on any recordId change" effect treated that as "switched to a
-  // different record" and wiped the banner, even though DetailView.jsx never
-  // remounts BlockingBpBanner for this transition (same React Router route key —
-  // see runtime-routes.jsx `:windowName/:recordId` using the static key
-  // "with-record").
-  it('does NOT clear the banner when a new record is first assigned an id on Save (falsy -> truthy recordId)', () => {
+  // made it disappear. FIRST fix attempt assumed `recordId` was falsy/undefined
+  // pre-Save and only guarded a falsy -> truthy transition — that fix's own unit
+  // test (below, now corrected) used `recordId={undefined}` and passed, but the
+  // bug was STILL live in the browser. Root cause, found only via live
+  // instrumentation: `DetailView.jsx` passes `recordId: data?.id || recordId`,
+  // and the OUTER `recordId` is React Router's `:recordId` route param, which is
+  // the literal STRING `'new'` while creating a document — never falsy (see
+  // `DetailView.jsx`'s own `const isNew = recordId === 'new'`, and
+  // `runtime-routes.jsx`'s `:windowName/:recordId` route). So the real pre-Save
+  // value is the truthy string `'new'`, and `'new'` -> `<real id>` is "two
+  // different truthy ids" under the naive check — exactly the "genuine record
+  // switch" case the effect is supposed to detect — which wiped the banner on
+  // every plain Save. `isFirstSaveOfNewRecord` in BlockingBpBanner.jsx now
+  // excludes `'new'` explicitly as a real id, so this one transition is exempt.
+  it('does NOT clear the banner when a new record is first assigned an id on Save (route sentinel "new" -> real id)', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={CREDIT_LIMIT}
+        completionSignal={0}
+        recordId="new"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+
+    // First Save: the record acquires its real id for the first time — same
+    // in-progress record, not a navigation to a different one.
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={CREDIT_LIMIT}
+        completionSignal={0}
+        recordId="new-doc-id-123"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+  });
+
+  // Defensive coverage for a truly absent/falsy pre-Save value too (not just the
+  // real-world 'new' sentinel above) — belt and braces in case some future call
+  // site ever passes recordId={undefined} pre-Save instead of the route's 'new'.
+  it('does NOT clear the banner on a falsy/undefined -> truthy recordId transition either', () => {
     const { rerender } = render(
       <BlockingBpBanner
         calloutResult={null}
@@ -161,8 +194,6 @@ describe('BlockingBpBanner (ETP-5024)', () => {
     );
     expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
 
-    // First Save: the record acquires its real id for the first time — same
-    // in-progress record, not a navigation to a different one.
     rerender(
       <BlockingBpBanner
         calloutResult={null}
