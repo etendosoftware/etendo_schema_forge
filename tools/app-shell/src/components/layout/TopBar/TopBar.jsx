@@ -62,6 +62,7 @@ export default function TopBar({
   const copilot = useCopilot();
   const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
   const [isCurrentWindowScopeEnabled, setIsCurrentWindowScopeEnabled] = useState(true);
+  const [searchSelectionTargets, setSearchSelectionTargets] = useState(null);
   const { open: searchOpen, setOpen: setSearchOpen, query: searchValue, setQuery: setSearchValue, inputRef: searchInputRef, handleKeyDown: handleSearchKeyDown } = useGlobalSearch();
   const currentPathname = window.location.pathname;
   const vectorSearchTargets = useMemo(
@@ -99,17 +100,33 @@ export default function TopBar({
 
   useEffect(() => {
     setIsCurrentWindowScopeEnabled(true);
+    setSearchSelectionTargets(null);
+  }, [currentPathname]);
+
+  useEffect(() => {
+    const handleSelection = (event) => {
+      if (event.detail?.pathname !== currentPathname) return;
+      setSearchSelectionTargets(Array.isArray(event.detail.targets) ? event.detail.targets : null);
+    };
+    document.addEventListener('schema-forge:vector-search-selection', handleSelection);
+    return () => document.removeEventListener('schema-forge:vector-search-selection', handleSelection);
   }, [currentPathname]);
 
   const clearCurrentWindowScope = (event) => {
     event.stopPropagation();
     setIsCurrentWindowScopeEnabled(false);
+    setSearchSelectionTargets([]);
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
       detail: { pathname: currentPathname, vectorSearchTarget: null },
     }));
   };
 
   const currentWindowScope = isCurrentWindowScopeEnabled ? currentWindowVectorTarget : null;
+  const selectedScope = searchSelectionTargets === null
+    ? currentWindowScope
+    : searchSelectionTargets.length === 1
+      ? vectorSearchTargets.find((target) => target.target === searchSelectionTargets[0])
+      : { label: searchSelectionTargets.length === 0 ? '' : ui('selectedWindows').replace('{count}', searchSelectionTargets.length) };
 
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
@@ -240,12 +257,12 @@ export default function TopBar({
             }}
           >
             <Search className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
-            {currentWindowScope && (
+            {selectedScope && selectedScope.label && (
               <span
                 className="mr-2 inline-flex min-w-0 max-w-[12rem] shrink items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
                 data-testid="topbar-vector-search-scope"
               >
-                <span className="truncate">{tMenu(currentWindowScope.label) || currentWindowScope.label}</span>
+                <span className="truncate">{selectedScope.target ? (tMenu(selectedScope.label) || selectedScope.label) : selectedScope.label}</span>
                 <button
                   type="button"
                   onClick={clearCurrentWindowScope}

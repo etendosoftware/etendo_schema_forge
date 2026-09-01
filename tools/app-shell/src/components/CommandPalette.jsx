@@ -117,6 +117,13 @@ export function CommandPalette() {
     ? scopeOverride.targets
     : undefined;
 
+  useEffect(() => {
+    if (!open || vectorSearchTargets.length === 0 || selectedVectorTargetKeys === null) return;
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
+      detail: { pathname: location.pathname, targets: requestedVectorSearchTargetKeys },
+    }));
+  }, [location.pathname, open, requestedVectorSearchTargetKeys, selectedVectorTargetKeys, vectorSearchTargets.length]);
+
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { keyboardIndexRef.current = keyboardIndex; }, [keyboardIndex]);
 
