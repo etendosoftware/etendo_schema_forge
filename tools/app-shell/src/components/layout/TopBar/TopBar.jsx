@@ -243,7 +243,7 @@ export default function TopBar({
         {/* Center: search — absolutely centered so it never shifts with title width */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
           <div
-            className="pointer-events-auto relative flex h-11 w-full max-w-3xl items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+            className="pointer-events-auto relative flex h-11 w-full max-w-[min(48rem,calc(100vw-28rem))] items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
             onClick={(event) => {
               handleSearchClick(event);
               requestAnimationFrame(() => searchInputRef.current?.focus());
