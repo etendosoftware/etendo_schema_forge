@@ -211,6 +211,37 @@ describe('StatementsTable', () => {
       expect(screen.queryByTestId('statement-row-delete-s1')).not.toBeInTheDocument();
       expect(screen.getByTestId('statement-row-menu-s1')).toBeInTheDocument();
     });
+
+    // ETP-4921 — on a PSD2-connected account the statements come from the bank, so even a DRAFT
+    // one offers no Edit and no Delete. Hidden rather than disabled, matching what this row
+    // already does for a processed statement; the reason is shown on the kebab's Reactivar.
+    it('hides inline Edit + Delete on a bank-connected account, even for a draft', () => {
+      render(
+        <StatementsTable
+          statements={[DRAFT]}
+          loading={false}
+          bankConnected
+          actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+        />,
+      );
+      expect(screen.queryByTestId('statement-row-edit-d1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('statement-row-delete-d1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+    });
+
+    // Guard against over-correcting: an unconnected account keeps the draft affordances.
+    it('keeps them on a draft when the account is not connected', () => {
+      render(
+        <StatementsTable
+          statements={[DRAFT]}
+          loading={false}
+          bankConnected={false}
+          actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }}
+        />,
+      );
+      expect(screen.getByTestId('statement-row-edit-d1')).toBeInTheDocument();
+      expect(screen.getByTestId('statement-row-delete-d1')).toBeInTheDocument();
+    });
   });
 
   describe('selection', () => {
@@ -435,5 +466,46 @@ describe('StatementsTable — ETP-5030 selected-row shading', () => {
     // is nothing left that could repaint over the tint.
     expect(hoverBackgroundUtilities(row)).toEqual([]);
     expect(row.className).not.toContain('hover:shadow-lg');
+  });
+});
+
+/**
+ * ETP-4921 — numeric column headers must sit over their own figures. The generic `DataTable`
+ * right-aligns any header whose column type is numeric; this grid is hand-rolled and never
+ * inherited that rule, so Líneas / Salida / Entrada were labelled at the left edge of columns
+ * whose cells have always been `text-right tabular-nums`.
+ */
+describe('StatementsTable — numeric header alignment', () => {
+  // Every header button sits directly inside its grid-cell <span>; a non-numeric one carries no
+  // className at all, which is exactly the "not right-aligned" signal being asserted.
+  const headerCellClass = (sortKey) => screen
+    .getByTestId(`column-header-sort-${sortKey}`)
+    .parentElement.className ?? '';
+
+  it('right-aligns the money and count headers', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    for (const key of ['lines', 'out', 'in']) {
+      expect(headerCellClass(key), `${key} header`).toContain('text-right');
+    }
+  });
+
+  // Estado renders a pill, not a figure — it stays left, like every text column.
+  it('leaves the non-numeric headers alone', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    expect(headerCellClass('status')).not.toContain('text-right');
+    expect(headerCellClass('documentNo')).not.toContain('text-right');
+  });
+
+  // `align="right"` also flips the sort arrow to the label's left, so the arrow stays on the
+  // column's outer edge instead of drifting into the middle of the row.
+  it('puts the sort arrow on the outer edge of a right-aligned header', () => {
+    render(<SortableStatements statements={ROWS} />);
+
+    const btn = screen.getByTestId('column-header-sort-in');
+    expect(btn.className).toContain('flex-row-reverse');
+    expect(screen.getByTestId('column-header-sort-documentNo').className)
+      .not.toContain('flex-row-reverse');
   });
 });

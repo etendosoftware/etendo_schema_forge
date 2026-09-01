@@ -378,13 +378,33 @@ describe('MovementsTable — contract cell fallback', () => {
 });
 
 describe('MovementsTable — loading and empty states', () => {
-  it('renders skeleton placeholder rows while loading', () => {
-    renderTable({ loading: true });
-    // No data rows are rendered while loading.
+  const skeletons = () => document.querySelectorAll('tbody .animate-pulse');
+
+  it('renders skeleton placeholder rows on the TRUE initial load (no rows yet)', () => {
+    renderTable({ loading: true, movements: [] });
+    // No data rows are rendered on the first fetch.
     expect(screen.queryByText('DOC-001')).not.toBeInTheDocument();
-    // Skeleton rows expose the stubbed money/badge cells of real rows for none of them.
     const rows = document.querySelectorAll('tbody tr');
     expect(rows.length).toBe(5); // SKELETON_ROWS
+    expect(skeletons().length).toBeGreaterThan(0);
+  });
+
+  // Smooth refresh: reloading with rows already on screen must NOT wipe the body into
+  // skeletons (the jarring flash this replaced) — the rows stay and are only dimmed.
+  it('keeps the existing rows while refreshing instead of flashing skeletons', () => {
+    renderTable({ loading: true, movements: [baseMovement({ id: 'm1' })] });
+    expect(screen.getByText('DOC-001')).toBeInTheDocument();
+    expect(screen.getByTestId('movement-row-m1')).toBeInTheDocument();
+    expect(skeletons().length).toBe(0);
+  });
+
+  it('dims the table only while refreshing over existing rows', () => {
+    const { unmount } = renderTable({ loading: true, movements: [baseMovement({ id: 'm1' })] });
+    expect(document.querySelector('table').className).toContain('opacity-70');
+    unmount();
+
+    renderTable({ loading: false, movements: [baseMovement({ id: 'm1' })] });
+    expect(document.querySelector('table').className).not.toContain('opacity-70');
   });
 
   it('renders the empty-state message when there are no movements', () => {

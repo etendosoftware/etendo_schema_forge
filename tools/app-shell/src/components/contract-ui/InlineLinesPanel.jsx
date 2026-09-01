@@ -1024,7 +1024,10 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       // when an id repeats, instead of stacking a fresh toast for every blur.
       toast.success(ui('recordSaved'), { id: `inline-save-${row.id}` });
     } catch (err) {
-      toast.error(err?.message || ui('networkError'));
+      // `userNotified` means the save handler already told the user (its own toast, or the
+      // concurrency-conflict dialog). Toasting again would stack a duplicate on top of the toast,
+      // or a redundant one behind the dialog. Errors from anywhere else still land here.
+      if (!err?.userNotified) toast.error(err?.message || ui('networkError'));
     } finally {
       pendingEditRef.current = null;
     }
