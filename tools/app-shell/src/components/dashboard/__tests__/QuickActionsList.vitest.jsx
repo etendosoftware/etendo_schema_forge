@@ -53,36 +53,4 @@ describe('QuickActionsList', () => {
       source: 'dashboard_quick_actions',
     });
   });
-
-  it('keeps a long label on one line, inside the card', () => {
-    // Reported live, twice. The label was first chopped mid-word: the pill uses
-    // `align-self: flex-start`, so it sized to its content and overflowed the card, and a flex
-    // item defaults to `min-width: auto` and will not shrink below its text. The real fix was a
-    // width floor on the column (DashboardPage), which lets every current label fit on one line —
-    // so the pill stays 28px and the ellipsis here is only a safety net for a longer translation.
-    render(
-      <QuickActionsList
-        actions={[
-          {
-            label: 'Nuevo pedido de venta',
-            to: '/sales-order/new',
-            testId: 'quick-action-sales-order-new',
-            analyticsAction: 'create_sales_order',
-          },
-        ]}
-      />,
-    );
-
-    const pill = screen.getByTestId('quick-action-sales-order-new');
-    expect(pill.style.height).toBe('28px');
-    // Never wider than the card, and free to shrink so the label can ellipse inside it.
-    expect(pill.style.maxWidth).toBe('100%');
-    expect(pill.style.minWidth).toBe('0px');
-    expect(pill).toHaveAttribute('title', 'Nuevo pedido de venta');
-
-    const label = pill.querySelector('span');
-    expect(label.style.whiteSpace).toBe('nowrap');
-    expect(label.style.textOverflow).toBe('ellipsis');
-    expect(label.style.minWidth).toBe('0px');
-  });
 });

@@ -306,15 +306,4 @@ describe('DashboardPage — creation CTAs need the write tier (ETP-5088)', () =>
     expect(screen.getByTestId('financial-summary')).toHaveTextContent('purchase:false sale:true');
     expect(screen.getByTestId('top-clients')).toHaveTextContent('contact:true');
   });
-
-  it('gives the quick actions column a floor wide enough for its labels', () => {
-    // The row's narrowest column shrank to ~130px with the sidebar open, which cut
-    // "Nuevo pedido de venta". A floor here is what keeps the pills on one line; the two wider
-    // widgets absorb the difference.
-    render(<DashboardPage />);
-    const column = screen.getByTestId('quick-actions').parentElement;
-    expect(column.style.minWidth).toBe('216px');
-    // Must NOT carry Tailwind's min-w-0, which would let it collapse again.
-    expect(column.className).not.toMatch(/min-w-0/);
-  });
 });

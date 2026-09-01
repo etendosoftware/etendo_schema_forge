@@ -181,12 +181,7 @@ function DashboardContent({ apiBaseUrl }) {
             </div>
             )}
             {showQuickActions && (
-            // `minWidth` instead of the `min-w-0` its siblings use: this is the narrowest column
-            // of the row (flex 213 against 672 and 435), and with the sidebar open it shrank to
-            // ~130px — not enough for "Nuevo pedido de venta" on one line. 216px is that label at
-            // 14px plus the icon, gaps and both paddings, so the pills read on a single line and
-            // the two wider widgets give up the space instead.
-            <div className="flex flex-col w-full h-[234px]" style={{ flex: '213 1 0', minWidth: '216px' }}>
+            <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '213 1 0' }}>
               <QuickActionsList actions={quickActions} data-testid="QuickActionsList__3a4535" />
             </div>
             )}

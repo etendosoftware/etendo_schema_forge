@@ -30,18 +30,11 @@ export function QuickActionsList({ actions = [] }) {
                 source: 'dashboard_quick_actions',
               })}
               data-testid={action.testId}
-              // The full label on hover, since a narrow sidebar-open layout truncates it.
-              title={action.label}
               style={{
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
                 alignSelf: 'flex-start',
-                // `alignSelf: flex-start` sizes the pill to its content, so without `maxWidth` it
-                // grows past the card and gets clipped as soon as the sidebar opens and the column
-                // narrows. `minWidth: 0` lets a flex item shrink below its content at all.
-                maxWidth: '100%',
-                minWidth: 0,
                 padding: '4px 8px',
                 height: '28px',
                 backgroundColor: 'hsl(var(--muted))',
@@ -60,15 +53,9 @@ export function QuickActionsList({ actions = [] }) {
                 fontSize: '14px',
                 lineHeight: '20px',
                 color: 'hsl(var(--muted-foreground))',
-                // One line, as designed. The column now has a 216px floor (see DashboardPage) so
-                // every current label fits; this only engages for a translation longer than any of
-                // them, where a clean ellipsis beats a chopped word.
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                // A flex item defaults to `min-width: auto` and refuses to shrink below its text,
-                // which would push the overflow outside the pill instead of ellipsing inside it.
-                minWidth: 0,
               }}>
                 {action.label}
               </span>
