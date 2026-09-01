@@ -1175,6 +1175,20 @@ selected.
 }
 ```
 
+**Precedence over callouts (ETP-5039).** A mapping target is an explicit user choice, so
+`applyOnSelectMappings` registers every `to` key as *touched*. A callout fired by the same
+selection (e.g. the product callout returning the AD locator `Value`, `AS-0-0-0`) therefore
+cannot overwrite it. The protection extends to the `to$_identifier` companion key, where the
+display label lives — in `applyCalloutUpdates` (`tools/app-shell/src/lib/applyCalloutUpdates.js`)
+a `X$_identifier` key inherits the base key `X`'s membership in both `touched` and
+`forceCalloutFields`. Consequences:
+
+- A field the user picked keeps **both** its value and its label against a callout default.
+- A field declared in `forceCalloutFields` still wins, and its label is refreshed with it —
+  no value/label mismatch.
+- Untouched autocompleted fields (prices, discounts, amounts) are recalculated by callouts
+  exactly as before.
+
 ### Custom Renderer (`customRenderer`)
 
 Swap in a custom React component as the input widget for a single field inside `EntityForm`.

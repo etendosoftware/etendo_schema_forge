@@ -189,10 +189,10 @@ a real instance: `MovementType` is identical between a normal document and its r
 | `N` | `Y` (purchase return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-to-vendor-shipment` |
 | — | — | `M_MovementLine → M_Movement` | `goods-movements` |
 | — | — | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
+| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | `internal-consumption` (identifier = `name` column, not `documentno`; ETP-5039) |
 | — | — | `M_ProductionLine → M_Production` | No GO window yet — plain text |
-| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
 
-`documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, or `productionLine$_identifier`.
+`documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, `internalConsumptionLine$_identifier`, or `productionLine$_identifier`.
 
 **Type column resolution:** `M_Transaction.MovementType` is identical between a normal document and
 its return (`C-` for both a customer shipment and its return, `V+` for both a vendor receipt and its
@@ -201,8 +201,8 @@ return), so it cannot be used alone to label the Type column for a return. `reso
 document-window discriminator used for navigation — mapping `return-material-receipt` →
 `movTypeCustomerReturn` and `return-to-vendor-shipment` → `movTypeVendorReturn` (normal
 `goods-shipment`/`goods-receipt` reuse the existing `movTypeCustomerShipment`/`movTypeVendorReceipt`
-keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`, production,
-internal consumption) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
+keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`,
+`internal-consumption`, production) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
 real `M_Transaction.MovementType` codes — `V+`, `I+`, `I-`, `M+`, `M-`, `P+`, `P-`, `C-`, `D-` — see
 `artifacts/return-material-receipt/FINDINGS.md`, which confirms no other codes like `V-`/`C+` are
 actually used in stock transactions), and only drop to the raw `movementType$_identifier` /

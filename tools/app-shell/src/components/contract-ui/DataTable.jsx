@@ -63,8 +63,20 @@ function getByPath(obj, path) {
  * the row, optionally with a display label resolved from one of several keys.
  * Replaces window-specific branches like `if (entity === 'internalConsumptionLine')`
  * with metadata declared in the contract.
+ *
+ * ETP-5039: every mapped target is reported through the optional `markTouched`
+ * callback. A value the user selected in the lookup drawer is an explicit user
+ * choice, so a callout fired by the same selection (e.g. the product callout
+ * returning the default locator) must not overwrite it — see
+ * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
+ * companions.
+ *
+ * @param {object}   field        Field whose `onSelectMappings` are applied
+ * @param {object}   item         Item selected in the lookup
+ * @param {Function} handleChange (key, value) row-state setter
+ * @param {Function} [markTouched] (key) called for every mapped target field
  */
-export function applyOnSelectMappings(field, item, handleChange) {
+export function applyOnSelectMappings(field, item, handleChange, markTouched) {
   const mappings = field?.onSelectMappings;
   if (!Array.isArray(mappings) || mappings.length === 0) return;
   for (const m of mappings) {
@@ -79,6 +91,7 @@ export function applyOnSelectMappings(field, item, handleChange) {
     }
     handleChange(`${m.to}$_identifier`, label == null ? value : label);
     handleChange(m.to, value);
+    markTouched?.(m.to);
   }
 }
 
@@ -488,7 +501,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
             touchedFieldsRef.current.add(field.key);
             handleChange(field.key + '$_identifier', resolveLookupItemLabel(item));
             handleFieldChange(field.key, item.id, item);
-            applyOnSelectMappings(field, item, handleChange);
+            applyOnSelectMappings(field, item, handleChange, (key) => touchedFieldsRef.current.add(key));
           }}
           onKeyDown={handleKeyDown}
           title={lookupTitle}

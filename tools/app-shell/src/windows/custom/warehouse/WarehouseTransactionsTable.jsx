@@ -31,6 +31,7 @@ function documentLabel(tx) {
     tx['goodsShipmentLine$_identifier'] ??
     tx['movementLine$_identifier'] ??
     tx['physicalInventoryLine$_identifier'] ??
+    tx['internalConsumptionLine$_identifier'] ??
     tx['productionLine$_identifier'] ??
     null
   );
@@ -54,8 +55,9 @@ const TYPE_KEY_MAP = {
  * (which is identical for a shipment and its return on the same side), the resolved window key
  * already distinguishes a normal document from its return — see ETP-4864.
  *
- * Windows without a clear return semantics (goods-movements, physical-inventory) are
- * intentionally absent here; those rows fall back to {@code TYPE_KEY_MAP} below.
+ * Windows without a clear return semantics (goods-movements, physical-inventory,
+ * internal-consumption) are intentionally absent here; those rows fall back to
+ * {@code TYPE_KEY_MAP} below.
  */
 const WINDOW_TYPE_KEY_MAP = {
   'goods-shipment': 'movTypeCustomerShipment',
