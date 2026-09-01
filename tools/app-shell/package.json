@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.43",
-    "@etendosoftware/etendo-go-core": "0.3.43",
+    "@etendosoftware/app-shell-core": "0.3.44-preview.feature-ETP-5077.20260901195235.9b513d9",
+    "@etendosoftware/etendo-go-core": "0.3.44-preview.feature-ETP-5077.20260901195235.9b513d9",
     "@iconicapp/iconic-react": "^1.1.4",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
