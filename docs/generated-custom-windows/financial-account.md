@@ -1983,9 +1983,26 @@ hand-rolled `createPortal` positioning:
 for whatever width the content ends up being — growing the panel via CSS doesn't bypass that, so no
 extra positioning code was needed.
 
-**Already fine, not touched:** `SelectorChip`'s own selected-value chip label (`<span
-className="truncate">`) already truncated correctly — this gap was specific to the still-searching
-dropdown LIST, not the committed value shown once something is picked.
+**Already fine at the time, since revisited below:** `SelectorChip`'s own selected-value chip label
+(`<span className="truncate">`) already truncated correctly — this gap was specific to the
+still-searching dropdown LIST, not the committed value shown once something is picked. It was still
+missing a hover tooltip for the truncated case, though — see the next follow-up.
+
+#### Seventh follow-up: the committed chip value had no way to reveal a truncated name (ETP-4924)
+
+Once a long Contacto/Cuenta contable value is actually selected, `SelectorChip` shows it as a pill
+with `truncate` (correct, per the follow-up above) — but truncating alone means a name that doesn't
+fit is just gone with no way to read the rest; there was no hover affordance at all, unlike
+`EditRow`'s Descripción/Nombre del contacto inputs, which already got a native `title` tooltip in an
+earlier follow-up in this same thread.
+
+Added `title={label}` to `SelectorChip`'s label `<span>` — the same native-tooltip pattern, on the
+same shared component the "widen the dropdown" fix above already touched. Being a shared component
+(`components/contract-ui/SelectorChip.jsx`), every consumer gets the hover tooltip for free, not
+just this modal's Contacto/Cuenta contable — confirmed real consumers (not just the component's own
+doc comment): `ChipSelect` (`forms/fields.jsx`), `CreatableSearchSelect`, `InlineSearchCombo` (so the
+"Impuesto" chip itself, once a tax is picked, also gains the tooltip), `EntityForm.jsx`, and
+`FundsTransferModal.jsx`.
 
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
