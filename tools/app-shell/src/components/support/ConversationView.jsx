@@ -146,22 +146,43 @@ function renderText(txt) {
   return blocks;
 }
 
-// Matches **bold**, *italic*, `code`, markdown links [label](url), and BARE http(s) URLs —
-// links restricted to http(s) only, so a crafted `javascript:`/`data:` href in a reply
-// (AI-generated or relayed from a Jira comment) can never end up as a clickable link.
-// **bold** is tried before *italic* so a bold span isn't misread as italic-star + literal
-// star; the markdown-link alternative is tried before the bare-URL one so a `[label](url)`
-// pair renders with its label rather than the bare-URL branch matching just the url part.
-// The bare-URL alternative excludes whitespace, angle/square brackets and quotes — NOT
-// trailing sentence punctuation (a period/comma right after a URL can get swept in); accepted
-// simplification for a hand-rolled matcher, not a full URL grammar. The docs "Fuente: <url>"
-// line the AI always appends is a bare URL, never markdown-link syntax, which is why this
-// exists — without it, every source link rendered as inert plain text. Every span is
-// length-capped (no plain `+`) — chat text is never a legitimate multi-KB bold/code/url run,
-// and the cap bounds the worst-case backtracking cost of the star-prefixed alternatives to a
-// constant, regardless of message length (javascript:S5852).
+// Matches **bold**, *italic*, `code`, and markdown links [label](url) — links restricted to
+// http(s) URLs only, so a crafted `javascript:`/`data:` href in a reply (AI-generated or
+// relayed from a Jira comment) can never end up as a clickable link. **bold** is tried before
+// *italic* so a bold span isn't misread as italic-star + literal star. Every span is
+// length-capped (no plain `+`) — chat text is never a legitimate multi-KB bold/code run, and
+// the cap bounds the worst-case backtracking cost of the two star-prefixed alternatives to a
+// constant, regardless of message length (javascript:S5852). Bare URLs (no markdown-link
+// syntax) are deliberately NOT a 5th alternative here — see BARE_URL_PATTERN below for why.
 const INLINE_PATTERN =
-  /\*\*([^*\n]{1,500})\*\*|\*([^*\n]{1,500})\*|`([^`\n]{1,500})`|\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)|(https?:\/\/[^\s<>"'\]]{1,2000})/g;
+  /\*\*([^*\n]{1,500})\*\*|\*([^*\n]{1,500})\*|`([^`\n]{1,500})`|\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/g;
+
+// Second, independent pass — bare `https?://` URLs (no markdown [label](url) syntax), e.g. the
+// "Fuente: <url>" line the AI always appends to a docs answer. Kept as its OWN tiny regex
+// rather than folded into INLINE_PATTERN as a 5th alternative: adding that branch pushed
+// INLINE_PATTERN's Sonar regex-complexity score (javascript:S5843) from 20 to 26 — over the
+// cap — even though it can't be nested inside INLINE_PATTERN more cheaply (nesting costs more
+// than a flat top-level branch would have saved). Splitting is safe with zero precedence
+// logic: pushWithBareUrls only ever runs on the plain-text slices renderInline already
+// determined are NOT part of any bold/italic/code/link match, so the two patterns never see
+// overlapping text.
+const BARE_URL_PATTERN = /https?:\/\/[^\s<>"'\]()]{1,2000}/g;
+
+function pushWithBareUrls(nodes, text) {
+  let lastIndex = 0;
+  let match;
+  BARE_URL_PATTERN.lastIndex = 0;
+  while ((match = BARE_URL_PATTERN.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    nodes.push(
+      <a key={nodes.length} href={match[0]} target="_blank" rel="noopener noreferrer">
+        {match[0]}
+      </a>
+    );
+    lastIndex = BARE_URL_PATTERN.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+}
 
 function renderInline(txt) {
   const nodes = [];
@@ -169,19 +190,13 @@ function renderInline(txt) {
   let match;
   INLINE_PATTERN.lastIndex = 0;
   while ((match = INLINE_PATTERN.exec(txt)) !== null) {
-    if (match.index > lastIndex) nodes.push(txt.slice(lastIndex, match.index));
+    if (match.index > lastIndex) pushWithBareUrls(nodes, txt.slice(lastIndex, match.index));
     if (match[1] !== undefined) {
       nodes.push(<strong key={nodes.length}>{match[1]}</strong>);
     } else if (match[2] !== undefined) {
       nodes.push(<em key={nodes.length}>{match[2]}</em>);
     } else if (match[3] !== undefined) {
       nodes.push(<code key={nodes.length}>{match[3]}</code>);
-    } else if (match[6] !== undefined) {
-      nodes.push(
-        <a key={nodes.length} href={match[6]} target="_blank" rel="noopener noreferrer">
-          {match[6]}
-        </a>
-      );
     } else {
       nodes.push(
         <a key={nodes.length} href={match[5]} target="_blank" rel="noopener noreferrer">
@@ -191,7 +206,7 @@ function renderInline(txt) {
     }
     lastIndex = INLINE_PATTERN.lastIndex;
   }
-  if (lastIndex < txt.length) nodes.push(txt.slice(lastIndex));
+  if (lastIndex < txt.length) pushWithBareUrls(nodes, txt.slice(lastIndex));
   return nodes;
 }
 
