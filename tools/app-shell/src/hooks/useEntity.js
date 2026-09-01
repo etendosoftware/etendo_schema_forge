@@ -19,6 +19,7 @@ import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldEr
 import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
+import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
@@ -899,6 +900,20 @@ export function useEntity(entity, childEntity, {
     // are empty (either client-side or via backend MISSING_REQUIRED_FIELDS) so EntityForm
     // can highlight each input. Cleared on successful save and on field change.
     const [fieldErrors, setFieldErrors] = useState({});
+    // ETP-5024: `{ kind: 'creditLimit' | 'onHold', text } | null` — set when a process
+    // (handleProcess) or a "Save & Complete" (handleSaveAndProcess) action fails with one
+    // of the two Business-Partner blocking conditions (see lib/blockingBpConditions.js).
+    // When set, the failing action does NOT toast — DetailView renders a persistent inline
+    // banner from this instead. Cleared here whenever a completion action later succeeds;
+    // consumers also watch `completionSignal` below to clear a banner that came from the
+    // OTHER source (useCallout's calloutResult), which this hook has no reference to.
+    const [blockingCondition, setBlockingCondition] = useState(null);
+    // ETP-5024: bumped every time a completion-type action succeeds (Complete via
+    // handleProcess, or the draft-mode Complete flow in handleSaveAndProcess). DetailView
+    // watches this to clear ANY currently-shown blocking banner — including one raised by
+    // useCallout's BP-select-time message, which this hook cannot reach directly — on the
+    // "document completed successfully" trigger.
+    const [completionSignal, setCompletionSignal] = useState(0);
     const [sortColumn, setSortColumn] = useState(initialSortColumn);
     const [sortDirection, setSortDirection] = useState(initialSortDirection);
     const startRowRef = useRef(0);
@@ -1229,6 +1244,10 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        // ETP-5024: a Complete-time blocking condition belongs to the record that raised
+        // it — switching to a different one (or reselecting the same row after a refresh)
+        // must not leak a stale banner forward.
+        setBlockingCondition(null);
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
@@ -1238,6 +1257,8 @@ export function useEntity(entity, childEntity, {
         backendDefaultKeysRef.current = new Set();
         userChangedKeysRef.current = new Set();
         setFieldErrors({});
+        // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
+        setBlockingCondition(null);
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
 
@@ -1723,7 +1744,14 @@ export function useEntity(entity, childEntity, {
         });
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
-            toast.error(msg);
+            // ETP-5024: same routing as handleProcess above — a BP-on-hold refusal of the
+            // draft-mode Complete flow becomes a persistent banner, not a toast.
+            const condition = detectBlockingBpCondition(msg);
+            if (condition) {
+                setBlockingCondition(condition);
+            } else {
+                toast.error(msg);
+            }
             // A refused process may still have bumped `updated` — see refreshRecordVersion.
             await refreshRecordVersion(saved.id);
             return null;
@@ -1736,6 +1764,10 @@ export function useEntity(entity, childEntity, {
             source: 'detail_view',
             operation: 'complete',
         });
+        // ETP-5024: this whole function IS the "Save & Complete" flow, so a successful
+        // response always means the document just completed — clear any blocking banner.
+        setBlockingCondition(null);
+        setCompletionSignal(c => c + 1);
         if (isInvoiceSpec(specName)) {
             incrementSurveyCounter('invoicing');
             emitSurveyTrigger();
@@ -1796,12 +1828,27 @@ export function useEntity(entity, childEntity, {
                         source: 'process_action',
                         operation: 'complete',
                     });
+                    // ETP-5024: a document that just completed successfully can no longer be
+                    // blocked by the condition that may have been shown before (credit limit /
+                    // BP on hold) — clear it and signal DetailView so it drops the banner even
+                    // when the banner came from useCallout, which this hook cannot reach.
+                    setBlockingCondition(null);
+                    setCompletionSignal(c => c + 1);
                 }
                 fetchById(selected.id);
                 refresh();
             } else {
                 const msg = await extractErrorMessage(res, ui);
-                toast.error(msg);
+                // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
+                // inline banner instead of an auto-dismissing toast — skip the toast for it and
+                // let DetailView pick it up via `blockingCondition`. Every other process error
+                // keeps the existing toast.
+                const condition = detectBlockingBpCondition(msg);
+                if (condition) {
+                    setBlockingCondition(condition);
+                } else {
+                    toast.error(msg);
+                }
                 // A refused process may still have bumped `updated` — see refreshRecordVersion.
                 await refreshRecordVersion(selected.id);
             }
@@ -1867,6 +1914,7 @@ export function useEntity(entity, childEntity, {
     return {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
+        blockingCondition, completionSignal,
         isDirtyHeader,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,

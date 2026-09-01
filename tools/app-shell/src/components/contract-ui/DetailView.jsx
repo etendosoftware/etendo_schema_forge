@@ -3180,7 +3180,7 @@ export function DetailView({
               ) : null;
             })() : null}
             <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, contentOverflow })}>
-              {resolveHeaderContent(headerContent, data)}
+              {resolveHeaderContent(headerContent, data, { calloutResult, blockingCondition: hook.blockingCondition, completionSignal: hook.completionSignal, recordId: data?.id || recordId })}
               {(() => {
                 const slotProps = {
                   data,

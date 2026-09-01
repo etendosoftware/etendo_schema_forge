@@ -15,6 +15,7 @@ import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -907,8 +908,19 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
   );
 }
 
-export function resolveHeaderContent(headerContent, data) {
-  return typeof headerContent === 'function' ? headerContent(data) : headerContent;
+// ETP-5024: `bpBanner`, when passed, renders the persistent credit-limit/BP-on-hold
+// inline warning (BlockingBpBanner.jsx) above the resolved header content. Optional
+// so every call site that has nothing to report (no BP-related callout/process
+// wiring in scope) keeps behaving exactly as before.
+export function resolveHeaderContent(headerContent, data, bpBanner) {
+  const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
+  if (!bpBanner) return resolvedHeader;
+  return (
+    <>
+      <BlockingBpBanner {...bpBanner} />
+      {resolvedHeader}
+    </>
+  );
 }
 
 export function isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) {
