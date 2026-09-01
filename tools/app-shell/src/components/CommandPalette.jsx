@@ -381,13 +381,13 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} data-testid="CommandDialog__73263e">
-      <div className="relative border-b border-[hsl(var(--border-control))] bg-card px-8 py-5" data-testid="vector-search-scope-panel">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">{ui('searchIn')}</h2>
+      <div className="relative border-b border-[hsl(var(--border-control))] bg-card px-4 py-3" data-testid="vector-search-scope-panel">
+        <h2 className="mb-2 text-base font-semibold text-foreground">{ui('searchIn')}</h2>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={clearVectorSearchScope}
-            className="inline-flex max-w-56 items-center gap-2 rounded-full bg-muted px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="inline-flex max-w-56 items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label={ui('clearSearchScope')}
             data-testid="vector-search-scope"
           >
@@ -398,7 +398,7 @@ export function CommandPalette() {
             type="button"
             onClick={() => setIsTargetPickerOpen((isOpen) => !isOpen)}
             ref={targetPickerTriggerRef}
-            className="rounded-full bg-muted px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-expanded={isTargetPickerOpen}
             data-testid="vector-search-target-picker-trigger"
           >
@@ -406,12 +406,12 @@ export function CommandPalette() {
           </button>
         </div>
         {isTargetPickerOpen && (
-          <div ref={targetPickerRef} className="absolute left-[380px] top-16 z-20 w-80 rounded-2xl border bg-popover p-3 shadow-lg" data-testid="vector-search-target-picker">
+          <div ref={targetPickerRef} className="absolute left-[300px] top-12 z-20 w-72 rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
               const label = tMenu(target.label) || target.label;
               return (
-                <label key={target.target} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent">
+                <label key={target.target} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-accent">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -551,7 +551,7 @@ export function CommandPalette() {
           );
         })}
       </CommandList>
-      <div className="flex h-12 shrink-0 items-center justify-between border-t border-[hsl(var(--border-control))] bg-muted/30 px-4 text-sm text-muted-foreground" data-testid="command-search-help">
+      <div className="flex h-10 shrink-0 items-center justify-between border-t border-[hsl(var(--border-control))] bg-muted/30 px-3 text-sm text-muted-foreground" data-testid="command-search-help">
         <div className="flex items-center gap-2">
           <span className="rounded-md border bg-card px-2 py-1 font-mono text-xs">↑</span>
           <span className="rounded-md border bg-card px-2 py-1 font-mono text-xs">↓</span>

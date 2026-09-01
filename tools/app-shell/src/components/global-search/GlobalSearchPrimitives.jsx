@@ -29,9 +29,9 @@ export function GlobalSearchList({ children, className, ...props }) {
   return <div {...props} className={cn('min-h-0 overflow-y-auto overflow-x-hidden', className)}>{children}</div>;
 }
 export function GlobalSearchGroup({ heading, children, className, ...props }) {
-  return <section {...props} className={cn('p-2', className)}><h3 className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{heading}</h3>{children}</section>;
+  return <section {...props} className={cn('p-1', className)}><h3 className="px-2 py-1 text-xs font-medium text-muted-foreground">{heading}</h3>{children}</section>;
 }
 export function GlobalSearchItem({ children, onSelect, className, disabled = false, ...props }) {
-  return <button type="button" {...props} disabled={disabled} onClick={onSelect} className={cn('relative flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-left text-sm outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-50', className)} data-global-search-item="true">{children}</button>;
+  return <button type="button" {...props} disabled={disabled} onClick={onSelect} className={cn('relative flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-50', className)} data-global-search-item="true">{children}</button>;
 }
 export function GlobalSearchEmpty({ children, ...props }) { return <div {...props} className="py-6 text-center text-sm">{children}</div>; }
