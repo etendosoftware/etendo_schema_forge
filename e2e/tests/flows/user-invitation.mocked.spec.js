@@ -111,7 +111,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
       });
     });
 
-    await page.route('**/sws/go/login', async (route) => {
+    await page.route('**/sws/go/session', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -327,7 +327,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
         }),
       });
     });
-    await page.route('**/sws/go/login', async (route) => {
+    await page.route('**/sws/go/session', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

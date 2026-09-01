@@ -67,20 +67,25 @@ async function installEnvironmentsMock(page, environments) {
 }
 
 /**
- * Mocks entering an already-provisioned environment. `switchTo`
- * (`useEnvironmentSwitch.js`) calls `GET /sws/go/login?userId=...` and only
- * proceeds with its hard `window.location.href = '/'` navigation if the
- * response includes a `token` — without one it silently no-ops.
+ * Mocks entering an already-provisioned environment.
+ *
+ * ETP-4576 — `switchTo` (`useEnvironmentSwitch.js`) now POSTs to
+ * `/sws/go/session/environment`, which UPDATES the backend-managed session rather than minting
+ * a token for the client to hold, and reports `status`. It proceeds with its hard
+ * `window.location.href` navigation on success; anything else silently no-ops.
  */
-async function installEnvironmentLoginMock(page, { token, roleList } = {}) {
-  await page.route('**/sws/go/login{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
+async function installEnvironmentLoginMock(page, { roleList } = {}) {
+  const requests = [];
+  await page.route('**/sws/go/session/environment{/**,}**', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    try { requests.push(JSON.parse(route.request().postData() || '{}')); } catch { /* ignore */ }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ token, roleList }),
+      body: JSON.stringify({ status: 'success', roleList }),
     });
   });
+  return requests;
 }
 
 /** Mocks provider-hosted checkout creation and the paid return status. */
@@ -232,7 +237,7 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     // find the tenant by name, then switchTo() logs into it via this route —
     // both need a response, or the auto-enter after success silently fails.
     const NEW_ENV_TOKEN = 'e2e-new-env-token';
-    await installEnvironmentLoginMock(page, {
+    const envRequests = await installEnvironmentLoginMock(page, {
       token: NEW_ENV_TOKEN,
       roleList: [{ id: 'role-productive', name: 'Administrator', orgList: [{ id: 'org-productive', name: 'Acme Productive HQ' }] }],
     });
@@ -293,14 +298,11 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     await page.getByTestId('upgrade-success-continue').click();
     await page.waitForURL('**/dashboard', { timeout: 15_000 });
 
-    // sf_auth_client_name is written by buildEnvironmentSessionStorage and
-    // not touched by login()'s init script (unlike sf_auth_token, which that
-    // script reseeds on every new document — see auth.js), so it is the
-    // reliable signal that the session landed in the new tenant rather than
-    // merely surviving the reload with the old one.
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem('sf_auth_client_name')))
-      .toBe('Acme Productive');
+    // ETP-4576 — sf_auth_client_name was written by buildEnvironmentSessionStorage, the
+    // handoff channel the cookie session replaced; nothing writes it any more. What proves the
+    // session landed in the NEW tenant is the request that moved it there: entering an
+    // environment POSTs the target's admin user, and only the provisioned tenant has this one.
+    expect(envRequests.at(-1)).toMatchObject({ userId: 'user-2' });
   });
 
   test('checkout creation failure stays on the checkout without onboarding', async ({ page }) => {

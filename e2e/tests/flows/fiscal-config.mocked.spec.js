@@ -92,6 +92,16 @@ async function openActionsMenu(page) {
 test.describe('Fiscal Config — no org selected', () => {
   test('shows the no-org message when session has no selected organisation', async ({ page }) => {
     await login(page);
+    // ETP-4576 — the shared stub restores a session that HAS an organisation, which is what
+    // every other spec needs. This case is about the opposite, so it overrides the restore
+    // with an org-less session; registered after login(), so it wins (Playwright is LIFO).
+    await page.route('**/sws/go/session', (route) => (route.request().method() === 'GET'
+      ? route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ account: { name: 'admin' }, environment: {}, roleList: [] }),
+      })
+      : route.fallback()));
     await navigateTo(page, 'fiscal-config');
     await expect(page.getByText(t('fiscal.noOrg'))).toBeVisible();
   });

@@ -81,22 +81,6 @@ export async function login(page, {
       // here rather than in its own page.route because Playwright resolves routes LIFO, so this
       // catch-all — registered last — would swallow a more specific one anyway. Without it every
       // spec bounces off the auth guard into /onboarding and never reaches the page under test.
-      // The account owns an environment: an empty list is what sends the shell into the
-      // onboarding wizard, so the catch-all's generic `{ data: [] }` would strand every spec
-      // on the "let's get you set up" screen rather than the page under test.
-      if (url.includes('/sws/go/environments') && method === 'GET') {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([{
-            clientId: 'e2e-mock-client',
-            clientName: 'E2E Client',
-            adminUserId: 'e2e-mock-user',
-            roleId: 'e2e-mock-role',
-            orgId: 'e2e-mock-org',
-          }]),
-        });
-      }
       if (url.includes('/sws/go/session') && method === 'GET') {
         return route.fulfill({
           status: 200,
