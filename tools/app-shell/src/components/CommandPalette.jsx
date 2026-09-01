@@ -121,6 +121,7 @@ export function CommandPalette() {
   useEffect(() => {
     const navigateKeyboard = (key) => {
       const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [cmdk-item]:not([data-disabled="true"])'));
+      if (import.meta.env.DEV) console.debug('[CommandPalette] navigate', { key, itemCount: items.length, index: keyboardIndexRef.current });
       if (items.length === 0) return;
       if (key === 'Enter') {
         items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0]?.click();
@@ -131,7 +132,9 @@ export function CommandPalette() {
       keyboardIndexRef.current = next;
       setKeyboardIndex(next);
     };
-    return registerKeyboardHandler(navigateKeyboard);
+    const unregister = registerKeyboardHandler(navigateKeyboard);
+    if (import.meta.env.DEV) console.debug('[CommandPalette] keyboard handler registered');
+    return unregister;
   }, [registerKeyboardHandler]);
 
   useEffect(() => {
@@ -177,6 +180,8 @@ export function CommandPalette() {
       const selected = index === keyboardIndex && !item.hasAttribute('data-disabled');
       item.setAttribute('data-selected', selected ? 'true' : 'false');
       item.setAttribute('aria-selected', selected ? 'true' : 'false');
+      item.classList.toggle('bg-accent', selected);
+      item.classList.toggle('text-accent-foreground', selected);
     });
   }, [keyboardIndex, query, vectorMatches, recentSearches, open, isTargetPickerOpen]);
 

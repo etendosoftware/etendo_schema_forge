@@ -7,6 +7,7 @@ export function GlobalSearchProvider({ children }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
   const keyboardHandlerRef = useRef(null);
+  const lastKeyRef = useRef({ key: null, time: 0 });
 
   const value = useMemo(() => ({
     open,
@@ -22,7 +23,11 @@ export function GlobalSearchProvider({ children }) {
     },
     handleKeyDown(event) {
       if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
-      if (!open || document.activeElement !== inputRef.current) return;
+      const now = Date.now();
+      if (lastKeyRef.current.key === event.key && now - lastKeyRef.current.time < 40) return;
+      lastKeyRef.current = { key: event.key, time: now };
+      if (import.meta.env.DEV) console.debug('[GlobalSearch] keydown', { key: event.key, open, hasHandler: Boolean(keyboardHandlerRef.current) });
+      if (!open) return;
       event.preventDefault();
       keyboardHandlerRef.current?.(event.key);
     },
@@ -50,7 +55,7 @@ export function useGlobalSearch() {
     },
     handleKeyDown(event) {
       if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
-      if (!fallbackOpen || document.activeElement !== fallbackInputRef.current) return;
+      if (!fallbackOpen) return;
       event.preventDefault();
       fallbackHandlerRef.current?.(event.key);
     },
