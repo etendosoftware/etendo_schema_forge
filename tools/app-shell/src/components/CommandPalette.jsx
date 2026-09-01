@@ -140,7 +140,6 @@ export function CommandPalette() {
   useEffect(() => {
     const navigateKeyboard = (key) => {
       const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]:not(:disabled)'));
-      if (import.meta.env.DEV) console.debug('[CommandPalette] navigate', { key, itemCount: items.length, index: keyboardIndexRef.current });
       if (items.length === 0) return;
       if (key === 'Enter') {
         const selectedItem = items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0];
@@ -155,7 +154,6 @@ export function CommandPalette() {
       setKeyboardIndex(next);
     };
     const unregister = registerKeyboardHandler(navigateKeyboard);
-    if (import.meta.env.DEV) console.debug('[CommandPalette] keyboard handler registered');
     return unregister;
   }, [registerKeyboardHandler]);
 
