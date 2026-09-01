@@ -45,6 +45,13 @@ function useNeoPost(action) {
         const message = json?.error?.message || `HTTP ${res.status}`;
         const err = new Error(message);
         err.status = json?.error?.status ?? res.status;
+        // Structured error bodies in this API carry more than a message: `code` (e.g.
+        // GL_ITEM_REQUIRED, which tells the panel to ask for an accounting concept and retry) and
+        // `remainderLineId` (which tells it to retarget a 409 at the pending sub-line). Dropping
+        // them left callers with nothing but a toast, unable to act on a failure the server had
+        // already diagnosed.
+        err.body = json;
+        err.code = json?.code ?? null;
         throw err;
       }
       return json?.response?.data ?? {};
