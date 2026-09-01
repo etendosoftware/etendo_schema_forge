@@ -43,7 +43,7 @@ describe('CommandPalette', () => {
   });
 
   it('renders translated label inside CommandItem span', () => {
-    assert.match(src, /<span>\s*\{translatedLabel\}\s*<\/span>/);
+    assert.match(src, /<span>\s*<HighlightedQuery\s+text=\{translatedLabel\}\s+query=\{query\}\s*\/?>\s*<\/span>/);
   });
 
   it('does not hardcode English group names as literal strings outside JSX', () => {
@@ -123,5 +123,10 @@ describe('CommandPalette', () => {
     assert.match(src, /selectedVectorTargetKeys\s*===\s*null/);
     assert.match(src, /requestedVectorSearchTargetKeys\.map\(\(target\)\s*=>\s*\[target\]\)/);
     assert.match(src, /payloads\.flatMap/);
+  });
+
+  it('renders the related-results group at most once without a more-results action', () => {
+    assert.equal((src.match(/data-testid="vector-search-related"/g) || []).length, 1);
+    assert.doesNotMatch(src, /search-more-related|setShowRelatedMatches|searchMoreRelated/);
   });
 });
