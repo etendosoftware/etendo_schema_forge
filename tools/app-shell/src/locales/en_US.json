@@ -13843,8 +13843,8 @@
       "label": "Invoiceable Expenses"
     },
     "Asset Group": {
-      "label": "Asset Category",
-      "newLabel": "New category"
+      "label": "Asset Group",
+      "newLabel": "New group"
     },
     "Employee Expenses": {
       "label": "Employee Expenses"
@@ -16768,6 +16768,8 @@
     "postingFailed": "Posting failed",
     "filterDocumentType": "Document type",
     "filterAccountingStatus": "Accounting status",
+    "filterFrom": "From",
+    "filterTo": "To",
     "accountingDate": "Accounting date",
     "accountingStatus": "Accounting status",
     "postedStatus": "Posted",
@@ -20161,7 +20163,7 @@
     "customerDataSection": "Customer data",
     "vendorDataSection": "Vendor data",
     "fiscal.title": "Fiscal Configuration",
-    "fiscal.monitor.nav": "Invoice Monitor",
+    "fiscal.monitor.nav": "Fiscal Monitor",
     "fiscal.wip.badge": "Work in Progress",
     "fiscal.wip.tooltip": "This window is still under active development. Fields, design, and behaviour may change without notice and are not final.",
     "fiscal.territory.question": "What fiscal territory does this organization operate in?",
@@ -20936,6 +20938,7 @@
     "purchaseOrders": "Purchase Orders",
     "docNo": "Doc No",
     "documentNo": "Document No",
+    "finance": "Finance",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -21057,6 +21060,7 @@
     "fm.kpi.deadline_days": "days",
     "fm.kpi.deadline_blocking": "blocking",
     "fm.list.title": "Declarations",
+    "fm.breadcrumb.section": "Fiscal Models",
     "fm.list.count": "declarations",
     "fm.filter.all": "All",
     "fm.filter.model_prefix": "Form",
@@ -21734,7 +21738,6 @@
     "newSubAccountSuccess": "Sub-account created successfully",
     "newSubAccountError": "Could not create sub-account",
     "glc.title": "General Ledger Configuration",
-    "glc.breadcrumbRoot": "Treasury",
     "glc.tab.general": "General",
     "glc.tab.defaults": "Defaults",
     "glc.tab.dimensions": "Dimensions",
@@ -24574,7 +24577,7 @@
       "label": "Create AP Expense Invoices"
     },
     "Asset Group": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Create Shipments from Orders": {
       "label": "Create Shipments from Orders"
