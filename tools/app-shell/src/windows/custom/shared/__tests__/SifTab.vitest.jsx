@@ -1,5 +1,7 @@
 // Mocks must be declared before any imports that pull in the mocked modules.
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
@@ -11,6 +13,10 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-001' } }),
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({

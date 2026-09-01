@@ -414,6 +414,18 @@ export function getDocumentIds(recordId) {
   return recordId ? [recordId] : [];
 }
 
+// ETP-5052: display-only merge exposing whether the master record currently has
+// child lines to HEADER field `readOnlyLogicJs` expressions (e.g. `"!!record.hasLines"`
+// on Physical Inventory's `warehouse`), so a header field can lock once count/detail
+// lines exist and unlock again once the last one is removed. `children` is guarded
+// (not every window's `hook.children` is an array — header-only windows have none).
+// NEVER feed the returned object into a save/PUT payload: `handleSave` (useEntity.js)
+// builds the request from `editing` state directly, never from this merge, so the
+// synthetic `hasLines` key never reaches the backend.
+export function buildHeaderFormData(data, children) {
+  return { ...data, hasLines: Array.isArray(children) && children.length > 0 };
+}
+
 export function resolveSidebarContent(sidebarContent, data) {
   return typeof sidebarContent === 'function' ? sidebarContent(data) : sidebarContent;
 }
@@ -582,11 +594,24 @@ export function renderDetailBulkActionBar({
   );
 }
 
-export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
+/**
+ * @param {Function} [guard] ETP-5073 / DOC-08: wraps the switch so an in-progress line edit is
+ *   not discarded silently. Receives the switch as a callback and decides when (or whether) to
+ *   run it. Optional: without it the switch happens immediately, which is the pre-ticket
+ *   behaviour and keeps every existing caller working unchanged.
+ */
+export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guard) {
   return DetailForm && linesLayout !== 'inlineEditable' ? (row) => {
-    const line = {...row};
-    roundAmounts(line);
-    setSelectedLine(line);
+    const openLine = () => {
+      const line = {...row};
+      roundAmounts(line);
+      setSelectedLine(line);
+    };
+    if (guard) {
+      guard(openLine);
+    } else {
+      openLine();
+    }
   } : undefined;
 }
 

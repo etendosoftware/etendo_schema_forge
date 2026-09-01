@@ -4977,7 +4977,7 @@
       "description": "Posición específica generada por procesos tanto ejecutados como no ejecutados."
     },
     "C_Glitem_Acct_ID": {
-      "label": "Concepto Contable Contabilidad",
+      "label": "Configuración de cuenta contable",
       "description": ""
     },
     "Showingrid": {
@@ -7885,11 +7885,11 @@
       "description": "Cuadrado de efectos"
     },
     "C_Glitem_ID": {
-      "label": "Concepto contable",
+      "label": "Cuenta contable",
       "description": "Alias de una combinación contable que puede usarse habitualmente en las operaciones diarias."
     },
     "c_glitem_id": {
-      "label": "Concepto contable",
+      "label": "Cuenta contable",
       "description": "Alias de una combinación contable que puede usarse habitualmente en las operaciones diarias."
     },
     "Orgfiltered": {
@@ -9749,11 +9749,11 @@
       "description": ""
     },
     "Glitemname": {
-      "label": "Concepto Contable",
+      "label": "Cuenta contable",
       "description": ""
     },
     "glitemName": {
-      "label": "Concepto Contable",
+      "label": "Cuenta contable",
       "description": ""
     },
     "IsEquityPositive": {
@@ -12177,7 +12177,7 @@
       "description": ""
     },
     "transactionGLItemName": {
-      "label": "Transacción Concepto Contable",
+      "label": "Transacción Cuenta contable",
       "description": ""
     },
     "EM_APRM_Process_Proposal": {
@@ -12265,8 +12265,8 @@
       "description": ""
     },
     "EM_Aprm_Glitem_Diff": {
-      "label": "Diferencia de Concepto Contable",
-      "description": "Diferencia de Concepto Contable"
+      "label": "Diferencia de Cuenta contable",
+      "description": "Diferencia de Cuenta contable"
     },
     "EM_APRM_OutstandingPaymentsItemNo": {
       "label": "Reintegro Pendiente nº",
@@ -12301,8 +12301,8 @@
       "description": ""
     },
     "EM_APRM_Glitem_ID": {
-      "label": "Concepto Contable por defecto en Transferencia de Fondos",
-      "description": "Concepto Contable por defecto usado para el proceso de Transferencia de Fondos"
+      "label": "Cuenta contable por defecto en Transferencia de Fondos",
+      "description": "Cuenta contable por defecto usada para el proceso de Transferencia de Fondos"
     },
     "EM_Aprm_Modif_Paym_Sched": {
       "label": "Modificar Plan de Cobros",
@@ -12341,8 +12341,8 @@
       "description": ""
     },
     "gLItem": {
-      "label": "Concepto contable",
-      "description": "Conceptos contables añadidos como parte de un pago dado"
+      "label": "Cuenta contable",
+      "description": "Cuentas contables añadidas como parte de un pago dado"
     },
     "businessPartnerName": {
       "label": "Tercero",
@@ -13664,7 +13664,7 @@
       "label": "Plantilla"
     },
     "APRM GL Item": {
-      "label": "APRM Concepto contable"
+      "label": "APRM Cuenta contable"
     },
     "Doubtful Debt": {
       "label": "Dudoso cobro"
@@ -14201,7 +14201,7 @@
       "label": "Rappels"
     },
     "G/L Item": {
-      "label": "Concepto contable"
+      "label": "Cuenta contable"
     },
     "Project Proposal Tracker": {
       "label": "Seguimiento de presupuestos"
@@ -15569,7 +15569,7 @@
       "label": "Conceptos"
     },
     "G/L Item": {
-      "label": "Concepto contable"
+      "label": "Cuenta contable"
     },
     "Proposal List": {
       "label": "Informe presupuesto"
@@ -16037,7 +16037,7 @@
       "label": "Pedidos Facturas"
     },
     "GL Item": {
-      "label": "Concepto contable"
+      "label": "Cuenta contable"
     },
     "Credit To Use": {
       "label": "Crédito a utilizar"
@@ -16973,6 +16973,7 @@
     "editLine": "Editar línea",
     "noLines": "Sin líneas",
     "backendError.amortizationCurrencyRequired": "El campo Moneda no puede estar vacío.",
+    "backendError.staleRecord": "Otra persona modificó este registro mientras lo editabas, así que tus cambios no se guardaron. Recarga el registro para ver los valores actuales.",
     "backendError.amortizationAnnualDepreciationRequired": "El campo Amortización Anual no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationUsableLifeYearsRequired": "El campo Vida útil - Años no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationUsableLifeMonthsRequired": "El campo Vida útil - Meses no puede estar vacío, ser cero o negativo.",
@@ -18105,6 +18106,12 @@
     "ocrRetryingLines": "Reintentando la creación de líneas...",
     "recordCreated": "Registro creado",
     "recordSaved": "Registro guardado",
+    "saveConflictRecordChanged": "Otra persona editó este registro mientras trabajabas en él, así que no se guardó nada. Puedes conservar tus cambios e intentarlo más tarde, o descartarlos y cargar la versión actual.",
+    "saveConflictDiscardAndReload": "Descartar mis cambios y refrescar",
+    "saveConflictKeepEditing": "Cancelar guardado",
+    "saveConflictTitle": "No se puede guardar este registro",
+    "saveConflictReloaded": "Registro refrescado con los valores almacenados actualmente.",
+    "saveConflictReloadFailed": "No se pudo refrescar el registro. Comprueba tu conexión e inténtalo de nuevo.",
     "requiredFieldsMissing": "Completá todos los campos requeridos",
     "fieldRequired": "Requerido",
     "invoicePdfGenerating": "Generando factura...",
@@ -18472,8 +18479,8 @@
     "financeAccountTxNewTypeIn": "Entrada",
     "financeAccountTxNewTypeOut": "Salida",
     "financeAccountTxNewDate": "Fecha",
-    "financeAccountTxNewGlItem": "Concepto contable",
-    "financeAccountTxNewGlDescPrefix": "Conceptos Contables",
+    "financeAccountTxNewGlItem": "Cuenta contable",
+    "financeAccountTxNewGlDescPrefix": "Cuentas contables",
     "financeAccountTxNewGlItemPlaceholder": "Selecciona una cuenta contable…",
     "financeAccountTxNewAmount": "Importe",
     "financeAccountTxNewAmountPlaceholder": "0,00",
@@ -18513,9 +18520,9 @@
     "financeAccountTransferDestination": "Hacia · cuenta destino",
     "financeAccountTransferDestinationPlaceholder": "Seleccionar cuenta…",
     "financeAccountTransferAccountSearch": "Buscar cuenta…",
-    "financeAccountTransferGlItem": "Concepto contable",
+    "financeAccountTransferGlItem": "Cuenta contable",
     "financeAccountTransferGlNone": "Sin imputación",
-    "financeAccountTransferGlItemPlaceholder": "Buscar concepto…",
+    "financeAccountTransferGlItemPlaceholder": "Buscar cuenta contable…",
     "financeAccountTransferAmount": "Importe",
     "financeAccountTransferAmountPlaceholder": "0,00",
     "financeAccountTransferFx": "Conversión de divisa",
@@ -18667,6 +18674,17 @@
     "financeAccountsAccountingNone": "Ninguna",
     "financeAccountsAccountingLoading": "Cargando configuración contable…",
     "financeAccountsAccountingNoLedger": "La organización de esta cuenta no tiene un libro mayor configurado, por lo que aquí no se pueden establecer cuentas contables.",
+    "financeAccountsAccountingSectionPaymentIn": "Cobro",
+    "financeAccountsAccountingSectionPaymentOut": "Pago",
+    "financeAccountsAccountingBankRevaluationGain": "Cuenta de ganancia por revalorización bancaria",
+    "financeAccountsAccountingBankRevaluationLoss": "Cuenta de pérdida por revalorización bancaria",
+    "financeAccountsAccountingBankFee": "Cuenta de comisiones bancarias",
+    "financeAccountsAccountingInTransitIn": "Cuenta de cobro en tránsito",
+    "financeAccountsAccountingDeposit": "Cuenta de depósito",
+    "financeAccountsAccountingClearedIn": "Cuenta de cobro liquidado",
+    "financeAccountsAccountingInTransitOut": "Cuenta de pago en tránsito",
+    "financeAccountsAccountingWithdrawal": "Cuenta de retirada",
+    "financeAccountsAccountingClearedOut": "Cuenta de pago liquidado",
     "financeAccountsArchiveConfirmTitle": "Archivar cuenta",
     "financeAccountsArchiveConfirmBody": "¿Seguro que quieres archivar esta cuenta? Dejará de aparecer en el listado.",
     "financeAccountsArchiveConfirm": "Archivar",
@@ -18694,8 +18712,8 @@
     "financeAccountsReconciliationAmountTolerance": "Tolerancia de importe (%)",
     "financeAccountsReconciliationAmountToleranceInvalid": "Debe ser un porcentaje entre 0 y 100.",
     "financeAccountsGlItemDifferenceSection": "Configuración de diferencias",
-    "financeAccountsGlItemDifferenceLabel": "Concepto contable",
-    "financeAccountsGlItemDifferencePlaceholder": "Buscar concepto contable…",
+    "financeAccountsGlItemDifferenceLabel": "Cuenta contable",
+    "financeAccountsGlItemDifferencePlaceholder": "Buscar cuenta contable…",
     "financeAccountCashCloseHideCleared": "Ocultar marcados",
     "financeAccountCashCloseHideAfter": "Ocultar posteriores a la fecha",
     "financeAccountCashCloseSearchPlaceholder": "Buscar movimiento…",
@@ -18729,7 +18747,7 @@
     "financeAccountCashCloseConfirmDifference": "Hay una diferencia de",
     "financeAccountCashCloseConfirmBody": "Se registrará un movimiento de ajuste por ese importe.",
     "financeAccountCashCloseConfirmAccept": "Confirmar",
-    "financeAccountCashCloseNoConceptError": "Esta cuenta no tiene concepto contable de diferencias. Configúralo en Editar cuenta, en la sección General, antes de confirmar un cierre que no cuadra.",
+    "financeAccountCashCloseNoConceptError": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta, en la sección General, antes de confirmar un cierre que no cuadra.",
     "financeAccountCashCloseDraftSaved": "Borrador guardado",
     "financeAccountCashCloseConfirmed": "Cierre de caja confirmado",
     "financeAccountCashCloseError": "No se ha podido completar el cierre de caja",
@@ -18773,7 +18791,7 @@
     "financeAccountClearedItemsColCurrency": "Moneda",
     "financeAccountClearedItemsColAmount": "Importe",
     "financeAccountClearedItemsColType": "Tipo de transacción",
-    "financeAccountClearedItemsColGlItem": "Concepto contable",
+    "financeAccountClearedItemsColGlItem": "Cuenta contable",
     "financeAccountClearedItemsTrxType_BPD": "Cobro",
     "financeAccountClearedItemsTrxType_BPW": "Pago",
     "financeAccountClearedItemsTrxType_BF": "Comisión bancaria",
@@ -18842,14 +18860,14 @@
     "financeReconcileToastError": "Error al conciliar",
     "financeReconcileDiffBannerTitle": "Quedan {amount} sin conciliar en este extracto",
     "financeReconcileDiffLeavePending": "Dejar pendiente",
-    "financeReconcileDiffAction": "Llevar a concepto contable",
-    "financeReconcileDiffModalTitle": "Llevar diferencia a un concepto contable",
+    "financeReconcileDiffAction": "Llevar a cuenta contable",
+    "financeReconcileDiffModalTitle": "Llevar la diferencia a una cuenta contable",
     "financeReconcileDiffModalBody": "Los {amount} que quedan del extracto se registrarán como un ajuste contable y el extracto quedará conciliado.",
     "financeReconcileDiffRowStatement": "Importe del extracto",
     "financeReconcileDiffRowMatched": "Conciliado con movimientos",
     "financeReconcileDiffRowDifference": "Diferencia a ajustar",
-    "financeReconcileDiffConceptLabel": "Concepto contable",
-    "financeReconcileDiffConceptPlaceholder": "Buscar concepto contable…",
+    "financeReconcileDiffConceptLabel": "Cuenta contable",
+    "financeReconcileDiffConceptPlaceholder": "Buscar cuenta contable…",
     "financeReconcileDiffDescriptionLabel": "Descripción (opcional)",
     "financeReconcileDiffDescriptionPlaceholder": "Redondeo transferencia",
     "financeReconcileDiffConfirm": "Confirmar y conciliar",
@@ -18942,8 +18960,8 @@
     "financeAccountMovementsNewAcctDate": "Fecha contable",
     "financeAccountMovementsNewBpartner": "Tercero",
     "financeAccountMovementsNewBpartnerPlaceholder": "Buscar tercero…",
-    "financeAccountMovementsNewGlItem": "Concepto contable",
-    "financeAccountMovementsNewGlItemPlaceholder": "Buscar concepto…",
+    "financeAccountMovementsNewGlItem": "Cuenta contable",
+    "financeAccountMovementsNewGlItemPlaceholder": "Buscar cuenta contable…",
     "financeAccountMovementsNewDescription": "Descripción",
     "financeAccountMovementsNewCurrency": "Moneda",
     "financeAccountMovementsNewDepositAmount": "Importe depósito",
@@ -18961,17 +18979,17 @@
     "financeAccountMovementsWizardDescriptionPlaceholder": "Descripción del movimiento…",
     "financeAccountMovementsWizardAmounts": "Importes",
     "financeAccountMovementsWizardDimensions": "Dimensiones",
-    "financeAccountMovementsWizardGlItemLabel": "Concepto contable (G/L Item)",
+    "financeAccountMovementsWizardGlItemLabel": "Cuenta contable",
     "financeAccountMovementsWizardChoicePayTitle": "Registrar pago",
     "financeAccountMovementsWizardChoicePayHint": "Vincula facturas y registra un cobro o pago. Se crea un pago junto al movimiento.",
-    "financeAccountMovementsWizardChoiceGlTitle": "Concepto contable (G/L)",
+    "financeAccountMovementsWizardChoiceGlTitle": "Cuenta contable",
     "financeAccountMovementsWizardChoiceGlHint": "Asigna el movimiento a una cuenta contable. Sin pago ni facturas — ideal para comisiones e intereses.",
     "financeAccountMovementsWizardStep1": "Movimiento",
     "financeAccountMovementsWizardStep2": "Pago o concepto",
     "financeAccountMovementsWizardReconcileQuestion": "¿Cómo se concilia este movimiento?",
     "financeAccountMovementsWizardReconcileHintA": "Solo se puede registrar un pago",
     "financeAccountMovementsWizardReconcileOr": "o",
-    "financeAccountMovementsWizardReconcileHintB": "asignar un concepto contable, no ambos.",
+    "financeAccountMovementsWizardReconcileHintB": "asignar una cuenta contable, no ambos.",
     "financeAccountMovementsWizardAssocType": "Tipo de asociación",
     "financeAccountMovementsWizardChange": "Cambiar",
     "financeAccountMovementsWizardSubtitle": "Cuenta de Banco · {iso}",
@@ -18981,7 +18999,7 @@
     "financeAccountMovementsWizardWillCreate": "Se creará el movimiento",
     "financeAccountMovementsWizardWith": "con",
     "financeAccountMovementsWizardWithoutAssoc": "y su asociación",
-    "financeAccountMovementsWizardAssocGl": "concepto contable",
+    "financeAccountMovementsWizardAssocGl": "cuenta contable",
     "financeAccountMovementsWizardAssocPay": "pago",
     "financeAccountMovementsWizardPaymentSuccess": "Pago registrado",
     "financeAccountMovementsWizardPaymentError": "No se pudo registrar el pago",
@@ -19024,7 +19042,7 @@
     "financeAccountMovementsStatusCompleted": "Completado",
     "financeAccountMovementsStatusReconciled": "Conciliado",
     "financeAccountMovementsStatusUnreconciled": "Sin conciliar",
-    "financeAccountMovementsColGlItem": "Concepto contable",
+    "financeAccountMovementsColGlItem": "Cuenta contable",
     "financeAccountMovementsRowViewDetail": "Ver detalle",
     "financeAccountMovementsRowViewDetailToast": "Detalle de movimiento próximamente",
     "financeAccountMovementsRowUnreconcile": "Desreconciliar",
@@ -19055,6 +19073,7 @@
     "financeAccountStatementsRowDelete": "Eliminar",
     "financeAccountStatementsRowProcessedTooltip": "Los extractos procesados no se pueden modificar",
     "financeAccountStatementsRowReactivateTooltip": "Solo los extractos procesados se pueden reactivar",
+    "financeAccountStatementsRowBankSyncedTooltip": "Los extractos de una cuenta conectada al banco no se pueden editar ni eliminar",
     "financeAccountStatementsReactivateTitle": "Reactivar extracto",
     "financeAccountStatementsReactivateBody": "El extracto «{name}» volverá a borrador y podrás editarlo o eliminarlo. ¿Continuar?",
     "financeAccountStatementsReactivateConfirm": "Reactivar",
@@ -19088,6 +19107,7 @@
     "financeAccountStatementsManualLineHintCancel": "para cancelar",
     "financeAccountStatementsManualKeyEsc": "ESC",
     "financeAccountStatementsManualRemoveLine": "Eliminar línea",
+    "financeAccountStatementsManualLineMatchedTooltip": "Línea conciliada: no se puede modificar ni eliminar",
     "financeAccountStatementsManualEditLine": "Editar línea",
     "financeAccountStatementsManualTotalLines": "Líneas",
     "financeAccountStatementsManualTotalIn": "Entradas",
@@ -19117,8 +19137,8 @@
     "financeAccountStatementsManualColReference": "Nº de referencia",
     "financeAccountStatementsManualColContactName": "Nombre del contacto",
     "financeAccountStatementsManualColContact": "Contacto",
-    "financeAccountStatementsManualColGlItem": "Concepto contable",
-    "financeAccountStatementsManualGlItemPlaceholder": "Buscar concepto contable…",
+    "financeAccountStatementsManualColGlItem": "Cuenta contable",
+    "financeAccountStatementsManualGlItemPlaceholder": "Buscar cuenta contable…",
     "financeAccountStatementsManualContactPlaceholder": "Buscar contacto…",
     "financeAccountStatementsManualAddLinesCta": "Añadir líneas",
     "financeAccountStatementsManualAddLinesCtaDesc": "Introduce los movimientos del extracto a mano",
@@ -19214,7 +19234,7 @@
     "financeAccountStatementLinesColReference": "N.º de referencia",
     "financeAccountStatementLinesColBpartner": "Nombre de contacto",
     "financeAccountStatementLinesColContact": "Contacto",
-    "financeAccountStatementLinesColGlItem": "Concepto contable",
+    "financeAccountStatementLinesColGlItem": "Cuenta contable",
     "financeAccountStatementLinesColAmount": "Importe",
     "financeAccountStatementLinesColDramount": "Salida",
     "financeAccountStatementLinesColCramount": "Entrada",
@@ -19274,6 +19294,7 @@
     "financialSummaryEmptySubtitle": "Registra ventas y compras para ver ingresos, gastos y beneficio",
     "newInvoice": "Nueva factura",
     "financialSummaryPositive": "Tus ingresos superaron a los gastos este año",
+    "financialSummaryNegative": "Tus gastos superaron a los ingresos este año",
     "financialSummaryIncome": "Ingresos",
     "financialSummaryExpenses": "Gastos",
     "financialSummaryProfit": "Beneficio",
@@ -19722,6 +19743,10 @@
     "onboardingCredentialChangeSuccess": "Contraseña actualizada.",
     "onboardingCredentialChangeFailed": "No se pudo cambiar la contraseña.",
     "localeChangeConfirmTitle": "Cambiar idioma",
+    "unsavedNavigationTitle": "Tienes cambios sin guardar",
+    "unsavedNavigationBody": "Si sales ahora, se perderán los cambios que no hayas guardado.",
+    "unsavedNavigationDiscardAction": "Descartar y salir",
+    "unsavedNavigationSaveAction": "Guardar y salir",
     "localeChangeConfirmBody": "Tienes cambios sin guardar en este formulario. Cambiar el idioma recarga la página y se perderán.",
     "localeChangeDiscardAction": "Descartar y cambiar",
     "onboardingChangePasswordMissingCredentials": "Debes indicar la contraseña actual y la nueva.",
@@ -20191,6 +20216,7 @@
     "cloneConfirmSubtitleOne": "Se creará una copia en estado borrador",
     "cloneConfirmSubtitleMany": "Se crearán {count} copias en estado borrador",
     "cloneInfoBanner": "Los documentos clonados conservarán todos los datos del original.",
+    "cloneBlockedUnsavedChanges": "Guarda o descarta tus cambios pendientes antes de clonar. Clonar ahora copiaría la última versión guardada, no lo que ves en pantalla.",
     "cloneDoneTitleOne": "Documento clonado",
     "cloneDoneTitleMany": "{count} documentos clonados",
     "cloneDoneSubtitle": "Hacé clic en uno para abrirlo",
@@ -20254,6 +20280,8 @@
     "backendError.matchRuleRegexComplex": "La expresión regular es demasiado compleja (posible backtracking catastrófico)",
     "backendError.matchRuleRegexInvalid": "Expresión regular no válida",
     "backendError.matchRulePriorityConflict": "Ya existe una regla con esta prioridad para el ámbito seleccionado",
+    "backendError.statementNotDraft": "Los extractos procesados no se pueden modificar",
+    "backendError.statementNotProcessed": "Solo los extractos procesados se pueden reactivar",
     "backendError.priceListCannotDeactivateDefault": "No es posible desactivar una tarifa marcada como por defecto.",
     "backendError.productCategoryCannotSetMultipleDefault": "Solo una categoría de producto puede estar marcada como valor por defecto.",
     "backendError.noLinesToInvoice": "No hay líneas a facturar en este pedido.",
@@ -20269,7 +20297,7 @@
     "backendError.shipmentNotFound": "Albarán no encontrado: {id}",
     "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos.",
     "backendError.conversionRateNotDraft": "No es posible modificar el tipo de cambio del documento cuando la factura no está en estado Borrador.",
-    "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurado un concepto contable para las diferencias. Configúralo en Editar cuenta antes de confirmar un cierre que no cuadra.",
+    "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta antes de confirmar un cierre que no cuadra.",
     "backendError.cashCloseDateInFuture": "La fecha del cierre no puede ser futura.",
     "backendError.cashCloseDateBeforeLastClose": "La fecha del cierre no puede ser anterior al último cierre confirmado ({date}).",
     "backendError.cashCloseLineInClosedPeriod": "El movimiento «{movement}» tiene fecha contable en un periodo cerrado. Reabre ese periodo o desmarca el movimiento antes de confirmar el cierre.",
@@ -21810,7 +21838,7 @@
     "matchRuleColName": "Nombre",
     "matchRuleColCondition": "Condición",
     "matchRuleColType": "Tipo de transacción",
-    "matchRuleColConcept": "Concepto contable",
+    "matchRuleColConcept": "Cuenta contable",
     "matchRuleColReconciliations": "Conciliaciones",
     "matchRuleColActive": "Activa",
     "matchRuleSectionDimensions": "Dimensiones",
@@ -22343,7 +22371,7 @@
     "cashTypeA": "Pagar por Adelantado",
     "cashTypeD": "Diferencia",
     "cashTypeE": "Gasto general",
-    "cashTypeG": "Concepto contable",
+    "cashTypeG": "Cuenta contable",
     "cashTypeP": "Efecto",
     "cashTypeR": "Ingreso general",
     "categoryTypeD": "Documento",
@@ -24062,7 +24090,7 @@
     "serviceTypePs": "Solución Pentaho",
     "settlementtypeB": "Cobro (Caja/Banco)",
     "settlementtypeC": "Cancelado/Generado",
-    "settlementtypeI": "Concepto contable",
+    "settlementtypeI": "Cuenta contable",
     "shiftM": "turno de mañana",
     "shiftT": "turno de tarde",
     "showValueCondA": "Algebraico",
@@ -25509,7 +25537,7 @@
       "label": "Asientos Manuales"
     },
     "G/L Item": {
-      "label": "Concepto contable"
+      "label": "Cuenta contable"
     },
     "Incoming Shipment": {
       "label": "Albarán logístico entrada"

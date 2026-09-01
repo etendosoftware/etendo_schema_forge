@@ -131,6 +131,19 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('SO-NULL')).toBeInTheDocument();
   });
 
+  // ETP-4567 (QA finding — bug A): `displayAmount = grandTotal > 0 ? formattedTotal
+  // : documentNo` falls back to the document number for a NEGATIVE grand total too
+  // (a return/credit scenario), even though `formattedTotal` is a perfectly valid
+  // signed amount. The fix drops the `> 0` gate entirely so the real (possibly
+  // negative) total is always shown — mirroring how the working subtotal line
+  // elsewhere in the app already renders signed totals unconditionally.
+  it('shows the real formatted NEGATIVE grandTotal, not documentNo and not a zeroed amount (ETP-4567)', () => {
+    renderModal({ data: makeData({ grandTotalAmount: -450.75, documentNo: 'SO-NEG', 'currency$_identifier': 'EUR' }) });
+    expect(screen.getByText(/-450,75\s€/)).toBeInTheDocument();
+    expect(screen.queryByText('SO-NEG')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^0([.,]00)?$/)).not.toBeInTheDocument();
+  });
+
   it('uses linkedOrders grandTotal, falling back to linkedOrder currency when the document has none of its own', () => {
     const data = {
       documentNo: 'SO-002',
