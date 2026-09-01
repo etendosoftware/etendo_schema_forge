@@ -270,6 +270,8 @@ function mapPendingAmounts(handlerData) {
   // Handler returns data as object (not array) or as first element of array
   const obj = Array.isArray(handlerData) ? handlerData[0] : handlerData;
   if (!obj) return null;
+  // ETP-5012: toCollect/toPay are TOTAL pending balances (any due date), so
+  // their default drill-down is 'pending', not the now-stricter 'overdue'.
   return {
     toCollect: {
       count: obj.toCollect?.count ?? 0,
@@ -277,7 +279,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toCollect?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'sales-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
     toPay: {
@@ -286,7 +288,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toPay?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'purchase-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
   };
@@ -347,7 +349,9 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        fetchWidget(apiFetch, 'kpis', range),
+        // ETP-5011: the Financial Summary widget is always a calendar-year figure
+        // and does not follow the date-range selector, so `kpis` is fetched without `range`.
+        fetchWidget(apiFetch, 'kpis', null),
         fetchWidget(apiFetch, 'trends', range),
         fetchWidget(apiFetch, 'pending-tasks', range),
         fetchWidget(apiFetch, 'activity', range),

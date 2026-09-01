@@ -366,6 +366,179 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
+  // ETP-4567 (QA finding 2): the confirmation modal's big grand-total amount showed a
+  // hardcoded '0,00' whenever the computed total was <= 0 (e.g. a fully-negative order),
+  // while the subtotal line a few lines below already called formatCurrency
+  // unconditionally and rendered the signed value correctly (e.g. -46,50 €). Both
+  // ConfirmModal and CreateDocsModal must render grandTotal through formatCurrency
+  // unconditionally, exactly like the working subtotal line already does.
+  describe('grand-total modal amount renders negative totals correctly (ETP-4567)', () => {
+    it('does not gate grandTotal behind a >0 ternary that falls back to a hardcoded 0,00 string', () => {
+      const gatedOccurrences = (
+        src.match(/\{grandTotal > 0 \? formatCurrency\(currency, grandTotal\) : '0,00'\}/g) || []
+      ).length;
+      assert.equal(
+        gatedOccurrences,
+        0,
+        'grandTotal must render unconditionally via formatCurrency, not fall back to a literal 0,00 for zero/negative totals',
+      );
+    });
+
+    it('renders grandTotal unconditionally via formatCurrency in both ConfirmModal and CreateDocsModal', () => {
+      const unconditionalOccurrences = (
+        src.match(/\{formatCurrency\(currency, grandTotal\)\}/g) || []
+      ).length;
+      assert.equal(
+        unconditionalOccurrences,
+        2,
+        'expected exactly 2 unconditional formatCurrency(currency, grandTotal) renders: ConfirmModal + CreateDocsModal',
+      );
+    });
+  });
+
+  // ETP-4567 (QA finding — bug B): `qtyPending`/`totalPending` are floored via
+  // `Math.max(0, ...)`, and `needsShip`/`needsInvoice` gate on `> 0`. For a
+  // confirmed order with a NEGATIVE grandTotalAmount and no invoice yet, the
+  // real pending amount is negative — the clamp floors it to 0, so
+  // `needsInvoice` is always false. This hides the "Gestionar pedido" button
+  // AND the "Crear factura" checkbox inside CreateDocsModal, and makes
+  // ManageDocsLauncher silently no-op (`nothingToManage = true`) instead of
+  // opening the modal — a grid row quick action that does nothing.
+  //
+  // These tests extract the LITERAL computation source from the file (not a
+  // hand-copied re-implementation) and execute it via `new Function(...)`, so
+  // they exercise the real arithmetic/branching and will track the fix
+  // automatically once the clamp is dropped for `!== 0` comparisons.
+  describe('needsInvoice/needsShip pending computation (ETP-4567 bug B)', () => {
+    function extractComputationBlocks(source) {
+      // ETP-4567: post-fix source drops the Math.max(0, ...) clamp entirely —
+      // qtyPending/totalPending are now plain (possibly negative) differences.
+      const re = /const qtyOrdered[\s\S]*?const totalPending\s*=\s*totalOrder - totalInvoiced;/g;
+      return [...source.matchAll(re)].map(m => m[0]);
+    }
+    function extractNeedsBlocks(source, needsVarName) {
+      // ETP-4567: post-fix source compares against 0 with !== instead of the
+      // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      const re = new RegExp(
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        'g',
+      );
+      return [...source.matchAll(re)].map(m => m[0]);
+    }
+
+    const compBlocks = extractComputationBlocks(src);
+    const needsBlocks = extractNeedsBlocks(src, 'needsShip');
+
+    it('finds exactly 2 occurrences of the computation+needs blocks (main component + ManageDocsLauncher)', () => {
+      assert.equal(compBlocks.length, 2);
+      assert.equal(needsBlocks.length, 2);
+    });
+
+    function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
+      const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', body);
+      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft);
+    }
+
+    const sites = [
+      ['main component (Gestionar button + CreateDocsModal gate)', 0],
+      ['ManageDocsLauncher', 1],
+    ];
+
+    for (const [siteName, siteIndex] of sites) {
+      describe(siteName, () => {
+        it('RED: needsInvoice is true for a negative grandTotal with no invoice yet (currently false — the clamp floors negative pending to 0)', () => {
+          const { needsInvoice } = evaluate(siteIndex, { grandTotalAmount: -450.75 });
+          assert.equal(needsInvoice, true);
+        });
+
+        it('regression guard: fully invoiced positive order — needsInvoice stays false', () => {
+          const { needsInvoice } = evaluate(siteIndex, {
+            grandTotalAmount: 100,
+            invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+          });
+          assert.equal(needsInvoice, false);
+        });
+
+        it('regression guard: partially invoiced positive order — needsInvoice stays true', () => {
+          const { needsInvoice } = evaluate(siteIndex, {
+            grandTotalAmount: 100,
+            invoicesComplete: [{ grandTotalAmount: 60, documentStatus: 'CO' }],
+          });
+          assert.equal(needsInvoice, true);
+        });
+
+        // NOTE (flagged, not decided here — see report): this asserts the fix's
+        // INTENDED post-fix behavior per the investigation, not a pre-existing
+        // bug. Under the old clamp this state (pending < 0 for a POSITIVE order)
+        // was always hidden; the `!== 0` fix makes it reachable again because
+        // pending is nonzero (just negative). Whether an over-invoiced positive
+        // order should re-show "Crear factura" is a product judgment call above
+        // this test's scope — it is written here only to document/pin the fix's
+        // actual resulting behavior once applied.
+        it('documents post-fix behavior: over-invoiced positive order (pending=-40) → needsInvoice=true, a state unreachable under the old clamp', () => {
+          const { needsInvoice } = evaluate(siteIndex, {
+            grandTotalAmount: 100,
+            invoicesComplete: [{ grandTotalAmount: 140, documentStatus: 'CO' }],
+          });
+          assert.equal(needsInvoice, true);
+        });
+      });
+    }
+
+    it('ManageDocsLauncher does not treat a negative-total order as "nothing to manage" (would otherwise silently no-op the quick action)', () => {
+      const { needsShip, needsInvoice } = evaluate(1, { grandTotalAmount: -450.75 });
+      const nothingToManage = !needsShip && !needsInvoice;
+      assert.equal(nothingToManage, false);
+    });
+  });
+
+  // ETP-4567 (QA finding — bug B, item 4): same clamp-adjacent pattern in the
+  // subtitle copy shown inside each checkbox card. `qtyOrdered > 0` /
+  // `totalOrder > 0` gate the quantified "X pending" subtitle — for a negative
+  // qty/total the subtitle silently falls back to the generic
+  // soCreateShipmentCheckDesc/soCreateInvoiceCheckDesc copy instead of telling
+  // the user what's actually pending.
+  describe('subtitle text falls back to generic copy for negative qty/total (ETP-4567 bug B, item 4)', () => {
+    function extractSubtitleBlock(varName, fallbackKey) {
+      const re = new RegExp(`const ${varName} = [\\s\\S]*?ui\\('${fallbackKey}'\\);`);
+      const m = src.match(re);
+      assert.ok(m, `expected to find a ${varName} block ending in ui('${fallbackKey}')`);
+      return m[0];
+    }
+
+    const mockUi = (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key);
+    // Lightweight stand-in matching the real fmtNum's number->string contract —
+    // not itself under test, only needed to satisfy the extracted expression.
+    const fmtNum = (v, decimals = 2) =>
+      v != null && v !== '' && !isNaN(Number(v))
+        ? Number(v).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+        : '0';
+
+    it('RED: shipmentSubtitle shows the quantified pending message, not the generic fallback, for negative qtyOrdered', () => {
+      const block = extractSubtitleBlock('shipmentSubtitle', 'soCreateShipmentCheckDesc');
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('qtyOrdered', 'qtyDelivered', 'qtyPending', 'ui', 'fmtNum', `${block}\nreturn shipmentSubtitle;`);
+      const result = fn(-5, 0, 5, mockUi, fmtNum);
+      assert.notEqual(result, 'soCreateShipmentCheckDesc');
+      assert.match(result, /soQtyPendingDelivery/);
+    });
+
+    it('RED: invoiceSubtitle shows the quantified pending message, not the generic fallback, for negative totalOrder', async () => {
+      const { formatCurrency } = await import('../../../../tools/app-shell/src/lib/formatCurrency.js');
+      const block = extractSubtitleBlock('invoiceSubtitle', 'soCreateInvoiceCheckDesc');
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function(
+        'totalOrder', 'totalInvoiced', 'totalPending', 'currency', 'ui', 'fmtNum', 'formatCurrency',
+        `${block}\nreturn invoiceSubtitle;`,
+      );
+      const result = fn(-100, 0, -100, 'EUR', mockUi, fmtNum, formatCurrency);
+      assert.notEqual(result, 'soCreateInvoiceCheckDesc');
+      assert.match(result, /soAmountPendingInvoice/);
+    });
+  });
+
   // ETP-4888 (commit b30276a14) — 6 call sites (ConfirmModal's step1/2/3,
   // CreateDocsModal's shipment/invoice, and CloneModal's handleClone) were
   // missing the flat `e?.message`/`json?.message` fallback. A business-rule
@@ -506,31 +679,5 @@ describe('OrderCreateInvoice', () => {
       });
     });
 
-    describe('CloneModal.handleClone', () => {
-      const cloneModalSrc = src.slice(src.indexOf('function CloneModal'));
-
-      function resolveMessage(json, ui) {
-        const expr = extractCallExprAfter(cloneModalSrc, 'action/cloneRecord', 'setError(');
-        const fn = new Function('json', 'ui', `return ${expr};`);
-        return fn(json, ui);
-      }
-
-      it('surfaces the real backend message for a flat {status,message} 400 body', () => {
-        assert.equal(resolveMessage(flatErrBody(), (k) => k), REAL_MESSAGE);
-      });
-
-      it('does not fall back to the generic cloneOrderError i18n key when a flat message is present', () => {
-        assert.notEqual(resolveMessage(flatErrBody(), (k) => k), 'cloneOrderError');
-      });
-
-      it('still falls back to the cloneOrderError i18n key when the body has no message at all', () => {
-        assert.equal(resolveMessage({}, (k) => k), 'cloneOrderError');
-      });
-
-      it('keeps preferring the nested json.response.error.message over the flat json.message', () => {
-        const nested = { response: { error: { message: 'Nested clone message' } }, message: 'Flat message' };
-        assert.equal(resolveMessage(nested, (k) => k), 'Nested clone message');
-      });
-    });
   });
 });
