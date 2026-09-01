@@ -1,14 +1,15 @@
 {
-  "version": "0.52.0",
-  "generatedAt": "2026-09-02T14:00:00.000Z",
-  "checksum": "ea7d24f53dd6dc01",
+  "version": "0.50.0",
+  "generatedAt": "2026-08-25T11:37:47.653Z",
+  "updatedAt": "2026-09-01T12:14:44.661Z",
+  "checksum": "faf76f527068a725",
   "frontendContract": {
     "window": {
       "id": "123",
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
+      "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -53,7 +54,6 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
-          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
@@ -103,8 +103,7 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto",
-          "TaxID": "NIF"
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -139,21 +138,23 @@
       ],
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt",
-          "xlsx"
+          "txt"
         ],
         "limit": {
           "maxRows": 5000,
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "database",
+          "scope": "file",
           "key": [
             "taxID"
           ]
@@ -170,8 +171,6 @@
             ],
             "label": "Commercial Name",
             "required": true,
-            "example": "Distribuciones García S.L.",
-            "column": "Name",
             "type": "string"
           },
           {
@@ -184,9 +183,6 @@
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
-            "example": "Empresa",
-            "labelKey": "importHeaderType",
-            "column": "EM_Etgo_Isperson",
             "type": "boolean"
           },
           {
@@ -203,9 +199,7 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Contact Category",
-            "example": "Clientes",
-            "column": "C_BP_Group_ID"
+            "label": "Contact Category"
           },
           {
             "target": "etgoFirstname",
@@ -213,10 +207,8 @@
               "nombre de pila",
               "nombre persona"
             ],
-            "label": "First Name",
+            "label": "First Name (Company)",
             "required": false,
-            "example": "María",
-            "column": "EM_Etgo_Firstname",
             "type": "string"
           },
           {
@@ -225,10 +217,8 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Company)",
             "required": false,
-            "example": "García",
-            "column": "EM_Etgo_Lastname",
             "type": "string"
           },
           {
@@ -239,9 +229,7 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email",
-            "example": "info@distribucionesgarcia.es",
-            "column": "EM_Etgo_Email",
+            "label": "Email (Company)",
             "required": false,
             "type": "string"
           },
@@ -251,9 +239,7 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone",
-            "example": "910 000 001",
-            "column": "EM_Etgo_Phone",
+            "label": "Phone (Company)",
             "required": false,
             "type": "string"
           },
@@ -266,9 +252,7 @@
               "pagina web",
               "página web"
             ],
-            "label": "Website",
-            "example": "https://distribucionesgarcia.es",
-            "column": "EM_Etgo_Web",
+            "label": "Website (Company)",
             "required": false,
             "type": "string"
           },
@@ -283,8 +267,6 @@
             ],
             "label": "Tax ID Type",
             "required": false,
-            "example": "NIF",
-            "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum"
           },
           {
@@ -298,10 +280,8 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "NIF",
+            "label": "CIF/NIF",
             "required": true,
-            "example": "B12345678",
-            "column": "TaxID",
             "type": "string"
           },
           {
@@ -311,9 +291,6 @@
             ],
             "isEmail": true,
             "label": "Email (Contact)",
-            "example": "compras@distribucionesgarcia.es",
-            "headerScope": "contact",
-            "column": "Email",
             "required": false,
             "type": "string"
           },
@@ -323,9 +300,6 @@
               "nombre de contacto"
             ],
             "label": "First Name (Contact)",
-            "example": "Lucía",
-            "headerScope": "contact",
-            "column": "Firstname",
             "required": false,
             "type": "string"
           },
@@ -335,9 +309,6 @@
               "apellido de contacto"
             ],
             "label": "Last Name (Contact)",
-            "example": "Fernández",
-            "headerScope": "contact",
-            "column": "Lastname",
             "required": false,
             "type": "string"
           },
@@ -347,9 +318,6 @@
               "telefono de contacto"
             ],
             "label": "Phone (Contact)",
-            "example": "610 000 002",
-            "headerScope": "contact",
-            "column": "Phone",
             "required": false,
             "type": "string"
           },
@@ -359,9 +327,6 @@
               "cargo"
             ],
             "label": "Position",
-            "example": "Responsable de compras",
-            "headerScope": "contact",
-            "column": "Title",
             "required": false,
             "type": "string"
           },
@@ -373,10 +338,7 @@
               "direccion",
               "dirección"
             ],
-            "label": "Address",
-            "example": "Calle Mayor 12",
-            "labelKey": "importHeaderAddress",
-            "headerScope": "address"
+            "label": "Address"
           },
           {
             "required": false,
@@ -385,10 +347,7 @@
             "aliases": [
               "ciudad"
             ],
-            "label": "City",
-            "example": "Sevilla",
-            "labelKey": "importHeaderCity",
-            "headerScope": "address"
+            "label": "City"
           },
           {
             "required": false,
@@ -399,10 +358,7 @@
               "código postal",
               "cp"
             ],
-            "label": "Postal Code",
-            "example": "41001",
-            "labelKey": "importHeaderPostalCode",
-            "headerScope": "address"
+            "label": "Postal Code"
           },
           {
             "target": "country",
@@ -412,10 +368,6 @@
             ],
             "label": "Country",
             "matchEntity": "Country",
-            "example": "España",
-            "headerScope": "address",
-            "labelKey": "importHeaderCountry",
-            "column": "C_Country_ID",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"
@@ -429,10 +381,7 @@
               "region",
               "región"
             ],
-            "label": "Region",
-            "example": "Sevilla",
-            "labelKey": "importHeaderRegion",
-            "headerScope": "address"
+            "label": "Region"
           }
         ]
       }
@@ -5246,7 +5195,7 @@
       "name": "Contacts",
       "primaryEntity": "businessPartner",
       "category": "contact",
-      "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead.",
+      "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
       "hidePrint": true,
       "hideMoreMenu": true,
       "breadcrumb": "Contact",
@@ -5291,7 +5240,6 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
-          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
@@ -5341,8 +5289,7 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto",
-          "TaxID": "NIF"
+          "C_BP_Group_ID": "Categoría de contacto"
         }
       },
       "primaryTabs": [
@@ -5376,21 +5323,23 @@
         }
       ],
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt",
-          "xlsx"
+          "txt"
         ],
         "limit": {
           "maxRows": 5000,
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "database",
+          "scope": "file",
           "key": [
             "taxID"
           ]
@@ -5407,8 +5356,6 @@
             ],
             "label": "Commercial Name",
             "required": true,
-            "example": "Distribuciones García S.L.",
-            "column": "Name",
             "type": "string"
           },
           {
@@ -5421,9 +5368,6 @@
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
-            "example": "Empresa",
-            "labelKey": "importHeaderType",
-            "column": "EM_Etgo_Isperson",
             "type": "boolean"
           },
           {
@@ -5440,9 +5384,7 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Contact Category",
-            "example": "Clientes",
-            "column": "C_BP_Group_ID"
+            "label": "Contact Category"
           },
           {
             "target": "etgoFirstname",
@@ -5450,10 +5392,8 @@
               "nombre de pila",
               "nombre persona"
             ],
-            "label": "First Name",
+            "label": "First Name (Company)",
             "required": false,
-            "example": "María",
-            "column": "EM_Etgo_Firstname",
             "type": "string"
           },
           {
@@ -5462,10 +5402,8 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Company)",
             "required": false,
-            "example": "García",
-            "column": "EM_Etgo_Lastname",
             "type": "string"
           },
           {
@@ -5476,9 +5414,7 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email",
-            "example": "info@distribucionesgarcia.es",
-            "column": "EM_Etgo_Email",
+            "label": "Email (Company)",
             "required": false,
             "type": "string"
           },
@@ -5488,9 +5424,7 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone",
-            "example": "910 000 001",
-            "column": "EM_Etgo_Phone",
+            "label": "Phone (Company)",
             "required": false,
             "type": "string"
           },
@@ -5503,9 +5437,7 @@
               "pagina web",
               "página web"
             ],
-            "label": "Website",
-            "example": "https://distribucionesgarcia.es",
-            "column": "EM_Etgo_Web",
+            "label": "Website (Company)",
             "required": false,
             "type": "string"
           },
@@ -5520,8 +5452,6 @@
             ],
             "label": "Tax ID Type",
             "required": false,
-            "example": "NIF",
-            "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum"
           },
           {
@@ -5535,10 +5465,8 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "NIF",
+            "label": "CIF/NIF",
             "required": true,
-            "example": "B12345678",
-            "column": "TaxID",
             "type": "string"
           },
           {
@@ -5548,9 +5476,6 @@
             ],
             "isEmail": true,
             "label": "Email (Contact)",
-            "example": "compras@distribucionesgarcia.es",
-            "headerScope": "contact",
-            "column": "Email",
             "required": false,
             "type": "string"
           },
@@ -5560,9 +5485,6 @@
               "nombre de contacto"
             ],
             "label": "First Name (Contact)",
-            "example": "Lucía",
-            "headerScope": "contact",
-            "column": "Firstname",
             "required": false,
             "type": "string"
           },
@@ -5572,9 +5494,6 @@
               "apellido de contacto"
             ],
             "label": "Last Name (Contact)",
-            "example": "Fernández",
-            "headerScope": "contact",
-            "column": "Lastname",
             "required": false,
             "type": "string"
           },
@@ -5584,9 +5503,6 @@
               "telefono de contacto"
             ],
             "label": "Phone (Contact)",
-            "example": "610 000 002",
-            "headerScope": "contact",
-            "column": "Phone",
             "required": false,
             "type": "string"
           },
@@ -5596,9 +5512,6 @@
               "cargo"
             ],
             "label": "Position",
-            "example": "Responsable de compras",
-            "headerScope": "contact",
-            "column": "Title",
             "required": false,
             "type": "string"
           },
@@ -5610,10 +5523,7 @@
               "direccion",
               "dirección"
             ],
-            "label": "Address",
-            "example": "Calle Mayor 12",
-            "labelKey": "importHeaderAddress",
-            "headerScope": "address"
+            "label": "Address"
           },
           {
             "required": false,
@@ -5622,10 +5532,7 @@
             "aliases": [
               "ciudad"
             ],
-            "label": "City",
-            "example": "Sevilla",
-            "labelKey": "importHeaderCity",
-            "headerScope": "address"
+            "label": "City"
           },
           {
             "required": false,
@@ -5636,10 +5543,7 @@
               "código postal",
               "cp"
             ],
-            "label": "Postal Code",
-            "example": "41001",
-            "labelKey": "importHeaderPostalCode",
-            "headerScope": "address"
+            "label": "Postal Code"
           },
           {
             "target": "country",
@@ -5649,10 +5553,6 @@
             ],
             "label": "Country",
             "matchEntity": "Country",
-            "example": "España",
-            "headerScope": "address",
-            "labelKey": "importHeaderCountry",
-            "column": "C_Country_ID",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"
@@ -5666,10 +5566,7 @@
               "region",
               "región"
             ],
-            "label": "Region",
-            "example": "Sevilla",
-            "labelKey": "importHeaderRegion",
-            "headerScope": "address"
+            "label": "Region"
           }
         ]
       }
@@ -10892,14 +10789,6 @@
             "required": false
           },
           {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "smfswsDefaultWsRole",
             "apiKey": "smfswsDefaultWsRole",
             "column": "EM_Smfsws_Default_Ws_Role_ID",
@@ -12058,50 +11947,152 @@
     ],
     "actions": [
       {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
         "entity": "businessPartner",
-        "field": "setNewCurrency",
         "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/contacts/businessPartner/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
         "entity": "customer",
-        "field": "setNewCurrency",
         "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/contacts/customer/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
         "entity": "vendorCreditor",
-        "field": "setNewCurrency",
         "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/contacts/vendorCreditor/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
+        "name": "setNewCurrency",
+        "actionType": "utilityAction",
         "entity": "employee",
-        "field": "setNewCurrency",
         "column": "Update_Currency",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/contacts/employee/{id}/action/setNewCurrency",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "B5C942145F354ABEBC9F16235D80D776",
         "processType": "obuiapp"
       },
       {
+        "name": "grantPortalAccess",
+        "actionType": "utilityAction",
         "entity": "contact",
-        "field": "grantPortalAccess",
         "column": "Grant_Portal_Access",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/contacts/contact/{id}/action/grantPortalAccess",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "97FFD59B991D49BFB5153C309B009272",
         "processType": "obuiapp"
       },
       {
+        "name": "processNow",
+        "actionType": "documentAction",
         "entity": "contact",
-        "field": "processNow",
         "column": "Processing",
-        "url": "/sws/neo/contacts/contact/{id}/action/processNow"
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/contacts/contact/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
       }
     ],
     "queryParams": {
@@ -12138,10 +12129,575 @@
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
         "EM_Etgo_Lastname": "Apellidos",
-        "C_BP_Group_ID": "Categoría de contacto",
-        "TaxID": "NIF"
+        "C_BP_Group_ID": "Categoría de contacto"
       }
     }
+  },
+  "formState": {
+    "entities": {
+      "businessPartner": {
+        "fields": {
+          "etgoIdentifier": {
+            "readOnly": true
+          },
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "businessPartnerCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
+          },
+          "etgoFirstname": {
+            "required": true
+          },
+          "etgoLastname": {
+            "required": true
+          },
+          "oBTIKTaxIDKey": {
+            "required": true,
+            "defaultValue": "'1'"
+          },
+          "taxID": {},
+          "oBTIKVIESStatus": {
+            "readOnly": true,
+            "defaultValue": "P"
+          },
+          "etgoWeb": {},
+          "etgoEmail": {},
+          "etgoPhone": {},
+          "etgoIsperson": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "name2": {},
+          "description": {},
+          "uRL": {},
+          "referenceNo": {},
+          "consumptionDays": {
+            "defaultValue": "1000"
+          },
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "greeting": {},
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "vendor": {
+            "required": true
+          },
+          "employee": {
+            "required": true
+          },
+          "setNewCurrency": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "creditLimit": {
+            "required": true
+          },
+          "bPCurrencyID": {},
+          "isCustomerConsent": {
+            "defaultValue": "N"
+          },
+          "tbaiIssimplifiedinv": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "operator": {
+            "defaultValue": "N"
+          },
+          "creditUsed": {
+            "readOnly": true,
+            "required": true
+          },
+          "paymentTerms": {},
+          "salaryCategory": {
+            "readOnly": true
+          },
+          "customerBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiDefaultsiikey": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiSiikeylist": {
+            "defaultValue": "F1"
+          },
+          "account": {},
+          "paymentMethod": {},
+          "isSalesRepresentative": {
+            "required": true
+          },
+          "priceList": {},
+          "pOFinancialAccount": {},
+          "pOPaymentTerms": {},
+          "pOPaymentMethod": {},
+          "purchasePricelist": {},
+          "vendorBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "eTGOLocation": {
+            "readOnly": true
+          }
+        }
+      },
+      "customer": {
+        "fields": {
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "priceList": {},
+          "paymentMethod": {},
+          "paymentTerms": {},
+          "account": {},
+          "salesRepresentative": {},
+          "invoiceTerms": {
+            "defaultValue": "I"
+          },
+          "invoiceSchedule": {},
+          "taxExempt": {},
+          "customerBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "salesOrder": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "goodsShipment": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "salesInvoice": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "paymentIn": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "sOBPTaxCategory": {},
+          "maturityDate1": {},
+          "maturityDate2": {},
+          "maturityDate3": {},
+          "birthDay": {},
+          "birthPlace": {},
+          "aeatsiiDefaultsiikey": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiSiikeylist": {
+            "defaultValue": "F1"
+          }
+        }
+      },
+      "customerAccounting": {
+        "fields": {
+          "customerReceivablesNo": {
+            "required": true
+          },
+          "customerPrepayment": {}
+        }
+      },
+      "intrastatShipments": {
+        "fields": {
+          "businessPartner": {
+            "readOnly": true,
+            "required": true
+          },
+          "sOTransportationType": {},
+          "port": {},
+          "statisticalAmtPercentSo": {},
+          "privateCustomer": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "vendorCreditor": {
+        "fields": {
+          "vendor": {
+            "required": true
+          },
+          "purchasePricelist": {},
+          "pOPaymentMethod": {},
+          "pOPaymentTerms": {},
+          "pOFinancialAccount": {},
+          "pOMaturityDate1": {},
+          "pOMaturityDate2": {},
+          "pOMaturityDate3": {},
+          "taxCategory": {},
+          "cashVAT": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "vendorBlocking": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "purchaseOrder": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "goodsReceipt": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "purchaseInvoice": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "paymentOut": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "vendorAccounting": {
+        "fields": {
+          "vendorLiability": {
+            "required": true
+          },
+          "vendorPrepayment": {}
+        }
+      },
+      "intrastatAdquisitions": {
+        "fields": {
+          "businessPartner": {
+            "readOnly": true,
+            "required": true
+          },
+          "country": {},
+          "transportationType": {},
+          "portAirport": {},
+          "statisticalAmtPercentPo": {}
+        }
+      },
+      "employee": {
+        "fields": {
+          "employee": {
+            "required": true
+          },
+          "isSalesRepresentative": {
+            "required": true
+          },
+          "operator": {
+            "defaultValue": "N"
+          },
+          "salaryCategory": {
+            "readOnly": true
+          }
+        }
+      },
+      "employeeAccounting": {
+        "fields": {
+          "accountingSchema": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "costSalaryCategory": {
+        "fields": {
+          "startingDate": {
+            "required": true
+          },
+          "salaryCategory": {
+            "required": true
+          }
+        }
+      },
+      "bankAccount": {
+        "fields": {
+          "bankName": {},
+          "country": {
+            "defaultValue": "@COUNTRYDEF@"
+          },
+          "userContact": {},
+          "bankFormat": {
+            "required": true,
+            "defaultValue": "GENERIC"
+          },
+          "accountNo": {},
+          "iBAN": {},
+          "swiftCode": {},
+          "displayedAccount": {
+            "readOnly": true
+          }
+        }
+      },
+      "documentType": {
+        "fields": {
+          "documentcategory": {
+            "required": true
+          },
+          "issotrx": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "cDoctypeID": {
+            "required": true
+          },
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "locationAddress": {
+        "fields": {
+          "locationAddress": {
+            "required": true
+          },
+          "phone": {},
+          "alternativePhone": {},
+          "name": {
+            "required": true,
+            "defaultValue": "."
+          },
+          "fax": {},
+          "shipToAddress": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "invoiceToAddress": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "active": {
+            "readOnly": true,
+            "required": true
+          },
+          "taxLocation": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "contact": {
+        "fields": {
+          "firstName": {},
+          "lastName": {},
+          "name": {
+            "readOnly": true,
+            "required": true
+          },
+          "email": {},
+          "phone": {},
+          "alternativePhone": {},
+          "position": {},
+          "comments": {},
+          "active": {
+            "readOnly": true,
+            "required": true
+          },
+          "isdefaultfordocs": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "grantPortalAccess": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "commercialauth": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "viasms": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "viaemail": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "basicDiscount": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_BPARTNER_DISCOUNT WHERE C_BPARTNER_ID=@C_BPARTNER_ID@"
+          },
+          "discount": {
+            "required": true
+          },
+          "customer": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "vendor": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "applyInOrder": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "cascade": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage contacts records.",
+    "whenToUse": [
+      "Use for contacts management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "businessPartnerCategory",
+        "etgoFirstname",
+        "etgoLastname",
+        "oBTIKTaxIDKey",
+        "etgoIsperson",
+        "customer",
+        "vendor",
+        "employee",
+        "setNewCurrency",
+        "creditLimit",
+        "tbaiIssimplifiedinv",
+        "customerBlocking",
+        "aeatsiiDefaultsiikey",
+        "isSalesRepresentative",
+        "vendorBlocking"
+      ],
+      "lineFields": [
+        "customer",
+        "customerBlocking",
+        "salesOrder",
+        "goodsShipment",
+        "salesInvoice",
+        "paymentIn",
+        "aeatsiiDefaultsiikey",
+        "customerReceivablesNo",
+        "privateCustomer",
+        "vendor",
+        "cashVAT",
+        "vendorBlocking",
+        "purchaseOrder",
+        "goodsReceipt",
+        "purchaseInvoice",
+        "paymentOut",
+        "vendorLiability",
+        "employee",
+        "isSalesRepresentative",
+        "startingDate",
+        "salaryCategory",
+        "bankFormat",
+        "documentcategory",
+        "issotrx",
+        "cDoctypeID",
+        "active",
+        "locationAddress",
+        "name",
+        "shipToAddress",
+        "invoiceToAddress",
+        "taxLocation",
+        "isdefaultfordocs",
+        "grantPortalAccess",
+        "commercialauth",
+        "viasms",
+        "viaemail",
+        "lineNo",
+        "discount",
+        "customer",
+        "vendor",
+        "applyInOrder",
+        "cascade"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "businessPartner",
+        "field": "pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "field",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "vendorCreditor",
+        "field": "pOFinancialAccount",
+        "context": {
+          "required": [
+            {
+              "param": "PO_Paymentmethod_ID",
+              "source": "parentField",
+              "field": "pOPaymentMethod"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "processNow"
+    ],
+    "workflow": [],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "businessPartnerCategory",
+          "etgoFirstname",
+          "etgoLastname",
+          "oBTIKTaxIDKey",
+          "etgoIsperson",
+          "customer",
+          "vendor",
+          "employee",
+          "setNewCurrency",
+          "creditLimit",
+          "tbaiIssimplifiedinv",
+          "customerBlocking",
+          "aeatsiiDefaultsiikey",
+          "isSalesRepresentative",
+          "vendorBlocking"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [],
+    "agentPrompt": "#REF#agent-prompts/contacts/spec.md"
   },
   "testManifest": {
     "tests": [
@@ -17915,14 +18471,6 @@
         "description": "System field 'emailServerUsername' should exist in backend but not frontend for contact"
       },
       {
-        "id": "t-system-field-contact-eTGOIsOwner",
-        "category": "system-field",
-        "entity": "contact",
-        "field": "eTGOIsOwner",
-        "runner": "node",
-        "description": "System field 'eTGOIsOwner' should exist in backend but not frontend for contact"
-      },
-      {
         "id": "t-system-field-contact-fax",
         "category": "system-field",
         "entity": "contact",
@@ -21245,7 +21793,7 @@
       }
     ],
     "summary": {
-      "total": 1154,
+      "total": 1153,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -21257,11 +21805,11 @@
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 517,
+        "system-field": 516,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1154,
+        "node": 1153,
         "junit": 0
       }
     }

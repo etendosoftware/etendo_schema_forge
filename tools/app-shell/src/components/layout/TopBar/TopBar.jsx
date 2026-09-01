@@ -1,6 +1,11 @@
-import { useUI } from '@/i18n';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMenuLabel, useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { cn } from '@/lib/utils.js';
+import {
+  resolveVectorSearchTargetForPath,
+  resolveVectorSearchTargets,
+} from '@/lib/vectorSearchConfig.js';
 import {
   Tooltip,
   TooltipContent,
@@ -24,12 +29,17 @@ import {
   Star,
   HelpCircle,
   ArrowLeft,
+  X,
 } from 'lucide-react';
 
+const windowContractLoaders = Object.entries(import.meta.glob('@generated/*/contract.json'));
+
+function specNameFromContractPath(path) {
+  return path.split('/').at(-2);
+}
+
 function openCommandPalette() {
-  document.dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'k', metaKey: true })
-  );
+  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-open'));
 }
 
 export default function TopBar({
@@ -51,13 +61,56 @@ export default function TopBar({
   className,
 }) {
   const ui = useUI();
+  const tMenu = useMenuLabel();
   const copilot = useCopilot();
+  const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
+  const [isCurrentWindowScopeEnabled, setIsCurrentWindowScopeEnabled] = useState(true);
+  const [searchValue, setSearchValue] = useState('');
+  const searchInputRef = useRef(null);
+  const currentPathname = window.location.pathname;
+  const vectorSearchTargets = useMemo(
+    () => resolveVectorSearchTargets(vectorSearchContracts),
+    [vectorSearchContracts],
+  );
+  const currentWindowVectorTarget = useMemo(
+    () => resolveVectorSearchTargetForPath(currentPathname, vectorSearchTargets),
+    [currentPathname, vectorSearchTargets],
+  );
 
   const resolvedPlaceholder = searchPlaceholder ?? ui('searchPlaceholder');
   const handleSearchClick = onSearchClick ?? openCommandPalette;
   const handleAIClick = onAIClick ?? copilot?.toggle;
 
   const hasMenu = onAddToFavorites || onPageHelp || menuAction;
+
+  useEffect(() => {
+    let active = true;
+    Promise.all(windowContractLoaders.map(async ([path, loadContract]) => ({
+      contract: await loadContract(),
+      specName: specNameFromContractPath(path),
+    })))
+      .then((contracts) => {
+        if (active) setVectorSearchContracts(contracts);
+      })
+      .catch(() => {
+        if (active) setVectorSearchContracts([]);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    setIsCurrentWindowScopeEnabled(true);
+  }, [currentPathname]);
+
+  const clearCurrentWindowScope = (event) => {
+    event.stopPropagation();
+    setIsCurrentWindowScopeEnabled(false);
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+      detail: { pathname: currentPathname, vectorSearchTarget: null },
+    }));
+  };
+
+  const currentWindowScope = isCurrentWindowScopeEnabled ? currentWindowVectorTarget : null;
 
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
@@ -173,32 +226,81 @@ export default function TopBar({
 
         {/* Center: search — absolutely centered so it never shifts with title width */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
-          <button
-            type="button"
-            onClick={handleSearchClick}
+          <div
+            className="pointer-events-auto relative flex h-11 w-full max-w-3xl items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+            onClick={(event) => {
+              handleSearchClick(event);
+              requestAnimationFrame(() => searchInputRef.current?.focus());
+            }}
             data-testid="global-search-trigger"
-            className="pointer-events-auto relative flex h-9 w-full max-w-xl items-center gap-2 rounded-full bg-search-bg px-4 text-sm hover:bg-search-bg/80 transition-colors"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') handleSearchClick(event);
+            }}
           >
-            <Search
-              className="h-4 w-4 shrink-0 text-search-placeholder"
-              data-testid="Search__133e64" />
-            <span className="flex-1 text-left truncate text-search-placeholder">
-              {resolvedPlaceholder}
-            </span>
+            <Search className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
+            {currentWindowScope && (
+              <span
+                className="mr-2 inline-flex min-w-0 max-w-[12rem] shrink items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
+                data-testid="topbar-vector-search-scope"
+              >
+                <span className="truncate">{tMenu(currentWindowScope.label) || currentWindowScope.label}</span>
+                <button
+                  type="button"
+                  onClick={clearCurrentWindowScope}
+                  aria-label={ui('clearSearchScope')}
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full hover:bg-accent hover:text-foreground"
+                  data-testid="topbar-vector-search-scope-clear"
+                >
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              </span>
+            )}
+            <input
+              ref={searchInputRef}
+              value={searchValue}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setSearchValue(nextValue);
+                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-query', {
+                  detail: { query: nextValue },
+                }));
+                if (nextValue.length === 0) {
+                  setIsCurrentWindowScopeEnabled(false);
+                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+                    detail: { pathname: currentPathname, vectorSearchTarget: null },
+                  }));
+                }
+              }}
+              onFocus={handleSearchClick}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key !== 'Backspace' || searchValue.length !== 1) return;
+                event.preventDefault();
+                setSearchValue('');
+                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-query', {
+                  detail: { query: '' },
+                }));
+                setIsCurrentWindowScopeEnabled(false);
+                document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+                  detail: { pathname: currentPathname, vectorSearchTarget: null },
+                }));
+              }}
+              placeholder={resolvedPlaceholder}
+              aria-label={resolvedPlaceholder}
+              className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
+              data-testid="global-search-input"
+            />
             <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
               <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  aria-label={ui('searchWithVoice')}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-search-placeholder"
-                >
+                <span role="button" tabIndex={-1} aria-label={ui('searchWithVoice')} className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-search-placeholder">
                   <Mic className="h-4 w-4" data-testid="Mic__133e64" />
                 </span>
               </TooltipTrigger>
               <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('searchWithVoice')}</TooltipContent>
             </Tooltip>
-          </button>
+          </div>
         </div>
 
         {/* Right: action icons */}

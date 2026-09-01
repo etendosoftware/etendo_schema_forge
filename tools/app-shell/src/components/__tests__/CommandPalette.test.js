@@ -60,4 +60,62 @@ describe('CommandPalette', () => {
   it('skips groups where all items are hidden (returns null)', () => {
     assert.match(src, /visibleItems\.length\s*===\s*0\s*\)\s*return\s*null/);
   });
+
+  it('uses contract-declared vector targets for semantic results', () => {
+    assert.match(src, /resolveVectorSearchTargets/);
+    assert.match(src, /import\.meta\.glob\('@generated\/\*\/contract\.json'\)/);
+    assert.match(src, /\/sws\/neo\/vectorsearch/);
+  });
+
+  it('keeps vector matches opt-in and renders them as a separate result group', () => {
+    assert.match(src, /normalizedQuery\.length\s*<\s*3/);
+    assert.match(src, /vectorMatches\.length\s*>\s*0/);
+    assert.match(src, /semanticSearchResults/);
+  });
+
+  it('renders semantic matches before menu navigation groups', () => {
+    const semanticGroup = src.indexOf('data-testid="vector-search-results"');
+    const menuGroups = src.indexOf('menuConfig.menu.filter');
+    assert.ok(semanticGroup >= 0 && semanticGroup < menuGroups);
+  });
+
+  it('keeps semantic matches visible even when their label does not contain the query text', () => {
+    assert.match(src, /value\s*=\s*\{`\$\{query\}\s+\$\{label\}/);
+  });
+
+  it('shows a searching placeholder while vector search is in flight', () => {
+    assert.match(src, /isVectorSearchLoading\s*\?\s*ui\('searching'\)\s*:\s*ui\('searchPages'\)/);
+    assert.match(src, /data-testid="vector-search-loading"/);
+    assert.match(src, /role="status"/);
+  });
+
+  it('opens a semantic result in its contract-declared window record route', () => {
+    assert.match(src, /resolveVectorSearchTargets/);
+    assert.match(src, /navigate\(`\/\$\{target\.specName\}\/\$\{match\.id\}`\)/);
+    assert.match(src, /onSelect=\{\(\)\s*=>\s*handleVectorSelect\(match\)\}/);
+  });
+
+  it('shows the normalized vector similarity score for each semantic match', () => {
+    assert.match(src, /match\.score/);
+    assert.match(src, /Math\.round\(match\.score\s*\*\s*100\)/);
+  });
+
+  it('shows the contract-declared entity label on each semantic match', () => {
+    assert.match(src, /tMenu\(target\.label\)\s*\|\|\s*target\.label/);
+    assert.match(src, /\{entityLabel\}/);
+  });
+
+  it('defaults semantic search to the contract target of the current window and lets users clear it', () => {
+    assert.match(src, /useLocation/);
+    assert.match(src, /resolveVectorSearchTargetForPath/);
+    assert.match(src, /requestedVectorSearchTargetKeys/);
+    assert.match(src, /data-testid="vector-search-scope"/);
+    assert.match(src, /setSelectedVectorTargetKeys\(null\)/);
+  });
+
+  it('renders contract-declared window-filter suggestions before navigation results', () => {
+    assert.match(src, /resolveWindowSearchSuggestions/);
+    assert.match(src, /window-filter-suggestions/);
+    assert.match(src, /navigate\(suggestion\.path\)/);
+  });
 });

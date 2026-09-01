@@ -422,7 +422,6 @@ export const api = {
   "actions": [
     {
       "entity": "product",
-      "field": "manageVariants",
       "column": "ManageVariants",
       "url": "/sws/neo/product/product/{id}/action/manageVariants",
       "processId": "FE3A8C134D41488DB3A69837BD54B56A",
@@ -430,7 +429,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/product/product/{id}/action/processNow",
       "processId": "136",
@@ -438,7 +436,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "createVariants",
       "column": "CreateVariants",
       "url": "/sws/neo/product/product/{id}/action/createVariants",
       "processId": "3C386BC12832466790E50F2F8C5EBD85",
@@ -446,7 +443,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "updateInvariants",
       "column": "Updateinvariants",
       "url": "/sws/neo/product/product/{id}/action/updateInvariants",
       "processId": "7DC2C8DC186B4C1DB18E147911950861",
@@ -454,7 +450,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "relateprodcattoservice",
       "column": "Relateprodcattoservice",
       "url": "/sws/neo/product/product/{id}/action/relateprodcattoservice",
       "processId": "8E5996F1F3154B498468938B5341A0CB",
@@ -462,7 +457,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "relateprodtoservice",
       "column": "Relateprodtoservice",
       "url": "/sws/neo/product/product/{id}/action/relateprodtoservice",
       "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
@@ -470,7 +464,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "relateprodcattaxtoservice",
       "column": "Relateprodcattaxtoservice",
       "url": "/sws/neo/product/product/{id}/action/relateprodcattaxtoservice",
       "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
@@ -478,7 +471,6 @@ export const api = {
     },
     {
       "entity": "product",
-      "field": "copyservicemodifytaxconfig",
       "column": "Copyservicemodifytaxconfig",
       "url": "/sws/neo/product/product/{id}/action/copyservicemodifytaxconfig",
       "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
@@ -486,7 +478,6 @@ export const api = {
     },
     {
       "entity": "transactions",
-      "field": "manualcostadjustment",
       "column": "Manualcostadjustment",
       "url": "/sws/neo/product/transactions/{id}/action/manualcostadjustment",
       "processId": "D395B727675C45C98320F8A40E0768E7",

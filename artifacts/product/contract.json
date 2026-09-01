@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-31T17:56:47.501Z",
-  "checksum": "7c8084d663b32794",
+  "updatedAt": "2026-09-01T12:14:44.511Z",
+  "checksum": "2c30d4febabd3700",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -38,8 +38,7 @@
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
-          "ProductType": "Tipo",
-          "Value": "Código"
+          "ProductType": "Tipo"
         }
       },
       "primaryTabs": [
@@ -73,6 +72,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -80,15 +82,14 @@
         "descriptor": "product",
         "formats": [
           "csv",
-          "txt",
-          "xlsx"
+          "txt"
         ],
         "limit": {
           "maxRows": 5000,
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "database",
+          "scope": "file",
           "key": [
             "searchKey"
           ]
@@ -103,8 +104,6 @@
             ],
             "label": "Search Key",
             "required": true,
-            "example": "SKU-1001",
-            "column": "Value",
             "type": "string"
           },
           {
@@ -114,8 +113,6 @@
             ],
             "label": "Name",
             "required": true,
-            "example": "Tornillo hexagonal M8",
-            "column": "Name",
             "type": "string"
           },
           {
@@ -124,9 +121,7 @@
               "descripcion",
               "descripción"
             ],
-            "example": "Tornillería inoxidable",
             "label": "Description",
-            "column": "Description",
             "required": false,
             "type": "textarea"
           },
@@ -138,8 +133,6 @@
             ],
             "label": "Product Type",
             "required": false,
-            "example": "Item",
-            "column": "ProductType",
             "type": "enum"
           },
           {
@@ -153,8 +146,6 @@
             "label": "Unit of Measure",
             "matchEntity": "UOM",
             "required": false,
-            "example": "Unidad",
-            "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
           },
@@ -168,10 +159,7 @@
               "precio",
               "pvp"
             ],
-            "label": "Sales Price",
-            "isNumeric": true,
-            "example": "12,50",
-            "labelKey": "importHeaderSalesPrice"
+            "label": "Sales Price"
           },
           {
             "required": false,
@@ -183,10 +171,7 @@
               "coste",
               "costo"
             ],
-            "label": "Purchase Price",
-            "isNumeric": true,
-            "example": "8,20",
-            "labelKey": "importHeaderPurchasePrice"
+            "label": "Purchase Price"
           },
           {
             "required": false,
@@ -200,9 +185,7 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Category",
-            "example": "Herramientas",
-            "column": "M_Product_Category_ID"
+            "label": "Category"
           }
         ]
       },
@@ -2472,8 +2455,7 @@
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
-          "ProductType": "Tipo",
-          "Value": "Código"
+          "ProductType": "Tipo"
         }
       },
       "primaryTabs": [
@@ -2507,6 +2489,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -2514,15 +2499,14 @@
         "descriptor": "product",
         "formats": [
           "csv",
-          "txt",
-          "xlsx"
+          "txt"
         ],
         "limit": {
           "maxRows": 5000,
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "database",
+          "scope": "file",
           "key": [
             "searchKey"
           ]
@@ -2537,8 +2521,6 @@
             ],
             "label": "Search Key",
             "required": true,
-            "example": "SKU-1001",
-            "column": "Value",
             "type": "string"
           },
           {
@@ -2548,8 +2530,6 @@
             ],
             "label": "Name",
             "required": true,
-            "example": "Tornillo hexagonal M8",
-            "column": "Name",
             "type": "string"
           },
           {
@@ -2558,9 +2538,7 @@
               "descripcion",
               "descripción"
             ],
-            "example": "Tornillería inoxidable",
             "label": "Description",
-            "column": "Description",
             "required": false,
             "type": "textarea"
           },
@@ -2572,8 +2550,6 @@
             ],
             "label": "Product Type",
             "required": false,
-            "example": "Item",
-            "column": "ProductType",
             "type": "enum"
           },
           {
@@ -2587,8 +2563,6 @@
             "label": "Unit of Measure",
             "matchEntity": "UOM",
             "required": false,
-            "example": "Unidad",
-            "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
           },
@@ -2602,10 +2576,7 @@
               "precio",
               "pvp"
             ],
-            "label": "Sales Price",
-            "isNumeric": true,
-            "example": "12,50",
-            "labelKey": "importHeaderSalesPrice"
+            "label": "Sales Price"
           },
           {
             "required": false,
@@ -2617,10 +2588,7 @@
               "coste",
               "costo"
             ],
-            "label": "Purchase Price",
-            "isNumeric": true,
-            "example": "8,20",
-            "labelKey": "importHeaderPurchasePrice"
+            "label": "Purchase Price"
           },
           {
             "required": false,
@@ -2634,9 +2602,7 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Category",
-            "example": "Herramientas",
-            "column": "M_Product_Category_ID"
+            "label": "Category"
           }
         ]
       },
@@ -6149,74 +6115,219 @@
     ],
     "actions": [
       {
+        "name": "manageVariants",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "manageVariants",
         "column": "ManageVariants",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/manageVariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "FE3A8C134D41488DB3A69837BD54B56A",
         "processType": "obuiapp"
       },
       {
+        "name": "processNow",
+        "actionType": "documentAction",
         "entity": "product",
-        "field": "processNow",
         "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
         "processId": "136",
         "processType": "classic"
       },
       {
+        "name": "createVariants",
+        "actionType": "createFrom",
         "entity": "product",
-        "field": "createVariants",
         "column": "CreateVariants",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/createVariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "3C386BC12832466790E50F2F8C5EBD85",
         "processType": "classic"
       },
       {
+        "name": "updateInvariants",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "updateInvariants",
         "column": "Updateinvariants",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/updateInvariants",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "7DC2C8DC186B4C1DB18E147911950861",
         "processType": "obuiapp"
       },
       {
+        "name": "relateprodcattoservice",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "relateprodcattoservice",
         "column": "Relateprodcattoservice",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/relateprodcattoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "8E5996F1F3154B498468938B5341A0CB",
         "processType": "obuiapp"
       },
       {
+        "name": "relateprodtoservice",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "relateprodtoservice",
         "column": "Relateprodtoservice",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/relateprodtoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
         "processType": "obuiapp"
       },
       {
+        "name": "relateprodcattaxtoservice",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "relateprodcattaxtoservice",
         "column": "Relateprodcattaxtoservice",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/relateprodcattaxtoservice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
         "processType": "obuiapp"
       },
       {
+        "name": "copyservicemodifytaxconfig",
+        "actionType": "utilityAction",
         "entity": "product",
-        "field": "copyservicemodifytaxconfig",
         "column": "Copyservicemodifytaxconfig",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/product/{id}/action/copyservicemodifytaxconfig",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
         "processType": "obuiapp"
       },
       {
+        "name": "manualcostadjustment",
+        "actionType": "utilityAction",
         "entity": "transactions",
-        "field": "manualcostadjustment",
         "column": "Manualcostadjustment",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/product/transactions/{id}/action/manualcostadjustment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "D395B727675C45C98320F8A40E0768E7",
         "processType": "obuiapp"
       }
@@ -6244,10 +6355,473 @@
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
-        "ProductType": "Tipo",
-        "Value": "Código"
+        "ProductType": "Tipo"
       }
     }
+  },
+  "formState": {
+    "entities": {
+      "product": {
+        "fields": {
+          "searchKey": {
+            "required": true
+          },
+          "name": {
+            "required": true
+          },
+          "image": {},
+          "uOM": {
+            "required": true
+          },
+          "productCategory": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY='N'"
+          },
+          "taxCategory": {
+            "required": true
+          },
+          "purchase": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "sale": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "description": {},
+          "productType": {
+            "required": true,
+            "defaultValue": "I"
+          },
+          "stocked": {
+            "required": true,
+            "readOnlyLogic": "@ProductType@='R' | @ProductType@='E' | @ProductType@='O'",
+            "defaultValue": "Y"
+          },
+          "weight": {},
+          "uOMForWeight": {},
+          "attributeSet": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "uPCEAN": {},
+          "brand": {},
+          "returnable": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "mProductStatusID": {},
+          "eTGOPurchasePrice": {
+            "readOnly": true
+          },
+          "eTGOSalePrice": {
+            "readOnly": true
+          },
+          "eTGOStock": {
+            "readOnly": true
+          }
+        }
+      },
+      "price": {
+        "fields": {
+          "priceListVersion": {
+            "required": true
+          },
+          "standardPrice": {
+            "required": true
+          },
+          "listPrice": {
+            "required": true
+          },
+          "cost": {
+            "required": true,
+            "defaultValue": "0"
+          }
+        }
+      },
+      "priceRuleVersion": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "validFromDate": {
+            "required": true
+          },
+          "servicePriceRule": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "accounting": {
+        "fields": {
+          "fixedAsset": {},
+          "productExpense": {
+            "required": true
+          },
+          "productRevenue": {
+            "required": true
+          },
+          "productCOGS": {}
+        }
+      },
+      "billOfMaterials": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_Product_BOM WHERE M_Product_ID=@M_Product_ID@"
+          },
+          "bOMProduct": {
+            "required": true
+          },
+          "bOMQuantity": {
+            "required": true,
+            "defaultValue": "1"
+          },
+          "bomprice": {},
+          "description": {}
+        }
+      },
+      "costing": {
+        "fields": {
+          "costType": {
+            "readOnly": true,
+            "required": true
+          },
+          "cost": {
+            "readOnly": true
+          },
+          "startingDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "endingDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "quantity": {
+            "readOnly": true
+          },
+          "warehouse": {
+            "readOnly": true
+          },
+          "cCurrencyID": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "100"
+          },
+          "originalCost": {
+            "readOnly": true
+          }
+        }
+      },
+      "transactionAdjustments": {
+        "fields": {
+          "costDate": {
+            "required": true
+          },
+          "cost": {
+            "required": true
+          },
+          "cCurrencyID": {
+            "required": true
+          },
+          "costAdjustmentLine": {},
+          "unitCost": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "accountingDate": {
+            "required": true
+          }
+        }
+      },
+      "transactions": {
+        "fields": {
+          "organization": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@AD_Org_ID@"
+          },
+          "storageBin": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementQuantity": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "movementType": {
+            "readOnly": true,
+            "required": true
+          },
+          "totalCost": {
+            "readOnly": true
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "productCharacteristic": {
+        "fields": {
+          "sequenceNumber": {
+            "required": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@"
+          },
+          "characteristic": {
+            "required": true
+          },
+          "variant": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "explodeConfigurationTab": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "definesPrice": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "priceListType": {
+            "required": true,
+            "defaultValue": "SALES"
+          },
+          "definesImage": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "characteristicSubset": {},
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      },
+      "stock": {
+        "fields": {
+          "storageBin": {
+            "readOnly": true,
+            "required": true
+          },
+          "attributeSetValue": {
+            "readOnly": true
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true
+          },
+          "quantityOnHand": {
+            "readOnly": true,
+            "required": true
+          },
+          "reservedQty": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "allocatedQuantity": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          }
+        }
+      },
+      "categoryPriceRuleVersion": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "validFromDate": {
+            "required": true
+          },
+          "servicePriceRule": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "alternateUom": {
+        "fields": {
+          "uOM": {
+            "required": true
+          },
+          "conversionRate": {
+            "required": true,
+            "readOnlyLogic": "@EXISTS_CONVERSION@='Y'"
+          },
+          "gtin": {},
+          "sales": {
+            "required": true,
+            "defaultValue": "S"
+          },
+          "purchase": {
+            "required": true,
+            "defaultValue": "S"
+          },
+          "logistics": {
+            "required": true,
+            "defaultValue": "S"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage product inventory operations.",
+    "whenToUse": [
+      "Use for stock and warehouse operations."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "uOM",
+        "productCategory",
+        "taxCategory",
+        "purchase",
+        "sale",
+        "productType",
+        "stocked",
+        "active",
+        "returnable"
+      ],
+      "lineFields": [
+        "priceListVersion",
+        "standardPrice",
+        "listPrice",
+        "cost",
+        "active",
+        "validFromDate",
+        "productExpense",
+        "productRevenue",
+        "lineNo",
+        "bOMProduct",
+        "bOMQuantity",
+        "costDate",
+        "cost",
+        "cCurrencyID",
+        "unitCost",
+        "accountingDate",
+        "sequenceNumber",
+        "characteristic",
+        "variant",
+        "explodeConfigurationTab",
+        "definesPrice",
+        "priceListType",
+        "definesImage",
+        "active",
+        "active",
+        "validFromDate",
+        "uOM",
+        "conversionRate",
+        "sales",
+        "purchase",
+        "logistics"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "createVariants"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "uOM",
+          "productCategory",
+          "taxCategory",
+          "purchase",
+          "sale",
+          "productType",
+          "stocked",
+          "active",
+          "returnable"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "priceListVersion",
+          "standardPrice",
+          "listPrice",
+          "cost",
+          "active",
+          "validFromDate",
+          "productExpense",
+          "productRevenue",
+          "lineNo",
+          "bOMProduct",
+          "bOMQuantity",
+          "costDate",
+          "cost",
+          "cCurrencyID",
+          "unitCost",
+          "accountingDate",
+          "sequenceNumber",
+          "characteristic",
+          "variant",
+          "explodeConfigurationTab",
+          "definesPrice",
+          "priceListType",
+          "definesImage",
+          "active",
+          "active",
+          "validFromDate",
+          "uOM",
+          "conversionRate",
+          "sales",
+          "purchase",
+          "logistics"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
   },
   "testManifest": {
     "tests": [
