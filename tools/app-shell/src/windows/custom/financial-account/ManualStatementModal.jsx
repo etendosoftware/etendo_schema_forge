@@ -248,10 +248,12 @@ function LinesHeader({ ui }) {
       <ColHead
         label={ui('financeAccountStatementsManualColOut')}
         required
+        className="text-right"
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColIn')}
         required
+        className="text-right"
         data-testid="ColHead__6b4086" />
       <span />
     </div>

@@ -1527,6 +1527,13 @@ arrow stays on the column's outer edge):
 
 Deliberately NOT changed: Estado (a pill), Progreso (a bar, not a figure), and every text column.
 
+**Follow-up (ETP-4924): `ManualStatementModal`'s own editable-lines header had the same gap.** This
+grid is also hand-rolled (it predates and doesn't go through `DataTable`), so it wasn't in scope for
+the original ETP-4921 sweep above — its "Salida"/"Entrada" `ColHead`s sat flush left while the
+amount cells beneath (`EditRow`'s inputs and `MatchedRow`'s read-only spans) were already
+`text-right tabular-nums`. Fixed the same way: `className="text-right"` on those two `ColHead`
+calls in `LinesHeader`.
+
 #### The expanded row and the header row refresh together (ETP-4921)
 
 A statement's header row and its expanded accordion are fed by **two independent fetches**:
