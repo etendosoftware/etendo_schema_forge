@@ -49,7 +49,7 @@ describe('createLookupRecord', () => {
     expect(opts.method).toBe('POST');
     expect(opts.headers).toMatchObject({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES',
     });
     expect(JSON.parse(opts.body)).toEqual({ name: 'Bank fee' });
     expect(created).toEqual({ id: 'TT-1', name: 'Bank fee' });

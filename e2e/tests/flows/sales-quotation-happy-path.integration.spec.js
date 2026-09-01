@@ -148,19 +148,16 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
     await test.step('Add a line — select a product', async () => {
       await waitForDetailReady(page);
 
-      // Click "+ Añadir líneas" — retry the whole click→response→render sequence
-      // in case the click doesn't register (overlay, animation, React reconciliation)
+      // Click "+ Añadir líneas" — wait for the button to appear first (the lines
+      // panel may still be loading after the draft save), then retry until the
+      // inline-add-row appears.
       const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
         .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
+      await expect(emptyStateBtn).toBeVisible({ timeout: 15_000 });
 
       await expect(async () => {
-        const addLinesResponse = page.waitForResponse(
-          (r) => r.url().includes('/sws/neo/') && r.status() < 500,
-          { timeout: 15_000 },
-        );
-        await emptyStateBtn.click({ timeout: 3_000 });
-        await addLinesResponse;
-        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+        await emptyStateBtn.click({ timeout: 5_000 });
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
       }).toPass({ timeout: 30_000 });
       await slow(page);
 
@@ -177,12 +174,16 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       const productOption = page.locator('[data-testid^="product-search-option-"]').first();
       await expect(productOption).toBeVisible({ timeout: 15_000 });
 
-      // Start listening for callout (price/tax fill) BEFORE clicking the product
-      const productCalloutResponse = page.waitForResponse(
-        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-        { timeout: 30_000 },
-      );
-      await productOption.click();
+      // Retry click if the product element detaches mid-click (the drawer
+      // re-renders its list when waterfall fetches complete — see purchase-helpers.js).
+      let productCalloutResponse;
+      await expect(async () => {
+        productCalloutResponse = page.waitForResponse(
+          (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
+          { timeout: 30_000 },
+        );
+        await productOption.click({ timeout: 3_000 });
+      }).toPass({ timeout: 15_000 });
       await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
       await productCalloutResponse;
       await slow(page);

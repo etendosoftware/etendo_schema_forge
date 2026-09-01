@@ -356,6 +356,12 @@ export function SecondaryPanelTab(props) {
 }
 
 export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  // ETP-4836 — the subtitle + "add" CTA only make sense when the tab actually
+  // supports manual row creation (st.addLineFields configured). Tabs whose rows
+  // are entirely backend-managed (e.g. invoices' Exchange Rates, auto-created by
+  // AbstractInvoiceHeaderHandler) still get the "no records" illustration instead
+  // of a blank area, just without an action that would do nothing.
+  const canAdd = Boolean(onAddLineClick);
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
@@ -366,11 +372,15 @@ export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
           <line x1="8" y1="17" x2="13" y2="17" />
         </svg>
       </div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
-        + {addLineLabel}
-      </button>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: canAdd ? 4 : 0 }}>{ui('noRecordsYet')}</span>
+      {canAdd && (
+        <>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+          <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+            + {addLineLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -402,6 +412,18 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
 
 export function getDocumentIds(recordId) {
   return recordId ? [recordId] : [];
+}
+
+// ETP-5052: display-only merge exposing whether the master record currently has
+// child lines to HEADER field `readOnlyLogicJs` expressions (e.g. `"!!record.hasLines"`
+// on Physical Inventory's `warehouse`), so a header field can lock once count/detail
+// lines exist and unlock again once the last one is removed. `children` is guarded
+// (not every window's `hook.children` is an array — header-only windows have none).
+// NEVER feed the returned object into a save/PUT payload: `handleSave` (useEntity.js)
+// builds the request from `editing` state directly, never from this merge, so the
+// synthetic `hasLines` key never reaches the backend.
+export function buildHeaderFormData(data, children) {
+  return { ...data, hasLines: Array.isArray(children) && children.length > 0 };
 }
 
 export function resolveSidebarContent(sidebarContent, data) {
@@ -572,11 +594,24 @@ export function renderDetailBulkActionBar({
   );
 }
 
-export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
+/**
+ * @param {Function} [guard] ETP-5073 / DOC-08: wraps the switch so an in-progress line edit is
+ *   not discarded silently. Receives the switch as a callback and decides when (or whether) to
+ *   run it. Optional: without it the switch happens immediately, which is the pre-ticket
+ *   behaviour and keeps every existing caller working unchanged.
+ */
+export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guard) {
   return DetailForm && linesLayout !== 'inlineEditable' ? (row) => {
-    const line = {...row};
-    roundAmounts(line);
-    setSelectedLine(line);
+    const openLine = () => {
+      const line = {...row};
+      roundAmounts(line);
+      setSelectedLine(line);
+    };
+    if (guard) {
+      guard(openLine);
+    } else {
+      openLine();
+    }
   } : undefined;
 }
 

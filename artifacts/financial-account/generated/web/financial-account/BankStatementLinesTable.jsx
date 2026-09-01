@@ -7,7 +7,7 @@ const columns = [
   { key: 'description', column: 'Description', type: 'string', label: 'Description' },
   { key: 'bpartnername', column: 'Bpartnername', type: 'string', label: 'Business Partner Name' },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'G/L Item' },
+  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'Accounting account' },
   { key: 'referenceNo', column: 'Referenceno', type: 'string', label: 'Reference No.', required: true },
   { key: 'dramount', column: 'Dramount', type: 'amount', label: 'Amount OUT', required: true },
   { key: 'cramount', column: 'Cramount', type: 'amount', label: 'Amount IN', required: true },

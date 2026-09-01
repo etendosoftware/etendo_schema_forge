@@ -151,3 +151,32 @@ the Diferencias filter is *theoretically* reachable today, not a case worth rely
 | Flag storage | `FIN_MATCHING_ALGORITHM` table, per financial account |
 | Our classifier + date window | `AutoMatchSupport.classifyPendingLine` / `standardMatchLevel` (com.etendoerp.go) |
 | Filter chips and badges | `ReconciliationSplitPanel.jsx` — `STATUS_CODES`, `STATUS_LABEL_KEYS` |
+
+## 6. Consuming candidates across a batch (ETP-4971)
+
+Every query behind the standard algorithm's two passes filters on an **exact** amount match with
+no ordering (`MatchTransactionDao`, no `ORDER BY`), so with several pending lines of the identical
+amount, `transactions.get(0)` would return the *same* candidate transaction for every one of them —
+unless the caller excludes what earlier lines already claimed. Core's own auto-match driver
+(`MatchStatementOnLoadActionHandler.runAutoMatchingAlgorithm`) does this via a single `excluded`
+list that grows with every accepted match across the whole batch, in `bsl.transactionDate,
+bsl.lineNo` order (first pending line wins the transaction).
+
+`AutoMatchSupport.classifyPendingLine` and `ReconciliationHandler.suggestedTransactionIds` now have
+overloads that accept the same kind of shared accumulator (`Set<String> usedTxnIds,
+List<FIN_FinaccTransaction> excludedTxns`) and feed it into `AutoMatchSupport.standardMatch`
+(the single place that calls `FIN_MatchingTransaction.match(line, excluded)`). Two call sites share
+one accumulator each, in the same `datetrx, line` order the underlying SQL already returns:
+
+- `ReconciliationHandler.buildAutoMatch` — the actual Automatch preview. Before ETP-4971 this
+  called the standard algorithm with an always-empty `excluded` list, so N pending lines of the
+  same amount only ever produced ONE suggestion per run (accepting it and re-running Automatch
+  revealed the next one, one at a time).
+- `ReconciliationHandlerSupport.summarizePendingLines` — the left-panel `pendingLines` classifier.
+  Without the same accumulator its `suggested` count would over-report: a same-amount line whose
+  only candidate was already claimed by an earlier line would still be counted `suggested`, even
+  though an actual Automatch run would leave it `pending`.
+
+The no-accumulator overloads of both methods still exist for single-line lookups (e.g.
+`buildCandidates`'s right-panel preselection, which only ever classifies the one selected line) —
+they just create a fresh, empty accumulator per call, so their behavior is unchanged.

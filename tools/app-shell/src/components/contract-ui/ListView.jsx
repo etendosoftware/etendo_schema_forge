@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -15,6 +16,7 @@ import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
@@ -153,12 +155,19 @@ function ListTableRegion({
   onReachBottom, viewMode, galleryRenderer, navigate, windowName, token, apiBaseUrl,
 }) {
   if (ownScroll) {
+    // Only the TRUE initial fetch (no items yet) hands `loading` to the Table, which renders
+    // it as a full skeleton (DataTable: `if (loading) return <TableSkeleton />`, unconditional
+    // on row count). A later refresh — the button next to sort, or any reload() after an
+    // edit/CRUD action — already has rows to show, so it stays smooth via the opacity dim
+    // below instead, matching the non-ownScroll branch just below (which never even forwards
+    // `loading` once `hook.items.length > 0`).
+    const showInitialSkeleton = hook.loading && hook.items.length === 0;
     return (
       <div className={`flex min-h-0 flex-1 flex-col ${tablePaddingX}`} data-testid="list-table-region">
         <div
           className={tableOpacityClass(hook)}
           style={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column' }}>
-          <Table {...tableProps} loading={hook.loading} data-testid="Table__620cbc" />
+          <Table {...tableProps} loading={showInitialSkeleton} data-testid="Table__620cbc" />
         </div>
       </div>
     );
@@ -220,8 +229,12 @@ function TableRowsIcon({ size = 24, color = 'currentColor' }) {
   );
 }
 
-function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode }) {
-  if (!galleryRenderer) return null;
+// `forceShow` lets a caller outside ListView (the report catalog, ETP-5013)
+// render this same list/gallery switch without a `galleryRenderer` — ListView's
+// own callers never pass it, so their gate (hide the toggle when the window
+// declares no gallery layout) is unchanged.
+export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, viewMode, forceShow }) {
+  if (!galleryRenderer && !forceShow) return null;
   return (
     <div data-testid="view-toggle" className="flex flex-row items-center p-1 gap-1 h-10 w-[108px] bg-[hsl(var(--muted))] rounded-xl">
       <button
@@ -387,6 +400,7 @@ export function ListView({
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { runBatch } = useBatch({ apiBaseUrl, token });
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into
@@ -629,6 +643,50 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+
+  // ETP-4996 — the import dialog's two injected capabilities.
+  //
+  // `importFieldLabel` writes the downloaded CSV template's headers in the SESSION language.
+  //
+  // The base comes from the AD label dictionary (`t(column)`, which already applies the
+  // window's own `labelOverrides`) — those translations exist and are maintained, so the
+  // template should not carry a second copy of them. `labelKey` is the escape hatch for the
+  // handful of columns AD cannot serve: `EM_Etgo_Isperson` has no dictionary entry, and
+  // address/city/postal/region are C_Location columns the descriptor writes directly, so they
+  // are not entity fields and have no AD label at all.
+  //
+  // `headerScope: "contact"` appends a localized qualifier. A Contacts row is split across the
+  // business partner and its contact person, and the AD label for both halves is identical
+  // ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
+  // qualifier the template writes the same header twice, which `parseDelimited` rejects
+  // outright — the file could not be uploaded at all.
+  const importFieldLabel = useCallback((field) => {
+    const base = (field.labelKey ? ui(field.labelKey) : null)
+      || (field.column ? t(field.column) : null)
+      || field.label || field.target;
+    return field.headerScope === 'contact'
+      ? `${base} (${ui('importHeaderScopeContact')})`
+      : base;
+  }, [t, ui]);
+
+  // `importExistingKeys` answers "which of these rows already exist?" before the user
+  // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
+  // post-send duplicates. Goes through the same `criteria=` list query the grid itself
+  // uses, so it inherits the window's org/client security filtering for free.
+  const importExistingKeys = useCallback(async (criteria, keyTargets) => {
+    const params = new URLSearchParams();
+    params.append('criteria', JSON.stringify(criteria));
+    params.append('_startRow', '0');
+    params.append('_endRow', '1000');
+    const res = await apiFetch(`/${importConfig.entity}?${params.toString()}`);
+    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data ?? json?.data ?? [];
+    // Only the key columns are read back; anything else the endpoint returns is ignored.
+    return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
+      keyTargets.map((target) => [target, record[target]]),
+    ));
+  }, [apiFetch, importConfig?.entity]);
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -1188,17 +1246,11 @@ export function ListView({
             </div>
           )}
 
-          {/* Indeterminate top progress bar — visible while refreshing existing data */}
+          {/* Indeterminate top progress bar — visible while refreshing existing data. Extracted
+              to ListProgressBar so the hand-rolled tables that never reach ListView (the
+              financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
-            <>
-              <div role="progressbar" className="h-0.5 w-full overflow-hidden bg-primary/10" data-testid="list-progress-bar">
-                <div
-                  className="h-full w-1/3 bg-primary"
-                  style={{ animation: 'sf-list-progress 1.1s ease-in-out infinite' }}
-                />
-              </div>
-              <style>{`@keyframes sf-list-progress { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }`}</style>
-            </>
+            <ListProgressBar data-testid="ListProgressBar__620cbc" />
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its
@@ -1263,6 +1315,8 @@ export function ListView({
             simSearchFn={simSearch}
             labels={importLabels}
             translate={ui}
+            fieldLabelFn={importFieldLabel}
+            existingKeyFetchFn={importExistingKeys}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

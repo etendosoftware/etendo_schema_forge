@@ -71,7 +71,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --compare-branch)
       # Override the branch to compare overall coverage against (default: the
-      # --base-ref branch, falling back to epic/ETP-3504).
+      # --base-ref branch, falling back to develop).
       if [[ -z "${2:-}" ]]; then
         echo "ERROR: --compare-branch requires a value"
         exit 1
@@ -206,7 +206,7 @@ prompt_for_base_ref() {
 
   if [[ -t 0 ]]; then
     echo "==> PR validation mode is enabled by default."
-    echo "Enter the PR base commit or target ref used by Sonar Cloud (examples: origin/main, origin/epic/ETP-3504, abc1234)."
+    echo "Enter the PR base commit or target ref used by Sonar Cloud (examples: origin/develop, origin/main, abc1234)."
     read -r -p "Base commit/ref: " BASE_REF
     return 0
   fi
@@ -1097,7 +1097,7 @@ fi
 CMP_RC=0
 if [[ "$COMPARE_COVERAGE" == "true" ]]; then
   CMP_BRANCH="${COMPARE_BRANCH:-${BASE_REF#origin/}}"
-  CMP_BRANCH="${CMP_BRANCH:-epic/ETP-3504}"
+  CMP_BRANCH="${CMP_BRANCH:-develop}"
   GATE_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'this branch')"
 
   if [[ "$GATE_BRANCH" == "$CMP_BRANCH" ]]; then

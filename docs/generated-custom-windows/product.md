@@ -469,3 +469,39 @@ reject the untouched template.
 Regression coverage: `productImportDescriptor.vitest.js`, plus
 `windows/custom/__tests__/importTemplateRoundTrip.vitest.js` (template → map → validate →
 build operations, for both windows).
+
+## ETP-4996 — Import engine: duplicate policy, review-time validation, template i18n
+
+Engine-level work shared with Contacts. See `contacts.md` for the same section; only the
+product-specific points are repeated here.
+
+**Duplicates are detected before the send, not after.** `window.import.dedupe.scope` is now
+`"database"`. The review queue queries the entity for the rows' `searchKey` values through the
+same `criteria=` list request the grid uses, so re-importing an already-imported file shows
+**0 rows in Correctas and N in Saltadas** before the user confirms. Previously every row showed
+as Correcta and the duplicate only surfaced after the send, when the unique index on
+`(value, ad_org_id, ad_client_id)` rejected it and `importEngine.js` reclassified the failure as
+a benign duplicate — the right outcome, reported far too late. **Upsert/overwrite remains out of
+scope**: skip is still the only policy. If the lookup cannot reach the server the check comes
+back empty and the send-time handling stays the backstop, so a failed pre-flight never blocks an
+import the server would have accepted.
+
+**Price and product-type errors now fail the row during review.** `salesPrice`/`purchasePrice`
+declare `isNumeric: true`, which `validateRow` reads, and `productType` is checked by the
+descriptor's registered row validator (`registerImportRowValidator('product', …)`). A price cell
+reading `abc` used to sit in Correctas until the user confirmed the import and only then failed
+inside `buildPriceOperation`. Both the preview and the send now parse the amount through the same
+`parseImportNumber` (app-shell-core), so the preview cannot accept a value the send would reject.
+`parseImportNumber` replaced the descriptor's local `parsePrice`; behaviour is unchanged
+(`"1.234,56"` → 1234.56, blank → no price, non-numeric → row error).
+
+**Template.** Required columns carry a trailing `*` and the file ships a sample row built from
+each field's `example` in `decisions.json` (`SKU-1001,Tornillo hexagonal M8,…`). Headers are
+written in the session language via the field's AD `column`, which `generate-contract.js` now
+backfills into `window.import.fields`. `mapColumns` strips the `*` before matching, and the
+localized header is added to the field's aliases, so the template round-trips in any language.
+
+Regression coverage: `importRowValidators.vitest.js`, the extended
+`importTemplateRoundTrip.vitest.js` (which now also asserts the shipped sample row validates),
+and in app-shell-core `existingRecordLookup.test.js`, `parseImportNumber.test.js`,
+`rowValidators.test.js` plus the ETP-4996 block in `ImportDialog.test.jsx`.

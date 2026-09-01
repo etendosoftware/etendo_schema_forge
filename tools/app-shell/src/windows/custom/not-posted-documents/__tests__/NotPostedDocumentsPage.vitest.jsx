@@ -167,7 +167,7 @@ describe('NotPostedDocumentsPage', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
+        headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' }),
       }),
     );
   });

@@ -202,6 +202,81 @@ describe('ListModalWindow — toolbar & banner', () => {
   });
 });
 
+// ETP-4921 — this window draws its own toolbar, so it never inherited ListView's refresh
+// button nor ListView's refresh progress bar. Both were added back explicitly; these two
+// blocks lock the wiring (reload handler) and the gate (rows already on screen).
+describe('ListModalWindow — refresh button', () => {
+  it('renders the shared refresh control in the toolbar', () => {
+    renderWindow();
+    expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+  });
+
+  it('labels it from useUI("refresh") rather than a hardcoded string', () => {
+    renderWindow();
+    expect(screen.getByTestId('finance-refresh-button')).toHaveAttribute('aria-label', 'refresh');
+  });
+
+  it('sits between the sort popover and the "+ New" button', () => {
+    renderWindow();
+    const refresh = screen.getByTestId('finance-refresh-button');
+    const create = screen.getByTestId('list-modal-new');
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4 → create comes after refresh.
+    expect(refresh.compareDocumentPosition(create) & 4).toBeTruthy();
+  });
+
+  it('calls the useNeoResource reload when clicked', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    renderWindow();
+    expect(neoState.reload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    expect(neoState.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches without unmounting the rows already on screen', () => {
+    neoState.data = [
+      { id: '1', name: 'Alpha' },
+      { id: '2', name: 'Beta' },
+    ];
+    renderWindow();
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    // The click is a pure refetch: the grid must not be torn down or reset to the skeleton.
+    expect(rowCount()).toBe(2);
+  });
+});
+
+describe('ListModalWindow — refresh progress bar', () => {
+  it('shows the progress bar while refreshing over rows already on screen', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.getByTestId('list-modal-progress-bar')).toBeInTheDocument();
+    // Rows stay mounted during the refresh — that is the whole point of the bar.
+    expect(rowCount()).toBe(1);
+  });
+
+  it('hides it on the very first fetch, where the skeletons are the indicator', () => {
+    neoState.data = [];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.queryByTestId('list-modal-progress-bar')).not.toBeInTheDocument();
+    expect(rowCount()).toBe(0);
+  });
+
+  it('hides it once the fetch settles', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = false;
+    renderWindow();
+    expect(screen.queryByTestId('list-modal-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('uses its own testid, not the default ListView one', () => {
+    neoState.data = [{ id: '1', name: 'Alpha' }];
+    neoState.loading = true;
+    renderWindow();
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+  });
+});
+
 describe('ListModalWindow — back button', () => {
   it('calls navigate(-1) when no backTo is configured', () => {
     renderWindow();
