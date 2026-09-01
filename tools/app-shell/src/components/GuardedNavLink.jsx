@@ -12,6 +12,10 @@ import { requestNavigation } from '@/lib/unsavedChanges.js';
  * is dirty. See the navigation-guard section of `lib/unsavedChanges.js` for why the interception
  * is here rather than in a react-router blocker.
  */
+// @data-testid-ignore — this is a pass-through wrapper: every caller supplies its own
+// `data-testid` through `...rest`, and the codemod appends its generated attribute AFTER the
+// spread, where it silently wins over the caller's. Adding one here makes every consumer's testid
+// unreachable (it breaks this component's own suite and SideMenu's).
 export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
