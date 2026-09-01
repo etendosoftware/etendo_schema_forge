@@ -139,6 +139,11 @@ export function CommandPalette() {
 
   useEffect(() => {
     const down = (e) => {
+      if (e.key === 'Escape' && openRef.current) {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen((o) => !o);
