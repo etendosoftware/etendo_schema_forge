@@ -289,6 +289,7 @@ export default function TopBar({
                   return;
                 }
                 handleSearchKeyDown(event);
+                if (event.key === 'Enter') setSearchOpen(false);
               }}
               placeholder={resolvedPlaceholder}
               aria-label={resolvedPlaceholder}

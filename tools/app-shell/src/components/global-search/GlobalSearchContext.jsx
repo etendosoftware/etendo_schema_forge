@@ -30,6 +30,7 @@ export function GlobalSearchProvider({ children }) {
     if (!open) return;
     event.preventDefault();
     keyboardHandlerRef.current?.(event.key);
+    if (event.key === 'Enter') setOpen(false);
   }, [open]);
 
   const value = useMemo(() => ({
