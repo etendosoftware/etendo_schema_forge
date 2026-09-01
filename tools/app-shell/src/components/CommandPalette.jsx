@@ -144,9 +144,10 @@ export function CommandPalette() {
       if (items.length === 0) return;
       if (key === 'Enter') {
         const selectedItem = items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0];
-        setOpen(false);
+        const keepOpen = selectedItem?.dataset.searchKind === 'recent';
+        if (!keepOpen) setOpen(false);
         selectedItem?.click();
-        return;
+        return { keepOpen };
       }
       const delta = key === 'ArrowUp' ? -1 : 1;
       const next = (keyboardIndexRef.current + delta + items.length) % items.length;
@@ -455,13 +456,15 @@ export function CommandPalette() {
                     <CommandItem
                       key={`${item.query}:${item.timestamp}`}
                       value={item.query}
-                      onSelect={() => {
+                      onSelect={(event) => {
                         if (Array.isArray(item.targets)) {
                           setSelectedVectorTargetKeys(item.targets.length === vectorSearchTargetKeys.length ? null : item.targets);
                         }
                         setQuery(item.query);
+                        if (event?.detail !== 0) setOpen(false);
                       }}
                     data-testid="recent-search-item"
+                    data-search-kind="recent"
                   >
                     <Clock3 className="mr-2 h-4 w-4 text-muted-foreground" />
                     <span>{item.query}</span>

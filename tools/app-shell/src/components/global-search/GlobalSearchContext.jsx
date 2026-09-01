@@ -29,8 +29,8 @@ export function GlobalSearchProvider({ children }) {
     if (import.meta.env.DEV) console.debug('[GlobalSearch] keydown', { key: event.key, open, hasHandler: Boolean(keyboardHandlerRef.current) });
     if (!open) return;
     event.preventDefault();
-    keyboardHandlerRef.current?.(event.key);
-    if (event.key === 'Enter') setOpen(false);
+    const result = keyboardHandlerRef.current?.(event.key);
+    if (event.key === 'Enter' && !result?.keepOpen) setOpen(false);
   }, [open]);
 
   const value = useMemo(() => ({
