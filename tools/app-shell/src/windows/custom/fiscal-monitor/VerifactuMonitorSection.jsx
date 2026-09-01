@@ -10,7 +10,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection, buildCsvAndDownload, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection, buildCsvAndDownload, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { mapVfStatus } from '../shared/useFiscalStatus.js';
 import {
   VF_SPEC,
@@ -245,7 +245,7 @@ export default function VerifactuMonitorSection({
                 const typeLabel    = parseTypeLabel(row);
                 const mappedStatus = mapVfStatus(row.verifactuSendingStatus ?? activeTab);
                 return (
-                  <tr key={row.id ?? i}>
+                  <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
                     <td><Checkbox
                       checked={selectedIds.has(row.id)}
                       onChange={() => handleToggleRow(row.id)}

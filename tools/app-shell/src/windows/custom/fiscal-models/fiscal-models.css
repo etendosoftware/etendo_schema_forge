@@ -248,6 +248,25 @@
 .fm-table tbody tr:hover td { background: hsl(var(--card)); }
 .fm-table tr.fm-table__row--current td { background: var(--fm-info-bg); }
 .fm-table tbody tr.fm-table__row--selected td { background: hsl(var(--muted)); box-shadow: inset 0 1px 0 hsl(var(--border-control)), inset 0 -1px 0 hsl(var(--border-control)); }
+/* ETP-5030 — selected-row tint, converged on the app-wide selection colour.
+   `hsl(var(--primary) / 0.05)` is the literal Tailwind `bg-primary/5` resolves
+   to (app-shell-core tailwind preset: primary.DEFAULT = 'hsl(var(--primary))'),
+   so this matches the Sales Orders grid, InlineLinesPanel and DataTable.
+
+   NOTE: this deliberately does NOT reuse `.fm-table__row--selected` above,
+   which is still on the older `--muted` + inset-border look and is used by
+   models/349/FmModel349Page.jsx. Migrating that sibling onto this rule is a
+   pending decision, not part of this ticket.
+
+   Defined as a CSS rule rather than a `bg-primary/5` class on the <tr> because
+   this table paints its backgrounds on the CELLS (`tbody tr:hover td` above),
+   and a td background covers whatever the tr paints underneath. The pointer is
+   necessarily over the row when the user clicks the checkbox, so a row-level
+   utility would show nothing at exactly the moment feedback is expected — the
+   bug this ticket fixes. The `:hover` selector outranks `tbody tr:hover td`
+   on specificity, so the tint survives independently of rule order. */
+.fm-table tbody tr.fm-row--selected td,
+.fm-table tbody tr.fm-row--selected:hover td { background: hsl(var(--primary) / 0.05); }
 .fm-table th.num, .fm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fm-table td.strong { color: var(--fm-fg-1); font-weight: 600; }
 .fm-table td.mono {

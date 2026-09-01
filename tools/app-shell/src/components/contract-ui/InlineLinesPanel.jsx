@@ -141,16 +141,60 @@ function makeRowClickHandler(onRowClick, row) {
   };
 }
 
-function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
+/**
+ * ETP-5030 — background and highlight cues for a body row.
+ *
+ * `backgroundClass` resolves to exactly ONE class. That is not cosmetic: every
+ * candidate paints the same CSS property (`background-color`) and Tailwind
+ * resolves competing utilities by stylesheet order, not by class order, so
+ * emitting two would make the winner unpredictable. The if/else chain makes that
+ * structurally impossible:
+ *   - `isSelected` (checkbox ticked) → `bg-primary/5`, the same checked-row shade
+ *     `selectedRowBg` uses in DataTable, so a tab grid and the main list grid
+ *     shade a selected row identically.
+ *   - else `isHighlighted` (`selectedRowId` — the line whose detail form is
+ *     currently open) → `bg-muted/40`.
+ *   - else `bg-card`, the opaque base that keeps the row shadow readable.
+ *
+ * The highlight ALSO emits `ring-1 ring-focus-ring`, independently of that chain
+ * — a ring paints no background, so it never competes for the winning utility.
+ * This mirrors the `isSelectedLine` branch of `getRowClassName` in DataTable,
+ * which pairs its tint with the same ring. Keeping the ring outside the chain is
+ * what keeps the two states independent: a row that is both selected and
+ * highlighted shows the selection tint AND the ring, so ticking a checkbox never
+ * erases the "this line's form is open" cue. (DataTable's own
+ * "Selection always wins over hover" rule is about the hover axis only — it does
+ * not suppress its highlight either.)
+ *
+ * `isEditing` only adds a shadow and a z-index, so it stacks on top of whichever
+ * background the chain resolved to.
+ *
+ * Ancestor coupling: `bg-primary/5` and `bg-muted/40` are translucent, so those
+ * rows are not self-opaque and show through to whatever the ancestor paints.
+ * Today that ancestor is the detail content area, which is `bg-card` (the
+ * `contentBg` default in DetailView, not overridden by any window), so the tint
+ * composites over the same base an unselected row paints itself. A future
+ * `contentBg` override would retint selected/highlighted tab-grid rows.
+ */
+function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected }) {
+  let backgroundClass;
+  if (isSelected) {
+    backgroundClass = 'bg-primary/5';
+  } else if (isHighlighted) {
+    backgroundClass = 'bg-muted/40';
+  } else {
+    backgroundClass = 'bg-card';
+  }
   return [
-    // `hover:relative hover:z-10` lifts the row above its neighbors so the
+    // `hover:relative hover:z-20` lifts the row above its neighbors so the
     // shadow can spill onto the rows below without being clipped by them.
-    'group/row flex items-stretch border-b bg-card transition-shadow',
+    'group/row flex items-stretch border-b transition-shadow',
+    backgroundClass,
     'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
-    isHighlighted ? 'bg-muted/40' : '',
+    isHighlighted ? 'ring-1 ring-focus-ring' : '',
     isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
     hasRowClick ? 'cursor-pointer' : '',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 /**
@@ -1159,7 +1203,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <React.Fragment key={row.id}>
           <div
             data-testid={`line-row-${row.id}`}
-            className={computeRowClassName(isHighlighted, isEditing, Boolean(onRowClick))}
+            className={computeRowClassName({ isHighlighted, isEditing, hasRowClick: Boolean(onRowClick), isSelected })}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}

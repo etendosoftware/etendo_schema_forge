@@ -29,6 +29,7 @@ vi.mock('../FmPrimitives.jsx', () => ({
     handleToggleAll: stableToggleAll,
     handleToggleRow: stableToggleRow,
   }),
+  selectedRowClassName: (selectedIds, id) => (selectedIds.has(id) ? 'fm-row--selected' : undefined),
 }));
 vi.mock('../useFiscalMonitor.js', () => ({
   SII_SPEC: 'sii-monitor',
