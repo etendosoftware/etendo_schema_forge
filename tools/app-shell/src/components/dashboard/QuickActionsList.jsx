@@ -43,13 +43,7 @@ export function QuickActionsList({ actions = [] }) {
                 maxWidth: '100%',
                 minWidth: 0,
                 padding: '4px 8px',
-                // Grows to a second line instead of staying at 28px: this is the narrowest column
-                // of the row (`flex: 213` against 672 and 435), and with the sidebar open it has
-                // roughly 130px for "Nuevo pedido de venta". Truncating it read as broken, and the
-                // alternatives are worse — shortening the copy to "Nuevo pedido" turns ambiguous
-                // the moment purchase actions exist, and widening this column steals from the
-                // other widgets.
-                minHeight: '28px',
+                height: '28px',
                 backgroundColor: 'hsl(var(--muted))',
                 borderRadius: '8px',
                 gap: '8px',
@@ -66,15 +60,14 @@ export function QuickActionsList({ actions = [] }) {
                 fontSize: '14px',
                 lineHeight: '20px',
                 color: 'hsl(var(--muted-foreground))',
-                // Two lines, then ellipsis — a safety net for a label longer than any current one
-                // (or a translation that runs long), so it can never grow the card unbounded.
-                display: '-webkit-box',
-                WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: 2,
+                // One line, as designed. The column now has a 216px floor (see DashboardPage) so
+                // every current label fits; this only engages for a translation longer than any of
+                // them, where a clean ellipsis beats a chopped word.
+                whiteSpace: 'nowrap',
                 overflow: 'hidden',
-                overflowWrap: 'anywhere',
+                textOverflow: 'ellipsis',
                 // A flex item defaults to `min-width: auto` and refuses to shrink below its text,
-                // which would push the overflow outside the pill instead of wrapping inside it.
+                // which would push the overflow outside the pill instead of ellipsing inside it.
                 minWidth: 0,
               }}>
                 {action.label}

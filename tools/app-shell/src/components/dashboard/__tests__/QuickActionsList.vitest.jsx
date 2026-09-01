@@ -54,12 +54,12 @@ describe('QuickActionsList', () => {
     });
   });
 
-  it('wraps a long label to a second line instead of cutting it off', () => {
-    // Reported live, twice. First the label was chopped mid-word: the pill uses
+  it('keeps a long label on one line, inside the card', () => {
+    // Reported live, twice. The label was first chopped mid-word: the pill uses
     // `align-self: flex-start`, so it sized to its content and overflowed the card, and a flex
-    // item defaults to `min-width: auto` and will not shrink below its text. Capping the pill
-    // fixed the clipping but left "Nuevo pedido d..." — this is the narrowest column of the row
-    // and the label simply does not fit on one line, so it now wraps to two.
+    // item defaults to `min-width: auto` and will not shrink below its text. The real fix was a
+    // width floor on the column (DashboardPage), which lets every current label fit on one line —
+    // so the pill stays 28px and the ellipsis here is only a safety net for a longer translation.
     render(
       <QuickActionsList
         actions={[
@@ -74,20 +74,15 @@ describe('QuickActionsList', () => {
     );
 
     const pill = screen.getByTestId('quick-action-sales-order-new');
-    // Never wider than the card, and free to shrink so the text wraps inside it.
+    expect(pill.style.height).toBe('28px');
+    // Never wider than the card, and free to shrink so the label can ellipse inside it.
     expect(pill.style.maxWidth).toBe('100%');
     expect(pill.style.minWidth).toBe('0px');
-    // Grows past 28px when it needs a second line, rather than being locked to one.
-    expect(pill.style.minHeight).toBe('28px');
-    expect(pill.style.height).toBe('');
     expect(pill).toHaveAttribute('title', 'Nuevo pedido de venta');
 
     const label = pill.querySelector('span');
-    // Two lines, then ellipsis: wrapping must not let an unusually long label grow the card
-    // without bound.
-    expect(label.style.webkitLineClamp).toBe('2');
+    expect(label.style.whiteSpace).toBe('nowrap');
+    expect(label.style.textOverflow).toBe('ellipsis');
     expect(label.style.minWidth).toBe('0px');
-    // The old single-line clamp is gone — that is what produced "Nuevo pedido d...".
-    expect(label.style.whiteSpace).not.toBe('nowrap');
   });
 });
