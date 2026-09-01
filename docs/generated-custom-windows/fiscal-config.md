@@ -229,6 +229,22 @@ When the wizard reaches the `applied` step, a `useEffect` fires to fetch the cur
 
 Without this fetch the wizard's top-level `cert` state would only update when the cert is uploaded through `CertModal` on the applied step itself, not through `CertSection` inside the detail step. The two components have independent state; the API call bridges them.
 
+## Wizard applied step — environment row (ETP-5027)
+
+The "Entorno" row of the applied summary used to be hardcoded to the sandbox label, so an organization configured for production was still told it was in "Sandbox · pruebas". It now derives the value from the config records created during the wizard, via `isProductionEnvironment(system, createdRecords)` in `fiscalConfig.utils.js`.
+
+Each fiscal system stores the environment in its own column, and VERI*FACTU stores it **inverted**:
+
+| System | Field (API key) | AD column | Meaning of `Y` |
+|--------|-----------------|-----------|----------------|
+| SII | `entornoDeProduccin` | `ENTORNO_DE_PRODUCCIN` | production |
+| TicketBAI | `productionEnv` | `Production_Env` | production |
+| VERI*FACTU | `isDevEnv` | `IS_Dev_Env` | developer/**test** environment |
+
+`isDevEnv` is curated as a `system` field in `artifacts/verifactu-config/decisions.json`, which maps to `ISINCLUDED=Y` / `ISREADONLY=Y` — it is returned by NEO GET responses but cannot be written from the frontend, which is exactly what this read-only display needs.
+
+For `sii+tbai` both records must report production for the row to read "Producción". Any missing or unknown flag falls back to the sandbox label and the `text-status-warning-foreground` token; production uses `text-status-success-foreground`. Labelling a test setup as production is the more dangerous error, so the fallback is deliberately never "Producción".
+
 ## Manual verification
 
 1. Delete any existing SII/TBAI/Verifactu records for the test org, open `/fiscal-config`, and confirm the wizard territory screen appears.

@@ -116,7 +116,7 @@ function PercentCell({ row, col }) {
   return <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{value}%</span>;
 }
 
-function ToggleCell({ row, col, onToggle, saving }) {
+function ToggleCell({ row, col, onToggle, saving, readOnly = false }) {
   const raw = rawValue(row, col.key);
   const checked = raw === true || raw === 'Y' || raw === 'true';
   return (
@@ -128,7 +128,7 @@ function ToggleCell({ row, col, onToggle, saving }) {
     >
       <PillToggle
         checked={checked}
-        disabled={!!saving}
+        disabled={!!saving || readOnly}
         onCheckedChange={(next) => onToggle?.(row, col, next)}
         aria-label={col.label ?? col.key}
         data-testid={`list-modal-toggle-${col.key}-${row?.id ?? ''}`}
@@ -160,13 +160,14 @@ function DefaultCell({ row, col, tMenu }) {
  * Render a single grid cell for the list-modal table.
  * Selects a renderer by `col.cellType`, falling back to a plain value cell.
  */
-export function ListModalCell({ row, col, tMenu, ui, onToggle, savingToggle }) {
+export function ListModalCell({ row, col, tMenu, ui, onToggle, savingToggle, readOnly = false }) {
   const toggleCellEl = (
     <ToggleCell
       row={row}
       col={col}
       onToggle={onToggle}
       saving={savingToggle}
+      readOnly={readOnly}
       data-testid="ToggleCell__846bd2" />
   );
   switch (col.cellType) {
