@@ -50,6 +50,19 @@ const ICON_MAP = {
   Settings,
 };
 
+function HighlightedQuery({ text, query }) {
+  const value = String(text ?? '');
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) return value;
+  const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = value.split(new RegExp(`(${escapedQuery})`, 'ig'));
+  return parts.map((part, index) => (
+    part.toLowerCase() === normalizedQuery.toLowerCase()
+      ? <mark key={`${part}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{part}</mark>
+      : part
+  ));
+}
+
 const RECENT_SEARCHES_KEY = 'schema-forge:recent-searches';
 const MAX_RECENT_SEARCHES = 5;
 const VECTOR_MAX_RESULTS = 10;
@@ -437,7 +450,7 @@ export function CommandPalette() {
         data-testid="vector-search-result"
       >
         <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
-        <span>{label}</span>
+        <span><HighlightedQuery text={label} query={query} /></span>
         {entityLabel && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{entityLabel}</span>}
         {score && <span className="ml-auto text-xs text-muted-foreground">{score}</span>}
       </CommandItem>
@@ -595,7 +608,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelect(item.name)}
                     data-testid="CommandItem__73263e">
                     <Icon className="mr-2 h-4 w-4" data-testid="Icon__73263e" />
-                    <span>{translatedLabel}</span>
+                    <span><HighlightedQuery text={translatedLabel} query={query} /></span>
                   </CommandItem>
                 );
               })}
