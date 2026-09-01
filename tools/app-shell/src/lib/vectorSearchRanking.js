@@ -6,6 +6,15 @@ function normalizeSearchText(value) {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+function hasLexicalMatch(fields, query) {
+  const normalizedFields = Object.values(fields || {}).map(normalizeSearchText);
+  if (normalizedFields.some((value) => value.includes(query))) return true;
+  const tokens = query.split(/\s+/).filter((token) => token.length > 2);
+  if (tokens.length < 2) return false;
+  const matchedTokens = tokens.filter((token) => normalizedFields.some((value) => value.includes(token)));
+  return matchedTokens.length >= Math.ceil(tokens.length * 0.6);
+}
+
 function statistics(scores) {
   if (scores.length === 0) return { mean: 0, deviation: 0, coefficient: 0 };
   const mean = scores.reduce((total, score) => total + score, 0) / scores.length;
@@ -38,8 +47,7 @@ export function rankVectorMatches(matches = [], query = '', expanded = false) {
   const related = [];
   const semanticCutoff = Math.max(HIGH_SCORE_FLOOR, (scores[0] ?? 0) - 0.08);
   ordered.forEach(({ match, score }) => {
-    const lexicalMatch = Object.values(match.fields || {})
-      .some((value) => normalizeSearchText(value).includes(normalizedQuery));
+    const lexicalMatch = hasLexicalMatch(match.fields, normalizedQuery);
     if (lexicalMatch) exact.push(match);
     else if (score >= semanticCutoff && score >= cutoff) semantic.push(match);
     else if (score >= RELATED_SCORE_FLOOR) related.push(match);
