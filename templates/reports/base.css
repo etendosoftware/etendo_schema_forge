@@ -63,6 +63,23 @@
   --color-text-muted: #6C6C89; /* ETP-5013: matches the app's --muted-foreground exactly */
   --color-bg-header: #f8fafc;
   --color-bg-stripe: #f1f5f9;
+  /* ETP-5013 follow-up — UX/UI decided the whole report surface goes
+     grayscale (no brand-yellow), so these 3 tokens (still used by every
+     group/section title band across all 10 reports — thead, dimension
+     chips, account cards, tax-report's section banners) are now neutral by
+     DEFAULT, not just under @media print. "Strong" is transparent — a
+     border carries the separation instead (see .report-table thead th
+     below); "muted" is transparent too, matching the flat, ungrouped
+     "everything white" look; the foreground text reuses --color-primary.
+     Because every report routes its bands through these 3 tokens (not a
+     hardcoded hex per template), this ONE change retro-fits all 10 reports
+     at once — no template.hbs edits needed for the color removal itself.
+     Screen and print/PDF are identical now, so the @media print override
+     this file used to carry for the same 3 tokens is gone — it would just
+     re-declare the same values. */
+  --color-accent-highlight: transparent;
+  --color-accent-highlight-foreground: var(--color-primary);
+  --color-accent-highlight-muted: transparent;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Deliberately NO --font-mono token (ETP-5013): any system-monospace stack
      renders differently in the PDF than in the preview, because the two run on
@@ -97,14 +114,12 @@ body {
      flex-start left the title pinned to the top of the row while the logo
      visually centered lower — the two never lined up. */
   align-items: center;
-  /* Was 8mm — that's what actually put space between the rule and whatever
-     comes next, .report-filters-grid included, which itself defined none of
-     its own top spacing. Left small and non-zero so a report with no active
-     filters (meta.filters.length === 0, so .report-filters-grid doesn't even
-     render) still gets SOME breathing room before its table. */
-  margin-bottom: 3mm;
-  padding-bottom: 4mm;
-  border-bottom: 2px solid var(--color-primary);
+  /* No margin-bottom, no padding-bottom, no border-bottom (ETP-5013): the
+     extra gap, the internal padding and the separator line under the title
+     all read as redundant weight once the header row itself already carries
+     it (logo + bold title) — removed across all reports. .report-filters-grid
+     (or the table, when there are no active filters) now sits directly under
+     the header row. */
 }
 
 .report-title {
@@ -171,14 +186,20 @@ body {
 }
 
 .report-table thead th {
+  /* ETP-5013 follow-up: back to a neutral, grayscale header row (UX/UI
+     decided against the brand-yellow fill this session had introduced) —
+     a light background, muted text, and a thin border for separation
+     instead of a solid fill. Sentence case now too (was uppercase +
+     letter-spacing) — the label text itself ("Fecha", "Debe", "Haber", ...)
+     is already the intended case, matching the new design across all 10
+     reports. */
   background: var(--color-bg-header);
   border-bottom: 2px solid var(--color-border);
   padding: 2mm 3mm;
   text-align: left;
+  vertical-align: middle;
   font-weight: 600;
   font-size: 8pt;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
@@ -189,9 +210,10 @@ body {
   vertical-align: top;
 }
 
-.report-table tbody tr:nth-child(even) {
-  background: var(--color-bg-stripe);
-}
+/* ETP-5013 follow-up: zebra striping removed (UX/UI grayscale redesign) —
+   every data row stays plain white now, instead of alternating with
+   --color-bg-stripe. Rows are still separated by tbody td's own
+   border-bottom above. */
 
 /* tfoot cells had no padding rule of their own, so they fell back to the
    browser's default td padding (~1px) instead of tbody's 1.5mm/3mm — the

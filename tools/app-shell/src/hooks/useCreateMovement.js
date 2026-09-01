@@ -1,17 +1,28 @@
 import { useCallback, useState } from 'react';
 import { getApiBase } from './useNeoResource';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { parseBackendErrorMessage } from '@/lib/backendErrors.js';
 
-/** POSTs a JSON payload to a financial-account-transactions action and returns data. */
+/**
+ * POSTs a JSON payload to a financial-account-transactions action and returns data.
+ *
+ * On failure it throws the backend's OWN business message (`{"error":{"message":…}}`), read with the
+ * shared `parseBackendErrorMessage`, so the caller can run it through `translateBackendError` and
+ * show it translated. It used to throw `HTTP <status>: <raw body>`, which is how ETP-5085's error
+ * reached the user as `HTTP 500: {"error":{"message":"Could not delete the movement…"}}`. The status
+ * is attached to the error for callers that branch on it; `HTTP <status>` stays as the fallback for
+ * a response with no readable message (empty or non-JSON body).
+ */
 async function postAction(apiFetch, action, payload) {
   const res = await apiFetch(`/sws/neo/financial-account-transactions?action=${action}`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    const detail = text ? `: ${text}` : '';
-    throw new Error(`HTTP ${res.status}${detail}`);
+    const raw = await parseBackendErrorMessage(res);
+    const error = new Error(raw || `HTTP ${res.status}`);
+    error.status = res.status;
+    throw error;
   }
   const json = await res.json();
   return json?.response?.data ?? {};

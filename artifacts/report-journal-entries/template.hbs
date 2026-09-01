@@ -8,14 +8,18 @@
 .entry-date { font-weight: 700; color: #0f172a; font-size: 9pt; }
 .entry-detail { color: #475569; font-size: 8.5pt; }
 .entry-line td { border-top: none; border-bottom: 1px solid #f1f5f9 !important; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
 {{#if meta.isInteractive}}
 .entry-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
 .entry-link:hover { opacity: 0.75; text-decoration: none; }
 {{/if}}
-/* Belt-and-suspenders (ETP-5013 follow-up, see report-trial-balance's own
-   template for the full rationale): a browser's own Cmd/Ctrl+P on the live
-   preview bypasses meta.isInteractive entirely, so @media print is what
-   actually catches it — plus our own jsreport PDF export, uniformly. */
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
 @media print {
   .entry-link { color: inherit !important; text-decoration: none !important; cursor: default !important; }
 }

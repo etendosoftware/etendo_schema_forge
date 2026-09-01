@@ -8,6 +8,12 @@
  * server.js's own `isInteractive` derivation and this file's sibling
  * `report-api-is-interactive.test.js`.
  *
+ * ETP-5013 follow-up (re-confirmed): the grayscale redesign later this
+ * session made screen and PDF match everywhere ELSE, but this one stays a
+ * deliberate exception — a drill-down link is genuinely clickable in the
+ * interactive preview and dead text in the exported PDF, so the PDF
+ * specifically renders it black, not blue.
+ *
  * Renders each template with REAL Handlebars (registerReportHelpers +
  * expandReportPartials, same composition report-api.js uses) once with
  * `meta.isInteractive: true` and once with `false`, and asserts:

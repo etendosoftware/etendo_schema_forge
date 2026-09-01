@@ -137,7 +137,7 @@ export default function PurchaseInvoiceWindow(props) {
   const breadcrumb = 'Purchases / Purchase Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases', specName: 'purchase-invoice',
   });
 
   const { requestDelete, deleteDialog } = useRowDelete({

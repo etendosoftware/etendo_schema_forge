@@ -63,6 +63,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 function selectOpenCloseOption(value) {
   fireEvent.change(screen.getByTestId('select-control'), { target: { value } });
@@ -1049,5 +1050,95 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
     const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('ZZZ');
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP A (Tailwind utility on the row element). Before the fix the document
+// row had NO selection feedback at all — ticking its checkbox only moved the
+// bulk-action bar, the row itself never changed.
+//
+// This row deliberately carries a background and nothing else: nothing behind it
+// paints one (the `pl-8` list container and the outer `border-b` wrapper are
+// transparent; the sticky `bg-card` is on the period header, a sibling above,
+// not an ancestor), and the row has no hover background of its own. That is why
+// the hover case below asserts the ABSENCE of any `hover:bg-*` utility — with
+// nothing to repaint over it, the tint is unconditional and survives hover by
+// construction. A `hover:bg-*` appearing here later would be the regression.
+describe('PeriodsExpandablePanel — ETP-5030 selected-row shading', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2, DOC3] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  /** The document row <div> that owns the given document checkbox. */
+  const rowOf = (docId) => screen.getByTestId(`document-select-${docId}`).parentElement;
+
+  async function renderExpandedDocuments() {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('document-select-d1'));
+  }
+
+  it('tints ONLY the ticked document row and leaves the others untinted', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+    // Negative half: the untouched rows must not have picked up the tint. They
+    // keep their layout classes, so the row element is definitely still there.
+    expect(backgroundUtilities(rowOf('d2'))).toEqual([]);
+    expect(backgroundUtilities(rowOf('d3'))).toEqual([]);
+    expect(rowOf('d2').className).toContain('flex items-center gap-2 py-1.5');
+  });
+
+  it('removes the tint when the document row is unticked', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual([]);
+  });
+
+  it('keeps the tint under the pointer: the selected row declares no hover background that could repaint over it', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+
+    const row = rowOf('d1');
+    // Exactly one background utility, and no `hover:bg-*` at all — so the tint
+    // cannot be covered while the pointer is on the row, which is precisely
+    // when the user clicks the checkbox and looks for feedback.
+    expect(countBackgroundUtilities(row)).toBe(1);
+    expect(hoverBackgroundUtilities(row)).toEqual([]);
+  });
+
+  it('drops the tint from every row when the selection is cleared from the bulk bar', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+    expect(backgroundUtilities(rowOf('d2'))).toEqual(['bg-primary/5']);
+
+    // Collapsing the period clears the selection (existing behaviour), so the
+    // tint must not survive a re-expand.
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('document-select-d1'));
+
+    expect(backgroundUtilities(rowOf('d1'))).toEqual([]);
+    expect(backgroundUtilities(rowOf('d2'))).toEqual([]);
   });
 });

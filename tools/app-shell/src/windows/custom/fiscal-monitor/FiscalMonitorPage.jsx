@@ -137,6 +137,7 @@ function useDebugState(orgId, apiBaseUrl) {
 
 export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const ui = useUI();
+  const navigate = useNavigate();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
 
@@ -400,6 +401,11 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
           apiBaseUrl={`${neoBase(apiBaseUrl)}/${previewSpec}`}
           specName={previewSpec}
           onClose={() => setPreviewInvoice(null)}
+          onEdit={(id) => {
+            const targetId = id ?? previewInvoice?.id;
+            setPreviewInvoice(null);
+            if (targetId) navigate(`/${previewSpec}/${targetId}`);
+          }}
           data-testid="InvoicePreviewModal__884f90" />
       )}
       {bpPopup?.bpId && (

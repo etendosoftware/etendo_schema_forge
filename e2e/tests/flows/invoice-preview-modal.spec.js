@@ -5,7 +5,7 @@ import { login, navigateTo } from '../helpers/auth.js';
  * Invoice Preview — modal lifecycle tests.
  *
  * Tests the GenericPreviewModal shell: open via row click, close via X button,
- * close via backdrop, tab switching, and Edit navigation.
+ * close via backdrop, tab rendering, and Edit navigation.
  *
  * Uses the purchase-invoice window because its left panel is a drop zone managed
  * entirely by GenericPreviewModal — no jsreport dependency.
@@ -93,30 +93,15 @@ test.describe('Invoice Preview — modal lifecycle (purchase invoice)', () => {
     await expect(page.getByTestId('generic-preview-modal')).not.toBeVisible({ timeout: 2_000 });
   });
 
-  test('tabs are rendered and switching changes the active tab', async ({ page }) => {
+  test('the General tab is rendered', async ({ page }) => {
     await openPreview(page);
 
     const modal = page.getByTestId('generic-preview-modal');
 
-    // Detect locale from rendered tab text (General is the same in both locales)
+    // General is the only tab InvoicePreview declares today (same in both
+    // locales) — the modal shell no longer ships Messages/History tabs.
     const generalTab = modal.getByRole('button', { name: 'General' });
-    const messagesTab = modal.getByRole('button', { name: /mensajes|messages/i });
-    const historyTab = modal.getByRole('button', { name: /historial|history/i });
-
     await expect(generalTab).toBeVisible();
-    await expect(messagesTab).toBeVisible();
-    await expect(historyTab).toBeVisible();
-
-    // Switch to Messages tab
-    await messagesTab.click();
-
-    // Messages tab becomes active (white background shadow-sm); General loses it.
-    // We verify by checking for the empty-state content that the Messages tab renders.
-    await expect(modal.locator('text=/mensajes|messages/i').last()).toBeVisible();
-
-    // Switch to History tab
-    await historyTab.click();
-    await expect(modal.locator('text=/historial|history/i').last()).toBeVisible();
   });
 
   test('Edit button navigates to the detail page', async ({ page }) => {

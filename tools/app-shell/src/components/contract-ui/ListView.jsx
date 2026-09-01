@@ -1184,7 +1184,7 @@ export function ListView({
                     <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
                   </Button>
                 )}
-                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="outline"
                     size="sm"

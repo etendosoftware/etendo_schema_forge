@@ -278,9 +278,20 @@ describe('ConfirmInOutModal', () => {
     expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
   });
 
-  it('enables the confirm button once a price list is auto-selected when hasLinkedOrder=false', async () => {
+  it('does NOT auto-select any price list when hasLinkedOrder=false and no real defaultPriceListId is provided, even if one is flagged system-default (mandatory field must not autofill)', async () => {
     mockFetchRouter({ priceLists: [{ id: 'pl-default', name: 'Default PL', active: true, salesPriceList: true, default: true }] });
     render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+    // allowGenericFallback is disabled whenever the field is mandatory (no linked
+    // order) — the system `default` flag must never silently satisfy it.
+    expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+  });
+
+  it('auto-selects and enables the confirm button when a real defaultPriceListId (e.g. the BP tariff) is provided, even with hasLinkedOrder=false', async () => {
+    mockFetchRouter({ priceLists: [{ id: 'pl-bp-default', name: 'BP Tariff', active: true, salesPriceList: true, default: false }] });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} defaultPriceListId="pl-bp-default" />);
     await waitFor(() => {
       expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
     });
@@ -288,7 +299,10 @@ describe('ConfirmInOutModal', () => {
 
   it('sends the selected priceListId in the invoice action request body', async () => {
     mockFetchRouter({ priceLists: [{ id: 'pl-selected', name: 'Selected PL', active: true, salesPriceList: true, default: true }] });
-    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    // With no linked order the field is mandatory (allowGenericFallback=false), so a
+    // real defaultPriceListId (simulating the BP's own tariff) is required to reach
+    // an enabled confirm state before we can assert on what travels in the request body.
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} defaultPriceListId="pl-selected" />);
     await waitFor(() => {
       expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
     });
@@ -297,6 +311,32 @@ describe('ConfirmInOutModal', () => {
       const invoiceCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/createDraftInvoice'));
       expect(invoiceCall).toBeTruthy();
       expect(invoiceCall[1].body).toBe(JSON.stringify({ priceListId: 'pl-selected' }));
+    });
+  });
+
+  it('sends the manually-selected priceListId in the invoice action request body when the user picks one by hand (no defaultPriceListId)', async () => {
+    mockFetchRouter({
+      priceLists: [
+        { id: 'pl-a', name: 'PL A', active: true, salesPriceList: true, default: false },
+        { id: 'pl-b', name: 'PL B', active: true, salesPriceList: true, default: true },
+      ],
+    });
+    render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-a' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+    await waitFor(() => {
+      const invoiceCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/createDraftInvoice'));
+      expect(invoiceCall).toBeTruthy();
+      expect(invoiceCall[1].body).toBe(JSON.stringify({ priceListId: 'pl-a' }));
     });
   });
 

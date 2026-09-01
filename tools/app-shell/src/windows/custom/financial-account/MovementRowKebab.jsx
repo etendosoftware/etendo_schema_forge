@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
+import { translateBackendError } from '@/lib/backendErrors.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
@@ -43,6 +44,8 @@ async function callTransactionAction(apiFetch, url, token) {
  * (no `paymentId`); movements linked to an invoice payment/collection are managed
  * from the Payments module, so those actions are hidden for them. Post/Unpost
  * (contabilizar/descontabilizar) apply to any processed/posted movement.
+ * Delete carries one further exclusion: a funds-transfer leg is never deletable
+ * (ETP-5085) — see `isTransferLeg` below.
  *
  * @param {{ movement: object, onReload?: () => void, onEdit?: (m: object) => void }} props
  */
@@ -68,7 +71,13 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   const canEdit = isGlTransaction && !isPosted;
   const canProcess = isGlTransaction && !isProcessed;
   const canReactivate = isGlTransaction && isProcessed;
-  const canDelete = isGlTransaction;
+  // A funds-transfer leg cannot be deleted: its counterpart references it through a RESTRICT
+  // self-FK on FIN_FINACC_TRANSACTION, so the removal can only ever fail (it used to fail as an
+  // HTTP 500 — ETP-5085). The backend rejects it with a 409, and the action is hidden rather than
+  // disabled, like every other inapplicable item in this menu. A bank fee (BF) carries the same
+  // `transferTxnId` but nothing references IT, so it stays deletable.
+  const isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF';
+  const canDelete = isGlTransaction && !isTransferLeg;
   // Contabilizar only makes sense once the movement is Processed (and not yet posted).
   const canPost = isProcessed && !isPosted;
   // The destructive-action confirmation only matters when there is something to undo — i.e. the
@@ -90,7 +99,10 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
       toast.success(ui(successKey));
       onReload?.();
     } catch (e) {
-      toast.error(e?.message || ui(errorKey));
+      // The hooks now throw the backend's own business message (useCreateMovement.postAction), so
+      // it goes through the shared translator before being shown — otherwise the user reads it in
+      // English. Falls back to the generic per-action key when there was no message at all.
+      toast.error(translateBackendError(e?.message, ui) || ui(errorKey));
     }
   }
 

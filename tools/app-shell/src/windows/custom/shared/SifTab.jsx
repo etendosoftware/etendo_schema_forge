@@ -369,10 +369,28 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   //     user to pick a cause in this SIF tab.
   // Each fires once per line save; the guard re-arms when the flag flips back to false between
   // saves (applyExemptionCauseSignals always writes the resolved boolean).
+  //
+  // ETP-5027: both toasts are SII-ONLY and are gated on `showSii`. The exemption cause they
+  // point the user at lives on the invoice HEADER (C_INVOICE.EM_Aeatsii_Cause_Exemption_ID)
+  // and its selector is rendered exclusively inside the SII panel below. VERI*FACTU and
+  // TicketBAI keep the exemption cause on the TAX master instead
+  // (C_TAX.EM_Etvfac_Exemption_Cause / EM_Tbai_Exemptioncause) and warn at the tax level on
+  // the invoice line, where the user sets it directly — but ONLY where that key can actually
+  // be transmitted: the line-level warning is itself direction-gated (see
+  // `getInvoiceFiscalTargets()`/`useTaxSifLineRowActions`), since VERI*FACTU never sends
+  // purchases and TicketBAI only sends them under BIZKAIA. So on a purchase invoice outside
+  // those cases NEITHER warning shows, which is correct: there is nothing to configure for a
+  // document that is never submitted. The backend flag
+  // (InvoiceLineHandler#shouldAutoFillExemptionCause) does not check which fiscal system the
+  // org has configured, so on a VERI*FACTU-only or TBAI-only org the SII column is always
+  // null and the flag fires on every exempt-line save — a false positive telling the user to
+  // do something this UI never offers them. `showSii` is part of the effect deps, so if it
+  // ever flips false → true while the flag is still set the toast fires then: the ref is only
+  // latched when a toast is actually emitted, never by a suppressed one.
   const autoFillToastedRef = useRef(false);
   const warningToastedRef = useRef(false);
   useEffect(() => {
-    if (data?.exemptionCauseAutoFilled && !autoFillToastedRef.current) {
+    if (showSii && data?.exemptionCauseAutoFilled && !autoFillToastedRef.current) {
       autoFillToastedRef.current = true;
       toast.info(ui('sifDataTabs.toast.exemptionCauseModified.title'), {
         description: ui('sifDataTabs.toast.exemptionCauseModified.description'),
@@ -381,9 +399,9 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     if (!data?.exemptionCauseAutoFilled) {
       autoFillToastedRef.current = false;
     }
-  }, [data?.exemptionCauseAutoFilled, ui]);
+  }, [showSii, data?.exemptionCauseAutoFilled, ui]);
   useEffect(() => {
-    if (data?.exemptionCauseWarning && !warningToastedRef.current) {
+    if (showSii && data?.exemptionCauseWarning && !warningToastedRef.current) {
       warningToastedRef.current = true;
       toast.warning(ui('sifDataTabs.toast.exemptionCauseRequired.title'), {
         description: ui('sifDataTabs.toast.exemptionCauseRequired.description'),
@@ -392,7 +410,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     if (!data?.exemptionCauseWarning) {
       warningToastedRef.current = false;
     }
-  }, [data?.exemptionCauseWarning, ui]);
+  }, [showSii, data?.exemptionCauseWarning, ui]);
 
   const defaultTab = resolveDefaultTab(showSii, showVerifactu);
   const [activeTab, setActiveTab] = useState(defaultTab);

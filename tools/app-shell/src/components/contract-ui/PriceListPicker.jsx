@@ -31,8 +31,23 @@ export const toPriceListSelectValue = (id) => id || EMPTY_SENTINEL;
  *   than recomputed here so this hook has a single job (fetch/filter/default)
  *   and no opinion on that derivation.
  * @param headers — fetch headers object (must carry `Authorization`).
+ * @param defaultPriceListId — ETP-4942: the price list resolved server-side (from the
+ *   linked sales order, or the Business Partner's own tariff — see
+ *   `GoodsShipmentHeaderHandler#enrichResolvedPriceList`), preferred over the system
+ *   `default` flag when present in the active/matching list. Falls back cleanly to the
+ *   previous behavior when absent, inactive, or of the wrong trade direction (not in
+ *   `matches`).
+ * @param allowGenericFallback — ETP-4942: default `true` (preserves the original
+ *   behavior for CreateInvoiceConfirmModal / ETP-4028, unaffected by this flag).
+ *   When `false` (used by ConfirmInOutModal when the tariff field is mandatory
+ *   because there is no linked order), the picker only ever auto-selects a
+ *   `defaultPriceListId` match — a value with real business meaning (the order's
+ *   or BP's own tariff). The generic last-resort fallback (system `default` flag,
+ *   or simply the first list entry) is skipped, so the field is left empty and
+ *   the user must choose consciously instead of the field silently filling with
+ *   an arbitrary tariff.
  */
-export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
+export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, defaultPriceListId, allowGenericFallback = true }) {
   const [priceLists, setPriceLists] = useState([]);
   const [priceListId, setPriceListId] = useState('');
   const [loading, setLoading] = useState(!!enabled);
@@ -51,7 +66,8 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
         const matches = all.filter(p => p.active !== false && p.salesPriceList === isSOTrx);
         if (cancelled) return;
         setPriceLists(matches);
-        const preferred = matches.find(p => p.default) || matches[0];
+        const byDefaultId = matches.find(p => p.id === defaultPriceListId);
+        const preferred = byDefaultId || (allowGenericFallback ? (matches.find(p => p.default) || matches[0]) : undefined);
         if (preferred) setPriceListId(preferred.id);
       } catch { /* silent */ } finally {
         if (!cancelled) setLoading(false);
@@ -59,7 +75,7 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers }) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- headers is keyed by authHeader below
-  }, [enabled, isSOTrx, base, authHeader, apiFetch]);
+  }, [enabled, isSOTrx, base, authHeader, apiFetch, defaultPriceListId, allowGenericFallback]);
 
   return { priceLists, priceListId, setPriceListId, loading };
 }

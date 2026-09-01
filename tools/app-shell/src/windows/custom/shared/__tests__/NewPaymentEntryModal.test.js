@@ -382,6 +382,57 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     });
   });
 
+  // ETP-5084: a bank transfer leaves the account in the ACCOUNT's currency, so eligibility and the
+  // payment template are both keyed off it — not off the invoice currency, which is what the code
+  // read before. These are source-text assertions because the render suite cannot drive the account
+  // dropdown (see the ETP-4331 note in NewPaymentEntryModal.vitest.jsx: CreatableSearchSelect's
+  // options are stuck at [] for a mounted modal), so the re-derivation on account change and the
+  // manual-pick guard have no reachable behavioral path.
+  describe('PIS currency keyed off the account (ETP-5084)', () => {
+    it('the eligible-currency set covers EUR, USD and GBP', () => {
+      assert.match(src, /const PIS_ELIGIBLE_CURRENCIES = new Set\(\['EUR', 'USD', 'GBP'\]\);/);
+    });
+
+    it('pisEligible tests the ACCOUNT currency, falling back to the invoice currency', () => {
+      // The fallback keeps a backend that omits `currency` on the account list behaving as before,
+      // instead of silently hiding the PIS block for every account.
+      assert.match(src, /&& PIS_ELIGIBLE_CURRENCIES\.has\(accountCurrency \|\| currency\);/);
+    });
+
+    it('defaultPisTemplate maps the account currency: EUR-SEPA, USD-DOMESTIC, GBP-FPS', () => {
+      assert.match(src, /function defaultPisTemplate\(accountCurrency\) \{/);
+      assert.match(src, /if \(accountCurrency === 'GBP'\) return PIS_TEMPLATE_FPS;/);
+      assert.match(src, /if \(accountCurrency === 'USD'\) return PIS_TEMPLATE_DOMESTIC;/);
+      assert.match(src, /return PIS_TEMPLATE_SEPA; \/\/ EUR and anything unforeseen/);
+    });
+
+    it('the template default lives in its own effect keyed on the account currency', () => {
+      // Previously it was chosen inside the once-per-eligibility-flip catalog effect, so switching
+      // to a connected account in another currency left the template stale (a GBP account keeping
+      // the SEPA the previous EUR account defaulted to).
+      assert.match(src, /const preferred = defaultPisTemplate\(accountCurrency \|\| currency\);/);
+      assert.match(src, /\}, \[pisEligible, pisTemplates, accountCurrency, currency\]\);/);
+    });
+
+    it('a manual template pick stops the currency default from overriding it', () => {
+      assert.match(src, /pisTemplateTouchedRef\.current\) return;/);
+      assert.match(src, /if \(id\) pisTemplateTouchedRef\.current = true;/);
+    });
+
+    it('the PIS block is handed the converted amount, not just the invoice amount', () => {
+      // pisBankAmount is amount x rate at the account's currency — what actually leaves the bank.
+      assert.match(src, /const pisBankAmount = useMemo\(\(\) => \{/);
+      assert.match(src, /return rate != null \? round2\(balance\.amount \* rate\) : null;/);
+      assert.match(src, /bankAmount=\{pisBankAmount\}/);
+    });
+
+    it('the transfer alert states the converted amount when the currencies differ', () => {
+      assert.match(src, /const showsConverted = isForeign && bankAmount != null;/);
+      assert.match(src, /const transferAmount = showsConverted \? bankAmount : balance\.amount;/);
+      assert.match(src, /const transferCurrency = showsConverted \? accountCurrency : currency;/);
+    });
+  });
+
   // ETP-4406: the PIS "IBAN Destino" (SEPA / vendor transfer) is validated with the
   // shared isValidIban (ISO 13616 mod-97) from lib/validateIban.js. An invalid IBAN
   // must keep Confirmar disabled and surface an inline error under the field.

@@ -5,6 +5,7 @@ import {
   MOVEMENT_TEMPLATE_OPEN,
   MOVEMENT_TEMPLATE_HEADER,
   MOVEMENT_TEMPLATE_PARTIES,
+  MOVEMENT_TEMPLATE_SIGNATURE,
   MOVEMENT_TEMPLATE_NOTES,
   MOVEMENT_TEMPLATE_FOOTER,
   fetchJson,
@@ -59,6 +60,7 @@ const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
       {{/each}}
     </tbody>
   </table>`
++ MOVEMENT_TEMPLATE_SIGNATURE
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
 
@@ -81,15 +83,15 @@ export async function buildReturnToVendorData(shipmentId, base, token) {
     originalQty: l.orderQuantity ?? 0,
   }));
 
-  const vendorAddressLines = buildLocationAddressLines(
+  const customerAddressLines = buildLocationAddressLines(
     partnerLocation,
     header['partnerAddress$_identifier'] || null,
   );
 
   return {
     ...buildReturnDocCommonFields(header, companyLogoDataUrl),
-    vendorName: header['businessPartner$_identifier'] || '—',
-    vendorAddressLines,
+    customerName: header['businessPartner$_identifier'] || '—',
+    customerAddressLines,
     warehouse: header['warehouse$_identifier'] || null,
     sourceReceiptRef: header.sourceReceiptDocNo || null,
     notes: header.description || null,
@@ -111,7 +113,7 @@ export function getReturnToVendorPdfLabels(ui) {
     taxId:            ui('invoicePdfTaxId'),
     page:             ui('invoicePdfPage'),
     issuerSection:    ui('shipmentPdfIssuerSection'),
-    vendorSection:    ui('returnToVendorPdfVendorSection'),
+    deliverySection:  ui('shipmentPdfDeliverySection'),
     sourceReceipt:    ui('returnToVendorPdfSourceReceipt'),
     date:             ui('shipmentPdfDate'),
     warehouse:        ui('shipmentPdfWarehouse'),
@@ -120,6 +122,8 @@ export function getReturnToVendorPdfLabels(ui) {
     colReturned:      ui('returnToVendorPdfColReturned'),
     colOriginalQty:   ui('returnToVendorPdfColOriginalQty'),
     notes:            ui('invoicePdfNotes'),
+    signatureReceiver: ui('shipmentPdfSignatureReceiver'),
+    signatureDate:     ui('shipmentPdfSignatureDate'),
   };
 }
 
