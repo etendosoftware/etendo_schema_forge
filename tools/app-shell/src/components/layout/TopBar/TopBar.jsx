@@ -270,7 +270,11 @@ export default function TopBar({
                 }
               }}
               onFocus={handleSearchClick}
-              onClick={(event) => event.stopPropagation()}
+              onMouseDown={() => setSearchOpen(true)}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleSearchClick(event);
+              }}
               onKeyDown={(event) => {
                 if (import.meta.env.DEV && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) console.debug('[TopBar search] keydown', { key: event.key, value: searchValue });
                 if (event.key === 'Backspace' && searchValue.length === 1) {
