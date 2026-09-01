@@ -60,15 +60,17 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
   GlobalSearchGroup: ({ heading, children }) => (
     <div data-testid={`cmd-group-${heading}`}>{children}</div>
   ),
-  GlobalSearchItem: ({ value, children, onSelect }) => (
-    <div data-testid={`cmd-item-${value}`} onClick={onSelect}>
+  GlobalSearchItem: ({ value, children, onSelect, ...props }) => (
+    <div {...props} data-testid={props['data-search-kind'] === 'recent' ? props['data-testid'] : `cmd-item-${value}`} onClick={onSelect}>
       {children}
     </div>
   ),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
+import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 
 function openPalette() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
@@ -151,5 +153,44 @@ describe('CommandPalette', () => {
     });
     fireEvent.click(screen.getByTestId('vector-search-scope'));
     expect(screen.getByTestId('vector-search-scope')).toHaveTextContent('allWindows');
+  });
+
+  it('keeps the dropdown open when a recent search is confirmed with the keyboard', async () => {
+    localStorage.setItem('schema-forge:recent-searches', JSON.stringify([
+      { query: 'blanquiceleste', targets: [], timestamp: 1 },
+    ]));
+    render(
+      <GlobalSearchProvider>
+        <CommandPalette />
+      </GlobalSearchProvider>,
+    );
+    openPalette();
+    await waitFor(() => expect(screen.getByTestId('recent-search-item')).toBeInTheDocument());
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    fireEvent.keyDown(document, { key: 'Enter' });
+
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+  });
+
+  it('returns the keep-open decision to the top-bar keyboard bridge', () => {
+    function KeyboardBridge() {
+      const { open, setOpen, handleKeyDown, registerKeyboardHandler } = useGlobalSearch();
+      useEffect(() => registerKeyboardHandler(() => ({ keepOpen: true })), [registerKeyboardHandler]);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>open</button>
+          <input data-testid="bridge-input" onKeyDown={(event) => {
+            const result = handleKeyDown(event);
+            if (event.key === 'Enter' && !result?.keepOpen) setOpen(false);
+          }} />
+          <span data-testid="bridge-state">{String(open)}</span>
+        </>
+      );
+    }
+    render(<GlobalSearchProvider><KeyboardBridge /></GlobalSearchProvider>);
+    fireEvent.click(screen.getByText('open'));
+    fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+    expect(screen.getByTestId('bridge-state')).toHaveTextContent('true');
   });
 });
