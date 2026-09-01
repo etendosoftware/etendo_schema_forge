@@ -512,7 +512,7 @@ export function CommandPalette() {
                   onSelect={() => handleVectorSelect(match)}
                   data-testid="vector-search-result"
                 >
-                  <Search className="mr-2 h-4 w-4" />
+                  <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
                   <span>{label}</span>
                   {entityLabel && (
                     <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
