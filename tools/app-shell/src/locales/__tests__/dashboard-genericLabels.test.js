@@ -19,6 +19,7 @@ const DASHBOARD_KEYS = [
   'pendingStateLowStock',
   'financialSummaryTitle',
   'financialSummaryPositive',
+  'financialSummaryNegative',
   'financialSummaryIncome',
   'financialSummaryExpenses',
   'financialSummaryProfit',
