@@ -121,6 +121,12 @@ export function CommandPalette() {
   useEffect(() => { keyboardIndexRef.current = keyboardIndex; }, [keyboardIndex]);
 
   useEffect(() => {
+    keyboardIndexRef.current = -1;
+    setKeyboardIndex(-1);
+    document.querySelector('[data-testid="CommandList__73263e"]')?.scrollTo?.({ top: 0 });
+  }, [query]);
+
+  useEffect(() => {
     const navigateKeyboard = (key) => {
       const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]:not(:disabled)'));
       if (import.meta.env.DEV) console.debug('[CommandPalette] navigate', { key, itemCount: items.length, index: keyboardIndexRef.current });
@@ -316,6 +322,7 @@ export function CommandPalette() {
   }, [query, requestedVectorSearchTargetKeys]);
 
   const handleSelect = (name) => {
+    setQuery('');
     navigate(`/${name}`);
     setOpen(false);
   };
@@ -323,6 +330,7 @@ export function CommandPalette() {
   const handleVectorSelect = (match) => {
     const target = vectorSearchTargetsByKey.get(match.target);
     if (!target || !match.id) return;
+    setQuery('');
     navigate(`/${target.specName}/${match.id}`);
     setOpen(false);
   };
@@ -447,6 +455,7 @@ export function CommandPalette() {
                   key={suggestion.path}
                   value={`${tMenu(suggestion.label)} ${suggestion.path}`}
                   onSelect={() => {
+                    setQuery('');
                     navigate(suggestion.path);
                     setOpen(false);
                   }}
