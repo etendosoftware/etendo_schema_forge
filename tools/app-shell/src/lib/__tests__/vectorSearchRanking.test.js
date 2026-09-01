@@ -44,4 +44,14 @@ describe('rankVectorMatches', () => {
 
     expect(result.relevant.map(({ fields }) => fields.name)).toContain('Pan');
   });
+
+  it('separates a strong partial text match from a related semantic match', () => {
+    const result = rankVectorMatches([
+      match(0.81, 'Claras pasteurizadas 500ml'),
+      match(0.74, 'Bebida de avena 1L'),
+    ], 'claras pasteurizadas 250ml');
+
+    expect(result.exact.map(({ fields }) => fields.name)).toEqual(['Claras pasteurizadas 500ml']);
+    expect(result.semantic.map(({ fields }) => fields.name)).toEqual(['Bebida de avena 1L']);
+  });
 });
