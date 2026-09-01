@@ -45,6 +45,14 @@ export function ToggleRow({
         checked={checked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}
+        // ETP-4879: the shared Switch's disabled look is a blanket `disabled:opacity-50`
+        // over `bg-primary`/`bg-input`, which derives the disabled-checked colour by
+        // opacity math instead of a deliberate value and lands on the wrong shade.
+        // Cancel that dimming and supply the two disabled-track colours explicitly
+        // (`--switch-track-off-disabled` / `--switch-track-on-disabled`, defined in
+        // this app's index.css) so all 4 states — off/on x enabled/disabled — are
+        // deliberate, theme-aware colours. The enabled states are untouched.
+        className="disabled:opacity-100 disabled:data-[state=unchecked]:bg-[hsl(var(--switch-track-off-disabled))] disabled:data-[state=checked]:bg-[hsl(var(--switch-track-on-disabled))]"
         data-testid={dataTestId ? `${dataTestId}-switch` : undefined}
       />
     </div>
