@@ -33,18 +33,23 @@ export function rankVectorMatches(matches = [], query = '', expanded = false) {
     ? Math.max(HIGH_SCORE_FLOOR, mean - deviation)
     : Math.max(RELATED_SCORE_FLOOR, mean - deviation);
 
-  const relevant = [];
+  const exact = [];
+  const semantic = [];
   const related = [];
+  const semanticCutoff = Math.max(HIGH_SCORE_FLOOR, (scores[0] ?? 0) - 0.08);
   ordered.forEach(({ match, score }) => {
     const lexicalMatch = Object.values(match.fields || {})
       .some((value) => normalizeSearchText(value).includes(normalizedQuery));
-    if (lexicalMatch || score >= cutoff) relevant.push(match);
+    if (lexicalMatch) exact.push(match);
+    else if (score >= semanticCutoff && score >= cutoff) semantic.push(match);
     else if (score >= RELATED_SCORE_FLOOR) related.push(match);
   });
 
   return {
-    relevant: expanded ? [...relevant, ...related] : relevant,
-    related: expanded ? [] : related,
+    exact,
+    semantic,
+    relevant: expanded ? [...exact, ...semantic, ...related] : [...exact, ...semantic],
+    related,
     concentrated,
     mean,
     deviation,

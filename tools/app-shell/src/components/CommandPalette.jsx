@@ -399,7 +399,12 @@ export function CommandPalette() {
     if (!Array.isArray(item.targets) || item.targets.length === 0) return true;
     return item.targets.some((target) => requestedVectorSearchTargetKeys.includes(target));
   });
-  const { relevant: relevantVectorMatches, related: relatedVectorMatches } = rankVectorMatches(
+  const {
+    exact: exactVectorMatches,
+    semantic: semanticVectorMatches,
+    related: relatedVectorMatches,
+    concentrated: vectorMatchesConcentrated,
+  } = rankVectorMatches(
     vectorMatches,
     query,
     showRelatedMatches,
@@ -550,8 +555,10 @@ export function CommandPalette() {
             })}
           </CommandGroup>
         )}
-        {relevantVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{relevantVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {relatedVectorMatches.length > 0 && !showRelatedMatches && (
+        {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && (showRelatedMatches || !vectorMatchesConcentrated) && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && !showRelatedMatches && vectorMatchesConcentrated && (
           <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related-prompt">
             <CommandItem value="search-more-related" onSelect={() => setShowRelatedMatches(true)} data-testid="vector-search-more-related">
               <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />

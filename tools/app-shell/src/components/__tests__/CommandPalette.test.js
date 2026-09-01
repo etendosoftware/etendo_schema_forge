@@ -69,7 +69,7 @@ describe('CommandPalette', () => {
 
   it('keeps vector matches opt-in and renders them as a separate result group', () => {
     assert.match(src, /normalizedQuery\.length\s*<\s*3/);
-    assert.match(src, /relevantVectorMatches\.length\s*>\s*0/);
+    assert.match(src, /exactVectorMatches\.length\s*>\s*0/);
     assert.match(src, /relevantSearchResults/);
   });
 

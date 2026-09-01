@@ -17745,6 +17745,7 @@
     "clearSearchScope": "Buscar en todas las ventanas",
     "semanticSearchResults": "Resultados semánticos",
     "relevantSearchResults": "Coincidencias principales",
+    "exactSearchResults": "Coincidencias por texto",
     "relatedSearchResults": "Otras coincidencias",
     "searchMoreRelated": "Buscar más resultados relacionados",
     "recentSearches": "Búsquedas recientes",
