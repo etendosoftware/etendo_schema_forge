@@ -1927,6 +1927,32 @@ differently-implemented `LookupPicker` (a Radix-Popover-based one, distinct from
 `results.map` shape and no `onWheel` handler either — same latent gap, not reported, not fixed as
 part of this change (out of scope; nobody has hit it there yet).
 
+#### Fifth follow-up: the "Cuenta contable" placeholder was cropping mid-word (ETP-4924)
+
+`financeAccountStatementsManualGlItemPlaceholder` ("Buscar cuenta contable…") is longer than the
+"Cuenta contable" column (`minmax(140px, 1.2fr)` — the same width class as "Contacto", whose own
+placeholder "Buscar contacto…" is noticeably shorter). A plain `<input>` doesn't add an ellipsis
+when its value/placeholder overflows — it just clips mid-character with no visual signal that
+anything is missing, which is what made it read as broken rather than merely narrow.
+
+Two independent fixes, not one:
+
+1. **Shortened the placeholder itself**, in all three locale files that carry this key
+   (`es_ES.json`, `en_US.json`, `es_AR.json` — this key has no other call site, so it was safe to
+   edit directly): `"Buscar cuenta contable…"` → `"Buscar cuenta…"` (es_ES), `"Search accounting
+   account…"` → `"Search account…"` (en_US), `"Buscar concepto contable…"` → `"Buscar concepto…"`
+   (es_AR) — each now matches the `"Buscar contacto…"` / `"Search contact…"` sibling's length, so it
+   fits the same column width without relying on truncation in the common case.
+2. **Added real CSS truncation to `ChipSelect`'s search `<input>`** (`overflow-hidden text-ellipsis
+   whitespace-nowrap`) regardless — so ANY future long placeholder, typed query, or narrower host
+   column crops with a visible "…" instead of an abrupt raw cut, matching `SelectorChip`'s own
+   `truncate` treatment of the selected-value chip label. This is the durable fix; #1 just means the
+   common case no longer needs to rely on it.
+
+Not touched: `locales/generated/core.*.json` — gitignored build artifacts the "slice-labels" Vite
+plugin regenerates from the plain `locales/*.json` files (see `App.jsx`'s `coreLoaders` comment);
+editing them directly would just be overwritten on the next regen.
+
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)

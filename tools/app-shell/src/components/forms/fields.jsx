@@ -343,7 +343,10 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
           ) : (
             <input
               ref={inputRef}
-              className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
+              // `text-ellipsis` so a placeholder/query wider than a narrow host column
+              // (e.g. a lines table cell) crops with a visible "…" instead of an abrupt
+              // raw cut — matches SelectorChip's own `truncate` on the selected-value label.
+              className="h-full min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
               value={query}
               placeholder={placeholder}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
