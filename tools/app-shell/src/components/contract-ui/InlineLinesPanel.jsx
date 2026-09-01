@@ -23,7 +23,8 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getContactsTextFieldError } from './contactsFieldValidation.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
 // grid column (DimSummary, no longer used here) to a hover action + the existing
@@ -685,6 +686,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   columns,
   data,
   entity,
+  specName,
   token,
   apiBaseUrl,
   selectedRowId,
@@ -952,14 +954,25 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       toast.error(ui('fieldMinValueError', { min: col.min }));
       return;
     }
-    // Format validation (email + phone) for inline cell edits — mirrors the below-min
-    // guard: flag the cell, toast the specific error, and block the PATCH. Empty is
-    // valid (not required); a later valid re-commit clears the flag via setInvalidCell(null).
-    const formatError = getEmailFieldError(col, value) ?? getPhoneFieldError(col, value);
+    // Format validation (email + phone + website, plus the Contacts-only text-field
+    // checks) for inline cell edits — mirrors the below-min guard: flag the cell,
+    // toast the specific error, and block the PATCH. Empty is valid (not required);
+    // a later valid re-commit clears the flag via setInvalidCell(null). ETP-5031
+    // added the website check (previously missing here) and the Contacts gate.
+    const formatError = getEmailFieldError(col, value)
+      ?? getPhoneFieldError(col, value)
+      ?? getWebsiteFieldError(col, value);
     if (formatError !== null) {
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
       toast.error(ui(formatError));
+      return;
+    }
+    const contactsError = getContactsTextFieldError(specName, col, value);
+    if (contactsError !== null) {
+      hasValidationErrorRef.current = true;
+      setInvalidCell({ rowId: row.id, colKey: col.key });
+      toast.error(ui(contactsError.key, contactsError.params));
       return;
     }
     const effectiveValue = clampToMax(col, value);
@@ -984,7 +997,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     } finally {
       pendingEditRef.current = null;
     }
-  }, [isDocumentReadOnly, onUpdateRow, ui]);
+  }, [isDocumentReadOnly, onUpdateRow, ui, specName]);
 
   // Imperative API for parent's global "Guardar". Closing the row implicitly blurs
   // the focused input (if any), which triggers its onBlur autosave. Awaiting any

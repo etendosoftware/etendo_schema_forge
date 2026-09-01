@@ -10,6 +10,7 @@ import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -1082,6 +1083,16 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       // subsequent successful save must be able to clear it, not just one raised by
       // the save gate itself.
       trackSaveBlockToast(toastId);
+      return;
+    }
+    // ETP-5031: Contacts-only text-field validation (length + unsafe chars). A
+    // no-op for every other window — getContactsTextFieldError gates on
+    // windowName === 'contacts' as its first check.
+    const contactsErr = getContactsTextFieldError(windowName, f, value);
+    if (contactsErr) {
+      const toastId = `contacts-field-${f.key}`;
+      toast.error(ui(contactsErr.key, contactsErr.params), { id: toastId });
+      trackSaveBlockToast(toastId);
     }
   };
 
@@ -1126,7 +1137,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         data-testid={`field-${f.key}`}
         type={getInputType(f)}
         value={getFieldValue(isReadOnly, displayValue, data, f)}
-        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+        onChange={(e) => onChange?.(f.key, filterContactsInputValue(windowName, f, e.target.value), f.column)}
         onBlur={(e) => {
           if (!isReadOnly) {
             validateNumericOnBlur(f, e.target.value);

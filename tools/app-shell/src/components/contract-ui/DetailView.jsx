@@ -603,6 +603,7 @@ export function SecondaryTableTab(props) {
               ref={getSecondaryLinesTableRef(props.linesLayout, props.secondaryInlineLinesRef, props.st)}
               data={props.secondaryHooks[props.stIdx]?.children ?? []}
               entity={props.st.key}
+              specName={props.windowName}
               token={props.token}
               apiBaseUrl={props.apiBaseUrl}
               labelOverrides={props.labelOverrides}
@@ -3805,6 +3806,7 @@ export function DetailView({
                               <SecondaryTableTab
                                 st={st}
                                 stIdx={stIdx}
+                                windowName={windowName}
                                 linesLayout={linesLayout}
                                 secondaryInlineLinesRef={getSecondaryInlineLinesRef}
                                 secondaryHooks={secondaryHooks}
