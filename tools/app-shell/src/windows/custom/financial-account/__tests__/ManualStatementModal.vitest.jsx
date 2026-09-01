@@ -389,5 +389,86 @@ describe('ManualStatementModal', () => {
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountStatementsManualUpdateSuccess');
       expect(toastSuccess).not.toHaveBeenCalledWith('financeAccountStatementsManualSuccess');
     });
+
+    /**
+     * ETP-4921 — a statement can now be reactivated while some of its lines are already matched
+     * (Classic parity), so the edit modal must handle a mixed draft. A matched line is immutable
+     * at the DB level: core's APRM_FIN_BNKSTM_LINE_CHECK_TRG rejects any update or delete of it,
+     * for any caller, regardless of the parent statement's Processed flag. Offering the inputs
+     * would be offering an edit the database will refuse.
+     */
+    describe('matched lines are read-only', () => {
+      const MATCHED_LINE = {
+        id: 'ln-m', date: '2026-05-08T00:00:00Z', reference: 'REFM', description: 'Ya conciliada',
+        bpartnerName: 'Globex', bpartnerId: 'bp-9', bpartnerFkName: 'Globex S.A.',
+        glItemId: null, glItemName: '', in: 100, out: 0, matched: true,
+      };
+      const FREE_LINE = {
+        id: 'ln-f', date: '2026-05-09T00:00:00Z', reference: 'REFF', description: 'Libre',
+        bpartnerName: 'Acme', bpartnerId: 'bp-1', bpartnerFkName: 'Acme S.L.',
+        glItemId: null, glItemName: '', in: 0, out: 50, matched: false,
+      };
+
+      it('renders a matched line as a locked row, not an editable one', () => {
+        linesRef.value = [MATCHED_LINE, FREE_LINE];
+        renderModal({ statement: STATEMENT });
+
+        // One locked row, one editable row — not two editable ones.
+        expect(screen.getAllByTestId(/^manual-line-matched-/)).toHaveLength(1);
+        expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
+        // The locked row shows its values as text and offers no delete button.
+        const locked = screen.getAllByTestId(/^manual-line-matched-/)[0];
+        expect(locked).toHaveTextContent('Ya conciliada');
+        expect(within(locked).queryByTestId('manual-line-remove')).not.toBeInTheDocument();
+        expect(within(locked).getByTestId('manual-line-lock')).toHaveAttribute(
+          'title', 'financeAccountStatementsManualLineMatchedTooltip',
+        );
+      });
+
+      it('leaves matched lines out of the save payload entirely', async () => {
+        linesRef.value = [MATCHED_LINE, FREE_LINE];
+        const user = userEvent.setup();
+        renderModal({ statement: STATEMENT });
+
+        await user.click(screen.getByTestId('manual-statement-save'));
+
+        await waitFor(() => expect(updateStatement).toHaveBeenCalledTimes(1));
+        const payload = updateStatement.mock.calls[0][0];
+        // Only the unmatched line travels — the backend keeps the matched one in place.
+        expect(payload.lines).toHaveLength(1);
+        expect(payload.lines[0].reference).toBe('REFF');
+        expect(payload.lines.some((l) => l.reference === 'REFM')).toBe(false);
+      });
+
+      // A statement whose every line is matched still has an editable header (name, notes,
+      // dates). Sending zero lines is legitimate there — the statement is not left empty.
+      it('allows a header-only save when every line is matched', async () => {
+        linesRef.value = [MATCHED_LINE];
+        const user = userEvent.setup();
+        renderModal({ statement: STATEMENT });
+
+        // The seeded starter row is create-mode only; in edit mode nothing editable is hydrated.
+        expect(screen.queryAllByTestId('manual-line-editrow')).toHaveLength(0);
+
+        await user.click(screen.getByTestId('manual-statement-save'));
+
+        await waitFor(() => expect(updateStatement).toHaveBeenCalledTimes(1));
+        expect(updateStatement.mock.calls[0][0].lines).toHaveLength(0);
+        expect(toastError).not.toHaveBeenCalled();
+      });
+
+      // Guard against over-correcting: with nothing matched and nothing filled in, the original
+      // "at least one line" validation must still fire.
+      it('still rejects a save with no lines at all', async () => {
+        linesRef.value = [];
+        const user = userEvent.setup();
+        renderModal({ statement: STATEMENT });
+
+        await user.click(screen.getByTestId('manual-statement-save'));
+
+        expect(updateStatement).not.toHaveBeenCalled();
+        expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorLines');
+      });
+    });
   });
 });

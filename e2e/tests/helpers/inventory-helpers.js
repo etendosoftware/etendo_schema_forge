@@ -298,9 +298,22 @@ export async function ensureStockOnHand(page, { productName, warehouseName, minQ
     }
 
     // ─── Not enough stock — count it up to minQty (absolute, never a delta) ─
+    // `updated` is MANDATORY on every write since ETP-5073: NEO refuses an update that does not
+    // carry the record version it was read with (400 `missing_updated`) rather than letting it
+    // silently overwrite a concurrent edit. The create response already carries the version, so
+    // no extra round-trip is needed; the GET is the fallback for a backend that omits it there.
+    let lineUpdated = lineRecord?.updated;
+    if (!lineUpdated) {
+      const rereadRes = await page.request.get(`${specBase()}/${LINE_ENTITY}/${lineId}`, { headers });
+      lineUpdated = extractRecord(await rereadRes.json())?.updated;
+    }
+    if (!lineUpdated) {
+      throw new Error('ensureStockOnHand: could not resolve the line `updated` version required by NEO');
+    }
+
     const patchRes = await page.request.patch(`${specBase()}/${LINE_ENTITY}/${lineId}`, {
       headers,
-      data: { quantityCount: minQty },
+      data: { quantityCount: minQty, updated: lineUpdated },
     });
     if (!patchRes.ok()) {
       throw new Error(`ensureStockOnHand: line patch (quantityCount) failed (${patchRes.status()}): ${await patchRes.text()}`);

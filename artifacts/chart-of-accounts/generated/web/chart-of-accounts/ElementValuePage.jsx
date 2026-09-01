@@ -15,7 +15,7 @@ const breadcrumb = 'Accounting / Chart of Accounts';
 
 // @sf-generated-start summary:elementValue
 const summary = [
-  { key: 'active', column: 'IsActive', type: 'boolean' },
+
 ];
 
 const statusField = null;
@@ -127,6 +127,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hideCreate
+      hideListFilters
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

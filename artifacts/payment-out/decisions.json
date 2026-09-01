@@ -309,7 +309,8 @@
         },
         "gLItem": {
           "form": false,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "label": "Accounting account"
         },
         "canceled": {
           "visibility": "readOnly",
