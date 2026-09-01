@@ -221,8 +221,6 @@ const G1_DEBT = new Set([
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
   'artifacts/amortization/custom/AmortizationConfirmModal.jsx',
-  'artifacts/chart-of-accounts/custom/AccountTreeView.jsx',
-  'artifacts/chart-of-accounts/custom/NewAccountModal.jsx',
   'artifacts/goods-receipt/custom/GoodsReceiptActions.jsx',
   'artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx',
   'artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx',
@@ -287,8 +285,6 @@ const G2_DEBT = new Set([
   'artifacts/payment-in/custom/PaymentBottomPanel.jsx',
   'artifacts/payment-in/custom/PaymentSummaryCard.jsx',
   'artifacts/payment-out/custom/PaymentOutBottomPanel.jsx',
-  'artifacts/chart-of-accounts/custom/AccountTreeView.jsx',
-  'artifacts/chart-of-accounts/custom/NewAccountModal.jsx',
   'artifacts/payment-in/custom/RelatedDocuments.jsx',
   'artifacts/payment-out/custom/RelatedDocuments.jsx',
 ]);
@@ -309,7 +305,6 @@ const G3_DEBT = new Set([
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
   'artifacts/amortization/custom/AmortizationConfirmModal.jsx',
-  'artifacts/chart-of-accounts/custom/NewAccountModal.jsx',
   'artifacts/goods-receipt/custom/GoodsReceiptActions.jsx',
   'artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx',
   'artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx',
