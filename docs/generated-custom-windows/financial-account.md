@@ -1600,6 +1600,17 @@ every consumer, not a drive-by edit bundled into a single-window bug fix. If the
 ("reopening/toggling a `path: id ? url : null` hook shows stale data for one paint") is ever reported
 somewhere else, this is the place to make that deeper fix.
 
+#### Ninth follow-up: tooltip coverage completed for the remaining truncatable cells (ETP-4924)
+
+The earlier tooltip follow-up (chip label, then Descripción/Nombre del contacto) skipped **Nº de
+referencia, Salida, Entrada** in `EditRow` on the assumption Reference No stays short (`REF-####`)
+and without considering the amount cells at all — both can still overflow in practice, and amounts
+truncate the same way any overflowing `<input>` does (no visible ellipsis, no way to read the rest).
+Added `title={row.reference}` to the reference input and `title={row[field]}` inside `amountCell`
+(the shared helper both Salida and Entrada render through). `MatchedRow` (the read-only counterpart)
+got the matching `title` on its own reference and amount spans, so both variants of the same table
+stay consistent — description was the only field it already had.
+
 #### The expanded row and the header row refresh together (ETP-4921)
 
 A statement's header row and its expanded accordion are fed by **two independent fetches**:

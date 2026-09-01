@@ -281,13 +281,13 @@ function MatchedRow({ row, ui, money }) {
       data-testid={`manual-line-matched-${row.id}`}
     >
       <span className={cell}>{row.date}</span>
-      <span className={cell}>{row.reference}</span>
+      <span className={cell} title={row.reference}>{row.reference}</span>
       <span className={cell} title={row.description}>{row.description}</span>
       <span className={cell}>{row.contactName}</span>
       <span className={cell}>{row.contact?.name ?? ''}</span>
       <span className={cell}>{row.glItem?.name ?? ''}</span>
-      <span className={amount}>{parseAmount(row.out) ? money(parseAmount(row.out)) : ''}</span>
-      <span className={amount}>{parseAmount(row.in) ? money(parseAmount(row.in)) : ''}</span>
+      <span className={amount} title={parseAmount(row.out) ? money(parseAmount(row.out)) : undefined}>{parseAmount(row.out) ? money(parseAmount(row.out)) : ''}</span>
+      <span className={amount} title={parseAmount(row.in) ? money(parseAmount(row.in)) : undefined}>{parseAmount(row.in) ? money(parseAmount(row.in)) : ''}</span>
       <span className="flex items-center justify-end">
         {/* The lock replaces the delete button in the same track, so the grid stays aligned and
             the row visibly explains why it offers no actions. */}
@@ -313,6 +313,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
       <input
         type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
         placeholder={ui('financeAccountAmountPlaceholder')}
+        title={row[field]}
         className={cn(cellAmount, currencySymRightSide ? 'pr-7' : 'pl-7')} data-testid={testId} />
       <span
         className={`pointer-events-none absolute ${currencySymRightSide ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]`}>
@@ -323,7 +324,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   return (
     <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[hsl(var(--muted))]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
-      <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
+      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
         placeholder={ui('financeAccountStatementsManualDescPlaceholder')}
         title={row.description}
