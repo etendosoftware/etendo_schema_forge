@@ -35,9 +35,14 @@ export function useApiFetch(baseUrl) {
   // re-fire forever.
   const hasSession = auth != null;
 
+  // Falls back to the published store rather than trusting the context alone: a provider
+  // that holds no `csrfToken` (it is populated by the session restore, and a host can mount
+  // one before that settles) would otherwise hand back null and send an unsafe request with
+  // no proof at all — a 403 on the write while every read still succeeds. The context value
+  // still wins when it has one, so a fresher provider value is not lost.
   return useMemo(() => createApiFetch(
     baseUrl,
-    hasSession ? () => csrfToken : getSessionCsrfToken,
+    hasSession ? () => csrfToken ?? getSessionCsrfToken() : getSessionCsrfToken,
     logout,
   ), [baseUrl, hasSession, csrfToken, logout]);
 }

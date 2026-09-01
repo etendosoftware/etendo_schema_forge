@@ -1000,7 +1000,7 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
-  setSelectedChildRows, setExecutingDetailProcess,
+  setSelectedChildRows, setExecutingDetailProcess, apiFetch: request = apiFetch,
 }) {
   const rows = explicitRows || selectedChildRows;
   const fieldValues = {};
@@ -1014,7 +1014,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return request(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
           body: JSON.stringify({ fieldValues }),
           token, baseUrl: '',
@@ -2673,7 +2673,11 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  // ETP-4576 — hands down the hook's apiFetch, not the module-level one this file also
+  // imports. The two read the CSRF proof from different places, and only the hook's is
+  // reliably populated here: the module one sent this POST with no proof and the backend
+  // answered 403, which is what stopped every document confirm.
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
   const othersRef = useRef(null);
 
