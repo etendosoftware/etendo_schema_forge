@@ -75,3 +75,31 @@ export function groupIntoRows(items, { capacity = ROW_CAPACITY, tolerance = ROW_
 export function rowHeight(row) {
   return (row ?? []).reduce((tallest, item) => Math.max(tallest, Number(item?.height) || 0), 0);
 }
+
+/**
+ * How far past its design share a widget may stretch when its row is not full. 1.5 was chosen so
+ * that a partially-filled row still spreads out naturally (a Purchasing first row of three widgets
+ * fills its width as before) while a widget ALONE in a row is stopped well short of spanning
+ * everything — "Productos más vendidos" as a full-width band puts its counts a screen away from
+ * the product names.
+ */
+export const MAX_STRETCH = 1.5;
+
+/**
+ * The widest a widget may render, as a CSS percentage of its row.
+ *
+ * Expressed as a share of {@link ROW_CAPACITY} rather than in pixels on purpose: a pixel cap would
+ * silently reshape the full, all-widgets-visible layout on a wide monitor, where each widget's
+ * flex-basis legitimately resolves to more pixels than the design mock. A share keeps the design
+ * intact at every resolution and only bites when a widget is being handed space that was freed by
+ * a hidden sibling.
+ *
+ * @param {{weight: number}} item
+ * @returns {string} e.g. "50.4%"
+ */
+export function maxWidthFor(item) {
+  const weight = Number(item?.weight) || 0;
+  if (weight <= 0) return '100%';
+  const share = (weight / ROW_CAPACITY) * MAX_STRETCH * 100;
+  return `${Math.min(share, 100).toFixed(1)}%`;
+}

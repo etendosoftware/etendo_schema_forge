@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { groupIntoRows, rowHeight } from '../dashboardRowLayout.js';
+import { groupIntoRows, maxWidthFor, rowHeight } from '../dashboardRowLayout.js';
 
 /**
  * ETP-5088 — the contract, in the words it was asked for: a user with every permission must see
@@ -98,5 +98,37 @@ describe('rowHeight', () => {
     assert.equal(rowHeight([]), 0);
     assert.equal(rowHeight(null), 0);
     assert.equal(rowHeight([{ key: 'x' }]), 0);
+  });
+});
+
+describe('maxWidthFor — a widget alone in a row must not span everything', () => {
+  test('the cap is above the design share, so a full dashboard is never reshaped', () => {
+    for (const item of ALL) {
+      const designShare = (item.weight / 1320) * 100;
+      const cap = parseFloat(maxWidthFor(item));
+      assert.ok(cap >= designShare, `${item.key}: cap ${cap}% must not bite its ${designShare}% design share`);
+    }
+  });
+
+  test('best products, alone in its row, stops at half the width', () => {
+    assert.equal(maxWidthFor({ weight: 443.33 }), '50.4%');
+  });
+
+  test('a partially filled row still spreads: Purchasing\'s first row stays under its caps', () => {
+    // pendingTasks + quickActions + pendingAmounts = 1098.33, so each receives more than its
+    // design share but must remain below its cap, or the row would leave a gap it does not today.
+    const row = [ALL[0], ALL[1], ALL[5]];
+    const total = row.reduce((n, i) => n + i.weight, 0);
+    for (const item of row) {
+      const received = (item.weight / total) * 100;
+      assert.ok(parseFloat(maxWidthFor(item)) > received,
+        `${item.key}: receives ${received.toFixed(1)}% and must not be capped`);
+    }
+  });
+
+  test('never exceeds 100% and tolerates a weightless item', () => {
+    assert.equal(maxWidthFor({ weight: 901 }), '100.0%');
+    assert.equal(maxWidthFor({}), '100%');
+    assert.equal(maxWidthFor(null), '100%');
   });
 });

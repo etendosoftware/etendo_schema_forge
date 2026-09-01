@@ -355,6 +355,10 @@ describe('DashboardPage — rows adjust to the visible widgets (ETP-5088)', () =
     expect(rows).toHaveLength(2);
     expect(rows[1].querySelector('[data-testid="best-products"]')).not.toBeNull();
     expect(rows[1].style.minHeight).toBe('328px');
+    // Alone in its row it must NOT span the full width: a full-width list puts the counts a
+    // screen away from the product names.
+    expect(rows[1].querySelector('[data-testid="best-products"]').parentElement.style.maxWidth)
+      .toBe('50.4%');
     // The first row holds the 234px widgets, so it must not inherit the taller height.
     expect(rows[0].style.minHeight).toBe('234px');
   });

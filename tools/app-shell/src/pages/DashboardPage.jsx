@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useDashboardWidgetAccess } from '@/hooks/useDashboardWidgetAccess.js';
-import { groupIntoRows, rowHeight } from '@/lib/dashboardRowLayout.js';
+import { groupIntoRows, maxWidthFor, rowHeight } from '@/lib/dashboardRowLayout.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useUI } from '@/i18n';
@@ -234,7 +234,7 @@ function DashboardContent({ apiBaseUrl }) {
                 <div
                   key={w.key}
                   className="flex flex-col w-full min-w-0"
-                  style={{ flex: `${w.weight} 1 0`, height: `${w.height}px` }}
+                  style={{ flex: `${w.weight} 1 0`, maxWidth: maxWidthFor(w), height: `${w.height}px` }}
                 >
                   {w.node}
                 </div>
