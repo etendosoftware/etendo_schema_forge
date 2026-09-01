@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
-import { getApiBase } from '@/hooks/useNeoResource.js';
+import { useVectorSearchContracts } from '@/hooks/useVectorSearchContracts.js';
+import { useRecentSearches } from '@/hooks/useRecentSearches.js';
+import { useVectorSearch } from '@/hooks/useVectorSearch.js';
 import {
   resolveVectorSearchTargetForPath,
   resolveVectorSearchTargets,
@@ -33,12 +35,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-const windowContractLoaders = Object.entries(import.meta.glob('@generated/*/contract.json'));
-
-function specNameFromContractPath(path) {
-  return path.split('/').at(-2);
-}
-
 const ICON_MAP = {
   LayoutDashboard,
   ShoppingCart,
@@ -63,40 +59,19 @@ function HighlightedQuery({ text, query }) {
   ));
 }
 
-const RECENT_SEARCHES_KEY = 'schema-forge:recent-searches';
-const MAX_RECENT_SEARCHES = 5;
-const VECTOR_MAX_RESULTS = 10;
-const VECTOR_FETCH_MIN_SCORE = 0.45;
-
-function normalizeSearchText(value) {
-  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-function readRecentSearches() {
-  try {
-    const value = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]');
-    return Array.isArray(value) ? value.filter((item) => item && typeof item.query === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
 export function CommandPalette() {
   const { open, setOpen, query, setQuery, registerKeyboardHandler } = useGlobalSearch();
-  const [recentSearches, setRecentSearches] = useState(readRecentSearches);
+  const { recentSearches, addRecentSearch } = useRecentSearches();
   const [keyboardIndex, setKeyboardIndex] = useState(-1);
   const openRef = useRef(false);
   const keyboardIndexRef = useRef(-1);
   const dropdownInteractionRef = useRef(false);
   const targetPickerRef = useRef(null);
   const targetPickerTriggerRef = useRef(null);
-  const [vectorMatches, setVectorMatches] = useState([]);
-  const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
-  const [isVectorSearchLoading, setIsVectorSearchLoading] = useState(false);
+  const vectorSearchContracts = useVectorSearchContracts(open);
   const [selectedVectorTargetKeys, setSelectedVectorTargetKeys] = useState(null);
   const [isTargetPickerOpen, setIsTargetPickerOpen] = useState(false);
   const [scopeOverride, setScopeOverride] = useState(null);
-  const vectorContractsLoaded = useRef(false);
   const initializedScopeTarget = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,6 +111,12 @@ export function CommandPalette() {
   const scopeOverrideTargets = scopeOverride?.pathname === location.pathname
     ? scopeOverride.targets
     : undefined;
+  const { matches: vectorMatches, isLoading: isVectorSearchLoading } = useVectorSearch({
+    query,
+    requestedTargetKeys: requestedVectorSearchTargetKeys,
+    selectedTargetKeys: selectedVectorTargetKeys,
+    onSearch: addRecentSearch,
+  });
 
   useEffect(() => {
     if (!open || vectorSearchTargets.length === 0) return;
@@ -268,25 +249,6 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    if (!open || vectorContractsLoaded.current) return undefined;
-    let active = true;
-    vectorContractsLoaded.current = true;
-
-    Promise.all(windowContractLoaders.map(async ([path, loadContract]) => ({
-      contract: await loadContract(),
-      specName: specNameFromContractPath(path),
-    })))
-      .then((contracts) => {
-        if (active) setVectorSearchContracts(contracts);
-      })
-      .catch(() => {
-        if (active) setVectorSearchContracts([]);
-      });
-
-    return () => { active = false; };
-  }, [open]);
-
-  useEffect(() => {
     if (!open) {
       initializedScopeTarget.current = null;
       setSelectedVectorTargetKeys(null);
@@ -312,65 +274,6 @@ export function CommandPalette() {
     initializedScopeTarget.current = currentWindowVectorTarget.target;
     setSelectedVectorTargetKeys([currentWindowVectorTarget.target]);
   }, [currentWindowVectorTarget, open, scopeOverrideTargets]);
-
-  useEffect(() => {
-    const normalizedQuery = query.trim();
-    if (requestedVectorSearchTargetKeys.length === 0 || normalizedQuery.length < 3) {
-      setVectorMatches([]);
-      setIsVectorSearchLoading(false);
-      return undefined;
-    }
-
-    setVectorMatches([]);
-    setIsVectorSearchLoading(true);
-    const controller = new AbortController();
-    const timeout = setTimeout(async () => {
-      try {
-        const token = localStorage.getItem('sf_auth_token');
-        const queryTargets = selectedVectorTargetKeys === null && requestedVectorSearchTargetKeys.length > 1
-          ? requestedVectorSearchTargetKeys.map((target) => [target])
-          : [requestedVectorSearchTargetKeys];
-        const payloads = await Promise.all(queryTargets.map(async (targets) => {
-          const params = new URLSearchParams({
-            query: normalizedQuery,
-            targets: targets.join(','),
-            minScore: String(VECTOR_FETCH_MIN_SCORE),
-            maxResults: String(VECTOR_MAX_RESULTS),
-          });
-          const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
-          return response.json();
-        }));
-        const matches = payloads.flatMap((payload) => Array.isArray(payload?.matches) ? payload.matches : []);
-        setVectorMatches(matches
-          .filter((match) => Number.isFinite(Number(match.score)))
-          .sort((left, right) => Number(right.score) - Number(left.score))
-          .slice(0, VECTOR_MAX_RESULTS));
-        if (normalizedQuery.length >= 3) {
-          setRecentSearches((current) => {
-            const next = [
-              { query: normalizedQuery, targets: requestedVectorSearchTargetKeys, timestamp: Date.now() },
-              ...current.filter((item) => item.query.toLowerCase() !== normalizedQuery.toLowerCase()),
-            ].slice(0, MAX_RECENT_SEARCHES);
-            try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
-            return next;
-          });
-        }
-      } catch (error) {
-        if (error.name !== 'AbortError') setVectorMatches([]);
-      } finally {
-        if (!controller.signal.aborted) setIsVectorSearchLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      controller.abort();
-      clearTimeout(timeout);
-    };
-  }, [query, requestedVectorSearchTargetKeys, selectedVectorTargetKeys]);
 
   const handleSelect = (name) => {
     setQuery('');

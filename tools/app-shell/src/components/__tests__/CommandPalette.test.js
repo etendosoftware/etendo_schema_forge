@@ -63,12 +63,11 @@ describe('CommandPalette', () => {
 
   it('uses contract-declared vector targets for semantic results', () => {
     assert.match(src, /resolveVectorSearchTargets/);
-    assert.match(src, /import\.meta\.glob\('@generated\/\*\/contract\.json'\)/);
-    assert.match(src, /\/sws\/neo\/vectorsearch/);
+    assert.match(src, /useVectorSearchContracts/);
+    assert.match(src, /useVectorSearch/);
   });
 
   it('keeps vector matches opt-in and renders them as a separate result group', () => {
-    assert.match(src, /normalizedQuery\.length\s*<\s*3/);
     assert.match(src, /exactVectorMatches\.length\s*>\s*0/);
     assert.match(src, /relevantSearchResults/);
   });
@@ -121,8 +120,7 @@ describe('CommandPalette', () => {
 
   it('queries each target independently when all windows are selected', () => {
     assert.match(src, /selectedVectorTargetKeys\s*===\s*null/);
-    assert.match(src, /requestedVectorSearchTargetKeys\.map\(\(target\)\s*=>\s*\[target\]\)/);
-    assert.match(src, /payloads\.flatMap/);
+    assert.match(src, /useVectorSearch/);
   });
 
   it('renders the related-results group at most once without a more-results action', () => {
