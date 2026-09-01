@@ -76,6 +76,43 @@ export async function login(page, {
     await page.route('**/sws/**', (route) => {
       const url = route.request().url();
       const method = route.request().method();
+      // ETP-4576 — the session is RESTORED FROM THE SERVER, not seeded into localStorage: the
+      // shell asks GET /sws/go/session on mount and treats anything else as anonymous. Handled
+      // here rather than in its own page.route because Playwright resolves routes LIFO, so this
+      // catch-all — registered last — would swallow a more specific one anyway. Without it every
+      // spec bounces off the auth guard into /onboarding and never reaches the page under test.
+      // The account owns an environment: an empty list is what sends the shell into the
+      // onboarding wizard, so the catch-all's generic `{ data: [] }` would strand every spec
+      // on the "let's get you set up" screen rather than the page under test.
+      if (url.includes('/sws/go/environments') && method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            clientId: 'e2e-mock-client',
+            clientName: 'E2E Client',
+            adminUserId: 'e2e-mock-user',
+            roleId: 'e2e-mock-role',
+            orgId: 'e2e-mock-org',
+          }]),
+        });
+      }
+      if (url.includes('/sws/go/session') && method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            csrfToken: 'e2e-mock-csrf',
+            account: { name: 'admin', email: 'admin@e2e.test' },
+            environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: 'e2e-mock-org' },
+            roleList: [{
+              id: 'e2e-mock-role',
+              name: 'Administrator',
+              orgList: [{ id: 'e2e-mock-org', name: 'E2E Org' }],
+            }],
+          }),
+        });
+      }
       // SFListMenu is reached via `/sws/neo/listmenu` now (ETP-4513 — moved off the Webhooks
       // module's `/webhooks/SFListMenu`). Before that move, this generic `/sws/**` catch-all
       // never matched the old `/webhooks/*` path at all, so the fetch failed unmocked and
