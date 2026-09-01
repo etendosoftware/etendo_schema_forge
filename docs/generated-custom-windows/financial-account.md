@@ -762,7 +762,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
-- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
+- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating. **Eliminar carries one further exclusion (ETP-5085): it is hidden for a funds-transfer leg** — `isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF'`. The two legs of a transfer reference each other through RESTRICT self-FKs, so the removal could only ever fail, and it failed as an opaque HTTP 500; the backend now rejects it with a 409 and the action is hidden rather than disabled, like every other inapplicable item in this menu. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
 - **Status column** shows three states derived from the transaction status code (`movementStatusConfig.js`): **Borrador** (grey — `RPAP`/`RPAE`, not yet processed), **Sin conciliar** (processed, not cleared), **Conciliado** (`RPPC`, cleared against a bank statement).
 - Back arrow in the toolbar runs `navigate(-1)`.
 - The action bar's primary button is **`Nuevo movimiento`** (opens the accounting-account modal), with **`Transferir fondos`** (ETP-4272) inside its ▾ dropdown. The **accounts grid** row kebab (`AccountRowMenu.jsx`) also offers **`Nuevo movimiento`**, which deep-links to that account's Movements tab with the modal auto-opened (`?tab=movements&newMovement=true` → `index.jsx` sets `autoOpenNewMovement` on `MovementsTab`).
@@ -781,7 +781,9 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 
 The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirmar** saves **and processes** it (Borrador → Procesado) in one atomic backend call. Both go through `useCreateMovement()`/`useUpdateMovement()` → `POST …financial-account-transactions?action=create|update` with a `process` flag (`false` for Guardar, `true` for Confirmar); the backend (`FinancialAccountTransactionsHandler`) inserts/updates the `FIN_Finacc_Transaction` (Draft = status `RPAE`/`RPAP`) and, when `process:true`, runs Classic's `FIN_TransactionProcess.doTransactionProcess("P", trx)`.
 
-**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`). Posting (contabilización) stays an independent flag (the kebab's Post action).
+**Error surfacing (ETP-5085, applies to every movement action — create / update / process / reactivate / delete / transfer):** `useCreateMovement.postAction` no longer throws `HTTP <status>: <raw response body>`. It reads the backend's own business message with the shared `parseBackendErrorMessage` (`lib/backendErrors.js`) and attaches `error.status`; `MovementRowKebab.runLifecycle` then runs it through `translateBackendError` before the toast, falling back to the per-action i18n key when the response carried no message. Before this, a rejected action showed the user the literal JSON envelope — that is how ETP-5085's 500 reached the screen as `HTTP 500: {"error":{"message":"Could not delete the movement…"}}`. New backend literals therefore need an entry in `BACKEND_ERROR_MAP` plus the `backendError.*` key in all three locale files.
+
+**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
 **Reactivar (kebab) and the Reconciliación tab's un-reconcile actions overlap in scope but are separate code paths.** A movement matched to a bank statement can be reactivated from either surface — the Reconciliación split panel's Desconciliar/Reactivar (`ReconciliationHandler`, see above), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
 
@@ -795,6 +797,8 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 - **Account detail** → the **Transferir fondos** item inside the Movements toolbar split-button (▾ next to "Nuevo movimiento"), with the current account as source.
 
 Both render `windows/custom/financial-account/FundsTransferModal.jsx` — a single-step modal (shared `@/components/ui/dialog`, with inline searchable dropdowns so wheel/touchpad scrolling works inside the modal). Fields: source account (pre-filled, read-only, with available balance), destination account (searchable; other org accounts), **accounting item / GL (required, searchable)**, amount (currency symbol via the shared `formatCurrency`), currency-conversion block (shown only when the destination currency differs — multi-currency; the "Tasa de conversión" rate field with the source→destination currency badges alongside its label, no separate "Conversión de divisa" heading — plus, inline next to the rate input, a compact read-only "≈ {amount}" box, `data-testid="transfer-receive-amount"`, previewing `amount × rate` in the destination currency via `formatCurrency`; shows "—" until both amount and rate are valid positive numbers), Bank Fee checkbox (reveals two fee fields — source and destination — mirroring Classic), description (default "Funds Transfer Transaction"). Client guards: destination + accounting item required, amount > 0, amount ≤ source balance; the backend re-validates and rejects same-account / over-balance / cross-org transfers. On confirm it calls `useFundsTransfer()` → `POST …financial-account-transactions?action=transfer`; the backend delegates to Etendo Classic's `FundsTransferActionHandler.createTransfer(...)`, creating the paired withdrawal (source) + deposit (destination) — plus optional bank-fee expenses on the source and/or destination — left **Pending** (`PWNC` / `RDNC`) until reconciled.
+
+**A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
 
 **Layout note:** the modal's body wrapper (`<div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">`, right below the header) carries `min-w-0`. `DialogContent` renders as `display: grid`, and grid items default to `min-width: auto` — without this, an extremely long value anywhere deep inside (e.g. `transfer-receive-amount` computing a huge product) inflates this whole column past the dialog's own `max-w-[600px]`, and only the rightmost sliver gets clipped, cropping every row uniformly instead of just the offending field. Confirmed live via Playwright (`getBoundingClientRect()` before/after) — do not remove this class when touching this wrapper.
 
@@ -929,6 +933,196 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
 - When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
+
+#### Match with a difference — detection and automatic posting (ETP-4965)
+
+A 1:1 match whose deviation falls inside the account's configured tolerances is now detected as
+**"Con diferencia"**, proposed by the Automatch, and — on reconciling — has its amount deviation
+posted to the account's **GL Item Difference**, leaving the line **Conciliada** instead of split and
+stuck on "Pendiente".
+
+**What was broken.** Nothing in the codebase applied the amount tolerance to a 1:1 match. Core's
+`StandardMatchingAlgorithm` searches by EXACT amount and EXACT date, and Etendo GO's date tolerance
+(`withinDateWindow` inside `AutoMatchSupport.standardMatch`) is only a post-filter over what Core
+already found, so it can never widen the search. The one tolerance-aware path,
+`AutoMatchSupport.findSignalGroup`, discards any partition with fewer than two transactions
+(`matchByKey`), so a lone 26,62 € movement against a 27,00 € line was unreachable. The line
+classified `pending`, the Automatch proposed nothing, and reconciling by hand produced a Core partial
+split whose 0,38 € remainder had no way to close.
+
+**Classification matrix.** Both account tolerances take part — `EM_ETGO_Amount_Tolerance` (%) and
+`EM_ETGO_Date_Tolerance` (days, default 3, so there is always a minimum date slack):
+
+| Amount deviation | Date deviation | State |
+|---|---|---|
+| 0 | 0 | Con sugerencia |
+| 0 | > 0, within date tolerance | Con diferencia |
+| > 0, within amount tolerance | 0 | Con diferencia |
+| > 0, within amount tolerance | > 0, within date tolerance | Con diferencia |
+| beyond amount tolerance | any | Pendiente |
+| any | beyond date tolerance | Pendiente |
+
+A **date-only** deviation posts nothing: the amount balances, so the reconciliation is the ordinary
+one and no GL item is needed. The accounting account only comes into play for an amount deviation.
+
+**Detection** — `AutoMatchSupport.findNearMatch` searches the `loadUnreconciledSameSign` pool
+directly (the only code that widens by date) for a single same-sign unreconciled transaction within
+the date window whose amount deviates by no more than the tolerance, best deviation first and date
+distance as the tie-break. The exact-exact case is excluded on purpose — that is a plain suggestion.
+It honours the shared `usedTxnIds` / `excludedTxns` accumulator (see ETP-4971 below) and records its
+winner in both, so the left panel can never count more differences than an Automatch run could apply.
+
+**Two tolerances, one column, two meanings.** `EM_ETGO_Amount_Tolerance` is read by two helpers with
+deliberately opposite conventions, and they are named apart so the two are never confused:
+`AutoMatchSupport.signalGroupTolerance` (formerly `computeAmountTolerance`) is rounding slack for a
+1:N SUM, where 0 still yields a one-cent floor because nothing is posted on that path;
+`AutoMatchSupport.differenceTolerance` returns `null` for 0, because it authorises an automatic
+accounting entry and an unconfigured account must never get one by default.
+
+**The two tolerances govern INDEPENDENT dimensions — the amount one is not a master switch.**
+`EM_ETGO_Amount_Tolerance` bounds how far the AMOUNT may deviate, and is therefore the only thing
+that can authorise an accounting entry. At **0%** no amount deviation is admitted at all:
+`differenceTolerance` returns `null` and `findNearMatch` accepts only **exact-amount** candidates, so
+nothing is ever posted without a configured percentage. But `null` does **not** disable the search
+and is emphatically not "unlimited" — `EM_ETGO_Date_Tolerance` stays in force, defaults to 3 days,
+and a date-only deviation posts nothing, so 0%'s safety rationale does not apply to it. A 100,00 €
+line dated 28/08 against a 100,00 € movement dated 26/08, on an account at 0% amount / 3 days, is
+detected as **"Con diferencia"** and reconciles with no GL-item movement created.
+
+**Scope note:** because every account ships with date tolerance = 3, this detection is live on
+**every** account in the instance, not only those that configured a percentage. What it produces
+there is proposals and classification — never an automatic accounting entry.
+
+**WEAK is now a suggestion, not a difference.** Core's STRONG/WEAK distinction is about documentary
+evidence (does the reference or partner corroborate the hit), never about amount or date — both are
+exact either way. Mapping WEAK to `difference` made that filter mean two unrelated things. It now
+classifies as `suggested`. **This changes existing behaviour**: anyone who used the "Diferencias"
+filter to find weak-evidence matches will no longer see them there.
+
+**The difference movement's description.** `createTransactionForRule` falls back to the statement
+line's description, and an imported line very often has none — which left a bare `0,38 €` row in the
+Movements list with nothing to identify it by. `defaultDifferenceDescription` resolves the text from
+the message dictionary (`ETGO_ReconciliationDifference`) so it arrives in the user's language, and
+degrades to the accounting account's own name when that message is not installed. An explicitly
+supplied description (the manual ETP-4796 flow, where the user types one) always wins.
+
+> **OPEN DECISION — the difference movement's date.** It currently inherits the STATEMENT LINE's
+> date, the same as every other movement `createTransactionForRule` builds. On a match with a date
+> deviation this reads oddly: a line of 30/08 matched to a movement of 31/08 produces a difference
+> movement dated 30/08, so the reconciliation holds two movements on different days. Three candidates
+> were weighed — the statement line's date (today's behaviour; zero cross-month risk, since it
+> matches the sub-line the movement is attached to, and the statement is the authority on when the
+> money moved), the matched movement's date (the two movements agree; risk bounded by the account's
+> date tolerance), and the reconciliation date (unbounded risk — an August line reconciled in
+> September puts its difference in September while the sub-line stays in August, i.e. a different
+> accounting period). **Pending a decision from the functional analyst; behaviour unchanged until
+> then.**
+
+**Posting** — `ReconciliationDifferenceSupport.applyInlineDifference` runs on both the manual
+(`reconcileGroup`) and the Automatch (`ReconciliationFlowSupport.prepareGroup`) paths, before the
+match is composed. It computes `gap = line − Σ operations` and, when the gap is within
+`differenceTolerance`, creates the compensating GL-item movement via `createTransactionForRule` and
+adds it to the operation set so the sum matches the line EXACTLY. Core still splits the line, but now
+both halves end matched: the group's pending amount reaches zero, `mergeSubLineIntoHead` reports
+RECONCILED, and the user sees one closed line. The movement carries `EM_ETGO_Auto_Created`, so
+Desconciliar / Reactivar delete it with no extra code. A negligible gap (< 0,005), an over-coverage
+gap, a disabled tolerance or a gap beyond tolerance all leave the previous behaviour untouched.
+
+**No accounting account configured.** Manual: the backend answers `400` with
+`code: "GL_ITEM_REQUIRED"` and the difference amount, and the panel reopens `DifferenceModal` to ask
+for an accounting account, then resubmits with `glItemId`. Automatch: a mass run cannot pick one line by
+line, so the group is rejected — its error travels back inside `applySuggestions`' `results[]`, the
+suggestion modal counts it as failed and surfaces a direct **Editar cuenta** link. Detection and the
+proposal are NOT suppressed; only applying fails.
+
+**Why one path rolls back and the other must not.** A returned `NeoResponse.error` commits — only an
+escaping exception rolls back (see `ReconciliationDifferenceSupport`'s header javadoc). On the manual
+invoice path `ReconciliationWriteoffSupport.payInvoices` has already written payments by the time the
+gap is knowable, so the rejection rolls back explicitly (`rollbackOnReject`). The Automatch batch
+passes `false`: there the rejection is per group, sibling groups are already prepared, and a rollback
+would discard their work and close the session the rest of the loop still needs.
+
+**Frontend.** `financeReconcileFilterStatusDifference` and `financeReconcileBadgeDifference` now read
+**"Con diferencia"** (parallel to "Con sugerencia") instead of "Diferencias" / "Diferencia". Candidate
+rows the backend flags with `nearMatch` carry the red difference badge — `badgeKindFor` ranks
+`nearMatch` above `suggested`, since the backend sets both. The action bar no longer paints a
+within-tolerance shortfall in destructive red; it shows the neutral notice
+`financeReconcileBarDifferenceNotice` naming the concept it will be posted to (or
+`…NoConcept` when the account has none). `useNeoPost` now hangs the parsed error body off the thrown
+Error (`err.body`, `err.code`), which is what makes both `GL_ITEM_REQUIRED` and the 409's
+`remainderLineId` reachable at all — previously only `message` and `status` survived.
+
+#### Why an un-reconcile failed now reaches the user (ETP-4965 follow-up)
+
+Un-reconciling is deliberately non-atomic: Core's removal utilities commit mid-flow, so
+`ReconciliationHandlerSupport.removeSelectedFromReconciliations` attempts every unit regardless of an
+earlier one's outcome, and `removeOperation` / `reactivateSelected` then re-check each transaction's
+ACTUAL post-state rather than trusting that no exception was thrown. That part works — a failed undo
+is correctly reported as `failedTransactionIds`, never as a false success.
+
+What was missing was the CAUSE. The helpers swallowed their exception into the server log, so the
+response could say *which* transactions were still reconciled but never *why*, and the panel fell
+back to a generic toast. In practice the commonest cause is an accounting period closed for
+unposting (`@PeriodClosedForUnPosting@`, raised by Core's `ResetAccounting` when a `Fact_Acct` row
+for the document sits in a period whose `C_PeriodControl` is not open for that document base type) —
+exactly the failure a user can resolve, and exactly the one they could not see.
+
+- The removal helpers now record the translated reason per transaction id, and both endpoints emit
+  the first reason that belongs to a genuinely failed id as `failureReason` on the 200 response.
+- **Only the translatable part is kept.** Core wraps each cause in untranslated English prose and
+  concatenates the chain without separators, so the raw message arrives as
+  `Error when removing the transaction from reconciliation.Error when reactivating
+  reconciliation@PeriodClosedForUnPosting@`. Translating that whole string leaves English fragments
+  glued in front of the Spanish sentence — unacceptable in a product used in Spanish by real
+  clients. `userFacingReason` resolves the LAST `@KEY@` placeholder (the innermost, most specific
+  cause) through the message dictionary and returns just that; a message with no placeholder is
+  translated whole, as before. The user sees `Periodo Cerrado. No se puede descontabilizar un
+  documento en un periodo cerrado` and nothing else.
+- `ReconciliationSplitPanel.confirmRemove` shows it as the toast description, and no longer reuses
+  `financeReconcileToastError` — whose copy reads "Error al conciliar", the wrong action for an
+  un-reconcile. The un-reconcile and reactivate paths have their own keys
+  (`financeReconcileToastOperationRemoveError` / `…ReactivateError`).
+
+**One path still reports nothing: the whole-line `reactivate`.** It calls `detachSelected` directly
+and discards the accumulator, because unlike `removeOperation` / `reactivateSelected` it never
+re-checks the post-state and always answers `{reactivated: true}`. Giving it a reason would mean also
+giving it the `failedTransactionIds` contract it does not have — a product change, not a compile fix,
+so it was left as it was. Its OTHER branch (`undoReconciliation`, when the selection covers the whole
+document) does let the exception propagate, and `runPostAction` turns that into an error response, so
+only the partial-detach branch is silent. Pre-existing; worth its own ticket.
+
+**The "period closed" error was a lie, and is now worked around from this side.** Un-reconciling a
+posted reconciliation failed with `@PeriodClosedForUnPosting@` on an environment whose periods were
+all open — verified exhaustively: the client has a single organization, it is its own
+period-control organization, and all 43 document base types are `O` for the period in question.
+
+The real cause is a date mismatch. `com.etendoerp.payment.removal`'s
+`Utilities.unPostReconciliation` resets accounting passing the RECONCILIATION's own date as both
+ends of the range, but Core dates a reconciliation's `Fact_Acct` rows with the TRANSACTION's
+accounting date. On the live case the reconciliation was dated 29/08 and its entries 28/08, so the
+range matched nothing, zero entries were deleted, and `ResetAccounting` fell into the catch-all
+`throw` at the end of its `delete` — a branch that performs no period check at all and whose only
+wording is `@PeriodClosedForUnPosting@`. Any reconciliation whose statement line is older than the
+day it was reconciled hits this, which is the normal case.
+
+`ReconciliationHandlerSupport.unpostBeforeUndo` resets the accounting first with an OPEN range —
+what Classic's own unpost button does, and what `DocumentPostingService.unpost` already does in this
+module — from both the whole-document undo and the per-transaction detach. The document then has no
+entries, so the narrow-range reset downstream becomes a no-op that returns cleanly. `recordId`
+already scopes the deletion, so the open range removes nothing extra, and a genuinely closed period
+still fails — accurately this time.
+
+This compensates for the other module's defect rather than fixing it there, deliberately: that
+module is outside this ticket's repos. Its `unPostPayment` carries the same date-narrowing and is
+presumably latent-broken the same way. Worth its own ticket against that module.
+
+**`guardOpenPeriods` was deliberately left alone.** It runs `Utilities.checkPeriod` on the
+reconciliation's own date and table, which is NOT the rule Core enforces when unposting, so it does
+not pre-empt this failure. Making it do so would mean duplicating
+`ResetAccounting.validateNoFactsInClosedPeriods` — a private Core method that queries `Fact_Acct`
+against `C_PeriodControl` — in a codebase whose rule is never to reimplement Core's logic. The copy
+would drift on the first Core change. Failing inside Core and reporting its message costs one
+harmless round trip (nothing is written) and stays correct by construction.
 
 #### Posting the unreconciled remainder to an accounting account (ETP-4796)
 
@@ -1098,8 +1292,14 @@ its own currency while booking the bank transaction(s) in the account currency:
   against the account actually being reconciled instead. If the account has no methods configured for
   the direction, the modal is skipped and the backend auto-resolves a default, same as before this
   iteration. A cross-currency settlement additionally requires the resolved/chosen method to be
-  multi-currency enabled (`payin/payout_ismulticurrency`); a PSD2 bank-transfer method (disabled by
-  ETP-4503) is rejected with a clear error instead of a cryptic Core failure.
+  multi-currency enabled (`payin/payout_ismulticurrency`), and is rejected with a clear error instead
+  of a cryptic Core failure when it is not. **Since ETP-5084 a PSD2 bank-transfer method no longer
+  trips this**: connecting an account to its bank used to clear those two flags on the transfer link
+  (ETP-4503), on the premise that a transfer could only ever settle an invoice in the account's own
+  currency. A PIS transfer now converts the amount to the account currency before instructing the
+  bank, so that premise is gone — the disabling was removed and data-fix R29 re-enabled the flags on
+  already-connected accounts. The guard now only fires on a link an administrator deliberately
+  configured as single-currency.
 - **Same currency:** unchanged — rate ONE, standard flow.
 
 #### Write off the invoice difference (ETP-4797)
@@ -1285,14 +1485,15 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 
 - **Automatch modal** (`components/contract-ui/AutoMatchSuggestionModal.jsx`, opened from the `Automatch` header action and from the Cuentas-list `Conciliar (N)` pill): runs the engine in preview (GET `?action=autoMatch`) and shows the suggested groups (statement line + its N operations) with per-group include/exclude checkboxes. Rule-origin groups carry a yellow **"Por regla {nombre}"** badge; candidates that would create a new payment carry a blue **"Nueva"** badge. Applying (POST `?action=applySuggestions`) reconciles only the ticked groups, creating payments for rule matches and incrementing each matched rule's count. On success the panel/list refresh. The 1:N signal matcher first tries the whole same-partner / same-reference block and, if that over-shoots, can now choose an exact subset inside that same signal block (for example two 13,20 receipts balancing a 26,40 statement line).
   - **Cardinality: ONE `FIN_Reconciliation` per apply, not one per line.** Earlier, `applySuggestions` called `compose` per accepted group, so confirming N suggestions created N separate reconciliation documents — noisy (Classic's own "Match Statement" produces one per statement) and quadratic (`processReconciliation`'s `updateReconciliations` recomputes every later reconciliation's balance on each call). `ReconciliationHandler.applySuggestions` now runs two passes: `prepareGroup` validates every group first (an invalid group is reported in `results[]` without touching any reconciliation), then every valid group is matched via `matchInto` into ONE reconciliation obtained from `getOrCreateDraftReconciliation` (reuses the account's open draft — the same lookup Classic's `MatchStatementActionHandler` does — or creates one), which is processed once at the end. Not atomic across groups: Core's matching services commit mid-flow, so a failure on group *k* does not roll back groups `1..k-1` already matched into the shared document — the frontend surfaces this via a partial-success toast (`financeReconcileAutomatchToastPartial`) read off `results[]`, since the old code silently reported full success as long as the batch-level POST returned 2xx regardless of individual failures. The manual **`reconcileGroup`** path (single line, one click) is unaffected — it still creates its own dedicated reconciliation per call.
+- **Rule dimensions (ETP-4950)**: a rule-origin group carries the rule's Producto / Proyecto / Centro de costos through `createPayment` (`projectId` / `costcenterId` / `productId`) and `ReconciliationHandler.createTransactionForRule` assigns them to the generated `FIN_FinaccTransaction`, skipping any dimension that is not active at the `FAT` header level for the tenant (`AccountingDimensionsSupport`). Before this they were loaded by the engine and then dropped, so the movement never carried them. The rule's *transaction type* is still not propagated — there is no column for it on the transaction (the movement's type is `TRXTYPE` BPD/BPW, derived from the amount sign); see `match-rule.md` → "Dimension propagation + gating (ETP-4950)".
 - **Same-amount lines each get their own suggestion in one run (ETP-4971).** `buildAutoMatch` threads a single growing `excludedTxns` list through every pending line's call into Core's standard algorithm (`AutoMatchSupport.standardMatch`), mirroring Classic's own `runAutoMatchingAlgorithm` accumulator. Before this fix, Core's `FIN_MatchingTransaction.match(line, excluded)` was always called with an empty `excluded` list, so N pending lines of the identical amount all got offered the SAME transaction and only the first one ended up with a suggestion — the rest required a second Automatch run after accepting the first. `ReconciliationHandlerSupport.summarizePendingLines` shares the same accumulator across the left-panel's `suggested` classification, so its per-state counts match what an actual Automatch run produces (a line whose only same-amount candidate was already claimed by an earlier line now counts as `pending`, not `suggested`).
 - **Conditional auto-open (ETP-4922).** Entering the Reconciliation tab (tab click, `?tab=reconciliation` deep link, or the Cuentas-list `Conciliar (N)` pill's `?autoMatch=true`) no longer pops the modal unconditionally — it *arms* an `autoMatchArmed` flag in `index.jsx` and queries `useAutoMatch` for as long as that tab stays active. The modal only opens once a fresh response confirms `groups.length > 0`; an empty result never opens it (previously it always opened, showing an empty state). The **manual** `Automatch` header button is unaffected — it still calls `setAutoMatchOpen(true)` directly and always opens, empty state included. Leaving the tab disarms the flag, so returning to it re-evaluates from scratch (a stale response from the prior visit is never treated as fresh: `useNeoResource` doesn't clear `data` when its `path` goes back to `null`, so the code tracks readiness with an `autoMatchFetchedRef` ref instead of trusting `loading` alone).
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no date clause in its HQL, so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
-- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` now covers both a Classic strong `1:1` match and an exact `1:N` signal-group match, so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
+- **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
 - **"Pendientes" is a superset, not a fifth exclusive bucket (ETP-5033)**: the backend classification stays exclusive (one `state` per line), but the dropdown's `pending` entry maps to the SET `{pending, suggested, byRule, difference}` — everything not `reconciled` — via `matchesStatus`/`STATUS_MEMBERS` in the new `reconciliationStatusFilter.js` (`ReconciliationSplitPanel.jsx`, which used to filter with strict equality, hiding suggested/byRule/difference lines behind their own chips even though `pending` is the panel's default filter). `Con sugerencia`, `Por regla` and `Diferencias` stay strict single-state subsets, so a suggested line shows under both its own chip and Pendientes. The chip's count follows the same mapping (`countForStatus`, summed over the covered states) so the number on "Pendientes" always matches the row count it produces.
-- i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES}.json`.
-- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast.
+- i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`. `es_AR` was missing 15 of them (the 14 `financeReconcileDiff*` plus `financeReconcileAutomatchToastPartial`), which rendered raw key names for that locale — the resolver does not fall back to English (`useUI.js`: `dictionary?.genericLabels?.[key] ?? key`). Backfilled and covered by a parity test (ETP-4965).
+- Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
 
 ### Movement Post / Unpost (ETP-4505)
 
@@ -1395,15 +1596,43 @@ GET  /sws/neo/financial-account-transactions?...&export=csv&columns=...&ids=... 
 POST /sws/neo/financial-account-transactions?action=create                       → create one FIN_Finacc_Transaction
 POST /sws/neo/financial-account-transactions?action=create-payment               → register a payment (Classic "Add Payment")
 POST /sws/neo/financial-account-transactions?action=transfer                     → funds transfer between accounts (ETP-4272)
+POST /sws/neo/financial-account-transactions?action=delete                       → delete one movement (409 on a transfer leg)
 ```
 
 **`action=transfer`** (ETP-4272) — body `{ sourceAccountId, destinationAccountId, amount, glItemId?, transferDate?, conversionRate?, bankFee?, bankFeeFrom?, bankFeeTo?, description? }`. Validates (source ≠ destination, amount > 0, destination in the source's org tree, amount ≤ source `currentBalance`) and **delegates to Etendo Classic `FundsTransferActionHandler.createTransfer(...)`** (`org.openbravo.advpaymentmngt`) — it never reimplements the transfer. That creates the source withdrawal (`BPW`) + destination deposit (`BPD`), optional bank-fee (`BF`) transactions on the source and/or destination, conversion-rate docs (multi-currency), processes them (→ `PWNC` / `RDNC`, Pending until reconciled) and runs the module's post-hooks. The handler exposes `loadAccount` / `availableBalance` / `sameOrgScope` / `doTransfer` as package-private test seams.
+
+**`action=delete`** (ETP-5085) — body `{ id }`. A Draft is removed directly; a Processed movement is reactivated and
+removed through `TransactionRemovalUtil.reactivateAndRemove`. **A leg of a funds transfer is rejected up-front with a
+409** and the message `Movements generated by a funds transfer cannot be deleted.` — deleting a transfer is not allowed
+by design. The check is `FinancialAccountTransactionsSupport.isTransferCounterpart(trx)`, two `OBCriteria` probes asking
+the FK's own question — *does any other transaction point at me?* — over
+`FIN_FinaccTransaction.PROPERTY_APRMFINACCTRANSORIGIN` (Classic, destination → source) and
+`PROPERTY_ETGOFINACCTRANSDEST` (the mirror half written by `FundsTransferDestinationHook`, source → destination). Both
+columns are **RESTRICT**, so before this guard the removal reached `OBDal.flush()` and died there with a
+`ConstraintViolationException` — which is not an `OBException`, so it escaped `runMutation`'s business-error branch and
+surfaced as an opaque **HTTP 500** (`Could not delete the movement. Please check logs for details.`) with the FK
+violation only visible in the Tomcat log.
+
+Two deliberate properties of that predicate: it is shaped like the FK rather than reading the transaction's own outgoing
+links, so a destination-side **bank fee (`BF`) stays deletable** (it carries an origin, but nothing references it), and it
+also covers transfers created **before the mirror column existed**, where only the Classic half is set. The frontend
+hides the kebab's Eliminar for those rows, so this guard is the server-side enforcement for the bulk-delete path, the
+REST API and MCP.
+
+**Bulk delete surfaces the reason too.** `MovementsTab.jsx` → `useBatchDeleteDialog` still does **not** pre-filter the
+selection — the same deliberate choice already made for payment-linked movements — so a selected transfer leg comes back
+as a per-row failure. What changed is that the 3-outcome toast no longer reports bare counters: because `postAction`
+rejects with the backend's message and a `status` of 409, `toastBatchDeleteOutcome` names the reason, and for a single
+selected row it shows that sentence alone instead of "No se pudo eliminar ninguno de los 1 registros seleccionados". The
+generic contract (only a 4xx counts, opaque status-code messages are discarded, several distinct reasons fall back to the
+counter) is documented in `docs/ui-customization.md` §9c.
 
 Implemented by `com.etendoerp.go.schemaforge.FinancialAccountTransactionsHandler` (CDI bean registered via `@Named("financial-account-transactions")`). The handler:
 
 - Queries `FIN_Finacc_Transaction` joined with `FIN_Financial_Account`, `C_Currency`, `FIN_Payment`, and `C_BPartner` (resolved from either the transaction or its parent payment).
 - Joins the 9 accounting-dimension FK tables (`ad_org`, `c_bpartner`, `c_project`, `c_costcenter`, `c_activity`, `c_campaign`, `c_salesregion`, `user1`, `user2`) to marshal a `dimensions` object per row, and surfaces the related payment (`paymentId` + `paymentIsReceipt`) so the frontend can deep-link to the payment window.
 - Computes the account's `enabledDimensions` by reading `C_AcctSchema_Element` (the dimensions enabled in the chart of accounts), returned once at the payload level (not per row).
+- `headerDimensions` (the set the New Movement wizard renders) is delegated to `AccountingDimensionsSupport` since ETP-4950. That helper honours `AD_Client.Acctdim_Centrally_Maintained`: for a centrally-maintained tenant `C_AcctSchema_Element.IsActive` is a no-op and the authoritative source is Core's `DimensionDisplayUtility.getAccountingDimensionConfiguration` — reading the element table directly used to give those tenants the wrong header set. `enabledDimensions` keeps its previous, coarser semantics on purpose (it is informational; nothing gates editing on it).
 - Computes a per-row running balance anchored to `FIN_Financial_Account.currentbalance` (window function: `currentbalance − SUM(subsequent)` over `statementdate ASC, line ASC`).
 - Returns a `totals` object with the current balance, 30-day inflows, 30-day outflows, and the account currency. The 30-day cutoff is **computed in Java** (`Instant.now().minus(30, ChronoUnit.DAYS)`) and bound as a `Timestamp` parameter — no PostgreSQL-specific `NOW() − INTERVAL` syntax, so the query stays portable across PostgreSQL and Oracle.
 - Each row also carries **CSV-export fields** consumed by the generic `?export=csv` path so the exporter stays a dumb serializer: `transactionTypeLabel`, `statusLabel` (Classic English labels), `depositAmount`/`withdrawalAmount` (the split, from raw `depositamt`/`paymentamt`), `paymentLabel` (synthetic `docNo - date - bp - |amount|`) and `processed`. These replace the retired client-side `movementsCsvExport.js`.

@@ -13,6 +13,7 @@ import {
   getFiscalRecordId,
   getAllowedSystemsForTerritory,
   getCertificateContext,
+  isProductionEnvironment,
   resolveSystem,
 } from './fiscalConfig.utils.js';
 import SiiSection from './SiiSection.jsx';
@@ -298,7 +299,7 @@ function SkippedScreen({ orgName, selectedOrg, orgList, onSelectOrg, ui, onGoHom
   );
 }
 
-function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, system, selectedTerritory, alsoNational, volume, lowChoice, apiBaseUrl, apiFetch, locale, ui, SYSTEMS, TERRITORIES, onComplete, onGoHome }) {
+function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, system, selectedTerritory, alsoNational, volume, lowChoice, createdRecords, apiBaseUrl, apiFetch, locale, ui, SYSTEMS, TERRITORIES, onComplete, onGoHome }) {
   const [cert, setCert] = useState(null);
   const [certModalOpen, setCertModalOpen] = useState(false);
 
@@ -317,6 +318,9 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
   const sys = SYSTEMS[system];
   const terr = TERRITORIES[selectedTerritory ?? ''];
   const certContext = getCertificateContext(system);
+  // ETP-5027: the environment row used to be hardcoded to the sandbox label. It
+  // now reads the real per-system environment column off the created records.
+  const isProduction = isProductionEnvironment(system, createdRecords);
   const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
 
   return (
@@ -377,7 +381,9 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
             )}
             <Row
               k={ui('fiscal.onboarding.applied.row.env')}
-              v={<span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
+              v={isProduction
+                ? <span className="text-status-success-foreground">{ui('fiscal.onboarding.applied.env.production')}</span>
+                : <span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
               data-testid="Row__e9ef3f" />
             <Row
               k={ui('fiscal.onboarding.applied.row.activated')}
@@ -1244,6 +1250,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
       alsoNational={alsoNational}
       volume={volume}
       lowChoice={lowChoice}
+      createdRecords={createdRecords}
       apiBaseUrl={apiBaseUrl}
       apiFetch={apiFetch}
       locale={locale}

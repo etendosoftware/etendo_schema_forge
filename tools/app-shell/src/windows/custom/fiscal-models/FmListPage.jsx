@@ -403,6 +403,26 @@ function getComputedForDecl(decl, isDraft, maps) {
 }
 
 // ── Main component ───────────────────────────────────────────────
+/**
+ * ETP-5030 — resolves the declaration row's class so exactly ONE background is
+ * ever applied, mirroring the chain in `computeRowClassName`
+ * (components/contract-ui/InlineLinesPanel.jsx).
+ *
+ * The row previously only ever reflected `decl.current` — which marks the
+ * CURRENT declaration, never the selection — so ticking a checkbox changed
+ * nothing on the row. Selection now outranks the current-declaration marker,
+ * consistent with the shared components; both classes paint the same td
+ * background, so returning both would leave the winner to stylesheet order.
+ *
+ * `fm-row--selected` is the converged `bg-primary/5` colour defined in
+ * fiscal-models.css — see that rule for why this is a CSS class here and not a
+ * Tailwind utility on the <tr>.
+ */
+function fmListRowClassName({ selected, current }) {
+  if (selected) return 'fm-row--selected';
+  return current ? 'fm-table__row--current' : '';
+}
+
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
@@ -712,7 +732,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             return (
               <tr
                 key={decl.id}
-                className={decl.current ? 'fm-table__row--current' : ''}
+                className={fmListRowClassName({ selected: selected.has(decl.id), current: decl.current })}
                 onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
               >
                 <td onClick={e => e.stopPropagation()}>
