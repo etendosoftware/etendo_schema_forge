@@ -1953,6 +1953,40 @@ Not touched: `locales/generated/core.*.json` — gitignored build artifacts the 
 plugin regenerates from the plain `locales/*.json` files (see `App.jsx`'s `coreLoaders` comment);
 editing them directly would just be overwritten on the next regen.
 
+#### Sixth follow-up: a long BPartner/GL-item name wrapped onto multiple lines in `ChipSelect`'s dropdown (ETP-4924)
+
+`ChipSelect`'s `PopoverContent` was pinned to `width: var(--radix-popover-trigger-width)` — exactly
+the trigger cell's own (narrow, ~140px) width — and its option buttons had no `whitespace-nowrap`,
+so a long result (a BPartner or accounting-account name that doesn't fit) wrapped onto two or three
+lines inside that fixed-width panel instead of the panel widening to show it on one line. The
+"Impuesto" selector on Sales Invoice/Purchase Invoice lines (`InlineSearchCombo`, ETP-4600) already
+solves exactly this for its own dropdown — its own doc comment calls it an "auto-width,
+non-truncating panel": the trigger cell stays its own fixed width, but the dropdown grows to fit its
+longest option.
+
+Ported the same idea to `ChipSelect`, adapted to Radix Popover rather than `InlineSearchCombo`'s
+hand-rolled `createPortal` positioning:
+
+- `PopoverContent`'s `style` changed from a fixed `width` to `minWidth: 'var(--radix-popover-trigger-width)'`
+  (never narrower than the trigger) + `width: 'max-content'` (grows to fit its content) + `maxWidth:
+  'min(420px, 90vw)'` (caps an extreme outlier so it can't blow past the viewport).
+- Each option button gained `overflow-hidden text-ellipsis whitespace-nowrap`, so within that
+  auto-width panel a name renders on one line — and in the rare case a single name still exceeds the
+  420px/90vw cap, it truncates with a visible "…" rather than wrapping or overflowing.
+
+**Why `InlineSearchCombo`'s own hand-rolled horizontal-anchor-flip logic
+(`shouldAnchorDropdownRight`, measuring each option's `scrollWidth`) wasn't needed here:**
+`InlineSearchCombo` has to compute its own collision/anchoring because it portals via a raw
+`createPortal` with manually-computed `position: fixed` coordinates — nothing else is watching for
+"did this dropdown just grow past the right edge of the screen". `ChipSelect` is built on Radix
+`Popover`/`Popper`, which already does collision-aware positioning (`avoidCollisions`, on by default)
+for whatever width the content ends up being — growing the panel via CSS doesn't bypass that, so no
+extra positioning code was needed.
+
+**Already fine, not touched:** `SelectorChip`'s own selected-value chip label (`<span
+className="truncate">`) already truncated correctly — this gap was specific to the still-searching
+dropdown LIST, not the committed value shown once something is picked.
+
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)

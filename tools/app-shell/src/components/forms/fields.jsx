@@ -366,7 +366,13 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
         className="max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
-        style={{ width: 'var(--radix-popover-trigger-width)' }}
+        // Auto-width, non-truncating panel (matches the "Impuesto" line-item selector,
+        // InlineSearchCombo's ETP-4600 behavior): the field itself stays a fixed width,
+        // but the dropdown grows to fit its longest option instead of wrapping a long
+        // BPartner/GL-item name onto multiple lines. `minWidth` keeps it never narrower
+        // than the trigger; `maxWidth` caps it so an extreme outlier can't blow past the
+        // viewport (Radix's own collision/shift handling keeps it on-screen horizontally).
+        style={{ minWidth: 'var(--radix-popover-trigger-width)', width: 'max-content', maxWidth: 'min(420px, 90vw)' }}
         data-testid={`${testId}-popover`}
         // Radix Dialog's page-scroll lock (react-remove-scroll) swallows native wheel
         // scrolling on this body-portalled list even though overflow-auto + a real
@@ -395,7 +401,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
             data-testid={`${testId}-option-${r.id}`}
             data-option-index={index}
             aria-selected={index === activeIndex}
-            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${index === activeIndex || value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
+            className={`flex w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${index === activeIndex || value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
           >
             {r.name}
           </button>
