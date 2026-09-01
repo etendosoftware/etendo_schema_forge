@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  canCreateIn,
   filterByNavigationWindow,
   filterQuickActions,
   hasAnyWindowRead,
@@ -189,5 +190,27 @@ describe('matrix: Tareas pendientes (per item)', () => {
   test('admin keeps every entry, and a non-array input yields []', () => {
     assert.deepEqual(filterByNavigationWindow(TASKS, NO_ROLE, true), TASKS);
     assert.deepEqual(filterByNavigationWindow(null, FINANCE), []);
+  });
+});
+
+describe('creation affordances outside the quick actions list', () => {
+  test('canCreateIn requires the write tier, not mere visibility', () => {
+    // Finance holds sales-order read-only and purchase-invoice full.
+    assert.equal(canCreateIn(FINANCE, 'purchase-invoice'), true);
+    assert.equal(canCreateIn(FINANCE, 'sales-order'), false);
+  });
+
+  test('the Financial summary card is reachable by a role that cannot create in both windows', () => {
+    // A role holding financial-account (so the card renders) with sales-invoice read-only must be
+    // offered "new purchase" but not "new sale".
+    const role = { 'financial-account': 'full', 'purchase-invoice': 'full', 'sales-invoice': 'read-only' };
+    assert.equal(isWidgetVisible(role, 'kpis'), true);
+    assert.equal(canCreateIn(role, 'purchase-invoice'), true);
+    assert.equal(canCreateIn(role, 'sales-invoice'), false);
+  });
+
+  test('fails closed on an empty map and bypasses for admin', () => {
+    assert.equal(canCreateIn(NO_ROLE, 'sales-invoice'), false);
+    assert.equal(canCreateIn(NO_ROLE, 'sales-invoice', true), true);
   });
 });

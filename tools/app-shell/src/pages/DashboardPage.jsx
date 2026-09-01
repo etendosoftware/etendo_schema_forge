@@ -189,6 +189,7 @@ function DashboardContent({ apiBaseUrl }) {
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '435 1 0' }}>
               <TopClientsList
                 clients={topClients}
+                canCreateContact={access.canCreateIn('contacts')}
                 currencyLabel={dashboardCurrency}
                 token={token}
                 apiBaseUrl={apiBaseUrl}
@@ -206,6 +207,8 @@ function DashboardContent({ apiBaseUrl }) {
               <FinancialSummaryCard
                 kpis={resolvedKpis}
                 currencyLabel={dashboardCurrency}
+                canCreatePurchase={access.canCreateIn('purchase-invoice')}
+                canCreateSale={access.canCreateIn('sales-invoice')}
                 data-testid="FinancialSummaryCard__3a4535" />
             </div>
             )}
@@ -213,6 +216,7 @@ function DashboardContent({ apiBaseUrl }) {
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '443 1 0' }}>
               <RecentSalesList
                 invoices={recentInvoices}
+                canCreateSale={access.canCreateIn('sales-invoice')}
                 currencyLabel={dashboardCurrency}
                 data-testid="RecentSalesList__3a4535" />
             </div>
@@ -235,6 +239,8 @@ function DashboardContent({ apiBaseUrl }) {
             {showTrends && (
             <div className="flex flex-col w-full h-[328px] min-w-0" style={{ flex: '901 1 0' }}>
               <FinancialTrendChart
+                canCreatePurchase={access.canCreateIn('purchase-invoice')}
+                canCreateSale={access.canCreateIn('sales-invoice')}
                 labels={revenueTrend.labels}
                 values={revenueTrend.values}
                 expenseValues={expenseTrend}
@@ -245,6 +251,7 @@ function DashboardContent({ apiBaseUrl }) {
             {showBestProducts && (
             <div className="flex flex-col w-full h-[328px] min-w-0" style={{ flex: '443.33 1 0' }}>
               <BestProductsList
+                canCreateSale={access.canCreateIn('sales-invoice')}
                 sellers={bestSellers}
                 products={bestProducts}
                 currencyLabel={dashboardCurrency}

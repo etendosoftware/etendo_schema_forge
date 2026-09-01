@@ -159,6 +159,18 @@ export function resolvePendingAmountsVisibility(tierBySlug, isAdmin = false) {
 }
 
 /**
+ * Whether the role may create a record in the given window — the gate every creation affordance
+ * shares, wherever it is rendered.
+ *
+ * Quick actions are not the only ones: the Financial summary card offers "new purchase" / "new
+ * sale" buttons in its empty state, which are equally creation actions and equally need the write
+ * tier. Route any new one through here rather than re-deriving it.
+ */
+export function canCreateIn(tierBySlug, slug, isAdmin = false) {
+  return isAdmin || hasWindowWrite(tierBySlug, slug);
+}
+
+/**
  * Quick-action filter. Each action declares the `window` slug it creates a record in; the action
  * is kept only when the role may WRITE there. An action that declares no window is kept (not a
  * record-creating action, nothing to gate on).

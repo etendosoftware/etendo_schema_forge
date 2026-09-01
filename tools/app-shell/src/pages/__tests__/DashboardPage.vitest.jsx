@@ -88,11 +88,17 @@ vi.mock('@/components/dashboard/QuickActionsList', () => ({
 }));
 
 vi.mock('@/components/dashboard/TopClientsList', () => ({
-  TopClientsList: () => <div data-testid="top-clients">TopClients</div>,
+  TopClientsList: ({ canCreateContact }) => (
+    <div data-testid="top-clients">{`contact:${canCreateContact}`}</div>
+  ),
 }));
 
 vi.mock('@/components/dashboard/FinancialSummaryCard', () => ({
-  FinancialSummaryCard: () => <div data-testid="financial-summary">FinancialSummary</div>,
+  // ETP-5088 — the creation-gate props are echoed so the page's wiring is assertable: the empty
+  // state's "new purchase"/"new sale" buttons are creation actions and were NOT gated at first.
+  FinancialSummaryCard: ({ canCreatePurchase, canCreateSale }) => (
+    <div data-testid="financial-summary">{`purchase:${canCreatePurchase} sale:${canCreateSale}`}</div>
+  ),
 }));
 
 vi.mock('@/components/dashboard/RecentSalesList', () => ({
@@ -269,5 +275,35 @@ describe('DashboardPage — role-based widget visibility (ETP-5088)', () => {
     // The greeting still renders — the page is not blank, it says why it is empty.
     expect(screen.getByTestId('greeting')).toBeInTheDocument();
     expect(screen.getByTestId('DashboardNoWidgets__3a4535')).toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage — creation CTAs need the write tier (ETP-5088)', () => {
+  const FINANCIAL_ACCOUNT = '94EAA455D2644E04AB25D93BE5157B6D';
+
+  it('a role holding the windows read-only is offered no creation CTA', () => {
+    authState.value = {
+      token: 'test-token', username: 'testuser', logout: () => {},
+      // Can OPEN the financial account (so the card renders) and the two invoice windows, but
+      // cannot write in either, nor in contacts.
+      windowAccess: {
+        [FINANCIAL_ACCOUNT]: 'read-only', 167: 'read-only', 183: 'read-only', 123: 'read-only',
+      },
+      capabilities: { isAdminOrClientAdmin: false },
+    };
+    render(<DashboardPage />);
+    expect(screen.getByTestId('financial-summary')).toHaveTextContent('purchase:false sale:false');
+    expect(screen.getByTestId('top-clients')).toHaveTextContent('contact:false');
+  });
+
+  it('write access on one window only opens that one CTA', () => {
+    authState.value = {
+      token: 'test-token', username: 'testuser', logout: () => {},
+      windowAccess: { [FINANCIAL_ACCOUNT]: 'full', 167: 'full', 183: 'read-only', 123: 'full' },
+      capabilities: { isAdminOrClientAdmin: false },
+    };
+    render(<DashboardPage />);
+    expect(screen.getByTestId('financial-summary')).toHaveTextContent('purchase:false sale:true');
+    expect(screen.getByTestId('top-clients')).toHaveTextContent('contact:true');
   });
 });

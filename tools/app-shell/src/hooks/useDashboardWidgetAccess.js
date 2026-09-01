@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import menuConfig from '@/menu.json';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import {
+  canCreateIn,
   filterByNavigationWindow,
   filterQuickActions,
   hasAnyWindowRead,
@@ -87,5 +88,8 @@ export function useDashboardWidgetAccess() {
      * state instead of vanishing.
      */
     pendingTasksVisible: hasAnyWindowRead(tierBySlug, PENDING_TASK_WINDOWS, isAdmin),
+    /** Whether the role may create a record in `slug` — for creation buttons outside the quick
+     *  actions list, e.g. the Financial summary card's empty state. */
+    canCreateIn: (slug) => canCreateIn(tierBySlug, slug, isAdmin),
   }), [accessKey, isAdmin]);
 }
