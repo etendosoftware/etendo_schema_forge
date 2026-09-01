@@ -29,7 +29,7 @@ export function GlobalSearchList({ children, className, ...props }) {
   return <div {...props} className={cn('min-h-0 overflow-y-auto overflow-x-hidden [&>section+section]:border-t [&>section+section]:border-[hsl(var(--border-control))]', className)}>{children}</div>;
 }
 export function GlobalSearchGroup({ heading, children, className, ...props }) {
-  return <section {...props} className={cn('px-2 py-1.5', className)}><h3 className="mb-1 rounded-md border-l-2 border-[hsl(var(--text-secondary))] bg-muted/35 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{heading}</h3>{children}</section>;
+  return <section {...props} className={cn('px-2 py-1.5', className)}><h3 className="mb-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{heading}</h3>{children}</section>;
 }
 export function GlobalSearchItem({ children, onSelect, className, disabled = false, ...props }) {
   return <button type="button" {...props} disabled={disabled} onClick={onSelect} className={cn('relative flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-50', className)} data-global-search-item="true">{children}</button>;
