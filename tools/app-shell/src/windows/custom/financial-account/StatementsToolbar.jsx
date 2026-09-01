@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
+import { RefreshButton } from '@/components/financial-accounts';
 import { StatementStatusFilter } from './StatementStatusFilter';
 import { buildStatementFilterColumns } from './statementAdvancedFilter';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
@@ -103,6 +104,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
  *   bankConnectionSynced?: boolean;
  *   onSyncClick?: () => void;
  *   syncing?: boolean;
+ *   onRefresh?: () => void;
  * }} props
  */
 export function StatementsToolbar({
@@ -120,6 +122,7 @@ export function StatementsToolbar({
   bankConnectionSynced = false,
   onSyncClick,
   syncing = false,
+  onRefresh,
   // Rendered node, not sort props: the toolbar stays presentational and the tab that owns the
   // sort state decides what goes here. Absent = nothing rendered.
   sortControl = null,
@@ -173,6 +176,10 @@ export function StatementsToolbar({
         />
       </div>
       {sortControl}
+      <RefreshButton
+        onRefresh={onRefresh}
+        label={ui('refresh')}
+        data-testid="RefreshButton__8a428c" />
       {/* bank-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
           manual import / manual create split-button. */}
       {bankConnectionSynced ? (
