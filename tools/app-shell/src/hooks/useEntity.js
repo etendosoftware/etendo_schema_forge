@@ -16,7 +16,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
@@ -1412,7 +1412,26 @@ export function useEntity(entity, childEntity, {
         // the toast becomes purely cosmetic. No-op for every window whose fields declare
         // neither `min` nor `integer`. ETP-4542.
         const allFormFields = [...formFieldsRef.current.values()].flat();
-        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        // Silent safety-net clamp for numeric fields with a declared `max` (e.g. Annual
+        // Depreciation % <= 100). EntityForm's onBlur already clamps this on the input, but
+        // that only fires if the user left the field before saving — clicking Save directly
+        // (e.g. right after typing, or a programmatic save) reaches performSave with the raw,
+        // unclamped value still in `editing`. Clamp it here, on the object used to build the
+        // payload, so an over-limit value is never persisted. Silent: never blocks save, no
+        // toast, no field error — unlike getNumericFieldViolation below (min/integer). ETP-4887.
+        let clampedEditing = editing;
+        for (const f of allFormFields) {
+            if (f?.max == null) continue;
+            const clamped = clampNumericFieldMax(f, editing?.[f.key]);
+            if (clamped !== editing?.[f.key]) {
+                if (clampedEditing === editing) clampedEditing = { ...editing };
+                clampedEditing[f.key] = clamped;
+            }
+        }
+        if (clampedEditing !== editing) {
+            setEditing(clampedEditing);
+        }
+        const numericViolation = getNumericFieldViolation(allFormFields, clampedEditing);
         if (numericViolation) {
             // Same id as EntityForm's on-blur toast for this field (ETP-4542):
             // when Save is clicked without leaving the input first, blur fires
@@ -1435,25 +1454,25 @@ export function useEntity(entity, childEntity, {
         const changedFormFields = [...formFieldsRef.current.values()]
             .flat()
             .filter(f => userChangedKeysRef.current.has(f.key));
-        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
         }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
         if (invalidWebsites.length > 0) {
             return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
         }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
-        const url = getUrl(isNew, apiBaseUrl, entity, editing);
+        const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
         const method = getMethod(isNew);
         const payload = buildSavePayload({
             isNew,
             selected,
-            editing,
+            editing: clampedEditing,
             entity,
             apiBaseUrl,
             backendDefaultKeysRef,

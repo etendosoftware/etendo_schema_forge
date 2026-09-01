@@ -3389,12 +3389,12 @@
       "description": "Cancellation date"
     },
     "Amortizationstartdate": {
-      "label": "Depreciation Start Date",
-      "description": "Depreciation Start Date"
+      "label": "Amortization Start Date",
+      "description": "Amortization Start Date"
     },
     "Amortizationenddate": {
-      "label": "Depreciation End Date",
-      "description": "Depreciation end date"
+      "label": "Amortization End Date",
+      "description": "Amortization end date"
     },
     "Annualamortizationpercentage": {
       "label": "Annual Depreciation %",
@@ -4209,7 +4209,7 @@
       "description": "Calculate type"
     },
     "Depreciatedpreviousamt": {
-      "label": "Previously Depreciated Amt.",
+      "label": "Previously Depreciated Value",
       "description": ""
     },
     "Exportexcel": {
@@ -19883,12 +19883,12 @@
     "assetsCurrencyLabel": "Currency",
     "assetsPurchaseDateLabel": "Purchase Date",
     "assetsCancellationDateLabel": "Cancellation Date",
-    "assetsDepStartDateLabel": "Depreciation Start Date",
-    "assetsDepEndDateLabel": "Depreciation End Date",
+    "assetsDepStartDateLabel": "Amortization Start Date",
+    "assetsDepEndDateLabel": "Amortization End Date",
     "assetsAssetValueLabel": "Asset Value",
     "assetsResidualValueLabel": "Residual Asset Value",
     "assetsDepreciationAmtLabel": "Depreciation Amount",
-    "assetsPrevDepreciatedLabel": "Previously Depreciated Amount",
+    "assetsPrevDepreciatedLabel": "Previously Depreciated Value",
     "poSave": "Save",
     "poSaveDraft": "Save draft",
     "poConfirmBtn": "Confirm",

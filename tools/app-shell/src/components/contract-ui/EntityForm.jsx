@@ -9,7 +9,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -592,7 +592,11 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
         // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
         // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
         const raw = e.target.value;
-        const v = (isNumber && raw.trim() === '') ? '0' : raw;
+        let v = (isNumber && raw.trim() === '') ? '0' : raw;
+        // Silently clamp to the field's declared `max` (e.g. Annual Depreciation % ≤ 100).
+        // This is a correction, not a validation — it never blocks the commit or shows a
+        // toast, unlike getNumericFieldError below which only handles `min`/`integer`. ETP-4887.
+        v = clampNumericFieldMax(f, v);
         // Re-sync the displayed buffer to the (possibly coerced) committed value.
         setBuffer(v);
         // Only COMMIT (fires the callout via onChange) when the value differs from the

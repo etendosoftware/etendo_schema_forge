@@ -232,7 +232,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // (e.g. 12.5% is valid) — so only `min: 1` is set, no `integer`. Drives the
     // generic numeric validation in EntityForm (on-blur toast) and the useEntity
     // save-block gate — no window-specific code. ETP-4542.
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, max: 100, calloutOn: 'blur', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'principal', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
     // Usable Life must be a positive whole number (backend "Create Amortization"
     // rejects empty/zero/negative/decimal). `min: 1` + `integer: true` drive the
