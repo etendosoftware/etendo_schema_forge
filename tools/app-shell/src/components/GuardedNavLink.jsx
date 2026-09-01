@@ -12,22 +12,20 @@ import { requestNavigation } from '@/lib/unsavedChanges.js';
  * is dirty. See the navigation-guard section of `lib/unsavedChanges.js` for why the interception
  * is here rather than in a react-router blocker.
  */
-export function GuardedNavLink({
-  to,
-  onClick,
-  // ETP-5073 follow-up — declared explicitly, with a default, for two reasons: the repo's
-  // `check:data-testid` codemod requires a literal `data-testid` on the rendered element, and it
-  // would otherwise insert one AFTER the `{...rest}` spread, silently overriding what every caller
-  // passes. SideMenu passes `menu-item-${slug}` on 7 call sites, and four Playwright specs plus
-  // SideMenu's own unit test select on it — so the caller's value has to win.
-  'data-testid': dataTestId = 'GuardedNavLink',
-  ...rest
-}) {
+// @data-testid-ignore — this is a pass-through wrapper: every caller supplies its own
+// `data-testid` through `...rest`, and the codemod appends its generated attribute AFTER the
+// spread, where it silently wins over the caller's. Adding one here makes every consumer's testid
+// unreachable (it breaks this component's own suite and SideMenu's).
+export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
+      // Placed BEFORE {...rest} on purpose: this is a fallback, not an override. Every caller
+      // passes its own testid (SideMenu's nav entries, and GuardedNavLink.vitest.jsx queries by
+      // "link"), and the codemod's default placement after the spread would have silently replaced
+      // all of them.
+      data-testid="NavLink__1b6d6d"
       {...rest}
-      data-testid={dataTestId}
       to={to}
       onClick={(event) => {
         onClick?.(event);

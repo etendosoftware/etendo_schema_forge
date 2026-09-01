@@ -142,7 +142,7 @@ export default function SalesInvoiceWindow(props) {
   const breadcrumb = 'Sales / Sales Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales', specName: 'sales-invoice',
   });
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -186,6 +186,13 @@ export default function SalesInvoiceWindow(props) {
           {...props}
           draftMode={draftModeOverride}
           bottomSection={InvoiceBottomPanel}
+          /* ETP-5027 — this prop SHADOWS the customComponents.topbarRight
+             declared in artifacts/sales-invoice/decisions.json (which the
+             generated HeaderPage.jsx passes as its own default): the explicit
+             prop here always wins, so the decisions-declared component is
+             never mounted directly — SalesInvoiceTopbar nests it instead.
+             Keep both in sync; a component added on only one side is either
+             invisible or rendered twice. */
           topbarRight={SalesInvoiceTopbar}
           notesField="description"
           onAfterSave={true}
