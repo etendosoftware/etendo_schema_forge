@@ -26,7 +26,6 @@ export function GlobalSearchProvider({ children }) {
     const now = Date.now();
     if (lastKeyRef.current.key === event.key && now - lastKeyRef.current.time < 40) return;
     lastKeyRef.current = { key: event.key, time: now };
-    if (import.meta.env.DEV) console.debug('[GlobalSearch] keydown', { key: event.key, open, hasHandler: Boolean(keyboardHandlerRef.current) });
     if (!open) return;
     event.preventDefault();
     const result = keyboardHandlerRef.current?.(event.key);

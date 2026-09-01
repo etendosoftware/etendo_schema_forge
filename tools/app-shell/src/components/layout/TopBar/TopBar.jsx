@@ -303,7 +303,6 @@ export default function TopBar({
                 handleSearchClick(event);
               }}
               onKeyDown={(event) => {
-                if (import.meta.env.DEV && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) console.debug('[TopBar search] keydown', { key: event.key, value: searchValue });
                 if (!searchOpen && event.key !== 'Escape') setSearchOpen(true);
                 const atStart = event.currentTarget.selectionStart === 0
                   && event.currentTarget.selectionEnd === 0;
