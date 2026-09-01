@@ -568,6 +568,7 @@ describe('useCallout', () => {
         expect(result.current.calloutResult?.blockingCondition).toEqual({
           kind: 'creditLimit',
           text: 'Business Partner credit limit exceeded',
+          amount: null,
         });
       });
 
