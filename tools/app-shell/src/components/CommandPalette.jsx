@@ -312,23 +312,28 @@ export function CommandPalette() {
     const timeout = setTimeout(async () => {
       try {
         const token = localStorage.getItem('sf_auth_token');
-        const params = new URLSearchParams({
-          query: normalizedQuery,
-          targets: requestedVectorSearchTargetKeys.join(','),
-          minScore: String(VECTOR_FETCH_MIN_SCORE),
-          maxResults: String(showRelatedMatches ? VECTOR_RELATED_MAX_RESULTS : VECTOR_MAX_RESULTS),
-        });
-        const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
-        const payload = await response.json();
-        const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+        const queryTargets = selectedVectorTargetKeys === null && requestedVectorSearchTargetKeys.length > 1
+          ? requestedVectorSearchTargetKeys.map((target) => [target])
+          : [requestedVectorSearchTargetKeys];
+        const payloads = await Promise.all(queryTargets.map(async (targets) => {
+          const params = new URLSearchParams({
+            query: normalizedQuery,
+            targets: targets.join(','),
+            minScore: String(VECTOR_FETCH_MIN_SCORE),
+            maxResults: String(showRelatedMatches ? VECTOR_RELATED_MAX_RESULTS : VECTOR_MAX_RESULTS),
+          });
+          const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
+          return response.json();
+        }));
+        const matches = payloads.flatMap((payload) => Array.isArray(payload?.matches) ? payload.matches : []);
         setVectorMatches(matches
           .filter((match) => Number.isFinite(Number(match.score)))
           .sort((left, right) => Number(right.score) - Number(left.score))
-          .slice(0, showRelatedMatches ? VECTOR_RELATED_MAX_RESULTS : VECTOR_MAX_RESULTS));
+          .slice(0, VECTOR_RELATED_MAX_RESULTS));
         if (normalizedQuery.length >= 3) {
           setRecentSearches((current) => {
             const next = [
@@ -350,7 +355,7 @@ export function CommandPalette() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [query, requestedVectorSearchTargetKeys, showRelatedMatches]);
+  }, [query, requestedVectorSearchTargetKeys, selectedVectorTargetKeys, showRelatedMatches]);
 
   const handleSelect = (name) => {
     setQuery('');

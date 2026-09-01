@@ -118,4 +118,10 @@ describe('CommandPalette', () => {
     assert.match(src, /window-filter-suggestions/);
     assert.match(src, /navigate\(suggestion\.path\)/);
   });
+
+  it('queries each target independently when all windows are selected', () => {
+    assert.match(src, /selectedVectorTargetKeys\s*===\s*null/);
+    assert.match(src, /requestedVectorSearchTargetKeys\.map\(\(target\)\s*=>\s*\[target\]\)/);
+    assert.match(src, /payloads\.flatMap/);
+  });
 });
