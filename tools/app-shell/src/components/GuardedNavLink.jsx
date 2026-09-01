@@ -12,7 +12,7 @@ import { requestNavigation } from '@/lib/unsavedChanges.js';
  * is dirty. See the navigation-guard section of `lib/unsavedChanges.js` for why the interception
  * is here rather than in a react-router blocker.
  */
-export function GuardedNavLink({ to, onClick, ...rest }) {
+export function GuardedNavLink({ to, onClick, 'data-testid': dataTestId = 'NavLink__1b6d6d', ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
@@ -28,7 +28,7 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
         event.preventDefault();
         requestNavigation(() => navigate(to));
       }}
-      data-testid="NavLink__1b6d6d" />
+      data-testid={dataTestId} />
   );
 }
 
