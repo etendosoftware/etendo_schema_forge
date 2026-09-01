@@ -208,6 +208,18 @@ buttons looked like *before* your change, and make sure they still look the same
 match to the pre-existing `hidePrint: true` (→ add `listViewOptions.hidePrint: true`) or absence
 (→ use `hidePrintWhen: true`/an object condition, never the plain `hidePrint`) case above.
 
+**The idle-toolbar Print button hides during a selection.** `ListView.jsx`'s top-right toolbar
+Print button (opens the whole-list report via `setShowReport(true)`) is gated by
+`selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint)` — as soon as one or
+more rows are selected, it disappears, leaving only the bottom `SelectionToolbar`'s own Print
+icon (bulk-prints just the selected rows via `printDocuments()`). Before this, both Print
+affordances stayed visible at once during a selection — confusing, since they print different
+things (the whole filtered list vs. only the selected rows). This is a **generic `ListView.jsx`
+behavior**, not a per-window flag — it applies uniformly to every window using `ListView`,
+regardless of `hidePrint`/`hidePrintWhen`/`listViewOptions.hidePrint` configuration. Do not add a
+per-window opt-out; if a window genuinely needs both prints visible during a selection, that is a
+product decision to revisit here, not to route around locally.
+
 ### Send Document (`window.sendDocument`)
 
 Recipient-edit policy overrides (ETP-4226). The generator copies these keys
@@ -341,7 +353,8 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
     "attachments": {
       "enabled": true,
       "maxSizeMB": 10,
-      "allowedMimeTypes": ["application/pdf", "image/*"]
+      "allowedMimeTypes": ["application/pdf", "image/*"],
+      "saveBeforeAttach": false
     }
   }
 }
@@ -352,6 +365,7 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
 | `enabled` | boolean | `true` | Master toggle. Set to `false` for the same effect as `attachments: false`. |
 | `maxSizeMB` | number | `10` | Max file size enforced client-side before upload. The NEO servlet has its own hard limit of 10 MB (`MultipartConfig`); raising this beyond 10 will surface a server error. |
 | `allowedMimeTypes` | string[] | `undefined` (any) | MIME-type allow-list applied client-side. Supports wildcards like `"image/*"`, `"application/*"`. When omitted, every MIME type is accepted. |
+| `saveBeforeAttach` | boolean | `false` | ETP-4315 QA follow-up. On a brand-new (unsaved) record, `recordId` is the literal string `"new"` — truthy, so the dropzone stays enabled, but an upload against it fails server-side and the file is silently lost. When `true`, dropping a file on an unsaved record force-saves the header first (same `hook.handleSave()` → `primeSaved()` → navigate mechanism `secondaryTabs.requireSavedRecord` already uses), then uploads against the newly persisted id and lands on the saved record with this tab still open. When `false` (default), the tab keeps today's behavior — the underlying bug still exists on any window that hasn't opted in. Enabled today only on `purchase-invoice`, where attaching the supplier's original document before finishing data entry is the expected flow; other windows are a deliberately separate follow-up (see the ETP-4315 comment thread) rather than a blanket auto-save-on-attach for every window. |
 
 **Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
@@ -1016,6 +1030,12 @@ Two field-level props control how the grid column renders raw values as labeled 
 2. `DistinctEnumPicker` (in `AdvancedFilterBuilder.jsx`) reads `enumLabels` to populate the advanced/conditional filter value dropdown — so the filter shows translated labels instead of raw values.
 3. `ListFilterBar.jsx` uses the same `enumLabels` to drive the status quick-filter pills above the list.
 
+**Option order in the two status dropdowns (ETP-4913):** both the `ListFilterBar` pill and `DistinctEnumPicker` merge two sources that arrive at different times — the uncached backend `_distinct` fetch (fired when the popover opens) and the codes present in the currently loaded grid rows. Neither source is wrong on its own, but merging them unsorted meant the list painted in grid order and then reshuffled once the fetch resolved, giving a different order on every open. Both now sort with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, the single fixed business-flow catalog (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown).
+
+`DistinctEnumPicker` applies that sort **only** to `type: 'status'` columns — exactly the set `ListFilterBar` discovers via `columns.find(c => c.type === 'status')`, so the two can never disagree for the same column. Every other `enumLabel` column keeps its merge order, because it is already deterministic AND intentional: the backend's `order by <code> asc` for business enums (`accountType` `A,E,L,M,O,R` would become `M,A,E,L,O,R`, since `M` sits in the In-process bucket), or the `enumLabels` insertion order for virtual columns filled by `fillFallbackCodes` (a severity list `vencida, proxima, aldia` would be alphabetized into reverse severity). **Do not widen that gate.** Note that `DistinctEnumPicker` lives in `schema_forge_core`, so `STATUS_ORDER` is duplicated there; `tools/app-shell/src/lib/__tests__/statusBadge.coreParity.test.js` fails the build if the two copies drift apart.
+
+Unlike `ListFilterBar.labelForStatus`, `DistinctEnumPicker.labelFor` deliberately does NOT delegate to `statusLabel()`: that function only honours an `enumLabels` entry that is an i18n **key**, and a literal label falls through to its hardcoded code→key `MAP`, yielding the **raw code** for anything outside it. Docstatus `enumLabels` are always keys, but that picker also serves columns whose `enumLabels` are literals (`docBaseType`'s 44 AD names, `'GENERIC' → 'Use Generic Account No.'`, `sales-quotation`'s `ui('quotationStatus.CO')`), which would all regress to raw codes.
+
 **"All statuses" dropdown label resolution (ETP-4696):** `labelForStatus` in `ListFilterBar.jsx` — the function that renders each option text in the "All statuses" quick-filter dropdown — delegates 100% to `statusLabel(code, dictionary, ui, statusCol?.enumLabels)`, the exact same resolution function `DataTable.cellRenderers.jsx` uses for the grid cell badge (also used by `DocumentStatusPill.jsx`, `CloneOrderModal.jsx`, `ReportDrawer.jsx`, `useInvoicePreview.js`). It previously had its own local lookup that bypassed `statusLabel()`, so codes without a fortuitous translation (`PWNC`, `RDNC`, `ETGO_CI`, `RPVOID`) rendered in raw/English form in the dropdown while the grid cell for the same row translated correctly. There is no second translation mechanism to maintain: extending the catalog — a new `enumValues` entry in `decisions.json`, a `genericLabels` key in `{es_ES,en_US}.json`, or an `AD_Ref_List_Trl` row — is picked up by `statusLabel()` once, and both the grid cell and the dropdown reflect it automatically.
 
 **Key rules:**
@@ -1024,7 +1044,9 @@ Two field-level props control how the grid column renders raw values as labeled 
 - The mapping is **per-window**: the same raw value (e.g. `false`) can map to `statusDraft` in one window and a different key (e.g. `statusIncomplete`) in another. The shared `statusLabel` function stays generic.
 - `name` should be an existing key in `genericLabels` (in `packages/app-shell-core/src/locales/{es_ES,en_US}.json`) so both locales resolve correctly. If you use a literal string it renders as-is in all locales.
 - If you introduce a **new** key, add it to **both** `en_US.json` and `es_ES.json` (per `docs/i18n-guide.md`).
-- If the raw schema already supplies `enumValues` (from an AD list reference), `decisions.json` `enumValues` **overrides** them.
+- If the raw schema already supplies `enumValues` (from an AD list reference), `decisions.json` `enumValues` **overrides** them. An empty array (`[]`) is ignored, so it cannot accidentally leave a field with no options — declare the codes you want or omit the key.
+  - **Fixed in ETP-4913.** Until then this only held for fields with NO raw `enumValues` (e.g. the synthetic `YesNo` `processed` status of `goods-movements`). `buildField` in the core's `cli/src/resolve-curated.js` copies `enumValues` from decisions first and from the raw schema second, and the raw copy overwrote unconditionally — so a field backed by a real AD List reference silently kept the AD values. That is why the two return-shipment windows could not redirect `DocStatus`/`CO` away from the poisoned `docStatusCo` key. Requires `@etendosoftware/schema-forge-cli` ≥ the ETP-4913 release.
+  - The poisoning itself is a separate, still-open generator issue: `extract-labels.js` keys enum labels by `(column name, value code)` rather than by AD reference, so `M_InOut.DocStatus/CO` ("Completed") and `C_Order.DocStatus/CO` ("Booked") collide on one global `docStatusCo` key, and the `ORDER BY rl.name COLLATE "C"` tie-break makes "Booked"/"Registrado" win for every window. Overriding `enumValues` per window is the supported workaround; a reference-scoped key would be the root fix. See `docs/generated-custom-windows/return-material-receipt.md` §"Final status reads Completado".
 
 **Example — `goods-movements` `processed` field** (an Etendo `YesNo` boolean the API serializes as `true`/`false`):
 
