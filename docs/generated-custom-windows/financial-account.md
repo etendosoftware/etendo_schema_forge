@@ -1543,8 +1543,62 @@ uses) never had it: a long description or counterparty name typed into those cel
 inside the `<input>`, with no way to see the full value without focusing it. Added the same native
 `title={row.description}` / `title={row.contactName}` to `EditRow`'s description and Nombre del
 contacto inputs, matching the existing `MatchedRow` precedent exactly (no new component — Reference
-No wasn't included, having asked for and confirmed only these two fields; that column is expected to
-stay short, `REF-####`).
+No wasn't included at first, on the assumption that column stays short, `REF-####`; broadened below).
+
+#### Eighth follow-up: reopening the same edit modal showed the pre-edit line values (ETP-4924)
+
+Reported sequence: edit a line's date, save as draft, close the modal, reopen "Editar extracto" on
+the SAME statement immediately — the line shows the OLD date, not the one just saved. The
+list/accordion view (`StatementLinesInline.jsx`) already shows the new value right after saving (its
+own ETP-4921 `refreshToken` mechanism is correctly wired); only the reopened EDIT MODAL was stale.
+Pressing the toolbar refresh button before reopening "fixed" it — a strong clue this was a client-side
+timing issue, not a backend persistence bug (a real persistence failure wouldn't self-correct via an
+unrelated header refresh).
+
+**Root cause: a stale-closure race between two `useEffect`s in the same passive-effect flush, not
+browser HTTP caching.** `useBankStatementLines(statementId)` → `useNeoResource({path, deps})` only
+sets `loading` to `true` INSIDE the effect that starts a fetch (fired when `path` flips null→url,
+i.e. every time the modal reopens). `ManualStatementModal`'s own hydration effect is a SEPARATE
+`useEffect` in the same component, and both effects fire in the SAME commit's effect flush when
+`open` changes. React batches all effects from one commit before re-rendering, so the hydration
+effect's closure can still read the STALE `linesLoading === false` (left over from the PREVIOUS
+successful fetch, before this reopen) and the STALE `loadedLines` (the old rows) for that one pass —
+it hydrates `rows` from that stale snapshot and immediately sets `hydratedRef.current = true`,
+locking it in. By the time the real fetch's `loading: true` (and eventually the fresh data) actually
+lands, the hydration effect no longer runs again (`hydratedRef.current` is already `true`), so the
+stale rows are never replaced. A ruled-out alternative worth naming: `useNeoResource`'s own
+`fetchNeoPayload`/`apiFetch` call sets no `cache` option on `fetch()` at all, which was the first
+suspect (an uncontrolled browser HTTP cache) — but the list/accordion's OWN refetch (via the same
+`useBankStatementLines`/`useNeoResource`, just with a bumped `refreshToken`) genuinely returns fresh
+data every time, which rules out a caching layer blocking repeat GETs to this exact URL; the bug is
+purely in `ManualStatementModal`'s own hydration-effect timing, not the fetch layer.
+
+This ONLY reproduces on a REOPEN of an already-mounted `ManualStatementModal` instance for the same
+statement — a first-ever open of a fresh instance is never affected, because `useNeoResource`'s
+`loading` starts at `true` via `useState(true)`, so there is no stale `false` to misread on that
+first pass.
+
+**Fix, scoped entirely to `ManualStatementModal.jsx`** (not the shared `useNeoResource` hook — see
+"Considered but not done" below): a new `seenFreshLoadRef` (`useRef(false)`), reset alongside
+`hydratedRef.current = false` whenever the modal closes. In the hydration effect: a `linesLoading ===
+true` reading marks `seenFreshLoadRef.current = true` and returns without hydrating (confirms a
+genuine fetch cycle has started for this open); a `linesLoading === false` reading is only trusted —
+and hydration proceeds — once `seenFreshLoadRef.current` is already `true`, i.e. once a `true` pulse
+has actually been observed first. A `false` reading before that point is ambiguous (stale-old vs.
+genuinely-idle-with-fresh-data) and is treated as "not yet safe to hydrate from" rather than assumed
+correct.
+
+**Considered but not done: fixing this at the source, in `useNeoResource` itself.** The more thorough
+fix would have `useNeoResource` synchronously reset `loading` to `true` (and clear `data`) the moment
+`path` changes to a new non-null value — using the React-documented "adjust state during render when
+a dependency changes" pattern, rather than waiting for an effect to notice. That would close this
+entire CLASS of bug for every consumer that does `path: id ? url : null` and toggles it (a documented,
+widely-used pattern per the hook's own comment — `useFinancialAccount`, `useAccountMovements`, and
+presumably others across the app), not just this one call site. Not done here: `useNeoResource` is a
+foundational, broadly-shared hook, and a change to it needs its own scoping/regression pass across
+every consumer, not a drive-by edit bundled into a single-window bug fix. If the same symptom
+("reopening/toggling a `path: id ? url : null` hook shows stale data for one paint") is ever reported
+somewhere else, this is the place to make that deeper fix.
 
 #### The expanded row and the header row refresh together (ETP-4921)
 

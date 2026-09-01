@@ -678,9 +678,6 @@ export function ManualStatementModal({
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
   const { updateStatement, busy } = useStatementActions();
-  // Only fetch lines while editing an open draft. No refresh token is needed here (unlike the
-  // expanded accordion row): `path` itself flips null → url on every open, which is already a
-  // dependency change and so already forces a fresh fetch of the just-saved lines.
   const { lines: loadedLines, loading: linesLoading } =
     useBankStatementLines(editing && open ? statement.id : null);
   const saving = creating || busy;
@@ -694,6 +691,21 @@ export function ManualStatementModal({
   const [confirmClose, setConfirmClose] = useState(false);
   // Guards single hydration per open so user edits aren't clobbered on re-render.
   const hydratedRef = useRef(false);
+  // ETP-4924: re-editing the SAME already-saved statement a second time (close, edit
+  // again, without a full page reload in between) showed the PRE-edit line values. Root
+  // cause: `useBankStatementLines`'s underlying `useNeoResource` only flips `loading` to
+  // `true` INSIDE the effect that starts the new fetch (after `path` goes null → url
+  // again) — but that effect and this component's own hydration effect below both fire
+  // in the SAME passive-effect flush, so this effect's closure can still read the STALE,
+  // pre-fetch `linesLoading === false` (left over from the previous successful load) and
+  // `loadedLines` (still the old rows) for one pass, hydrate from them, and lock the
+  // result in via `hydratedRef.current = true` — before the fresh fetch's `loading: true`
+  // has even been observed, let alone its result. A first-ever mount never hits this:
+  // `useState(true)` starts `loading` genuinely `true`, so there's nothing stale to read.
+  // Fix: don't trust a `linesLoading === false` reading until we've actually SEEN it flip
+  // to `true` at least once since this open cycle began — that's the signal a real fetch
+  // for the current statement has genuinely started (and, later, finished).
+  const seenFreshLoadRef = useRef(false);
 
   // setForm/setRows variants that flag the form as dirty. Hydration/reset use the
   // raw setters so seeding the modal never counts as a user edit.
@@ -706,6 +718,7 @@ export function ManualStatementModal({
   useEffect(() => {
     if (open) return;
     hydratedRef.current = false;
+    seenFreshLoadRef.current = false;
     setForm(initialForm(today));
     setRows([]);
     setDirty(false);
@@ -718,7 +731,14 @@ export function ManualStatementModal({
   useEffect(() => {
     if (!open || hydratedRef.current) return;
     if (editing) {
-      if (linesLoading) return;
+      if (linesLoading) {
+        seenFreshLoadRef.current = true;
+        return;
+      }
+      // A `false` reading is ambiguous on its own — see the comment on
+      // `seenFreshLoadRef` above — so only trust it once we've actually observed
+      // this open's fetch pass through `loading: true` first.
+      if (!seenFreshLoadRef.current) return;
       setForm({
         name: statement.name || '',
         transactionDate: isoToLocal(statement.transactionDate) || today,
