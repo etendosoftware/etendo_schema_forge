@@ -51,6 +51,8 @@ const ICON_MAP = {
 
 const RECENT_SEARCHES_KEY = 'schema-forge:recent-searches';
 const MAX_RECENT_SEARCHES = 5;
+const VECTOR_MIN_SCORE = 0.76;
+const VECTOR_MAX_RESULTS = 10;
 
 function readRecentSearches() {
   try {
@@ -305,6 +307,8 @@ export function CommandPalette() {
         const params = new URLSearchParams({
           query: normalizedQuery,
           targets: requestedVectorSearchTargetKeys.join(','),
+          minScore: String(VECTOR_MIN_SCORE),
+          maxResults: String(VECTOR_MAX_RESULTS),
         });
         const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -312,7 +316,11 @@ export function CommandPalette() {
         });
         if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
         const payload = await response.json();
-        setVectorMatches(Array.isArray(payload?.matches) ? payload.matches : []);
+        const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+        setVectorMatches(matches
+          .filter((match) => Number.isFinite(Number(match.score)) && Number(match.score) >= VECTOR_MIN_SCORE)
+          .sort((left, right) => Number(right.score) - Number(left.score))
+          .slice(0, VECTOR_MAX_RESULTS));
         if (normalizedQuery.length >= 3) {
           setRecentSearches((current) => {
             const next = [
