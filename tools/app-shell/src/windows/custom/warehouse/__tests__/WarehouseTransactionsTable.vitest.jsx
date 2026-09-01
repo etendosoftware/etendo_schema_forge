@@ -311,6 +311,28 @@ describe('WarehouseTransactionsTable', () => {
     expect(screen.queryByTestId('icon-arrow-up-right')).not.toBeInTheDocument();
   });
 
+  it('falls back to internalConsumptionLine$_identifier when etgoDocLabel is absent (ETP-5039)', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      transactions: [
+        {
+          id: 'tx-1',
+          movementDate: '2025-01-15',
+          movementType: 'D-',
+          etgoDocWindow: 'internal-consumption',
+          etgoDocHeaderId: 'HDR-IC-1',
+          'internalConsumptionLine$_identifier': 'IC-0007',
+          movementQuantity: -2,
+        },
+      ],
+    });
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    expect(screen.getByText('IC-0007')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('IC-0007'));
+    expect(mockNavigate).toHaveBeenCalledWith('/internal-consumption/HDR-IC-1');
+  });
+
   it('renders a dash placeholder when no document label can be resolved at all', () => {
     useWarehouseStock.mockReturnValue({
       loading: false,
