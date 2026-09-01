@@ -144,6 +144,29 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
   });
 
+  // ETP-4948 QA finding: FiscalYearPeriodsHandler.createPeriod (July-June range) sets the 13th
+  // "adjustment" period's startingDate to June 30 of the fiscal-year end — the same month/year as
+  // the regular 12th period's June 1 startingDate. formatPeriodName() only ever reads
+  // month+year (never day) and nothing else in the row surfaces periodType/periodNo, so a user
+  // cannot visually tell the two periods apart in the list. This test documents the current
+  // (ambiguous) behavior as a known gap — not a fix — so a future disambiguation (e.g. rendering
+  // periodType or periodNo) has a regression test to flip once it lands.
+  it('KNOWN GAP: renders an identical label for the regular June period and the July-June 13th adjustment period', async () => {
+    const regularJune = { id: 'p12', name: 'Jun-28', startingDate: '2028-06-01', status: 'O', periodNo: 12, periodType: 'S' };
+    const adjustment = { id: 'p13', name: '13th Period - 28', startingDate: '2028-06-30', status: 'O', periodNo: 13, periodType: 'A' };
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [regularJune, adjustment] } }),
+    }));
+
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+
+    await waitFor(() => expect(screen.getByTestId('period-name-p12')).toHaveTextContent('June 28'));
+    // Both rows render the exact same text — no periodType/periodNo indicator distinguishes the
+    // 13th adjustment period from the regular June period it shares a displayed month/year with.
+    expect(screen.getByTestId('period-name-p13')).toHaveTextContent('June 28');
+  });
+
   it('renders period status as a colored badge with the translated label, not the raw code', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p11" />);
     await waitFor(() => screen.getByText('January 27'));
