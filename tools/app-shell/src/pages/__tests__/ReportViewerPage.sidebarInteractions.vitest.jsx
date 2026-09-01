@@ -6,6 +6,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -258,9 +259,7 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Date From')).toBeInTheDocument());
 
-    // Submitting with the required date empty shows the error
-    await user.click(screen.getByText('runReport'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
 
     // Setting a value should clear the error (handleChange clears errors[name] when value is truthy)
     const dateField = screen.getByTestId('date-field');
@@ -329,8 +328,7 @@ describe('ReportViewerPage — ReportSidebar conditional required (requiredIf, E
     expect(dateLabel.closest('label')).not.toHaveTextContent('*');
 
     // Now submitting with referenceYearId empty must show the required error.
-    await user.click(screen.getByText('runReport'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    await assertGenerateDisabledThenPdfTriggersRequired(user);
   });
 
   it('toggling the gate back off re-hides both visibleIf-gated params and clears the requirement', async () => {

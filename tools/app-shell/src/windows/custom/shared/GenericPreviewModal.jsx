@@ -282,12 +282,16 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
 
   return (
     <div
-      // z-[60], above SelectionToolbar's z-50 (ETP-4972 live-QA finding):
-      // both portal to document.body, so equal z-index left paint order to
-      // decide the winner, and the floating selection pill was showing on
-      // top of this preview when opened with rows still selected in the
-      // list behind it.
-      className={`fixed inset-0 z-[60] bg-foreground/30 ${getBackdropClass(animState)}`}
+      // z-50, the Overlay tier this belongs to. It was raised to z-[60] so it would
+      // beat SelectionToolbar's z-50 (ETP-4972): the pill portals to document.body
+      // while this renders in place, so at an equal z-index paint order handed the
+      // pill the win. But z-[60] is the dropdown-in-modal tier, above every modal —
+      // so the payment, SIF and send modals this same component opens, all at z-50,
+      // began rendering BEHIND it (ETP-4895 live report). The pill is at z-40 now,
+      // where the scale puts chrome an overlay must cover, and this is back on its
+      // own tier: it covers the pill by z-index, and the modals it opens cover it in
+      // turn by being rendered after it.
+      className={`fixed inset-0 z-50 bg-foreground/30 ${getBackdropClass(animState)}`}
       onClick={triggerClose}
     >
       <div

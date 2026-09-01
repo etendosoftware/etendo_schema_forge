@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { X, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 const SELECTOR_PAGE_SIZE = 50;
@@ -58,7 +59,10 @@ export default function ProductResolverPopup({
   onCancel,
 }) {
   const ui = useUI();
-  const authHeader = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  // Every URL these components receive (selectorUrl, productSpecUrl) is already
+  // complete, so the hook is bound with no base of its own; the caller's token
+  // is passed explicitly per call below (it comes from a prop, not AuthContext).
+  const apiFetch = useApiFetch('');
 
   // selections: { [idx]: { id, label } | null }
   const [selections, setSelections] = useState({});
@@ -97,7 +101,7 @@ export default function ProductResolverPopup({
               onSelect={(value) => setSelections(prev => ({ ...prev, [row.idx]: value }))}
               selectorUrl={selectorUrl}
               productSpecUrl={productSpecUrl}
-              authHeader={authHeader}
+              apiFetch={apiFetch}
               token={token}
               ui={ui}
               data-testid="ProductRow__b3ae11" />
@@ -123,7 +127,7 @@ export default function ProductResolverPopup({
   );
 }
 
-function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, authHeader, token, ui }) {
+function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, apiFetch, token, ui }) {
   const [creating, setCreating] = useState(false);
 
   return (
@@ -147,7 +151,8 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
         </div>
         <InlineSelector
           selectorUrl={selectorUrl}
-          authHeader={authHeader}
+          apiFetch={apiFetch}
+          token={token}
           initialQuery={row.description}
           value={selection}
           onPick={onSelect}
@@ -159,7 +164,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
         <ProductCreateForm
           initialName={row.description}
           productSpecUrl={productSpecUrl}
-          authHeader={authHeader}
+          apiFetch={apiFetch}
           token={token}
           onCreated={(value) => { onSelect(value); setCreating(false); }}
           onCancel={() => setCreating(false)}
@@ -170,7 +175,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
   );
 }
 
-function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, onCreateNew, ui }) {
+function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onPick, onCreateNew, ui }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
@@ -216,7 +221,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
           params.set('name', trimmed);
           params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
         }
-        const res = await fetch(`${selectorUrl}?${params}`, { headers: authHeader });
+        const res = await apiFetch(`${selectorUrl}?${params}`, { token });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         const list = data?.items ?? data?.response?.data ?? [];
@@ -228,7 +233,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [open, query, selectorUrl, authHeader]);
+  }, [open, query, selectorUrl, apiFetch, token]);
 
   const options = useMemo(() => {
     const seen = new Set();
@@ -319,7 +324,8 @@ function SelectorDialog({
   title,
   initialQuery,
   selectorUrl,
-  authHeader,
+  apiFetch,
+  token,
   currentId,
   onPick,
   onClose,
@@ -360,7 +366,7 @@ function SelectorDialog({
           params.set('name', trimmed);
           params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
         }
-        const res = await fetch(`${selectorUrl}?${params}`, { headers: authHeader });
+        const res = await apiFetch(`${selectorUrl}?${params}`, { token });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         const list = data?.items ?? data?.response?.data ?? [];
@@ -377,7 +383,7 @@ function SelectorDialog({
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [query, selectorUrl, authHeader]);
+  }, [query, selectorUrl, apiFetch, token]);
 
   const options = useMemo(() => {
     const seen = new Set();
@@ -481,7 +487,7 @@ function deriveSearchKey(value) {
   return String(value || '').trim().replace(/\s+/g, '');
 }
 
-function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onCreated, onCancel, ui }) {
+function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCreated, onCancel, ui }) {
   const [name, setName] = useState(initialName || '');
   const [searchKey, setSearchKey] = useState(deriveSearchKey(initialName));
   const [skTouched, setSkTouched] = useState(false);
@@ -509,7 +515,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${productSpecUrl}/product/defaults`, { headers: authHeader });
+        const res = await apiFetch(`${productSpecUrl}/product/defaults`, { token });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
@@ -527,7 +533,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productSpecUrl, authHeader]);
+  }, [productSpecUrl, apiFetch, token]);
 
   const validate = () => {
     if (!name.trim()) return ui('ocrProductCreateNameRequired');
@@ -552,10 +558,10 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
       };
       // Drop the synthetic id field /defaults always returns.
       delete body.id;
-      const res = await fetch(`${productSpecUrl}/product`, {
+      const res = await apiFetch(`${productSpecUrl}/product`, {
         method: 'POST',
-        headers: { ...authHeader, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        token,
       });
       const text = await res.text().catch(() => '');
       let json = null;
@@ -672,7 +678,8 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           title={ui('ocrProductCreateUom')}
           initialQuery=""
           selectorUrl={uomSelectorUrl}
-          authHeader={authHeader}
+          apiFetch={apiFetch}
+          token={token}
           currentId={uom?.id || null}
           onPick={(value) => { setUom(value); setPicker(null); }}
           onClose={() => setPicker(null)}
@@ -684,7 +691,8 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           title={ui('ocrProductCreateTaxCategory')}
           initialQuery=""
           selectorUrl={taxSelectorUrl}
-          authHeader={authHeader}
+          apiFetch={apiFetch}
+          token={token}
           currentId={taxCategory?.id || null}
           onPick={(value) => { setTaxCategory(value); setPicker(null); }}
           onClose={() => setPicker(null)}

@@ -86,6 +86,59 @@ describe('AccountsToolbar', () => {
     expect(screen.queryByTestId('cuentas-advanced-filter')).not.toBeInTheDocument();
   });
 
+  // This window hides ListView's idle bar and draws its own toolbar, so the generic
+  // refresh button is reproduced here (same reason as `sortControl`).
+  it('renders the refresh button', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+    const button = screen.getByTestId('finance-refresh-button');
+    expect(button).toBeInTheDocument();
+    // Icon-only: the accessible name comes from the i18n key, never a hardcoded string.
+    expect(button).toHaveAttribute('aria-label', 'refresh');
+    expect(button).toHaveAttribute('title', 'refresh');
+  });
+
+  it('calls onRefresh when the refresh button is clicked', () => {
+    const onRefresh = vi.fn();
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={onRefresh}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the refresh button between the sort control and the matching-rules button', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={vi.fn()}
+        sortControl={<button type="button" data-testid="sort-control">sort</button>}
+      />,
+    );
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    const order = ['sort-control', 'finance-refresh-button', 'cuentas-matching-rules-button']
+      .map((id) => [...toolbar.querySelectorAll('[data-testid]')]
+        .indexOf(screen.getByTestId(id)));
+    expect(order[0]).toBeLessThan(order[1]);
+    expect(order[1]).toBeLessThan(order[2]);
+  });
+
   it('keeps the "Nueva cuenta" button enabled with no click handler in T1', () => {
     render(
       <AccountsToolbar

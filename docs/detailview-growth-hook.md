@@ -5,14 +5,14 @@ Claude's project hook rejects `Edit`, `Write`, and `MultiEdit` operations that w
 The hook searches for a base in this order:
 
 1. `DETAILVIEW_BASE_REF`, when configured;
-2. `origin/epic/ETP-3504`;
-3. `epic/ETP-3504`;
-4. `origin/main`, `main`, `origin/develop`, or `develop`.
+2. `origin/develop`;
+3. `develop`;
+4. `origin/main` or `main`.
 
 Override the automatic choice when needed:
 
 ```sh
-DETAILVIEW_BASE_REF=epic/ETP-3504 claude
+DETAILVIEW_BASE_REF=origin/develop claude
 ```
 
 The check is predictive for Claude `Edit` and `Write` payloads. It fails closed when it cannot resolve the base, read the baseline, or calculate the proposed file contents.

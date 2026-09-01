@@ -12,6 +12,12 @@ import { login } from '../helpers/auth.js';
  * TC-35 — Tax Category window is accessible (partial)
  * TC-37 — Existing Tax Rate window unaffected by this PR
  *
+ * This file is also the home for later window-visibility regressions that share
+ * the same assertions, so they stay in one place instead of spawning a spec per
+ * ticket:
+ *
+ * ETP-5068 — "Conversion Rate Downloader Log" retired from the Settings menu
+ *
  * All specs run in mock mode (no real Etendo backend required).
  */
 
@@ -172,5 +178,99 @@ test.describe('TC-37 — Tax Rate window unaffected', () => {
     // Expand the sidebar so sub-items are rendered in the DOM.
     await expandSidebar(page);
     await expect(page.getByTestId('menu-item-tax')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5068 — "Conversion Rate Downloader Log" retired from the Settings menu
+//
+// The window is an internal log of the conversion-rate downloader job. It adds
+// no value to the Etendo Go end user, so it was REMOVED from menu.json rather
+// than marked `hidden: true` — reinstating it is not planned, and administrators
+// read the log in Etendo classic instead (the GO template roles keep their AD
+// window grant). The artifact, contract and NEO spec are intentionally intact,
+// so the slug is declared in `apiOnlyWindows` in registry.js.
+//
+// These tests are the regression net for that removal: a bulk `make regen` or a
+// bad merge re-adding the menu entry would silently undo the ticket.
+//
+// IMPORTANT — why every test here navigates to `/tax` first: in expanded mode
+// the SideMenu only renders the sub-items of the OPEN group, and the open group
+// is the one matching the current route (`findActiveGroup`). Asserting the
+// absence of a `menu-item-*` testid from `/dashboard` is therefore VACUOUS — it
+// passes whether or not the entry still exists in menu.json. `tax` is a Settings
+// sibling (windowId "137", already covered by TC-37), so landing on `/tax` opens
+// exactly the group the retired entry used to live in, and the sanity test below
+// pins that precondition so this suite can never silently go green for the wrong
+// reason.
+// ---------------------------------------------------------------------------
+test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installListMock(page, 'tax');
+    await page.goto('/tax');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expandSidebar(page);
+  });
+
+  test('precondition — the Settings group is open and renders its items', async ({ page }) => {
+    // Guards the whole suite: if this fails, the absence assertions below prove
+    // nothing and must be fixed rather than trusted.
+    await expect(page.getByTestId('menu-item-tax')).toBeVisible();
+    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
+  });
+
+  test('no menu item for conversion-rate-downloader-log exists in the DOM', async ({ page }) => {
+    // The SideMenu emits data-testid="menu-item-{name}" for every non-hidden
+    // item of the open group. Settings is open (see precondition) and the entry
+    // was deleted from menu.json, so the element must be absent.
+    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('menu-item-conversion-rate-downloader-log')).toHaveCount(0);
+  });
+
+  test('no anchor href contains the "conversion-rate-downloader" path segment', async ({ page }) => {
+    // Belt-and-suspenders: no sidebar link may point at the retired route,
+    // whatever testid naming a future re-add might use.
+    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
+    await expect(page.locator('nav a[href*="conversion-rate-downloader"]')).toHaveCount(0);
+  });
+
+  test('direct navigation renders the not-found state instead of the window', async ({ page }) => {
+    // The route is not registered anymore, but `:windowName` is a catch-all, so
+    // the URL still resolves — to WindowLoader's error branch. Asserting this
+    // pins the graceful degradation: no blank page, and no window rendered.
+    await page.goto('/conversion-rate-downloader-log');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(
+      page.getByText(/Window "conversion-rate-downloader-log" not found/),
+    ).toBeVisible();
+    await expect(page.getByTestId('list-view')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5068 (companion) — "Conversion Rates" must NOT be collateral damage
+//
+// `conversion-rates` (Finance group, windowId "116") is the window users
+// actually need, and its slug is a prefix-neighbour of the retired one — an
+// over-broad deletion or a careless grep-and-remove would take it out too.
+// ---------------------------------------------------------------------------
+test.describe('ETP-5068 — Conversion Rates window unaffected', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installListMock(page, 'conversion-rates');
+    await page.goto('/conversion-rates');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('conversion-rates route still renders the list view', async ({ page }) => {
+    await expect(page.getByTestId('list-view')).toBeVisible();
+  });
+
+  test('menu-item for conversion-rates is still present in the navigation', async ({ page }) => {
+    // Landing on /conversion-rates makes Finance the active (open) group, so its
+    // sub-items are rendered — same mechanism as the Settings note above.
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-conversion-rates')).toBeVisible();
   });
 });

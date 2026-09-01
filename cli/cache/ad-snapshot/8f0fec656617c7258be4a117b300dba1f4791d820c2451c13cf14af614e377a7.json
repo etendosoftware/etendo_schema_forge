@@ -1892,7 +1892,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "2a25621962fd27f78d2dabcae9954324ab8edec8edf025de6348a3f9b5dc9d65",
+      "checksum": "c441ad95f832051629328a0778e484698e94f8b1ee3fc5e8fe0f5b877336e8cd",
       "params": [
         "123"
       ],
@@ -2238,6 +2238,12 @@
           "ad_table_id": "114",
           "columnname": "Isdefaultfordocs",
           "position": "51"
+        },
+        {
+          "ad_column_id": "7F6CB3F646EE4C9B8B37449D0D90FD0E",
+          "ad_table_id": "114",
+          "columnname": "EM_ETGO_Is_Owner",
+          "position": null
         },
         {
           "ad_column_id": "2756",

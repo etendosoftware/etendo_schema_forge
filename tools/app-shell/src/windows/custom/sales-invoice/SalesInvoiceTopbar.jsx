@@ -9,6 +9,7 @@ import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton'
 import { useUI } from '@etendosoftware/app-shell-core';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 
+import { buildHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
 export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh }) {
@@ -18,10 +19,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
 
   useInvoiceUpdatedListener('sales-invoice', recordId, onRefresh);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   if (!data || !recordId) return null;
 

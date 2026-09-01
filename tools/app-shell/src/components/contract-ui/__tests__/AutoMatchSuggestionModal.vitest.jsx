@@ -13,7 +13,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -99,6 +99,7 @@ describe('AutoMatchSuggestionModal', () => {
     applyMock.mockReset().mockResolvedValue({});
     toast.success.mockReset();
     toast.error.mockReset();
+    toast.warning.mockReset();
   });
 
   it('renders nothing when open is false', () => {
@@ -204,6 +205,63 @@ describe('AutoMatchSuggestionModal', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('automatch-modal-apply'));
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  // ── Per-group partial-success outcome (ETP-4951: shared-batch reconciliation) ──
+  // applySuggestions now shares ONE reconciliation across the whole batch, so a per-group failure no
+  // longer aborts the request — it resolves with `results[]` carrying a mix of success entries and
+  // `{ error }` entries. handleApply must read that per-group outcome instead of always showing a
+  // flat success toast regardless of what actually happened.
+
+  it('shows a partial-success warning toast when some groups succeeded and some failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { error: { message: 'boom' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringContaining('financeReconcileAutomatchToastPartial'),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('shows an error toast (not a warning) when every group in the batch failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { error: { message: 'boom 1' } },
+        { error: { message: 'boom 2' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('financeReconcileAutomatchToastError'),
+    );
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the plain success toast when every group in the batch succeeded', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { reconciliationId: 'r1', statementLineId: 'line-2' },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('calls onClose when cancel is clicked', () => {

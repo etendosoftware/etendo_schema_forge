@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+// ETP-5073 / DOC-08: the side menu is the "another window" half of the unsaved-changes guard —
+// every one of these links leaves the current window, which is exactly when an in-progress edit
+// used to be lost silently. GuardedNavLink keeps the anchor semantics (cmd/middle-click still
+// open a new tab, unguarded, because those leave the form untouched) and routes an ordinary
+// click through the navigation gate.
+import { GuardedNavLink } from '@/components/GuardedNavLink.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
   Tooltip,
@@ -160,7 +166,7 @@ function CollapsedGroupPopover({
             const currentFull = currentPath + locationSearch;
             const isItemActive = matchesItem(item, currentPath, currentFull);
             return (
-              <NavLink
+              <GuardedNavLink
                 key={item.name}
                 to={`/${itemPath}`}
                 className={cn(
@@ -171,7 +177,7 @@ function CollapsedGroupPopover({
                 )}
                 data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                 {tMenu(item.label)}
-              </NavLink>
+              </GuardedNavLink>
             );
           })}
         </div>
@@ -222,7 +228,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
         </div>
       )}
       <div className="px-2 py-0.5">
-        <NavLink
+        <GuardedNavLink
           to={`/${itemPath}`}
           className={cn(
             'flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors border-l-[3px] border-transparent',
@@ -238,7 +244,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
           <span className={cn('flex-1 text-left truncate', !isActive && 'text-text-primary')}>
             {itemLabel}
           </span>
-        </NavLink>
+        </GuardedNavLink>
       </div>
     </div>
   );
@@ -429,7 +435,7 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
     return (
       <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
         <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-          <NavLink
+          <GuardedNavLink
             to="/artifacts"
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
@@ -437,14 +443,14 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
             )}
             data-testid="NavLink__247c75">
             <FileJson className="h-5 w-5" data-testid="FileJson__247c75" />
-          </NavLink>
+          </GuardedNavLink>
         </TooltipTrigger>
         <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu('Artifacts')}</TooltipContent>
       </Tooltip>
     );
   }
   return (
-    <NavLink
+    <GuardedNavLink
       to="/artifacts"
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors',
@@ -453,7 +459,7 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
       data-testid="NavLink__247c75">
       <FileJson className="h-4 w-4" data-testid="FileJson__247c75" />
       <span>{tMenu('Artifacts')}</span>
-    </NavLink>
+    </GuardedNavLink>
   );
 }
 
@@ -718,7 +724,7 @@ export default function SideMenu({
                   >
                     <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
                       <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-                        <NavLink
+                        <GuardedNavLink
                           to={`/${itemPath}`}
                           className={cn(
                             'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
@@ -731,7 +737,7 @@ export default function SideMenu({
                             weight={isItemActive || isGroupActive ? 'fill' : 'regular'}
                             className="h-5 w-5"
                             data-testid="Icon__247c75" />
-                        </NavLink>
+                        </GuardedNavLink>
                       </TooltipTrigger>
                       <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu(singleItem.label)}</TooltipContent>
                     </Tooltip>
@@ -785,7 +791,7 @@ export default function SideMenu({
               const currentFull = currentPath + location.search;
               const isItemActive = !isFavorites && matchesItem(item, currentPath, currentFull);
               return (
-                <NavLink
+                <GuardedNavLink
                   key={item.name}
                   to={`/${itemPath}`}
                   className={cn(
@@ -807,13 +813,13 @@ export default function SideMenu({
                       ? (item.labels?.[locale] || tMenu(favNameMap[item.path || item.name] || item.label))
                       : tMenu(item.label)}
                   </span>
-                </NavLink>
+                </GuardedNavLink>
               );
             };
             const renderFavoriteOverflowItem = (item) => {
               const itemPath = item.path || item.name;
               return (
-                <NavLink
+                <GuardedNavLink
                   key={item.name}
                   to={`/${itemPath}`}
                   className="relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm text-text-primary hover:bg-muted/50 transition-colors"
@@ -822,7 +828,7 @@ export default function SideMenu({
                   <span className="relative z-10">
                     {item.labels?.[locale] || tMenu(favNameMap[itemPath] || item.label)}
                   </span>
-                </NavLink>
+                </GuardedNavLink>
               );
             };
             const visibleSubItems = isFavorites ? g.items.slice(0, FAVORITES_VISIBLE) : g.items;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * The single, canonical "is this year closed" derivation for the whole Calendar window —
  * reused by YearCloseStatusBadge (detail header pill), YearTableWithCloseStatus (list column),
@@ -17,6 +18,7 @@ import { useEffect, useState } from 'react';
  */
 export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
   const [closed, setClosed] = useState(undefined);
+  const apiFetch = useApiFetch(endYearCloseApiBaseUrl);
 
   useEffect(() => {
     if (!yearId) {
@@ -25,9 +27,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     }
     let cancelled = false;
     setClosed(undefined);
-    fetch(`${endYearCloseApiBaseUrl}/accounting?year=${yearId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/accounting?year=${yearId}`, { token })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();
@@ -41,7 +41,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     return () => {
       cancelled = true;
     };
-  }, [yearId, endYearCloseApiBaseUrl, token]);
+  }, [yearId, apiFetch, token]);
 
   return closed;
 }

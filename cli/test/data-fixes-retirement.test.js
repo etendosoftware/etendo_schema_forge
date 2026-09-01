@@ -14,6 +14,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
 const RETIRED_R16_ID = '20260727T114306Z__R16-tenant-roles-and-webhook-access';
+const RETIRED_R18_ID = '20260803T140000Z__R18-stuck-average-cost-anchor';
 
 async function sha256Of(fixId) {
   const text = await readFile(join(SQL_DIR, `${fixId}.sql`), 'utf-8');
@@ -28,6 +29,16 @@ describe('loadRetiredList (ETP-4877)', () => {
     assert.equal(typeof entry.checksum, 'string');
     assert.equal(entry.checksum.length, 64, 'sha256 hex digest is 64 chars');
     assert.equal(entry.retiredBy, 'ETP-4877');
+  });
+
+  it('loads the real retired.json and finds the R18 Average-cost anchor entry', async () => {
+    const retired = await loadRetiredList();
+    assert.ok(retired.has(RETIRED_R18_ID), 'retired.json must list R18 as retired');
+    const entry = retired.get(RETIRED_R18_ID);
+    assert.equal(typeof entry.checksum, 'string');
+    assert.equal(entry.checksum.length, 64, 'sha256 hex digest is 64 chars');
+    assert.match(entry.reason, /Average/i);
+    assert.match(entry.reason, /Standard/i);
   });
 });
 
@@ -78,7 +89,7 @@ describe('loadCatalogWithRetirement (ETP-4877) — end-to-end against the real c
   it('flags exactly the retired.json entries as .retired, and nothing else', async () => {
     const catalog = await loadCatalogWithRetirement();
     const retiredFixIds = catalog.filter(f => f.retired).map(f => f.fixId);
-    assert.deepEqual(retiredFixIds, [RETIRED_R16_ID]);
+    assert.deepEqual(retiredFixIds, [RETIRED_R16_ID, RETIRED_R18_ID]);
 
     const unretiredSample = catalog.find(f => f.fixId !== RETIRED_R16_ID);
     assert.ok(unretiredSample, 'catalog must contain at least one non-retired fix to compare against');

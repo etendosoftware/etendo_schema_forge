@@ -164,9 +164,11 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       await expectStatusPill(page, /completado|registrado|booked|completed/i,
         'PO status pill should show Completed after confirmation');
 
+      // After a reload the lines count badge may briefly show "0" while the
+      // lines fetch is in-flight — allow enough time for the real count to land.
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
         'PO should still show 2 lines after completion',
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 20_000 });
 
       // [Plan 9.4] Verify the PO is not editable after confirming
       const saveAfterConfirm = page.getByRole('button', { name: /guardar|save/i });

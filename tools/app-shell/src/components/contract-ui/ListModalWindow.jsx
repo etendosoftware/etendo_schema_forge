@@ -22,11 +22,14 @@ import { EntityForm } from './EntityForm.jsx';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
+import { RefreshButton } from './RefreshButton.jsx';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
@@ -71,6 +74,75 @@ function canonFilterValue(v) {
 // Client-side filtering for the list: exact-match toolbar dropdown filters first,
 // then a free-text search over the searchable columns. Pure helper so the
 // component's useMemo stays trivial (keeps cognitive complexity low).
+/**
+ * The list region: first-fetch skeletons, or the grid with a refresh bar over it.
+ *
+ * Same three states as before, stated as one early return instead of two chained ternaries:
+ * a first fetch (loading, nothing on screen yet) shows skeletons and no bar; any later load
+ * keeps the rows mounted and puts the indeterminate bar above them; otherwise just the grid.
+ *
+ * Its own component so those decisions leave `ListModalWindow`'s body, which was over Sonar's
+ * cognitive-complexity ceiling (javascript:S3776) — the rule scores each function separately,
+ * and a window component's JSX is where its conditionals accumulate.
+ *
+ * @param {{ loading: boolean, hasRows: boolean, gridProps: object }} props
+ */
+function ListModalBody({ loading, hasRows, gridProps }) {
+  if (loading && !hasRows) {
+    return (
+      <div className="flex flex-col gap-2 px-2">
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+      </div>
+    );
+  }
+  return (
+    <>
+      {/* Refresh indicator — only once rows are on screen; the first fetch shows the skeletons
+          above instead. */}
+      {loading ? (
+        <ListProgressBar testId="list-modal-progress-bar" data-testid="ListProgressBar__19eda5" />
+      ) : null}
+      {/* `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
+          base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid). */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ListModalGrid {...gridProps} data-testid="ListModalGrid__19eda5" />
+      </div>
+    </>
+  );
+}
+
+/**
+ * Rows ordered by the window's auto-priority field, ascending.
+ *
+ * Match rules are the case this exists for: their banner states that rows are evaluated in
+ * ascending priority order, so the list has to mirror that (10, 20, 30…). Rows with a missing or
+ * non-numeric priority sink to the end, and ties keep their order — `Array.prototype.sort` has
+ * been stable since ES2019, so equal rows stay in the order the backend sent them.
+ *
+ * Module-level rather than inline in the component: it is a named ordering rule, it is pure, and
+ * keeping the four-branch comparator out of the component body is what holds `ListModalWindow`
+ * under Sonar's cognitive-complexity ceiling (javascript:S3776).
+ *
+ * @param {Array<object>} rows
+ * @param {string|undefined} priorityField field to order by; falsy returns `rows` untouched
+ * @returns {Array<object>} a new array, or the original reference when there is nothing to do
+ */
+function orderByAutoPriority(rows, priorityField) {
+  if (!priorityField) return rows;
+  return [...rows].sort((a, b) => {
+    const av = Number(a?.[priorityField]);
+    const bv = Number(b?.[priorityField]);
+    const aok = Number.isFinite(av);
+    const bok = Number.isFinite(bv);
+    if (aok && bok) return av - bv;
+    if (aok) return -1;
+    if (bok) return 1;
+    return 0;
+  });
+}
+
 function filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }) {
   let result = allRows;
   for (const f of toolbarFilters) {
@@ -201,6 +273,7 @@ export function ListModalWindow({
     () => apiBaseUrlProp || (api?.baseUrl ? `${getApiBase()}${api.baseUrl}` : getApiBase()),
     [apiBaseUrlProp, api],
   );
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const label = tMenu(entityLabel) || entityLabel || entity;
   const fullBreadcrumb = breadcrumb
@@ -233,29 +306,13 @@ export function ListModalWindow({
   // --- Local search over the configured filter columns ----------------------
   const [searchQuery, setSearchQuery] = useState('');
   const priorityOrdered = useMemo(
-    () => {
-      const filtered = applyConditions(
+    () => orderByAutoPriority(
+      applyConditions(
         filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }),
         advancedFilter,
-      );
-      // Order by the auto-priority field ascending when the window declares one
-      // (e.g. match rules: the banner states rows are evaluated in ascending
-      // priority order, so the list must mirror that — 10, 20, 30…). Rows with a
-      // missing/non-numeric priority sink to the end; ties keep their order
-      // (Array.prototype.sort is stable).
-      const priorityField = config?.autoPriorityField;
-      if (!priorityField) return filtered;
-      return [...filtered].sort((a, b) => {
-        const av = Number(a?.[priorityField]);
-        const bv = Number(b?.[priorityField]);
-        const aok = Number.isFinite(av);
-        const bok = Number.isFinite(bv);
-        if (aok && bok) return av - bv;
-        if (aok) return -1;
-        if (bok) return 1;
-        return 0;
-      });
-    },
+      ),
+      config?.autoPriorityField,
+    ),
     [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config],
   );
 
@@ -284,11 +341,6 @@ export function ListModalWindow({
   const [deleting, setDeleting] = useState(false);
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
-
-  const authHeaders = useCallback(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -378,13 +430,12 @@ export function ListModalWindow({
     setSaving(true);
     setFormError(null);
     // Generic NEO W CRUD: POST {entity} creates, PUT {entity}/{id} updates.
-    const url = editingRow
-      ? `${apiBaseUrl}/${entity}/${encodeURIComponent(editingRow.id)}`
-      : `${apiBaseUrl}/${entity}`;
+    const path = editingRow
+      ? `/${entity}/${encodeURIComponent(editingRow.id)}`
+      : `/${entity}`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(path, {
         method: editingRow ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -398,16 +449,15 @@ export function ListModalWindow({
     } finally {
       setSaving(false);
     }
-  }, [missingRequired, editingRow, apiBaseUrl, entity, formData, authHeaders, ui, closeModal, reload, errorMessage]);
+  }, [missingRequired, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
 
   // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload.
   const handleToggle = useCallback(async (row, col, nextChecked) => {
     const key = `${row.id}:${col.key}`;
     setSavingToggles(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(row.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(row.id)}`, {
         method: 'PATCH',
-        headers: authHeaders(),
         body: JSON.stringify({ [col.key]: nextChecked }),
       });
       if (!res.ok) {
@@ -424,16 +474,15 @@ export function ListModalWindow({
         return next;
       });
     }
-  }, [apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [entity, apiFetch, errorMessage, reload, ui]);
 
   // Delete confirmed from the dialog: DELETE {entity}/{id}, then reload.
   const handleDeleteConfirmed = useCallback(async () => {
     if (!deletingRow) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(deletingRow.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(deletingRow.id)}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       if (!res.ok) {
         toast.error(await errorMessage(res));
@@ -446,7 +495,7 @@ export function ListModalWindow({
     } finally {
       setDeleting(false);
     }
-  }, [deletingRow, apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [deletingRow, entity, apiFetch, errorMessage, reload, ui]);
 
   const handleBack = useCallback(() => {
     if (config?.backTo) navigate(config.backTo);
@@ -538,6 +587,12 @@ export function ListModalWindow({
             onClear={clearSort}
             isDefaultSort={isDefaultSort}
             data-testid="ListSortPopover__19eda5" />
+          {/* Same slot a generated list gives it (between sort and the create button). This
+              window draws its own toolbar, so it never inherited ListView's. */}
+          <RefreshButton
+            onRefresh={reload}
+            label={ui('refresh')}
+            data-testid="RefreshButton__19eda5" />
           <button
             type="button"
             onClick={openCreate}
@@ -563,34 +618,25 @@ export function ListModalWindow({
           {ui(config.bannerKey)}
         </InfoBanner>
       )}
-      {/* Grid */}
-      {loading && allRows.length === 0 ? (
-        <div className="flex flex-col gap-2 px-2">
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-        </div>
-      ) : (
-        // `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
-        // base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid).
-        (<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <ListModalGrid
-            columns={columns}
-            data={data}
-            sortKey={sortKey}
-            sortDirection={sortDirection}
-            onSort={toggleSort}
-            tMenu={tMenu}
-            ui={ui}
-            onEdit={openEdit}
-            onClone={config.allowClone ? openClone : undefined}
-            onDelete={(row) => setDeletingRow(row)}
-            deletingId={deleting ? deletingRow?.id : null}
-            onToggle={handleToggle}
-            savingToggles={savingToggles}
-            data-testid="ListModalGrid__19eda5" />
-        </div>)
-      )}
+      <ListModalBody
+        loading={loading}
+        hasRows={allRows.length > 0}
+        gridProps={{
+          columns,
+          data,
+          sortKey,
+          sortDirection,
+          onSort: toggleSort,
+          tMenu,
+          ui,
+          onEdit: openEdit,
+          onClone: config.allowClone ? openClone : undefined,
+          onDelete: (row) => setDeletingRow(row),
+          deletingId: deleting ? deletingRow?.id : null,
+          onToggle: handleToggle,
+          savingToggles,
+        }}
+        data-testid="ListModalBody__19eda5" />
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
           section, and a footer with an optional toggle (left) + pill submit (right). */}

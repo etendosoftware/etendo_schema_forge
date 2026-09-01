@@ -5,6 +5,7 @@ import { resolve, join } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { pickLabel } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+import { filterAndTransformParams } from '@etendosoftware/schema-forge-cli/src/report-filters.js';
 
 // ETP-4898 — report-trial-balance ("Balance de Sumas y Saldos") new
 // `accountLevel` parameter.
@@ -32,7 +33,16 @@ const ARTIFACT_DIR = join(ROOT, 'artifacts', 'report-trial-balance');
 const CONTRACT = JSON.parse(readFileSync(join(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const SQL = CONTRACT.sql.query;
 const TEMPLATE_SRC = readFileSync(join(ARTIFACT_DIR, 'template.hbs'), 'utf8');
-const REPORT_API_SRC = readFileSync(join(ROOT, 'tools', 'app-shell', 'vite-plugins', 'report-api.js'), 'utf8');
+// ETP-5013 added `{{> document-branding}}` to this template's .report-header.
+// It is NOT a native Handlebars partial (see report-api.js's own comment on
+// expandReportPartials) — compiling TEMPLATE_SRC as-is throws "The partial
+// document-branding could not be found". Only the COMPILED template needs the
+// expanded source; the regex-based assertions on TEMPLATE_SRC below (accountLevel
+// guards, account-link count) are unaffected by the partial and must keep
+// reading the raw file so they still catch drift in the original markup.
+const REPORT_TEMPLATES_DIR = join(ROOT, 'templates', 'reports');
+const BRANDING_PARTIAL = readFileSync(join(REPORT_TEMPLATES_DIR, 'document-branding.hbs'), 'utf8');
+const EXPANDED_TEMPLATE_SRC = TEMPLATE_SRC.replace(/\{\{>\s*document-branding\s*\}\}/g, BRANDING_PARTIAL);
 
 // ── Part 1: contract shape ──────────────────────────────────────────────────
 
@@ -224,11 +234,21 @@ function renderTemplate({ accountLevel, groupBy }) {
     ui: { records: 'registros', total: 'Total', generatedBy: 'Etendo Go' },
     dimensionLabel: 'Contacto',
     dimensionField: 'bpname',
-    tbGroups: [{ dimensionValue: 'ACME', accounts: ROWS }],
+    // ETP-5013 — account-outer / dimension-inner: ONE block per ACCOUNT, its
+    // dimension breakdown nested inside, closing with the account's own totals
+    // (which is where the drill-down link now lives). Replaces the ETP-4898
+    // `{dimensionValue, accounts}` card.
+    tbGroups: [{
+      account_no: '4300', account_id: 'ACC-1', account_name: 'Clientes',
+      dimensionRows: [
+        { dimensionValue: 'ACME', opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130 },
+      ],
+      opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130,
+    }],
     filters: [],
     totals: {},
   };
-  return hb.compile(TEMPLATE_SRC)({ css: '', meta, rows: ROWS });
+  return hb.compile(EXPANDED_TEMPLATE_SRC)({ css: '', meta, rows: ROWS });
 }
 
 describe('report-trial-balance — template drill-down link vs accountLevel (ETP-4898)', () => {
@@ -269,6 +289,29 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
     });
   }
 
+  it('puts the drill-down on the account TOTAL row of the block, not on a dimension row (ETP-5013)', () => {
+    const html = renderTemplate({ accountLevel: 'S', groupBy: 'bpartner' });
+    const start = html.indexOf('<tr class="acct-total">');
+    assert.notEqual(start, -1, 'expected an acct-total closing row per account block');
+    const totalRow = html.slice(start, html.indexOf('</tr>', start));
+    assert.match(totalRow, /<span class="account-link"/, 'the drill-down link must live on the account total row');
+    assert.match(totalRow, /accountId:'ACC-1'/);
+    assert.match(totalRow, /accountValue:'4300'/);
+    assert.match(totalRow, /<td>Clientes<\/td>/, 'the total row also carries the account name');
+    // ...and nowhere else: exactly one link per account block.
+    assert.equal((html.match(/<span class="account-link"/g) || []).length, 1);
+  });
+
+  it('renders the dimension breakdown above the total row, with an empty account-code cell (ETP-5013)', () => {
+    const html = renderTemplate({ accountLevel: 'S', groupBy: 'bpartner' });
+    const bodyStart = html.indexOf('<tbody>');
+    const dimRow = html.slice(bodyStart, html.indexOf('<tr class="acct-total">'));
+    assert.match(dimRow, /<td><\/td>/, 'the dimension row leaves the account-code cell empty');
+    assert.match(dimRow, /<td>ACME<\/td>/, 'the dimension value goes in the description column');
+    assert.doesNotMatch(dimRow, /account-link/, 'no drill-down on a dimension row');
+    assert.doesNotMatch(dimRow, />4300</, 'the account code is not repeated on every dimension row');
+  });
+
   it('guards the drill-down in BOTH render branches (two ifCond guards in the source)', () => {
     const guards = TEMPLATE_SRC.match(/\{\{#ifCond @root\.meta\.params\.accountLevel '===' 'S'\}\}/g) || [];
     assert.equal(guards.length, 2, 'expected the accountLevel guard in both the grouped and flat branches');
@@ -280,26 +323,13 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
 
 // ── Part 4: report-api.js activeFilters option-label resolution ─────────────
 //
-// `activeFilters` is built inline inside the request handler and is not
-// exported. Rather than refactor production code just to make it reachable,
-// this extracts the REAL `.map()` callback source from the plugin file and
-// evaluates it — so the behavior under test is the shipped code, not a copy.
-//
-// `pickLabel` used to be text-extracted from this same file too. It now lives
-// in the shared @etendosoftware/schema-forge-cli module (so the production
-// report-server gets it as well), so it is imported and injected instead —
-// which is strictly better: the test exercises the real shipped function
-// rather than a regex-scraped duplicate of it.
+// `activeFilters` used to be built inline inside the request handler (and text-
+// scraped out of this file's source for testing). It now lives in the shared
+// @etendosoftware/schema-forge-cli module (so the production report-server
+// gets it as well), so it is imported directly — the test exercises the real
+// shipped function, not a regex-scraped duplicate of it.
 
-function loadActiveFiltersBuilder() {
-  const blockSrc = REPORT_API_SRC.match(/const activeFilters = Object\.entries\(params\)[\s\S]*?\n[ \t]*\}\);\n/);
-  assert.ok(blockSrc, 'could not extract the activeFilters block from report-api.js');
-  // eslint-disable-next-line no-new-func
-  const build = new Function('params', 'contract', 'locale', 'pickLabel', `${blockSrc[0]}\nreturn activeFilters;`);
-  return (params, contract, locale) => build(params, contract, locale, pickLabel);
-}
-
-const buildActiveFilters = loadActiveFiltersBuilder();
+const buildActiveFilters = filterAndTransformParams;
 
 function chipFor(paramName, value, locale) {
   const filters = buildActiveFilters({ [paramName]: value }, CONTRACT, locale);

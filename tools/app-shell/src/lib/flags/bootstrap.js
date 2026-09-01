@@ -2,6 +2,7 @@ import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
 
+import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Feature-flag bootstrap.
  *
@@ -262,7 +263,7 @@ export async function refreshAccountIdentity(
   if (!token || typeof fetchImpl !== 'function') return undefined;
   try {
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token),
     });
     if (!res?.ok) return undefined;
     const session = await res.json();

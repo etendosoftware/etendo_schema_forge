@@ -16,9 +16,15 @@ const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
 // tests can override the current path (e.g. the ETP-4598 openGroups-race
 // regression test below needs a non-'/dashboard' route).
+//
+// ETP-5073 / DOC-08: the menu's links are GuardedNavLink now, which calls useNavigate so an
+// ordinary click can be routed through the unsaved-changes gate. The mock has to provide it, and
+// mockNavigate doubles as the assertion seam for the guard cases at the bottom of this file.
 const mockUseLocation = vi.fn(() => ({ pathname: '/dashboard', search: '' }));
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useLocation: () => mockUseLocation(),
+  useNavigate: () => mockNavigate,
   NavLink: ({ children, to, className, ...props }) => (
     <a href={to} className={typeof className === 'function' ? '' : className} {...props}>{children}</a>
   ),

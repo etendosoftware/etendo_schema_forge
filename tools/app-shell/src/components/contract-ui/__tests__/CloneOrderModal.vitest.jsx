@@ -33,7 +33,7 @@ describe('CloneOrderModal', () => {
   const defaultProps = {
     records: singleRecord,
     apiBaseUrl: '/sws/neo/sales-order',
-    headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer test', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
     onClose: vi.fn(),
     routePrefix: '/sales-order/',
     onCloned: vi.fn(),
@@ -167,6 +167,20 @@ describe('CloneOrderModal', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Clone failed')).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces a flat {message} error body with no error/response.error wrapper (ETP-4781)', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: 'Flat backend error' }),
+    });
+
+    render(<CloneOrderModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('action-clone-record'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Flat backend error')).toBeInTheDocument();
     });
   });
 

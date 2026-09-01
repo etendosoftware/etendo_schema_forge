@@ -47,6 +47,7 @@ import {
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
+  buildHeaderFormData,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -704,5 +705,39 @@ describe('maybeSaveBeforeConfirm', () => {
 
   it('tolerates a missing handleSave (defensive optional-chaining) when dirty', async () => {
     await expect(maybeSaveBeforeConfirm({ isDirty: true, handleSave: undefined })).resolves.toBe(false);
+  });
+});
+
+// ETP-5052 — exposes `record.hasLines` to HEADER field `readOnlyLogicJs` expressions
+// (e.g. Physical Inventory's `warehouse` field: `"!!record.hasLines"`) so a header field
+// can lock once count/detail lines exist and unlock again once the last one is removed.
+// This is a display-only merge: DetailView.jsx feeds the result ONLY into the header
+// `<Form>` calls' `data` prop, never into a save/PATCH/POST payload (see the function's
+// own doc comment in detailViewHelpers.jsx).
+describe('buildHeaderFormData (ETP-5052)', () => {
+  it('sets hasLines=false when children is undefined (header-only window shape)', () => {
+    expect(buildHeaderFormData({ id: '1' }, undefined)).toEqual({ id: '1', hasLines: false });
+  });
+
+  it('sets hasLines=false when children is a non-array object, without crashing', () => {
+    expect(buildHeaderFormData({ id: '1' }, {})).toEqual({ id: '1', hasLines: false });
+  });
+
+  it('sets hasLines=false when children is an empty array', () => {
+    expect(buildHeaderFormData({ id: '1' }, [])).toEqual({ id: '1', hasLines: false });
+  });
+
+  it('sets hasLines=true when children has one or more items', () => {
+    expect(buildHeaderFormData({ id: '1' }, [{ id: 'line-1' }])).toEqual({ id: '1', hasLines: true });
+    expect(buildHeaderFormData({ id: '1' }, [{ id: 'line-1' }, { id: 'line-2' }])).toEqual({ id: '1', hasLines: true });
+  });
+
+  it('does not mutate the input data object — returns a new spread object', () => {
+    const data = { id: '1', warehouse: 'W1' };
+    const result = buildHeaderFormData(data, [{ id: 'line-1' }]);
+    expect(result).not.toBe(data);
+    expect(data).toEqual({ id: '1', warehouse: 'W1' });
+    expect('hasLines' in data).toBe(false);
+    expect(result).toEqual({ id: '1', warehouse: 'W1', hasLines: true });
   });
 });

@@ -7,6 +7,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * CreatableSearchSelect — generic search-style selector with an inline "Create X" action.
  *
@@ -151,11 +152,9 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
  * scroll-triggered "load more" (ETP-4600 Phase 2a; pagination added ETP-4975). Returns
  * `hasMore` (inferred the same way as SelectorInput.jsx: a short page means the server is
  * exhausted) alongside the mapped `items` so the caller can decide whether to keep paginating. */
-function fetchServerOptions({ selectorUrl, selectorContext, token, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
+function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
-  return fetch(buildUrlWithParams(selectorUrl, params), {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  return apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' })
     .then(res => (res.ok ? res.json() : null))
     .then(data => {
       const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
@@ -283,6 +282,7 @@ export function CreatableSearchSelect({
   placeholderOverride,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   // `query` is PURE search text — it must never be prefilled with the selected value's
   // label (ETP-4600 Gap B). The chip's label comes from `displayValue` (caller-provided)
   // or `resolvedDisplay` (this component's own lookup fallback) below, never from `query`.
@@ -422,9 +422,7 @@ export function CreatableSearchSelect({
     const params = { ...selectorContext };
     if (parentKey && parentValue && filterKey) params[filterKey] = parentValue;
 
-    fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         const items = (data?.items ?? []).map(i => ({
@@ -451,7 +449,7 @@ export function CreatableSearchSelect({
   // selectorContext intentionally omitted — it is memoized upstream and its reference
   // is stable across renders for all current callers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey]);
+  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey, apiFetch]);
 
   // When options load and we still lack a display label for the current value, resolve
   // one locally so the chip is never blank while the caller catches up (ETP-4600 Gap B —
@@ -473,9 +471,7 @@ export function CreatableSearchSelect({
     if (!value || displayValue) return;
     if (!selectorUrl || !token) return;
     let cancelled = false;
-    fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), { baseUrl: '' })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
         if (cancelled) return;
@@ -486,7 +482,7 @@ export function CreatableSearchSelect({
     return () => { cancelled = true; };
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, value, displayValue, selectorUrl, token]);
+  }, [serverSearch, value, displayValue, selectorUrl, token, apiFetch]);
 
   // serverSearch mode only: fetches one page. Called with offset 0 for the debounced
   // typing-triggered search AND the initial page load on first focus/open (both REPLACE the
@@ -508,7 +504,7 @@ export function CreatableSearchSelect({
     fetchInFlightRef.current = true;
     if (offset === 0) setLoading(true); else setLoadingMore(true);
     fetchServerOptions({
-      selectorUrl, selectorContext, token, parentKey, parentValue, filterKey,
+      apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
       query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
     })
       .then(({ items, hasMore: more }) => {
@@ -530,7 +526,7 @@ export function CreatableSearchSelect({
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey]);
+  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch]);
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };

@@ -5,6 +5,7 @@ import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
   'priceList',
   'paymentMethod',
@@ -80,7 +81,7 @@ export default function BillingPreferencesForm(props) {
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
   const apiBase = apiBaseUrl ?? api?.baseUrl ?? '';
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const apiFetch = useApiFetch(apiBase);
   const organizationId = resolveId(data?.organization ?? data?.adOrgId ?? data?.ad_org_id);
   const clientId = resolveId(data?.client ?? data?.adClientId ?? data?.ad_client_id);
   // Sub-entity records (current BP's discount)
@@ -138,7 +139,7 @@ export default function BillingPreferencesForm(props) {
     if (!bpId || !token) return;
 
     // Fetch current discount record for this BP
-    fetch(`${apiBase}/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/basicDiscount?parentId=${bpId}&_startRow=0&_endRow=1`)
       .then(r => r.ok ? r.json() : null)
       .then(d => setDiscountRecord(d?.response?.data?.[0] ?? null))
       .catch(() => setDiscountRecord(null));
@@ -147,7 +148,7 @@ export default function BillingPreferencesForm(props) {
     const discountParams = new URLSearchParams({ limit: '200', offset: '0' });
     if (organizationId) discountParams.set('AD_Org_ID', organizationId);
     if (clientId) discountParams.set('AD_Client_ID', clientId);
-    fetch(`${apiBase}/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/basicDiscount/selectors/C_Discount_ID?${discountParams.toString()}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         const seen = new Set();
@@ -161,7 +162,7 @@ export default function BillingPreferencesForm(props) {
       })
       .catch(() => setDiscountOptions([]))
       .finally(() => setDiscountRecord(prev => prev === undefined ? null : prev)); // Clear loading state on error
-  }, [bpId, token, apiBase, organizationId, clientId]);
+  }, [bpId, token, apiFetch, organizationId, clientId]);
 
   // In Classic, billing preferences are set after the Business Partner exists.
   // Keep the pre-save create payload clean by removing auto-defaulted billing values
@@ -195,13 +196,12 @@ export default function BillingPreferencesForm(props) {
     try {
       if (!newDiscountId && discountRecord?.id) {
         // Clear: delete existing record
-        await fetch(`${apiBase}/basicDiscount/${discountRecord.id}`, { method: 'DELETE', headers });
+        await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
         setDiscountRecord(null);
       } else if (discountRecord?.id) {
         // Update existing record
-        const res = await fetch(`${apiBase}/basicDiscount/${discountRecord.id}`, {
+        const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {
           method: 'PUT',
-          headers,
           body: JSON.stringify({ discount: newDiscountId }),
         });
         if (res.ok) {
@@ -210,9 +210,8 @@ export default function BillingPreferencesForm(props) {
         }
       } else if (newDiscountId) {
         // Create new record with required auto-flags
-        const res = await fetch(`${apiBase}/basicDiscount?parentId=${bpId}`, {
+        const res = await apiFetch(`/basicDiscount?parentId=${bpId}`, {
           method: 'POST',
-          headers,
           body: JSON.stringify({
             discount: newDiscountId,
             lineNo: 10,

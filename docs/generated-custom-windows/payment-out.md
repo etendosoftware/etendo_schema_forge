@@ -86,7 +86,7 @@ outstanding amount and the user turned on the "Ajustar diferencia" toggle at cre
 `financial-account.md`'s reconciliation write-off section, and this same doc / `sales-invoice.md`
 for the `NewPaymentEntryModal` toggle on the payment side), the shortfall was written off rather
 than left pending — posted to the business partner group's write-off account. This row shows that
-amount. It is **not** a discount, credit, or G/L-item allocation — no accounting concept is chosen
+amount. It is **not** a discount, credit, or accounting-account allocation — no accounting account is chosen
 by the user.
 
 The lines table (`PaymentOutBottomPanel.jsx`) also changed: the **Pendiente** column (a purely

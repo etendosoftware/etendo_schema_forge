@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 
 /**
@@ -46,6 +47,7 @@ export default function ConfirmInOutModal({
   onClose,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(base);
   const [createInvoice, setCreateInvoice] = useState(skipDocumentAction ? true : defaultCreateInvoice);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -74,11 +76,11 @@ export default function ConfirmInOutModal({
     setLoading(true);
     setError(null);
     try {
-      const actionBase = `${base}/${specName}/${entityName}/${recordId}/action`;
+      const actionBase = `/${specName}/${entityName}/${recordId}/action`;
 
       if (!skipDocumentAction) {
-        const res = await fetch(`${actionBase}/documentAction`, {
-          method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }),
+        const res = await apiFetch(`${actionBase}/documentAction`, {
+          method: 'POST', body: JSON.stringify({ docAction: 'CO' }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -89,8 +91,8 @@ export default function ConfirmInOutModal({
       let invoice = null;
       if (invoiceRequested && invoiceAction) {
         const invoiceBody = pickerActive && priceListId ? { priceListId } : {};
-        const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers, body: JSON.stringify(invoiceBody),
+        const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
+          method: 'POST', body: JSON.stringify(invoiceBody),
         });
         if (!invRes.ok) {
           const body = await invRes.json().catch(() => null);

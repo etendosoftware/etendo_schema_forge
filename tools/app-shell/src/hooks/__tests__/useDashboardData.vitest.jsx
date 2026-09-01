@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
 import { useDashboardData } from '../useDashboardData';
 
 // Mock external dependencies
@@ -12,6 +13,10 @@ vi.mock('@generated/dashboard/generated/config', () => ({
 
 vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ token: 'test-token' }),
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({
@@ -75,7 +80,9 @@ describe('useDashboardData', () => {
     });
 
     const urls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(urls.some(u => u.includes('/sws/neo/dashboard/kpis?range=month'))).toBe(true);
+    // ETP-5011: kpis is always a calendar-year figure and does not follow the
+    // date-range selector, so it must be fetched WITHOUT the `range` query param.
+    expect(urls.some(u => u.includes('/sws/neo/dashboard/kpis') && !u.includes('range='))).toBe(true);
     expect(urls.some(u => u.includes('/sws/neo/dashboard/trends?range=month'))).toBe(true);
     expect(urls.some(u => u.includes('/sws/neo/dashboard/pending-tasks?range=month'))).toBe(true);
   });

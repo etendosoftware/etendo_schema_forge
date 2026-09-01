@@ -43,6 +43,14 @@ vi.mock('@/components/ui/label', () => ({
 const changePassword = vi.fn();
 vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   changePassword: (...a) => changePassword(...a),
+  // AUTH-07 / ETP-5022: the dialog resolves the backend's stable error code through this
+  // table instead of showing the server's English text, so the mock must carry it.
+  AUTH_ERROR_UI_KEYS: {
+    WEAK_PASSWORD: 'onboardingWeakPassword',
+    INVALID_CURRENT_PASSWORD: 'onboardingInvalidCurrentPassword',
+    NO_LOCAL_PASSWORD: 'onboardingNoLocalPassword',
+    CHANGE_PASSWORD_MISSING_CREDENTIALS: 'onboardingChangePasswordMissingCredentials',
+  },
 }));
 vi.mock('../copilot/copilotApi.js', () => ({
   detectBaseUrl: () => 'https://base',
@@ -110,6 +118,28 @@ describe('ChangePasswordDialog', () => {
 
     expect(await screen.findByText('Wrong current password')).toBeInTheDocument();
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  // AUTH-07 / ETP-5022: the backend sends a stable code AND English developer text. The code
+  // must win — this is the regression that made WEAK_PASSWORD show in English despite
+  // PasswordPolicy documenting it as "translate on the frontend".
+  it('translates a coded error instead of showing the server English text', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    changePassword.mockRejectedValue({
+      code: 'INVALID_CURRENT_PASSWORD',
+      userMessage: 'The current password is not correct.',
+    });
+
+    render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={vi.fn()} />);
+
+    await fillForm(user, { current: 'bad' });
+    await user.click(screen.getByTestId('change-password-submit'));
+
+    // ui() is mocked to echo the key, so seeing the key proves the code was translated
+    // rather than the English userMessage being rendered.
+    expect(await screen.findByText('onboardingInvalidCurrentPassword')).toBeInTheDocument();
+    expect(screen.queryByText('The current password is not correct.')).not.toBeInTheDocument();
   });
 
   it('resets the form and error when the dialog is dismissed via onOpenChange(false)', async () => {

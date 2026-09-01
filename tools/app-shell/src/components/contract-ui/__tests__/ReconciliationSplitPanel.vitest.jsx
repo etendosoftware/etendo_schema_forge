@@ -203,6 +203,49 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByText('Transfer ACME')).toBeInTheDocument();
   });
 
+  // ETP-4921 — this panel never goes through ListView, so it never inherited ListView's
+  // refresh progress bar. It renders the extracted ListProgressBar above the split, under the
+  // same gate ListView uses: only once lines are already on screen, because on the true first
+  // fetch the panel's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over lines already on screen', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the lines mounted underneath the bar (smooth refresh, not a remount)', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
+    });
+
+    it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+      setLines([]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = false;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid, not the default ListView one', () => {
+      setLines([LINE_A]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the empty state on the right until a line is selected', () => {
     setLines([LINE_A]);
     renderPanel();
@@ -1719,6 +1762,106 @@ describe('ReconciliationSplitPanel', () => {
       const btn = screen.getByTestId('recon-action-reconcile');
       expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
       expect(btn).not.toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+  });
+
+
+  // ETP-4921 QA — "la vista de conciliación se ve cortada; si cambio el zoom se ve bien".
+  // A long statement description stretched the auto-layout table past the panel, so Progreso and
+  // Importe ended up behind a horizontal scrollbar. The fix is structural (fixed table layout +
+  // an ellipsised description), which is why these assert on the layout contract rather than on
+  // pixels: jsdom does no layout, so nothing here can measure the overflow itself.
+  describe('column layout — Progreso and Importe stay in view', () => {
+    const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE Galder Romo CONCEPTO Factura Nº : 10001754 1000896';
+
+    it('lays both tables out with fixed columns, so the free column absorbs the overflow', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const tables = screen.getAllByTestId('Table__d0f4d5');
+      expect(tables.length).toBeGreaterThan(0);
+      for (const table of tables) {
+        expect(table.className).toContain('table-fixed');
+      }
+    });
+
+    // Every column but the description declares a width; under `table-fixed` those widths are
+    // what the browser honours, so Progreso (90px) and Importe (139px) can no longer be pushed out.
+    it('keeps a declared width on the Progreso and Importe columns', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const classes = heads.map((h) => h.className);
+      expect(classes.some((c) => c.includes('w-[90px]'))).toBe(true);
+      expect(classes.some((c) => c.includes('w-[139px]'))).toBe(true);
+    });
+
+    it('ellipsises the statement description instead of widening the row', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      expect(desc).toHaveTextContent(LONG_DESC);
+      expect(desc.className).toContain('truncate');
+    });
+
+    // The full text is not lost — it comes back on hover, which is the whole point of clipping it.
+    it('offers the full description in a tooltip once it is clipped', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      // jsdom reports 0 for both metrics, so the overflow has to be stated explicitly.
+      Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+      Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 300 });
+
+      fireEvent.focus(desc);
+
+      expect(screen.getByTestId('recon-line-desc-L1-tooltip')).toHaveTextContent(LONG_DESC);
+    });
+
+    // The row still falls back through partnerName / referenceNo when there is no description.
+    /**
+     * ETP-4921 — the money headers carried an explicit `text-left` while every MoneyCell under
+     * them is `text-right`, so "Importe" / "Saldo pendiente" labelled the opposite edge of their
+     * own column. The generic DataTable right-aligns a numeric column's header; these two
+     * hand-rolled panels never inherited that.
+     */
+    it('right-aligns the money headers over their own figures', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const moneyHeads = heads.filter((h) => /financeReconcileCol(Amount|PendingBalance)/
+        .test(h.textContent));
+      // Left panel Importe + right panel Saldo pendiente & Importe.
+      expect(moneyHeads.length).toBeGreaterThan(0);
+      for (const h of moneyHeads) {
+        expect(h.className, h.textContent).toContain('text-right');
+        expect(h.className, h.textContent).not.toContain('text-left');
+      }
+    });
+
+    // Fecha / Descripción / Progreso name text or a bar, not a figure — they stay left.
+    it('leaves the non-money headers alone', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const textHeads = heads.filter((h) => /financeReconcileCol(Date|Description|Progress)/
+        .test(h.textContent));
+      expect(textHeads.length).toBeGreaterThan(0);
+      for (const h of textHeads) {
+        expect(h.className, h.textContent).not.toContain('text-right');
+      }
+    });
+
+    it('keeps the description fallback chain', () => {
+      setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
+      renderPanel();
+
+      expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
     });
   });
 

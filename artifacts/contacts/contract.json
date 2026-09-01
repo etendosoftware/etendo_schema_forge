@@ -1,8 +1,8 @@
 {
-  "version": "0.50.0",
-  "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-08-25T18:09:16.378Z",
-  "checksum": "397296243d877390",
+  "version": "0.52.0",
+  "generatedAt": "2026-08-27T21:15:30.861Z",
+  "updatedAt": "2026-08-31T14:33:49.362Z",
+  "checksum": "6433bedc8fef87d0",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -151,7 +151,7 @@
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "file",
+          "scope": "database",
           "key": [
             "taxID"
           ]
@@ -168,6 +168,8 @@
             ],
             "label": "Commercial Name",
             "required": true,
+            "example": "Distribuciones García S.L.",
+            "column": "Name",
             "type": "string"
           },
           {
@@ -180,6 +182,9 @@
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
+            "example": "Empresa",
+            "labelKey": "importHeaderType",
+            "column": "EM_Etgo_Isperson",
             "type": "boolean"
           },
           {
@@ -196,7 +201,9 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Contact Category"
+            "label": "Contact Category",
+            "example": "Clientes",
+            "column": "C_BP_Group_ID"
           },
           {
             "target": "etgoFirstname",
@@ -204,8 +211,10 @@
               "nombre de pila",
               "nombre persona"
             ],
-            "label": "First Name (Company)",
+            "label": "First Name",
             "required": false,
+            "example": "María",
+            "column": "EM_Etgo_Firstname",
             "type": "string"
           },
           {
@@ -214,8 +223,10 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name (Company)",
+            "label": "Last Name",
             "required": false,
+            "example": "García",
+            "column": "EM_Etgo_Lastname",
             "type": "string"
           },
           {
@@ -226,7 +237,9 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email (Company)",
+            "label": "Email",
+            "example": "info@distribucionesgarcia.es",
+            "column": "EM_Etgo_Email",
             "required": false,
             "type": "string"
           },
@@ -236,7 +249,9 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone (Company)",
+            "label": "Phone",
+            "example": "910 000 001",
+            "column": "EM_Etgo_Phone",
             "required": false,
             "type": "string"
           },
@@ -249,7 +264,9 @@
               "pagina web",
               "página web"
             ],
-            "label": "Website (Company)",
+            "label": "Website",
+            "example": "https://distribucionesgarcia.es",
+            "column": "EM_Etgo_Web",
             "required": false,
             "type": "string"
           },
@@ -264,6 +281,8 @@
             ],
             "label": "Tax ID Type",
             "required": false,
+            "example": "NIF",
+            "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum"
           },
           {
@@ -279,6 +298,8 @@
             ],
             "label": "CIF/NIF",
             "required": true,
+            "example": "B12345678",
+            "column": "TaxID",
             "type": "string"
           },
           {
@@ -288,6 +309,9 @@
             ],
             "isEmail": true,
             "label": "Email (Contact)",
+            "example": "compras@distribucionesgarcia.es",
+            "headerScope": "contact",
+            "column": "Email",
             "required": false,
             "type": "string"
           },
@@ -297,6 +321,9 @@
               "nombre de contacto"
             ],
             "label": "First Name (Contact)",
+            "example": "Lucía",
+            "headerScope": "contact",
+            "column": "Firstname",
             "required": false,
             "type": "string"
           },
@@ -306,6 +333,9 @@
               "apellido de contacto"
             ],
             "label": "Last Name (Contact)",
+            "example": "Fernández",
+            "headerScope": "contact",
+            "column": "Lastname",
             "required": false,
             "type": "string"
           },
@@ -315,6 +345,9 @@
               "telefono de contacto"
             ],
             "label": "Phone (Contact)",
+            "example": "610 000 002",
+            "headerScope": "contact",
+            "column": "Phone",
             "required": false,
             "type": "string"
           },
@@ -324,6 +357,9 @@
               "cargo"
             ],
             "label": "Position",
+            "example": "Responsable de compras",
+            "headerScope": "contact",
+            "column": "Title",
             "required": false,
             "type": "string"
           },
@@ -335,7 +371,10 @@
               "direccion",
               "dirección"
             ],
-            "label": "Address"
+            "label": "Address",
+            "example": "Calle Mayor 12",
+            "labelKey": "importHeaderAddress",
+            "headerScope": "contact"
           },
           {
             "required": false,
@@ -344,7 +383,10 @@
             "aliases": [
               "ciudad"
             ],
-            "label": "City"
+            "label": "City",
+            "example": "Sevilla",
+            "labelKey": "importHeaderCity",
+            "headerScope": "contact"
           },
           {
             "required": false,
@@ -355,7 +397,10 @@
               "código postal",
               "cp"
             ],
-            "label": "Postal Code"
+            "label": "Postal Code",
+            "example": "41001",
+            "labelKey": "importHeaderPostalCode",
+            "headerScope": "contact"
           },
           {
             "target": "country",
@@ -365,6 +410,10 @@
             ],
             "label": "Country",
             "matchEntity": "Country",
+            "example": "España",
+            "headerScope": "contact",
+            "labelKey": "importHeaderCountry",
+            "column": "C_Country_ID",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"
@@ -378,7 +427,10 @@
               "region",
               "región"
             ],
-            "label": "Region"
+            "label": "Region",
+            "example": "Sevilla",
+            "labelKey": "importHeaderRegion",
+            "headerScope": "contact"
           }
         ]
       }
@@ -5333,7 +5385,7 @@
           "concurrency": 4
         },
         "dedupe": {
-          "scope": "file",
+          "scope": "database",
           "key": [
             "taxID"
           ]
@@ -5350,6 +5402,8 @@
             ],
             "label": "Commercial Name",
             "required": true,
+            "example": "Distribuciones García S.L.",
+            "column": "Name",
             "type": "string"
           },
           {
@@ -5362,6 +5416,9 @@
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
+            "example": "Empresa",
+            "labelKey": "importHeaderType",
+            "column": "EM_Etgo_Isperson",
             "type": "boolean"
           },
           {
@@ -5378,7 +5435,9 @@
               "nombre categoria",
               "nombre categoría"
             ],
-            "label": "Contact Category"
+            "label": "Contact Category",
+            "example": "Clientes",
+            "column": "C_BP_Group_ID"
           },
           {
             "target": "etgoFirstname",
@@ -5386,8 +5445,10 @@
               "nombre de pila",
               "nombre persona"
             ],
-            "label": "First Name (Company)",
+            "label": "First Name",
             "required": false,
+            "example": "María",
+            "column": "EM_Etgo_Firstname",
             "type": "string"
           },
           {
@@ -5396,8 +5457,10 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name (Company)",
+            "label": "Last Name",
             "required": false,
+            "example": "García",
+            "column": "EM_Etgo_Lastname",
             "type": "string"
           },
           {
@@ -5408,7 +5471,9 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email (Company)",
+            "label": "Email",
+            "example": "info@distribucionesgarcia.es",
+            "column": "EM_Etgo_Email",
             "required": false,
             "type": "string"
           },
@@ -5418,7 +5483,9 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone (Company)",
+            "label": "Phone",
+            "example": "910 000 001",
+            "column": "EM_Etgo_Phone",
             "required": false,
             "type": "string"
           },
@@ -5431,7 +5498,9 @@
               "pagina web",
               "página web"
             ],
-            "label": "Website (Company)",
+            "label": "Website",
+            "example": "https://distribucionesgarcia.es",
+            "column": "EM_Etgo_Web",
             "required": false,
             "type": "string"
           },
@@ -5446,6 +5515,8 @@
             ],
             "label": "Tax ID Type",
             "required": false,
+            "example": "NIF",
+            "column": "EM_OBTIK_Tax_ID_Key",
             "type": "enum"
           },
           {
@@ -5461,6 +5532,8 @@
             ],
             "label": "CIF/NIF",
             "required": true,
+            "example": "B12345678",
+            "column": "TaxID",
             "type": "string"
           },
           {
@@ -5470,6 +5543,9 @@
             ],
             "isEmail": true,
             "label": "Email (Contact)",
+            "example": "compras@distribucionesgarcia.es",
+            "headerScope": "contact",
+            "column": "Email",
             "required": false,
             "type": "string"
           },
@@ -5479,6 +5555,9 @@
               "nombre de contacto"
             ],
             "label": "First Name (Contact)",
+            "example": "Lucía",
+            "headerScope": "contact",
+            "column": "Firstname",
             "required": false,
             "type": "string"
           },
@@ -5488,6 +5567,9 @@
               "apellido de contacto"
             ],
             "label": "Last Name (Contact)",
+            "example": "Fernández",
+            "headerScope": "contact",
+            "column": "Lastname",
             "required": false,
             "type": "string"
           },
@@ -5497,6 +5579,9 @@
               "telefono de contacto"
             ],
             "label": "Phone (Contact)",
+            "example": "610 000 002",
+            "headerScope": "contact",
+            "column": "Phone",
             "required": false,
             "type": "string"
           },
@@ -5506,6 +5591,9 @@
               "cargo"
             ],
             "label": "Position",
+            "example": "Responsable de compras",
+            "headerScope": "contact",
+            "column": "Title",
             "required": false,
             "type": "string"
           },
@@ -5517,7 +5605,10 @@
               "direccion",
               "dirección"
             ],
-            "label": "Address"
+            "label": "Address",
+            "example": "Calle Mayor 12",
+            "labelKey": "importHeaderAddress",
+            "headerScope": "contact"
           },
           {
             "required": false,
@@ -5526,7 +5617,10 @@
             "aliases": [
               "ciudad"
             ],
-            "label": "City"
+            "label": "City",
+            "example": "Sevilla",
+            "labelKey": "importHeaderCity",
+            "headerScope": "contact"
           },
           {
             "required": false,
@@ -5537,7 +5631,10 @@
               "código postal",
               "cp"
             ],
-            "label": "Postal Code"
+            "label": "Postal Code",
+            "example": "41001",
+            "labelKey": "importHeaderPostalCode",
+            "headerScope": "contact"
           },
           {
             "target": "country",
@@ -5547,6 +5644,10 @@
             ],
             "label": "Country",
             "matchEntity": "Country",
+            "example": "España",
+            "headerScope": "contact",
+            "labelKey": "importHeaderCountry",
+            "column": "C_Country_ID",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"
@@ -5560,7 +5661,10 @@
               "region",
               "región"
             ],
-            "label": "Region"
+            "label": "Region",
+            "example": "Sevilla",
+            "labelKey": "importHeaderRegion",
+            "headerScope": "contact"
           }
         ]
       }
@@ -10835,6 +10939,14 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           }
@@ -17797,6 +17909,14 @@
         "description": "System field 'emailServerUsername' should exist in backend but not frontend for contact"
       },
       {
+        "id": "t-system-field-contact-eTGOIsOwner",
+        "category": "system-field",
+        "entity": "contact",
+        "field": "eTGOIsOwner",
+        "runner": "node",
+        "description": "System field 'eTGOIsOwner' should exist in backend but not frontend for contact"
+      },
+      {
         "id": "t-system-field-contact-fax",
         "category": "system-field",
         "entity": "contact",
@@ -21119,7 +21239,7 @@
       }
     ],
     "summary": {
-      "total": 1153,
+      "total": 1154,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -21131,11 +21251,11 @@
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 516,
+        "system-field": 517,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1153,
+        "node": 1154,
         "junit": 0
       }
     }

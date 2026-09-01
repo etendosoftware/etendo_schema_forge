@@ -12,7 +12,7 @@ import {
   useAttachmentsChanged,
 } from '@/components/attachments/attachmentsBus';
 import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
-
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
  * and write the same real `Attachment` row, marked via `EM_ETGO_ISPREVIEWMAIN`
@@ -56,6 +56,7 @@ export function useMainAttachment({
   const [storedFileIsStale, setStoredFileIsStale] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [storeFailed, setStoreFailed] = useState(false);
+  const apiFetch = useApiFetch(apiBaseUrl);
   const objectUrlRef = useRef(null);
   const sourceRef = useRef(null);
   if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
@@ -164,7 +165,7 @@ export function useMainAttachment({
     setIsBusy(true);
     setStoreFailed(false);
     try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetch(url, { baseUrl: '', token });
       if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
       const blob = await res.blob();
       await uploadAndMark(blob, fileName, blob.type || 'application/pdf');
@@ -173,7 +174,7 @@ export function useMainAttachment({
     } finally {
       setIsBusy(false);
     }
-  }, [active, token, uploadAndMark]);
+  }, [active, token, apiFetch, uploadAndMark]);
 
   /**
    * Marks an already-uploaded attachment (e.g. one created by an external

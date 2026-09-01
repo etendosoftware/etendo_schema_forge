@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { AccountTypeFilter } from './AccountTypeFilter.jsx';
+import { RefreshButton } from '../contract-ui/RefreshButton.jsx';
 
 /**
  * Toolbar above the accounts table. Sizes match Figma `3012:25602`:
@@ -22,6 +23,9 @@ export function AccountsToolbar({
   // owns the ListView sort state decides what goes here. Absent = nothing rendered, so this is
   // inert for any other caller.
   sortControl = null,
+  // This window sets `hideListBar` and draws its own toolbar (see AccountsHeaderTable), so it
+  // never gets ListView's own refresh button either — reproduced here the same way sortControl is.
+  onRefresh,
 }) {
   const ui = useUI();
 
@@ -52,6 +56,11 @@ export function AccountsToolbar({
         </div>
 
         {sortControl}
+
+        <RefreshButton
+          onRefresh={onRefresh}
+          label={ui('refresh')}
+          data-testid="RefreshButton__c01b81" />
 
         <Button
           type="button"

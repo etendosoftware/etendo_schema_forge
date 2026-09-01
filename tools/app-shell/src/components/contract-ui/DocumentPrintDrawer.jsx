@@ -5,6 +5,8 @@ import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/custom/shared/documentPdfRegistry.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as ambientApiFetch } from '@/auth/api.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
@@ -23,6 +25,7 @@ import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/cus
 async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
   let pdfRes;
   try {
+    // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
     pdfRes = await fetch('/jsreport/api/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,6 +76,7 @@ async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
  */
 export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [], token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { shouldRender, isClosing } = useAnimatedOpen(open, 200);
   const iframeRef = useRef(null);
   // Object URL of the client-rendered PDF, reused by Download/Print and revoked
@@ -114,9 +118,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -133,7 +137,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setError(err.message);
     }
     setLoading(false);
-  }, [reportId, token, windowName, apiBaseUrl, ui]);
+  }, [reportId, token, windowName, apiBaseUrl, apiFetch, ui]);
 
   useEffect(() => { if (open && currentDocId) renderDocument(currentDocId); }, [open, currentDocId, renderDocument]);
   useEffect(() => { if (open) setCurrentIndex(0); }, [open]);
@@ -156,9 +160,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
         return;
       }
       // Get HTML
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });
       if (!res.ok) throw new Error(ui('actionFailed'));
@@ -298,9 +302,10 @@ export async function printDocuments(windowName, documentIds, token, translate =
         }));
         continue;
       }
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await ambientApiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
+        token,
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error(translate('actionFailed'));

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { sanitizeImageName } from '@/lib/imageUpload.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const LOGO_MAX_SIZE_MB = 2;
 const LOGO_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
@@ -55,6 +56,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
   const imageBase = apiBaseUrl
     ? apiBaseUrl.replace(/\/sws\/neo.*/, '/sws/neo') + '/image'
     : '/sws/neo/image';
+  const apiFetch = useApiFetch(imageBase);
 
   useEffect(() => {
     if (!imageId || !token) {
@@ -62,7 +64,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
       return;
     }
     let cancelled = false;
-    fetch(`${imageBase}/${imageId}`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/${imageId}`)
       .then(res => (res.ok ? res.blob() : null))
       .then(blob => {
         if (!cancelled && blob) {
@@ -74,7 +76,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageId, token, imageBase]);
+  }, [imageId, token, apiFetch]);
 
   useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, []);
 
@@ -88,9 +90,8 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await fetch(imageBase, {
+      const res = await apiFetch('', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: sanitizeImageName(file.name), mimeType: file.type, data: base64 }),
       });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);

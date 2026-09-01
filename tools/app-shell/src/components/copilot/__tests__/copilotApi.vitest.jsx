@@ -214,8 +214,8 @@ describe('copilotRequest', () => {
     const [url, opts] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/copilot/question');
     expect(opts.credentials).toBe('include');
-    expect(opts.headers.get('Authorization')).toBe('Bearer test-token');
-    expect(opts.headers.get('Content-Type')).toBe('application/json');
+    expect(opts.headers['Authorization']).toBe('Bearer test-token');
+    expect(opts.headers['Content-Type']).toBe('application/json');
   });
 
   it('throws on non-ok response with error message from body', async () => {
@@ -251,7 +251,7 @@ describe('copilotRequest', () => {
 
     const [, opts] = globalThis.fetch.mock.calls[0];
     // Content-Type should NOT be set for FormData (browser sets multipart boundary)
-    expect(opts.headers.has('Content-Type')).toBe(false);
+    expect(opts.headers['Content-Type']).toBeUndefined();
   });
 
   it('omits Authorization header when token is null', async () => {
@@ -264,7 +264,7 @@ describe('copilotRequest', () => {
     await copilotRequest('question', null);
 
     const [, opts] = globalThis.fetch.mock.calls[0];
-    expect(opts.headers.has('Authorization')).toBe(false);
+    expect(opts.headers['Authorization']).toBeUndefined();
   });
 });
 
@@ -517,8 +517,8 @@ describe('copilotRequest — FormData body handling', () => {
     await copilotRequest('upload', 'tk', { method: 'POST', body: formData });
 
     const [, opts] = globalThis.fetch.mock.calls[0];
-    expect(opts.headers.has('Content-Type')).toBe(false);
-    expect(opts.headers.get('Authorization')).toBe('Bearer tk');
+    expect(opts.headers['Content-Type']).toBeUndefined();
+    expect(opts.headers['Authorization']).toBe('Bearer tk');
   });
 
   it('sets Content-Type to application/json for string body', async () => {
@@ -531,7 +531,7 @@ describe('copilotRequest — FormData body handling', () => {
     await copilotRequest('endpoint', 'tk', { method: 'POST', body: '{"x":1}' });
 
     const [, opts] = globalThis.fetch.mock.calls[0];
-    expect(opts.headers.get('Content-Type')).toBe('application/json');
+    expect(opts.headers['Content-Type']).toBe('application/json');
   });
 
   it('throws error with message from response body', async () => {

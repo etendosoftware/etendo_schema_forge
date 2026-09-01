@@ -5,7 +5,8 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 vi.mock('@/auth/api.js', () => ({
-  buildHeaders: (token) => ({ Authorization: `Bearer ${token}` }),
+  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
+  buildHeaders: (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES' }),
   detectBaseUrl: () => 'http://localhost',
 }));
 

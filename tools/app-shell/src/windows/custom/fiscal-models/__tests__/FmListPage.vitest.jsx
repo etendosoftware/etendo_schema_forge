@@ -2,6 +2,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -145,10 +146,16 @@ async function waitForCatalogLoad() {
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('fetch not mocked for this test')));
+  // FmListPage now goes through useApiFetch (ETP-5022), which resolves its bearer
+  // token from the ambient session when no AuthProvider wraps the tree (as here) —
+  // not from the `token` prop directly. Registering it with the same TOKEN constant
+  // keeps the "bearer token" assertions below meaningful without weakening them.
+  registerApiSession({ getToken: () => TOKEN });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetApiSessionForTests();
 });
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -827,7 +834,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
     await waitForCatalogLoad();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE}/fiscal-models-catalog`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
     );
   });
 
@@ -877,7 +884,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': true, '349': false }),
         })
       );
@@ -897,7 +904,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': false, '349': false }),
         })
       );
@@ -1083,7 +1090,7 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE}/fiscal303/incidents?id=decl-url-check`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
       );
     });
   });

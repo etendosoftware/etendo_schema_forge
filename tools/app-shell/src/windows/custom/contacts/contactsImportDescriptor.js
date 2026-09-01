@@ -1,9 +1,11 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
-import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
+import { resolveCodedCellOrThrow, codedCellError } from '@/lib/codedValue.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
 // could ever populate it — the mirror image of the "column with no consumer" problem.
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'etgoIsperson', 'taxID'];
@@ -24,7 +26,7 @@ async function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -151,10 +153,10 @@ async function resolveCategoryId(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      baseUrl: '',
+      token: config.token,
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {
@@ -209,6 +211,22 @@ async function resolveLocation(row, config) {
     },
   };
 }
+
+/**
+ * ETP-4996: the two AD-coded columns are checked while the user is still REVIEWING the
+ * file, not when the row is sent. Before this, a mistyped "Persona Fisica" sat in the
+ * Correctas tab, and the user only discovered the problem after confirming the import.
+ *
+ * Same tables and same wording as the send path below — see `codedCellError`.
+ */
+registerImportRowValidator('contacts', (row, { translate } = {}) => [
+  codedCellError(row.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
+    target: 'oBTIKTaxIDKey', fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate,
+  }),
+  codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
+    target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
+  }),
+].filter(Boolean));
 
 registerImportDescriptor('contacts', async (row, config) => {
   const bpFields = pick(row, BP_TARGETS);

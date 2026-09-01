@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import ImportModalFooter, { ImportModalHeader } from './ImportModalFooter.jsx';
 
 /**
@@ -23,6 +24,7 @@ import ImportModalFooter, { ImportModalHeader } from './ImportModalFooter.jsx';
  */
 export default function ImportReturnLinesModal({ targetId, bpId, base, headers, onClose, onSuccess, config }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(base);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(new Set());
@@ -59,7 +61,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
         if (fetchSourceDocs) {
           docs = await fetchSourceDocs(base, bpId, headers);
         } else {
-          const res = await fetch(sourceDocsUrl(base, bpId), { headers });
+          const res = await apiFetch(sourceDocsUrl(base, bpId), { baseUrl: '' });
           if (!res.ok) {
             if (!cancelled) setLoading(false);
             return;
@@ -75,7 +77,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
       }
     })();
     return () => { cancelled = true; };
-  }, [base, bpId, fetchSourceDocs, filterDoc, headers, sourceDocsUrl]);
+  }, [apiFetch, base, bpId, fetchSourceDocs, filterDoc, headers, sourceDocsUrl]);
 
   const bpName = docs[0]?.['businessPartner$_identifier'] || '';
 
@@ -93,7 +95,7 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
       if (fetchSourceLines) {
         lines = await fetchSourceLines(base, docId, headers);
       } else {
-        const res = await fetch(sourceLinesUrl(base, docId), { headers });
+        const res = await apiFetch(sourceLinesUrl(base, docId), { baseUrl: '' });
         if (!res.ok) { setLoadingLines((prev) => { const n = new Set(prev); n.delete(docId); return n; }); return; }
         lines = (await res.json())?.response?.data || [];
       }
@@ -169,9 +171,9 @@ export default function ImportReturnLinesModal({ targetId, bpId, base, headers, 
       }
       if (lines.length === 0) { toast.info(ui('noLinesWereImported')); return; }
 
-      const res = await fetch(importActionUrl(base, targetId), {
+      const res = await apiFetch(importActionUrl(base, targetId), {
+        baseUrl: '',
         method: 'POST',
-        headers,
         body: JSON.stringify({ lines }),
       });
 

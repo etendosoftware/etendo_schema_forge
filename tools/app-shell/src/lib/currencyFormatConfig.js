@@ -1,3 +1,4 @@
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Instance-wide currency number-formatting configuration (thousands/decimal separators,
  * and the per-currency symbol side).
@@ -21,10 +22,15 @@
  * using the default es-ES-style separators (`.`/`,`) and every currency renders symbol-after
  * (the pre-fix behavior) — a config outage must never break currency rendering.
  *
- * Deliberately does NOT import `detectBaseUrl` from `@/auth/api.js` — that module
- * transitively re-exports `.jsx` files, which plain `node --test` (used by
- * formatCurrency.js's own test suite) can't load at all. `detectBaseUrl` is a
- * two-line check, so it's inlined here instead of shared.
+ * Imports `authHeaders` from `@etendosoftware/app-shell-core/auth/api`, NOT from
+ * `@/auth/api.js`. The local alias re-exports the core's `auth` barrel, which pulls in
+ * `.jsx` files that plain `node --test` (used by formatCurrency.js's own test suite)
+ * cannot load — so importing it here would make this whole module unloadable in that
+ * suite. The `./auth/api` subpath points straight at the module and has no `.jsx` in
+ * its graph (ETP-5022).
+ *
+ * `detectBaseUrl` stays inlined below: it is a two-line check, and it predates the
+ * subpath existing.
  */
 
 function detectBaseUrl() {
@@ -81,7 +87,7 @@ export function isCurrencySymbolRightSide(currencyCode) {
 export function fetchCurrencyFormatConfig() {
   if (fetchPromise) return fetchPromise;
 
-  fetchPromise = fetch(`${detectBaseUrl()}/sws/neo/currency-format`)
+  fetchPromise = apiFetch('/sws/neo/currency-format', { baseUrl: detectBaseUrl() })
     .then((res) => {
       if (!res.ok) throw new Error(`currency-format fetch failed: ${res.status}`);
       return res.json();

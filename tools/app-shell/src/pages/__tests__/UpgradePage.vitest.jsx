@@ -9,7 +9,9 @@ vi.mock('@/i18n', () => ({
   useUI: () => key => key,
   getStoredLocale: () => 'es_ES',
 }));
-vi.mock('@/auth/api.js', () => ({ detectBaseUrl: () => 'http://tomcat.example/etendo' }));
+vi.mock('@/auth/api.js', () => ({
+  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
+  buildHeaders: (t) => ({ 'Content-Type': 'application/json', 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }), detectBaseUrl: () => 'http://tomcat.example/etendo' }));
 
 vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),

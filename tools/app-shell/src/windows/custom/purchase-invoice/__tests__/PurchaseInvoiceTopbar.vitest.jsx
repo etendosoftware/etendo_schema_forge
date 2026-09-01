@@ -57,6 +57,8 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 vi.mock('@etendosoftware/app-shell-core/auth', () => ({
+  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
+  buildHeaders: (t) => ({ 'Content-Type': 'application/json', 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
   AuthProvider: ({ children }) => children,
 }));

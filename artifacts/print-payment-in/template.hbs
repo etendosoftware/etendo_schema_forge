@@ -28,7 +28,7 @@
   .doc-table thead th { background: #1a1a2e; color: #fff; padding: 2mm 3mm; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3px; }
   .doc-table thead th.right { text-align: right; }
   .doc-table tbody td { padding: 2mm 3mm; border-bottom: 1px solid #e2e8f0; }
-  .doc-table tbody td.right { text-align: right; font-family: 'SF Mono', monospace; font-size: 8.5pt; }
+  .doc-table tbody td.right { text-align: right; font-variant-numeric: tabular-nums; font-size: 8.5pt; }
   .doc-table tbody tr:nth-child(even) { background: #f8fafc; }
 
   /* Totals */
@@ -37,7 +37,7 @@
   .doc-totals-row { display: flex; justify-content: space-between; padding: 1.5mm 3mm; font-size: 9pt; }
   .doc-totals-row.grand { border-top: 2px solid #1a1a2e; font-weight: 700; font-size: 11pt; padding-top: 2mm; }
   .doc-totals-label { color: #64748b; }
-  .doc-totals-amount { font-family: 'SF Mono', monospace; text-align: right; }
+  .doc-totals-amount { font-variant-numeric: tabular-nums; text-align: right; }
 
   /* Footer */
   .doc-notes { margin-bottom: 5mm; padding: 3mm 4mm; background: #f8fafc; border-radius: 2mm; font-size: 8pt; color: #475569; }
@@ -136,7 +136,7 @@
       <div style="font-size:6pt; color:#94a3b8; margin-top:1mm; max-width:80px; text-align:center;">Scan to verify</div>
     </div>
     <div style="font-size:7pt; color:#94a3b8; text-align:right;">
-      Generated on {{formatDate meta.generatedAt}}<br>{{header.org_name}}
+      {{header.org_name}}
     </div>
   </div>
 
