@@ -31,6 +31,7 @@ export function GlobalSearchProvider({ children }) {
     event.preventDefault();
     const result = keyboardHandlerRef.current?.(event.key);
     if (event.key === 'Enter' && !result?.keepOpen) setOpen(false);
+    return result;
   }, [open]);
 
   const value = useMemo(() => ({
@@ -74,7 +75,7 @@ export function useGlobalSearch() {
       if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
       if (!fallbackOpen) return;
       event.preventDefault();
-      fallbackHandlerRef.current?.(event.key);
+      return fallbackHandlerRef.current?.(event.key);
     },
   };
 }
