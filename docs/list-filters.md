@@ -50,6 +50,7 @@ Automatic filters rendered by `ListFilterBar` based on the *types* of the column
 - Behavior: dropdown menus with a check-mark next to the active option.
 - Default: the first `date` column applies `Last 12 months` on first render; the status dropdown starts at `All`.
 - All selections write into the shared `columnFilters` state, so they compose with AND against the backend.
+- **Option order is fixed, not alphabetical** (ETP-4696, extended by ETP-4913): the status options are sorted with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, so the list follows the document flow (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown) and never changes between openings. The advanced filter's value dropdown for the same column sorts with the identical comparator — see [`decisions-reference.md`](decisions-reference.md) §"Option order in the two status dropdowns" for why the sort is gated to `type: 'status'` columns only.
 
 ## 4. Advanced filter popover (funnel icon)
 
