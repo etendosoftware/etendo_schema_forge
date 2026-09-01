@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { toast } from 'sonner';
 import {
-  ChevronRight, MoreVertical, X, Plus, ArrowUp, Paperclip,
+  ChevronRight, X, Plus, ArrowUp, Paperclip,
   Users, CheckCircle, Smile, Maximize2, Minimize2,
 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -146,15 +146,22 @@ function renderText(txt) {
   return blocks;
 }
 
-// Matches **bold**, *italic*, `code`, and markdown links [label](url) — links restricted to
-// http(s) URLs only, so a crafted `javascript:`/`data:` href in a reply (AI-generated or
-// relayed from a Jira comment) can never end up as a clickable link. **bold** is tried before
-// *italic* so a bold span isn't misread as italic-star + literal star. Every span is length-capped
-// (no plain `+`) — chat text is never a legitimate multi-KB bold/code run, and the cap bounds the
-// worst-case backtracking cost of the two star-prefixed alternatives to a constant, regardless of
-// message length (javascript:S5852).
+// Matches **bold**, *italic*, `code`, markdown links [label](url), and BARE http(s) URLs —
+// links restricted to http(s) only, so a crafted `javascript:`/`data:` href in a reply
+// (AI-generated or relayed from a Jira comment) can never end up as a clickable link.
+// **bold** is tried before *italic* so a bold span isn't misread as italic-star + literal
+// star; the markdown-link alternative is tried before the bare-URL one so a `[label](url)`
+// pair renders with its label rather than the bare-URL branch matching just the url part.
+// The bare-URL alternative excludes whitespace, angle/square brackets and quotes — NOT
+// trailing sentence punctuation (a period/comma right after a URL can get swept in); accepted
+// simplification for a hand-rolled matcher, not a full URL grammar. The docs "Fuente: <url>"
+// line the AI always appends is a bare URL, never markdown-link syntax, which is why this
+// exists — without it, every source link rendered as inert plain text. Every span is
+// length-capped (no plain `+`) — chat text is never a legitimate multi-KB bold/code/url run,
+// and the cap bounds the worst-case backtracking cost of the star-prefixed alternatives to a
+// constant, regardless of message length (javascript:S5852).
 const INLINE_PATTERN =
-  /\*\*([^*\n]{1,500})\*\*|\*([^*\n]{1,500})\*|`([^`\n]{1,500})`|\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/g;
+  /\*\*([^*\n]{1,500})\*\*|\*([^*\n]{1,500})\*|`([^`\n]{1,500})`|\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)|(https?:\/\/[^\s<>"'\]]{1,2000})/g;
 
 function renderInline(txt) {
   const nodes = [];
@@ -169,6 +176,12 @@ function renderInline(txt) {
       nodes.push(<em key={nodes.length}>{match[2]}</em>);
     } else if (match[3] !== undefined) {
       nodes.push(<code key={nodes.length}>{match[3]}</code>);
+    } else if (match[6] !== undefined) {
+      nodes.push(
+        <a key={nodes.length} href={match[6]} target="_blank" rel="noopener noreferrer">
+          {match[6]}
+        </a>
+      );
     } else {
       nodes.push(
         <a key={nodes.length} href={match[5]} target="_blank" rel="noopener noreferrer">
@@ -452,7 +465,7 @@ function ConvMeta({ isClosed, isHuman, ui }) {
 
 function ConversationHeader({
   onBack, isHuman, isClosed, conversation, assigneeName, isExpanded, onToggleExpand,
-  menuOpen, onToggleMenu, onCloseConversation, onClose, menuRef, ui,
+  onClose, ui,
 }) {
   return (
     <div className="sc-conv-head">
@@ -483,7 +496,7 @@ function ConversationHeader({
           )}
         </div>
       </div>
-      <div className="sc-conv-actions" ref={menuRef} style={{ position: 'relative' }}>
+      <div className="sc-conv-actions" style={{ position: 'relative' }}>
         <button
           className="sc-head-icn"
           onClick={onToggleExpand}
@@ -492,27 +505,6 @@ function ConversationHeader({
         >
           {isExpanded ? <Minimize2 size={16} data-testid="Minimize2__50ab90" /> : <Maximize2 size={16} data-testid="Maximize2__50ab90" />}
         </button>
-        {conversation && !isClosed && (
-          <>
-            <button
-              className="sc-head-icn"
-              aria-label={ui('moreOptions')}
-              onClick={onToggleMenu}
-            >
-              <MoreVertical size={16} data-testid="MoreVertical__50ab90" />
-            </button>
-            {menuOpen && (
-              <div className="sc-head-menu">
-                <button
-                  className="danger"
-                  onClick={onCloseConversation}
-                >
-                  {ui('supportCloseConversation')}
-                </button>
-              </div>
-            )}
-          </>
-        )}
         <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__50ab90" /></button>
       </div>
     </div>
@@ -534,7 +526,6 @@ export function ConversationView({
   onClose,
   onSubmitRating,
   onDismissRating,
-  onCloseConversation,
   onReopenConversation,
   isExpanded,
   onToggleExpand,
@@ -546,15 +537,12 @@ export function ConversationView({
   const welcomeQuickReplies = React.useMemo(() => ([
     ui('supportQuickReply1'), ui('supportQuickReply2'), ui('supportQuickReply3'), ui('supportQuickReply4'),
   ]), [ui]);
-  const [draft, setDraft] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
-  const [menuOpen, setMenuOpen] = React.useState(false);
   const [showEmoji, setShowEmoji] = React.useState(false);
 
   const dragCounterRef = React.useRef(0);
   const fileRef = React.useRef(null);
   const threadRef = React.useRef(null);
-  const menuRef = React.useRef(null);
   const emojiRef = React.useRef(null);
 
   // Tracks the message count at the moment the conversation was opened,
@@ -562,16 +550,6 @@ export function ConversationView({
   const seenCountRef = React.useRef(null);
   const wasLoadingRef = React.useRef(false);
   const prevIsSendingRef = React.useRef(false);
-
-  // ── Close menu on outside click ────────────────────────────────────────────
-  React.useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen]);
 
   // ── Close emoji picker on outside click ────────────────────────────────────
   React.useEffect(() => {
@@ -617,15 +595,14 @@ export function ConversationView({
     threadRef.current?.scrollTo({ top: 1e6, behavior: 'smooth' });
   }, [messages.length, messages[messages.length - 1]?.text, conversation?.status]);
 
-  // ── Sync external input to local draft on conversation change ──────────────
+  // ── "Talk to a human" bar dismissal (per offering message) ──────────────────
+  // Tracks the id of the last ai message whose escalate offer the user dismissed (X, or by
+  // clicking the button itself) — NOT a blanket "hide forever" flag. See showEscalateSticky
+  // below for why this must be scoped to a specific message rather than the whole
+  // conversation.
+  const [dismissedMessageId, setDismissedMessageId] = React.useState(null);
   React.useEffect(() => {
-    setDraft(input || '');
-  }, [conversation?.id]);
-
-  // ── "Talk to a human" bar dismissal (per conversation) ──────────────────────
-  const [escalateBarDismissed, setEscalateBarDismissed] = React.useState(false);
-  React.useEffect(() => {
-    setEscalateBarDismissed(false);
+    setDismissedMessageId(null);
   }, [conversation?.id]);
 
   const { username } = useAuth();
@@ -643,13 +620,18 @@ export function ConversationView({
   const isHuman  = conversation?.assigneeKind === 'human';
   const assigneeName = conversation?.assigneeName || 'ValerIA';
 
-  // Once ValerIA has EVER offered to escalate in this conversation, keep the one-click
-  // "talk to a human" option available for the rest of it — not just on the offering
-  // message, which scrolls out of view as the conversation goes on. The offering message
-  // itself never leaves `messages`, so this naturally stays true from that point on.
-  const showEscalateSticky = !isHuman && !isClosed && !escalateBarDismissed && messages.some(
-    (m) => typeof m.text === 'string' && m.text.includes(SUGGESTS_ESCALATION_MARKER)
-  );
+  // Show the "talk to a human" offer only when it reflects the CURRENT situation: the bot
+  // (not a human) currently owns the conversation, AND its most recent reply is the one that
+  // actually judged itself insufficient / escalation-worthy (carries the marker) — not just
+  // "some earlier reply in this conversation once did". A later reply that fully answers a
+  // new question must hide the bar again, even if an earlier one in the same conversation
+  // triggered it — explicit product decision: the offer should track the LATEST answer's
+  // quality, not accumulate stickily for the whole conversation.
+  const lastAiMessage = [...messages].reverse().find((m) => m.sender === 'ai');
+  const lastAiSuggestsEscalation = typeof lastAiMessage?.text === 'string' &&
+    lastAiMessage.text.includes(SUGGESTS_ESCALATION_MARKER);
+  const showEscalateSticky = !isHuman && !isClosed && lastAiSuggestsEscalation &&
+    lastAiMessage.id !== dismissedMessageId;
 
   // ── Send ───────────────────────────────────────────────────────────────────
   // Sends a fixed, unambiguous request text through the normal message pipeline —
@@ -660,18 +642,19 @@ export function ConversationView({
     // Hide the bar the instant the user clicks it, rather than waiting for the full
     // LLM + Jira round trip (a few seconds) to come back and flip assigneeKind — clicking
     // this button IS the user's explicit confirmation to escalate, so there's no reason to
-    // keep showing "talk to a human" while that's already in flight.
-    setEscalateBarDismissed(true);
+    // keep showing "talk to a human" while that's already in flight. Scoped to this specific
+    // offering message (not a blanket flag) so a later, unrelated insufficient answer can
+    // still re-offer it.
+    if (lastAiMessage) setDismissedMessageId(lastAiMessage.id);
     onSend(ui('supportEscalateMessage'), []);
   };
 
   const send = () => {
-    const text = draft.trim();
+    const text = input.trim();
     if (!text && pendingFiles.length === 0) return;
     playSendSound();
     onSend(text, pendingFiles);
-    setDraft('');
-    if (onInputChange) onInputChange('');
+    onInputChange('');
   };
 
   const handleKey = (e) => {
@@ -743,11 +726,7 @@ export function ConversationView({
         assigneeName={assigneeName}
         isExpanded={isExpanded}
         onToggleExpand={onToggleExpand}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((v) => !v)}
-        onCloseConversation={() => { setMenuOpen(false); onCloseConversation?.(); }}
         onClose={onClose}
-        menuRef={menuRef}
         ui={ui}
         data-testid="ConversationHeader__50ab90" />
       {showEscalateSticky && (
@@ -759,7 +738,7 @@ export function ConversationView({
             <button
               type="button"
               className="sc-escalate-dismiss"
-              onClick={() => setEscalateBarDismissed(true)}
+              onClick={() => lastAiMessage && setDismissedMessageId(lastAiMessage.id)}
               aria-label={ui('supportDismissEscalateBar')}
               title={ui('supportDismissEscalateBar')}
             >
@@ -784,7 +763,7 @@ export function ConversationView({
               data-testid="Bubble__50ab90" />
             <Bubble
               message={{ id: 'w3', sender: 'bot', text: ui('supportWelcomeBubble3'), quickReplies: welcomeQuickReplies }}
-              onQuickReply={(q) => setDraft(q)}
+              onQuickReply={(q) => onInputChange(q)}
               data-testid="Bubble__50ab90" />
           </>
         )}
@@ -802,7 +781,7 @@ export function ConversationView({
                 messages={messages}
                 seenCount={seenCountRef.current}
                 dateLocale={dateLocale}
-                onQuickReply={(q) => setDraft(q)}
+                onQuickReply={(q) => onInputChange(q)}
                 ui={ui}
                 getLocalImageUrl={getLocalImageUrl}
                 data-testid="ConversationMessageItem__50ab90" />
@@ -889,7 +868,7 @@ export function ConversationView({
             {showEmoji && (
               <div className="sc-emoji-picker">
                 {EMOJIS.map((e) => (
-                  <button key={e} className="sc-emoji-btn" onClick={() => setDraft((d) => d + e)}>
+                  <button key={e} className="sc-emoji-btn" onClick={() => onInputChange(input + e)}>
                     {e}
                   </button>
                 ))}
@@ -899,8 +878,8 @@ export function ConversationView({
 
           <textarea
             placeholder={isClosed ? ui('supportClosedConversation') : ui('supportTypeMessage')}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKey}
             rows={1}
             onInput={(e) => {
@@ -911,7 +890,7 @@ export function ConversationView({
 
           <button
             className="sc-send"
-            disabled={!draft.trim() && pendingFiles.length === 0}
+            disabled={!input.trim() && pendingFiles.length === 0}
             onClick={send}
             aria-label={ui('send')}
           >
