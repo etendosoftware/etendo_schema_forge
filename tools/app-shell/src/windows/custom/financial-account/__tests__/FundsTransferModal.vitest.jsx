@@ -25,6 +25,22 @@ vi.mock('@/hooks/useMovementLookups', () => ({
   useGLItemLookup: () => ({ results: [{ id: 'GL1', name: 'Internal transfers' }], loading: false }),
 }));
 
+// ── conversion-rate prefill (useConversionRate) ───────────────────────────────
+// The modal seeds its editable rate field from the system exchange rate. The hook is
+// mocked with a module-level, per-test-configurable value so every scenario can drive
+// { rate, hasRate, loading } deterministically without a network round-trip. A test may
+// assign a FUNCTION instead of a plain object, in which case it is invoked with the hook
+// args ({ fromCode, toCode, ... }) so a scenario can vary the rate per currency pair
+// (the ETP-4504 W1 re-seeding regression). Reset in beforeEach.
+let mockConversion = { rate: null, hasRate: false, loading: false };
+const conversionCalls = [];
+vi.mock('../../shared/useConversionRate.js', () => ({
+  useConversionRate: (args) => {
+    conversionCalls.push(args);
+    return typeof mockConversion === 'function' ? mockConversion(args) : mockConversion;
+  },
+}));
+
 // Render the dialog inline (no portal). Drop onOpenAutoFocus (Radix-only handler).
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }) => <div>{children}</div>,
@@ -337,6 +353,162 @@ describe('FundsTransferModal', () => {
       bankFee: true,
       bankFeeFrom: '5',
       bankFeeTo: '3',
+    });
+  });
+
+  // ── conversion-rate prefill ─────────────────────────────────────────────────
+  // The rate field is seeded from the system exchange rate (useConversionRate) and
+  // RE-seeded whenever the currency pair changes, while still staying freely editable.
+  describe('conversion-rate prefill', () => {
+    // Third currency, so a pair change (EUR→USD ⇒ EUR→GBP) can be exercised.
+    const GBP = { id: 'GBP', name: 'Barclays', iban: 'GB29', currencyIso: 'GBP', currentBalance: 0, active: true };
+
+    // jest-dom's toHaveTextContent normalizes the DOM's whitespace but not the expected
+    // string, so strip the NBSP that Intl inserts before the currency symbol.
+    const money = (iso, value) => formatCurrency(iso, value).replace(/\u00a0/g, ' ');
+
+    beforeEach(() => {
+      ACCOUNTS = [SRC, DST, USD, GBP];
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      conversionCalls.length = 0;
+    });
+
+    it('does not render the FX block nor prefill any rate for a same-currency destination', () => {
+      // A rate is available from the hook; a same-currency transfer must ignore it entirely.
+      mockConversion = { rate: 1.1, hasRate: true, loading: false };
+      renderModal();
+      selectDest('DST');
+
+      expect(screen.queryByTestId('transfer-fx-block')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('transfer-rate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('transfer-rate-missing')).not.toBeInTheDocument();
+      // No real (differing) pair was ever requested: every call either lacked a
+      // destination currency (nothing selected yet) or carried two matching codes.
+      expect(conversionCalls.length).toBeGreaterThan(0);
+      expect(
+        conversionCalls.every((c) => !c.fromCode || !c.toCode || c.fromCode === c.toCode),
+      ).toBe(true);
+    });
+
+    it('prefills the rate field with the system rate and previews the destination amount', () => {
+      mockConversion = { rate: 1.1, hasRate: true, loading: false };
+      renderModal();
+      selectDest('USD');
+
+      expect(screen.getByTestId('transfer-fx-block')).toBeInTheDocument();
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+      // No rate on file hint must not appear when a rate was found.
+      expect(screen.queryByTestId('transfer-rate-missing')).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      const box = screen.getByTestId('transfer-receive-amount');
+      expect(box).not.toHaveTextContent('—');
+      expect(box).toHaveTextContent(money('USD', 110));
+    });
+
+    it('keeps a manually typed rate across re-renders that do not change the currency pair', () => {
+      mockConversion = { rate: 1.1, hasRate: true, loading: false };
+      renderModal();
+      selectDest('USD');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+
+      fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.25' } });
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.25');
+
+      // Any unrelated state change re-renders the modal; the seeding effect must not re-fire.
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '200' } });
+      fireEvent.change(screen.getByTestId('transfer-description'), { target: { value: 'Manual' } });
+
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.25');
+      expect(screen.getByTestId('transfer-receive-amount')).toHaveTextContent(money('USD', 250));
+    });
+
+    it('re-seeds the field with the new pair rate when the destination currency changes', () => {
+      // Rate varies per pair: EUR→USD = 1.1, EUR→GBP = 0.85.
+      mockConversion = ({ fromCode, toCode }) => {
+        if (fromCode === 'EUR' && toCode === 'USD') return { rate: 1.1, hasRate: true, loading: false };
+        if (fromCode === 'EUR' && toCode === 'GBP') return { rate: 0.85, hasRate: true, loading: false };
+        return { rate: null, hasRate: false, loading: false };
+      };
+      renderModal();
+
+      selectDest('USD');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+
+      selectDest('GBP');
+      // ETP-4504 W1 regression guard: the previous pair's rate must not survive the switch.
+      expect(screen.getByTestId('transfer-rate')).not.toHaveValue('1.1');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('0.85');
+
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      expect(screen.getByTestId('transfer-receive-amount')).toHaveTextContent(money('GBP', 85));
+    });
+
+    it('clears the rate and omits conversionRate from the payload when switching back to a same-currency destination', async () => {
+      mockConversion = ({ toCode }) => (toCode === 'USD'
+        ? { rate: 1.1, hasRate: true, loading: false }
+        : { rate: null, hasRate: false, loading: false });
+      renderModal();
+
+      selectDest('USD');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+
+      selectDest('DST');
+      expect(screen.queryByTestId('transfer-fx-block')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('transfer-rate')).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      expect(transfer.mock.calls[0][0]).not.toHaveProperty('conversionRate');
+      expect(transfer.mock.calls[0][0]).toMatchObject({ destinationAccountId: 'DST' });
+    });
+
+    it('leaves the field empty and shows the missing-rate hint when no rate exists for the pair', () => {
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal();
+      selectDest('USD');
+
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('');
+      expect(screen.getByTestId('transfer-rate-missing')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      // A positive rate is still required, so confirm stays blocked until one is typed.
+      expect(screen.getByTestId('transfer-confirm')).toBeDisabled();
+
+      fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.05' } });
+      expect(screen.getByTestId('transfer-confirm')).not.toBeDisabled();
+    });
+
+    it('does not flash the missing-rate hint while the rate request is still in flight', () => {
+      mockConversion = { rate: null, hasRate: false, loading: true };
+      renderModal();
+      selectDest('USD');
+
+      expect(screen.getByTestId('transfer-fx-block')).toBeInTheDocument();
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('');
+      expect(screen.queryByTestId('transfer-rate-missing')).not.toBeInTheDocument();
+    });
+
+    it('forwards the prefilled rate in the payload when the user never touches the field', async () => {
+      mockConversion = { rate: 1.085, hasRate: true, loading: false };
+      renderModal();
+      selectDest('USD');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.085');
+
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      expect(transfer.mock.calls[0][0]).toMatchObject({
+        destinationAccountId: 'USD',
+        amount: '100',
+        conversionRate: '1.085',
+      });
     });
   });
 });

@@ -18532,6 +18532,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferRateMissing": "No hay tasa de cambio vigente de {from} a {to}. Introdúcela manualmente.",
     "financeAccountTransferReceiveAmount": "La cuenta destino recibirá",
     "financeAccountTransferBankFee": "Aplicar comisión bancaria",
     "financeAccountTransferBankFeeFrom": "Comisión · origen",

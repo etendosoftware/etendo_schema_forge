@@ -14,6 +14,10 @@ import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
+import { getApiBase } from '@/hooks/useNeoResource';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { useConversionRate } from '../shared/useConversionRate.js';
 
 /** Parses a user-typed amount ("1.234,56" or "1234.56") into a Number, or NaN. */
 function parseAmount(raw) {
@@ -311,6 +315,37 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   const dest = useMemo(() => accounts.find((a) => a.id === destId) ?? null, [accounts, destId]);
   const multiCurrency = !!(source && dest && dest.currencyIso !== source.currencyIso);
 
+  // ── conversion-rate prefill ─────────────────────────────────────────────────
+  // The payload carries no transferDate, so Classic dates the transfer today —
+  // the rate in force is therefore looked up for the same day. todayCalendarISO
+  // (not toISOString) keeps the calendar day correct under a negative UTC offset.
+  // useAuthOptional, not useAuth: this modal must still render (rate simply not
+  // prefilled) outside an AuthProvider — useAuth throws there, per docs/request-policy.md.
+  const token = useAuthOptional()?.token;
+  const rateDate = todayCalendarISO();
+  // useConversionRate strips the LAST path segment off apiBaseUrl, because
+  // validate-exchange-rate hangs off /sws/neo with no entity segment (adding one
+  // 404s). Feeding it this modal's own endpoint leaves exactly /sws/neo.
+  const conversion = useConversionRate({
+    fromCode: source?.currencyIso,
+    toCode: dest?.currencyIso,
+    date: rateDate,
+    apiBaseUrl: `${getApiBase()}/sws/neo/financial-account-transactions`,
+    token,
+  });
+  // Seed the (editable) rate from the system rate, and RE-SEED it whenever the currency
+  // pair changes. The clear matters as much as the prefill: without it a EUR→USD rate the
+  // user typed by hand would survive a switch of destination to GBP and book one pair with
+  // another pair's rate (the ETP-4504 W1 failure, replayed here). A manual edit calls
+  // setConversionRate without touching these deps, so it stands until the pair does change.
+  useEffect(() => {
+    if (!multiCurrency) {
+      setConversionRate('');
+      return;
+    }
+    setConversionRate(conversion.rate != null ? String(conversion.rate) : '');
+  }, [multiCurrency, source?.currencyIso, dest?.currencyIso, conversion.rate]);
+
   const amountNum = parseAmount(amount);
   // Available balance is shown for context only — Classic allows transferring more than the
   // source balance (it never blocks on balance), so we deliberately do not gate on it.
@@ -471,6 +506,19 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                     <span className="min-w-0 truncate">{formatCurrency(dest?.currencyIso, receiveAmount)}</span>
                   </div>
                 </div>
+                {/* No rate on file for this pair — say so instead of leaving the user to
+                    wonder why it prefilled last time and not now. Not a blocker: Confirm
+                    already requires a positive rate, so they just type it. */}
+                {!conversion.loading && !conversion.hasRate ? (
+                  <p
+                    className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+                    data-testid="transfer-rate-missing"
+                  >
+                    {ui('financeAccountTransferRateMissing', {
+                      from: source?.currencyIso, to: dest?.currencyIso,
+                    })}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}
