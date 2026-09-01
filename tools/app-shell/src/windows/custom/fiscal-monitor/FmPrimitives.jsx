@@ -37,6 +37,8 @@ const STATUS_CONFIG = {
   partiallyAccepted:  { cls: 'warn',    labelKey: 'fiscalMonitor.status.vf.partiallyAccepted' },
   rejected:           { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.rejected' },
   invalid:            { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.invalid' },
+  // Namespaced so it does not collide with the SII 'PE' raw code above.
+  vf_pending:         { cls: 'pending', labelKey: 'fiscalMonitor.status.vf.pending' },
 };
 
 export const StatusPill = ({ estado, onClick, title: titleProp }) => {

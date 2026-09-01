@@ -93,7 +93,7 @@ describe('useFiscalStatus', () => {
 
       expect(result.current.sii).toBe('Enviada');
       expect(result.current.tbai).toBe('Enviado');
-      expect(result.current.verifactu).toBe('AC');
+      expect(result.current.verifactu).toBe('accepted');
     });
 
     it('falls through the verifactu entity list until one returns a non-null status', async () => {
@@ -114,16 +114,17 @@ describe('useFiscalStatus', () => {
       expect(result.current.tbai).toBeNull();
     });
 
-    it('maps VF_STATUS_MAP code CO to "accepted"', async () => {
+    it('maps VF_STATUS_MAP code AC to "accepted"', async () => {
       getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
       globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'CO' }])],
+        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'AC' }])],
       ]);
 
       const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      // CO (completado) maps to 'accepted' — distinct from 'AC' which passes through raw
+      // 'AC' (Aceptada) is the real Verifactu AD code; 'CO' never existed here.
+      // Passing through raw made StatusPill render "AC" with the yellow pending style.
       expect(result.current.verifactu).toBe('accepted');
     });
 
@@ -157,7 +158,7 @@ describe('useFiscalStatus', () => {
       expect(result.current.verifactu).toBe('invalid');
     });
 
-    it('maps VF_STATUS_MAP code PE to "pending"', async () => {
+    it('maps VF_STATUS_MAP code PE to "vf_pending"', async () => {
       getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
       globalThis.fetch = makeFetchMock([
         ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'PE' }])],
@@ -166,8 +167,8 @@ describe('useFiscalStatus', () => {
       const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      // PE (pendiente) maps to 'pending' — ETP-4783
-      expect(result.current.verifactu).toBe('pending');
+      // 'pending' has no StatusPill entry, so it used to render the literal word.
+      expect(result.current.verifactu).toBe('vf_pending');
     });
   });
 
@@ -264,7 +265,7 @@ describe('useFiscalStatus', () => {
 
       await waitFor(() => expect(result.current.sii).toBe('Enviada'));
       expect(result.current.tbai).toBe('Enviado');
-      expect(result.current.verifactu).toBe('AC');
+      expect(result.current.verifactu).toBe('accepted');
     });
 
     it('does NOT re-fetch when the event carries a different invoiceId', async () => {

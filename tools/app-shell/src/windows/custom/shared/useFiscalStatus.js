@@ -48,13 +48,27 @@ async function fetchTbaiStatus(apiFetch, orgId, invoiceId) {
 // Maps em_etvfac_invoice_status DB codes to the StatusPill keys defined in FmPrimitives.jsx.
 // Without this mapping, codes like 'IN' are misread as the SII 'IN' code ("Rechazado")
 // instead of the Verifactu 'invalid' code ("Inválido") — ETP-4783.
-const VF_STATUS_MAP = {
-  CO: 'accepted',
+// The Verifactu AD reference list is AC/AE/IN/ER/PE (com.etendoerp.verifactu) —
+// there is no 'CO' code here; that one belongs to SII.
+export const VF_STATUS_MAP = {
+  AC: 'accepted',
   AE: 'partiallyAccepted',
   ER: 'rejected',
   IN: 'invalid',
-  PE: 'pending',
+  PE: 'vf_pending',
 };
+
+/**
+ * Canonical raw-code -> StatusPill-key mapper for VERI*FACTU statuses.
+ * Single source of truth: every Verifactu surface (invoice preview badge,
+ * fiscal monitor table, CSV export) must go through this helper so a raw code
+ * never reaches `StatusPill` and collides with a same-letter SII code.
+ * Unknown codes fall through unchanged.
+ *
+ * @param {string|null|undefined} raw raw `em_etvfac_invoice_status` code
+ * @returns {string|null|undefined} StatusPill-compatible key
+ */
+export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
 
 async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   const entities = [
@@ -65,7 +79,7 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   ];
   for (const entity of entities) {
     const raw = await fetchFirstStatus(apiFetch, VF_SPEC, entity, { organization: orgId }, { fkField: 'invoice', statusField: 'verifactuSendingStatus' }, invoiceId);
-    if (raw !== null) return VF_STATUS_MAP[raw] ?? raw;
+    if (raw !== null) return mapVfStatus(raw);
   }
   return null;
 }
