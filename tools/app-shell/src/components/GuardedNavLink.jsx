@@ -12,11 +12,22 @@ import { requestNavigation } from '@/lib/unsavedChanges.js';
  * is dirty. See the navigation-guard section of `lib/unsavedChanges.js` for why the interception
  * is here rather than in a react-router blocker.
  */
-export function GuardedNavLink({ to, onClick, ...rest }) {
+export function GuardedNavLink({
+  to,
+  onClick,
+  // ETP-5073 follow-up — declared explicitly, with a default, for two reasons: the repo's
+  // `check:data-testid` codemod requires a literal `data-testid` on the rendered element, and it
+  // would otherwise insert one AFTER the `{...rest}` spread, silently overriding what every caller
+  // passes. SideMenu passes `menu-item-${slug}` on 7 call sites, and four Playwright specs plus
+  // SideMenu's own unit test select on it — so the caller's value has to win.
+  'data-testid': dataTestId = 'GuardedNavLink',
+  ...rest
+}) {
   const navigate = useNavigate();
   return (
     <NavLink
       {...rest}
+      data-testid={dataTestId}
       to={to}
       onClick={(event) => {
         onClick?.(event);
