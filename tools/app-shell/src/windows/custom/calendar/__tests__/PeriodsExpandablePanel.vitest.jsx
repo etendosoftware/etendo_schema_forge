@@ -144,14 +144,15 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
   });
 
-  // ETP-4948 QA finding: FiscalYearPeriodsHandler.createPeriod (July-June range) sets the 13th
-  // "adjustment" period's startingDate to June 30 of the fiscal-year end — the same month/year as
-  // the regular 12th period's June 1 startingDate. formatPeriodName() only ever reads
-  // month+year (never day) and nothing else in the row surfaces periodType/periodNo, so a user
-  // cannot visually tell the two periods apart in the list. This test documents the current
-  // (ambiguous) behavior as a known gap — not a fix — so a future disambiguation (e.g. rendering
-  // periodType or periodNo) has a regression test to flip once it lands.
-  it('KNOWN GAP: renders an identical label for the regular June period and the July-June 13th adjustment period', async () => {
+  // ETP-4948 QA finding, now fixed: FiscalYearPeriodsHandler.createPeriod (July-June range) sets
+  // the 13th "adjustment" period's startingDate to June 30 of the fiscal-year end — the same
+  // month/year as the regular 12th period's June 1 startingDate. formatPeriodName() only ever
+  // reads month+year (never day), so both rows used to render the exact same text. The fix reads
+  // the period's own `periodType` (already present on the row, set by the backend) and renders a
+  // distinguishing "Adjustment Period" badge next to the 13th period's name — the regular period
+  // is untouched (renamed from the "KNOWN GAP" test, which documented the ambiguity; it no longer
+  // exists).
+  it('renders a distinguishing badge for the July-June 13th adjustment period, not the regular June period', async () => {
     const regularJune = { id: 'p12', name: 'Jun-28', startingDate: '2028-06-01', status: 'O', periodNo: 12, periodType: 'S' };
     const adjustment = { id: 'p13', name: '13th Period - 28', startingDate: '2028-06-30', status: 'O', periodNo: 13, periodType: 'A' };
     global.fetch = vi.fn(() => Promise.resolve({
@@ -162,9 +163,12 @@ describe('PeriodsExpandablePanel', () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('period-name-p12')).toHaveTextContent('June 28'));
-    // Both rows render the exact same text — no periodType/periodNo indicator distinguishes the
-    // 13th adjustment period from the regular June period it shares a displayed month/year with.
+    // Both rows still show the same month/year (day is deliberately never part of the label —
+    // see the previous test) but the 13th period now also carries the adjustment badge, and the
+    // regular period must NOT.
     expect(screen.getByTestId('period-name-p13')).toHaveTextContent('June 28');
+    expect(screen.getByTestId('period-adjustment-badge-p13')).toHaveTextContent('Adjustment Period');
+    expect(screen.queryByTestId('period-adjustment-badge-p12')).not.toBeInTheDocument();
   });
 
   it('renders period status as a colored badge with the translated label, not the raw code', async () => {

@@ -16761,6 +16761,7 @@
     "calendarPeriod": "Período",
     "calendarStatus": "Estado",
     "calendarActions": "Acciones",
+    "calendarAdjustmentPeriod": "Período de ajuste",
     "openClosePeriod": "Abrir/Cerrar Periodo",
     "openCloseDocument": "Abrir/Cerrar Documento",
     "bulkOpenCloseDocuments": "Abrir/Cerrar Documentos seleccionados",

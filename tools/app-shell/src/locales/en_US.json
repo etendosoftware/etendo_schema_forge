@@ -16533,6 +16533,7 @@
     "calendarPeriod": "Period",
     "calendarStatus": "Status",
     "calendarActions": "Actions",
+    "calendarAdjustmentPeriod": "Adjustment Period",
     "openClosePeriod": "Open/Close Period",
     "openCloseDocument": "Open/Close Document",
     "bulkOpenCloseDocuments": "Open/Close selected documents",

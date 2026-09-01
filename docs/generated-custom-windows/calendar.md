@@ -37,7 +37,8 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    field with the current organization's calendar before generic CRUD persists it. This
    prevents the org-blind first-combo fallback from choosing the global (`*`) calendar when a
    client owns more than one. The handler also rejects missing or malformed fiscal years: only
-   four-digit values from 1900 through 2999 are accepted. The `decisions.json`
+   four-digit values from 1900 through 2999 are accepted — on both **create** and **update** (see
+   the DEV fix note directly below; the update-side gap this closes was ETP-4948 Issue 5). The `decisions.json`
    `derivation: "fromParent"` declaration remains semantic documentation only; it does not reach
    the backend shape for a `system`-visibility field. The broader selector fallback issue remains
    tracked separately as Jira ETP-5086.
@@ -50,6 +51,17 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    calendar this org should use, walking up to the nearest ancestor that owns one" — which also
    deliberately treats org `*` (id `"0"`) as "no usable calendar" rather than returning the
    global one.
+   **ETP-4948 Issue 5 — FIXED:** the fiscal-year format/range check above originally only ran on
+   `isFiscalCalendarCreate` (`recordId == null`), so editing an existing year and setting Fiscal
+   Year to a garbage value (e.g. `"asd"`) or an out-of-range one (e.g. `"1800"`) fell through to
+   default CRUD with no rejection — the exact symptom originally reported (creating a year named
+   `"asd"`), still reproducible via edit even after the create-side fix landed. `YearCloseHandler`
+   now also runs `isFiscalCalendarYearUpdate` (any write method, `recordId != null`, same
+   spec/entity match) and validates `fiscalYear` with the identical four-digit/1900-2999 check —
+   but only when the update body actually includes `fiscalYear`; a partial update touching only
+   e.g. `Description` is never rejected for a field it didn't send. The calendar FK injection
+   remains create-only by design (the calendar is set once, from the organization, never
+   re-derived on update).
    **Known residual risk, NOT fixed by this cycle:** a manual live retest after the original
    fix still reproduced the wrong-calendar symptom. Investigation traced the NEO JWT's
    `organization` claim (read by `NeoAuthenticator.authenticateJwt`, the sole input to every
@@ -237,6 +249,18 @@ The Calendar UI renders a full localized month and two-digit year from `starting
 utility also makes a July-June period ending in June 2028 display `June 28` / `Junio 28`, regardless
 of the stored name or the browser timezone.
 
+**ETP-4948 QA finding — FIXED.** A July-June year's 13th "adjustment" period (`periodType: "A"`,
+`startingDate` = June 30 of the fiscal-year end) shares its displayed month/year with the regular
+12th period (`periodType: "S"`, `startingDate` = June 1) — `formatPeriodName()` only ever reads
+month+year, never the day, so both used to render the identical text (e.g. `June 28`) with nothing
+in the row to tell them apart. `FiscalYearPeriodsHandler.createPeriod` already names the adjustment
+period distinctly server-side (`"13th Period - YY"`, vs. the regular period's `"MMM-yy"`), and
+`periodControl.periodType` is already exposed (`readOnly`, form-only) — the gap was purely a
+frontend rendering one. `PeriodsExpandablePanel.jsx` now renders an `ui('calendarAdjustmentPeriod')`
+("Adjustment Period" / "Período de ajuste") badge (`data-testid="period-adjustment-badge-{id}"`)
+next to the period name whenever `period.periodType === 'A'`; the regular period's row is
+unaffected. No data-shape change — `periodType` was already present on every row.
+
 `AccountingPanel.jsx` and `PeriodsExpandablePanel.jsx` each track three distinct states for their
 fetched data — never just "empty vs loaded":
 - **Loading** (`rows`/`periods === undefined`, the initial/in-flight state) — a `{ui('loading')}`
@@ -276,7 +300,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
-| fiscalYear | string | editable | yes | yes | Required four-digit value from 1900 through 2999, e.g. "2027"; enforced server-side on create |
+| fiscalYear | string | editable | yes | yes | Required four-digit value from 1900 through 2999, e.g. "2027"; enforced server-side on both create and update (ETP-4948 Issue 5) |
 | description | string | editable | yes | yes | Optional |
 | calendar | foreignKey | system | no | no | Hidden parent-link field (`C_Calendar_ID`, `AD_Column.ISPARENT='Y'`); no UI selector. On direct Fiscal Calendar creates, `YearCloseHandler` sets it from the current organization calendar and ignores any caller value — see Issue 1 note above (ETP-4948, fixed) |
 | processNow | button | editable | no | yes | **Create Periods** — AD Process 100 |
@@ -339,7 +363,10 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    `AccDefUtility.getCalendar`, which walks the org tree to the nearest ancestor that owns a
    calendar — see the Issue 1 note above for the cycle-1 REVIEW correction) before generic CRUD
    runs and never trusts a caller-supplied value. It also rejects non-four-digit fiscal years
-   outside 1900-2999. The broader, still-open class of bug — the org-blind selector fallback
+   outside 1900-2999, on both create and update (ETP-4948 Issue 5 — editing an existing year to an
+   invalid Fiscal Year previously fell through to default CRUD unrejected; fixed by adding an
+   update-side validation path alongside the existing create-side one, without repeating the
+   create-only calendar FK injection). The broader, still-open class of bug — the org-blind selector fallback
   (`SelectorOrgFilter`/`resolveFirstComboOption` picking the alphabetically-first org for *any*
   combo field, not just parent-links) — is tracked separately as Jira ETP-5086. A second, distinct
   residual risk (the JWT organization-claim/role-selection issue) is documented in the Issue 1
@@ -411,6 +438,13 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 18. Confirm all three backing specs push cleanly and independently: `sf-push-neo fiscal-calendar`
     and `sf-push-neo end-year-close` should each succeed with 0 errors; `open-close-period-control`
     needs no re-push (unchanged by this feature).
+19. Open an existing year and edit its Fiscal Year to a non-numeric value (e.g. `asd`) or an
+    out-of-range one (e.g. `1800`); confirm the save is rejected with a 400 error, not silently
+    accepted (ETP-4948 Issue 5).
+20. Open a July-June year with an adjustment period (Create Periods with **Fiscal Year Range =
+    July - June** and **Create adjustment period? = Yes**), switch to the **Periods** tab, and
+    confirm the 13th period's row shows an **Adjustment Period** badge next to its name while the
+    regular June period's row does not (ETP-4948 QA finding — adjustment period badge).
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `calendar` in the Finance group (`windowId: "117"`);

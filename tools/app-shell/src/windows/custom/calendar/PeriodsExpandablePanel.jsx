@@ -451,7 +451,17 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                   {isExpanded ? <ChevronDown size={16} data-testid="ChevronDown__711967" /> : <ChevronRight size={16} data-testid="ChevronRight__711967" />}
                 </Button>
               </TableCell>
-              <TableCell className="font-medium" data-testid={`period-name-${period.id}`}>{formatPeriodName(period, locale)}</TableCell>
+              <TableCell className="font-medium" data-testid={`period-name-${period.id}`}>
+                {formatPeriodName(period, locale)}
+                {period.periodType === 'A' && (
+                  <span className="ml-2 inline-block align-middle" data-testid={`period-adjustment-badge-${period.id}`}>
+                    <Tag
+                      variant="neutral"
+                      label={ui('calendarAdjustmentPeriod')}
+                      data-testid="Tag__711967" />
+                  </span>
+                )}
+              </TableCell>
               <TableCell data-testid={`period-status-${period.id}`}>
                 <Tag
                   variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
