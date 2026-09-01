@@ -34,6 +34,21 @@ export function formatCalendarDate(
   return date ? date.toLocaleDateString(normalizeLocale(locales), options) : '—';
 }
 
+/**
+ * Today's date as a `yyyy-MM-dd` string, built from LOCAL calendar getters.
+ *
+ * `new Date().toISOString().slice(0, 10)` is UTC-based: west of UTC (e.g.
+ * America/Argentina/Buenos_Aires, UTC-3) it returns *yesterday* from ~21:00
+ * local onward, and east of UTC it can return *tomorrow* late in the day.
+ * Use this instead whenever "today" is compared against a date-only field.
+ */
+export function todayCalendarISO(reference = new Date()) {
+  const year = reference.getFullYear();
+  const month = String(reference.getMonth() + 1).padStart(2, '0');
+  const day = String(reference.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function getCalendarDateRelation(raw, reference = new Date()) {
   const date = parseCalendarDate(raw);
   if (!date) return null;

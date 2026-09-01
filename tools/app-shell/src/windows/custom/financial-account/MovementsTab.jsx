@@ -9,6 +9,7 @@ import {
   buildMovementSortColumns,
 } from './MovementsTable';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { useUI } from '@/i18n';
 import { NewTransactionModal } from './NewTransactionModal.jsx';
@@ -206,16 +207,16 @@ export const MovementsTab = forwardRef(function MovementsTab(
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {selectedIds.size > 0 && (
-        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
-          <BulkDeleteSelectionBar
-            count={selectedIds.size}
-            deleting={bulkDeleting}
-            onCancel={clearSelection}
-            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-            data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
-        </div>
-      )}
+      {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
+          viewport-fixed pill via SelectionToolbar; it no longer occupies a
+          slot in this flow (the wrapping div here used to reserve space for
+          the old in-flow bar). */}
+      <BulkDeleteSelectionBar
+        count={selectedIds.size}
+        deleting={bulkDeleting}
+        onCancel={clearSelection}
+        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+        data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
@@ -223,6 +224,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onAdvancedFilterChange={setAdvancedFilter}
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
+        onRefresh={onReload}
         rows={movements}
         sortControl={(
           <ListSortPopover
@@ -240,6 +242,12 @@ export const MovementsTab = forwardRef(function MovementsTab(
         totals={dateScopedTotals}
         loading={loading}
         data-testid="AccountSummaryStrip__c1f76a" />
+      {/* Same affordance a generated list gets from ListView: the rows stay put and dim while
+          refreshing, and this says why. Only when rows are already on screen — on the first
+          fetch the table's own skeleton is the indicator. */}
+      {loading && movements.length > 0 ? (
+        <ListProgressBar testId="movements-progress-bar" data-testid="ListProgressBar__c1f76a" />
+      ) : null}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <MovementsTable
           movements={sortedMovements}

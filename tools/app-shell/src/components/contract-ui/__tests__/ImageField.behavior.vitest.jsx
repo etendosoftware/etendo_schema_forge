@@ -6,6 +6,13 @@
  */
 const toastMocks = vi.hoisted(() => ({ error: vi.fn() }));
 
+// ETP-5022 — ImageField's requests come from `useApiFetch`, which reads the bearer token
+// from the session rather than from the `token` prop.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'tk' }),
+}));
+
 vi.mock('sonner', () => ({ toast: toastMocks }));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/components/ui/custom-icons', () => ({
@@ -69,9 +76,10 @@ describe('ImageField — behaviour', () => {
       render(<ImageField imageId="IMG-1" token="tk" apiBaseUrl="/etendo/sws/neo/product" onChange={vi.fn()} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+      // `credentials: 'include'` comes from the shared helper now (ETP-5022).
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/etendo/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       );
       const img = await screen.findByRole('img');
       expect(img).toHaveAttribute('src', BLOB_URL);
@@ -81,7 +89,7 @@ describe('ImageField — behaviour', () => {
       render(<ImageField imageId="IMG-1" token="tk" onChange={vi.fn()} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         '/sws/neo/image/IMG-1',
-        { headers: { Authorization: 'Bearer tk' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       ));
     });
 
@@ -193,7 +201,7 @@ describe('ImageField — behaviour', () => {
       const [url, options] = globalThis.fetch.mock.calls.at(-1);
       expect(url).toBe('/etendo/sws/neo/image');
       expect(options.method).toBe('POST');
-      expect(options.headers).toEqual({ Authorization: 'Bearer tk', 'Content-Type': 'application/json' });
+      expect(options.headers).toEqual({ Authorization: 'Bearer tk', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' });
       const body = JSON.parse(options.body);
       expect(body.name).toBe('front.png');
       expect(body.mimeType).toBe('image/png');

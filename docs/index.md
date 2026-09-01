@@ -6,6 +6,7 @@
 |------|-------------|
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
 | [repo-topology.md](repo-topology.md) | The 3-repo split, the two dev profiles (functional-only vs core), published-package default vs `LOCAL_CORE` local-source mode (React + CLI), GitHub Packages auth |
+| [email-inventory.md](email-inventory.md) | Inventory of every email Etendo sends across both stacks (GO email contracts + Core SMTP), with triggers, key files, and where each format lives |
 | [transactional-email-framework.md](transactional-email-framework.md) | Transactional email framework: contract-driven execution, security boundary, lifecycle, edge cases, and agent checklist |
 | [email-contracts.md](email-contracts.md) | Email contracts guide: descriptor schema, request/response contract, recipient policies, versioning, and initial contract sketches |
 | [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |
@@ -85,6 +86,8 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | Path | Description |
 |------|-------------|
 | [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
+| [request-policy.md](request-policy.md) | **Request reference**: the single authenticated-`fetch` helper (`useApiFetch` / `apiFetch`), its options (`on401`, `baseUrl`, `token`), 401-to-logout wiring, how to give a test a session, and the two guardrails that keep raw `fetch` out |
+| [unsaved-changes-guard.md](unsaved-changes-guard.md) | **Unsaved-changes reference**: the single dirty-state registry, how to register a form (and give it a saver), the five consumers (unload, locale, navigation, clone, confirm), `GuardedNavLink` / `useGuardedNavigate`, and why react-router's `useBlocker` is not usable here |
 
 ## Feature Flags
 

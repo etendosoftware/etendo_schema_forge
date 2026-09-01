@@ -832,7 +832,8 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} />);
     selectRows();
 
-    await user.click(screen.getByText(/^print/).closest('button'));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('print'));
 
     // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
     // client-rendered document (design A) instead of the print-* artifact.
@@ -845,7 +846,8 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} onCloneRow={onCloneRow} />);
     selectRows();
 
-    await user.click(screen.getByText(/^cloneOrderBtn/).closest('button'));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('cloneOrderBtn'));
 
     expect(onCloneRow).toHaveBeenCalledWith(SELECTED);
   });
@@ -855,7 +857,8 @@ describe('ListView — selection bar actions', () => {
     render(<ListView {...defaultProps} />);
     act(() => { tableProps.onSelectionChange(['r1', 'r2']); });
 
-    await user.click(screen.getByText(/^print/).closest('button'));
+    // ETP-4972 — icon-only selection-bar button, identified by title tooltip.
+    await user.click(screen.getByTitle('print'));
     // ETP-4912: apiBaseUrl is passed too — it is what lets printDocuments build the
     // client-rendered document (design A) instead of the print-* artifact.
     expect(printDocumentsMock).toHaveBeenCalledWith('test-entity', ['r1', 'r2'], 'fake-token', expect.any(Function), 'http://localhost/api');
@@ -937,6 +940,33 @@ describe('ListView — refresh and paging', () => {
     act(() => { scrollPaneProps.onReachBottom(); });
 
     expect(loadMoreMock).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4921 — the inline progress-bar JSX moved out of ListView into the shared
+// ListProgressBar so the hand-rolled tables (financial-account tabs, ListModalWindow,
+// ReconciliationSplitPanel) can render the same affordance. The extraction must be invisible
+// from ListView's side: same `list-progress-bar` testid, same gate.
+describe('ListView — refresh progress bar', () => {
+  it('shows the bar while refreshing over rows already on screen', () => {
+    hookOverrides = { loading: true, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.getByTestId('list-progress-bar')).toBeInTheDocument();
+  });
+
+  it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+    hookOverrides = { loading: true, items: [] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('hides the bar once the fetch settles', () => {
+    hookOverrides = { loading: false, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
   });
 });
 

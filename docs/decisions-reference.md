@@ -161,21 +161,23 @@ feeds the first one — this is intentional (ETP-4714 was scoped to the form vie
 explicit product direction: the list-view print must never be touched by this feature). Two
 regressions were caught during review because of this split, with two different fixes:
 
-- `sales-invoice`/`purchase-order` **already had** `hidePrint: true` before this ticket (list
-  AND form both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form
-  behavior silently un-hid their list-view print buttons (list has no gate of its own once
-  `hidePrint` is unset). Fix: also declare `"listViewOptions": { "hidePrint": true }` alongside
-  `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint` prop
-  (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its pre-ticket
-  always-hidden state. **These two windows also needed a second fix**: their custom
-  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-rolls its
+- `sales-invoice`/`purchase-order` **had** `hidePrint: true` before ETP-4714 (list AND form
+  both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form behavior
+  silently un-hid their list-view print buttons (list has no gate of its own once `hidePrint`
+  is unset). ETP-4714's fix was to also declare `"listViewOptions": { "hidePrint": true }`
+  alongside `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint`
+  prop (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its
+  pre-ticket always-hidden state. Because both windows' custom
+  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-roll their
   own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`
-  (only the detail/record route goes through the generated component) — so the generator's
-  literal `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` is never even reached for
-  the list. The custom wrapper needs the exact same prop hardcoded directly on its own
-  `<ListView>` call (matching the existing pattern already used there for `dateFilterKey` etc.)
-  — check for this class of gap on **any** window whose custom `index.jsx` renders `<ListView>`
-  itself rather than delegating unconditionally to the generated `App`/`HeaderPage`.
+  (only the detail/record route goes through the generated component), the generator's literal
+  `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` was never even reached for the
+  list — the custom wrapper needed the same prop hardcoded directly on its own `<ListView>`
+  call too. **ETP-4728 QA later flagged this as an inconsistency** (grid print present on
+  `sales-order`, absent on `sales-invoice`/`purchase-order` with no per-status reason) and
+  ETP-4728 **removed** the `listViewOptions.hidePrint` from both windows' `decisions.json` AND
+  their custom `index.jsx`, unifying them with the `sales-order`/`sales-quotation` baseline
+  below — do **not** reintroduce it for these two windows either.
 - `purchase-invoice` needed the **opposite** correction: it never had `hidePrint` set before
   this ticket, so its list-view print was **visible**. An earlier iteration set
   `"hidePrint": true` to hide the form unconditionally, which also hid the previously-visible
@@ -190,9 +192,16 @@ regressions were caught during review because of this split, with two different 
   (plus `goods-shipment`'s), restoring their list-view print to always-visible as the new,
   tested, intended baseline — `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js`
   has an explicit regression guard (`'does not hardcode hidePrint on ListView (ETP-4729 — print
-  restored)'`) asserting this. ETP-4714's original `listViewOptions` fix for these two windows
-  is now obsolete and was removed — do **not** reintroduce it; the list stays unconditionally
-  visible for `sales-order`/`sales-quotation`, only the detail-view `hidePrintWhen` gate applies.
+  restored)'`) asserting this. **ETP-4728 later applied the same removal to `sales-invoice` and
+  `purchase-order`** (see above), each with the same class of regression guard on their own
+  custom `index.jsx` test — the list stays unconditionally visible for all four windows
+  (`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`); only the detail-view
+  `hidePrintWhen` gate applies anywhere now. `listViewOptions.hidePrint` remains legitimately
+  in use elsewhere for non-document master-data windows with their own unrelated reason to
+  suppress print (e.g. `contacts`, alongside `hideCounter`/`hideLink`/`hideBulkDelete`) — but
+  for the sales/purchase document windows specifically, before reintroducing it, re-check
+  whether the list-level suppression is genuinely intended (product decision) rather than an
+  accidental carry-over from an unrelated `hidePrintWhen` change, per the pitfall above.
 
 **Rule of thumb:** before changing a window's Print visibility, check what its list-view print
 buttons looked like *before* your change, and make sure they still look the same *after* it —
@@ -1252,7 +1261,7 @@ that already has values stored with the scheme included.
 | `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
 | `integer` | boolean | `undefined` (decimals allowed) | When `true`, the numeric field rejects decimal values. In detail forms a decimal raises a `fieldIntegerError` toast on blur and blocks the save. **Default (flag absent or `false`) accepts decimals** — omit it for the common case; only set `integer: true` for whole-number fields (e.g. Assets `usableLifeMonths` / `usableLifeYears`, declared `"min": 1, "integer": true`). Fully backwards-compatible: a field that declares neither `min` nor `integer` performs no numeric validation. Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `readOnlyLogic` | string \| null | `null` | AD-logic-string expression for conditional read-only (`@Column@=value` syntax, compiled from raw AD `displaylogic`/`readonlylogic`). Set `null` to omit — e.g. to silence the raw AD value before overriding it with `readOnlyLogicJs` below. |
-| `readOnlyLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional read-only, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to lock a field once the record is persisted (a "locks after first save" pattern the AD-logic translator cannot express, since raw AD `displaylogic`/`readonlylogic` only ever references *other column values*, never "does this record have a PK yet"). Compiles into the SAME generated `readOnlyLogic: (record) => …` function property as the AD-logic-string variant above — `EntityForm.jsx`'s `evalReadOnlyLogic` doesn't know or care which decisions.json key produced it. Real examples: `sales-invoice`/`purchase-invoice`'s `transactionDocument` (`"!!record.id"`, locked after first save) and `simple-g-l-journal`'s several fields (`"record['processed'] === true"`, an AD-shaped condition written directly in JS because it was simpler than composing the equivalent `@Processed@` logic string). When both `readOnlyLogic` and `readOnlyLogicJs` are set on the same field, set `readOnlyLogic: null` explicitly (as in the examples above) — otherwise the raw AD value and the JS override may both compile into contradictory or redundant checks. |
+| `readOnlyLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional read-only, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to lock a field once the record is persisted (a "locks after first save" pattern the AD-logic translator cannot express, since raw AD `displaylogic`/`readonlylogic` only ever references *other column values*, never "does this record have a PK yet"). Compiles into the SAME generated `readOnlyLogic: (record) => …` function property as the AD-logic-string variant above — `EntityForm.jsx`'s `evalReadOnlyLogic` doesn't know or care which decisions.json key produced it. Real examples: `sales-invoice`/`purchase-invoice`'s `transactionDocument` (`"!!record.id"`, locked after first save) and `simple-g-l-journal`'s several fields (`"record['processed'] === true"`, an AD-shaped condition written directly in JS because it was simpler than composing the equivalent `@Processed@` logic string). When both `readOnlyLogic` and `readOnlyLogicJs` are set on the same field, set `readOnlyLogic: null` explicitly (as in the examples above) — otherwise the raw AD value and the JS override may both compile into contradictory or redundant checks. **`record.hasLines` (ETP-5052):** for a HEADER field, `record` also carries a live `hasLines` boolean — `true` once the master record has at least one child line, `false` once the last one is removed — sourced by `DetailView.jsx` from `hook.children.length > 0` and merged in via `buildHeaderFormData()` (`detailViewHelpers.jsx`), display-only and never part of the save payload. Use it to lock a header field once lines exist, e.g. Physical Inventory's `warehouse`, which combines it with the field's pre-existing Processed-based lock: `"readOnlyLogicJs": "!!record.hasLines || record.processed === true"` (with `"readOnlyLogic": null`) — the OR is required because `readOnlyLogicJs` always takes priority over the AD-translated raw logic, so a bare `"!!record.hasLines"` would silently drop the Processed lock instead of adding to it (see `docs/generated-custom-windows/physical-inventory.md` § "Design changes — ETP-5052"). Only header `<Form>` calls receive this merged `record` — line-entity forms keep receiving the plain record, so `hasLines` is not available on line-level `readOnlyLogicJs` expressions. |
 | `displayLogic` | string \| null | `null` | AD-logic-string expression for conditional visibility (`@Column@=value` syntax). Set `null` to omit. |
 | `displayLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional visibility, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to hide a field only on the CREATE form (shown again once persisted; the double negation is deliberate — `evalDisplayLogic` treats a truthy result as "show", so "hidden until saved" needs `!!record.id`, not the single-negation `!record.id`, which would do the opposite). Compiles into the same generated `displayLogic: (record) => …` function property `EntityForm.jsx`'s `evalDisplayLogic` reads to filter `displayFields` — a field failing this check is removed from the rendered form entirely, not merely disabled. Real examples: `assets`/`asset-group`'s several fields gated on `"record.depreciate === true \|\| record.depreciate === 'Y'"`, and `user`'s `password` (ETP-4830, `"!!record.id"` — hidden on the create form now that admin-typed passwords no longer bypass the invite-email flow, shown again once the user record is saved so an existing user's password can still be reset). |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |
