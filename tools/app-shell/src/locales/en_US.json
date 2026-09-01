@@ -16753,6 +16753,7 @@
     "backendError.amortizationDepreciationAmountRequired": "Depreciation Amount field cannot be empty, zero or negative.",
     "backendError.amortizationStartDateRequired": "The start date field is mandatory",
     "backendError.assetGroupNameDuplicate": "There is already an asset category with this name.",
+    "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
     "processAssetCompleted": "Create Amortization completed",
     "reactivated": "Document reactivated",

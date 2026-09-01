@@ -16980,6 +16980,7 @@
     "backendError.amortizationDepreciationAmountRequired": "El campo Valor a amortizar no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationStartDateRequired": "El campo fecha inicio es obligatorio.",
     "backendError.assetGroupNameDuplicate": "Ya existe una categoría de activo con este nombre.",
+    "backendError.assetSearchKeyDuplicate": "Ya existe un activo con este identificador en esta organización.",
     "backendError.productNotStockable": "Este producto es de tipo Servicio y no admite movimientos de inventario.",
     "processAssetCompleted": "Amortización creada",
     "reactivated": "Documento reactivado",
