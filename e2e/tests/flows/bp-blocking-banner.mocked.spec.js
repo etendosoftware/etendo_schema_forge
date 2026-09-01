@@ -236,6 +236,97 @@ test.describe('BP-blocking banner (ETP-5024) — purchase-invoice', () => {
     });
   });
 
+  // ── Scenario 1b: credit-limit on a brand-new, UNSAVED document (ETP-5024
+  //    blocker 2 — currency fallback) ─────────────────────────────────────
+  // A REVIEW pass found the amount could be silently dropped from the banner
+  // specifically on this scenario: `data` is `hook.editing` while creating a
+  // new document, which has no `currency$_identifier` yet (unlike an existing
+  // record's header GET response). This test asserts the actual FORMATTED
+  // AMOUNT text appears — not just that the banner is visible — exercising the
+  // `useCurrency()` session-level fallback (mocked by `login()` to 'EUR' via
+  // `GET /sws/neo/session`) end to end, with the REAL (unmocked) `formatCurrency`.
+  test.describe('credit-limit condition on a brand-new, unsaved document', () => {
+    test.beforeEach(async ({ page }) => {
+      await login(page);
+
+      await page.route(`**/sws/neo/${SPEC}/${ENTITY}/selectors/C_BPartner_ID{/**,}**`, async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ items: [{ id: BP_RISKY.id, label: BP_RISKY.label }] }),
+        });
+      });
+
+      // Same shape as core Etendo's real (buggy) concatenation — see
+      // SE_Order_BPartner.java / blockingBpConditions.js's header comment: no
+      // separating space, raw `Double.toString()` amount appended directly.
+      await page.route(`**/sws/neo/${SPEC}/${ENTITY}/callout`, async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const body = route.request().postDataJSON() ?? {};
+        if (body.field === 'businessPartner' && body.value === BP_RISKY.id) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              updates: {}, combos: {},
+              messages: [{ type: 'ERROR', text: 'Aviso: Crédito limite superado4912.6' }],
+            }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ updates: {}, combos: {}, messages: [] }),
+        });
+      });
+
+      await page.route(`**/sws/neo/${SPEC}/${ENTITY}/selectors/C_BPartner_Location_ID{/**,}**`, async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ items: [{ id: ADDRESS.id, label: ADDRESS.label }] }),
+        });
+      });
+
+      await page.goto(`/${SPEC}/new`);
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    });
+
+    test('shows the FORMATTED amount (not dropped, not raw) via the session currency fallback', async ({ page }) => {
+      await expect(page.getByTestId('bp-blocking-banner')).toHaveCount(0);
+
+      // A brand-new record's businessPartner field starts EMPTY — CreatableSearchSelect
+      // only renders the `-chip` testid once a value is selected (SelectorChip); an
+      // empty field renders the `field-businessPartner` search input directly (see
+      // CreatableSearchSelect.jsx). Unlike scenario 1 (an already-loaded existing
+      // record with a BP already selected), there is no chip to click first here.
+      const input = page.getByTestId('field-businessPartner');
+      await expect(input).toBeVisible({ timeout: 10_000 });
+      await input.fill('Risky');
+
+      const riskyOption = page.getByTestId(`option-businessPartner-${BP_RISKY.id}`);
+      await expect(riskyOption).toBeVisible({ timeout: 5_000 });
+      await riskyOption.click();
+
+      // A brand-new record's initial mount fires more concurrent work than an
+      // already-loaded existing record (scenario 1 above) — handleNew's own
+      // defaults fetch plus every other mandatory field's default-selector
+      // resolution race the businessPartner callout's 300ms debounce — so this
+      // allows a more generous window before the banner is expected to land.
+      const banner = page.getByTestId('bp-blocking-banner');
+      await expect(banner).toBeVisible({ timeout: 10_000 });
+
+      // The formatted amount (EUR session fallback, es-ES grouping: '.' thousands,
+      // ',' decimal — see formatCurrency.js) actually appears in the banner...
+      await expect(banner).toContainText('4.912,60');
+      // ...and the raw, unformatted backend concatenation never leaks through.
+      await expect(banner).not.toContainText('superado4912.6');
+    });
+  });
+
   // ── Scenario 2: on-hold BP, attempted Complete, then a successful retry ──
   test.describe('on-hold condition via a failed then successful Complete', () => {
     const INVOICE_ID = 'pi-bpban-onhold';
@@ -263,10 +354,14 @@ test.describe('BP-blocking banner (ETP-5024) — purchase-invoice', () => {
         if (route.request().method() !== 'POST') return route.fallback();
         attempt += 1;
         if (attempt === 1) {
+          // Real production wording (AD_MESSAGE `SelectedBPartnerBlocked`) — the
+          // detector's ON_HOLD_PATTERN is anchored on this exact sentence shape
+          // (ETP-5024 REVIEW: a bare "on hold" keyword false-positived on unrelated
+          // AD_MESSAGE catalog entries like `lockedProduct`).
           await route.fulfill({
             status: 400,
             contentType: 'application/json',
-            body: JSON.stringify({ error: { message: 'Selected Business Partner is on hold' } }),
+            body: JSON.stringify({ error: { message: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' } }),
           });
           return;
         }

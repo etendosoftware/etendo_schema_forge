@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useCurrency } from '@/hooks/useCurrency';
 
 /**
  * ETP-5024 — persistent inline warning for the two Business-Partner blocking
@@ -9,9 +10,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
  * auto-dismissing toast. Renders nothing until one of the two sources below reports
  * a condition, then stays visible — unlike a toast — until it is explicitly cleared.
  *
- * Rendered from `resolveHeaderContent` (detailViewHelpers.jsx) so DetailView.jsx
- * itself only has to widen its existing `resolveHeaderContent(...)` call with one
- * extra argument — see that file for why (DetailView.jsx is a governed God
+ * Rendered from `resolveHeaderContent` (detailViewHelpers.jsx), which DetailView.jsx
+ * calls unchanged — no new argument needed there (DetailView.jsx is a governed God
  * Component: `.claude/hooks/check-detailview-growth.mjs` blocks it from growing).
  *
  * Two independent sources can raise the condition, so this component owns the
@@ -55,20 +55,30 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
  * values (including a real id going back to `'new'` via "Nuevo", or one real
  * id switching to a different real id) still clears, exactly as before.
  *
- * `currencyCode` — the document's currency (`data['currency$_identifier']`, with
- * the session-level fallback DetailView.jsx already resolves for line rows —
- * see `sessionCurrencyCode` there) — is threaded down so the `creditLimit`
- * condition's `amount` (see `lib/blockingBpConditions.js`) can be rendered through
- * the canonical `formatCurrency` util instead of the raw, unformatted backend
- * number. If the currency isn't available for some reason, the amount is dropped
- * entirely rather than shown unformatted (mirrors the `matchCashCloseNoConcept`
- * precedent in `lib/backendErrors.js`) — a banner that says "credit limit
- * exceeded" without the exact figure is still correct and useful.
+ * `currencyCode` — the document's currency (`data['currency$_identifier']`, from
+ * `resolveHeaderContent` in detailViewHelpers.jsx) — is threaded down so the
+ * `creditLimit` condition's `amount` (see `lib/blockingBpConditions.js`) can be
+ * rendered through the canonical `formatCurrency` util instead of the raw,
+ * unformatted backend number. That prop is `null` on a brand-new, unsaved
+ * document — `data` is `hook.editing` at that point (DetailView.jsx), which has
+ * no `currency$_identifier` yet — so this component falls back to `useCurrency()`
+ * (the same session-level currency DetailView.jsx already uses for line rows,
+ * via its own `sessionCurrencyCode`) rather than threading one more prop through
+ * DetailView.jsx, a governed God Component
+ * (`.claude/hooks/check-detailview-growth.mjs` blocks it from growing). If
+ * NEITHER source has a currency code, the amount is still shown, unformatted,
+ * rather than dropped — mirrors the `matchCashCloseNoConcept` precedent in
+ * `lib/backendErrors.js` in spirit (never silently discard a real figure), but
+ * that precedent re-interpolates its value when it has one, it doesn't drop it;
+ * dropping the number entirely would leave a banner that reads like a truncated
+ * sentence with no amount at all.
  */
 export function BlockingBpBanner({ calloutResult, blockingCondition, completionSignal, recordId, currencyCode }) {
   const [banner, setBanner] = useState(null);
   const completionSignalRef = useRef(completionSignal);
   const prevRecordIdRef = useRef(recordId);
+  const sessionCurrencyCode = useCurrency();
+  const effectiveCurrencyCode = currencyCode ?? sessionCurrencyCode ?? null;
 
   useEffect(() => {
     const prevRecordId = prevRecordIdRef.current;
@@ -109,7 +119,7 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
 
   return (
     <InfoBanner tone="warning" icon={AlertTriangle} className="mb-4" data-testid="bp-blocking-banner">
-      {resolveBannerText(banner, currencyCode)}
+      {resolveBannerText(banner, effectiveCurrencyCode)}
     </InfoBanner>
   );
 }
@@ -120,12 +130,14 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
  * trailing raw amount stripped out by `detectBlockingBpCondition` (see
  * `lib/blockingBpConditions.js`) — it is rebuilt here, through `formatCurrency`,
  * with an explicit space (the backend's own spacing is unreliable — that's the
- * root cause of this bug). When `currencyCode` isn't available, the amount is
- * dropped rather than shown unformatted.
+ * root cause of this bug). When `currencyCode` isn't available (both the header
+ * data and the session-level `useCurrency()` fallback came back empty), the raw
+ * unformatted number is still shown — never dropped — so the sentence never
+ * reads as truncated.
  */
 function resolveBannerText(banner, currencyCode) {
   if (banner.kind !== 'creditLimit' || banner.amount == null) return banner.text;
-  if (!currencyCode) return banner.text;
+  if (!currencyCode) return `${banner.text} ${banner.amount}`;
   return `${banner.text} ${formatCurrency(currencyCode, banner.amount)}`;
 }
 

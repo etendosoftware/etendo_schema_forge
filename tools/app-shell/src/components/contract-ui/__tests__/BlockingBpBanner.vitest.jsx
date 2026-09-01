@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BlockingBpBanner } from '../BlockingBpBanner.jsx';
+import { useCurrency } from '@/hooks/useCurrency';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -13,6 +14,16 @@ vi.mock('@/i18n', () => ({
 // explicit space (ETP-5024 follow-up bug).
 vi.mock('@/lib/formatCurrency.js', () => ({
   formatCurrency: (currencyCode, value) => `${currencyCode}:${value.toFixed(2)}`,
+}));
+
+// ETP-5024 blocker 2: the credit-limit callout fires while creating a brand-new,
+// unsaved document, where `data['currency$_identifier']` (the `currencyCode` prop)
+// genuinely doesn't exist yet — so BlockingBpBanner falls back to the session-level
+// `useCurrency()` hook. Mocked here (not a real CurrencyProvider) so each test can
+// control its return value independently; defaults to `null` (no session currency
+// resolved), matching the real hook's behavior before the session endpoint answers.
+vi.mock('@/hooks/useCurrency', () => ({
+  useCurrency: vi.fn(() => null),
 }));
 
 const ON_HOLD = { kind: 'onHold', text: 'Selected Business Partner is on hold' };
@@ -341,7 +352,13 @@ describe('BlockingBpBanner (ETP-5024)', () => {
       expect(banner).toHaveTextContent('Credit Limit over by USD:4912.60');
     });
 
-    it('drops the amount entirely (shows only the label) when currencyCode is not available', () => {
+    // ETP-5024 blocker 2: a REVIEW pass found this used to drop the amount
+    // entirely, which silently loses the figure on the ticket's PRIMARY scenario
+    // (a brand-new, unsaved document, where there is no `currency$_identifier`
+    // yet and — in this test — no session-level currency resolved either). The
+    // fixed behavior shows the raw unformatted amount rather than a truncated
+    // sentence with no number at all.
+    it('falls back to the raw unformatted amount (never drops it) when no currency code is available from either source', () => {
       render(
         <BlockingBpBanner
           calloutResult={null}
@@ -352,8 +369,7 @@ describe('BlockingBpBanner (ETP-5024)', () => {
         />,
       );
       const banner = screen.getByTestId('bp-blocking-banner');
-      expect(banner).toHaveTextContent('Aviso: Crédito limite superado');
-      expect(banner.textContent).not.toContain('4912');
+      expect(banner).toHaveTextContent('Aviso: Crédito limite superado 4912.6');
     });
 
     it('renders the label as-is when the message had no trailing amount to extract', () => {
@@ -382,6 +398,47 @@ describe('BlockingBpBanner (ETP-5024)', () => {
       );
       const banner = screen.getByTestId('bp-blocking-banner');
       expect(banner).toHaveTextContent('Selected Business Partner is on hold');
+    });
+  });
+
+  // ETP-5024 blocker 2: on a brand-new, unsaved document `data` is `hook.editing`
+  // (DetailView.jsx), which has no `currency$_identifier` yet, so the
+  // `currencyCode` prop resolved by `resolveHeaderContent` is `null` at exactly the
+  // moment the credit-limit callout can fire. These tests assert the FORMATTED
+  // AMOUNT actually appears via the session-level `useCurrency()` fallback — the
+  // gap a REVIEW pass found: the old suite never asserted on the amount at all,
+  // and mocked formatCurrency away entirely, so this exact bug had zero coverage.
+  describe('session-level currency fallback for a brand-new/unsaved document (ETP-5024 blocker 2)', () => {
+    it('formats the amount via useCurrency() when currencyCode prop is null (new, unsaved document)', () => {
+      useCurrency.mockReturnValue('EUR');
+      render(
+        <BlockingBpBanner
+          calloutResult={null}
+          blockingCondition={{ kind: 'creditLimit', text: 'Aviso: Crédito limite superado', amount: 4912.6 }}
+          completionSignal={0}
+          recordId="new"
+          currencyCode={null}
+        />,
+      );
+      const banner = screen.getByTestId('bp-blocking-banner');
+      expect(banner).toHaveTextContent('Aviso: Crédito limite superado EUR:4912.60');
+      useCurrency.mockReturnValue(null);
+    });
+
+    it('prefers the header-derived currencyCode prop over the session-level fallback when both are present', () => {
+      useCurrency.mockReturnValue('EUR');
+      render(
+        <BlockingBpBanner
+          calloutResult={null}
+          blockingCondition={{ kind: 'creditLimit', text: 'Aviso: Crédito limite superado', amount: 4912.6 }}
+          completionSignal={0}
+          recordId="doc-1"
+          currencyCode="USD"
+        />,
+      );
+      const banner = screen.getByTestId('bp-blocking-banner');
+      expect(banner).toHaveTextContent('Aviso: Crédito limite superado USD:4912.60');
+      useCurrency.mockReturnValue(null);
     });
   });
 });

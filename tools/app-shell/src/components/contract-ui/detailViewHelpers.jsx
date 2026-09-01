@@ -913,13 +913,16 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
 // so every call site that has nothing to report (no BP-related callout/process
 // wiring in scope) keeps behaving exactly as before.
 //
-// `currencyCode` is derived from `data['currency$_identifier']` here (not threaded
-// through the DetailView.jsx call site — `data` is already an argument of this
-// function) so BlockingBpBanner can format the creditLimit condition's extracted
-// amount via `formatCurrency` instead of showing the backend's raw unformatted
-// number. The header endpoint always returns `currency$_identifier` (only line/child
-// endpoints omit it — see DetailView.jsx's `sessionCurrencyCode` fallback, which
-// does not apply here), so no session-level fallback is needed at this level.
+// `currencyCode` is derived from `data['currency$_identifier']` here. A REVIEW pass
+// (ETP-5024) found the original "the header endpoint always returns
+// currency$_identifier, no session-level fallback needed" assumption WRONG for the
+// credit-limit callout's actual firing point: it fires while creating a NEW,
+// unsaved document, where `data` is `hook.editing` (DetailView.jsx) — never a
+// header GET response — so `currency$_identifier` genuinely isn't there yet. Rather
+// than thread DetailView.jsx's `sessionCurrencyCode` through this call (DetailView.jsx
+// is a governed God Component — `.claude/hooks/check-detailview-growth.mjs` blocks it
+// from growing, and this branch is already over its line budget), BlockingBpBanner
+// itself calls `useCurrency()` as the session-level fallback — see that component.
 export function resolveHeaderContent(headerContent, data, bpBanner) {
   const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
   if (!bpBanner) return resolvedHeader;
