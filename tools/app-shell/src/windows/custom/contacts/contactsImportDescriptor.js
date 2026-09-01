@@ -211,7 +211,11 @@ async function resolveLocation(row, config) {
       // silently arrived with no province. The server has the country in hand and the client
       // context needed to tell the tenant's own province row from the System one, so it is the
       // only place the lookup can be decided at all.
-      ...(row.region ? { regionName: row.region } : {}),
+      // Trimmed before the check, not just before sending: a cell holding only spaces is
+      // visually empty to whoever typed it, but it is truthy here, so the raw value would ship
+      // the key — and the key's PRESENCE is what the handler reads as an instruction. Blank
+      // must be indistinguishable from absent.
+      ...(String(row.region ?? '').trim() ? { regionName: row.region.trim() } : {}),
     },
   };
 }

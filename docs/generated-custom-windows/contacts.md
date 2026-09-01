@@ -855,6 +855,15 @@ over the System one, mirroring how Etendo treats every client-overridable master
 explicit `region` id still takes precedence, so the Location modal's selector-driven save is
 untouched.
 
+**A blank province is not an instruction to erase one.** `regionName` is set-if-provided: the
+descriptor trims before deciding whether to send the key at all, and the handler reads it with
+`trimToNull`, so a cell holding only spaces is indistinguishable from a cell that was never
+filled in. Both halves are needed and both were missing (found in PR review): a whitespace value
+is truthy in the browser, so the key shipped; and `nullIfEmpty` only rejects `""`, so it reached
+the resolver, which answers null for a blank name — and the region was **cleared**. Harmless on
+the import, which only ever POSTs a new address, but a PUT would have erased a province the file
+never mentioned. Clearing is now exclusively the `region` id field's job.
+
 **It now refuses instead of degrading.** A province that cannot be resolved fails the row with a
 message naming the region and the country, where before it imported an address quietly missing a
 field. That is a deliberate behaviour change: a file that used to "work" can now fail. The failure
@@ -864,8 +873,8 @@ The browser-side `contacts-region` resolver and its `/sws/neo/contacts/region` f
 rather than left dead — `contactsFkResolvers.js` keeps a comment explaining why there is no region
 resolver, so the next person does not re-add one. Coverage:
 `ContactsLocationAddressHandlerTest` (System-vs-tenant preference, System-only fallback, accent and
-case folding, blank without querying, unknown name, missing country, and a genuine same-client
-ambiguity) plus the `regionName` assertions in `contactsImportDescriptor.vitest.js`.
+case folding, blank without querying, unknown name, missing country, a genuine same-client
+ambiguity, and a whitespace-only name leaving the region untouched) plus the `regionName` assertions in `contactsImportDescriptor.vitest.js`.
 
 ### A skipped row showed no data — ETP-4997
 

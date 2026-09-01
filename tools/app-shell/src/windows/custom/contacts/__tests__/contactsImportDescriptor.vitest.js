@@ -72,6 +72,27 @@ describe('contacts import descriptor', () => {
     assert.equal(contact.body.name, 'Acme Corp');
   });
 
+  it('treats a whitespace-only province as absent, not as an instruction to clear it', async () => {
+    // A cell holding only spaces is visually empty to whoever typed it, but it is truthy, so
+    // the raw value used to ship the key — and the handler reads the key's PRESENCE, so on a
+    // PUT that erased a province the file never mentioned.
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const ops = await buildOperations({ ...baseRow, region: '   ' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal('regionName' in location.body, false);
+  });
+
+  it('sends the province trimmed, so a stray space cannot miss an exact name match', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const ops = await buildOperations({ ...baseRow, region: '  Córdoba  ' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal(location.body.regionName, 'Córdoba');
+  });
+
   it('omits regionName entirely when the row has no province, rather than sending a blank', async () => {
     // A blank `regionName` is not the same request as an absent one: the handler reads its
     // presence as "clear the region", which for a fresh address is a pointless write and for a

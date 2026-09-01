@@ -7,12 +7,12 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Download, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
+import { ListExportButton } from './ListExportButton.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
@@ -23,9 +23,6 @@ import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/I
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
-import { useCsvExport } from '@/hooks/useCsvExport';
-import { outputFormats } from '@etendosoftware/app-shell-core/lib/import/importFormats.js';
-import { buildExportColumns, buildExportValueMaps, serializeExportColumns } from '@/lib/importExportColumns.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
@@ -35,9 +32,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
-
-/** Menu caption per export format. Keys live in both locale files (i18n policy). */
-const EXPORT_FORMAT_LABEL_KEYS = { csv: 'exportCsv', xlsx: 'exportXlsx' };
 
 /**
  * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
@@ -719,83 +713,6 @@ export function ListView({
     ));
   }, [apiFetch, importConfig?.entity]);
 
-  // ETP-4997 — CSV export, the mirror image of the import above. It reuses the window's
-  // `import.fields` as its column set (see `importExportColumns.js`) so export -> edit ->
-  // import closes the loop instead of producing a file the import cannot read back. The
-  // headers come out of the template writer itself, resolved with the SAME `importFieldLabel`
-  // handed to ImportDialog below — so an export and a downloaded template are byte-identical
-  // in whichever language the session is running.
-  //
-  // The rows are re-fetched with `buildListQuery()` — the grid's own sort + criteria — rather
-  // than taken from `hook.items`: the list is filtered and paginated server-side, so exporting
-  // what is in memory would silently export only the pages the user scrolled. The server
-  // serializes them (`export=csv`, NeoCsvExportService), so a 5000-row export never has to
-  // materialize in the browser.
-  const runCsvExport = useCsvExport();
-  const [exporting, setExporting] = useState(false);
-  // Which formats this window offers. Derived from its own `window.import.formats` declaration
-  // via the same helper the import dialog uses, so the export can only offer a format the
-  // import can read back — and a window that declares CSV alone keeps exactly the single-click
-  // button it had before xlsx existed.
-  const exportFormats = useMemo(() => outputFormats(importConfig?.formats), [importConfig?.formats]);
-
-  const handleExport = useCallback(async (format = 'csv') => {
-    const columns = buildExportColumns(importConfig, { headerFor: importFieldLabel });
-    if (columns.length === 0) return;
-    // The same ceiling the import honours, so neither direction can outgrow the other.
-    const maxRows = importConfig?.limit?.maxRows ?? 5000;
-    const query = hook.buildListQuery();
-    query.append('_startRow', '0');
-    query.append('_endRow', String(maxRows - 1));
-    query.append('columns', serializeExportColumns(columns));
-    // Part of the export contract, sent for every window: "this GET feeds a file the user will
-    // edit and re-import, so include the child records a list row omits". A NeoHandler that can
-    // supply them does (contacts attaches its primary contact person and address); every other
-    // window's handler ignores the param, exactly as it ignores `export`/`columns`.
-    query.append('includeChildData', '1');
-    // AD-coded columns would otherwise export as codes ("false", "6", "I"). The map is built
-    // from the descriptor's own synonym tables, so every word it writes re-imports.
-    const valueMaps = buildExportValueMaps(importConfig, columns);
-    if (valueMaps) query.append('valueMaps', JSON.stringify(valueMaps));
-    setExporting(true);
-    try {
-      await runCsvExport({
-        // `apiBaseUrl` already carries the window segment (`/sws/neo/contacts`), which is what
-        // the entity path is relative to — the same base `importExistingKeys` above fetches on.
-        baseUrl: apiBaseUrl,
-        path: `/${importConfig.entity}?${query.toString()}`,
-        // No extension: the hook appends the one matching the format, so a single name serves
-        // both and a workbook can never go out under a .csv name.
-        filename: `${importConfig.spec}-export`,
-        format,
-      });
-      toast.success(ui('exportDone'));
-    } catch (e) {
-      console.error('csv export error', e);
-      toast.error(ui('exportError'));
-    } finally {
-      setExporting(false);
-    }
-  }, [importConfig, importFieldLabel, apiBaseUrl, hook.buildListQuery, runCsvExport, ui]);
-
-  // One button, two mount points: on its own for a single-format window (a click exports
-  // straight away, as before xlsx existed) or as the DropdownMenu trigger when there is a choice.
-  // Shared rather than duplicated so the icon, size and testid cannot diverge between the two.
-  const exportButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={exporting}
-      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-      onClick={exportFormats.length > 1 ? undefined : () => handleExport(exportFormats[0] ?? 'csv')}
-      aria-label={ui('export')}
-      title={ui('export')}
-      data-testid="ListView__exportButton"
-    >
-      <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewExport" />
-    </Button>
-  );
-
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -1305,27 +1222,12 @@ export function ListView({
                   </Button>
                 )}
                 {importConfig?.enabled && (
-                  exportFormats.length > 1 ? (
-                    // More than one writable format: the same button becomes a menu. Only the
-                    // trigger changes — the button markup is shared below so the two paths
-                    // cannot drift in size, icon or testid.
-                    (<DropdownMenu data-testid="DropdownMenu__ListViewExport">
-                      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__ListViewExport">
-                        {exportButton}
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" data-testid="DropdownMenuContent__ListViewExport">
-                        {exportFormats.map((format) => (
-                          <DropdownMenuItem
-                            key={format}
-                            onClick={() => handleExport(format)}
-                            data-testid={`ListView__exportFormat_${format}`}
-                          >
-                            {ui(EXPORT_FORMAT_LABEL_KEYS[format])}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>)
-                  ) : exportButton
+                  <ListExportButton
+                    importConfig={importConfig}
+                    importFieldLabel={importFieldLabel}
+                    apiBaseUrl={apiBaseUrl}
+                    buildListQuery={hook.buildListQuery}
+                    data-testid="ListExportButton__620cbc" />
                 )}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
