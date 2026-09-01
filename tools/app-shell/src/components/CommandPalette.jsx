@@ -118,11 +118,15 @@ export function CommandPalette() {
     : undefined;
 
   useEffect(() => {
-    if (!open || vectorSearchTargets.length === 0 || selectedVectorTargetKeys === null) return;
+    if (!open || vectorSearchTargets.length === 0) return;
+    const targets = selectedVectorTargetKeys === null
+      ? (initializedScopeTarget.current ? vectorSearchTargetKeys : null)
+      : requestedVectorSearchTargetKeys;
+    if (!targets) return;
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
-      detail: { pathname: location.pathname, targets: requestedVectorSearchTargetKeys },
+      detail: { pathname: location.pathname, targets },
     }));
-  }, [location.pathname, open, requestedVectorSearchTargetKeys, selectedVectorTargetKeys, vectorSearchTargets.length]);
+  }, [location.pathname, open, requestedVectorSearchTargetKeys, selectedVectorTargetKeys, vectorSearchTargetKeys, vectorSearchTargets.length]);
 
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { keyboardIndexRef.current = keyboardIndex; }, [keyboardIndex]);
@@ -351,6 +355,9 @@ export function CommandPalette() {
   const clearVectorSearchScope = () => {
     setScopeOverride({ pathname: location.pathname, targets: null });
     setSelectedVectorTargetKeys(null);
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
+      detail: { pathname: location.pathname, targets: [] },
+    }));
   };
 
   const toggleVectorSearchTarget = (targetKey) => {

@@ -116,6 +116,9 @@ export default function TopBar({
     event.stopPropagation();
     setIsCurrentWindowScopeEnabled(false);
     setSearchSelectionTargets([]);
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
+      detail: { pathname: currentPathname, targets: [] },
+    }));
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
       detail: { pathname: currentPathname, vectorSearchTarget: null },
     }));
@@ -282,8 +285,12 @@ export default function TopBar({
                 setSearchValue(nextValue);
                 if (nextValue.length === 0) {
                   setIsCurrentWindowScopeEnabled(false);
+                  setSearchSelectionTargets([]);
                   document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
                     detail: { pathname: currentPathname, vectorSearchTarget: null },
+                  }));
+                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
+                    detail: { pathname: currentPathname, targets: [] },
                   }));
                 }
               }}
@@ -301,8 +308,12 @@ export default function TopBar({
                 if (event.key === 'Backspace' && atStart) {
                   event.preventDefault();
                   setIsCurrentWindowScopeEnabled(false);
+                  setSearchSelectionTargets([]);
                   document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
                     detail: { pathname: currentPathname, vectorSearchTarget: null },
+                  }));
+                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
+                    detail: { pathname: currentPathname, targets: [] },
                   }));
                   return;
                 }
