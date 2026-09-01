@@ -387,9 +387,10 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} data-testid="CommandDialog__73263e">
-      <div className="relative border-b border-[hsl(var(--border-control))] bg-card px-4 py-3" data-testid="vector-search-scope-panel">
-        <h2 className="mb-2 text-base font-semibold text-foreground">{ui('searchIn')}</h2>
-        <div className="flex items-center gap-3">
+      {vectorSearchTargets.length > 0 && (
+        <div className="relative border-b border-[hsl(var(--border-control))] bg-card px-4 py-3" data-testid="vector-search-scope-panel">
+          <h2 className="mb-2 text-base font-semibold text-foreground">{ui('searchIn')}</h2>
+          <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={clearVectorSearchScope}
@@ -410,8 +411,8 @@ export function CommandPalette() {
           >
             {ui('filterWindows')}
           </button>
-        </div>
-        {isTargetPickerOpen && (
+          </div>
+          {isTargetPickerOpen && (
           <div ref={targetPickerRef} className="absolute left-[300px] top-12 z-20 w-72 rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
@@ -430,8 +431,9 @@ export function CommandPalette() {
               );
             })}
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       {isVectorSearchLoading && (
         <div
           role="status"
