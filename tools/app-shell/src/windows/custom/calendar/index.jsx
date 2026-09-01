@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useUI } from '@/i18n';
 import YearPage from '@generated/fiscal-calendar/generated/web/fiscal-calendar/YearPage';
 import AccountingPanel from './AccountingPanel.jsx';
@@ -6,8 +6,41 @@ import PeriodsExpandablePanel from './PeriodsExpandablePanel.jsx';
 import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
 import YearTableWithCloseStatus from './YearTableWithCloseStatus.jsx';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
+import { useYearHasPeriods } from './useYearHasPeriods.js';
 import CloseYearModal from '@/windows/custom/fiscal-calendar/CloseYearModal';
 import UndoCloseYearModal from '@/windows/custom/fiscal-calendar/UndoCloseYearModal';
+
+// Mirrors `artifacts/fiscal-calendar/decisions.json` → `window.processOverrides.processNow` /
+// the generated `YearPage.jsx`'s own `processes` const exactly — kept in sync manually since
+// this is a hand-written override (see the `processesForCalendar` comment below for why it must
+// be a full replacement, not a merge). Update both places together if the process params change.
+const CREATE_PERIODS_PROCESS = {
+  name: 'processNow',
+  label: 'Create Periods',
+  style: 'positive',
+  params: [
+    {
+      key: 'FISCALYEARSTART',
+      type: 'select',
+      label: 'Fiscal Year Range',
+      required: true,
+      options: [
+        { value: 'JANUARY', label: 'January - December' },
+        { value: 'JULY', label: 'July - June' },
+      ],
+    },
+    {
+      key: 'CREATEADJUSTMENT',
+      type: 'select',
+      label: 'Create Adjustment Period',
+      required: false,
+      options: [
+        { value: 'N', label: 'No' },
+        { value: 'Y', label: 'Yes' },
+      ],
+    },
+  ],
+};
 
 /**
  * The `calendar` custom window has no backing NEO spec of its own (ETP-4478 rework — the
@@ -63,6 +96,7 @@ export default function CalendarWindow(props) {
   const ui = useUI();
   const yearApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/fiscal-calendar`;
   const endYearCloseApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/end-year-close`;
+  const periodControlApiBaseUrl = `${rootApiBase(props.apiBaseUrl)}/open-close-period-control`;
   const secondaryTabs = [
     { key: 'periods', label: ui('calendarPeriodsTab'), Panel: PeriodsExpandablePanelForCalendar },
     { key: 'accounting', label: ui('calendarAccountingTab'), Panel: AccountingPanelForCalendar },
@@ -84,6 +118,23 @@ export default function CalendarWindow(props) {
   // action can never disagree with what the badge/column show for the same year.
   const closed = useYearCloseStatus(props.recordId, props.token, endYearCloseApiBaseUrl);
 
+  // "Create Periods" (`year.processNow`) should stop being offered once the year already has at
+  // least one `C_Period` record — the same relationship the Periods tab (`PeriodsExpandablePanel`)
+  // already fetches, via a dedicated lightweight existence check (not a full periods fetch) so
+  // this header button and that tab don't share React state across specs.
+  const hasPeriods = useYearHasPeriods(props.recordId, props.token, periodControlApiBaseUrl);
+
+  // The generated `YearPage.jsx`'s own `processes` is a plain array, not a function of the
+  // current record — same "wholesale override, not merge" constraint already documented above
+  // for `menuActions` (props spread in YearPage.jsx overrides it entirely, it cannot be composed
+  // from outside). While the existence check is still loading (`undefined`) or failed (`null`),
+  // default to showing the button — the common case (a not-yet-populated year) — rather than
+  // hiding a valid action on a transient fetch hiccup.
+  const processesForCalendar = useMemo(
+    () => (hasPeriods === true ? [] : [CREATE_PERIODS_PROCESS]),
+    [hasPeriods]
+  );
+
   const menuActionsForCalendar = useCallback(({ data }) => {
     // While the closed-status check is still loading (`undefined`) or failed (`null`), default
     // to offering "Cerrar Año" — the common case (a not-yet-closed year) rather than showing
@@ -103,6 +154,7 @@ export default function CalendarWindow(props) {
         topbarRight={YearCloseStatusBadgeForCalendar}
         Table={YearTableWithCloseStatus}
         menuActions={menuActionsForCalendar}
+        processes={processesForCalendar}
         data-testid="CalendarPage__f478"
       />
       {closeYearTarget && (

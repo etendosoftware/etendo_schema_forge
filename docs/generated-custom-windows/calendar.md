@@ -88,6 +88,17 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   handled by the `year-close` NEO handler because core process metadata has no range parameter. A
   year must not already contain periods for a different range. Invalid range values are rejected
   server-side rather than silently falling back to January.
+  **ETP-4948 — Hide once periods exist.** The **Create Periods** button is no longer offered once
+  the year already has at least one `C_Period` record — `tools/app-shell/src/windows/custom/
+  calendar/useYearHasPeriods.js`'s `useYearHasPeriods` hook issues a lightweight existence check
+  against `open-close-period-control`'s `periodControl` endpoint (same `criteria`-filtered-by-year
+  query `PeriodsExpandablePanel.jsx` already uses, but without fetching or rendering the full list)
+  and `index.jsx` overrides `YearPage`'s `processes` prop wholesale (the same "props spread
+  overrides, doesn't merge" mechanism already used for `menuActions`, see the Reactive behavior
+  note below) to `[]` once the check resolves `true`. While the check is loading or fails, the
+  button stays visible — the safe default, matching the equivalent `menuActions`/closed-status
+  precedent. The hook also re-checks after a successful `processNow` run (`neo:processSuccess`),
+  so the button disappears without a manual page reload.
 - On a year's detail, switch between two secondary tabs:
    - **Periods** (the first detail tab) — an expandable list of the year's periods (aggregate status badge), where
     expanding a period row reveals its per-document-type breakdown inline, each with its own
@@ -173,6 +184,15 @@ ever changes, this needs revisiting.
   calls `loadPeriods()` on a match (ETP-4948 Issue 1). Without this, "Create Periods" reported
   success but the Periods tab kept showing its pre-create (usually empty) list until a manual
   navigation away and back.
+- **Create Periods button visibility (ETP-4948).** `year.processNow`'s toolbar button is declared
+  as a plain array (`processes`) in the generated `YearPage.jsx`, not a function of the current
+  record — same constraint already documented for `menuActions` two paragraphs below. `index.jsx`
+  computes `hasPeriods` via `useYearHasPeriods` (own hook, own `open-close-period-control` fetch,
+  independent of `PeriodsExpandablePanel`'s own periods fetch — the two panels still don't share
+  React state) and overrides the whole `processes` array to `[]` once a period exists, or to a
+  hand-duplicated copy of the same process definition (label, `FISCALYEARSTART`/`CREATEADJUSTMENT`
+  params) otherwise. `decisions.json`'s `window.processOverrides.processNow` is unchanged — this
+  is a frontend-only visibility gate on top of it, not a change to the process itself.
 - **Abrir/Cerrar Periodo** (`periodControl.openClose`, on `open-close-period-control`) calls AD
    Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
    (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
@@ -304,7 +324,7 @@ the same `submitting` boolean pattern to disable its own confirm button during t
 | fiscalYear | string | editable | yes | yes | Required four-digit value from 1900 through 2999, e.g. "2027"; enforced server-side on both create and update (ETP-4948 Issue 5) |
 | description | string | editable | yes | yes | Optional |
 | calendar | foreignKey | system | no | no | Hidden parent-link field (`C_Calendar_ID`, `AD_Column.ISPARENT='Y'`); no UI selector. On direct Fiscal Calendar creates, `YearCloseHandler` sets it from the current organization calendar and ignores any caller value — see Issue 1 note above (ETP-4948, fixed) |
-| processNow | button | editable | no | yes | **Create Periods** — AD Process 100 |
+| processNow | button | editable | no | yes | **Create Periods** — AD Process 100. Hidden by `custom/calendar/index.jsx` once the year already has at least one `C_Period` (ETP-4948, frontend-only override — see Reactive behavior) |
 | createRegFactAcct | button | discarded | — | — | Backing field for **Close Year**; triggered only via the `closeYear` menuAction/`CloseYearConfirmModal`, never rendered directly |
 | dropRegFactAcct | button | discarded | — | — | Backing field for **Undo Close Year**; same trigger path as above |
 
@@ -447,6 +467,10 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
     July - June** and **Create adjustment period? = Yes**), switch to the **Periods** tab, and
     confirm the 13th period's row shows an **Adjustment Period** badge next to its name while the
     regular June period's row does not (ETP-4948 QA finding — adjustment period badge).
+21. Open an empty year (no periods yet) and confirm **Create Periods** is visible in the header.
+    Click it, create periods, and confirm the button disappears from the header without a manual
+    page reload (ETP-4948 — Create Periods hidden once periods exist). Reload the page on a year
+    that already has periods and confirm the button stays hidden.
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `calendar` in the Finance group (`windowId: "117"`);
@@ -503,6 +527,11 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 - `tools/app-shell/src/windows/custom/calendar/index.jsx` — the aggregating custom window;
   `AccountingPanel.jsx`, `PeriodsExpandablePanel.jsx` (+ Vitest suites covering loading/error/empty
   states and the per-row double-submit guard, not just the happy path).
+- `tools/app-shell/src/windows/custom/calendar/useYearHasPeriods.js` (ETP-4948) — the "does this
+  year already have periods" existence check gating the **Create Periods** button, with its own
+  Vitest suite mirroring `useYearCloseStatus.vitest.jsx`'s coverage shape (resolves true/false,
+  resolves null on failure, stays undefined with no fetch when `yearId` is absent, re-fetches on
+  `neo:processSuccess`).
 - `tools/app-shell/src/windows/custom/fiscal-calendar/CloseYearConfirmModal.jsx` (+
   `CloseYearModal.jsx`/`UndoCloseYearModal.jsx` wrappers and Vitest suite) — moved here from the
   retired merged spec, since `menuActions[].component` resolution has no cross-spec-name option.
