@@ -5,6 +5,7 @@ import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
@@ -132,14 +133,17 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   );
 
   const clonePortal = showClone ? createPortal(
-    <CloneModal
-      orderId={recordId}
+    <CloneOrderModal
+      recordId={recordId}
       data={data}
       apiBaseUrl={apiBaseUrl}
       headers={headers}
       onClose={() => setShowClone(false)}
-      onCloned={(newId) => navigate(`/purchase-order/${newId}`)}
-      data-testid="CloneModal__8b5323" />,
+      onCloned={(newId) => {
+        setShowClone(false);
+        navigate(`/purchase-order/${newId}`);
+      }}
+      data-testid="CloneOrderModal__8b5323" />,
     document.body,
   ) : null;
 
@@ -162,16 +166,16 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
     const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
     const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-    const qtyPending   = Math.max(0, qtyOrdered - qtyDelivered);
+    const qtyPending   = qtyOrdered - qtyDelivered;
 
     const totalOrder    = Number(data?.grandTotalAmount) || 0;
     const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-    const totalPending  = Math.max(0, totalOrder - totalInvoiced);
+    const totalPending  = totalOrder - totalInvoiced;
 
     currency = data?.['currency$_identifier'] || '';
 
-    const needsReceipt = qtyPending > 0 && receiptsDraft.length === 0;
-    const needsInvoice = totalPending > 0 && !invoiceDraft;
+    const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
+    const needsInvoice = totalPending !== 0 && !invoiceDraft;
 
     if      (needsReceipt && needsInvoice) buttonLabel = ui('poManageReceiptAndInvoice');
     else if (needsReceipt)                 buttonLabel = ui('poManageReceipt');
@@ -499,7 +503,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
+              {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
               {lineCount != null ? (lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })) : '…'}
@@ -627,13 +631,13 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   const grandTotal = Number(d.grandTotalAmount) || 0;
 
   // Contextual subtitles: show pending qty/amount so the user knows what's outstanding
-  const receiptSubtitle = qtyOrdered > 0
+  const receiptSubtitle = qtyOrdered !== 0
     ? (qtyDelivered > 0
         ? ui('poQtyReceivedOf', { received: fmtNum(qtyDelivered, 0), total: fmtNum(qtyOrdered, 0), pending: fmtNum(qtyPending, 0) })
         : `${fmtNum(qtyPending, 0)} ${ui('poPendingReceipt')}`)
     : ui('poCreateReceiptCheckDesc');
 
-  const invoiceSubtitle = totalOrder > 0
+  const invoiceSubtitle = totalOrder !== 0
     ? (totalInvoiced > 0
         ? ui('poAmountInvoicedOf', { invoiced: formatCurrency(currency, totalInvoiced), pending: formatCurrency(currency, totalPending) })
         : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
@@ -703,7 +707,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               </div>
             )}
             <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
-              {grandTotal > 0 ? formatCurrency(currency, grandTotal) : '0,00'}
+              {formatCurrency(currency, grandTotal)}
             </div>
           </div>
         </div>
@@ -762,121 +766,6 @@ function CopyIcon() {
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
-  );
-}
-
-// ── CloneModal ─────────────────────────────────────────────────────────────────
-
-function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
-  const ui = useUI();
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
-  const [lines,   setLines]   = useState(null); // null = loading
-
-  const documentNo = data?.documentNo || '';
-  const bpName     = data?.['businessPartner$_identifier'] || '';
-  const status     = data?.documentStatus;
-  const currency   = data?.['currency$_identifier'] || '';
-  const total      = Number(data?.grandTotalAmount) || 0;
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers })
-      .then(r => r.ok ? r.json() : null)
-      .then(json => { if (!cancelled) setLines(json?.response?.data ?? []); })
-      .catch(() => { if (!cancelled) setLines([]); });
-    return () => { cancelled = true; };
-  }, [orderId, apiBaseUrl, headers]);
-
-  const statusMap = {
-    DR: { label: ui('orderStatusDraft'),     bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
-    CO: { label: ui('orderStatusCompleted'), bg: 'var(--status-success-bg)', color: 'var(--status-success-fg)' },
-    CL: { label: ui('orderStatusClosed'),    bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' },
-    VO: { label: ui('orderStatusVoided'),    bg: 'hsl(var(--destructive))', color: 'hsl(var(--destructive-foreground))' },
-  };
-  const badge = statusMap[status] || { label: status, bg: 'hsl(var(--foreground))', color: 'hsl(var(--muted-foreground))' };
-
-  const lineCount   = lines?.length ?? null;
-  const productLine = lineCount === null
-    ? '…'
-    : `${lineCount === 1 ? ui('soLine') : ui('soLines', { count: lineCount })}  ·  ${formatCurrency(currency, total)}`;
-
-  const handleClone = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res  = await fetch(`${apiBaseUrl}/header/${orderId}/action/cloneRecord`, { method: 'POST', headers });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json?.response?.error?.message || ui('cloneOrderError'));
-        return;
-      }
-      const newId = json?.response?.data?.id;
-      onClose();
-      onCloned(newId);
-    } catch {
-      setError(ui('cloneOrderError'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={overlayStyle}>
-      <div style={{ ...cardStyle, width: 440 }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 0' }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('cloneOrderConfirmTitle')}</span>
-          <button type="button" onClick={onClose} style={closeBtn}>×</button>
-        </div>
-
-        <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Summary card */}
-          <div style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, overflow: 'hidden' }}>
-            {/* Row 1: contact · docNo · badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'hsl(var(--card))' }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', flex: 1,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {bpName}
-              </span>
-              {documentNo && (
-                <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {documentNo}
-                </span>
-              )}
-              {status && (
-                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999,
-                  background: badge.bg, color: badge.color, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {badge.label}
-                </span>
-              )}
-            </div>
-            {/* Row 2: products + total */}
-            <div style={{ padding: '6px 14px 9px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
-              <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{productLine}</span>
-            </div>
-          </div>
-
-          {/* Explanatory text — same horizontal inset as card content */}
-          <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0, padding: '0 2px' }}>{ui('cloneOrderConfirmBody')}</p>
-
-          {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} disabled={loading} style={btnSecondary}>
-              {ui('cancel')}
-            </button>
-            <button type="button" onClick={handleClone} disabled={loading}
-              style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading && <Spinner data-testid="Spinner__8b5323" />}
-              {loading ? ui('poProcessing') : ui('cloneOrderAction')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -985,14 +874,14 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
 
   const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
   const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-  const qtyPending   = Math.max(0, qtyOrdered - qtyDelivered);
+  const qtyPending   = qtyOrdered - qtyDelivered;
 
   const totalOrder    = Number(data?.grandTotalAmount) || 0;
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-  const totalPending  = Math.max(0, totalOrder - totalInvoiced);
+  const totalPending  = totalOrder - totalInvoiced;
 
-  const needsReceipt = qtyPending > 0 && receiptsDraft.length === 0;
-  const needsInvoice = totalPending > 0 && !invoiceDraft;
+  const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
+  const needsInvoice = totalPending !== 0 && !invoiceDraft;
   const nothingToManage = !needsReceipt && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the

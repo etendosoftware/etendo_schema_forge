@@ -10,14 +10,20 @@ import { throwHttpError } from '@/hooks/financialAccountHttp.js';
  * The entity is fully intercepted by `FinancialAccountAccountingHandler`
  * (`@Named("financialAccountAccountingHandler")`) — no plain generic CRUD — so both GET and
  * save always resolve/find-or-create the single per-ledger row for the account transparently.
- * Only two fields are exposed for write: `fINAssetAcct` ("Cuenta bancaria", required) and
- * `fINTransitoryAcct` ("Cuenta transitoria", optional). The GET response also carries
- * `catalogs.accounts` — the active accounting-combination options for the account's ledger, used
- * to populate the two search selects client-side (no separate selector round-trip).
+ *
+ * ETP-4872 — the old two-field set (`fINAssetAcct` / `fINTransitoryAcct`) is fully retired and
+ * replaced by the account-type-dependent set of 9 fields below. No field is required — see
+ * `docs/superpowers/plans/2026-08-30-etp-4872-financial-account-accounting-fields.md`. The GET
+ * response also carries `catalogs.accounts` — the active accounting-combination options for the
+ * account's ledger, used to populate the search selects client-side (no separate selector
+ * round-trip).
  *
  *   - fetchAccountingConfiguration(accountId) → GET  /sws/neo/financial-account/accountingConfiguration
- *   - saveAccountingConfiguration(accountId, { fINAssetAcct, fINTransitoryAcct })
- *                                             → POST /sws/neo/financial-account/accountingConfiguration
+ *   - saveAccountingConfiguration(accountId, {
+ *       fINBankrevaluationgainAcct, fINBankrevaluationlossAcct, fINBankfeeAcct,
+ *       inTransitPaymentAccountIN, depositAccount, clearedPaymentAccount,
+ *       fINOutIntransitAcct, withdrawalAccount, clearedPaymentAccountOUT,
+ *     })                                     → POST /sws/neo/financial-account/accountingConfiguration
  */
 
 const BASE_PATH = '/sws/neo/financial-account';
@@ -40,13 +46,20 @@ export function useFinancialAccountAccounting() {
     return firstRecord(json);
   }, [apiFetch]);
 
-  const saveAccountingConfiguration = useCallback(async (accountId, { fINAssetAcct, fINTransitoryAcct }) => {
+  const saveAccountingConfiguration = useCallback(async (accountId, fields) => {
     const res = await apiFetch(ENTITY_PATH, {
       method: 'POST',
       body: JSON.stringify({
         financialAccountId: accountId,
-        fINAssetAcct: fINAssetAcct || null,
-        fINTransitoryAcct: fINTransitoryAcct || null,
+        fINBankrevaluationgainAcct: fields.fINBankrevaluationgainAcct || null,
+        fINBankrevaluationlossAcct: fields.fINBankrevaluationlossAcct || null,
+        fINBankfeeAcct: fields.fINBankfeeAcct || null,
+        inTransitPaymentAccountIN: fields.inTransitPaymentAccountIN || null,
+        depositAccount: fields.depositAccount || null,
+        clearedPaymentAccount: fields.clearedPaymentAccount || null,
+        fINOutIntransitAcct: fields.fINOutIntransitAcct || null,
+        withdrawalAccount: fields.withdrawalAccount || null,
+        clearedPaymentAccountOUT: fields.clearedPaymentAccountOUT || null,
       }),
     });
     if (!res.ok) await throwHttpError(res);

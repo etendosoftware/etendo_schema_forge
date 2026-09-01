@@ -16,9 +16,9 @@
     "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },
   "devDependencies": {
-    "@etendosoftware/app-shell-core": "0.3.43-preview.feature-ETP-5013.20260831155218.c7c1f96",
-    "@etendosoftware/schema-forge-cli": "0.3.43-preview.feature-ETP-5013.20260831155218.c7c1f96",
-    "@etendosoftware/schema-forge-core": "0.3.43-preview.feature-ETP-5013.20260831155218.c7c1f96",
+    "@etendosoftware/app-shell-core": "0.3.43-preview.feature-ETP-5013.20260901112343.936746f",
+    "@etendosoftware/schema-forge-cli": "0.3.43-preview.feature-ETP-5013.20260901112343.936746f",
+    "@etendosoftware/schema-forge-core": "0.3.43-preview.feature-ETP-5013.20260901112343.936746f",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",
