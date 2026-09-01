@@ -413,23 +413,25 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
 
   return (
     <div className="overflow-x-auto" data-testid="periods-expandable-panel">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-10" />
-            <TableHead>{ui('calendarPeriod')}</TableHead>
-            <TableHead className="w-44">{ui('calendarStatus')}</TableHead>
-            <TableHead className="w-44 text-right">{ui('calendarActions')}</TableHead>
+      <Table data-testid="Table__711967">
+        <TableHeader data-testid="TableHeader__711967">
+          <TableRow data-testid="TableRow__711967">
+            <TableHead className="w-10" data-testid="TableHead__711967" />
+            <TableHead data-testid="TableHead__711967">{ui('calendarPeriod')}</TableHead>
+            <TableHead className="w-44" data-testid="TableHead__711967">{ui('calendarStatus')}</TableHead>
+            <TableHead className="w-44 text-right" data-testid="TableHead__711967">{ui('calendarActions')}</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody data-testid="TableBody__711967">
           {orderedPeriods.map((period) => {
         const periodPending = !!pendingActions[`period-${period.id}`];
         const isExpanded = expandedId === period.id;
         return (
           <Fragment key={period.id}>
-            <TableRow className={isExpanded ? 'bg-primary/5 ring-1 ring-focus-ring hover:bg-primary/10' : 'cursor-pointer hover:bg-muted/50'}>
-              <TableCell>
+            <TableRow
+              className={isExpanded ? 'bg-primary/5 ring-1 ring-focus-ring hover:bg-primary/10' : 'cursor-pointer hover:bg-muted/50'}
+              data-testid="TableRow__711967">
+              <TableCell data-testid="TableCell__711967">
                 <Button
                   type="button"
                   variant="ghost"
@@ -458,7 +460,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                   label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
                   data-testid="Tag__711967" />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right" data-testid="TableCell__711967">
                 <Button
                   type="button"
                   variant="outline"
@@ -510,7 +512,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
             )}
             {isExpanded && (
               <TableRow data-testid={`period-documents-${period.id}`}>
-                <TableCell colSpan={4} className="bg-muted/20 p-0">
+                <TableCell colSpan={4} className="bg-muted/20 p-0" data-testid="TableCell__711967">
                   <div className="divide-y">
                 {documentsError[period.id] && (
                   <div
