@@ -35,6 +35,18 @@ For example, Sales Invoice and Purchase Invoice both use `C_Invoice`. Their shar
 6. Ensure the DB Extended `AD_DATASET_TABLE` registration exports provider, source, source-column, and search-target records. The child filters must select their parents by owning module.
 7. Update existing records to enqueue them, let Vector Outbox process them, then verify the source has an active collection and provider.
 
+## Application shell responsibilities
+
+The global search UI is split into a shared data layer and window-aware presentation:
+
+- `useVectorSearchContracts` is the single loader for generated window contracts. Both the top bar and the palette consume this hook, so target keys, labels, and opt-in state always come from generated contracts rather than duplicated discovery code.
+- `useVectorSearch` owns debouncing, authentication, target fan-out, score filtering, result ordering, abort handling, and the loading state. It does not render UI or decide which windows are visible.
+- `useRecentSearches` owns browser persistence, de-duplication, size limits, and the minimum query length for history entries.
+- `vectorSearchConfig.js` and `vectorSearchRanking.js` remain pure policy functions for scope resolution and grouping/ranking. They can be tested without React or a browser.
+- `GlobalSearchContext` owns palette visibility, query state, the input reference, and keyboard-handler registration. `TopBar` owns the input and active-window pill. `CommandPalette` owns scope selection, navigation, rendering, and route actions.
+
+Generated files under `artifacts/*/generated/` remain outputs. Changes to search behavior belong in these hooks, pure policy modules, or the palette/top-bar components, followed by contract regeneration when the schema changes.
+
 ## Contacts example
 
 The user-facing `contacts` spec is backed by `C_BPartner`. Its target is `business-partner`, because the Contacts window covers customers, vendors, and employees; it is not a customer-only table. The UI label remains contract-driven (`Contacts`), while the target stays stable and technical.

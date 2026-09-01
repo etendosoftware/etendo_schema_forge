@@ -7,6 +7,7 @@ import {
   resolveVectorSearchTargetForPath,
   resolveVectorSearchTargets,
 } from '@/lib/vectorSearchConfig.js';
+import { useVectorSearchContracts } from '@/hooks/useVectorSearchContracts.js';
 import {
   Tooltip,
   TooltipContent,
@@ -33,12 +34,6 @@ import {
   X,
 } from 'lucide-react';
 
-const windowContractLoaders = Object.entries(import.meta.glob('@generated/*/contract.json'));
-
-function specNameFromContractPath(path) {
-  return path.split('/').at(-2);
-}
-
 export default function TopBar({
   onBack,
   title,
@@ -60,7 +55,7 @@ export default function TopBar({
   const ui = useUI();
   const tMenu = useMenuLabel();
   const copilot = useCopilot();
-  const [vectorSearchContracts, setVectorSearchContracts] = useState([]);
+  const vectorSearchContracts = useVectorSearchContracts();
   const [isCurrentWindowScopeEnabled, setIsCurrentWindowScopeEnabled] = useState(true);
   const [searchSelectionTargets, setSearchSelectionTargets] = useState(null);
   const { open: searchOpen, setOpen: setSearchOpen, query: searchValue, setQuery: setSearchValue, inputRef: searchInputRef, handleKeyDown: handleSearchKeyDown } = useGlobalSearch();
@@ -82,21 +77,6 @@ export default function TopBar({
   const handleAIClick = onAIClick ?? copilot?.toggle;
 
   const hasMenu = onAddToFavorites || onPageHelp || menuAction;
-
-  useEffect(() => {
-    let active = true;
-    Promise.all(windowContractLoaders.map(async ([path, loadContract]) => ({
-      contract: await loadContract(),
-      specName: specNameFromContractPath(path),
-    })))
-      .then((contracts) => {
-        if (active) setVectorSearchContracts(contracts);
-      })
-      .catch(() => {
-        if (active) setVectorSearchContracts([]);
-      });
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     setIsCurrentWindowScopeEnabled(true);
