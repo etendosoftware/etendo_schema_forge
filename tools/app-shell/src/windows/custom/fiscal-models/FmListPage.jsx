@@ -504,7 +504,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled:         Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMap349 } = useFiscalAutoCompute(draftDecls349, {
@@ -513,21 +513,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled:         Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther303 } = useFiscalAutoCompute(otherDecls303, {
     computeFn: computeBoxes303Real,
     token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled:   Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther349 } = useFiscalAutoCompute(otherDecls349, {
     computeFn: computeOperators349Real,
     token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled:   Boolean(apiBaseUrl),
   });
 
   useEffect(() => {
@@ -565,7 +565,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   }, [showSortMenu]);
 
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
-    if (token && apiBaseUrl) {
+    if (apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       apiFetch(`${base}/fiscal303/declarations`, {
         method: 'POST',
@@ -906,7 +906,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onSave={(newActive) => {
             setActiveModels(newActive);
             setShowCatalog(false);
-            if (token && apiBaseUrl) {
+            if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               apiFetch(`${base}/fiscal-models-catalog`, {
                 method: 'PUT',

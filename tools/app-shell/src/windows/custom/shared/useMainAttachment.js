@@ -61,7 +61,7 @@ export function useMainAttachment({
   const sourceRef = useRef(null);
   if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
 
-  const active = !!(storeCondition && documentId && tableName && token);
+  const active = !!(storeCondition && documentId && tableName);
 
   const revokeUrl = useCallback(() => {
     if (objectUrlRef.current) {

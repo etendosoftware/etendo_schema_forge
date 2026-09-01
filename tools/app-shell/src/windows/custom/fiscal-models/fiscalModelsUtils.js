@@ -5,7 +5,7 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
 export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -606,7 +606,7 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
 // ── Model 349 utilities ───────────────────────────────────────────
 
 export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });

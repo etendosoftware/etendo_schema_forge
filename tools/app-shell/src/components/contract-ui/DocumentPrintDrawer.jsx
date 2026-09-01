@@ -95,7 +95,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
 
   const renderDocument = useCallback(async (docId) => {
     // Design A when this window has a client-side builder.
-    if (hasClientPdf(windowName) && docId && token) {
+    if (hasClientPdf(windowName) && docId) {
       console.info(`[print-drawer] ${docId}: client-rendered PDF (same template as preview/email)`);
       setLoading(true);
       setError(null);

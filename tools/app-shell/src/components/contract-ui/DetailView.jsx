@@ -2290,7 +2290,7 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');

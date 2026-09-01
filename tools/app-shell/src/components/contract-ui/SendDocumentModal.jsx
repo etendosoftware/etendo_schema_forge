@@ -263,7 +263,7 @@ function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, to
     return;
   }
 
-  if (documentId && token) {
+  if (documentId) {
     renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError);
   }
 }

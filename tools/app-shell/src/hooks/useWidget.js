@@ -34,7 +34,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
   }, [apiFetch, specName, token, apiBaseUrl]);
 
   useEffect(() => {
-    if (token) refresh();
+    refresh();
   }, [refresh, token]);
 
   return { data, loading, error, refresh };
