@@ -18077,7 +18077,7 @@
     "financeReconcileLeftTitle": "Líneas del extracto",
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
-    "financeReconcileFilterStatusPending": "Pendiente",
+    "financeReconcileFilterStatusPending": "Pendientes",
     "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Diferencias",
