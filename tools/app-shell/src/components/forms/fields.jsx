@@ -222,9 +222,14 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
  * Chip-style searchable single-select, matching the Funds-transfer modal's
  * accounting-item selector: once chosen, the value shows as a removable chip
  * (label + ×) inside the field; clicking it returns to typing mode. The dropdown
- * is rendered INLINE (not portaled) so it scrolls with wheel/touchpad inside a
- * RemoveScroll-locked Dialog. Data comes from a `useLookup` hook, exactly like
- * {@link LookupPicker}.
+ * is a Radix `Popover`, portalled to `document.body` and auto-flipping on collision,
+ * so it is never clipped by an ancestor's overflow (e.g. a scrollable modal body).
+ * Data comes from a `useLookup` hook, exactly like {@link LookupPicker}.
+ *
+ * Keyboard: ArrowUp/Down move a highlighted option (clamped, no wrap), Home/End jump
+ * to the first/last, Enter commits the highlighted option (no fallback to the first
+ * result if nothing is highlighted yet), Escape closes without changing the value —
+ * ported from `CreatableSearchSelect`'s `handleInputKeyDown` (ETP-4924 follow-up).
  *
  * @param {{ id, name } | null} value
  * @param {(row: { id, name } | null) => void} onChange
@@ -235,6 +240,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
 export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar…', testId = 'chip-select' }) {
   const ui = useUI();
   const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState('');
@@ -245,6 +251,63 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
 
   // Keep focus in the input while the (portaled) list is open, so the user can keep typing.
   useEffect(() => { if (editing && open) inputRef.current?.focus(); }, [editing, open]);
+
+  // Keyboard navigation over `results` (ported from CreatableSearchSelect's
+  // handleInputKeyDown — the "Método de pago" field and every other generic
+  // FK selector already behave this way; ChipSelect had no keyboard handling
+  // at all until now, mouse-only). -1 = nothing highlighted.
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  // A fresh open or a changed search resets the highlight — a stale index from
+  // a previous open/query would highlight the wrong option.
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [open, query]);
+
+  // Keep the highlighted option scrolled into view.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeIndex]);
+
+  const selectResult = (r) => { onChange(r); close(); };
+
+  const handleInputKeyDown = (e) => {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      setOpen(true);
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, 0));
+        break;
+      case 'Home':
+        if (results.length > 0) { e.preventDefault(); setActiveIndex(0); }
+        break;
+      case 'End':
+        if (results.length > 0) { e.preventDefault(); setActiveIndex(results.length - 1); }
+        break;
+      case 'Enter':
+        if (activeIndex >= 0 && results[activeIndex]) {
+          e.preventDefault();
+          selectResult(results[activeIndex]);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        close();
+        break;
+      default:
+        break;
+    }
+  };
 
   // Radix Popover portals the list to the body and auto-flips on collision, so it is never
   // clipped by an ancestor's overflow (e.g. the modal body) — unlike an inline dropdown.
@@ -285,12 +348,16 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
               placeholder={placeholder}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
               onFocus={() => setOpen(true)}
+              onKeyDown={handleInputKeyDown}
+              role="combobox"
+              aria-expanded={open}
               data-testid={`${testId}-search`} />
           )}
           <ChevronDown className="ml-auto h-4 w-4 flex-none text-muted-foreground" data-testid={`${testId}-chevron`} />
         </div>
       </PopoverAnchor>
       <PopoverContent
+        ref={dropdownRef}
         align="start"
         sideOffset={6}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -298,17 +365,34 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
         className="max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
         data-testid={`${testId}-popover`}
+        // Radix Dialog's page-scroll lock (react-remove-scroll) swallows native wheel
+        // scrolling on this body-portalled list even though overflow-auto + a real
+        // maxHeight are correctly set. Bypass it manually — same fix already used by
+        // LookupPicker.jsx and CreatableSearchSelect.jsx for the identical scenario.
+        // Only adjust when `e.defaultPrevented` is already true (react-remove-scroll's
+        // capture-phase listener runs before this bubble-phase handler, so that flag
+        // tells us whether native scroll was actually blocked) — ChipSelect's other
+        // callers are all inside a Dialog today, but if one ever isn't, native
+        // scrolling already works there and adding deltaY on top would double-scroll.
+        onWheel={(e) => {
+          e.stopPropagation();
+          if (e.defaultPrevented) {
+            e.currentTarget.scrollTop += e.deltaY;
+          }
+        }}
       >
         {results.length === 0 ? (
           <div className="px-2.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
         ) : null}
-        {results.map((r) => (
+        {results.map((r, index) => (
           <button
             key={r.id}
             type="button"
-            onClick={() => { onChange(r); close(); }}
+            onClick={() => selectResult(r)}
             data-testid={`${testId}-option-${r.id}`}
-            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
+            data-option-index={index}
+            aria-selected={index === activeIndex}
+            className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${index === activeIndex || value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
           >
             {r.name}
           </button>

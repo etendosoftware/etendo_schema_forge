@@ -4,12 +4,14 @@
 // `EditableLines` (ManualStatementModal.jsx) uses `onFocusCapture` /
 // `onBlurCapture` with a DOM `e.currentTarget.contains(e.relatedTarget)`
 // check to decide whether focus "left the row". That check is DOM-tree based,
-// but the row's DateField (and LookupPicker) portal their popovers to
+// but the row's DateField (and ChipSelect) portal their popovers to
 // `document.body` — logically still inside the row in the REACT tree, but
 // NOT a DOM descendant of the row wrapper. So any focus movement into the
 // portalled calendar (or Escape/Enter handling swallowed by the row's own
 // `onKeyDown`) is wrongly treated as "focus left the row", unmounting
 // `LineEditHint` mid-interaction and breaking keyboard day selection.
+// `ChipSelect`'s dropdown is ALSO a Radix Popover portalled to `document.body`,
+// so the same mechanism applies to it too.
 //
 // UNLIKE the existing `ManualStatementModal.vitest.jsx` spec, this file does
 // NOT mock `@/components/ui/date-field` or `@/components/ui/dialog` — the
@@ -68,7 +70,7 @@ vi.mock('@/hooks/useBankStatementLines', () => ({
   useBankStatementLines: () => ({ lines: linesRef.value, loading: linesRef.loading, reload: vi.fn() }),
 }));
 
-// One fixed BPartner result so the LookupPicker dropdown (case 6) has
+// One fixed BPartner result so the ChipSelect dropdown (case 6) has
 // something to portal and render — an empty result list never mounts the
 // dropdown at all.
 vi.mock('@/hooks/useMovementLookups', () => ({
@@ -238,12 +240,14 @@ describe('ManualStatementModal — line date picker (real Popover/Dialog, ETP-49
 
   // Case 6 — same bug class, a different portal: opening the "Contacto"
   // lookup dropdown on a line must not unmount the row's edit hint either.
-  it('keeps the row edit hint mounted while a LookupPicker dropdown is open', async () => {
+  it('keeps the row edit hint mounted while a ChipSelect dropdown is open', async () => {
     const user = userEvent.setup();
     renderModal();
     const row = firstEditRow();
 
-    await user.click(within(row).getByTestId('manual-line-contact'));
+    // The row starts on a blank/new line (contact: null), so ChipSelect
+    // renders its plain search input (`${testId}-search`), not the chip.
+    await user.click(within(row).getByTestId('manual-line-contact-search'));
     // The BPartner mock always returns one result, so the dropdown mounts.
     await screen.findByText('Acme');
 

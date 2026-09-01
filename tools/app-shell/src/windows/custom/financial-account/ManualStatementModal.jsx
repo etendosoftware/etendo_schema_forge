@@ -14,7 +14,7 @@ import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankStatementLines } from '@/hooks/useBankStatementLines';
 import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
-import { LookupPicker } from './LookupPicker';
+import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -328,26 +328,20 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
       <input type="text" value={row.contactName} onChange={set('contactName')}
         placeholder={ui('financeAccountStatementsManualCounterpartyPlaceholder')}
         className={cellInput} data-testid="manual-line-contactname" />
-      <LookupPicker
+      <ChipSelect
         value={row.contact}
-        onSelect={(it) => setVal('contact')(it)}
-        onClear={() => setVal('contact')(null)}
+        onChange={setVal('contact')}
         placeholder={ui('financeAccountStatementsManualContactPlaceholder')}
         useLookup={useBPartnerLookup}
-        dataTestId="manual-line-contact"
-        className={cellInput}
-        search
-        data-testid="LookupPicker__6b4086" />
-      <LookupPicker
+        testId="manual-line-contact"
+        data-testid="ChipSelect__6b4086" />
+      <ChipSelect
         value={row.glItem}
-        onSelect={(it) => setVal('glItem')(it)}
-        onClear={() => setVal('glItem')(null)}
+        onChange={setVal('glItem')}
         placeholder={ui('financeAccountStatementsManualGlItemPlaceholder')}
         useLookup={useGLItemLookup}
-        dataTestId="manual-line-glitem"
-        className={cellInput}
-        search
-        data-testid="LookupPicker__6b4086" />
+        testId="manual-line-glitem"
+        data-testid="ChipSelect__6b4086" />
       {amountCell('out', 'manual-line-out')}
       {amountCell('in', 'manual-line-in')}
       <span className="flex items-center justify-end">

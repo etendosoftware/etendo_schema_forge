@@ -1356,9 +1356,9 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
       ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved. Contacto and Cuenta contable are `ChipSelect` (ETP-4924 follow-up — see below), matching every other FK picker in the app.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
-      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog and ManualStatementModal.
+      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog, NewMovementWizard and PaymentForm. No longer used by `ManualStatementModal` (ETP-4924 follow-up — switched to `ChipSelect`, see below).
 ```
 
 ## Shared primitives introduced or used
@@ -1789,6 +1789,124 @@ reproduction of the browser-level race would need a Playwright/real-browser test
 
 If this pattern recurs elsewhere (any interactive trigger inside a tall scrollable list, not just
 this modal's date field), the durable fix is in `DateField` itself, not a per-caller workaround.
+
+#### Second follow-up: Contacto / Cuenta contable switched from `LookupPicker` to `ChipSelect` (ETP-4924)
+
+The line-level "Contacto" and "Cuenta contable" fields used a bespoke `LookupPicker`
+(`windows/custom/financial-account/LookupPicker.jsx`): a plain `<input>` with a hand-rolled
+portalled results list and no visible way to clear a selected value — typing over the text was the
+only way to change it, and there was no affordance signaling a value could be cleared at all. Every
+other FK picker in the app (the "Impuesto" column in Sales Invoice/Purchase Invoice lines, "Cuenta
+contable" in Editar cuenta, the accounting-item pickers in Transferencias and Conciliación) shows a
+chip with the selected label and a hover-revealed **X** to clear.
+
+`ManualStatementModal.jsx`'s `EditRow` now uses **`ChipSelect`** (`@/components/forms/fields.jsx`)
+for both fields instead. This was a straight swap, not a new integration: `ChipSelect` already
+accepts a `useLookup(query) => { results, loading }` hook — the exact same shape
+`useBPartnerLookup`/`useGLItemLookup` (`hooks/useMovementLookups.js`) already provide, and that
+`LookupPicker` itself was built around — so no adapter, no new endpoint and no backend work was
+needed. Prop mapping: `LookupPicker`'s `onSelect(item)` + separate `onClear()` collapse into
+`ChipSelect`'s single `onChange(itemOrNull)` (already exactly what `setVal(field)` in `EditRow`
+expects — it just forwards whatever value it receives onto the row). The `search` prop
+(leading magnifier icon) has no `ChipSelect` equivalent — it renders a trailing chevron instead,
+matching the reference/target UI (Editar cuenta's own "Cuenta contable" field, which is itself a
+`ChipSelect`), not a search-box look.
+
+**Explicitly NOT done, by request:** `ChipSelect` renders its own fixed bordered/shadowed box
+(`FIELD_HEIGHT`, `rounded-lg`, `border-input`, `shadow`) — the same box used everywhere else it
+appears. The row's OTHER cells (Referencia, Descripción, amounts) use a borderless-until-focus
+"spreadsheet" look (`cellInput`, transparent border until `:focus`). Reusing `ChipSelect` as-is
+means Contacto/Cuenta contable now look visually distinct from their row neighbors (always-boxed
+vs. borderless-until-focus) — decided to leave it, for consistency with the OTHER modals that use
+`ChipSelect` (Editar cuenta, Transferencias, Conciliación), rather than add a `className` override
+prop to `ChipSelect` (which does not currently accept one) for this one caller.
+
+**Considered but rejected as broader in scope:** `InlineSearchCombo`
+(`components/contract-ui/InlineSearchCombo.jsx`) is the OTHER generic FK-cell component in the app
+— the one actually backing the Sales Invoice "Impuesto" column that prompted this change — but it
+is hard-coupled to the AD-metadata selector-endpoint convention (`GET
+{apiBaseUrl}/{entity}/selectors/{column}`, paginated, `decisions.json`-shaped `field` object) with
+no pluggable-hook escape hatch. Swapping to it would have meant either generalizing a
+widely-shared component (used by Sales Invoice, Purchase Invoice, Amortization, Price List and
+every generic `DataTable`/`InlineLinesPanel` add-row/edit-cell) to accept an arbitrary fetch hook,
+or building a new backend selector endpoint for BPartner/GLItem lookups and modeling bank-statement
+lines as a real AD/contract entity (they are hand-built, not decisions.json-driven, today). `ChipSelect`
+already existed, already used the exact same hook contract, and already delivered the actual thing
+asked for (the chip + clear-X), so it was the correct-scoped choice — `InlineSearchCombo` remains a
+follow-up worth having only if bank-statement lines are ever migrated onto the generic
+contract-ui/AD-metadata pipeline.
+
+**Residual, unverified risk (not addressed here):** `ChipSelect`'s clickable surface for an
+ALREADY-selected value (the chip) opens its Radix Popover via a `<div onClick={startEditing}>`, the
+same click-toggle mechanism that `DateField`'s trigger used before the scroll-edge fix above. If a
+row with a pre-filled Contacto/Cuenta contable sits at the bottom edge of the lines list's scroll,
+the SAME auto-scroll-swallows-the-click mechanism could in principle recur here too — this has not
+been reported or reproduced, and `ChipSelect` is shared by several other modals, so a preventive fix
+was intentionally left out of this change (would need its own scoping conversation, most likely in
+`ChipSelect` itself rather than per-caller, given it's a shared component).
+
+#### Third follow-up: `ChipSelect` gained arrow-key navigation (ETP-4924)
+
+`ChipSelect` had zero keyboard handling before this — its option list (`PopoverContent`) only
+responded to mouse clicks. Every OTHER generic FK selector in the app (e.g. "Método de pago" on the
+Sales Invoice header, rendered via `CreatableSearchSelect`) already lets the user move through
+results with the arrow keys, highlight one, and commit it with Enter. Requested so `ChipSelect`
+(and therefore Contacto/Cuenta contable in this modal, plus its 6 other call sites — Reconciliation
+Split Panel, Reconciliation Difference, New Transaction, Editar cuenta) matches that baseline.
+
+Ported the exact pattern from `CreatableSearchSelect.jsx`'s `handleInputKeyDown` (the reference
+implementation `InlineSearchCombo.jsx` also mirrors, per its own in-line comment) rather than
+inventing a new one — **no shared hook exists for this** (`activeIndex` + arrow/Home/End/Enter/
+Escape + scroll-into-view is duplicated across both existing components by convention/comments, not
+factored out), so `ChipSelect` is now a third hand-copied instance of the same logic. Added to
+`components/forms/fields.jsx`: an `activeIndex` state (reset on `open`/`query` change), a
+`handleInputKeyDown` wired to the search `<input>`'s `onKeyDown`, `data-option-index`/
+`aria-selected` on each option button (reusing the existing selected-value highlight class rather
+than adding a second one), and a `dropdownRef` on `PopoverContent` so the highlighted option can be
+scrolled into view.
+
+**Matches `CreatableSearchSelect`'s stricter Enter behavior, not `InlineSearchCombo`'s more lenient
+one:** Enter only commits when `activeIndex >= 0` — no fallback to the first result when nothing has
+been arrow-key-highlighted yet (typing a query and hitting Enter without ever pressing an arrow key
+does nothing). `InlineSearchCombo` deliberately diverges from `CreatableSearchSelect` on this exact
+point (documented in its own source) because a grid cell's Enter has a competing "commit the cell"
+meaning; `ChipSelect` doesn't share that constraint (it isn't embedded in a keyboard-navigable
+grid), so there was no reason to adopt the lenient variant.
+
+**Not done:** factoring the three now-duplicated implementations (`CreatableSearchSelect`,
+`InlineSearchCombo`, `ChipSelect`) into one shared hook. Out of scope for this change — each one has
+small, deliberate divergences (see above) suited to its own host (header field vs. grid cell vs.
+chip picker), and unifying them is a separate refactor with its own risk profile, not a prerequisite
+for giving `ChipSelect` the missing behavior.
+
+#### Fourth follow-up: the mouse wheel didn't scroll `ChipSelect`'s option list (ETP-4924)
+
+With a real, longer BPartner result list (the swap surfaced this — `LookupPicker` never showed
+enough short-named results at once to notice it was missing), the wheel didn't scroll `ChipSelect`'s
+dropdown at all despite `overflow-auto` and a real `max-h-64` being set. **This is a known,
+already-solved issue in this exact codebase** — `LookupPicker.jsx` and `CreatableSearchSelect.jsx`
+both carry the identical fix with an identical root cause already documented in their own comments:
+Radix Dialog's page-scroll lock (`react-remove-scroll`) intercepts the wheel event at the capture
+phase and blocks the browser's native scroll on ANY body-portalled scrollable content underneath it,
+even though the CSS itself is entirely correct — confirmed live in `CreatableSearchSelect.jsx`'s own
+comment: "`scrollTop` stayed `0` after a wheel event, but a direct `el.scrollTop = x` assignment
+worked fine — only the NATIVE scroll mechanism is blocked." `ChipSelect` simply never had this
+`onWheel` workaround because none of its earlier, shorter-lookup consumers surfaced the gap.
+
+Ported `CreatableSearchSelect`'s more defensive variant, not `LookupPicker`'s simpler one: only
+manually add `e.deltaY` to `scrollTop` when `e.defaultPrevented` is already `true` on the wheel event
+(react-remove-scroll's capture-phase listener runs first, so that flag tells us whether native
+scroll was actually blocked). `LookupPicker` gets away with unconditionally adding `deltaY` because
+it is ONLY ever used inside a Dialog; `ChipSelect` has 8 call sites across 5 files, and while all of
+them happen to be inside a Dialog today too, the conditional check means a future non-Dialog
+`ChipSelect` wouldn't silently double-scroll (native scroll working normally, plus the manual
+adjustment stacked on top) the way an unconditional version would.
+
+**Known related gap, not fixed here:** `components/forms/fields.jsx` also defines its OWN,
+differently-implemented `LookupPicker` (a Radix-Popover-based one, distinct from
+`windows/custom/financial-account/LookupPicker.jsx`) with the identical `PopoverContent` +
+`results.map` shape and no `onWheel` handler either — same latent gap, not reported, not fixed as
+part of this change (out of scope; nobody has hit it there yet).
 
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
