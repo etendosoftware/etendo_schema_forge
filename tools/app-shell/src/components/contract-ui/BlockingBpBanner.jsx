@@ -30,8 +30,17 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
  * its own ref-based "did it change" effect rather than folded into a plain value
  * comparison (0 → 0 must not look like a change on mount).
  *
- * `recordId` resets the banner when the user navigates to a different record — a
- * blocking condition on one document must never bleed into the next one opened.
+ * `recordId` resets the banner when the user navigates to a different EXISTING
+ * record — a blocking condition on one document must never bleed into the next
+ * one opened. But a brand-new/unsaved document has no id yet, so `recordId` is
+ * falsy until the first Save assigns one; `DetailView.jsx` never remounts this
+ * component for that transition (`:windowName/:recordId` route keeps the same
+ * static React Router `key`, only the param re-renders in place — verified by
+ * reading `runtime-routes.jsx`), so the naive "clear on any recordId change"
+ * effect used to wipe the banner on first Save even though it is still the same
+ * in-progress record. `prevRecordIdRef` tracks the last SEEN value so the clear
+ * only fires on a genuine truthy → different-truthy switch, never on the
+ * falsy/absent → truthy transition a first save produces.
  *
  * `currencyCode` — the document's currency (`data['currency$_identifier']`, with
  * the session-level fallback DetailView.jsx already resolves for line rows —
@@ -46,9 +55,17 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 export function BlockingBpBanner({ calloutResult, blockingCondition, completionSignal, recordId, currencyCode }) {
   const [banner, setBanner] = useState(null);
   const completionSignalRef = useRef(completionSignal);
+  const prevRecordIdRef = useRef(recordId);
 
   useEffect(() => {
-    setBanner(null);
+    const prevRecordId = prevRecordIdRef.current;
+    prevRecordIdRef.current = recordId;
+    // Only a genuine switch between two EXISTING records clears the banner.
+    // A falsy/absent recordId turning truthy is the first-Save id assignment
+    // for the SAME record — must not clear (see the doc comment above).
+    if (prevRecordId && recordId && String(prevRecordId) !== String(recordId)) {
+      setBanner(null);
+    }
   }, [recordId]);
 
   useEffect(() => {

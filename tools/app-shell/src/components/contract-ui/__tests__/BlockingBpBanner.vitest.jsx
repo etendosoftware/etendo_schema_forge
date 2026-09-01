@@ -140,6 +140,91 @@ describe('BlockingBpBanner (ETP-5024)', () => {
     expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
   });
 
+  // Bug found in manual testing: on a NEW (unsaved, "Nuevo") record, the banner
+  // correctly appeared after selecting a blocked BP — then hitting Guardar (Save)
+  // made it disappear. Root cause: DetailView.jsx passes `recordId: data?.id ||
+  // recordId`; on an unsaved record `data?.id` is falsy, so the first Save
+  // assigning the record its real id flips `recordId` from falsy to truthy. The
+  // naive "clear on any recordId change" effect treated that as "switched to a
+  // different record" and wiped the banner, even though DetailView.jsx never
+  // remounts BlockingBpBanner for this transition (same React Router route key —
+  // see runtime-routes.jsx `:windowName/:recordId` using the static key
+  // "with-record").
+  it('does NOT clear the banner when a new record is first assigned an id on Save (falsy -> truthy recordId)', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={CREDIT_LIMIT}
+        completionSignal={0}
+        recordId={undefined}
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+
+    // First Save: the record acquires its real id for the first time — same
+    // in-progress record, not a navigation to a different one.
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={CREDIT_LIMIT}
+        completionSignal={0}
+        recordId="new-doc-id-123"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+  });
+
+  it('clears when switching between two genuinely different EXISTING records (truthy -> different truthy)', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={0}
+        recordId="doc-1"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={0}
+        recordId="doc-2"
+      />,
+    );
+    expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
+  });
+
+  // "Nuevo" after a loaded record: ListView/DetailView navigate to
+  // `/${windowName}/new`, so the route's recordId param becomes the literal
+  // string "new" — a genuine truthy -> different-truthy switch away from the
+  // previously loaded record's real id, so it still clears through the SAME
+  // recordId-switch branch (not a special case). useEntity's handleNew also
+  // resets its own `blockingCondition` state to null in parallel (see
+  // useEntity.js ETP-5024 comment), so the two mechanisms agree.
+  it('clears when starting a new record ("Nuevo") after a real record was loaded (id -> "new")', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={0}
+        recordId="doc-1"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={null}
+        completionSignal={0}
+        recordId="new"
+      />,
+    );
+    expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
+  });
+
   it('clears when completionSignal bumps (document completed successfully)', () => {
     const { rerender } = render(
       <BlockingBpBanner
