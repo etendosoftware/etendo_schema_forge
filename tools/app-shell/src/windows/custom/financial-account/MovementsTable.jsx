@@ -242,7 +242,11 @@ const DISPLAYED_DIMENSIONS = PANEL_FIELDS
   .map((f) => DIMENSION_PAYLOAD_KEY_ALIASES[f.name] ?? f.name.toLowerCase());
 
 function renderBody({ loading, movements, ui, renderRow }) {
-  if (loading) {
+  // Only the true initial fetch (no rows yet) wipes the body into skeleton rows. A later
+  // refresh — the toolbar's refresh button, or reload() after an edit — already has rows to
+  // show, so it stays smooth via the opacity dim on the table wrapper instead (mirrors
+  // ListView's own `hook.loading && hook.items.length === 0` gate for the same reason).
+  if (loading && movements.length === 0) {
     return SKELETON_ROWS.map((n) => (
       <TableRow key={n} data-testid="TableRow__ae5a16">
         {SKELETON_COL_KEYS.map((colKey) => (
@@ -564,9 +568,13 @@ export function MovementsTable({
     );
   };
 
+  const dimWhileRefreshing = loading && movements.length > 0
+    ? 'opacity-70 transition-opacity duration-200'
+    : 'transition-opacity duration-200';
+
   return (
     <TooltipProvider data-testid="TooltipProvider__ae5a16">
-      <Table data-testid="Table__ae5a16">
+      <Table className={dimWhileRefreshing} data-testid="Table__ae5a16">
         <TableHeader data-testid="TableHeader__ae5a16">
           <TableRow
             className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"

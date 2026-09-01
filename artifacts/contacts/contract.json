@@ -1,8 +1,7 @@
 {
-  "version": "0.51.0",
-  "generatedAt": "2026-08-27T21:15:30.861Z",
-  "updatedAt": "2026-08-31T16:26:27.452Z",
-  "checksum": "8015a2a315615683",
+  "version": "0.52.0",
+  "generatedAt": "2026-09-01T10:50:41.136Z",
+  "checksum": "4ac67f13ac89ea0a",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -10889,6 +10888,14 @@
             "required": false
           },
           {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "smfswsDefaultWsRole",
             "apiKey": "smfswsDefaultWsRole",
             "column": "EM_Smfsws_Default_Ws_Role_ID",
@@ -17904,6 +17911,14 @@
         "description": "System field 'emailServerUsername' should exist in backend but not frontend for contact"
       },
       {
+        "id": "t-system-field-contact-eTGOIsOwner",
+        "category": "system-field",
+        "entity": "contact",
+        "field": "eTGOIsOwner",
+        "runner": "node",
+        "description": "System field 'eTGOIsOwner' should exist in backend but not frontend for contact"
+      },
+      {
         "id": "t-system-field-contact-fax",
         "category": "system-field",
         "entity": "contact",
@@ -21226,7 +21241,7 @@
       }
     ],
     "summary": {
-      "total": 1153,
+      "total": 1154,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -21238,11 +21253,11 @@
         "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 39,
-        "system-field": 516,
+        "system-field": 517,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1153,
+        "node": 1154,
         "junit": 0
       }
     }

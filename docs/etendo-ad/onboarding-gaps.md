@@ -17,6 +17,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
 | A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
+| A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -159,6 +160,16 @@ WHERE  ad_client_id = :client_id
 
 **Why this is dataset-only (no `Onboarding*Service` needed):** both tables are already in `INCLUDED_TABLES`, and neither `OnboardingAccountingWiringService` nor any other onboarding code references specific `elementtype` values or `c_acctschema` flags — they flow straight from the imported XML with zero code involvement. This mirrors the ETP-4341 "dataset-only provisioning" pattern (payment methods/terms) documented in `onboarding-and-datafixes-map.md` §1. **Decision:** no new Java service; only edit the sampledata XML + bump the CUT.
 
+> **⚠️ SUPERSEDED IN PART (2026-08-28, ETP-4947) — the `AllowNegative=Y` claim below is REVERSED.**
+> TC-38 (the Confluence Test Plan case that justified `AllowNegative=Y`) is itself being
+> retired/superseded in Confluence by the ticket owner. ETP-4947 is now the accepted requirement:
+> `C_ACCTSCHEMA.AllowNegative` must default to `N` (unchecked), remaining user-editable. This does
+> **NOT** touch `IsCentrallyMaintained` or the `CC`/`User1`/`User2` dimension rows below — those
+> stay exactly as this A3 fix left them. See gap **A3c** (further down this file) for the reversal's
+> own two-fronts closure, and `docs/etendo-ad/tenant-remediation-knowledge.md` (ETP-4947 section)
+> for the full investigation trail. The table below is left as historical record of what A3
+> originally shipped — do not rewrite it.
+
 **Both fronts closed (2026-07-06):**
 
 | Front | Deliverable |
@@ -219,6 +230,52 @@ WHERE s.ad_client_id = :client_id
 | **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
 
 See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
+
+### A3c — `AllowNegative` reverted back to N — TC-38 superseded (ETP-4947, 2026-08-28)
+
+**Symptom (Jira ETP-4947, "Corregir valor por defecto y visibilidad de campos en ventana Esquema
+Contable"):** the "Allow negative" checkbox (`C_AcctSchema.AllowNegative`) on the Esquema Contable /
+General Ledger Configuration window (`/general-ledger-configuration`, AD window 125, table
+`C_AcctSchema`) appears CHECKED by default when it should default to unchecked (`N`), while
+remaining editable.
+
+**Root cause — this is a direct reversal of A3, not a fresh gap.** A3/ETP-4245 (2026-07-06)
+deliberately flipped `AllowNegative` from `N`→`Y` on both fronts (preventive `C_ACCTSCHEMA.xml` +
+corrective `R10`), justified by Confluence Test Plan case **TC-38**. TC-38 is now itself being
+retired/superseded in Confluence by the ticket owner (Santiago Gremiger) — ETP-4947 is the accepted
+replacement requirement. Ruled out first: this is NOT a Schema Forge / frontend generator bug
+(`artifacts/general-ledger-configuration/schema-raw.json`'s AD column default is `N`, and the
+generator correctly omits `defaultValue` for a false-default checkbox) and NOT a Neo Headless
+handler bug (`GeneralLedgerConfigurationHandler.buildGeneral`/`applyGeneralChanges`,
+`src/com/etendoerp/go/schemaforge/GeneralLedgerConfigurationHandler.java:341,458`, is a pure
+passthrough with no default-injection logic — it faithfully mirrors whatever the DB row holds).
+Confirmed via `git log` that the sampledata XML's `<ALLOWNEGATIVE>` line was touched by exactly one
+commit ever (`47ff5aa8 Feature ETP-4245`), and via a live DB sweep (2026-08-28) that every
+GO-onboarded tenant on the dev DB (GOClient, DSAFSAD, 4× E2E test clients, QA Testing ×2 schemas,
+SantoEmpresa — 12/12) already carries `Y`, matching the frozen dataset default with zero variance.
+
+**Scope decision (explicit product call, not a data-driven guess):** revert **unconditionally**,
+for ALL tenants, no "was this manually set" guard. R10 itself force-set every tenant to `Y` only
+~7 weeks before this fix (2026-07-06) — there is no population of tenants who could have genuinely
+opted into `Y` independent of R10, so a blanket revert simply undoes an unwanted onboarding default.
+`IsCentrallyMaintained` (also touched by A3/R10) is explicitly **OUT of scope** — ETP-4947 concerns
+`AllowNegative` only; the CC/User1/User2 accounting-dimension rows A3 also introduced are untouched
+and remain correct.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260828T140000Z__R29-acctschema-allownegative-revert.sql` — single guarded `UPDATE c_acctschema SET allownegative = 'N' ... WHERE ad_client_id = :client_id AND allownegative = 'Y'`; does not touch `iscentrallymaintained` or `c_acctschema_element`. R10 itself is NOT retired (its other two effects stay in force). Labeled `R29` (not `R28`): two sibling in-flight branches, `feature/ETP-4706` and `feature/ETP-5019`, already claim `R28` with timestamps `20260828T120000Z` and `20260827T120000Z` respectively (neither merged yet) — confirmed via `git ls-tree` across all local branches before picking this label; `R29`'s timestamp (`20260828T140000Z`) sorts after both regardless of merge order. Static/parse tests: `cli/test/data-fixes-r29-acctschema-allownegative-revert.test.js` (16 assertions — header metadata, tenant isolation, two-layer idempotency, unconditional-scope guard). Live-validated: `--dry-run --fix 20260828T140000Z__R29-acctschema-allownegative-revert --client 802509E12436405C86BA1FD5B1DF508C` → `WOULD_APPLY — @check matched (1 row(s))` against GOClient. |
+| **Preventive** | `modules/com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` — `ALLOWNEGATIVE` reverted `Y`→`N` (the only line touched; `ISCENTRALLYMAINTAINED` stays `Y`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-28T14:00:00Z` in `OnboardingBaselineService.java`, with a new javadoc paragraph documenting the reversal and its rationale, plus the "Current watermark" comment updated to `R29 acctschema-allownegative-revert (2026-08-28)`. GOClient's own live `C_AcctSchema` row (`C06B100312FA48159DB36B9A4B461019`, "Esquema GO") is also reverted to `N` (confirmed via the real R29 run below), kept in sync with the dataset per the same convention A3 itself established. Regression test: A3's own `testNormalizerAccountingSchemaIsPredefinedForPosting` (`OnboardingDatasetNormalizerTest.java`) is updated in place and renamed to `testNormalizerAccountingSchemaAllowNegativeDefaultsToNo` — asserts `<allownegative>N</allownegative>` and still asserts `<iscentrallymaintained>Y</iscentrallymaintained>` (out of scope, unchanged). **Not verified by compilation** — this environment's `./gradlew test` is known-broken for `com.etendoerp.go` (`NO-SOURCE` on `compileTestJava`, see `tenant-remediation-knowledge.md`); flagged for QA to compile-check. |
+
+**Environment note (resolved):** the `com.etendoerp.go` edits (XML revert, CUT bump, watermark
+comment, and the updated JUnit test) were initially blocked by this session's tooling permission
+boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
+writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
+allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
+working tree was clean) — all deliverables above were then completed on that branch. All changes in
+both repos remain **unstaged/uncommitted**, pending REVIEW.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 
@@ -683,6 +740,88 @@ remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no
 
 ---
 
+### A7 — A single new named ledger account missing from an already-provisioned chart (ETP-4872, 2026-08-30)
+
+**Symptom:** ETP-4872 introduces accounting defaults for a new Tarjeta/Card `FIN_FinancialAccount`
+type. Those defaults need a brand-new ledger account, `57210` ("Tarjetas de crédito, euros"), as a
+sibling of the existing `57200` bank account under the `572` group. Tenants onboarded before this
+account existed in the chart have no such row — not a wiring gap on an existing account (A2's
+shape), and not the whole chart missing (A1's shape); the account definition itself is simply
+absent. This is a reusable gap SHAPE (a new account/document-type rollout needing a specific new
+`C_ELEMENTVALUE` added retroactively to already-provisioned tenants), of which `57210` is the first
+instance filed under this letter — ETP-4402's `417`/`4170`/`41700000` chain (`R9-bp-category-seed`,
+filed under `@gap: ETP-4402` before this letter existed) is the same shape in hindsight.
+
+> **Label note (2026-08-30):** this gap was originally filed as `A6`, which collided with the
+> pre-existing `A6` (Asset group "Genérico" consolidation, ETP-4539, §A above — see
+> `tenant-remediation-knowledge.md`) — a completely unrelated table (`A_Asset_Group`). Caught in
+> review before merge; relabeled `A7` across this doc, `tenant-remediation-knowledge.md`,
+> `onboarding-and-datafixes-map.md`, and the `.sql` header. No functional impact — `@gap` is a
+> documentation/categorization tag only, never stored in `ETGO_DATA_FIX_HISTORY` or read by the
+> runner (same class of drift as the `H1`→`H3` relabel documented above).
+
+**Root cause:** not a bug — a new account genuinely did not exist at the time earlier tenants were
+onboarded. Structural facts confirmed live against the shared dev/Experimental DB (2026-08-30, 20
+real+demo tenants with a wired `AC` accounting-schema element):
+
+- The tree is 3 levels: `572` (group) → `5720` (subgroup) → `57200` leaf — not 2. A new sibling
+  leaf needs its own new sibling subgroup (`5721`), not a leaf hung directly off `572`.
+- `C_ELEMENTVALUE.VALUE` width for the existing `57200` leaf is NOT uniform: 18/20 tenants (R8's
+  8-digit padding, ETP-4247) carry `57200000`; 2 (F&B International Group, QA Testing) never got
+  R8 applied and still carry the plain 5-digit `57200`. A fix that hardcodes either width silently
+  corrupts the other half of the fleet — the new leaf's width must be derived per-tenant from its
+  own `57200` sibling.
+- `C_VALIDCOMBINATION.ALIAS`/`COMBINATION` do NOT track `C_ELEMENTVALUE.VALUE`'s width even on
+  8-digit tenants (GOClient's own `57200000` leaf has `ALIAS=COMBINATION='57200'`, 5-digit) — an
+  artifact of R8 apparently having run with triggers disabled, so it never widened the
+  already-existing combinations. The standard `C_ElementValue_trg()` (fires reliably on an INSERT
+  made through the data-fix runner's plain-SQL transaction, per the ETP-4402/R9 precedent)
+  auto-creates the new leaf's combination with `ALIAS=COMBINATION=<full value>` — which must be
+  explicitly truncated to `LEFT(value, 5)` afterward to match the tenant's own established
+  convention, or the new account reads inconsistently next to its own sibling on the same chart.
+
+**Fix:** `cli/src/data-fixes/sql/20260830T120000Z__R30-financial-account-card-ledger-account.sql` —
+resolves the target element ONLY via `C_AcctSchema_Element.elementtype='AC'` (never a bare
+`value='572'` match, so GOClient's orphan second `C_Element` chain, see the ETP-4402/R9 precedent,
+is never touched); inserts `5721` (fixed 4-digit) and the new leaf (`57210` or `57210000`, derived
+from the tenant's own `57200` sibling); re-parents both auto-created-at-root `AD_TREENODE` rows;
+normalizes the auto-created `C_VALIDCOMBINATION`'s alias/combination width. Live-validated
+end-to-end (real run, not just a rolled-back tx) across all 19 real+demo tenants with a wired `AC`
+element on the shared dev DB: GOClient/SantoEmpresa/16 others → `APPLIED (5 rows)` (8-digit branch,
+including the combination-normalize step); F&B International Group/QA Testing → `APPLIED (4 rows)`
+(5-digit branch, where the normalize step correctly no-ops since the trigger's own output already
+matches); full re-run → 19/19 `SKIPPED_NOT_NEEDED`, confirming idempotency in both width branches.
+
+> **Caveat (2026-08-31, QA rejection follow-up — see `tenant-remediation-knowledge.md`'s "R30 QA
+> rejection" entry for the full investigation):** the "ONLY via `C_AcctSchema_Element`" claim above
+> is accurate for `@check` and Steps A/B, but NOT literally true for Steps C/D/E (the two
+> `AD_TREENODE` reparents and the `C_VALIDCOMBINATION` normalize) — those resolve their target rows
+> by plain `value` equality (`5721`/`57210`/`57210000`), paired to the row this SAME apply just
+> inserted via `c_element_id` equality between the joined aliases, never via
+> `C_AcctSchema_Element` itself. Live-verified this is harmless in practice (GOClient's own orphan
+> chain, and every other tenant's, never carries a `5721`/`57210`/`57210000` value on more than one
+> element), but that's an unstated invariant the SQL relies on, not something the joins enforce.
+> R30 is already `APPLIED` fleet-wide, so left as-is (immutable migration) rather than edited —
+> flagging here so the next reader doesn't take the "ONLY via" claim as a hard guarantee for a
+> future fix copying this pattern.
+
+**Preventive:** already shipped — ETP-4872 Task 5, `com.etendoerp.go` branch
+`feat/ledger-account-57210` (unmerged at the time this corrective fix was authored), extending
+`referencedata/sampledata/GOClient/{C_ELEMENTVALUE,C_ELEMENTVALUE_TRL,C_VALIDCOMBINATION,
+AD_TREENODE}.xml`. **`ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped by this
+corrective fix** — bumping it requires both the preventive dataset branch and this SQL to be merged
+first (the CUT is read by the LIVE onboarding path in `com.etendoerp.go`, a different repo/branch
+than this fix), and the current CUT (`2026-08-26T12:00:00Z` at authoring time) already sits behind
+several other unbumped, individually-unverified intervening fixes (R27/R28/R26-acct-rpt-definitions/
+the sibling R29) — bumping past all of them on this fix's say-so risks silently skipping one of
+theirs for a brand-new tenant, mirroring the ETP-5019/R28 precedent exactly. **Follow-up for
+whoever merges both the preventive dataset branch and this corrective `.sql`:** bump
+`ONBOARDING_PROVISIONED_THROUGH` to this fix's own timestamp (`2026-08-30T12:00:00Z`) ONLY once
+both are confirmed merged, or defer to whoever next legitimately re-verifies the whole unbumped
+chain.
+
+---
+
 ## B — Organization Hierarchy
 
 ### B1 — Empty `AD_ORG_TREE` (organization hierarchy)
@@ -1040,6 +1179,19 @@ GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` ro
 | **Preventive** | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; `referencedata/sampledata/GOClient/M_COSTING_RULE.xml`'s `M_COSTING_ALGORITHM_ID` changed from Average (`B069080A0AE149A79CF1FA0E24F16AB6`) to Standard (`6A39D8B46CD94FE682D48758D3B7726B`) — `isvalidated`/`isactive` were already `'Y'`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-03T18:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by `OnboardingDatasetNormalizerTest.testNormalizerIncludesValidatedStandardCostingRule`. |
 
 **Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
+
+### J2 — Standard-cost tenants missing initial product costs (ETP-4706 QA follow-up, 2026-08-28)
+
+**Symptom:** Goods Receipt posting can surface core `InvalidCostWhichProduct` as the raw English text `There is no cost defined for the product: @Product@ on @Date@`. In Etendo Go this is treated as a transient cost-not-ready condition for the user, not as a request to understand or configure costing rules.
+
+**Root cause:** R18 only seeded Average-cost anchors (`M_Costing.CostType='AVA'`). After the Standard-cost direction landed, core posting looks for Standard cost definitions through `CostingUtils.getStandardCostDefinition`, which accepts `CostType='STA'` and then legacy `CostType='ST'`; an AVA row is invisible to that lookup.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/retired.json` retires `R18-stuck-average-cost-anchor` so new runs do not seed obsolete Average-cost anchors. `cli/src/data-fixes/sql/20260828T120000Z__R28-standard-cost-anchor.sql` inserts one manual `M_Costing` row with `CostType='STA'` for each product/cost organization found on unposted Goods Receipt / Goods Shipment lines under an active validated Standard rule, when no active Standard/legacy Standard cost covers the first needed accounting date. The row is open-ended unless a later Standard/legacy Standard cost definition already exists, in which case it is bounded to that next start date. Unit cost is resolved from purchase price, then sales price, then a non-zero placeholder `1`; that placeholder is only an unblocker and requires follow-up finance review/correction where used. |
+| **UX** | `tools/app-shell/src/lib/backendErrors.js` maps core `InvalidCostWhichProduct`'s unresolved-placeholder literal to the existing `backendError.costNotCalculated` copy, so Spanish sessions show "El costo del producto aún no ha sido calculado..." rather than raw English/costing-rule details. |
 
 ---
 
