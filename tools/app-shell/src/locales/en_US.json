@@ -18604,7 +18604,7 @@
     "financeReconcileBarSelected": "Documents selected",
     "financeReconcileBarRemaining": "Remaining to reconcile",
     "financeReconcileBarDifferenceNotice": "The {amount} difference will be posted to {concept}",
-    "financeReconcileBarDifferenceNoticeNoConcept": "The {amount} difference will be posted to an accounting concept you pick on reconciling",
+    "financeReconcileBarDifferenceNoticeNoConcept": "The {amount} difference will be posted to an accounting account you pick on reconciling",
     "financeReconcileActionCancel": "Cancel selection",
     "writeoffAdjustTitle": "Write off the {amount} difference",
     "writeoffAdjustOffReceipt": "The invoice will keep {amount} outstanding.",

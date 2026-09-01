@@ -18837,7 +18837,7 @@
     "financeReconcileBarSelected": "Documentos seleccionados",
     "financeReconcileBarRemaining": "Restante por conciliar",
     "financeReconcileBarDifferenceNotice": "La diferencia de {amount} se contabilizará en {concept}",
-    "financeReconcileBarDifferenceNoticeNoConcept": "La diferencia de {amount} se contabilizará en un concepto contable que elegirás al conciliar",
+    "financeReconcileBarDifferenceNoticeNoConcept": "La diferencia de {amount} se contabilizará en una cuenta contable que elegirás al conciliar",
     "financeReconcileActionCancel": "Cancelar selección",
     "writeoffAdjustTitle": "Ajustar diferencia de {amount}",
     "writeoffAdjustOffReceipt": "La factura quedará con {amount} pendientes de cobro.",
