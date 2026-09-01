@@ -170,6 +170,7 @@ describe('GoodsShipmentWindow', () => {
       recordId: 'ship-1',
       autoSaveOnBlur: true,
       processes: [],
+      refetchAfterSave: true,
     });
     expect(lastPageProps.hideMoreMenu({ data: { documentStatus: 'DR' } })).toBe(true);
     expect(lastPageProps.hideMoreMenu({ data: { documentStatus: 'CO' } })).toBe(false);
