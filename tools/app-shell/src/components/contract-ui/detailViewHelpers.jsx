@@ -112,10 +112,19 @@ export function runAddLineAction(st, { handleCustomModalAddClick, handleSecondar
  * reads the same "+ Añadir dirección" as the document-header
  * PartnerAddressPicker, instead of the generic "Añadir Dirección".
  * Falls back to `st.labelKey` (label-only override) or `tMenu(st.label)`.
+ *
+ * The result feeds `AddLineButton`, which always renders its own leading
+ * Plus icon (`add-line-button.jsx`) — unlike `PartnerAddressPicker`'s plain-text
+ * `createLabel`, which has no icon and needs the literal "+" baked into the
+ * string. A key like `addAddress` ("+ Añadir dirección") is shared between both
+ * call sites, so its leading "+" is stripped here to avoid a double plus sign
+ * on the icon button; the generic `addEntity` composition never carries one.
  */
 export function resolveAddLineLabel(st, ui, tMenu) {
-  if (st.addLineLabelKey) return ui(st.addLineLabelKey);
-  return ui('addEntity', { label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label) });
+  const label = st.addLineLabelKey
+    ? ui(st.addLineLabelKey)
+    : ui('addEntity', { label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label) });
+  return label.replace(/^\+\s*/, '');
 }
 
 export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {

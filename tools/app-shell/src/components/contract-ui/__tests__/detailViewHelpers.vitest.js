@@ -472,6 +472,24 @@ describe('resolveAddLineLabel (ETP-5021)', () => {
     const st = { label: 'Location' };
     expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addEntity(menu:Location)');
   });
+
+  it('strips a leading "+ " from the resolved addLineLabelKey text — AddLineButton already renders its own Plus icon', () => {
+    const realUi = (key) => (key === 'addAddress' ? '+ Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir dirección');
+  });
+
+  it('strips a bare leading "+" with no following space too', () => {
+    const realUi = (key) => (key === 'addAddress' ? '+Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir dirección');
+  });
+
+  it('leaves the generic addEntity composition untouched — it never carries a leading "+"', () => {
+    const realUi = (key, vars) => (vars ? `Añadir ${vars.label}` : key);
+    const st = { label: 'Location' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir menu:Location');
+  });
 });
 
 describe('getAddLineMenuActions', () => {
