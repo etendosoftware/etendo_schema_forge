@@ -3,6 +3,15 @@ import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
+// useYearCloseStatus/useYearHasPeriods (called directly by CalendarWindow, not just by the
+// stubbed child panels below) now go through useApiFetch (@/auth/useApiFetch.js), which calls
+// the real useAuth() internally — that throws without an AuthProvider in the tree. Mocked here
+// the same way sibling calendar test files do, so CalendarWindow can still be rendered bare.
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
+}));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const calendarSource = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
@@ -240,7 +249,7 @@ describe('CalendarWindow', () => {
     await vi.waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('https://api.test/open-close-period-control/periodControl?criteria='),
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+        expect.anything()
       );
     });
   });

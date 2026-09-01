@@ -116,13 +116,13 @@ export default function CalendarWindow(props) {
   // Reuses the exact same "closed iff end-year-close has closing entries" derivation as the
   // status badge/list column — never a second, different derivation — so the visible menu
   // action can never disagree with what the badge/column show for the same year.
-  const closed = useYearCloseStatus(props.recordId, props.token, endYearCloseApiBaseUrl);
+  const closed = useYearCloseStatus(props.recordId, endYearCloseApiBaseUrl);
 
   // "Create Periods" (`year.processNow`) should stop being offered once the year already has at
   // least one `C_Period` record — the same relationship the Periods tab (`PeriodsExpandablePanel`)
   // already fetches, via a dedicated lightweight existence check (not a full periods fetch) so
   // this header button and that tab don't share React state across specs.
-  const hasPeriods = useYearHasPeriods(props.recordId, props.token, periodControlApiBaseUrl);
+  const hasPeriods = useYearHasPeriods(props.recordId, periodControlApiBaseUrl);
 
   // The generated `YearPage.jsx`'s own `processes` is a plain array, not a function of the
   // current record — same "wholesale override, not merge" constraint already documented above

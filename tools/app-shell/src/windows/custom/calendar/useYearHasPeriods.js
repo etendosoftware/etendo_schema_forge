@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Same classic-Openbravo-datasource caveat documented in PeriodsExpandablePanel.jsx: a plain
 // `?year=<id>` query param is silently ignored by NEO's generic DefaultJsonDataService, which
@@ -17,13 +18,13 @@ function yearCriteria(yearId) {
  * step 7) isn't offered as a header action in the first place.
  *
  * @param {string|undefined} yearId
- * @param {string} token
  * @param {string} periodControlApiBaseUrl - already rewritten to the `open-close-period-control`
  *   spec base (e.g. `.../open-close-period-control`), NOT the year header's own `.../fiscal-calendar` base.
  * @returns {boolean|undefined|null} `undefined` while loading, `null` on error, else the resolved boolean.
  */
-export function useYearHasPeriods(yearId, token, periodControlApiBaseUrl) {
+export function useYearHasPeriods(yearId, periodControlApiBaseUrl) {
   const [hasPeriods, setHasPeriods] = useState(undefined);
+  const apiFetch = useApiFetch(periodControlApiBaseUrl);
 
   const load = useCallback(async () => {
     if (!yearId) {
@@ -31,9 +32,7 @@ export function useYearHasPeriods(yearId, token, periodControlApiBaseUrl) {
       return;
     }
     try {
-      const res = await fetch(`${periodControlApiBaseUrl}/periodControl?${yearCriteria(yearId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/periodControl?${yearCriteria(yearId)}`);
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const body = await res.json();
       // periodControl's LIST goes through NEO's generic DefaultJsonDataService, which wraps rows
@@ -44,7 +43,7 @@ export function useYearHasPeriods(yearId, token, periodControlApiBaseUrl) {
     } catch {
       setHasPeriods(null);
     }
-  }, [yearId, periodControlApiBaseUrl, token]);
+  }, [yearId, apiFetch]);
 
   useEffect(() => {
     setHasPeriods(undefined);

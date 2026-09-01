@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
+}));
+
 import { useYearHasPeriods } from '../useYearHasPeriods.js';
 
 function expectedUrl(base, yearId) {
@@ -15,14 +21,14 @@ describe('useYearHasPeriods', () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1' }] } }) })
     );
     const { result } = renderHook(() =>
-      useYearHasPeriods('year1', 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods('year1', 'https://api.test/open-close-period-control')
     );
 
     expect(result.current).toBeUndefined(); // loading
     await waitFor(() => expect(result.current).toBe(true));
     expect(global.fetch).toHaveBeenCalledWith(
       expectedUrl('https://api.test/open-close-period-control', 'year1'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      {}
     );
   });
 
@@ -31,7 +37,7 @@ describe('useYearHasPeriods', () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) })
     );
     const { result } = renderHook(() =>
-      useYearHasPeriods('year1', 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods('year1', 'https://api.test/open-close-period-control')
     );
 
     await waitFor(() => expect(result.current).toBe(false));
@@ -40,7 +46,7 @@ describe('useYearHasPeriods', () => {
   it('resolves to null on a request failure', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
     const { result } = renderHook(() =>
-      useYearHasPeriods('year1', 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods('year1', 'https://api.test/open-close-period-control')
     );
 
     await waitFor(() => expect(result.current).toBe(null));
@@ -49,7 +55,7 @@ describe('useYearHasPeriods', () => {
   it('stays undefined and never fetches when yearId is absent', () => {
     global.fetch = vi.fn();
     const { result } = renderHook(() =>
-      useYearHasPeriods(undefined, 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods(undefined, 'https://api.test/open-close-period-control')
     );
 
     expect(result.current).toBeUndefined();
@@ -65,7 +71,7 @@ describe('useYearHasPeriods', () => {
       });
     });
     const { result, rerender } = renderHook(
-      ({ yearId }) => useYearHasPeriods(yearId, 'tok', 'https://api.test/open-close-period-control'),
+      ({ yearId }) => useYearHasPeriods(yearId, 'https://api.test/open-close-period-control'),
       { initialProps: { yearId: 'year1' } }
     );
     await waitFor(() => expect(result.current).toBe(false));
@@ -82,7 +88,7 @@ describe('useYearHasPeriods', () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
     });
     const { result } = renderHook(() =>
-      useYearHasPeriods('year1', 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods('year1', 'https://api.test/open-close-period-control')
     );
 
     await waitFor(() => expect(result.current).toBe(false));
@@ -100,7 +106,7 @@ describe('useYearHasPeriods', () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) })
     );
     const { result } = renderHook(() =>
-      useYearHasPeriods('year1', 'tok', 'https://api.test/open-close-period-control')
+      useYearHasPeriods('year1', 'https://api.test/open-close-period-control')
     );
 
     await waitFor(() => expect(result.current).toBe(false));

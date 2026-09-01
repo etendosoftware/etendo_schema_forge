@@ -4,8 +4,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LocaleProvider } from '@/i18n';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
 import enUS from '../../../../locales/en_US.json';
 import esES from '../../../../locales/es_ES.json';
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
+}));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fiscalCalendarDecisions = JSON.parse(readFileSync(
@@ -117,7 +122,6 @@ describe('PeriodsExpandablePanel', () => {
     render(
       <PeriodsExpandablePanel
         parentId="year1"
-        token="tok"
         apiBaseUrl="https://api.test"
         data-testid="PeriodsExpandablePanel__test" />
     );
@@ -138,7 +142,7 @@ describe('PeriodsExpandablePanel', () => {
       json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
     }));
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('period-name-june')).toHaveTextContent('June 28'));
     expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
@@ -160,7 +164,7 @@ describe('PeriodsExpandablePanel', () => {
       json: () => Promise.resolve({ response: { data: [regularJune, adjustment] } }),
     }));
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('period-name-p12')).toHaveTextContent('June 28'));
     // Both rows still show the same month/year (day is deliberately never part of the label —
@@ -172,7 +176,7 @@ describe('PeriodsExpandablePanel', () => {
   });
 
   it('renders period status as a colored badge with the translated label, not the raw code', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p11" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p11" />);
     await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
@@ -182,7 +186,7 @@ describe('PeriodsExpandablePanel', () => {
   });
 
   it('renders document type + status as a readable label and colored badge, not raw codes', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p12" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p12" />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -200,7 +204,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p13" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p13" />);
     await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
@@ -212,7 +216,7 @@ describe('PeriodsExpandablePanel', () => {
     // periodControl's LIST goes through NEO's generic DefaultJsonDataService, which silently
     // ignores an arbitrary `?year=<id>` query param (confirmed live — it returned every period
     // across every year, unfiltered). The real mechanism is the `criteria` JSON-array param.
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p10" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p10" />);
     await waitFor(() => screen.getByText('January 27'));
 
     const expectedCriteria = encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: 'year1' }]));
@@ -240,7 +244,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Periodo is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p2" />);
     await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
@@ -256,7 +260,7 @@ describe('PeriodsExpandablePanel', () => {
     ['P', 'Permanently closed'],
   ])('submits {"openClose": "%s"} for the period action when "%s" is selected and confirmed', async (value, _label) => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p2" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p2" />);
     await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
@@ -277,7 +281,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Documento is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p3" />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -295,7 +299,7 @@ describe('PeriodsExpandablePanel', () => {
     ['P', 'Permanently closed'],
   ])('submits {"openClose": "%s"} for the document action when "%s" is selected and confirmed', async (value, _label) => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p3" />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -329,7 +333,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p14" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p14" />);
     await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
@@ -376,7 +380,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p16" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p16" />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -414,7 +418,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p17" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p17" />);
     await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
     expect(documentsCallCount).toBe(0); // never expanded, so no documents fetch yet
@@ -447,7 +451,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p18" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p18" />);
     await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -505,7 +509,7 @@ describe('PeriodsExpandablePanel', () => {
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p15" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p15" />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -532,7 +536,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('cancelling the dialog does not submit any request', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p3b" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p3b" />);
     await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
@@ -544,7 +548,7 @@ describe('PeriodsExpandablePanel', () => {
   });
 
   it('collapses the period row again on a second click without re-fetching documents', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p4" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p4" />);
     await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -562,13 +566,13 @@ describe('PeriodsExpandablePanel', () => {
 
   it('shows a loading indicator while periodControl is still pending', () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p5" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p5" />);
     expect(screen.getByTestId('periods-expandable-panel-loading')).toBeInTheDocument();
   });
 
   it('shows an error state (not stuck loading, not the panel) when periodControl fails', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p6" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p6" />);
     await waitFor(() => expect(screen.getByTestId('periods-expandable-panel-error')).toBeInTheDocument());
     expect(screen.queryByTestId('periods-expandable-panel')).not.toBeInTheDocument();
   });
@@ -579,7 +583,7 @@ describe('PeriodsExpandablePanel', () => {
       if (url.includes('/documents')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
       return Promise.reject(new Error('unexpected'));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p7" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p7" />);
     await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -592,7 +596,7 @@ describe('PeriodsExpandablePanel', () => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected'));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p8" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p8" />);
     await waitFor(() => screen.getByText('January 27'));
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -608,7 +612,7 @@ describe('PeriodsExpandablePanel', () => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected'));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p9" />);
     await waitFor(() => screen.getByText('January 27'));
 
     // Only the POST is held pending by the test — the post-success periodControl refetch
@@ -645,7 +649,7 @@ describe('PeriodsExpandablePanel', () => {
       if (opts?.method === 'POST') return new Promise((resolve) => { resolvePost = resolve; });
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="p9b" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p9b" />);
     await waitFor(() => screen.getByText('January 27'));
     global.fetch = postSpy;
 
@@ -680,7 +684,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev1" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="ev1" />);
     await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
@@ -702,7 +706,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
       }
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev2" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="ev2" />);
     await waitFor(() => screen.getByText('January 27'));
     expect(periodControlCallCount).toBe(1);
 
@@ -722,7 +726,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
       return Promise.reject(new Error('unexpected url ' + url));
     });
     const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
-    const { unmount } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid="ev3" />);
+    const { unmount } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="ev3" />);
     await waitFor(() => screen.getByText('January 27'));
 
     unmount();
@@ -750,7 +754,7 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
   });
 
   async function renderExpanded(testId) {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" data-testid={testId} />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid={testId} />);
     await waitFor(() => screen.getByText('January 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('AP Credit Memo'));
@@ -1006,13 +1010,13 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
   });
 
   it('renders periods in their original (unpinned) order when nothing is expanded', async () => {
-    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
     expect(renderedPeriodOrder(container)).toEqual(['p1', 'p2', 'p3']);
   });
 
   it('moves a non-first period to the top of the list once it is expanded', async () => {
-    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p3'));
@@ -1027,7 +1031,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
       if (url.includes('/documents')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC] } }) });
       return Promise.reject(new Error('unexpected url ' + url));
     });
-    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
@@ -1043,7 +1047,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
   });
 
   it('moves the pin to a newly expanded period, returning the previous one to its normal sorted position', async () => {
-    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p3'));
@@ -1060,7 +1064,7 @@ describe('PeriodsExpandablePanel — pinning the expanded period to the top', ()
   });
 
   it('returns to the original order once the pinned period is collapsed', async () => {
-    const { container } = render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
@@ -1091,7 +1095,7 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
   }
 
   it('renders the established table headers and four-cell layout for collapsed period rows', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     const panel = screen.getByTestId('periods-expandable-panel');
@@ -1111,7 +1115,7 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
   });
 
   it('uses the standard selected-row treatment for the expanded period', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p2'));
@@ -1133,7 +1137,7 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
   // period row ends up in the table (ETP-4948's own Table conversion, see
   // `periodRowFor` above).
   it('renders the bulk action bar independently of the period row via the portaled SelectionToolbar', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -1149,7 +1153,7 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
   });
 
   it('renders expanded documents in a full-width table row below their period row', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -1162,7 +1166,7 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
   });
 
   it('moves the selected-row treatment to the newly expanded period', async () => {
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
@@ -1179,14 +1183,14 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
 describe('PeriodsExpandablePanel — Accept-Language header + real localization fix', () => {
   // Investigated BOTH hypotheses live, not assumed:
   //
-  // 1. This panel's raw fetch()/postAction sent no Accept-Language header at all, unlike
-  //    useEntity.js's buildHeaders(). Fixed that (see below) — NeoAuthenticator.java does read
-  //    the header and call OBContext.setLanguage(...) for the request. BUT live verification
-  //    (real login, real network capture) showed the header WAS sent as es_ES while
-  //    periodControl/documents still returned English $_identifier values — so this header
-  //    alone is NOT sufficient for this classic-datasource-backed path. The logged-in test
-  //    user's own ad_user.default_ad_language (en_US in this DB) is the more likely actual
-  //    authority for that datasource's identifier resolution.
+  // 1. This panel's raw fetch()/postAction used to send no Accept-Language header at all,
+  //    unlike useEntity.js's buildHeaders(). Live verification (real login, real network
+  //    capture) showed that even WITH the header correctly sent as es_ES, periodControl/
+  //    documents — served through NEO's generic DefaultJsonDataService (classic Openbravo
+  //    datasource) — still returned English $_identifier values. The logged-in test user's own
+  //    ad_user.default_ad_language (en_US in this DB) is the more likely actual authority for
+  //    that datasource's identifier resolution, not the per-request header — so the header
+  //    alone was never sufficient for this classic-datasource-backed path.
   // 2. So the real fix is client-side enumLabels — PERIOD_STATUS_LABEL_KEYS /
   //    DOCUMENT_STATUS_LABEL_KEYS / DOCUMENT_CATEGORY_LABEL_KEYS in PeriodsExpandablePanel.jsx
   //    — resolved via ui()/tMenu(), exactly like DataTable.cellRenderers.jsx's renderEnumCell()
@@ -1194,9 +1198,16 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
   //    the real AD_Ref_List/AD_Ref_List_Trl data already captured in
   //    artifacts/open-close-period-control/schema-raw.json — not hand-guessed.
   //
-  // The header is still sent (harmless, correct for other things like AD_Message
-  // translations) — these tests still confirm it, plus confirm the REAL fix: Spanish labels
-  // render correctly regardless of what (or whether) $_identifier says.
+  // ETP-4948 REVIEW follow-up: this panel's own hand-rolled buildLocaleHeaders() (which built
+  // the Accept-Language/Authorization headers itself) was removed entirely in favor of the
+  // canonical `apiFetch` (@/auth/useApiFetch.js), which now sends both automatically on every
+  // request — see CLAUDE.md's mandatory "Authenticated Requests" policy. That means this panel
+  // itself no longer builds ANY header, so the header-sending assertions below now confirm the
+  // absence of manual header-building here (delegated to useApiFetch, which owns its own tests)
+  // rather than re-testing a header this component no longer constructs. The label-translation
+  // tests further below are the real regression guard this describe block exists for, and are
+  // unaffected — Spanish labels still render correctly regardless of what (or whether)
+  // $_identifier says.
   const PERIOD_ES = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'M' }; // no $_identifier on purpose
   const DOC_ES = { id: 'd1', documentCategory: 'MMS', periodStatus: 'C' }; // ditto
 
@@ -1209,21 +1220,21 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     currentTestLocale = 'en_US';
   });
 
-  it('sends Accept-Language on the periodControl fetch, matching the stored UI locale', async () => {
+  it('no longer builds an Accept-Language header itself on the periodControl fetch (delegated to useApiFetch)', async () => {
     localStorage.setItem('schema-forge-locale', 'es_ES');
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) }));
     global.fetch = fetchSpy;
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
 
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/periodControl'),
-      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+      {}
     );
   });
 
-  it('sends Accept-Language on the documents fetch too', async () => {
+  it('no longer builds an Accept-Language header itself on the documents fetch either', async () => {
     localStorage.setItem('schema-forge-locale', 'es_ES');
     const fetchSpy = vi.fn((url) => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
@@ -1231,18 +1242,18 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
     });
     global.fetch = fetchSpy;
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
     fireEvent.click(screen.getByTestId('period-row-expand-p1'));
     await waitFor(() => screen.getByText('Entrega material'));
 
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/documents'),
-      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+      {}
     );
   });
 
-  it('sends Accept-Language on the openClose POST action too, not just the GET fetches', async () => {
+  it('no longer builds an Accept-Language header itself on the openClose POST action either', async () => {
     localStorage.setItem('schema-forge-locale', 'es_ES');
     const postSpy = vi.fn((url, opts) => {
       if (opts?.method === 'POST') return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -1250,7 +1261,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
     });
     global.fetch = postSpy;
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
 
     fireEvent.click(screen.getByTestId('period-openclose-p1'));
@@ -1261,21 +1272,25 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       expect.stringContaining('/action/openClose'),
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }),
+        body: JSON.stringify({ fieldValues: { openClose: 'C' } }),
       })
     ));
+    // No `headers` key at all on the POST options — the component only sets method/body,
+    // never headers, matching postAction(apiFetch, path, fieldValues)'s implementation.
+    const [, postOptions] = postSpy.mock.calls.find(([url]) => url.includes('/action/openClose'));
+    expect(postOptions.headers).toBeUndefined();
   });
 
-  it('falls back to es_ES when no locale is stored yet', async () => {
+  it('does not need a stored locale to fetch (locale resolution is useApiFetch\'s concern, not this component\'s)', async () => {
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
     global.fetch = fetchSpy;
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
 
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) })
+      {}
     );
   });
 
@@ -1285,7 +1300,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC_ES] } }) });
     });
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
 
     const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
@@ -1308,7 +1323,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
     }));
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('period-name-june')).toHaveTextContent('Junio 28'));
     expect(screen.queryByText('Jan-27')).not.toBeInTheDocument();
@@ -1321,7 +1336,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC_ES] } }) });
     });
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('January 27'));
 
     const periodBadge = screen.getByTestId(`period-status-${PERIOD_ES.id}`).querySelector('[data-testid="tag"]');
@@ -1339,7 +1354,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
     });
 
-    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
 
     const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');

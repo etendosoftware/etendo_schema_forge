@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { formatCalendarMonthYear, parseCalendarDate } from '@/lib/dateOnly.js';
 import { Tag } from '@/components/ui/tag';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,7 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast.js';
 
-import { useApiFetch } from '@/auth/useApiFetch.js';
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
 // since this is a custom component, not generator-driven output.
@@ -51,28 +51,19 @@ function yearCriteria(yearId) {
   return `criteria=${encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: yearId }]))}`;
 }
 
-// This panel's raw fetch()/postAction calls sent no Accept-Language header at all, unlike
-// useEntity.js's buildHeaders() (used by the rest of the app) — added here for parity and
-// because NeoAuthenticator.java's applyRequestLanguage() does read it and call
-// OBContext.getOBContext().setLanguage(...) for the request. BUT this was verified live (not
-// assumed) to NOT actually be sufficient on its own: with the header correctly sent as es_ES
-// (confirmed via captured network requests), periodControl/documents — served through NEO's
-// generic DefaultJsonDataService (classic Openbravo datasource) — still returned English
-// $_identifier values. The logged-in test user's own ad_user.default_ad_language is en_US in
-// this DB, which is the more likely actual authority for that datasource's identifier
-// resolution, not the per-request OBContext language. So $_identifier can't be relied on for
-// localization here — see PERIOD_STATUS_LABEL_KEYS / DOCUMENT_STATUS_LABEL_KEYS /
-// DOCUMENT_CATEGORY_LABEL_KEYS below for the actual fix (client-side enumLabels, same
-// convention DataTable.cellRenderers.jsx's renderEnumCell already uses everywhere else). The
-// header is still sent since it's correct for other things (e.g. AD_Message translations) and
-// doesn't hurt.
-//
-// ETP-5022: this panel's local fetch()/header-builder calls were replaced by the shared
-// `useApiFetch()` (app-shell-core/auth), which sends the same Authorization + Accept-Language
-// headers this panel already relied on. The finding above still stands: periodControl/documents
-// is served by the classic DefaultJsonDataService, and these labels are AD_Ref_List statuses
-// rather than FK identifiers, so the DAL's native *_Trl translation path does not reach them.
-// The client-side enumLabels below remain the fix here.
+// This panel's requests previously sent no Accept-Language header at all via a hand-rolled raw
+// fetch()/postAction. `apiFetch` (from `@/auth/useApiFetch.js`) sends `Accept-Language` (and
+// `Authorization`) on every request automatically now, so no manual header-building is needed
+// here anymore. This was verified live (not assumed) to NOT be sufficient on its own for
+// translation, though: with the header correctly sent as es_ES (confirmed via captured network
+// requests), periodControl/documents — served through NEO's generic DefaultJsonDataService
+// (classic Openbravo datasource) — still returned English $_identifier values. The logged-in
+// test user's own ad_user.default_ad_language is en_US in this DB, which is the more likely
+// actual authority for that datasource's identifier resolution, not the per-request OBContext
+// language. So $_identifier can't be relied on for localization here — see
+// PERIOD_STATUS_LABEL_KEYS / DOCUMENT_STATUS_LABEL_KEYS / DOCUMENT_CATEGORY_LABEL_KEYS below for
+// the actual fix (client-side enumLabels, same convention DataTable.cellRenderers.jsx's
+// renderEnumCell already uses everywhere else).
 
 // The actual fix for the untranslated labels: client-side enumLabels dictionaries resolved via
 // ui()/tMenu (dictionary.genericLabels), exactly like DataTable.cellRenderers.jsx's
@@ -157,8 +148,8 @@ function formatPeriodName(period, locale) {
   return formatCalendarMonthYear(new Date(2000 + Number(match[2]), month, 1), locale);
 }
 
-async function fetchJson(url, apiFetch) {
-  const res = await apiFetch(url, { baseUrl: '' });
+async function fetchJson(apiFetch, path) {
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
   // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
@@ -168,10 +159,9 @@ async function fetchJson(url, apiFetch) {
   return body?.response?.data ?? (Array.isArray(body) ? body : []);
 }
 
-async function postAction(url, apiFetch, fieldValues) {
-  const res = await apiFetch(url, {
+async function postAction(apiFetch, path, fieldValues) {
+  const res = await apiFetch(path, {
     method: 'POST',
-    baseUrl: '',
     // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
     // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
     body: JSON.stringify({ fieldValues }),
@@ -180,10 +170,10 @@ async function postAction(url, apiFetch, fieldValues) {
   return res.json();
 }
 
-export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) {
+export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
   const ui = useUI();
-  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
+  const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array (same convention as AccountingPanel):
   // `undefined` = loading, `null` = the request failed, an array = loaded (possibly empty).
   const [periods, setPeriods] = useState(undefined);
@@ -212,18 +202,18 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   const loadPeriods = useCallback(async () => {
     if (!parentId) return;
     try {
-      const data = await fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}&_sortBy=startingDate asc`, apiFetch);
+      const data = await fetchJson(apiFetch, `/periodControl?${yearCriteria(parentId)}&_sortBy=startingDate asc`);
       setPeriods(data);
     } catch {
       setPeriods(null);
     }
-  }, [parentId, apiBaseUrl, apiFetch]);
+  }, [parentId, apiFetch]);
 
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
     loadPeriods();
-  }, [parentId, apiBaseUrl, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parentId, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Create Periods" runs in a completely different React subtree — the generated `YearPage`
   // from the `fiscal-calendar` spec (this panel lives on the `open-close-period-control` spec,
@@ -249,13 +239,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   // Reused rather than duplicated so "initial load" and "post-action refresh" can never drift.
   const loadDocumentsForPeriod = useCallback(async (periodId) => {
     try {
-      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, apiFetch);
+      const docs = await fetchJson(apiFetch, `/documents?parentId=${periodId}`);
       setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
       setDocumentsError((prev) => ({ ...prev, [periodId]: false }));
     } catch {
       setDocumentsError((prev) => ({ ...prev, [periodId]: true }));
     }
-  }, [apiBaseUrl, apiFetch]);
+  }, [apiFetch]);
 
   const invalidateDocumentsForPeriod = useCallback((periodId) => {
     setDocumentsByPeriod((previous) => {
@@ -293,13 +283,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     });
   }, []);
 
-  const runAction = useCallback(async (key, url, fieldValues, onSuccess) => {
+  const runAction = useCallback(async (key, path, fieldValues, onSuccess) => {
     setPendingActions((prev) => {
       if (prev[key]) return prev;
       return { ...prev, [key]: true };
     });
     try {
-      await postAction(url, apiFetch, fieldValues);
+      await postAction(apiFetch, path, fieldValues);
       // Targeted refetch of just the affected data (never a full page reload) so the status
       // badge reflects the new value immediately, instead of staying stale until a manual F5.
       await onSuccess?.();
@@ -342,7 +332,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     setPendingActions((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
     try {
       const outcomes = await Promise.allSettled(
-        ids.map((id) => postAction(`${apiBaseUrl}/documents/${id}/action/openClose`, apiFetch, fieldValues))
+        ids.map((id) => postAction(apiFetch, `/documents/${id}/action/openClose`, fieldValues))
       );
       const failed = outcomes.filter((o) => o.status === 'rejected');
       const ok = ids.length - failed.length;
@@ -354,7 +344,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     } finally {
       setPendingActions((prev) => ({ ...prev, [key]: false }));
     }
-  }, [apiBaseUrl, apiFetch, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
+  }, [apiFetch, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
 
   const handleDialogConfirm = useCallback((paramValues) => {
     if (!dialogTarget) return;
@@ -367,7 +357,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
       // same as the document-level and bulk-document-level branches just below.
       runAction(
         `period-${id}`,
-        `${apiBaseUrl}/periodControl/${id}/action/openClose`,
+        `/periodControl/${id}/action/openClose`,
         paramValues,
         async () => {
           if (expandedId === id) {
@@ -389,12 +379,12 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
       // documents list AND the periods list must be refreshed, not just the former.
       runAction(
         `document-${id}`,
-        `${apiBaseUrl}/documents/${id}/action/openClose`,
+        `/documents/${id}/action/openClose`,
         paramValues,
         () => Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()])
       );
     }
-  }, [dialogTarget, apiBaseUrl, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod, invalidateDocumentsForPeriod, expandedId]);
+  }, [dialogTarget, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod, invalidateDocumentsForPeriod, expandedId]);
 
   const dialogProcess = (dialogTarget?.kind === 'document' || dialogTarget?.kind === 'bulk-documents')
     ? DOCUMENT_OPEN_CLOSE_PROCESS
