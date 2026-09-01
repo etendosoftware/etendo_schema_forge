@@ -1979,5 +1979,25 @@
     ],
     "author": "pipeline",
     "date": "2026-08-24"
+  },
+  {
+    "from": "0.46.0",
+    "to": "0.47.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"orderedQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-28"
+  },
+  {
+    "from": "0.47.0",
+    "to": "0.48.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"orderedQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-08-28"
   }
 ]
