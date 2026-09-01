@@ -350,12 +350,31 @@ describe('OrganizationPage', () => {
       expect(patchCalls).toHaveLength(0);
     });
 
-    it('blocks Save with the same phoneInvalidChars toast Contacts uses, when Teléfono has non-numeric junk', async () => {
+    // ETP-5031 follow-up — Teléfono now filters letters/symbols at KEYSTROKE time
+    // (filterPhoneCharacters), so typing "abc" no longer reaches this save-time
+    // check at all — it never lands in `form.phone` in the first place. The
+    // save-time phoneInvalidChars gate is still real: it is what catches a
+    // value that passes the keystroke filter's charset (digits, +, -, (, ), .,
+    // whitespace) but still has zero actual digits, e.g. punctuation alone.
+    it('filters non-phone characters out of Teléfono as the user types, before Save is ever reachable', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
       await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
 
-      fireEvent.change(screen.getByTestId('OrganizationPage__phone'), { target: { value: 'abc' } });
+      fireEvent.change(screen.getByTestId('OrganizationPage__phone'), { target: { value: 'abc!@#123' } });
+
+      expect(screen.getByTestId('OrganizationPage__phone')).toHaveValue('123');
+    });
+
+    it('blocks Save with the same phoneInvalidChars toast Contacts uses, when Teléfono has no digits at all', async () => {
+      globalThis.fetch = VALID_BASE();
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+
+      // '()' passes the keystroke filter's charset (it's all allowed punctuation)
+      // but isValidPhone still requires at least one digit — so this is the real,
+      // still-reachable case the save-time format check exists to catch.
+      fireEvent.change(screen.getByTestId('OrganizationPage__phone'), { target: { value: '()' } });
       fireEvent.click(screen.getByTestId('OrganizationPage__save'));
 
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('phoneInvalidChars'));
