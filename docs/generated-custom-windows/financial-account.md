@@ -1751,6 +1751,45 @@ would not have caught either mistake here).
 carries the same latent bug class; it wasn't touched here (out of scope for this fix) but is a
 candidate for the same treatment.
 
+#### Follow-up: the calendar needed two clicks when the line was at the bottom of the scroll (ETP-4924)
+
+After the fix above, a second, distinct symptom surfaced: clicking a line's date-field calendar
+trigger did nothing on the FIRST click — no calendar, no console error, nothing mounted in the
+DOM — when that row sat at the bottom edge of the scrollable lines list (`max-h-[62vh]
+overflow-y-auto` in `ManualStatementModal.jsx`). A second click, once the list had settled, worked
+normally. Confirmed via manual reproduction (DOM inspection showed `PopoverContent` genuinely never
+mounted after the failing click, ruling out a mispositioned-but-present popover) that this
+correlates specifically with scroll position, not with which line or session-first-focus.
+
+**Root cause:** the browser auto-scrolls a newly-focused element into view when it is only
+partially visible in a scrollable ancestor. That auto-scroll is triggered by the DEFAULT action of
+the `mousedown` that also moves focus to the trigger button — i.e. it can happen BETWEEN
+`mousedown` and `mouseup`. If the scroll shifts the row under the cursor before `mouseup`, the
+resulting native `click` event no longer lands on the trigger, so Radix's Popover never receives
+its open-toggle click — nothing opens, and nothing about it is visible in React state or the
+console, since the click was lost at the browser/DOM level, upstream of any of our code.
+
+**Fix, scoped to this modal only** (the correct general fix belongs in `DateField` itself, in
+`schema_forge_core` — out of scope here by explicit decision, since this instance is contained to
+the statements editor): the row wrapper in `EditableLines` now has an `onMouseDown` that detects a
+mousedown on the date-field's calendar trigger (`e.target.closest('[data-testid=
+"PopoverTrigger__d56af3"]')` — DateField's trigger button's stable test id, not the translated
+`aria-label`, which would be a fragile, locale-dependent selector), calls `e.preventDefault()` to
+suppress the browser's default mousedown-focus (the thing that triggers the auto-scroll), and
+focuses the trigger manually via `trigger.focus({ preventScroll: true })`. This keeps the
+trigger's position — and the whole click gesture — stable through mousedown→mouseup, without
+disabling focus or losing the subsequent `click` (which Radix still receives normally, since
+`preventDefault()` on `mousedown` does not cancel the following `click` event).
+
+**Known limitation:** jsdom does not implement the browser's native scroll-into-view-on-focus
+behavior at all, so the ORIGINAL failure cannot be reproduced by an automated test in this repo —
+only the code path (mousedown is prevented, `focus({preventScroll:true})` is called, and only when
+the target is the date-field trigger, not some other cell in the row) is unit-tested. A real
+reproduction of the browser-level race would need a Playwright/real-browser test.
+
+If this pattern recurs elsewhere (any interactive trigger inside a tall scrollable list, not just
+this modal's date field), the durable fix is in `DateField` itself, not a per-caller workaround.
+
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)

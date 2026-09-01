@@ -408,6 +408,29 @@ function EditableLines({ rows, setRows, ui, money, currencySym, currencySymRight
         ) : (
           <div
             key={r.id}
+            onMouseDown={(e) => {
+              // ETP-4924 follow-up: when this row sits at the bottom edge of
+              // the scrollable lines list, clicking the date-field's calendar
+              // trigger can fail silently — the browser auto-scrolls a
+              // partially-visible element into view the moment it receives
+              // focus (the default action of this same mousedown), and if
+              // that scroll shifts the content under the cursor before
+              // mouseup, the resulting `click` never lands back on the
+              // trigger, so Radix's open-toggle never fires (no error, the
+              // popover never mounts). A second click works because the
+              // scroll has already settled by then. Suppressing the
+              // default mousedown-focus (which is what triggers the
+              // auto-scroll) and focusing manually with `preventScroll:
+              // true` keeps the trigger's position — and the click gesture
+              // — stable. Scoped to the date-field trigger specifically via
+              // its stable `data-testid` (not the translated aria-label,
+              // which would be a fragile, locale-dependent selector).
+              const trigger = e.target.closest('[data-testid="PopoverTrigger__d56af3"]');
+              if (trigger) {
+                e.preventDefault();
+                trigger.focus({ preventScroll: true });
+              }
+            }}
             onFocusCapture={(e) => {
               // A focus landing inside a portalled popover/dropdown (calendar,
               // lookup list) still bubbles here as a React event even though
