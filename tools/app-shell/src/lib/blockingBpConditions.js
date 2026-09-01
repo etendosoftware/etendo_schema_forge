@@ -24,6 +24,27 @@
  * message text itself is locale-dependent — an exact-string map like
  * `backendErrors.js`'s would only match one language at a time.
  *
+ * `ON_HOLD_PATTERN` anchors on the DISTINCTIVE SENTENCE SHAPE of the two real
+ * AD_MESSAGE catalog entries this condition fires from — `BusinessPartnerBlocked`
+ * ("is on hold for this document, therefore it is not possible to complete it.")
+ * and `SelectedBPartnerBlocked` ("The selected Business Partner is on hold for this
+ * document, therefore it is not possible to complete it."), with their es_ES
+ * translations ("está/bloqueada bloqueado para este documento, no se puede
+ * completar.") — the same "anchor on a distinctive phrase fragment, not a bare
+ * keyword" precedent `backendErrors.js` already follows for its parameterized
+ * matchers. A REVIEW pass (ETP-5024) found the earlier bare `bloquead[oa]` keyword
+ * false-positived on 11 unrelated live AD_MESSAGE catalog entries, including
+ * `lockedProduct` ("el producto está bloqueado y no se puede entregar" — a Goods
+ * Shipment Complete failure with nothing to do with the Business Partner) — see
+ * `__tests__/blockingBpConditions.test.js` for the confirmed false-positive
+ * regression cases. `BusinessPartnerBlocked2`/`BusinessPartnerBlocked3` (the
+ * "on hold therefore invoices/shipments cannot be created" siblings, raised by
+ * core's `C_INVOICE_CREATE`/`M_INOUT_CREATE` DB functions) were investigated and
+ * deliberately excluded: Etendo GO's create-invoice/create-shipment actions
+ * (`CreateShipmentHandler.java`, `CreateInvoiceShipmentHandler.java`) build the
+ * target document directly via DAL, never calling those core DB functions, so
+ * those two messages are not reachable through the current NEO Headless surface.
+ *
  * `creditLimit` amount extraction: `SE_Order_BPartner.java` (core Etendo, out of
  * scope to touch) builds the message as raw string concatenation —
  * `Utility.messageBD(this, "CreditLimitOver", lang) + creditLimitExceed` — with NO
@@ -40,8 +61,13 @@
  */
 
 const CREDIT_LIMIT_PATTERN = /credit\s+limit|cr[eé]dito.{0,20}l[ií]mite|l[ií]mite.{0,20}(de\s+)?cr[eé]dito/i;
-const ON_HOLD_PATTERN = /\bon\s+hold\b|bloquead[oa]/i;
-const TRAILING_AMOUNT_PATTERN = /(-?\d+(?:[.,]\d+)?)\s*$/;
+const ON_HOLD_PATTERN = /\bon\s+hold\s+for\s+this\s+document\b|bloquead[oa]\s+para\s+este\s+documento/i;
+// Trailing numeric token, plain decimal OR scientific notation (Java's
+// `Double.toString()` — see `SE_Order_BPartner.java` above — switches to
+// scientific notation, e.g. `1.2345678E7`, for values >= 1e7, which is routine
+// for ARS/COP/CLP amounts). Number() parses the scientific form natively once
+// captured, so no separate exponent-expansion step is needed.
+const TRAILING_AMOUNT_PATTERN = /(-?\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?)\s*$/;
 
 /**
  * @param {string} text an already-localized backend message

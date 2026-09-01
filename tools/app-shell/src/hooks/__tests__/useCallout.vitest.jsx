@@ -578,13 +578,17 @@ describe('useCallout', () => {
     });
 
     it('routes an on-hold message into calloutResult.blockingCondition instead of toasting', async () => {
-      mockCalloutResponse([{ type: 'ERROR', text: 'Selected Business Partner is on hold' }]);
+      // Real production wording (AD_MESSAGE `SelectedBPartnerBlocked`) — the
+      // detector's ON_HOLD_PATTERN is anchored on this exact sentence shape, not a
+      // bare "on hold" keyword (ETP-5024 REVIEW: the old bare keyword false-
+      // positived on unrelated messages like `lockedProduct`).
+      mockCalloutResponse([{ type: 'ERROR', text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' }]);
       const { result } = renderHook(() => useCallout('header', opts));
 
       await triggerAndWait(result, () => {
         expect(result.current.calloutResult?.blockingCondition).toEqual({
           kind: 'onHold',
-          text: 'Selected Business Partner is on hold',
+          text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.',
         });
       });
 
@@ -592,7 +596,8 @@ describe('useCallout', () => {
     });
 
     it('matches a localized Spanish blocking message the same way', async () => {
-      mockCalloutResponse([{ type: 'ERROR', text: 'El socio de negocio está bloqueado' }]);
+      // Real production wording (AD_MESSAGE `SelectedBPartnerBlocked`, es_ES).
+      mockCalloutResponse([{ type: 'ERROR', text: 'El tercero seleccionado está bloqueado para este documento, no se puede completar.' }]);
       const { result } = renderHook(() => useCallout('header', opts));
 
       await triggerAndWait(result, () => {

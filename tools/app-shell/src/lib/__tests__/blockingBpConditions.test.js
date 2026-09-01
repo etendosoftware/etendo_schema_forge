@@ -86,32 +86,120 @@ describe('detectBlockingBpCondition', () => {
         amount: null,
       });
     });
-  });
 
-  describe('onHold — English', () => {
-    it('matches "on hold" wording', () => {
-      const result = detectBlockingBpCondition('Selected Business Partner is on hold.');
+    // ETP-5024 blocker 3: Java's Double.toString() (SE_Order_BPartner.java, core
+    // Etendo) switches to scientific notation for values >= 1e7 — routine for
+    // ARS/COP/CLP amounts. The old plain-decimal-only regex matched only the
+    // trailing digit after the exponent marker, producing a wildly wrong amount.
+    it('extracts a large amount expressed in scientific notation', () => {
+      const result = detectBlockingBpCondition('Aviso: Crédito limite superado1.2345678E7');
       assert.deepEqual(result, {
-        kind: 'onHold',
-        text: 'Selected Business Partner is on hold.',
+        kind: 'creditLimit',
+        text: 'Aviso: Crédito limite superado',
+        amount: 12345678,
       });
     });
 
+    it('extracts a negative amount in scientific notation', () => {
+      const result = detectBlockingBpCondition('credit limit exceeded by -1.5E7');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'credit limit exceeded by',
+        amount: -15000000,
+      });
+    });
+
+    it('extracts scientific notation with an explicit positive exponent sign', () => {
+      const result = detectBlockingBpCondition('limite de credito superado1.0E+7');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'limite de credito superado',
+        amount: 10000000,
+      });
+    });
+  });
+
+  describe('onHold — English', () => {
+    // Real production wording (AD_MESSAGE `BusinessPartnerBlocked` /
+    // `SelectedBPartnerBlocked`), not a contrived shorthand — the pattern is
+    // anchored on this exact sentence shape (ETP-5024 blocker 1).
+    it('matches the BusinessPartnerBlocked sentence shape', () => {
+      const result = detectBlockingBpCondition(
+        'The business partner Acme Corp is on hold for this document, therefore it is not possible to complete it.'
+      );
+      assert.deepEqual(result, {
+        kind: 'onHold',
+        text: 'The business partner Acme Corp is on hold for this document, therefore it is not possible to complete it.',
+      });
+    });
+
+    it('matches the SelectedBPartnerBlocked sentence shape', () => {
+      const result = detectBlockingBpCondition(
+        'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.'
+      );
+      assert.equal(result?.kind, 'onHold');
+    });
+
     it('matches regardless of case', () => {
-      const result = detectBlockingBpCondition('This BUSINESS PARTNER IS ON HOLD');
+      const result = detectBlockingBpCondition(
+        'THIS BUSINESS PARTNER IS ON HOLD FOR THIS DOCUMENT, THEREFORE IT IS NOT POSSIBLE TO COMPLETE IT.'
+      );
       assert.equal(result?.kind, 'onHold');
     });
   });
 
   describe('onHold — Spanish', () => {
-    it('matches "bloqueado" (masculine)', () => {
-      const result = detectBlockingBpCondition('El socio de negocio está bloqueado.');
+    it('matches "bloqueado para este documento" (masculine, BusinessPartnerBlocked)', () => {
+      const result = detectBlockingBpCondition(
+        'El socio de negocio Acme Corp está bloqueado para este documento, no se puede completar.'
+      );
       assert.equal(result?.kind, 'onHold');
     });
 
-    it('matches "bloqueada" (feminine)', () => {
-      const result = detectBlockingBpCondition('La cuenta seleccionada está bloqueada.');
+    it('matches "bloqueada para este documento" (feminine)', () => {
+      const result = detectBlockingBpCondition(
+        'La cuenta seleccionada está bloqueada para este documento, no se puede completar.'
+      );
       assert.equal(result?.kind, 'onHold');
+    });
+
+    it('matches the SelectedBPartnerBlocked Spanish sentence shape', () => {
+      const result = detectBlockingBpCondition(
+        'El tercero seleccionado está bloqueado para este documento, no se puede completar.'
+      );
+      assert.equal(result?.kind, 'onHold');
+    });
+  });
+
+  // ETP-5024 blocker 1 — REVIEW (Alex) queried the live AD_MESSAGE/AD_MESSAGE_TRL
+  // catalog and found these Spanish messages false-positived against the old bare
+  // `bloquead[oa]` keyword. None of them has anything to do with a BP being on
+  // hold, and one of them (`lockedProduct`) is a real, reachable Goods Shipment
+  // Complete failure that would have been silently converted from a red toast
+  // into a persistent yellow "BP blocking" banner.
+  describe('false positives the old bare-keyword pattern matched (regression, ETP-5024)', () => {
+    it('does NOT match lockedProduct (Goods Shipment Complete failure)', () => {
+      const result = detectBlockingBpCondition(
+        'el producto está bloqueado y no se puede entregar'
+      );
+      assert.equal(result, null);
+    });
+
+    it('does NOT match LinesWithLockedProducts', () => {
+      const result = detectBlockingBpCondition('Hay líneas con productos bloqueados');
+      assert.equal(result, null);
+    });
+
+    it('does NOT match CannotConsumeHoldReservation (bare "On Hold", no document)', () => {
+      const result = detectBlockingBpCondition('It is not possible to modify a On Hold reservation');
+      assert.equal(result, null);
+    });
+
+    it('does NOT match LOCKED_USER_MSG', () => {
+      const result = detectBlockingBpCondition(
+        'El usuario está bloqueado. Solicite a un administrador que lo desbloquee.'
+      );
+      assert.equal(result, null);
     });
   });
 
@@ -119,7 +207,9 @@ describe('detectBlockingBpCondition', () => {
     it('returns creditLimit when the credit-limit pattern matches first', () => {
       // Contrived, but locks in the documented "credit limit checked before
       // on-hold" order in detectBlockingBpCondition's implementation.
-      const result = detectBlockingBpCondition('credit limit exceeded, account bloqueada');
+      const result = detectBlockingBpCondition(
+        'credit limit exceeded, account is on hold for this document'
+      );
       assert.equal(result?.kind, 'creditLimit');
     });
   });

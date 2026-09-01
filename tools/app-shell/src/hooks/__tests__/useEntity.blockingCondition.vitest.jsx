@@ -57,7 +57,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
         return {
           ok: false,
           status: 400,
-          json: async () => ({ error: { message: 'Selected Business Partner is on hold' } }),
+          json: async () => ({ error: { message: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' } }),
         };
       }
       return defaultFallback();
@@ -72,7 +72,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
 
     expect(result.current.blockingCondition).toEqual({
       kind: 'onHold',
-      text: 'Selected Business Partner is on hold',
+      text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.',
     });
     expect(toast.error).not.toHaveBeenCalled();
   });
@@ -175,7 +175,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
         return {
           ok: false,
           status: 400,
-          json: async () => ({ error: { message: 'Selected Business Partner is on hold' } }),
+          json: async () => ({ error: { message: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' } }),
         };
       }
       return defaultFallback();
@@ -191,7 +191,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
 
     expect(result.current.blockingCondition).toEqual({
       kind: 'onHold',
-      text: 'Selected Business Partner is on hold',
+      text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.',
     });
     expect(toast.error).not.toHaveBeenCalled();
   });
@@ -263,7 +263,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
         return {
           ok: false,
           status: 400,
-          json: async () => ({ error: { message: 'Selected Business Partner is on hold' } }),
+          json: async () => ({ error: { message: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' } }),
         };
       }
       return defaultFallback();
@@ -289,7 +289,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
         return {
           ok: false,
           status: 400,
-          json: async () => ({ error: { message: 'Selected Business Partner is on hold' } }),
+          json: async () => ({ error: { message: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' } }),
         };
       }
       return defaultFallback();
