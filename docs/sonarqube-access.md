@@ -55,7 +55,7 @@ rtk proxy curl -sS -H "Authorization: Bearer $SONAR_TOKEN" \
 The Jenkins check **"Schema Forge Build"** with description **"Coverage Decreased"** is the
 `Compare Coverage Results` stage in `com.etendoerp.jenkins.pipelines/etendo-go/SchemaForgeJenkinsfile`,
 which calls `sonarUtils.compareCoverage(...)`. It compares the **overall project `coverage`
-metric** of your branch against the base branch (`epic/ETP-3504`) and **fails on a strict `<`**
+metric** of your branch against the base branch (`develop`) and **fails on a strict `<`**
 — i.e. any drop, even 0.1pp, blocks.
 
 This is independent of the SonarQube **Quality Gate**, which only evaluates **new code**. Adding
@@ -68,10 +68,10 @@ from this run's PR analysis (`sonar-reports/sonar-measures.json`), the base valu
 from Sonar, and the push is blocked when `current < base`.
 
 ```bash
-# Manual one-off comparison (current branch vs epic/ETP-3504)
-./run-sonar.sh --base-ref origin/epic/ETP-3504 --coverage --compare-coverage
+# Manual one-off comparison (current branch vs develop)
+./run-sonar.sh --base-ref origin/develop --coverage --compare-coverage
 # Override the comparison branch:
-./run-sonar.sh --base-ref origin/develop --coverage --compare-coverage --compare-branch develop
+./run-sonar.sh --base-ref origin/develop --coverage --compare-coverage --compare-branch main
 ```
 
 If the base branch has no coverage on Sonar yet, the check skips without blocking (matching CI,
