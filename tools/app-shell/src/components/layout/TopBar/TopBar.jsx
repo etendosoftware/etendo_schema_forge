@@ -113,11 +113,12 @@ export default function TopBar({
   }, [currentPathname]);
 
   const clearCurrentWindowScope = (event) => {
-    event.stopPropagation();
+    event?.stopPropagation();
     setIsCurrentWindowScopeEnabled(false);
-    setSearchSelectionTargets([]);
+    const allTargets = vectorSearchTargets.map(({ target }) => target);
+    setSearchSelectionTargets(allTargets);
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
-      detail: { pathname: currentPathname, targets: [] },
+      detail: { pathname: currentPathname, targets: allTargets },
     }));
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
       detail: { pathname: currentPathname, vectorSearchTarget: null },
@@ -286,14 +287,7 @@ export default function TopBar({
                 const nextValue = event.target.value;
                 setSearchValue(nextValue);
                 if (nextValue.length === 0) {
-                  setIsCurrentWindowScopeEnabled(false);
-                  setSearchSelectionTargets([]);
-                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
-                    detail: { pathname: currentPathname, vectorSearchTarget: null },
-                  }));
-                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
-                    detail: { pathname: currentPathname, targets: [] },
-                  }));
+                  clearCurrentWindowScope();
                 }
               }}
               onFocus={handleSearchClick}
@@ -308,14 +302,7 @@ export default function TopBar({
                   && event.currentTarget.selectionEnd === 0;
                 if (event.key === 'Backspace' && atStart) {
                   event.preventDefault();
-                  setIsCurrentWindowScopeEnabled(false);
-                  setSearchSelectionTargets([]);
-                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
-                    detail: { pathname: currentPathname, vectorSearchTarget: null },
-                  }));
-                  document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
-                    detail: { pathname: currentPathname, targets: [] },
-                  }));
+                  clearCurrentWindowScope(event);
                   return;
                 }
                 const result = handleSearchKeyDown(event);
