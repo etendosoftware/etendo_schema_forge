@@ -326,6 +326,8 @@ function renderLineCell({
       isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
       onCommit={(val, extras) => onCommit(row, col, val, extras)}
       ui={ui}
+      locale={locale}
+      t={t}
       data-testid="EditCell__3b7ec2" />
   ) : (
     <ReadCell
@@ -521,10 +523,13 @@ function clampToMax(col, value) {
  * The `excludeId` is derived here from `col.excludeValueOf` so the derivation + render stay
  * co-located and EditCell does not carry the extra decision point.
  */
-function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit, locale, t }) {
   // Exclude the option whose id equals the current value of a sibling field on this
   // row (e.g. newStorageBin can't be the same bin as storageBin).
   const excludeId = col.excludeValueOf ? (row?.[col.excludeValueOf] ?? null) : null;
+  // ETP-5023 — translated placeholder. Mirrors the column HEADER's own label
+  // resolution (resolveColumnLabel(col, locale, t), see the header render below)
+  // instead of the raw, always-English col.label emitted by the generator.
   return (
     <InlineSearchCombo
       field={col}
@@ -532,7 +537,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
       displayLabel={displayLabel || ''}
       options={[]}
       onChange={(id, label) => onCommit(id, { identifier: label || '' })}
-      placeholder={col.label}
+      placeholder={resolveColumnLabel(col, locale, t)}
       selectorUrl={selectorUrl}
       selectorContext={selectorContext}
       excludeId={excludeId}
@@ -545,7 +550,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui, locale, t }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -584,7 +589,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
           data-testid="LookupTrigger__3b7ec2" />
       );
     }
-    return renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit });
+    return renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit, locale, t });
   }
 
   // Enum / list field — native <select> populated from the column's enumLabels
