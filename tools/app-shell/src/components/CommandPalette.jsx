@@ -267,6 +267,12 @@ export function CommandPalette() {
       return;
     }
 
+    if (scopeOverrideTargets === undefined && currentWindowVectorTarget && selectedVectorTargetKeys === null) {
+      initializedScopeTarget.current = currentWindowVectorTarget.target;
+      setSelectedVectorTargetKeys([currentWindowVectorTarget.target]);
+      return;
+    }
+
     if (scopeOverrideTargets !== undefined) {
       setSelectedVectorTargetKeys(scopeOverrideTargets);
       return;
@@ -278,7 +284,7 @@ export function CommandPalette() {
 
     initializedScopeTarget.current = currentWindowVectorTarget.target;
     setSelectedVectorTargetKeys([currentWindowVectorTarget.target]);
-  }, [currentWindowVectorTarget, open, scopeOverrideTargets]);
+  }, [currentWindowVectorTarget, open, scopeOverrideTargets, selectedVectorTargetKeys]);
 
   useEffect(() => {
     const normalizedQuery = query.trim();
