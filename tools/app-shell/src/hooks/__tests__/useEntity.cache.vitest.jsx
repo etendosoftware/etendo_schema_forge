@@ -350,7 +350,12 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(toast.error).toHaveBeenCalled();
 
     // The record entry stays fresh → a subsequent read is served from cache.
+    // handleProcess re-reads the record version on failure (refreshRecordVersion,
+    // ETP-5073), an *uncached* GET, so the raw count may have advanced past 1.
+    // What this test verifies is that the cache was NOT invalidated — i.e. the
+    // *next* fetchById adds no further request.
+    const recordCountAfterProcess = counts.record;
     await act(async () => { a.result.current.fetchById('77'); });
-    await waitFor(() => expect(counts.record).toBe(1));
+    await waitFor(() => expect(counts.record).toBe(recordCountAfterProcess));
   });
 });
