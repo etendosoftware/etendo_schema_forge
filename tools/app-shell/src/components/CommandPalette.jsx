@@ -144,9 +144,10 @@ export function CommandPalette() {
       if (items.length === 0) return;
       if (key === 'Enter') {
         const selectedItem = items[keyboardIndexRef.current >= 0 ? keyboardIndexRef.current : 0];
-        setOpen(false);
+        const keepOpen = selectedItem?.dataset.searchKind === 'recent';
+        if (!keepOpen) setOpen(false);
         selectedItem?.click();
-        return { keepOpen: false };
+        return { keepOpen };
       }
       const delta = key === 'ArrowUp' ? -1 : 1;
       const next = (keyboardIndexRef.current + delta + items.length) % items.length;
