@@ -230,8 +230,7 @@
           "grid": true,
           "section": "principal",
           "seq": 20,
-          "readOnlyLogic": null,
-          "defaultValue": "1"
+          "readOnlyLogic": null
         },
         "orderQuantity": {
           "grid": true,

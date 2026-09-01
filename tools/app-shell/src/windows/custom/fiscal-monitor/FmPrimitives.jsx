@@ -37,6 +37,8 @@ const STATUS_CONFIG = {
   partiallyAccepted:  { cls: 'warn',    labelKey: 'fiscalMonitor.status.vf.partiallyAccepted' },
   rejected:           { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.rejected' },
   invalid:            { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.invalid' },
+  // Namespaced so it does not collide with the SII 'PE' raw code above.
+  vf_pending:         { cls: 'pending', labelKey: 'fiscalMonitor.status.vf.pending' },
 };
 
 export const StatusPill = ({ estado, onClick, title: titleProp }) => {
@@ -186,6 +188,18 @@ export function buildCsvAndDownload(filename, columnDefs, rows) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * ETP-5030 — selected-row tint. The single source of truth for the actual
+ * colour is the `.fm-row--selected` rule in fiscal-monitor.css (these tables
+ * paint their backgrounds on the CELLS, so a Tailwind `bg-primary/5` on the
+ * <tr> would be covered by `tr:hover td` at exactly the moment the user
+ * clicks the checkbox). This helper only computes the class name shared by
+ * the three monitor sections (SII, TBAI, Verifactu).
+ */
+export function selectedRowClassName(selectedIds, id) {
+  return selectedIds.has(id) ? 'fm-row--selected' : undefined;
 }
 
 export const WipBadge = ({ inline = false }) => {

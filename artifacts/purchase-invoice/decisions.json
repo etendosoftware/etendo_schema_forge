@@ -7,6 +7,9 @@
     "sendDocument": {
       "allowEmail": false
     },
+    "attachments": {
+      "saveBeforeAttach": true
+    },
     "hideDeleteWhenComplete": true,
     "hidePrintWhen": true,
     "relatedDocuments": true,

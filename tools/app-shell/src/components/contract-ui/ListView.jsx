@@ -1229,7 +1229,7 @@ export function ListView({
                     buildListQuery={hook.buildListQuery}
                     data-testid="ListExportButton__620cbc" />
                 )}
-                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="outline"
                     size="sm"

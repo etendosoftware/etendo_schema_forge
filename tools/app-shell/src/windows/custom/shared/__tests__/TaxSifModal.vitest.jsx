@@ -160,12 +160,17 @@ describe('TaxSifModal — bespoke layout (design-polish round, no EntityForm)', 
     expect(screen.getByTestId('tax-sif-modal-label-etvfacCauseNotTaxable')).toHaveTextContent('taxSif.field.verifactuNonSubject');
   });
 
-  it('renders zero fields (and the caption, but no crash) when no field applies (SII)', async () => {
+  // ETP-5027: a modal with zero applicable fields used to still render — title, tax
+  // badge, caption and a permanently-disabled Save — a dead-end dialog. It now renders
+  // nothing at all once loading has resolved.
+  it('renders NOTHING (not an empty dialog) when no field applies (SII)', async () => {
     useFiscalConfigMock.mockReturnValue({ profile: 'sii', verifactuRecord: null });
     fetchByIdMock.mockResolvedValue({ id: 'tax-3', name: 'SII tax' });
 
     render(<TaxSifModal {...baseProps({ taxId: 'tax-3' })} />);
-    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-caption')).toBeInTheDocument());
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('tax-sif-modal-caption')).not.toBeInTheDocument();
     expect(screen.queryByTestId(/tax-sif-modal-field-/)).not.toBeInTheDocument();
   });
 
@@ -536,5 +541,87 @@ describe('TaxSifModal — compound/summary tax resolution (ETP-4888 follow-up)',
     rerender(<TaxSifModal {...baseProps({ taxId: 'tax-plain' })} />);
     await waitFor(() => expect(screen.getByTestId('tax-sif-modal-tax-badge')).toHaveTextContent('Plain tax'));
     expect(fetchByCriteriaMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5027 — the `targets` document-direction pass-through.
+//
+// `useTaxSifLineRowActions` already refuses to open the modal when the gate
+// yields zero fields; the prop is defence-in-depth, so these tests drive the
+// modal directly with real `getInvoiceFiscalTargets()` output.
+// ---------------------------------------------------------------------------
+import { getInvoiceFiscalTargets } from '../fiscalTargets.js';
+
+describe('TaxSifModal — targets document-direction gate (ETP-5027)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
+    useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
+    fetchByIdMock.mockResolvedValue({ id: 'tax-1', name: 'IVA 21%' });
+    fetchByCriteriaMock.mockResolvedValue([]);
+  });
+
+  it('renders NOTHING for a VERI*FACTU purchase invoice — the key can never be sent', async () => {
+    useFiscalConfigMock.mockReturnValue({ profile: 'verifactu', verifactuRecord: { tAXType: '01' } });
+    const targets = getInvoiceFiscalTargets('purchase-invoice', 'verifactu');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+  });
+
+  it('still renders for the SAME profile on a sales invoice (proves the gate, not the profile, is what suppressed it)', async () => {
+    useFiscalConfigMock.mockReturnValue({ profile: 'verifactu', verifactuRecord: { tAXType: '01' } });
+    const targets = getInvoiceFiscalTargets('sales-invoice', 'verifactu');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-etvfacVatRegime')).toBeInTheDocument());
+  });
+
+  it('renders NOTHING for a TBAI purchase invoice outside BIZKAIA', async () => {
+    const targets = getInvoiceFiscalTargets('purchase-invoice', 'tbai', 'GIPUZKOA');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
+  });
+
+  // The deliberate loosening — assert it is ALLOWED, not merely non-crashing.
+  it('DOES render for a TBAI purchase invoice under BIZKAIA (Batuz/LROE sends purchases)', async () => {
+    const targets = getInvoiceFiscalTargets('purchase-invoice', 'tbai', 'BIZKAIA');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+  });
+
+  it('purchase orders are gated exactly like purchase invoices', async () => {
+    const targets = getInvoiceFiscalTargets('purchase-order', 'tbai', 'ARABA');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    await waitFor(() => expect(fetchByIdMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
+  });
+
+  it('omitting targets keeps the ungated behaviour (default null)', async () => {
+    render(<TaxSifModal {...baseProps()} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+  });
+
+  it('shows the loading dialog while the record is still being fetched, even when the gate will empty it', async () => {
+    // The `!loading` guard must not swallow the loading state: selectedFields is
+    // [] before `editing` exists, and returning null there would flash nothing.
+    let resolveFetch;
+    fetchByIdMock.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
+    const targets = getInvoiceFiscalTargets('purchase-invoice', 'tbai', 'ARABA');
+
+    render(<TaxSifModal {...baseProps({ targets })} />);
+    expect(screen.getByTestId('tax-sif-modal-loading')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveFetch({ id: 'tax-1', name: 'IVA 21%' });
+    });
+    await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
   });
 });
