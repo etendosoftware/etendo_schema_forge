@@ -576,6 +576,62 @@ describe('SifTab', () => {
     });
   });
 
+  // ETP-5027: the two toasts above are SII-only. The exemption cause they point at lives on
+  // the invoice HEADER and its selector is rendered exclusively inside the SII panel, so on a
+  // VERI*FACTU-only or TicketBAI-only org the toast would tell the user to fill in a field
+  // this UI never renders. The backend flag is fiscal-system-agnostic and fires on every
+  // exempt-line save, so the guard has to live here.
+
+  describe('exemption cause toasts are SII-only (ETP-5027)', () => {
+    const withWarning = { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseWarning: true };
+    const withAutoFill = { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseAutoFilled: true };
+
+    it('does NOT fire the warning toast for a verifactu-only profile', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire the info toast for a verifactu-only profile', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: withAutoFill })} />);
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire either toast for a tbai-only profile', () => {
+      mockFiscalConfig('tbai');
+      render(<SifTab {...makeProps({ data: { ...withWarning, ...withAutoFill } })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('still fires both toasts for an SII profile', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { ...withWarning, ...withAutoFill } })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+      expect(toast.info).toHaveBeenCalledTimes(1);
+    });
+
+    it('still fires for a combined sii+tbai profile', () => {
+      mockFiscalConfig('sii+tbai');
+      render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    // Suppressing a toast must NOT latch the one-shot ref: if the fiscal profile resolves
+    // late (useFiscalConfig starts unconfigured and settles on SII) the warning must still
+    // fire on the render where showSii finally becomes true, with the flag unchanged.
+    it('fires when showSii flips false -> true while the flag stays set', () => {
+      mockFiscalConfig('verifactu');
+      const { rerender } = render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+
+      mockFiscalConfig('sii');
+      rerender(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── TBAI: minimal Adjuntos-only rail (ETP-4888) ─────────────────────────────
   // ETP-4401 removed the full TBAI field panel (Chain Sequence, Invoice Series, Invoice
   // Sequence) from SifTab because chaining sequences are now generated automatically per
