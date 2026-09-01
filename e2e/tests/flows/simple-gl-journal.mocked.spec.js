@@ -141,9 +141,11 @@ test.describe('Simple G/L Journal — balance footer', () => {
   test('balanced journal: status is balanced and save is enabled, save succeeds', async ({ page }) => {
     const ctx = await openJournal(page, BALANCED_LINES);
 
-    // Footer reflects the balanced totals (debit 100 / credit 100 / diff 0).
-    const status = page.getByTestId('balance-status');
-    await expect(status).toHaveAttribute('data-balanced', 'true');
+    // Footer reflects the balanced totals (debit 100 / credit 100). The
+    // difference amount and the balanced/unbalanced badge were removed from
+    // BalanceFooterPanel (ETP-4917, DF Contabilidad §2.1 point 3) — only the
+    // two debit/credit totals render now; balance status is asserted through
+    // the save-gate behavior below instead.
     await expect(page.getByTestId('balance-total-debit')).toContainText('100');
     await expect(page.getByTestId('balance-total-credit')).toContainText('100');
 
@@ -162,15 +164,14 @@ test.describe('Simple G/L Journal — balance footer', () => {
     await expect.poll(() => ctx.wasSaveRequested(), { timeout: 5_000 }).toBe(true);
   });
 
-  test('unbalanced journal: status is unbalanced, difference shown, save is disabled', async ({ page }) => {
+  test('unbalanced journal: status is unbalanced, save is disabled', async ({ page }) => {
     await openJournal(page, UNBALANCED_LINES);
 
-    // debit 100 / credit 60 → not balanced, difference 40.
-    const status = page.getByTestId('balance-status');
-    await expect(status).toHaveAttribute('data-balanced', 'false');
+    // debit 100 / credit 60 → not balanced. The footer no longer renders a
+    // difference amount or a balanced/unbalanced badge (ETP-4917) — the
+    // unbalanced status is proven by the save-gate staying disabled below.
     await expect(page.getByTestId('balance-total-debit')).toContainText('100');
     await expect(page.getByTestId('balance-total-credit')).toContainText('60');
-    await expect(page.getByTestId('balance-difference')).toContainText('40');
 
     // Even after making the form dirty, the balance gate keeps save DISABLED.
     const descInput = page.getByTestId('field-description');
