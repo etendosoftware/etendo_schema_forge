@@ -87,4 +87,26 @@ describe('TopBar title', () => {
     expect(screen.queryByTestId('topbar-vector-search-scope')).not.toBeInTheDocument();
     window.history.pushState({}, '', '/');
   });
+
+  it('keeps vector search active after clearing the scope with Backspace', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    const selectionEvents = [];
+    const recordSelection = (event) => selectionEvents.push(event.detail);
+    document.addEventListener('schema-forge:vector-search-selection', recordSelection);
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId('global-search-input');
+    fireEvent.change(input, { target: { value: 'lentejas' } });
+    input.setSelectionRange(0, 0);
+    fireEvent.keyDown(input, { key: 'Backspace' });
+
+    const latestSelection = selectionEvents.at(-1);
+    expect(latestSelection.targets.length).toBeGreaterThan(0);
+    expect(input).toHaveValue('lentejas');
+    document.removeEventListener('schema-forge:vector-search-selection', recordSelection);
+    window.history.pushState({}, '', '/');
+  });
 });
