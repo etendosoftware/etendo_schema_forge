@@ -102,7 +102,9 @@ export async function login(page, {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            csrfToken: 'e2e-mock-csrf',
+            // No csrfToken on purpose: its presence is what resolves the scheme to `cookie`,
+            // and the mocked suite exercises the shipped default, which is still the bearer
+            // path. A cookie-scheme run is the job of the dual-scheme suites, not of every spec.
             account: { name: 'admin', email: 'admin@e2e.test' },
             environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: 'e2e-mock-org' },
             roleList: [{
