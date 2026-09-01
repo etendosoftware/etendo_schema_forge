@@ -17512,6 +17512,8 @@
     "overdueSalesInvoices": "Overdue sales invoices",
     "clearSearchScope": "Search across all windows",
     "semanticSearchResults": "Semantic results",
+    "relevantSearchResults": "Best matches",
+    "relatedSearchResults": "Other matches",
     "recentSearches": "Recent searches",
     "searchNavigate": "Navigate",
     "searchOpen": "Open",

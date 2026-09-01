@@ -17418,6 +17418,8 @@
     "overdueSalesInvoices": "Facturas de venta vencidas",
     "clearSearchScope": "Buscar en todas las ventanas",
     "semanticSearchResults": "Resultados semánticos",
+    "relevantSearchResults": "Coincidencias principales",
+    "relatedSearchResults": "Otras coincidencias",
     "recentSearches": "Búsquedas recientes",
     "searchNavigate": "Navegar",
     "searchOpen": "Abrir",

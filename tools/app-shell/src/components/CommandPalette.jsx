@@ -52,6 +52,7 @@ const ICON_MAP = {
 const RECENT_SEARCHES_KEY = 'schema-forge:recent-searches';
 const MAX_RECENT_SEARCHES = 5;
 const VECTOR_MIN_SCORE = 0.76;
+const VECTOR_RELEVANT_SCORE = 0.82;
 const VECTOR_MAX_RESULTS = 10;
 
 function normalizeSearchText(value) {
@@ -400,6 +401,36 @@ export function CommandPalette() {
     if (!Array.isArray(item.targets) || item.targets.length === 0) return true;
     return item.targets.some((target) => requestedVectorSearchTargetKeys.includes(target));
   });
+  const relevantVectorMatches = vectorMatches.filter((match) => {
+    const lexicalMatch = Object.values(match.fields || {})
+      .some((value) => normalizeSearchText(value).includes(normalizeSearchText(query.trim())));
+    return lexicalMatch || Number(match.score) >= VECTOR_RELEVANT_SCORE;
+  });
+  const relatedVectorMatches = vectorMatches.filter((match) => !relevantVectorMatches.includes(match));
+
+  const renderVectorMatch = (match) => {
+    const fields = Object.entries(match.fields || {})
+      .filter(([fieldName, value]) => value && fieldName.toLowerCase() !== 'issotrx')
+      .map(([, value]) => value);
+    const label = fields.join(' · ') || match.id;
+    const target = vectorSearchTargetsByKey.get(match.target);
+    const entityLabel = target ? tMenu(target.label) || target.label : null;
+    const score = Number.isFinite(match.score) ? `${Math.round(match.score * 100)}%` : null;
+    return (
+      <CommandItem
+        key={`${match.target}:${match.id}`}
+        value={`${query} ${label} ${match.target} ${match.id}`}
+        disabled={!target || !match.id}
+        onSelect={() => handleVectorSelect(match)}
+        data-testid="vector-search-result"
+      >
+        <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
+        <span>{label}</span>
+        {entityLabel && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{entityLabel}</span>}
+        {score && <span className="ml-auto text-xs text-muted-foreground">{score}</span>}
+      </CommandItem>
+    );
+  };
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} data-testid="CommandDialog__73263e">
@@ -522,37 +553,8 @@ export function CommandPalette() {
             })}
           </CommandGroup>
         )}
-        {vectorMatches.length > 0 && (
-          <CommandGroup heading={ui('semanticSearchResults')} data-testid="vector-search-results">
-            {vectorMatches.map((match) => {
-              const fields = Object.entries(match.fields || {})
-                .filter(([fieldName, value]) => value && fieldName.toLowerCase() !== 'issotrx')
-                .map(([, value]) => value);
-              const label = fields.join(' · ') || match.id;
-              const target = vectorSearchTargetsByKey.get(match.target);
-              const entityLabel = target ? tMenu(target.label) || target.label : null;
-              const score = Number.isFinite(match.score) ? `${Math.round(match.score * 100)}%` : null;
-              return (
-                <CommandItem
-                  key={`${match.target}:${match.id}`}
-                  value={`${query} ${label} ${match.target} ${match.id}`}
-                  disabled={!target || !match.id}
-                  onSelect={() => handleVectorSelect(match)}
-                  data-testid="vector-search-result"
-                >
-                  <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
-                  <span>{label}</span>
-                  {entityLabel && (
-                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                      {entityLabel}
-                    </span>
-                  )}
-                  {score && <span className="ml-auto text-xs text-muted-foreground">{score}</span>}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        )}
+        {relevantVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{relevantVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
         {menuConfig.menu.filter(g => !g.hidden).map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
           const visibleItems = group.items.filter(i => !i.hidden);
