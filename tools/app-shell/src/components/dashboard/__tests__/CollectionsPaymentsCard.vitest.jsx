@@ -13,9 +13,11 @@ vi.mock('@/lib/dashboardNumberFormat.js', () => ({
 }));
 
 // Mock navigation helpers. `resolveDashboardNavigation` returns null so the
-// component falls back to its hardcoded `/sales-invoice?filter=overdue` /
-// `/purchase-invoice?filter=overdue` defaults — that fallback is what we
-// verify in the populated state.
+// component falls back to its hardcoded `/sales-invoice?filter=pending` /
+// `/purchase-invoice?filter=pending` defaults — that fallback is what we
+// verify in the populated state. ETP-5012: this card shows the TOTAL
+// pending balance (any due date), so it must drill down into 'pending',
+// not the now date-restricted 'overdue' filter.
 vi.mock('@/lib/dashboardNavigation.js', () => ({
   createDashboardNavigation: (args) => args,
   resolveDashboardNavigation: () => null,
@@ -95,7 +97,7 @@ describe('CollectionsPaymentsCard', () => {
     expect(screen.getByText('50|EUR')).toBeInTheDocument();
   });
 
-  it('renders two links pointing to the fallback overdue list URLs', () => {
+  it('renders two links pointing to the fallback pending list URLs', () => {
     const { container } = render(
       <CollectionsPaymentsCard
         pendingAmounts={{
@@ -107,7 +109,7 @@ describe('CollectionsPaymentsCard', () => {
     );
     const anchors = container.querySelectorAll('a');
     const hrefs = Array.from(anchors).map((a) => a.getAttribute('href'));
-    expect(hrefs).toContain('/sales-invoice?filter=overdue');
-    expect(hrefs).toContain('/purchase-invoice?filter=overdue');
+    expect(hrefs).toContain('/sales-invoice?filter=pending');
+    expect(hrefs).toContain('/purchase-invoice?filter=pending');
   });
 });

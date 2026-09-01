@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
@@ -202,17 +203,23 @@ export default function SalesInvoiceWindow(props) {
   const docStatus = searchParams.get('DocStatus');
 
   const isOverdue = filterParam === 'overdue';
+  const isPending = filterParam === 'pending';
   const isCollectionsDueToday = filterParam === 'collectionsDueToday';
-  const isInvoiceFilter = isOverdue || isCollectionsDueToday;
+  const isInvoiceFilter = isOverdue || isPending || isCollectionsDueToday;
 
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayCalendarISO();
 
+  // ETP-5012: "overdue" must mean due date < today, not just "completed with
+  // an outstanding balance" — that broader set (any pending balance,
+  // regardless of due date) is now "pending", used by the dashboard's totals
+  // card. Otherwise a future-dated invoice was wrongly counted as overdue.
   const initialAdvancedFilter = isInvoiceFilter
     ? {
         rowOperator: 'and',
         conditions: [
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
           { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+          ...(isOverdue ? [{ field: 'eTGODueDate', operator: 'lessThan', value: todayISO }] : []),
           ...(isCollectionsDueToday
             ? [{ field: 'eTGODueDate', operator: 'equals', value: todayISO }]
             : []),
