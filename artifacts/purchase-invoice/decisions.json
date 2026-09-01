@@ -3,6 +3,9 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Invoice",
+    "vectorSearch": {
+      "target": "purchase-invoice"
+    },
     "documentDateField": "invoiceDate",
     "sendDocument": {
       "allowEmail": false

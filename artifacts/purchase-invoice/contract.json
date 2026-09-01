@@ -1,8 +1,8 @@
 {
   "version": "0.90.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-24T15:27:51.866Z",
-  "checksum": "e81504d14bd7d267",
+  "updatedAt": "2026-09-01T12:14:44.952Z",
+  "checksum": "446752a6dc616856",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -105,6 +105,9 @@
       },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "purchase-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",
@@ -5245,6 +5248,9 @@
         "allowEmail": false
       },
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "purchase-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",
@@ -10321,208 +10327,658 @@
     ],
     "actions": [
       {
+        "name": "generateTo",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "generateTo",
         "column": "GenerateTo",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/generateTo",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "142",
         "processType": "classic"
       },
       {
+        "name": "aPRMAddpayment",
+        "actionType": "paymentAction",
         "entity": "header",
-        "field": "aPRMAddpayment",
         "column": "EM_APRM_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aPRMAddpayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "9BED7889E1034FE68BD85D5D16857320",
         "processType": "obuiapp"
       },
       {
+        "name": "aPRMProcessinvoice",
+        "actionType": "paymentAction",
         "entity": "header",
-        "field": "aPRMProcessinvoice",
         "column": "EM_APRM_Processinvoice",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aPRMProcessinvoice",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "B54318B49E984B9CB855AEFB1F474CD6",
         "processType": "classic"
       },
       {
+        "name": "documentAction",
+        "actionType": "documentAction",
         "entity": "header",
-        "field": "documentAction",
         "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
         "processId": "111",
         "processType": "classic"
       },
       {
+        "name": "createLinesFromOrder",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "createLinesFromOrder",
         "column": "Createfromorders",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/createLinesFromOrder",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
         "processType": "obuiapp"
       },
       {
+        "name": "createLinesFromShipment",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "createLinesFromShipment",
         "column": "Createfrominouts",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/createLinesFromShipment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
         "processType": "obuiapp"
       },
       {
+        "name": "copyFrom",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "copyFrom",
         "column": "CopyFrom",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/copyFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "210",
         "processType": "classic"
       },
       {
+        "name": "calculatePromotions",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "calculatePromotions",
         "column": "Calculate_Promotions",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/calculatePromotions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
         "processType": "classic"
       },
       {
+        "name": "aeatsiiSend",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "aeatsiiSend",
         "column": "EM_Aeatsii_Send",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiSend",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
         "processType": "obuiapp"
       },
       {
+        "name": "aeatsiiModif",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "aeatsiiModif",
         "column": "EM_Aeatsii_Modif",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiModif",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
         "processType": "obuiapp"
       },
       {
+        "name": "tbaiXmlgenerator",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "tbaiXmlgenerator",
         "column": "EM_Tbai_Xmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/tbaiXmlgenerator",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "BE2486102F2C41779B760609FD69A225",
         "processType": "obuiapp"
       },
       {
+        "name": "processNow",
+        "actionType": "documentAction",
         "entity": "header",
-        "field": "processNow",
         "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
         "processId": "111",
         "processType": "classic"
       },
       {
+        "name": "createLinesFrom",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "createLinesFrom",
         "column": "CreateFrom",
-        "url": "/sws/neo/purchase-invoice/header/{id}/action/createLinesFrom"
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/createLinesFrom",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ]
       },
       {
+        "name": "aeatsiiDup",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "aeatsiiDup",
         "column": "EM_Aeatsii_Dup",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiDup",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "92C02F9A367140C085D1EE3BD27C4E96",
         "processType": "obuiapp"
       },
       {
+        "name": "aeatsiiUnsubscribe",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "aeatsiiUnsubscribe",
         "column": "EM_Aeatsii_Unsubscribe",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiUnsubscribe",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
         "processType": "obuiapp"
       },
       {
+        "name": "etvfacRectCreate",
+        "actionType": "createFrom",
         "entity": "header",
-        "field": "etvfacRectCreate",
         "column": "EM_Etvfac_Rect_Create",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/etvfacRectCreate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
         "processId": "E36A8BA259164E78AFDDC760172C18F5",
         "processType": "obuiapp"
       },
       {
+        "name": "tBAIQRcode",
+        "actionType": "utilityAction",
         "entity": "header",
-        "field": "tBAIQRcode",
         "column": "em_tbai_qrcode",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/tBAIQRcode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
         "processType": "obuiapp"
       },
       {
+        "name": "tbaiVoidxmlgenerator",
+        "actionType": "documentAction",
         "entity": "header",
-        "field": "tbaiVoidxmlgenerator",
         "column": "EM_Tbai_Voidxmlgenerator",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/tbaiVoidxmlgenerator",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
         "processId": "535A8BAE44A34759A7C8FF40D62A5070",
         "processType": "obuiapp"
       },
       {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
         "entity": "header",
-        "field": "psd2GenerateBankPayment",
         "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
         "entity": "header",
-        "field": "eTPRRemovePayment",
         "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "745FCF75B6F14024B96CC14429D8E952",
         "processType": "obuiapp"
       },
       {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
         "entity": "header",
-        "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
+        "name": "explode",
+        "actionType": "utilityAction",
         "entity": "lines",
-        "field": "explode",
         "column": "Explode",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/lines/{id}/action/explode",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "6E1ADD5C8B6B4ACB82237DAA8114451E",
         "processType": "classic"
       },
       {
+        "name": "matchLCCosts",
+        "actionType": "utilityAction",
         "entity": "lines",
-        "field": "matchLCCosts",
         "column": "Match_Lccosts",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/lines/{id}/action/matchLCCosts",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
         "processId": "281FFDFAB31C4394A2EAA73A6F9F3A3F",
         "processType": "obuiapp"
       },
       {
+        "name": "updatePaymentPlan",
+        "actionType": "paymentAction",
         "entity": "paymentPlan",
-        "field": "updatePaymentPlan",
         "column": "Update_Payment_Plan",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/updatePaymentPlan",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "FB740AB61B0E42B198D2C88D3A0D0CE6",
         "processType": "classic"
       },
       {
+        "name": "aprmModifPaymentOUTPlan",
+        "actionType": "paymentAction",
         "entity": "paymentPlan",
-        "field": "aprmModifPaymentOUTPlan",
         "column": "EM_Aprm_Modif_Paym_Out_Sched",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentOUTPlan",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "6F87442DF7BC43AB8A666BDED2F7D64E",
         "processType": "obuiapp"
       },
       {
+        "name": "aprmModifPaymentINPlan",
+        "actionType": "paymentAction",
         "entity": "paymentPlan",
-        "field": "aprmModifPaymentINPlan",
         "column": "EM_Aprm_Modif_Paym_Sched",
+        "requiresRecord": true,
+        "method": "POST",
         "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentINPlan",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
         "processId": "4EEB3497082C4F2182E16A4371CD5D96",
         "processType": "obuiapp"
       }
@@ -10560,6 +11016,835 @@
         "C_DocTypeTarget_ID": "Document Type"
       }
     }
+  },
+  "formState": {
+    "entities": {
+      "header": {
+        "fields": {
+          "transactionDocument": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "invoiceDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO')) | ((@EM_Aeatsii_Estado@='CO' | @EM_Aeatsii_Estado@='AE') & @IsSOTrx@='Y')",
+            "defaultValue": "@#Date@"
+          },
+          "businessPartner": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "partnerAddress": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "priceList": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "paymentTerms": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "paymentMethod": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {},
+          "salesOrder": {
+            "readOnly": true
+          },
+          "orderReference": {
+            "readOnlyLogic": "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'"
+          },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
+          "grandTotalAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "summedLineAmount": {
+            "readOnly": true,
+            "required": true
+          },
+          "currency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@C_Currency_ID@"
+          },
+          "paymentComplete": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "userContact": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "totalPaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "outstandingAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "dueAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "salesRepresentative": {},
+          "chargeAmount": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "charge": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "prepaymentAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "etsgDateOperation": {
+            "readOnlyLogic": "@processed@='Y'",
+            "defaultValue": "@DateInvoiced@"
+          },
+          "aeatsiiIssent": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "N"
+          },
+          "aeatsiiFechaRegCont": {
+            "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
+          },
+          "aeatsiiClaveTipoFc": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'F1' ELSE null END FROM dual"
+          },
+          "aeatsiiDescripcionSii": {
+            "readOnlyLogic": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
+            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t) AND c.isactive = 'Y'\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+          },
+          "aeatsiiEstado": {
+            "readOnly": true,
+            "readOnlyLogic": "true",
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN 'PE' ELSE null END FROM dual"
+          },
+          "aeatsiiErrorRegistral": {
+            "required": true,
+            "readOnlyLogic": "(@em_aeatsii_estado@!'CO' & @em_aeatsii_estado@!'AE') | @em_aeatsii_modified@='Y' | @DocStatus@='VO'",
+            "defaultValue": "N"
+          },
+          "aeatsiiIsauthorization": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeatsiiAuthorizationno": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          },
+          "aeatsiiCauseExemption": {},
+          "aeatsiiErrorCode": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "aeatsiiErrorMsg": {
+            "readOnly": true,
+            "readOnlyLogic": "true"
+          },
+          "etvfacDateIssue": {
+            "readOnly": true,
+            "readOnlyLogic": "@processed@='Y'"
+          },
+          "etvfacHash": {
+            "readOnly": true,
+            "readOnlyLogic": "@processed@='Y'"
+          },
+          "etvfacInvoiceStatus": {
+            "readOnly": true,
+            "readOnlyLogic": "@processed@='Y'"
+          },
+          "etvfacIssueDescription": {
+            "readOnly": true,
+            "readOnlyLogic": "@processed@='Y'"
+          },
+          "etvfacQRURL": {
+            "readOnly": true
+          },
+          "etvfacSentToVerifac": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etgoTotalDiscount": {},
+          "eTGODueDate": {
+            "readOnly": true
+          },
+          "eTGODeliveryStatus": {
+            "readOnly": true
+          },
+          "eTGOCurrencyRate": {}
+        }
+      },
+      "lines": {
+        "fields": {
+          "product": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "description": {},
+          "invoicedQuantity": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')",
+            "defaultValue": "1"
+          },
+          "listPrice": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "etgoDiscount": {
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "0"
+          },
+          "tax": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "account": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "operativeQuantity": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "unitPrice": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'|@GROSSPRICE@='Y'"
+          },
+          "grossUnitPrice": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'|@GROSSPRICE@='N'",
+            "defaultValue": "0"
+          },
+          "grossAmount": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "attributeSetValue": {
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "salesOrderLine": {
+            "readOnly": true
+          },
+          "goodsShipmentLine": {
+            "readOnly": true
+          },
+          "taxableAmount": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costcenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "asset": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "stDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "ndDimension": {
+            "readOnlyLogic": "@Posted@='Y'"
+          }
+        }
+      },
+      "intrastat": {
+        "fields": {
+          "invoiceLine": {
+            "readOnly": true,
+            "required": true
+          },
+          "product": {
+            "readOnly": true,
+            "required": true
+          },
+          "incoterms": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "transactionType": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "transportationType": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "portAirport": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "statisticalRegime": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "origCountry": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "nC8Code": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "netMassKg": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "hasSuplementaryUnit": {
+            "required": true,
+            "readOnlyLogic": "@INTR_INVOICE@='Y'",
+            "defaultValue": "N"
+          },
+          "conversionRate": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "staticalValue": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          },
+          "supplementaryUOM": {
+            "readOnlyLogic": "@INTR_INVOICE@='Y'"
+          }
+        }
+      },
+      "tax": {
+        "fields": {
+          "lineNo": {
+            "readOnly": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_INVOICETAX WHERE C_Invoice_ID=@C_Invoice_ID@"
+          },
+          "tax": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @Recalculate@='Y'"
+          },
+          "taxAmount": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @Recalculate@='Y'"
+          },
+          "taxableAmount": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @Recalculate@='Y'"
+          }
+        }
+      },
+      "basicDiscounts": {
+        "fields": {
+          "lineNo": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_INVOICE_DISCOUNT WHERE C_INVOICE_ID=@C_INVOICE_ID@"
+          },
+          "discount": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "cascade": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "cashVat": {
+        "fields": {
+          "paymentDate": {},
+          "percentage": {},
+          "taxAmount": {},
+          "taxableAmount": {},
+          "canceled": {},
+          "payment": {},
+          "status": {},
+          "isManualSettlement": {
+            "readOnly": true,
+            "required": true
+          },
+          "accountingDate": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "@#Date@"
+          }
+        }
+      },
+      "paymentPlan": {
+        "fields": {
+          "dueDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "expectedDate": {
+            "required": true
+          },
+          "paymentMethod": {
+            "readOnly": true,
+            "required": true
+          },
+          "amount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "paidAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "outstandingAmount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "currency": {
+            "readOnly": true,
+            "required": true
+          },
+          "lastPaymentDate": {
+            "readOnly": true
+          },
+          "daysOverdue": {
+            "readOnly": true
+          },
+          "numberOfPayments": {
+            "readOnly": true
+          },
+          "description": {}
+        }
+      },
+      "paymentDetails": {
+        "fields": {
+          "amount": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "writeoffAmount": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "amount2": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "canceled": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "finPaymentID": {
+            "readOnly": true,
+            "required": true
+          },
+          "invoicePaid": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "reversedInvoices": {
+        "fields": {
+          "reversedInvoice": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349IsCorrective": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349CYear": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349Period": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmount": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          },
+          "aEAT349BPBaseAmountS": {
+            "readOnlyLogic": "@Processed@='Y' & @DocStatus@!='VO'"
+          }
+        }
+      },
+      "exchangeRates": {
+        "fields": {
+          "currency": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
+          },
+          "toCurrency": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
+          },
+          "rate": {
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
+          },
+          "foreignAmount": {
+            "required": true,
+            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
+            "defaultValue": "0"
+          }
+        }
+      },
+      "accounting": {
+        "fields": {
+          "accountingSchema": {
+            "readOnly": true,
+            "required": true
+          },
+          "currency": {
+            "readOnly": true,
+            "required": true
+          },
+          "period": {
+            "readOnly": true,
+            "required": true
+          },
+          "accountingDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "account": {
+            "readOnly": true,
+            "required": true
+          },
+          "debit": {
+            "readOnly": true,
+            "required": true
+          },
+          "credit": {
+            "readOnly": true,
+            "required": true
+          },
+          "description": {
+            "readOnly": true
+          },
+          "businessPartner": {
+            "readOnly": true
+          },
+          "product": {
+            "readOnly": true
+          },
+          "project": {
+            "readOnly": true
+          },
+          "costcenter": {
+            "readOnly": true
+          },
+          "asset": {
+            "readOnly": true
+          },
+          "stDimension": {
+            "readOnly": true
+          },
+          "ndDimension": {
+            "readOnly": true
+          },
+          "postingType": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      },
+      "siiData": {
+        "fields": {
+          "conexinSII": {},
+          "cdigoCSV": {},
+          "estadoRegistro": {
+            "required": true
+          },
+          "comunicacion": {},
+          "motivo": {},
+          "estadoCuadre": {},
+          "fechaCuadre": {},
+          "fechaltimaModificacinSII": {}
+        }
+      },
+      "batuz": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "estado": {
+            "readOnly": true
+          },
+          "descripcion": {
+            "readOnly": true
+          },
+          "invoice": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Create and manage purchase invoice documents.",
+    "whenToUse": [
+      "Use for supplier purchase invoice before receipt or invoice."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "transactionDocument",
+        "invoiceDate",
+        "businessPartner",
+        "partnerAddress",
+        "priceList",
+        "paymentTerms",
+        "paymentMethod",
+        "currency",
+        "aeatsiiErrorRegistral",
+        "aeatsiiIsauthorization"
+      ],
+      "lineFields": [
+        "invoicedQuantity",
+        "listPrice",
+        "unitPrice",
+        "hasSuplementaryUnit",
+        "lineNo",
+        "discount",
+        "cascade",
+        "expectedDate",
+        "amount2",
+        "reversedInvoice",
+        "foreignAmount",
+        "estadoRegistro",
+        "active"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "priceList",
+        "context": {
+          "required": [
+            {
+              "param": "isSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "paymentMethod",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "userContact",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "project",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "lines",
+        "field": "tax",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "DateInvoiced",
+              "source": "parentField",
+              "field": "invoiceDate",
+              "format": "DD-MM-YYYY"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "exchangeRates",
+        "field": "currency",
+        "context": {
+          "required": [
+            {
+              "param": "C_Invoice_ID",
+              "source": "parentField",
+              "field": "invoice"
+            },
+            {
+              "param": "FIN_Payment_ID",
+              "source": "parentField",
+              "field": "payment"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [
+      "generateTo",
+      "documentAction",
+      "createLinesFromOrder",
+      "createLinesFromShipment",
+      "copyFrom",
+      "aeatsiiSend",
+      "processNow",
+      "createLinesFrom",
+      "etvfacRectCreate",
+      "tbaiVoidxmlgenerator",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Payment amount exceeds remaining balance",
+      "Payment method is not configured for the business partner",
+      "Invoice is already fully paid",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required context is missing"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "transactionDocument",
+          "invoiceDate",
+          "businessPartner",
+          "partnerAddress",
+          "priceList",
+          "paymentTerms",
+          "paymentMethod",
+          "currency",
+          "aeatsiiErrorRegistral",
+          "aeatsiiIsauthorization"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "invoicedQuantity",
+          "listPrice",
+          "unitPrice",
+          "hasSuplementaryUnit",
+          "lineNo",
+          "discount",
+          "cascade",
+          "expectedDate",
+          "amount2",
+          "reversedInvoice",
+          "foreignAmount",
+          "estadoRegistro",
+          "active"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "generateTo"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [
+      "tbaiVoidxmlgenerator"
+    ]
   },
   "testManifest": {
     "tests": [

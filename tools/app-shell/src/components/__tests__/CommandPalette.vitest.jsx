@@ -7,6 +7,7 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/sales-invoice' }),
 }));
 
 // Controlled menu fixture: one visible group with a visible and a hidden item,
@@ -53,7 +54,7 @@ vi.mock('@/components/ui/command.jsx', () => ({
   ),
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CommandPalette } from '../CommandPalette.jsx';
 
 function openPalette() {
@@ -119,5 +120,16 @@ describe('CommandPalette', () => {
     openPalette();
     // The CommandGroup heading for 'Sales' becomes 'translated:Sales'
     expect(screen.getByTestId('cmd-group-translated:Sales')).toBeInTheDocument();
+  });
+
+  it('defaults vector search to the current window target and lets the user clear that scope', async () => {
+    render(<CommandPalette />);
+    openPalette();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vector-search-scope')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('vector-search-scope'));
+    expect(screen.getByTestId('vector-search-scope')).toHaveTextContent('allWindows');
   });
 });

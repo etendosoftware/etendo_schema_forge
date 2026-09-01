@@ -4,10 +4,11 @@
  * underneath the absolutely-centered search box instead of eliding, because nothing capped the
  * width of the title's container — `truncate` alone never got a chance to activate.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => key,
 }));
 
 vi.mock('@/components/CopilotContext', () => ({
@@ -47,5 +48,26 @@ describe('TopBar title', () => {
   it('renders a short title unaffected (no visible truncation in practice)', () => {
     render(<TopBar title="Cuentas" />);
     expect(screen.getByText('Cuentas')).toBeInTheDocument();
+  });
+
+  it('shows the current contract target as a removable search scope', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    const scopeEvents = [];
+    const recordScopeEvent = (event) => scopeEvents.push(event.detail);
+    document.addEventListener('schema-forge:vector-search-scope', recordScopeEvent);
+
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('topbar-vector-search-scope-clear'));
+    expect(screen.queryByTestId('topbar-vector-search-scope')).not.toBeInTheDocument();
+    expect(scopeEvents).toContainEqual({
+      pathname: '/sales-invoice',
+      vectorSearchTarget: null,
+    });
+    document.removeEventListener('schema-forge:vector-search-scope', recordScopeEvent);
+    window.history.pushState({}, '', '/');
   });
 });
