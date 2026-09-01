@@ -35,7 +35,7 @@
 // selector/pointer-events mistakes that regressed to exactly that. The
 // pixel-level dialog-shift mechanism itself needs a real browser; that
 // belongs in Playwright E2E, not here.
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 
@@ -248,5 +248,64 @@ describe('ManualStatementModal — line date picker (real Popover/Dialog, ETP-49
     await screen.findByText('Acme');
 
     expect(screen.getByText(HINT_SAVE_TEXT)).toBeInTheDocument();
+  });
+
+  // ETP-4924 follow-up — the mousedown-suppression workaround for the
+  // "auto-scroll swallows the first click" bug.
+  //
+  // The actual bug (a newly-focused, partially-visible trigger auto-scrolling
+  // into view between mousedown and mouseup, so the resulting native `click`
+  // misses the trigger entirely) is a real-browser layout/scroll mechanism.
+  // jsdom performs no layout and implements no "scroll a focused element into
+  // view" behavior at all, so there is no way to make that mechanism actually
+  // reproduce here — a real repro belongs in Playwright E2E, not this suite.
+  //
+  // What CAN and IS verified at this level is the CODE PATH the fix adds to
+  // the row wrapper's `onMouseDown`: a mousedown whose target is the
+  // date-field's calendar-icon trigger suppresses the browser's default
+  // mousedown-focus (the thing that would trigger the auto-scroll) and
+  // re-focuses the trigger manually with `{ preventScroll: true }`; a
+  // mousedown anywhere else in the row does neither. These assertions would
+  // fail if the `onMouseDown` handler were reverted or its selector broadened
+  // incorrectly — they are not vacuous.
+  describe('mousedown suppression on the date-field trigger (code path only, ETP-4924 follow-up)', () => {
+    it('prevents the default mousedown action when the target is the calendar trigger', () => {
+      renderModal();
+      const row = firstEditRow();
+      const trigger = within(row).getByLabelText('datePickerOpen');
+
+      // `element.dispatchEvent()` (which `fireEvent` wraps) returns `false`
+      // when the event is cancelable and a handler called `preventDefault()`.
+      const notCanceled = fireEvent.mouseDown(trigger);
+
+      expect(notCanceled).toBe(false);
+    });
+
+    it('focuses the trigger manually with { preventScroll: true } on its own mousedown', () => {
+      renderModal();
+      const row = firstEditRow();
+      const trigger = within(row).getByLabelText('datePickerOpen');
+      const focusSpy = vi.spyOn(trigger, 'focus');
+
+      fireEvent.mouseDown(trigger);
+
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    });
+
+    it('does not intercept a mousedown on other row cells (e.g. the reference input)', () => {
+      renderModal();
+      const row = firstEditRow();
+      const trigger = within(row).getByLabelText('datePickerOpen');
+      const referenceInput = within(row).getByTestId('manual-line-ref');
+      const focusSpy = vi.spyOn(trigger, 'focus');
+
+      const notCanceled = fireEvent.mouseDown(referenceInput);
+
+      // Scoped strictly to the trigger: a mousedown elsewhere in the row must
+      // neither cancel its own default action nor steal focus onto the
+      // trigger — normal typing/clicking elsewhere in the row stays untouched.
+      expect(notCanceled).toBe(true);
+      expect(focusSpy).not.toHaveBeenCalled();
+    });
   });
 });
