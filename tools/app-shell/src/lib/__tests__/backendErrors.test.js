@@ -62,6 +62,55 @@ describe('translateBackendError', () => {
     }
   });
 
+  // ETP-5084: the PSD2 PIS template rejection reported live (a Salt Edge sandbox provider that does
+  // not offer DOMESTIC), plus the multi-currency registration rejections. All of these reached the
+  // payment modal but were swallowed by extractSaveError before it learned to read NEO's own
+  // `{error:{message}}` envelope, so none of them had ever needed a mapping until now.
+  describe('PSD2 PIS + multi-currency payment messages (ETP-5084)', () => {
+    const KNOWN = [
+      {
+        raw: 'The selected template is not supported by the chosen provider. Please select a different template.',
+        key: 'backendError.pisTemplateNotSupportedByProvider',
+      },
+      {
+        raw: 'A conversion rate is required when the invoice and account currencies differ',
+        key: 'backendError.conversionRateRequired',
+      },
+      {
+        raw: 'A conversion rate other than 1 is required when the invoice and account currencies differ',
+        key: 'backendError.conversionRateMustDifferFromOne',
+      },
+      {
+        raw: 'Invalid conversion rate format',
+        key: 'backendError.conversionRateInvalidFormat',
+      },
+      {
+        raw: 'Conversion rate must be greater than zero',
+        key: 'backendError.conversionRateNotPositive',
+      },
+    ];
+
+    for (const { raw, key } of KNOWN) {
+      it(`maps "${raw.slice(0, 40)}..." to key ${key}`, () => {
+        const t = (k) => (k === key ? `translated:${key}` : k);
+        assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      });
+    }
+
+    // The two "differ" messages are near-identical prefixes; a sloppy map (or a startsWith-style
+    // matcher) would collapse them into one and show the wrong instruction.
+    it('keeps the two cross-currency rate messages distinct', () => {
+      const t = (k) => `translated:${k}`;
+      const required = translateBackendError(
+        'A conversion rate is required when the invoice and account currencies differ', t);
+      const notOne = translateBackendError(
+        'A conversion rate other than 1 is required when the invoice and account currencies differ', t);
+      assert.notEqual(required, notOne);
+      assert.equal(required, 'translated:backendError.conversionRateRequired');
+      assert.equal(notOne, 'translated:backendError.conversionRateMustDifferFromOne');
+    });
+  });
+
   // ── translation missing guard ────────────────────────────────────────────────
 
   it('returns original message when t returns the key itself (key not found in locale)', () => {

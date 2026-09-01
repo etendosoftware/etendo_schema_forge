@@ -20,6 +20,11 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
   const navigate = useNavigate();
   return (
     <NavLink
+      // Placed BEFORE {...rest} on purpose: this is a fallback, not an override. Every caller
+      // passes its own testid (SideMenu's nav entries, and GuardedNavLink.vitest.jsx queries by
+      // "link"), and the codemod's default placement after the spread would have silently replaced
+      // all of them.
+      data-testid="NavLink__1b6d6d"
       {...rest}
       to={to}
       onClick={(event) => {

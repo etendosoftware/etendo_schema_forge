@@ -431,13 +431,65 @@ heuristic, not exhaustive):
   enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
   `FinancialAccountsPageHandler`), and
 - the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
-- the account currency is **EUR** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+- the **account** currency is **EUR**, **USD** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+
+The currency test is on the selected bank account, **not** the invoice (ETP-5084) — the money leaves
+the bank in the account's own currency, so that is what decides both eligibility and the template.
+The **invoice may be in any currency** that has a conversion rate; see *Cross-currency transfers*
+below. Until ETP-5084 both this gate and the backend's read the invoice currency, which is why a USD
+invoice used to hide the PIS block entirely. When the account list does not carry a currency at all
+(an older backend omits it) the gate falls back to the invoice currency, preserving the old behavior
+instead of hiding the block everywhere.
 
 The block offers a **payment template** select (`cpPisTemplateLabel` — SEPA / DOMESTIC / FPS,
-from the AD "Template List for Bank Payments" ref-list, defaulting by currency: EUR→SEPA,
-GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
+from the AD "Template List for Bank Payments" ref-list, defaulting by the **account** currency:
+EUR→SEPA, USD→DOMESTIC, GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
 `C_BP_BankAccount` IBANs, or a hand-typed one), plus an amber transfer summary and an SCA hint.
 The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
+
+The default is re-derived whenever the selected account's currency changes, so switching to a
+connected GBP account moves the template from SEPA to FPS. A template the user picks by hand is never
+overwritten afterwards. Note that **no currency maps to DOMESTIC except USD** — for a EUR or GBP
+account it remains a manual choice.
+
+### Cross-currency transfers — ETP-5084
+
+When the invoice currency differs from the account currency, the amount is **converted to the account
+currency before the bank is instructed**, and the bank is told the account's currency
+(`PisPaymentBridge` sends `amount` = the converted figure, `currency_id` = the account's). The PIS
+block's amber summary states that converted figure — what will actually leave the account — with the
+invoice amount and the rate as a following clause (`cpPisAlertConverted`), so the user is never asked
+to authorize a number the modal did not show them.
+
+**The rate is the one in the modal's conversion field** (the editable `cpConversionRate` from
+ETP-4504, prefilled from `validate-exchange-rate`). Deliberately so: it is the same value, applied
+through the same `PaymentCurrencyConverter.convertedAmount`, that the replayed payment is booked at as
+`financialTransactionAmount`. The amount instructed to the bank and the amount posted to the ledger
+therefore agree by construction. A request that omits the rate entirely (a direct API caller, never
+the SPA) gets it seeded from the invoice's own exchange rate —
+`PaymentCurrencyConverter.seedInvoiceRateIfAbsent`, the ETP-4502 contract: the invoice's
+`ConversionRateDoc` first, then the general table — written back **into the request body**, because
+that body is the intent snapshot the replay reads.
+
+The request body itself is unchanged: `actual_payment` stays in the invoice currency and
+`conversionRate` rides along; the backend does the conversion.
+
+### Backend errors are shown verbatim, not as "no se pudo guardar" — ETP-5084
+
+`registerPayment` answers a rejection in NEO Headless's own envelope,
+`{error:{message,status}}`. The modal's `extractSaveError` only read Etendo's JsonDataService shape
+(`response.error.message`), so **every** backend rejection on this endpoint — an unsupported PIS
+template, a bad conversion rate, a failed eligibility check — collapsed into the generic
+`cpSaveFailed` copy and the real reason was visible only in the network tab. It now reads the NEO
+shape first and passes the message through `translateBackendError`, so it appears in the UI language.
+
+The most common one in practice: **the connected provider does not offer the selected template**
+(`backendError.pisTemplateNotSupportedByProvider`). Salt Edge providers differ in which templates
+they accept, and the currency default (USD→DOMESTIC) is only a default — if the bank refuses it, pick
+another template in the select. A message with no mapping in `lib/backendErrors.js` is shown raw,
+which is still far better than the generic copy.
+
+The draft-delete in the payment-history popup (`deletePayment`) had the same gap and was fixed with it.
 
 ### Confirm behavior
 
@@ -615,8 +667,9 @@ transaction. Elsewhere the `PPM` status answers the same question on its own.
   `pisTemplates`, `pisSupplierAccounts`), `PisPaymentBridge` (composes the public PSD2
   `GenerateBankPayment` with Etendo Go's own `return_to`).
 
-Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
-PIS, other currencies, scheduled payments.
+Scope: purchase invoices only. Bank accounts in EUR (SEPA), USD (DOMESTIC) or GBP (FPS); the invoice
+may be in **any** currency with a conversion rate (ETP-5084). Out of scope: receipts, batch/multi-invoice
+PIS, bank accounts in other currencies, scheduled payments.
 
 ## Accounting dimension visibility per section — ETP-4529
 

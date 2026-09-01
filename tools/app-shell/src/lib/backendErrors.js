@@ -14,6 +14,26 @@ const BACKEND_ERROR_MAP = {
   'Usable Life - Years field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeYearsRequired',
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
+  // PSD2 PIS bank transfer (com.etendoerp.psd2.bank.integration AD_MESSAGE
+  // 0629302ABBB04612BEF87B7EB64E7A8E), raised by GenerateBankPayment when the connected provider does
+  // not offer the chosen payment template — e.g. a Salt Edge sandbox provider that supports SEPA but
+  // not DOMESTIC. Unlike most of that module's messages this one DOES ship a real es_ES
+  // AD_MESSAGE_TRL (in the separate `.es_es` translation module), so the backend returns Spanish when
+  // that module is installed and English when it is not; mapping the English form covers the second
+  // case and is a harmless no-op in the first (ETP-5084).
+  'The selected template is not supported by the chosen provider. Please select a different template.':
+    'backendError.pisTemplateNotSupportedByProvider',
+  // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
+  // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
+  // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
+  // not, and all four became newly VISIBLE when ETP-5084 fixed the NEO error shape the payment modal
+  // was failing to read (before that they all rendered as the generic "could not save").
+  'A conversion rate is required when the invoice and account currencies differ':
+    'backendError.conversionRateRequired',
+  'A conversion rate other than 1 is required when the invoice and account currencies differ':
+    'backendError.conversionRateMustDifferFromOne',
+  'Invalid conversion rate format': 'backendError.conversionRateInvalidFormat',
+  'Conversion rate must be greater than zero': 'backendError.conversionRateNotPositive',
   'Country needed in an IBAN account.': 'backendError.countryIban',
   // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
   // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
