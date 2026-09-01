@@ -227,4 +227,60 @@ describe('CalendarWindow', () => {
     // loud (a thrown TypeError) rather than a silent, wrongly-routed fetch.
     expect(() => render(<CalendarWindow token="tok" apiBaseUrl={undefined} />)).toThrow();
   });
+
+  it('sends the has-periods check to the open-close-period-control/periodControl endpoint', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('open-close-period-control/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) });
+    });
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('https://api.test/open-close-period-control/periodControl?criteria='),
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      );
+    });
+  });
+
+  it('offers only "Create Periods" while the year has no periods yet', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('open-close-period-control/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) });
+    });
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    await vi.waitFor(() => {
+      const processes = globalThis.__lastCalendarPageProps.processes;
+      expect(processes).toHaveLength(1);
+      expect(processes[0].name).toBe('processNow');
+    });
+  });
+
+  it('offers "Create Periods" while the has-periods check is still loading', () => {
+    global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    const processes = globalThis.__lastCalendarPageProps.processes;
+    expect(processes).toHaveLength(1);
+    expect(processes[0].name).toBe('processNow');
+  });
+
+  it('hides "Create Periods" once the year already has at least one period', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('open-close-period-control/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1' }] } }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) });
+    });
+    render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
+
+    await vi.waitFor(() => {
+      expect(globalThis.__lastCalendarPageProps.processes).toEqual([]);
+    });
+  });
 });
