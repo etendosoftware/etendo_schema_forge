@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
@@ -585,6 +586,15 @@ export function ListView({
   }, [refreshTrigger]);
 
   const navigate = useNavigate();
+  // ETP-5075 — surface the bulk-action result toast after `BulkDocumentAction`'s
+  // post-run `window.location.reload()`. It used to be wired per window, inside each
+  // hand-written `windows/custom/<w>/index.jsx` (sales-invoice, goods-shipment, …), which
+  // meant a purely pipeline-generated window with a `bulkActions` slot ran the bulk fine
+  // and then reported nothing at all. Hosting it here gives every list the toast with no
+  // per-window wiring. It cannot double-fire for the windows whose wrapper also calls it:
+  // the hook deletes the sessionStorage key before showing the toast, so whichever effect
+  // runs first consumes the result and the other finds nothing.
+  useBulkActionToast();
   // ETP-3914 — when rowQuickActions is enabled but the host did not supply
   // onEdit/onDelete, wire sensible defaults: navigate to detail and reuse the
   // shared delete confirm + DELETE pipeline. Custom overrides that pass their
@@ -913,6 +923,10 @@ export function ListView({
     data: hook.items,
     meta: hook.meta,
     onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    // ETP-5075 — lets DataTable turn an FK column in the fkNavigation registry into a
+    // click-through to the referenced document. Distinct from `onNavigate` above, which
+    // always targets THIS window's own record.
+    navigate,
     onSelectionChange: setSelectedRows,
     // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
     // headerTable that has to react to selection (e.g. financial-account swaps its own

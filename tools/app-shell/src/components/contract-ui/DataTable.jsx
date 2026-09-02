@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Inbox, X, ChevronDown, Trash2, Copy, Loader2, Pencil, Check } from 'lucide-react';
+import { Search, Inbox, X, ChevronDown, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useUI, useLocale, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -16,6 +16,7 @@ import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColum
 import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
+import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -1818,6 +1819,10 @@ export function DataTable({
   onRowSelect,
   onNavigate,
   onRowClick,
+  // ETP-5075 — router navigate, for FK columns in the fkNavigation registry. Passed in
+  // rather than pulled from useNavigate() so DataTable stays Router-agnostic (same reason
+  // onNavigate is a prop); absent ⇒ no cell is clickable.
+  navigate,
   selectedRowId,
   selectedId,
   rowHoverStyle = 'tint',
@@ -2050,7 +2055,12 @@ export function DataTable({
 
     const { display, rawValue, toggleKey } = resolveCellDisplay(row, col, optimisticToggles, displayCatalogMaps);
     const renderer = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.default;
-    return renderer({
+    // ETP-5075 — wrap at the dispatch point, not inside each renderer, so a navigable FK
+    // column works whatever cell type it resolves to. Fails closed: no registry entry, no
+    // resolvable id, or no `navigate` prop (DataTable is deliberately Router-agnostic) all
+    // fall through to the renderer's own output, untouched.
+    const navigateTo = navigate ? resolveFkNavigation(col.column, row) : null;
+    const rendered = renderer({
       row,
       col,
       display,
@@ -2068,6 +2078,19 @@ export function DataTable({
       token,
       apiBaseUrl,
     });
+    if (!navigateTo) return rendered;
+    return (
+      // stopPropagation is load-bearing: without it the row's own onNavigate/onRowClick
+      // also fires and wins, sending the user to this window's record instead.
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); navigate(navigateTo); }}
+        className="inline-flex items-center gap-1 text-left underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
+        data-testid={`fk-link-${col.key}`}>
+        {rendered}
+        <ArrowUpRight className="h-3 w-3 shrink-0" />
+      </button>
+    );
   };
 
   const handleRowActivation = useCallback((row, idx) => {
