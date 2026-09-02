@@ -11,7 +11,14 @@ import { login } from '../helpers/auth.js';
  *
  *   - useCallout's response when the Business Partner field changes (a
  *     `businessPartner` callout whose `messages` include a matching text), or
- *   - a failed Complete/process action (handleSaveAndProcess / handleProcess).
+ *   - a failed Complete/process action (handleSaveAndProcess / handleProcess), or
+ *   - (ETP-5024 follow-up) a Confirm-time PEEK of that same `businessPartner`
+ *     callout, fired right before the real Complete/Confirm request via
+ *     `peekBusinessPartnerCallout` (useCallout.js). Credit-limit-exceeded is
+ *     NOT a backend hard block (unlike BP-on-hold), so opening an EXISTING
+ *     document whose BP was selected in a PAST session — no fresh callout this
+ *     session — and clicking Confirmar used to complete silently with no
+ *     banner ever appearing. See scenario 3 below.
  *
  * Window: purchase-invoice. Its draftMode has no `onConfirm` override (see
  * `windows/custom/shared/useInvoiceWindow.js#getInvoiceDraftMode`), so its
@@ -400,6 +407,93 @@ test.describe('BP-blocking banner (ETP-5024) — purchase-invoice', () => {
       await confirmBtn.click();
 
       await expect(page.getByTestId('bp-blocking-banner')).toHaveCount(0, { timeout: 5_000 });
+    });
+  });
+
+  // ── Scenario 3: credit-limit BP already loaded on an EXISTING document —
+  //    Confirm-time peek (ETP-5024 follow-up) ───────────────────────────────
+  test.describe('credit-limit condition already loaded on an EXISTING document (Confirm-time peek)', () => {
+    const INVOICE_ID = 'pi-bpban-peek';
+    // BP_RISKY is set directly on the loaded record — no businessPartner field
+    // change happens in this session, so the field-change callout (scenario 1)
+    // never fires. This is the exact gap the peek closes: opening a document
+    // whose BP was picked in a PAST session and clicking Confirmar used to
+    // complete silently with no banner ever appearing.
+    const INVOICE = baseInvoice(INVOICE_ID, BP_RISKY);
+
+    test.beforeEach(async ({ page }) => {
+      await login(page);
+      await installCommonMocks(page, INVOICE);
+
+      // The businessPartner callout: BP_RISKY always carries the credit-limit
+      // message, whether it is fired by a field change (not used here) or by
+      // the Confirm-time peek (peekBusinessPartnerCallout hits this exact
+      // endpoint with the same payload shape as executeCallout).
+      await page.route(`**/sws/neo/${SPEC}/${ENTITY}/callout`, async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        const body = route.request().postDataJSON() ?? {};
+        if (body.field === 'businessPartner' && body.value === BP_RISKY.id) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              updates: {}, combos: {},
+              messages: [{ type: 'ERROR', text: 'Business Partner credit limit exceeded' }],
+            }),
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ updates: {}, combos: {}, messages: [] }),
+        });
+      });
+
+      // The Complete action ALWAYS succeeds — credit-limit-exceeded is NOT a
+      // backend hard block (confirmed empirically, unlike BP-on-hold), so the
+      // real document-completion request must never be affected by the peek.
+      // A short artificial delay keeps the request open long enough for the
+      // banner (set by the peek, which resolves on its own earlier request) to
+      // be observably visible before this one resolves and the success path
+      // clears it — without this, both network round-trips are mocked and can
+      // resolve within the same tick, racing the assertion below.
+      await page.route(`**/sws/neo/${SPEC}/${ENTITY}/${INVOICE_ID}/action/documentAction`, async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [{ ...INVOICE, documentStatus: 'CO', 'documentStatus$_identifier': 'Completado', documentAction: '--', processed: true }] } }),
+        });
+      });
+
+      await page.goto(`/${SPEC}/${INVOICE_ID}`);
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    });
+
+    test('clicking Confirmar surfaces the banner via the peek, and the document still completes successfully', async ({ page }) => {
+      // No banner on load — the field never changed this session, so the
+      // fresh-callout trigger (scenario 1) never fired.
+      await expect(page.getByTestId('bp-blocking-banner')).toHaveCount(0);
+
+      const confirmBtn = page.getByTestId('action-save');
+      await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(confirmBtn).toBeEnabled({ timeout: 5_000 });
+      await confirmBtn.click();
+
+      // The peek surfaces the persistent banner before the (delayed) real
+      // completion request resolves.
+      const banner = page.getByTestId('bp-blocking-banner');
+      await expect(banner).toBeVisible({ timeout: 5_000 });
+      await expect(banner).toContainText(/credit limit/i);
+
+      // Not a toast.
+      await expect(page.locator('[data-type="error"], [data-type="warning"]').filter({ hasText: /credit limit/i })).toHaveCount(0);
+
+      // The document still completes successfully — informational only, never
+      // blocked by the peek's finding.
+      await expect(page.locator('[data-type="success"]').first()).toBeVisible({ timeout: 5_000 });
     });
   });
 });

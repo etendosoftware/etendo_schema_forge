@@ -20,6 +20,7 @@ import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismiss
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
+import { useCallout } from '@/hooks/useCallout';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
@@ -861,6 +862,14 @@ export function useEntity(entity, childEntity, {
 }) {
     const ui = useUI();
     const apiFetch = useApiFetch(apiBaseUrl);
+    // ETP-5024: a SEPARATE `useCallout` instance from the one `DetailView.jsx` uses
+    // for `calloutResult` — this hook only ever reads `peekBusinessPartnerCallout`
+    // from it. Even if that function's contract ever changed, this instance's own
+    // `calloutResult`/`calloutLoading` are local state nobody reads, so they can
+    // never reach DetailView's calloutResult-driven auto-apply effect. See
+    // peekBusinessPartnerCallout's doc comment in useCallout.js for the full
+    // rationale (Confirm-time credit-limit peek, informational only).
+    const { peekBusinessPartnerCallout } = useCallout(entity, { token, apiBaseUrl });
     const [items, setItems] = useState([]);
     // The list response envelope minus the rows — i.e. any sibling of `response.data`
     // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
@@ -1734,6 +1743,18 @@ export function useEntity(entity, childEntity, {
         const saved = await handleSave({ silent: true });
         if (!saved?.id) return null;
 
+        // ETP-5024: this whole function IS the draft-mode "Save & Complete" flow, so
+        // peek the SAME businessPartner callout the field-change path already uses,
+        // right before the real completion request, using the just-saved BP value.
+        // Purely informational (credit-limit-exceeded is NOT a backend hard block,
+        // unlike BP-on-hold) — it only feeds the persistent banner via
+        // `blockingCondition`; the real request below always proceeds regardless of
+        // what it finds. See peekBusinessPartnerCallout's doc comment (useCallout.js)
+        // for why this can never collide with useCallout's own `calloutResult`.
+        const peekBpValue = saved?.businessPartner ?? editing?.businessPartner;
+        const peekCondition = await peekBusinessPartnerCallout(peekBpValue, { ...editing, ...saved });
+        if (peekCondition) setBlockingCondition(peekCondition);
+
         const { processField, processValue, extraParams } = draftModeConfig;
         // `extraParams` are merged at the top level of the body (not inside fieldValues)
         // so processes whose AD parameters are validated against the request root —
@@ -1788,7 +1809,7 @@ export function useEntity(entity, childEntity, {
         } catch { /* ignore, fall back to saved */
         }
         return saved;
-    }, [handleSave, entity, specName, refresh, ui, apiFetch]);
+    }, [handleSave, entity, specName, refresh, ui, apiFetch, editing, peekBusinessPartnerCallout]);
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
@@ -1804,6 +1825,18 @@ export function useEntity(entity, childEntity, {
             if (p.hidden) fieldValues[p.key] = p.value;
         }
         Object.assign(fieldValues, paramValues);
+
+        // ETP-5024: same Confirm-time peek as handleSaveAndProcess above, only for
+        // processes that actually complete the document (docAction / Complete /
+        // Confirm) — see isCompletionProcess. Purely informational: it only feeds
+        // the persistent banner via `blockingCondition`; the real request below
+        // always proceeds regardless of what it finds.
+        if (isCompletionProcess(process)) {
+            const peekBpValue = editing?.businessPartner ?? selected?.businessPartner;
+            const peekCondition = await peekBusinessPartnerCallout(peekBpValue, editing ?? selected ?? {});
+            if (peekCondition) setBlockingCondition(peekCondition);
+        }
+
         try {
             const res = await apiFetch(`/${entity}/${selected.id}/action/${process.columnName ?? process.name}`, {
                 method: 'POST',
@@ -1857,7 +1890,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, refresh, fetchById, ui, apiFetch]);
+    }, [selected, editing, entity, specName, refresh, fetchById, ui, apiFetch, peekBusinessPartnerCallout]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST
