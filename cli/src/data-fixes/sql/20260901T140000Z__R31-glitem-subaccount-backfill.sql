@@ -82,7 +82,7 @@
 -- C_Glitem: Client/Org copied from the SUBACCOUNT (never the schema) -- matches
 -- createGlItem(subaccount): glItem.setClient(subaccount.getClient()),
 -- glItem.setOrganization(subaccount.getOrganization()). Name = composeGlItemName's ETP-5101 format
--- "<searchKey> <name, truncated to fit>" (searchKey stored in C_ElementValue.Value -- confirmed via
+-- "<searchKey>-<name, truncated to fit>" (searchKey stored in C_ElementValue.Value -- confirmed via
 -- ElementValue.java's PROPERTY_SEARCHKEY javadoc), falling back to the (possibly truncated) bare
 -- name when the code is blank (should not happen for a real leaf, kept total to match the Java).
 -- The code leads (never truncated -- it is the more useful sort/scan key in a flat GL Item list),
@@ -121,7 +121,7 @@
 -- intact (it is what disambiguates two subaccounts sharing a name -- the entire point of prepending
 -- it) -- budget = 60 - (1 + code.length()) for the name when a code is present, 60 flat otherwise.
 -- composeGlItemName was later reordered (still same session) to lead with the code -- "<searchKey>
--- <name, truncated to fit>" -- since the code is the more useful sort/scan key in a flat GL Item
+-- -<name, truncated to fit>" -- since the code is the more useful sort/scan key in a flat GL Item
 -- list; the 60-char budget math is unchanged, only which side of the space the code sits on. This
 -- fix mirrors that EXACT current formula in SQL (Postgres `left(str, n)` is `String#substring(0,
 -- n)` here), so it converges on the identical bytes the live path now produces, not merely "no
@@ -265,7 +265,7 @@ WITH natural_combos AS (
     get_uuid() AS new_glitem_id
   FROM subaccounts_needing_new_item n
 ), created_items AS (
-  -- composeGlItemName's own format, byte-for-byte: "<searchKey> <name, truncated to fit>"
+  -- composeGlItemName's own format, byte-for-byte: "<searchKey>-<name, truncated to fit>"
   -- (searchKey = C_ElementValue.Value), falling back to the (possibly truncated) bare name when
   -- the code is blank. Mirrors truncateToFit(name, GL_ITEM_NAME_MAX_LENGTH - prefix.length())
   -- exactly: `left(str, n)` is Postgres's `String#substring(0, n)` (a hard cut, no ellipsis);
@@ -283,7 +283,7 @@ WITH natural_combos AS (
     itc.new_glitem_id, itc.ad_client_id, itc.subaccount_org_id, 'Y', now(), '0', now(), '0',
     CASE
       WHEN itc.subaccount_code IS NULL OR itc.subaccount_code = '' THEN left(itc.subaccount_name, 60)
-      ELSE itc.subaccount_code || ' ' || left(itc.subaccount_name, GREATEST(60 - length(itc.subaccount_code) - 1, 0))
+      ELSE itc.subaccount_code || '-' || left(itc.subaccount_name, GREATEST(60 - length(itc.subaccount_code) - 1, 0))
     END,
     NULL, 'N', 'N', NULL, NULL, NULL
   FROM items_to_create itc
@@ -345,7 +345,7 @@ FROM (
     ev.name AS account_name,
     CASE
       WHEN ev.value IS NULL OR ev.value = '' THEN left(ev.name, 60)
-      ELSE ev.value || ' ' || left(ev.name, GREATEST(60 - length(ev.value) - 1, 0))
+      ELSE ev.value || '-' || left(ev.name, GREATEST(60 - length(ev.value) - 1, 0))
     END AS expected_truncated_name,
     length(ev.name || ' ' || ev.value) AS original_composed_length,
     vc.c_validcombination_id AS combo_id

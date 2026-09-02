@@ -1775,8 +1775,9 @@ as the immutability trigger for a data-fix `.sql` file.
 - **2026-09-01 — `ElementValue.searchKey` (Java) stores in `C_ElementValue.Value` (DB), never a
   separate "search key" column.** Confirmed via `ElementValue.java`'s own javadoc
   (`"Property searchKey stored in column Value in table C_ElementValue"`). Matters directly for
-  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<searchKey> <name>"` format
-  (code leading, per the 2026-09-02 reorder note below) is really `"<value> <name>"` — the same
+  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<searchKey>-<name>"` format
+  (code leading per the 2026-09-02 reorder note below, hyphen-separated per the later 2026-09-02
+  separator note further below) is really `"<value>-<name>"` — the same
   5/8-digit posting code documented elsewhere in this file
   (e.g. `40700000`). **Apply:** any corrective `.sql` that needs to mirror `composeGlItemName` must
   read `ev.value`, not invent a nonexistent `searchkey` column.
@@ -1965,9 +1966,9 @@ as the immutability trigger for a data-fix `.sql` file.
   to destroy — if so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a
   workaround to avoid.
 - **2026-09-02 — Live sweep on the current (un-migrated) dev DB, R31 itself never committed here.**
-  GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000
+  GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000-
   Capital social"`). QA Testing: 3 (the 2 "Petty Cash" GL Items above, plus "Fees" →
-  `"62900 Otros servicios"` on subaccount `62900`). Both fully live-validated in `BEGIN...ROLLBACK`
+  `"62900-Otros servicios"` on subaccount `62900`). Both fully live-validated in `BEGIN...ROLLBACK`
   transactions using the real `parseFix`/`inlineParams` templating (not a hand-simplified query):
   `@check` correctly non-zero pre-apply, `@apply` updates exactly the expected row count, `@report`
   lists the correct old→new pairs, `@check` re-run in the SAME transaction (post-apply) converges
@@ -1981,3 +1982,28 @@ as the immutability trigger for a data-fix `.sql` file.
   front already covers) and `@check`'s own convergence-to-0 for any subaccount touched by a live
   rename since the preventive fix shipped makes the redundancy provably harmless, not just assumed
   safe.
+- **2026-09-02 — `composeGlItemName` changed its separator from a space to a hyphen — a SEPARATE,
+  later change from the SAME day's code-first reorder (2026-09-01/02 note above), and again a
+  pure-character change with the truncation budget math untouched.** Same session, after the
+  code-first reorder landed: the coordinator flipped `composeGlItemName` (Java) from
+  `code + " " + name` to `code + "-" + name` — the character between code and name is now a
+  hyphen, nothing else about the formula changed (the budget `60 - (code.length() + 1)` is
+  identical either way; a hyphen is 1 char, exactly like the space it replaces). Both
+  `R31-glitem-subaccount-backfill.sql` (the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation — 2 occurrences) and
+  `R32-glitem-name-resync.sql` (`@check`'s CASE expression plus `@apply`'s `resync_candidates`
+  CTE, which itself repeats the formula in both its `SELECT` and its `WHERE ... IS DISTINCT FROM`
+  guard — 3 occurrences) were updated in the SAME PR, swapping every `|| ' ' ||` composed-name
+  literal for `|| '-' ||`; the two `length(ev.name || ' ' || ev.value)` occurrences in R31's
+  `@report` (used only to sum characters for the >60 threshold, not to reproduce the actual
+  composed string) were deliberately left untouched — a hyphen and a space are both 1 byte, so
+  the sum is identical either way. Re-validated byte-for-byte against the new Java separator on
+  GOClient and QA Testing in rolled-back transactions — 0 mismatches. **Apply generally:** the
+  same lesson as the code-first reorder note applies one character at a time too — ANY edit to a
+  Java string-composition formula a corrective SQL fix mirrors byte-for-byte, however small
+  (reordering fields, or here just swapping which literal character sits between them), is an
+  equally load-bearing drift risk; grep every `.sql` file AND every doc illustrating the format
+  string (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file's own earlier N1/N2/N3
+  bullets) for the literal old separator, not just the SQL's own composed-name CASE expressions —
+  a stale illustration elsewhere will mislead the next person into mirroring the wrong,
+  now-superseded character.

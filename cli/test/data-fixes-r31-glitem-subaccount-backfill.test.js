@@ -235,7 +235,7 @@ describe('R31 data-fix — column mapping mirrors GlItemProvisioningSupport 1:1'
   it('composed name is "<searchKey/value> <name, truncated to fit>", falling back to the (possibly truncated) bare name when the code is blank', () => {
     assert.match(
       normApply,
-      /CASE WHEN itc\.subaccount_code IS NULL OR itc\.subaccount_code = '' THEN left\(itc\.subaccount_name, 60\) ELSE itc\.subaccount_code \|\| ' ' \|\| left\(itc\.subaccount_name, GREATEST\(60 - length\(itc\.subaccount_code\) - 1, 0\)\) END/i,
+      /CASE WHEN itc\.subaccount_code IS NULL OR itc\.subaccount_code = '' THEN left\(itc\.subaccount_name, 60\) ELSE itc\.subaccount_code \|\| '-' \|\| left\(itc\.subaccount_name, GREATEST\(60 - length\(itc\.subaccount_code\) - 1, 0\)\) END/i,
     );
   });
 
@@ -287,9 +287,9 @@ describe('R31 data-fix — N2 truncation (C_Glitem.Name is varchar(60)) — FIXE
     // Budget when a code is present: 60 - (1 + code.length()) — GREATEST(...,0) mirrors Java's
     // Math.max(0, maxLength) so it can never go negative (Postgres left() with a negative n has a
     // DIFFERENT meaning — "all but the last |n| chars" — which would silently disagree with Java).
-    assert.match(normApply, /itc\.subaccount_code \|\| ' ' \|\| left\(itc\.subaccount_name, GREATEST\(60 - length\(itc\.subaccount_code\) - 1, 0\)\)/i);
+    assert.match(normApply, /itc\.subaccount_code \|\| '-' \|\| left\(itc\.subaccount_name, GREATEST\(60 - length\(itc\.subaccount_code\) - 1, 0\)\)/i);
     assert.match(normApply, /left\(itc\.subaccount_name, 60\)/i, 'no-code branch truncates to the full 60-char budget');
-    // The code itself must never be truncated — it always appears in full after the space.
+    // The code itself must never be truncated — it always appears in full before the hyphen.
     assert.doesNotMatch(normApply, /left\(itc\.subaccount_code/i, 'the code must never be passed through left()/truncated');
   });
 
@@ -297,7 +297,7 @@ describe('R31 data-fix — N2 truncation (C_Glitem.Name is varchar(60)) — FIXE
     assert.match(normReport, /length\(ev\.name \|\| ' ' \|\| ev\.value\) > 60/i);
     assert.match(
       normReport,
-      /CASE WHEN ev\.value IS NULL OR ev\.value = '' THEN left\(ev\.name, 60\) ELSE ev\.value \|\| ' ' \|\| left\(ev\.name, GREATEST\(60 - length\(ev\.value\) - 1, 0\)\) END AS expected_truncated_name/i,
+      /CASE WHEN ev\.value IS NULL OR ev\.value = '' THEN left\(ev\.name, 60\) ELSE ev\.value \|\| '-' \|\| left\(ev\.name, GREATEST\(60 - length\(ev\.value\) - 1, 0\)\) END AS expected_truncated_name/i,
     );
     // Matched by equality against the actually-linked GL Item's name — a pre-existing, reused,
     // differently-named manual GL Item (e.g. "Capital social") must NOT be reported as truncated.

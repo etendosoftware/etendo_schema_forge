@@ -20,10 +20,10 @@
 -- Confirmed live on this DB (2026-09-02, rolled-back transaction, current un-migrated state --
 -- R31 itself has only ever been dry-run/rolled-back here, never committed): GOClient has exactly
 -- ONE stale-named linked GL Item -- the hand-made "Capital social" row (still its pre-ETP-5101
--- bare name, expected "10000000 Capital social"). QA Testing has THREE: two DIFFERENT GL Items
--- ("GL Item 1"/"GL Item 2") both linked to the SAME subaccount ("11100 Petty Cash") across its 2
+-- bare name, expected "10000000-Capital social"). QA Testing has THREE: two DIFFERENT GL Items
+-- ("GL Item 1"/"GL Item 2") both linked to the SAME subaccount ("11100-Petty Cash") across its 2
 -- active schemas -- a genuine pre-existing multi-GL-Item-per-subaccount state, not a duplicate to
--- collapse away -- plus one ("Fees", subaccount "62900 Otros servicios"). See the idempotency
+-- collapse away -- plus one ("Fees", subaccount "62900-Otros servicios"). See the idempotency
 -- section below for how @apply resyncs all of these correctly without double-touching a row.
 --
 -- Preventive front: ALREADY CLOSED, same session, no new Java in this ticket
@@ -94,7 +94,7 @@
 --
 -- Column mapping mirrors GlItemProvisioningSupport#composeGlItemName 1:1 (see R31's own header
 -- for the full derivation and the Postgres left()/GREATEST() vs Java substring()/Math.max() note)
--- -- "<searchKey> <name, truncated to fit>" (searchKey = C_ElementValue.Value), code leading and
+-- -- "<searchKey>-<name, truncated to fit>" (searchKey = C_ElementValue.Value), code leading and
 -- never truncated, name truncated via a hard cut. Only ad_client_id/updated/updatedby are written
 -- besides name -- no other column on C_Glitem is touched by this fix.
 --
@@ -156,7 +156,7 @@ JOIN c_glitem gi ON gi.c_glitem_id = ga.c_glitem_id AND gi.ad_client_id = :clien
 WHERE gi.name IS DISTINCT FROM (
   CASE
     WHEN nc.subaccount_code IS NULL OR nc.subaccount_code = '' THEN left(nc.subaccount_name, 60)
-    ELSE nc.subaccount_code || ' ' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
+    ELSE nc.subaccount_code || '-' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
   END
 )
 LIMIT 1;
@@ -202,7 +202,7 @@ WITH natural_combos AS (
     gi.name             AS old_name,
     CASE
       WHEN nc.subaccount_code IS NULL OR nc.subaccount_code = '' THEN left(nc.subaccount_name, 60)
-      ELSE nc.subaccount_code || ' ' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
+      ELSE nc.subaccount_code || '-' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
     END AS new_name
   FROM natural_combos nc
   JOIN c_glitem_acct ga ON ga.glitem_debit_acct = nc.combo_id
@@ -210,7 +210,7 @@ WITH natural_combos AS (
   WHERE gi.name IS DISTINCT FROM (
     CASE
       WHEN nc.subaccount_code IS NULL OR nc.subaccount_code = '' THEN left(nc.subaccount_name, 60)
-      ELSE nc.subaccount_code || ' ' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
+      ELSE nc.subaccount_code || '-' || left(nc.subaccount_name, GREATEST(60 - length(nc.subaccount_code) - 1, 0))
     END
   )
   ORDER BY gi.c_glitem_id, nc.subaccount_id

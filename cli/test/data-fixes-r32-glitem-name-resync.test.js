@@ -195,7 +195,7 @@ describe('R32 data-fix — natural_combos CTE mirrors R31 (11-dimension all-NULL
 
 describe('R32 data-fix — composed-name formula matches composeGlItemName exactly, symmetric in @check and @apply', () => {
   const bareCodeFallback = /CASE WHEN \w+\.subaccount_code IS NULL OR \w+\.subaccount_code = '' THEN left\(\w+\.subaccount_name, 60\)/;
-  const normalCase = /ELSE \w+\.subaccount_code \|\| ' ' \|\| left\(\w+\.subaccount_name, GREATEST\(60 - length\(\w+\.subaccount_code\) - 1, 0\)\) END/;
+  const normalCase = /ELSE \w+\.subaccount_code \|\| '-' \|\| left\(\w+\.subaccount_name, GREATEST\(60 - length\(\w+\.subaccount_code\) - 1, 0\)\) END/;
 
   it('@check uses the bare-code-fallback left() branch', () => {
     assert.match(normCheck, bareCodeFallback);

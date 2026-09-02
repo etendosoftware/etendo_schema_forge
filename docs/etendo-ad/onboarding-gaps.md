@@ -1448,7 +1448,7 @@ all-dimensions-NULL `C_ValidCombination` per active `C_AcctSchema` (mirroring
 subaccount already has one on ANY schema (mirrors `findGlItemLinkedToAnyCombinationOf` — verified
 against this DB's own hand-made GL Items, e.g. "Capital social"/"Sueldos y salarios", which were
 correctly reused, not duplicated), and otherwise mints exactly one new `C_Glitem` row per
-subaccount (`composeGlItemName`'s ETP-5101 `"<code> <name>"` format, code leading) shared across every schema
+subaccount (`composeGlItemName`'s ETP-5101 `"<code>-<name>"` format, code leading) shared across every schema
 that needs one. Idempotency key is the natural combination itself (`glitem_debit_acct`), never the
 GL Item name, matching the Java's own documented key choice.
 
@@ -1508,7 +1508,7 @@ preventive path, purely because of this length limit.
 
 **Fixed, same session, on BOTH fronts:**
 - **Preventive (Java, `GlItemProvisioningSupport`):** `composeGlItemName` + a new `truncateToFit`
-  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Format is `"<searchKey> <name, truncated to fit>"` — the
+  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Format is `"<searchKey>-<name, truncated to fit>"` — the
   code leads (it is the more useful sort/scan key in a flat GL Item list) and always survives
   intact; the NAME portion is truncated, hard cut (`String#substring(0, n)`, no ellipsis). Budget
   when a code is present: `60 - (1 + code.length())`; `60` flat otherwise.
@@ -1536,11 +1536,11 @@ the N1 "no GL Item at all" gap) can still carry a `C_Glitem.Name` that no longer
 resyncs it. Confirmed live on this DB (2026-09-02, rolled-back transaction, current un-migrated
 state — R31 itself has only ever been dry-run/rolled-back here, never committed): GOClient has
 exactly ONE stale-named linked GL Item — the hand-made "Capital social" row, still its
-pre-ETP-5101 bare name (`"Capital social"`) instead of the expected `"10000000 Capital social"`.
+pre-ETP-5101 bare name (`"Capital social"`) instead of the expected `"10000000-Capital social"`.
 QA Testing has THREE: two DIFFERENT GL Items (`"GL Item 1"`/`"GL Item 2"`) both linked to the SAME
-subaccount (`"11100 Petty Cash"`, one per active schema) — a genuine pre-existing
+subaccount (`"11100-Petty Cash"`, one per active schema) — a genuine pre-existing
 multi-GL-Item-per-subaccount state, not a duplicate to collapse away — plus one (`"Fees"`,
-subaccount `"62900 Otros servicios"`).
+subaccount `"62900-Otros servicios"`).
 
 **Root cause:** `GlItemProvisioningSupport#ensureGlItemForSchema`'s existing-link branch (the
 branch that fires when `findGlItemAccountsByCombination` already finds a link for the subaccount's
@@ -1600,11 +1600,11 @@ R31's own simpler post-apply recompute.
 
 **Live-validated in rolled-back transactions (2026-09-02):**
 - **GOClient:** `@check` → 1 row; `@apply` → 1 row updated; `@report` → `10000000 | Capital social
-  | Capital social -> 10000000 Capital social`; `@check` re-run in the SAME transaction (post-apply)
+  | Capital social -> 10000000-Capital social`; `@check` re-run in the SAME transaction (post-apply)
   → 0 rows; `@apply` re-run → 0 rows (idempotent).
 - **QA Testing:** `@check` → 1 row (its `LIMIT 1`, correctly non-zero); `@apply` → 3 rows updated;
-  `@report` → `11100 | Petty Cash | GL Item 2 -> 11100 Petty Cash`, `11100 | Petty Cash | GL Item 1
-  -> 11100 Petty Cash`, `62900 | Otros servicios | Fees -> 62900 Otros servicios`; `@check` re-run
+  `@report` → `11100 | Petty Cash | GL Item 2 -> 11100-Petty Cash`, `11100 | Petty Cash | GL Item 1
+  -> 11100-Petty Cash`, `62900 | Otros servicios | Fees -> 62900-Otros servicios`; `@check` re-run
   → 0 rows; `@apply` re-run → 0 rows (idempotent).
 
 Both runs were executed against the live DB inside `BEGIN ... ROLLBACK` (nothing committed) using
