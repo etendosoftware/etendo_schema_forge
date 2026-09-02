@@ -83,6 +83,12 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
     }
   };
 
+  // Named rather than nested inside the submit button's loading ternary: two levels of ternary in
+  // JSX is what Sonar flags, and the label is easier to read as its own line anyway.
+  const submitLabel = enrolling
+    ? ui('accountCreatePasswordAction')
+    : ui('onboardingSavePasswordAction');
+
   return (
     <Dialog
       open={open}
@@ -159,7 +165,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
                   {ui('onboardingSavingPassword')}
                 </>
               ) : (
-                enrolling ? ui('accountCreatePasswordAction') : ui('onboardingSavePasswordAction')
+                submitLabel
               )}
             </Button>
           </DialogFooter>

@@ -91,6 +91,25 @@ export default function AccountSettingsPage() {
     logout();
   };
 
+  // The loaded half of the body, named so the JSX below carries one ternary instead of two nested.
+  // A failed load must not fall through to the section: with no authMethods it would render its
+  // `{ enabled: false }` default and tell the user their account has no password.
+  const loadedBody = loadFailed ? (
+    <div className="space-y-3" data-testid="account-settings-load-error">
+      <p className="text-sm text-muted-foreground">{ui('accountMethodsLoadFailed')}</p>
+      <Button variant="outline" size="sm" onClick={load} data-testid="account-settings-retry">
+        {ui('retry')}
+      </Button>
+    </div>
+  ) : (
+    <SecuritySection
+      authMethods={authMethods}
+      removing={removing}
+      onRemove={handleRemove}
+      onChangePassword={() => setChangePasswordOpen(true)}
+      data-testid="SecuritySection__account" />
+  );
+
   return (
     <div className="mx-auto w-full max-w-3xl p-6" data-testid="account-settings-page">
       <h1 className="text-xl font-semibold">{ui('accountSettingsTitle')}</h1>
@@ -98,21 +117,7 @@ export default function AccountSettingsPage() {
       <div className="mt-6 space-y-6">
         {loading
           ? <p className="text-sm text-muted-foreground">{ui('loading')}</p>
-          : loadFailed ? (
-            <div className="space-y-3" data-testid="account-settings-load-error">
-              <p className="text-sm text-muted-foreground">{ui('accountMethodsLoadFailed')}</p>
-              <Button variant="outline" size="sm" onClick={load} data-testid="account-settings-retry">
-                {ui('retry')}
-              </Button>
-            </div>
-          ) : (
-            <SecuritySection
-              authMethods={authMethods}
-              removing={removing}
-              onRemove={handleRemove}
-              onChangePassword={() => setChangePasswordOpen(true)}
-              data-testid="SecuritySection__account" />
-          )}
+          : loadedBody}
       </div>
 
       <ChangePasswordDialog
