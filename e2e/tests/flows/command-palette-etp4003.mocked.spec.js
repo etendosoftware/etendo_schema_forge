@@ -71,15 +71,15 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
 
   test('closing and reopening the palette works', async ({ page }) => {
     await page.keyboard.press('Control+k');
-    const input = page.locator('[cmdk-input]').first();
+    const input = page.getByTestId('global-search-input');
     await expect(input).toBeVisible({ timeout: 5_000 });
     // Close with Escape — press on the focused input so cmdk intercepts it
     await input.press('Escape');
     // The input is the persistent top-bar control; only the dropdown closes.
-    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('CommandDropdown__8e5d1a')).toHaveCount(0, { timeout: 5_000 });
     // Reopen
     await page.keyboard.press('Control+k');
-    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('CommandDropdown__8e5d1a')).toBeVisible({ timeout: 5_000 });
   });
 
   test('top-bar search keeps scope controls synchronized with the dropdown', async ({ page }) => {

@@ -277,6 +277,11 @@ export default function TopBar({
                 handleSearchClick(event);
               }}
               onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setSearchOpen(false);
+                  return;
+                }
                 if (!searchOpen && event.key !== 'Escape') setSearchOpen(true);
                 const atStart = event.currentTarget.selectionStart === 0
                   && event.currentTarget.selectionEnd === 0;
