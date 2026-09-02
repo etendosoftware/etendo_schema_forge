@@ -176,3 +176,86 @@ The reset **request** screen says *"te enviaremos un enlace para restablecer tu 
 somebody who is about to create a first one. It lives in `@etendosoftware/etendo-go-core`
 (`LoginStep.jsx`) and is decision §8.2 in the main plan. The confirm screen is already correct
 (*Crear nueva contraseña*), so this is one sentence, not a flow.
+
+## Coverage matrix — every flow, and where it stands
+
+Added 2026-09-02, after the local end-to-end pass and the deploy. Three states, and the middle one
+is the one worth reading carefully:
+
+- **LOCAL** — exercised end to end on a developer machine, through the real UI or the real API
+  against the deployed backend. Believed working.
+- **UNIT** — covered by tests, and by tests only. The code path has never run against a real
+  request. A green unit test says the logic is right, not that the wiring is.
+- **EXP** — cannot be checked locally at all; needs experimental. The reason is in the E-item.
+
+### Authentication and recovery
+
+| # | Flow | State | Evidence / why not |
+|---|---|---|---|
+| 1 | Register with a password | LOCAL | `201`, post-deploy smoke |
+| 2 | Log in with a password | LOCAL | `200`, post-deploy smoke |
+| 3 | `GET /me` returns `authMethods` | LOCAL | password-only, SSO-only and both, read in the browser |
+| 4 | Reset request, account **with** a password → `reset-password` mail | LOCAL | pre-existing behaviour, unchanged |
+| 5 | **Reset request, SSO account with no password → `set-password` mail** | LOCAL | AUTH-05. Real inbox, correct accents, "Crear contraseña" button |
+| 6 | Reset confirm creates the password, SSO identity intact | LOCAL | DB showed `password_hash` set **and** `auth_provider = google` |
+| 7 | Log in with the newly created password on an SSO account | LOCAL | both methods coexist, proven at runtime |
+| 8 | Change password (supplying the current one) | LOCAL | pre-existing behaviour |
+| 9 | Enrol a password through change-password when there is none | UNIT | the `enrolling` branch; no local run |
+| 10 | SSO login, existing account | **EXP** | E2. Needs a real Google assertion |
+| 11 | SSO login, brand-new account | **EXP** | E2 |
+| 12 | Throttle: 3 mails per recipient per 900 s | **EXP** | E7 area; local sink does not exercise the real limiter |
+
+### Method management (phase 4)
+
+| # | Flow | State | Evidence / why not |
+|---|---|---|---|
+| 13 | Remove an SSO identity | LOCAL | browser; row gone from the DB |
+| 14 | Remove the password, supplying the current one | LOCAL | browser; `enabled: false` afterwards |
+| 15 | Remove the only remaining method → `409 LAST_AUTH_METHOD` | LOCAL | API and browser, twice |
+| 16 | Remove a method the account lacks → `404` | LOCAL | API |
+| 17 | Remove the password without the current one → `400` | LOCAL | API. Was the bug: no UI path supplied it |
+| 18 | **Session token rotates and the browser keeps it** | LOCAL | `ff4e…` → `1c5f…`, `/me` 200 after. Was the bug |
+| 19 | Legacy identity materialised lazily on read | LOCAL | one `/me` created the child row; 4 more left exactly 1 |
+| 20 | A second, different identity is refused | UNIT | `linkIfCompatible`; E3 confirms it on real data |
+| 21 | The `(auth_provider, external_subject)` constraint fires | **EXP** | E6. Needs the real schema after `update.database` |
+| 22 | `soleIdentityOf` throws on a second identity | UNIT | unreachable by design; no account has two |
+
+### Account settings UI (phase 4b)
+
+| # | Flow | State | Evidence / why not |
+|---|---|---|---|
+| 23 | `/account` lists the methods the server reports | LOCAL | browser |
+| 24 | Sole method: Remove disabled, with the explaining tooltip | LOCAL | drawn from `removable: []` |
+| 25 | Two methods: both Remove buttons enabled | LOCAL | browser |
+| 26 | Confirmation asks for the current password, and only for the password | LOCAL | browser |
+| 27 | Screen redraws from the server's `removable` after a removal | LOCAL | password button re-disabled on its own |
+| 28 | **Load failure shows an error, never "no password set"** | LOCAL | forced a 500; was the bug |
+| 29 | Retry after a failed load recovers | LOCAL | browser |
+| 30 | The 409 reaches the user translated, not as the generic sentence | LOCAL | forced the real race; toast read the Spanish copy |
+| 31 | Account entry in the user menu, unconditional | LOCAL | browser |
+| 32 | Password change still signs the user out | UNIT | covered in specs; not re-run in the browser after the move |
+
+### Deploy-time and infrastructure
+
+| # | Flow | State | Evidence / why not |
+|---|---|---|---|
+| 33 | **Orphan pre-check before deploying** | partial | E0 passed on experimental; **must still be run against production** |
+| 34 | No account already holds two identities | LOCAL | zero rows; re-run before any deploy that carries the guard |
+| 35 | `set-password` mail rendered by the real gateway | **EXP** | E7. The local sink is not the provider |
+| 36 | Reset link points at the real host | **EXP** | E5 |
+
+### What the matrix says
+
+Everything in **phases 4 and 4b is LOCAL** — the removal flow and its screen were used, not just
+tested. That is where the three defects came from, and none of them would have been found any other
+way.
+
+**Every remaining EXP item is an SSO login or an email.** Both need something a developer machine
+cannot provide: a real Google assertion, and the real mail gateway. That is the honest shape of the
+risk — the parts we could exercise, we exercised; the parts we could not are the ones that touch
+another system.
+
+The two **UNIT** items worth naming: item 9, the change-password enrolment branch, has never served
+a real request; and item 32, the sign-out after a password change, moved from the menu to the page
+during 4b and was re-covered by tests but not re-clicked. Neither is exotic, both are cheap to
+confirm the moment somebody is in front of the screen.
