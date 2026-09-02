@@ -335,10 +335,16 @@ describe('WarehouseTransactionsTable', () => {
         },
       ],
     });
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
     render(<WarehouseTransactionsTable {...defaultProps} />);
     expect(screen.getByText('IC-0007')).toBeInTheDocument();
     fireEvent.click(screen.getByText('IC-0007'));
-    expect(mockNavigate).toHaveBeenCalledWith('/internal-consumption/HDR-IC-1');
+    expect(openSpy).toHaveBeenCalledWith(
+      `${window.location.origin}/internal-consumption/HDR-IC-1`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 
   it('renders a dash placeholder when no document label can be resolved at all', () => {
