@@ -26,9 +26,15 @@ export function useYearHasPeriods(yearId, periodControlApiBaseUrl) {
   const [hasPeriods, setHasPeriods] = useState(undefined);
   const apiFetch = useApiFetch(periodControlApiBaseUrl);
 
-  const load = useCallback(async () => {
+  // `isStale` lets a caller opt into the cancellation-guard convention used elsewhere in this
+  // codebase (e.g. `useViewerRole.js`'s `cancelled` flag) without forcing it on every call site:
+  // the mount/`yearId`-change effect below passes one so a late-resolving response from a
+  // superseded `yearId` (or one that arrives after unmount) can't overwrite fresher state; the
+  // `neo:processSuccess` effect further down doesn't need it — it's a single fire-and-refresh
+  // call, not one that gets superseded by a new call for a different `yearId`.
+  const load = useCallback(async (isStale = () => false) => {
     if (!yearId) {
-      setHasPeriods(undefined);
+      if (!isStale()) setHasPeriods(undefined);
       return;
     }
     try {
@@ -39,15 +45,19 @@ export function useYearHasPeriods(yearId, periodControlApiBaseUrl) {
       // as { response: { data: [...] } } — matches PeriodsExpandablePanel.jsx's fetchJson fallback
       // (also tolerates a flat { data: [...] } or bare array shape).
       const rows = body?.response?.data ?? body?.data ?? (Array.isArray(body) ? body : []);
-      setHasPeriods(rows.length > 0);
+      if (!isStale()) setHasPeriods(rows.length > 0);
     } catch {
-      setHasPeriods(null);
+      if (!isStale()) setHasPeriods(null);
     }
   }, [yearId, apiFetch]);
 
   useEffect(() => {
+    let cancelled = false;
     setHasPeriods(undefined);
-    load();
+    load(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   // Refresh right after "Create Periods" succeeds — the same cross-subtree `neo:processSuccess`
