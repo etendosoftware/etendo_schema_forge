@@ -2465,7 +2465,7 @@
       "description": "Number of days the product is guaranteed or available"
     },
     "A_Asset_Group_ID": {
-      "label": "Asset Category",
+      "label": "Asset Group",
       "description": "A classification of assets based on similar characteristics."
     },
     "IsDepreciated": {
@@ -13843,8 +13843,8 @@
       "label": "Invoiceable Expenses"
     },
     "Asset Group": {
-      "label": "Asset Category",
-      "newLabel": "New category"
+      "label": "Asset Group",
+      "newLabel": "New group"
     },
     "Employee Expenses": {
       "label": "Employee Expenses"
@@ -14913,7 +14913,7 @@
       "label": "System"
     },
     "Asset Category": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Attribute Set": {
       "label": "Attribute Set"
@@ -24574,7 +24574,7 @@
       "label": "Create AP Expense Invoices"
     },
     "Asset Group": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Create Shipments from Orders": {
       "label": "Create Shipments from Orders"

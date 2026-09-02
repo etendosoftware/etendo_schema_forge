@@ -1,8 +1,8 @@
-# Asset Category
+# Asset Group
 
 ## Intent
 
-Asset Category lets finance users maintain the master records that classify fixed assets. Each category defines a named grouping (e.g. "Machinery", "Vehicles"), the depreciation policy applied to assets in that category, and the two GL accounts required to post depreciation. The window lives in the Finance section of the menu, after Assets.
+Asset Group lets finance users maintain the master records that classify fixed assets. Each group defines a named grouping (e.g. "Machinery", "Vehicles"), the depreciation policy applied to assets in that group, and the two GL accounts required to post depreciation. The window lives in the Finance section of the menu, after Assets.
 
 ## What this window should allow
 
@@ -20,7 +20,7 @@ The depreciation policy fields are shown conditionally: they only appear when **
 ## Interaction model
 
 - **Route:** `/asset-group` for the list and `/asset-group/:recordId` for record detail.
-- **Visibility:** visible in the Finance menu as **Asset Category** (after Assets).
+- **Visibility:** visible in the Finance menu as **Asset Group** (after Assets).
 - **Implementation type:** generated window loaded from `tools/app-shell/src/windows/registry.js` into the generic `/:windowName` shell route. No custom wrapper — the registry points directly to the generated `AssetCategoryPage`.
 - **Window shape:** master + inline-editable child. `assetCategory` is the header entity (table `A_Asset_Group`, AD_Window_ID 252). `accounting` is the child entity (table `A_Asset_Group_Acct`, AD_Tab_ID 800204), rendered as an inline-editable grid.
 - **List behavior:** the category list shows Name and Description. Both columns are visible in the grid.
@@ -143,15 +143,15 @@ The dictionary key for this window is `"Asset Group"` — the stable AD window n
 
 ```json
 // en_US.json → windows
-"Asset Group": { "label": "Asset Category", "newLabel": "New category" }
+"Asset Group": { "label": "Asset Group", "newLabel": "New group" }
 
 // es_ES.json → windows
-"Asset Group": { "label": "Categoría de Activos", "newLabel": "Nueva categoría" }
+"Asset Group": { "label": "Grupo de activo", "newLabel": "Nuevo grupo" }
 ```
 
-The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so if a `menus["Asset Group"]` entry ever exists it takes precedence over the `windows` entry for the title and breadcrumb. In the current build, only the `windows` section carries this key, which is the canonical source.
+The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so if a `menus["Asset Group"]` entry ever exists it takes precedence over the `windows` entry for the title and breadcrumb.
 
-The generated page uses `entityLabel="Asset Category"` (for the detail title) and `entityLabel="Asset Group"` (for the list breadcrumb) — the list still reads the raw AD name; the detail renders the localized label from `windows[key].label`.
+The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows["Asset Group"]`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label` and `windows["Asset Group"].label` both resolve to the same string per locale ("Asset Group" / "Grupo de activo"). Before this fix they showed different, inconsistent text ("Categoría de Activos" vs "Grupo de activos").
 
 ## Non-obvious gotchas
 
@@ -179,7 +179,7 @@ For `depreciate`, using `defaultExpr: "N"` ensures the backend serves `IsDepreci
 
 ### No draftMode / Confirm button
 
-The Confirm/Save button seen on transactional windows (Sales Order, Internal Consumption) is a `draftMode` completion flow — it reflects a document lifecycle with an explicit Complete action. Asset Category is a master-data window and has no such lifecycle. The standard Save button is correct here. The generated `AssetCategoryPage.jsx` confirms this: `const draftMode = null`.
+The Confirm/Save button seen on transactional windows (Sales Order, Internal Consumption) is a `draftMode` completion flow — it reflects a document lifecycle with an explicit Complete action. Asset Group is a master-data window and has no such lifecycle. The standard Save button is correct here. The generated `AssetCategoryPage.jsx` confirms this: `const draftMode = null`.
 
 ## Pipeline commands
 
@@ -206,7 +206,7 @@ node cli/src/push-to-neo.js asset-group
 
 ## Automated evidence
 
-- `tools/app-shell/src/menu.json` places **Asset Category** under the Finance menu (after Assets), using `"name": "asset-group"`.
+- `tools/app-shell/src/menu.json` places **Asset Group** under the Finance menu (after Assets), using `"name": "asset-group"`. The raw `label`/`favname` in `menu.json` still read `"Asset Category"` — that string is not shown directly, it is used as the `useMenuLabel()` lookup key, which resolves through `dictionary.tabs["Asset Category"].label` (updated by ETP-4986) to the unified displayed text.
 - `tools/app-shell/src/windows/registry.js` maps `'asset-group'` to the generated page at `@generated/asset-group/generated/web/asset-group/...`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryForm.jsx` defines the header form fields: `name`, `description` (`span: 2`, `rows: 1`), `depreciate` (checkbox), and the conditional depreciation-policy fields, each carrying a `displayLogic: (record) => ...` arrow function and `section: 'principal'`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `secondaryTabs` (Accounting), `linesLayout="inlineEditable"`, `hidePrint`, `noHeaderBorder`, and `AttachmentsTab` in `customTabs`.
@@ -254,7 +254,7 @@ and `usableLifeMonths` carry `min: 1, integer: true` with their amortize-based `
 
 ### Manual verification (ETP-4542)
 
-1. Open an Asset Category with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
+1. Open an Asset Group with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
    **Usable Life - Months** is visible.
 2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a toast
    error appears ("Value must be at least 1" or "Value must be a whole number", or the Spanish
@@ -289,7 +289,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 
 ## Manual verification
 
-1. Open the Finance menu and confirm **Asset Category** appears after Assets.
+1. Open the Finance menu and confirm **Asset Group** appears after Assets.
 2. Open `/asset-group` and confirm the list loads with Name and Description columns.
 3. Confirm the custom Sort and Refresh icons appear in the list toolbar and that the Print and Link icons do not appear.
 4. Create a new category, confirm the **Depreciate** checkbox starts unchecked, and confirm the record saves with only Name supplied (no depreciation fields required while Depreciate is off).
