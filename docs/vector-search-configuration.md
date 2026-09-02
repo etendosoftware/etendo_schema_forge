@@ -55,7 +55,8 @@ The user-facing `contacts` spec is backed by `C_BPartner`. Its target is `busine
 
 1. Run `update.database` after versioning the source data, then `export.database`; a clean diff confirms ownership and dataset export are stable.
 2. Query `GET /sws/neo/vectorsearch` with a valid session and the declared target. A `422 VECTOR_COLLECTION_NOT_FOUND` means the target's source, provider, or collection is not active yet.
-3. In the command palette, enter at least three characters. On an opted-in window, verify that its localized removable scope pill appears and that the request includes only that target; remove it and verify the request includes every opted-in target. During the request, the localized semantic-loading placeholder is visible. Semantic results render before page-navigation results, show the contract label and score, and open the matching spec in edit mode.
+3. Through MCP, call `neo_vector_search` with `query` and a `targets` array. It is read-only and requires `neo:read`; DB Extended authorizes each target against its physical source entity before searching.
+4. In the command palette, enter at least three characters. On an opted-in window, verify that its localized removable scope pill appears and that the request includes only that target; remove it and verify the request includes every opted-in target. During the request, the localized semantic-loading placeholder is visible. Semantic results render before page-navigation results, show the contract label and score, and open the matching spec in edit mode.
 
 ## Edge cases
 
