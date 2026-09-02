@@ -156,13 +156,32 @@ const VERIFACTU_REGIME_BY_TAX_TYPE = {
  *     non-subject (and not exempt). So: normal → [régimen]; non-subject →
  *     [régimen, no-sujeción]; exempt → [régimen, exención].
  *
+ * `targets` (optional) applies the DOCUMENT-DIRECTION gate on top of the profile:
+ * the profile says which systems the ORG has configured, `targets` says which of
+ * them the DOCUMENT this field/badge is rendered for can actually be sent to (see
+ * `getInvoiceFiscalTargets()` — VERI*FACTU is sales-only, TBAI reaches purchases
+ * only under BIZKAIA). Without it, a purchase invoice on a VERI*FACTU org asked for
+ * a régimen key that can never be transmitted (ETP-5027). Omitting `targets` keeps
+ * the pre-ETP-5027 profile-only behavior, which is what the Tax window's own header
+ * form wants: there is no document there, so no direction to gate on.
+ *
+ * @param {object}  args
+ * @param {string}  args.profile active fiscal profile
+ * @param {object}  [args.verifactuRecord] VERI*FACTU config record (drives the tax type)
+ * @param {object}  args.data the tax record
+ * @param {Function} args.ui i18n resolver
+ * @param {{showTbai: boolean, showVerifactu: boolean}} [args.targets] document-direction
+ *   gate from `getInvoiceFiscalTargets()`. When omitted, no direction gating is applied.
  * @returns {Array<object>} EntityForm select-field descriptors (0, 1, or 2).
  */
-export function selectSifFields({ profile, verifactuRecord, data, ui }) {
+export function selectSifFields({ profile, verifactuRecord, data, ui, targets = null }) {
   const exempt = isEtendoTrue(data?.taxExempt);
   const nonTaxable = isEtendoTrue(data?.notTaxable);
+  // `targets == null` → caller has no document direction to gate on (Tax window).
+  const tbaiAllowed = targets ? Boolean(targets.showTbai) : true;
+  const verifactuAllowed = targets ? Boolean(targets.showVerifactu) : true;
 
-  if (TBAI_PROFILES.has(profile)) {
+  if (TBAI_PROFILES.has(profile) && tbaiAllowed) {
     if (exempt) {
       return [buildField('tBAICausaDeExencion', 'EM_Tbai_Exemptioncause', 'taxSif.field.tbaiExemption', 'tbaiExemption', ui)];
     }
@@ -177,7 +196,7 @@ export function selectSifFields({ profile, verifactuRecord, data, ui }) {
   // Unlike TBAI, the régimen field is independent of exempt/non-subject: it is
   // always shown (driven by the config tax type), and the exención OR no-sujeción
   // field is shown ADDITIONALLY when the tax's own flags say so.
-  if (profile === 'verifactu' && verifactuRecord) {
+  if (profile === 'verifactu' && verifactuRecord && verifactuAllowed) {
     const fields = [];
     const regime = VERIFACTU_REGIME_BY_TAX_TYPE[verifactuRecord.tAXType];
     if (regime) {
@@ -191,7 +210,10 @@ export function selectSifFields({ profile, verifactuRecord, data, ui }) {
     return fields;
   }
 
-  // unconfigured | sii | sii-navarra | conflict → nothing at tax level
+  // unconfigured | sii | sii-navarra | conflict → nothing at tax level.
+  // Also lands here when the profile DOES have a tax-level field but the document's
+  // own direction rules it out (ETP-5027): a purchase document under VERI*FACTU, or
+  // under TBAI outside Bizkaia.
   return [];
 }
 
