@@ -453,6 +453,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.sc-t-key { color: var(--sc-fg-3); font-weight: 400; }
 .sc-t-time { font: 400 12px/16px 'Inter', sans-serif; color: var(--sc-fg-3); flex-shrink: 0; }
 .sc-t-preview {
   font: 400 13px/18px 'Inter', sans-serif;
