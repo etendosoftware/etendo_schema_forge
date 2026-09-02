@@ -18923,7 +18923,7 @@
     "financeAccountStatementsManualColContactName": "Contact name",
     "financeAccountStatementsManualColContact": "Contact",
     "financeAccountStatementsManualColGlItem": "Accounting account",
-    "financeAccountStatementsManualGlItemPlaceholder": "Search accounting account…",
+    "financeAccountStatementsManualGlItemPlaceholder": "Search account…",
     "financeAccountStatementsManualContactPlaceholder": "Search contact…",
     "financeAccountStatementsManualAddLinesCta": "Add lines",
     "financeAccountStatementsManualAddLinesCtaDesc": "Enter the statement movements by hand",
