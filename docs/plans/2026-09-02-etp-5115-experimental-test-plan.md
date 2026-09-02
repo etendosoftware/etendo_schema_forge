@@ -17,9 +17,35 @@ Two hard limits, both properties of the local environment rather than of the cod
 Experimental has neither limit: SSO is configured (`ETGO_SSO_GOOGLE_CLIENT_ID` is set on the task
 definition) and real Google-born accounts exist — the AUTH-05 report came from one.
 
+## Measured on experimental, 2026-09-02
+
+Reached over SSH (`etendo-go-experimental`, `/opt/EtendoERP/gradle.properties`) against
+`etendo-experimental.cfm2qm242otk.eu-west-3.rds.amazonaws.com` — the experimental RDS, not
+production. Read-only queries.
+
+| | |
+|---|---|
+| Accounts | 152 |
+| With an SSO identity | 20 |
+| With no local password | 14 |
+| Both — SSO and no password | **14** |
+
+**The AUTH-05 root cause is confirmed against the reported row itself**: the reporter's account on
+this environment carries `auth_provider = google` and `password_hash = null`. That is no longer an
+inference from code or a second-hand report.
+
+**Fourteen accounts on experimental currently have no way to recover access at all** — no password to
+reset, and until this change no way to give themselves one. That is the blast radius, counted rather
+than estimated, and it is the number to weigh when scheduling the deploy.
+
+The 20 SSO accounts are also the population for **E1**: each needs a child row, and none has one
+yet, so the lazy migration has 20 real subjects waiting.
+
 ## Before anything else: a pre-deploy check that can fail the deploy
 
-**E0 — orphan rows behind the four new foreign keys.** Not a test of this feature; a gate on it
+**E0 — orphan rows behind the four new foreign keys. ✅ PASSED on experimental 2026-09-02** — all
+four counts zero. Still to be run on any other environment before the constraints reach it; the
+result below is for experimental only. Not a test of this feature; a gate on it
 reaching the environment at all. The constraints were verified to have no orphans **on the local
 database only**, and `update.database` applies them everywhere. One orphan row and the deploy stops
 half-applied.
