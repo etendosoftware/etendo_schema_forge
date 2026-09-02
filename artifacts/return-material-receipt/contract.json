@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-08-13T11:56:58.624Z",
-  "updatedAt": "2026-08-31T12:35:28.009Z",
-  "checksum": "285f8eb1f756329c",
+  "updatedAt": "2026-09-02T16:49:13.915Z",
+  "checksum": "fba2ae17c6b947bf",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -12,7 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrintWhen": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -267,43 +271,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "docStatusCl"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "statusComplete"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "docStatusDr"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "docStatusNa"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "docStatusWp"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "docStatusRe"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "docStatusTemp"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "docStatusIp"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "docStatus"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "docStatusVo"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -697,7 +731,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrintWhen": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
