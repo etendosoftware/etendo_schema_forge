@@ -1064,6 +1064,93 @@ describe('translateBackendError — bank-statement sync result (ETP-4891)', () =
   });
 });
 
+// ETP-4984 — StringPropertyValidator "Value too long" (core, org.openbravo.base.validation).
+// Raised whenever a saved string exceeds its AD column's field length. Deliberately generic:
+// the matcher locates the fixed "Value too long. Length " / ", maximum allowed " markers
+// regardless of the "<EntityName>.<PropertyName>: " prefix ValidationException prepends, and
+// regardless of which entity/column triggered it — this is not Assets-specific.
+describe('translateBackendError — field too long (ETP-4984, StringPropertyValidator)', () => {
+  const en = fakeUiTranslator({
+    'backendError.fieldTooLong': 'This value is too long. It must not exceed {maxLength} characters.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.fieldTooLong': 'Este valor es demasiado largo. No puede superar los {maxLength} caracteres.',
+  });
+
+  describe('with the real reported "<Entity>.<field>: ..." prefix', () => {
+    const RAW = 'FinancialMgmtAsset.name: Value too long. Length 122, maximum allowed 60 '
+      + '[11321313212313654654484651643547354845435434113211312121313654...]';
+
+    it('translates to en_US, interpolating the maximum allowed length', () => {
+      assert.equal(
+        translateBackendError(RAW, en),
+        'This value is too long. It must not exceed 60 characters.',
+      );
+    });
+
+    it('translates to es_ES, interpolating the maximum allowed length', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Este valor es demasiado largo. No puede superar los 60 caracteres.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(RAW, (k) => k), RAW);
+    });
+  });
+
+  describe('without any "<Entity>.<field>: " prefix (prefix-independent match)', () => {
+    const RAW = 'Value too long. Length 500, maximum allowed 255 [some truncated description text...]';
+
+    it('still matches and translates, interpolating 255', () => {
+      assert.equal(
+        translateBackendError(RAW, es),
+        'Este valor es demasiado largo. No puede superar los 255 caracteres.',
+      );
+    });
+  });
+
+  it('interpolates different maximum-allowed values correctly (60 vs 255)', () => {
+    const rawName = 'FinancialMgmtAsset.name: Value too long. Length 80, maximum allowed 60 [abc...]';
+    const rawDescription = 'FinancialMgmtAsset.description: Value too long. Length 300, maximum allowed 255 [abc...]';
+    assert.equal(
+      translateBackendError(rawName, es),
+      'Este valor es demasiado largo. No puede superar los 60 caracteres.',
+    );
+    assert.equal(
+      translateBackendError(rawDescription, es),
+      'Este valor es demasiado largo. No puede superar los 255 caracteres.',
+    );
+  });
+
+  it('does not match an unrelated not-null violation message', () => {
+    const unrelated = 'FinancialMgmtAsset.name: The name is mandatory';
+    assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+
+  it('does not match an unrelated duplicate-key message', () => {
+    const unrelated = 'There is already an asset category with this name.';
+    // This one IS a known exact-match entry (assetGroupNameDuplicate) — assert it does NOT
+    // fall through to fieldTooLong's translation, proving matcher order/priority is intact.
+    const translated = translateBackendError(unrelated, fakeUiTranslator({
+      'backendError.assetGroupNameDuplicate': 'Ya existe una categoría de activo con este nombre.',
+      'backendError.fieldTooLong': 'Este valor es demasiado largo. No puede superar los {maxLength} caracteres.',
+    }));
+    assert.equal(translated, 'Ya existe una categoría de activo con este nombre.');
+  });
+
+  it('does not match a message missing the closing "]" (malformed/truncated skeleton)', () => {
+    const malformed = 'Value too long. Length 122, maximum allowed 60 [11321313212313654654484651643';
+    assert.equal(translateBackendError(malformed, es), malformed);
+  });
+
+  it('does not match a message missing the ", maximum allowed " marker', () => {
+    const malformed = 'Value too long. Length 122 [some value]';
+    assert.equal(translateBackendError(malformed, es), malformed);
+  });
+});
+
 // ── ETP-4983: asset (category / search key) uniqueness validation ────────────────
 //
 // AssetHandler (com.etendoerp.go) rejects a duplicate asset category name / asset
