@@ -341,6 +341,13 @@
 
 ## ETP-4503 — Payment-method multicurrency defaults (G1 / R14, 2026-07-16)
 
+> **Superseded in part by ETP-5084 (2026-08-31, R29).** The bank-transfer exception recorded below —
+> multicurrency forced OFF on the transfer link of a PSD2-connected Bank account — was **removed**.
+> The findings about the two columns, the two tables and the `em_psd2_is_bank_transfer` seed-vs-live
+> divergence all still hold and are still load-bearing for R15/R24. See the ETP-5084 entry at the end
+> of this section for what changed and why.
+
+
 - **2026-07-16 — "Multicurrency" is TWO independent columns, not one.** `payin_ismulticurrency` AND
   `payout_ismulticurrency` on BOTH `fin_paymentmethod` (the method template) and
   `fin_finacc_paymentmethod` (the per-account link). Both are `character(1)` with column default
@@ -370,7 +377,9 @@
   Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
   same bank-connected account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
 - **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
-  not in each handler.** `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
+  not in each handler.** *(The exception itself was removed by ETP-5084 — see the 2026-08-31 entry
+  below. The choke-point reasoning is kept because it still governs
+  `disableAutomaticWithdrawnForTransferMethod` and anything else added to a connect path.)* `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
   call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
   `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
   lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers
@@ -426,6 +435,24 @@
   — the failure mode inverts from "missing nicety" to "blocked user".
 
 ---
+
+- **2026-08-31 (ETP-5084) — the bank-transfer exception was WRONG, and it is now gone.** The premise
+  was "a PSD2 transfer executes in the account's own currency, so multicurrency on that link would be
+  misleading". The first half is true and the conclusion does not follow: because the transfer is
+  instructed in the account currency, a foreign invoice is settled by **converting** the amount first
+  (invoice → account, with the invoice's own rate — the ETP-4502 contract), which is exactly what a
+  multi-currency link means. The exception blocked two real operations: cross-currency PIS payment of
+  an invoice, and cross-currency bank reconciliation through the transfer method (refused by
+  `ReconciliationPaymentService.assertMethodMultiCurrency`). **Removed:**
+  `FinancialAccountSupport.disableMulticurrencyForBankTransfer` (deleted) and its call from
+  `FinancialAccountBankConnectionHandler.linkAccount`. **Repaired:** `R29-transfer-link-multicurrency`
+  enables both columns on every template and every link, with no predicate and no exception — so it
+  needs none of the fragile transfer-method identification R14/R15/R24 depend on. **R14 is retired**
+  (`retired.json`), because its effect 2 would keep re-applying the exception and fight R29 on every
+  run. **Apply:** when a corrective fix's premise is an *inference* about a business rule rather than
+  an observed DB fact, record the inference explicitly — this one survived three tickets before
+  anyone questioned whether "executes in the account currency" implies "cannot settle a foreign
+  invoice".
 
 ## Imported Bank Statement "Estado" stuck at Borrador after PSD2 sync — R25 (L1)
 
@@ -575,6 +602,8 @@
 
 ## ETP-4736 — Stuck Average-Cost queue: outbound-first product with zero cost history (H3, R18, 2026-08-03)
 
+> **Superseded / historical:** R18 is retired as of ETP-4706's 2026-08-28 QA follow-up. It remains documented here as historical Average-cost analysis, but it is no longer the current remediation path for Etendo Go tenants because Standard costing is now the intended model. Current Standard-cost missing-initial-cost remediation is `R28-standard-cost-anchor` (J2), which seeds `CostType='STA'` rows instead of Average `AVA` anchors.
+
 - **2026-08-03 — `CostingBackground.getTransactionsBatch()` (core `org.openbravo.costing`) orders its whole pending-work queue by `trx.transactionProcessDate` (column `TRXPROCESSDATE`), then `trxtype.sequenceNumber`, `movementQuantity desc`, `id` — CONFIRMED via direct source read, never `MovementDate`.** The query also spans EVERY org that has an applicable validated `CostingRule` (via `AD_ISORGINCLUDED`) and EVERY eligible product (`producttype='I' AND isstocked=true`, movement type in `ad_ref_list` reference `189`) — it is one global FIFO, not per-product. **Apply:** any costing-queue diagnosis or fix must resolve "the next transaction to be costed" via `trxprocessdate`, never `movementdate` — they can and do diverge (a transaction's `MovementDate` can be set to any user-chosen date, but `TrxProcessDate` reflects when it was actually recorded/completed).
 - **2026-08-03 — `CostingBackground.doExecute()` commits each transaction individually but a thrown `OBException` is only caught by the OUTER try/catch, which `rollbackAndClose()`s and RETURNS — it does NOT skip the bad transaction and continue.** So ONE uncostable transaction anywhere in the global FIFO halts EVERY transaction queued after it, for EVERY product, not just the one that failed. Empirically confirmed live (reporter's investigation): an unrelated, previously-healthy product stalled at the exact same date as the real blocker purely because it was queued later. **Apply:** a costing gap's blast radius is fleet-wide-by-date, not product-scoped — but the ROOT-CAUSE fix only needs to target the actual blocking product(s) (zero cost history + outbound-first); every downstream "victim" self-resolves once the blocker is removed and the background job runs again.
 - **2026-08-03 — `AverageAlgorithm.getOutgoingTransactionCost()` throws `@NoAvgCostDefined@` exactly when `getProductCost()` finds no matching `M_Costing` row.** `getProductCost()` filters `product = X AND startingDate <= trxprocessdate AND endingDate > trxprocessdate AND costType='AVA' AND cost IS NOT NULL AND organization = <cost org>` (`AND warehouse = <trx warehouse>` only if the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, else `warehouse IS NULL`). Zero `M_Costing` rows for a product ⇒ this always returns null ⇒ always throws for the FIRST outbound movement (there's no cost basis yet). **Apply:** the fix is to seed exactly this table/shape — an `M_Costing` row with `costType='AVA'`, dated at/before the blocking transaction's `TrxProcessDate`, `dateto` far in the future (core's own convention: `CostingUtils.getLastDate()` = `31-12-9999`) — this is the SAME mechanism the M_Costing window's "Manual" checkbox uses for a human-entered opening cost; `ISMANUAL='Y'` marks it as such.
@@ -596,8 +625,16 @@
 - **2026-08-03 — The live webapp context on this sandbox is `etendogoclean` (matches `gradle.properties`' `bbdd.sid`), NOT `etendo`.** `scripts/neo-token-sysadmin.sh` / `neo-token-groupadmin.sh` default `BASE_URL` to `.../etendo`, which 404s here — override with `ETENDO_URL=http://localhost:8080/etendogoclean` (or hit `/sws/login` directly). Tomcat is reachable at `localhost:8080` (via OrbStack; `ps aux` shows no local `java` process, the JVM runs inside the OrbStack VM, not on the host) — check `volumes/tomcat/webapps/` for which contexts are actually deployed before assuming a login URL.
 - **2026-08-03 — Posting a document (`AcctServer#post` via the ETP-4298 `DocumentPostingService`) synchronously triggers `CostingServer` for ALL of that product's pending transactions it touches, not just the one being posted — the separate `CostingBackground` scheduled process is NOT the only way to make average-cost seeding "take effect."** Observed live: posting only the Goods Shipment (R18's actual target) also cost-processed the LATER Goods Receipt transaction for the same product as a side effect (the seeded manual `M_Costing` row's `dateto` auto-narrowed to the Receipt's `TrxProcessDate`, and a new engine-computed `ismanual='N'` row appeared for it, `cumstock`/`cumcost` correctly reflecting 233-10 units at cost 23). **Apply:** when validating a costing-anchor data-fix end-to-end without access to trigger the scheduled background job, posting any ONE downstream document for the affected product is sufficient proof — no need to hunt for how to run `CostingBackground` manually.
 - **2026-08-03 — GAP CROSS-REFERENCE: a Goods Receipt's OWN posting can still fail with `"Account could not be found."` even after H3/R18 is fully applied — this is a SEPARATE, already-tracked gap, not a new one and not R18's scope.** Root cause: `C_BP_Group_Acct.NotInvoicedReceipts_Acct` NULL for the receipt's business-partner group (core resolves this account purely by BP group, `AcctServer#getAccount` `ACCTTYPE_NotInvoicedReceipts`/`selectNotInvoicedReceiptsAcct` — never by product/product-category). **Already diagnosed and already fixed on a different, unmerged branch:** `.worktrees/ETP-4706/cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` (gap A2b, ETP-4706) — same GOClient tenant, same BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`), same NULL column, backfilling from `C_AcctSchema_Default.NotInvoicedReceipts_Acct`. **Apply:** if a Goods Receipt post fails with a generic "Account could not be found" AFTER confirming the transaction itself is costed (`m_transaction.isprocessed='Y'`), check `C_BP_Group_Acct` for the receipt's BP group before assuming it's a costing/H3 regression — it's most likely gap A2b, and R17 (ETP-4706) is the existing remedy; don't re-diagnose or re-fix from scratch, just sequence that branch's merge.
-- **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed — R18's `blocking_products` candidate query is missing core's own `costingStatus <> 'S'` filter.** Read `src/org/openbravo/costing/CostingBackground.java` (`getTransactionsBatch()`/`getTransactionsBatchCount()`, this local Etendo core checkout) directly to confirm: the real HQL candidate-selection predicate is `trx.isProcessed = false AND trx.costingStatus <> 'S' AND p.productType = 'I' AND p.stocked = true AND trxtype.reference.id = :refid AND trxtype.searchKey = trx.movementType AND trx.transactionProcessDate <= now() AND trx.organization.id in (:orgs)`. R18's `blocking_products` CTE (both `@check` and `@apply`) reproduces every other predicate (`isactive='Y'`, `isprocessed='N'`, `producttype='I'`, `isstocked='Y'`, the `ad_ref_list`/reference-189 movement-type join) but never filters `costing_status <> 'S'` (column `M_TRANSACTION.COSTING_STATUS`, default `'NC'`, VARCHAR(60), set to `'CC'` by `CostingRuleProcess`/`CostingServer` once a transaction is cost-cleared/adjusted — no `'S'`-setter found in this checkout, so its origin/meaning is not yet pinned down here). **Consequence:** a transaction sitting in `costing_status='S'` would be miscounted as "blocking" by R18's `@check`/`@apply` even though core's own background job would skip it outright — a real, structural drift from the query R18's header claims to mirror. **Unexercised on every tenant checked this session** (no transaction anywhere in the local sandbox has `costing_status='S'`), so it has not caused an observed incorrect apply — flagged as a follow-up, not blocking. **Apply:** any future revision of R18 (or a sibling costing fix) should add `AND t.costing_status <> 'S'` to `blocking_products` in both `@check` and `@apply` to fully match core's candidate-selection semantics.
-- **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed) — R18's seeded `m_warehouse_id` ignores `AverageAlgorithm.getProductCost()`'s production override, independent of `M_Costing_Rule.WAREHOUSE_DIMENSION`.** Read `src/org/openbravo/costing/AverageAlgorithm.java`'s `getProductCost(...)` directly: the warehouse filter is gated by `if (costDimensions.get(CostDimension.Warehouse) != null && !product.isProduction())` — i.e. even when the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, a lookup for a **production-flagged** product (`M_Product.Production='Y'`) ALWAYS falls to the `warehouse is null` branch, never `warehouse.id = :warehouse`. R18's `uses_warehouse_dimension` flag (feeding `CASE WHEN uses_warehouse_dimension THEN trx_warehouse_id ELSE NULL END`) is derived purely from the `M_Costing_Rule.WAREHOUSE_DIMENSION`/`ISVALIDATED` check and never consults `is_production` (a column R18 already resolves, for the SEPARATE `cost_org_id` decision) — so a production-flagged blocking product under a warehouse-dimensioned rule would get a seeded row with a non-NULL `m_warehouse_id` that `getProductCost()` would never actually match against for that product (it always searches `warehouse IS NULL` for production items), silently defeating the anchor for that one product/warehouse-rule combination. **Unexercised on every tenant checked this session** (every `M_Costing_Rule` row found had `WAREHOUSE_DIMENSION='N'`, so the interaction never triggers here). **Apply:** any future revision should extend `uses_warehouse_dimension` (or the final `m_warehouse_id` `CASE`) with `AND NOT f2.is_production`/`f.is_production='N'`, mirroring the same override `cost_org_id` already applies for production products.
+- **2026-08-03 — KNOWN LIMITATION (historical only, not to be fixed in R18 now that it is retired) — R18's `blocking_products` candidate query is missing core's own `costingStatus <> 'S'` filter.** Read `src/org/openbravo/costing/CostingBackground.java` (`getTransactionsBatch()`/`getTransactionsBatchCount()`, this local Etendo core checkout) directly to confirm: the real HQL candidate-selection predicate is `trx.isProcessed = false AND trx.costingStatus <> 'S' AND p.productType = 'I' AND p.stocked = true AND trxtype.reference.id = :refid AND trxtype.searchKey = trx.movementType AND trx.transactionProcessDate <= now() AND trx.organization.id in (:orgs)`. R18's `blocking_products` CTE (both `@check` and `@apply`) reproduces every other predicate (`isactive='Y'`, `isprocessed='N'`, `producttype='I'`, `isstocked='Y'`, the `ad_ref_list`/reference-189 movement-type join) but never filters `costing_status <> 'S'` (column `M_TRANSACTION.COSTING_STATUS`, default `'NC'`, VARCHAR(60), set to `'CC'` by `CostingRuleProcess`/`CostingServer` once a transaction is cost-cleared/adjusted — no `'S'`-setter found in this checkout, so its origin/meaning is not yet pinned down here). **Consequence:** a transaction sitting in `costing_status='S'` would be miscounted as "blocking" by R18's `@check`/`@apply` even though core's own background job would skip it outright — a real, structural drift from the query R18's header claims to mirror. **Unexercised on every tenant checked this session** (no transaction anywhere in the local sandbox has `costing_status='S'`), so it has not caused an observed incorrect apply.
+- **2026-08-03 — KNOWN LIMITATION (historical only, not to be fixed in R18 now that it is retired) — R18's seeded `m_warehouse_id` ignores `AverageAlgorithm.getProductCost()`'s production override, independent of `M_Costing_Rule.WAREHOUSE_DIMENSION`.** Read `src/org/openbravo/costing/AverageAlgorithm.java`'s `getProductCost(...)` directly: the warehouse filter is gated by `if (costDimensions.get(CostDimension.Warehouse) != null && !product.isProduction())` — i.e. even when the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, a lookup for a **production-flagged** product (`M_Product.Production='Y'`) ALWAYS falls to the `warehouse is null` branch, never `warehouse.id = :warehouse`. R18's `uses_warehouse_dimension` flag (feeding `CASE WHEN uses_warehouse_dimension THEN trx_warehouse_id ELSE NULL END`) is derived purely from the `M_Costing_Rule.WAREHOUSE_DIMENSION`/`ISVALIDATED` check and never consults `is_production` (a column R18 already resolves, for the SEPARATE `cost_org_id` decision) — so a production-flagged blocking product under a warehouse-dimensioned rule would get a seeded row with a non-NULL `m_warehouse_id` that `getProductCost()` would never actually match against for that product (it always searches `warehouse IS NULL` for production items), silently defeating the anchor for that one product/warehouse-rule combination. **Unexercised on every tenant checked this session** (every `M_Costing_Rule` row found had `WAREHOUSE_DIMENSION='N'`, so the interaction never triggers here).
+
+## ETP-4706 — Standard-cost initial anchor after R18 retirement (J2, R28, 2026-08-28)
+
+- **2026-08-28 — R18's Average anchor is obsolete under the current Standard-cost direction.** R18 wrote `M_Costing.CostType='AVA'`, but `CostingUtils.getStandardCostDefinition` only accepts `STA` first and legacy `ST` second. An AVA row does not satisfy the Standard-cost lookup, so R18 is retired through `cli/src/data-fixes/retired.json` instead of being edited or deleted.
+- **2026-08-28 — `InvalidCostWhichProduct` is the Standard-cost missing-input symptom.** In `DocInOut`, an unposted Goods Receipt / Goods Shipment line with no material transaction falls through to `CostingUtils.hasStandardCostDefinition(product, legalEntity, dateAcct, costDimensions)`. If no active `STA`/`ST` cost covers that accounting date, core sets `STATUS_InvalidCost`; `AcctServer.determineTitleByStatus` returns `@InvalidCostWhichProduct@`, whose English text is `There is no cost defined for the product: @Product@ on @Date@`.
+- **2026-08-28 — R28 seeds Standard rows, not Average rows.** `R28-standard-cost-anchor` inserts manual `M_Costing` rows with `CostType='STA'`, `IsManual='Y'`, `IsPermanent='Y'`, `M_Warehouse_ID=NULL`, and `DateFrom` equal to the earliest unposted document accounting date that lacks an active Standard/legacy Standard cost. `DateTo` is open-ended only when no later active `STA`/`ST` cost exists; otherwise it is bounded to that later row's `DateFrom`.
+- **2026-08-28 — The fallback cost remains an accounting unblocker, not a confirmed business cost.** R28 uses purchase price first, then sales price, then literal `1` when no product price exists. Any row that falls to `1` must be reviewed/corrected by finance after the posting blocker is cleared.
+- **2026-08-28 — User-facing messaging stays non-technical.** Etendo Go maps the unresolved core literal to `backendError.costNotCalculated`, so users see a retry-later message because the cost may still be calculated by the background process; they are not asked to understand `M_Costing`, cost types, or costing rules.
 ## ETP-4761 — Locator inventory status defaults to Available, negative-stock guard (I1, R19, 2026-08-03)
 
 - **2026-08-03 — `M_INVENTORYSTATUS` fixed system ids (confirmed live, `ad_client_id='0'`):**
@@ -1433,6 +1470,51 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   checksum verification `retired.json` itself needs, computed on-demand for retired fixIds only, not
   stored anywhere or computed for the whole catalog on every run.
 
+## ETP-4947 — C_AcctSchema.AllowNegative defaults checked, investigation (2026-08-28)
+
+- **2026-08-28 — Gap A3 (ETP-4245) is the root cause, and it is a direct REVERSAL, not a fresh
+  gap.** ETP-4245 (`onboarding-gaps.md` A3, 2026-07-06) deliberately flipped
+  `C_ACCTSCHEMA.ALLOWNEGATIVE` from N to Y on BOTH fronts -- preventive:
+  `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` (`<ALLOWNEGATIVE><![CDATA[Y]]>`, commit
+  `47ff5aa8 Feature ETP-4245`, the only commit ever touching that line since the file's creation);
+  corrective: `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql`
+  (`UPDATE c_acctschema SET allownegative='Y', iscentrallymaintained='Y' ...`). The stated reason at
+  the time was a Confluence Test Plan case (TC-38) that expected "Allow Negatives=Yes". ETP-4947 now
+  reports the opposite requirement (should default unchecked/N). Apply: before scoping any
+  corrective/preventive work for ETP-4947, get product/QA to confirm TC-38 is superseded -- otherwise
+  the fix would just flip the same field back and forth across tickets.
+- **2026-08-28 -- Confirmed empirically: NOT a live "copy GOClient's row at onboarding time" bug --
+  it's the frozen onboarding dataset XML being imported verbatim, exactly per the documented
+  dataset-only mechanism.** `OnboardingDatasetImportService`/`OnboardingDatasetNormalizer` import
+  `C_ACCTSCHEMA.xml` as bundled classpath data; grepped the whole `com.etendoerp.go` module -- zero
+  Java references to allownegative/AllowNegative outside `GeneralLedgerConfigurationHandler`
+  (the Neo Headless read/write passthrough for the window itself, which has no default-injection
+  logic -- `buildGeneral`/`applyGeneralChanges` just mirror the DB column both ways). So GOClient's
+  live DB row happening to also show Y is a side-effect of the same ETP-4245 change having been
+  applied to GOClient's own row too (to keep XML and live GOClient in sync, per the project's own
+  convention), not a runtime dependency of onboarding on GOClient's live state.
+- **2026-08-28 -- Live DB sweep (dev DB, 2026-08-28): 12/12 GO-onboarded C_AcctSchema rows show Y,
+  the one N is irrelevant.** All of: GOClient (`802509E12436405C86BA1FD5B1DF508C`,
+  `C06B100312FA48159DB36B9A4B461019`, "Esquema GO"), DSAFSAD, 4x "E2E User 1/2 *" (E2E test
+  automation clients), QA Testing (2 schemas: Main + USA), SantoEmpresa -- all allownegative='Y'.
+  The only N is F&B International Group (`23C59575B9CF467C9620760EB255B389`, both its schemas) --
+  but that client's `ad_client.created = 2013-07-04`, i.e. it's stock Openbravo/Etendo-core demo
+  data bundled with the base product, never onboarded through the GO flow at all -- not a
+  counter-example, just an unrelated control case. Caveat: every sampled tenant on this dev DB is a
+  QA/E2E/test artifact, not a real paying customer -- this sample says nothing about whether any
+  real production tenant has ever manually re-toggled the field after onboarding (see next entry).
+- **2026-08-28 -- No field-level audit trail exists to distinguish "still the untouched onboarding
+  default" from "a user explicitly checked it after the fact."** `ad_changelog` does not exist on
+  this DB/version (`relation "ad_changelog" does not exist`) and `ad_table` has no isaudited-style
+  column either. A blanket corrective `UPDATE ... SET allownegative='N'` cannot distinguish the two
+  cases -- the 100%-uniform Y across every sampled tenant (zero variance) is circumstantial evidence
+  they're all still on the frozen default, but it is NOT proof for any given production tenant.
+  Apply: any corrective data-fix for this gap either accepts this residual risk explicitly
+  (documented, product-approved) or needs a different signal entirely (e.g. cross-checking against
+  `updated`/`updatedby` on the c_acctschema row, which is weak -- it reflects the whole row, not just
+  this one column, so any other field edit would also bump it and produce a false "possibly touched"
+  flag).
+
 ## ETP-5019 — L2: owner `AD_User.Email` backfill (2026-08-27)
 
 - **2026-08-27 — The canonical source for an existing tenant owner's "real" email is the
@@ -1527,3 +1609,163 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   letter/number, grep BOTH `onboarding-gaps.md` (`^### [A-Z][0-9]`) AND
   `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
   doc you happen to be editing.
+
+## ETP-4872 — A7 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+
+- **2026-08-30 (review correction) — Originally filed as `A6`; caught in review as a collision
+  with the pre-existing `A6` (ETP-4539 "Asset group Genérico consolidation", documented above in
+  this same file) — a completely unrelated table (`A_Asset_Group`). Relabeled `A7` here, in
+  `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and the `.sql` header's `@gap:` line.**
+  Root cause: the letter was assigned without cross-checking the SQL headers directly (`grep
+  "@gap:" cli/src/data-fixes/sql/*.sql`), only against this doc's own prose — the exact check
+  `onboarding-and-datafixes-map.md`'s own `L1` collision note (2026-08-27, above) already flagged
+  as mandatory. **Apply generally:** grep the actual `.sql` `@gap:` headers, not just the docs,
+  before assigning any new letter/number — a doc can drift from the SQL it describes.
+
+- **2026-08-30 — `R29` was already claimed AND already `APPLIED` live on the shared DB by an
+  unmerged sibling branch (`feature/ETP-4947`) before this session started — confirmed via
+  `git branch -a` + `git ls-tree` (found `20260828T140000Z__R29-acctschema-allownegative-revert.sql`
+  on `feature/ETP-4947`/`origin/feature/ETP-4947`, absent from this branch) AND independently via
+  a direct `SELECT DISTINCT fix_id FROM etgo_data_fix_history WHERE fix_id LIKE '%R29%'`, which
+  returned that exact fix_id already `APPLIED`. **Apply generally:** the ledger check alone would
+  have been sufficient here (it directly proves the id is live-taken, no branch archaeology
+  needed) — when both checks are available, the ledger query is the faster/more authoritative
+  one; `git branch -a` is still worth running too since a claimed-but-not-yet-applied id (still
+  only on a branch, no ledger row yet) wouldn't show up in the ledger at all. Used `R30` +
+  timestamp `2026-08-30T12:00:00Z` (after both R29's `20260828T140000Z` and the newest same-day
+  file `R26-acct-rpt-definitions` at `20260828T120000Z`).
+- **2026-08-30 — The account code width for the "572" bank-account family is genuinely NOT
+  uniform fleet-wide, confirmed by direct query across all 20 real+demo tenants with a wired `AC`
+  element, not assumed from any single source file.** 18/20 tenants (incl. GOClient,
+  SantoEmpresa) carry the R8-padded 8-digit leaf (`57200000`); exactly 2 (F&B International
+  Group, QA Testing) never got R8 applied and still carry the plain 5-digit PGC form (`57200`).
+  `GROUP BY length(value)` across every `572%` `issummary='N'` row on the whole DB confirms only
+  these two widths exist — no third. A fix that hardcodes either width (as R9's own
+  `41700000` did, reasonably, since it happened to only ever run against GOClient-family tenants)
+  would have silently corrupted the other family here. **Apply generally:** for any future
+  new-account gap, verify the sibling account's width per-tenant via direct query before writing
+  `@apply` — do not assume R9's single-width precedent generalizes.
+- **2026-08-30 — Confirmed live: `C_ELEMENTVALUE_TRL`, `C_VALIDCOMBINATION`, and one
+  `AD_TREENODE` row per new `C_ELEMENTVALUE` are ALL auto-created by the standard
+  `c_elementvalue_trg()` trigger firing reliably inside the data-fix runner's plain-SQL
+  transaction — do not manually INSERT any of the three (would violate their UNIQUE
+  constraints against the trigger's own rows).** This reconfirms the ETP-4402/R9 finding
+  (2026-07-02, same file, `c_elementvalue code structure` section) on a second, independent gap.
+  New corollary this session: the trigger's auto-created `C_VALIDCOMBINATION` sets
+  `ALIAS=COMBINATION=new.VALUE` **verbatim** — the FULL, possibly-8-digit value, never truncated.
+  On an 8-digit tenant this produces `'57210000'`, inconsistent with the sibling `57200`
+  account's own actual `ALIAS='57200'` (5-digit) shape on the SAME chart — itself an artifact of
+  R8 apparently having disabled triggers during its bulk 8-digit-padding UPDATE, so the
+  pre-existing combinations were never widened to match. **Apply generally:** any future fix that
+  inserts a NEW postable leaf onto an R8-padded (8-digit) chart must add an explicit follow-up
+  `UPDATE c_validcombination SET alias = LEFT(value,5), combination = LEFT(value,5) ...` after the
+  INSERT — the trigger's own output will NOT match the tenant's established convention on its own.
+  Verified empirically: on the 2 non-R8 (5-digit) tenants, `LEFT(value,5)` trivially equals
+  `value`, so this normalize step correctly no-ops there (`APPLIED (4 rows)` vs. `(5 rows)` on the
+  8-digit branch — the row-count difference is itself a clean signal the branch logic is correct).
+- **2026-08-30 — Self-caught authoring bug: typed the Spanish account name without its accent
+  ("Tarjetas de credito, euros" instead of "Tarjetas de crédito, euros") when transcribing it into
+  the `.sql` file by hand, diverging from both the preventive-side XML and the live DB's own
+  existing `572`-family names.** Caught only by re-querying the just-applied live row and diffing
+  its `name` against the preventive fix's committed XML — the SQL file itself doesn't fail any
+  syntax/idempotency check for a plain string content difference. Fixed the `.sql` file, then
+  cleaned up (manually deleted) the wrongly-accented test rows already committed to the shared DB
+  (`c_validcombination` → `ad_treenode` → `c_elementvalue_trl` → `c_elementvalue` → the
+  `etgo_data_fix_history` ledger row, in that FK-safe order) before re-running the corrected fix.
+  **Apply generally:** when a fix's `.sql` file hand-transcribes a name/description string that
+  must byte-match another artifact (a preventive XML, a sibling account's existing name), diff the
+  actual applied row's content against that source AFTER a real test run, not just eyeball the
+  `.sql` source — accented/non-ASCII characters are exactly the class of error that survives a
+  visual review of the file but not a live data diff.
+- **2026-08-30 — CUT (`ONBOARDING_PROVISIONED_THROUGH`) intentionally left unbumped for a
+  different reason than the ETP-5019/R28 precedent: the preventive front for THIS gap lives on an
+  UNMERGED sibling branch in a DIFFERENT repo (`com.etendoerp.go` `feat/ledger-account-57210`),
+  which this session could not safely edit (out of scope, explicitly read-only per the task
+  brief) even if the CUT-chain-verification concern didn't also apply.** Both reasons compound:
+  even setting aside the intervening-unbumped-fixes risk (R27/R28/R26-acct-rpt-definitions/the
+  sibling R29, none individually re-verified this session), bumping a Java constant that lives on
+  an unmerged branch this session has no write access to is a structurally separate blocker.
+  Flagged explicitly as a follow-up for whoever merges both the preventive dataset branch and this
+  corrective `.sql` — do not silently skip noting this, and do not bump it from a worktree that
+  cannot see the preventive branch's actual merged state.
+
+## ETP-4872 — R30 QA rejection (Sentinel): multi-chain hazard, live-verified, zero exposure (2026-08-31)
+
+QA filed two findings against R30 (BUG-2 medium, BUG-3 low), both backed by new **passing**
+pinning tests (`cli/test/data-fixes-r30-financial-account-card-ledger-account.test.js`, describing
+current behavior, not failing it). Investigated both against the SAME shared dev DB R30 was
+originally validated against. R30 is already `APPLIED` for 19/19 real+demo tenants in that DB
+(confirmed via `SELECT ... FROM etgo_data_fix_history WHERE fix_id =
+'20260830T120000Z__R30-financial-account-card-ledger-account'`) — per this agent's own
+`what_i_never_do` rule ("never rename or edit an already-applied migration"), **the `.sql` file
+itself was left untouched for both findings.** Root cause of confusion the first time around: it's
+tempting to think "not yet in production" means a corrective data-fix `.sql` is still free-form
+editable during a QA cycle — it is NOT, once it has a real `APPLIED` ledger row anywhere, even a
+shared dev/experimental DB. **Apply generally:** treat the ledger row, not the git/PR merge state,
+as the immutability trigger for a data-fix `.sql` file.
+
+- **BUG-2 (multi-chain: >1 qualifying element chain per tenant, only the lowest-`c_element_id` one
+  gets fixed per `@apply` since both INSERTs share one `@uuid_<KEY>@` token) — confirmed ZERO live
+  exposure, fleet-wide, not just within the original 20-tenant sample.** Queried
+  `c_acctschema_element` (`elementtype='AC'`, `isactive='Y'`) grouped by `ad_client_id`, counting
+  `DISTINCT c_element_id`: only **2 clients in the ENTIRE fleet** are wired to more than one
+  distinct `AC` element — `F&B International Group` (`23C59575B9CF467C9620760EB255B389`, elements
+  `56E65CF592BD4DAF8A8A879810646266` + `FB577CDB95A54375AD95AE5F3B9D8458`) and `QA Testing`
+  (`4028E6C72959682B01295A070852010D`, elements `3DE10A7188234EB2898C0500B97CB495` +
+  `A0DA7C90447A412EAB5E1E4D16D1A9CA`). For BOTH, only ONE of the two wired elements carries ANY
+  `572%` row at all — the second `C_AcctSchema` on each (a US-Dollar-denominated schema) uses a
+  completely different chart with zero `572` family. So the BUG-2 precondition — two INDEPENDENTLY
+  qualifying chains (each with its own `57200`/`57200000` sibling but missing `57210`/`57210000`)
+  on the SAME tenant — cannot occur for either client, and both are already correctly `APPLIED`
+  (their one real chain's `57210`/`57210000` row exists). **Decision: accept as a known, documented
+  limitation, not worth a proactive hardening fix at this priority.** Rationale beyond
+  "zero exposure today": a second `C_AcctSchema` on an Etendo tenant is, structurally, almost
+  always there FOR a different chart of accounts (different currency/jurisdiction/reporting need)
+  — the exact reason a tenant adds a second schema in the first place tends to be the same reason
+  its element rarely shares the same `572` PGC family as the first. Not a proof of impossibility,
+  but a real reason this class of gap is unlikely to materialize, distinct from "we just haven't
+  seen it yet."
+  - **Separate, more durable observation (framework-level, not R30-specific):** `run.js` marks a
+    fix `APPLIED` unconditionally on `@apply` success — no rows-affected gate — and
+    `APPLIED`/`MANUALLY_FIXED`/`SKIPPED_NOT_NEEDED` are all in the `PROCESSED` set that a re-run
+    never revisits (see `run.js` `STATUS`/`PROCESSED` around L58-71, L408-410). So ANY future
+    single-token-per-apply fix (not just R30) that intentionally picks one of several qualifying
+    rows via `ORDER BY ... LIMIT 1` has the SAME latent gap: a tenant with N qualifying rows only
+    ever gets 1 fixed, with no ledger signal that N-1 remain and no retry path short of a brand-new
+    fix. Worth remembering as a pattern to watch for in future `ORDER BY ... LIMIT 1`-shaped fixes,
+    not something to retrofit onto R30 today.
+
+- **BUG-3 (Steps C/D/E lack a `c_acctschema_element` join, contradicting the SQL file's Background
+  point 4 claim that "every statement... resolves ONLY via `C_AcctSchema_Element`") — confirmed
+  the SAME zero-exposure result live.** Directly checked GOClient's own documented orphan chain
+  (element `91D04C02EF8F4975B9E4F5E07543B6EA`, the "GOOrg Account Tree" element, not wired to any
+  `C_AcctSchema` — see the ETP-4402 two-`C_Element`-hazard precedent above): it carries `572`,
+  `5720`, `57200000` but **NOT** `5721`/`57210`/`57210000` — the exact values Steps C/D/E actually
+  match on. A fleet-wide sweep (`SELECT ad_client_id, value, COUNT(DISTINCT c_element_id) ... value
+  IN ('572','5721','57210','57210000') ... HAVING COUNT(DISTINCT c_element_id) > 1`) found exactly
+  ONE collision anywhere: GOClient's bare `572` node (shared by both its wired and orphan
+  elements) — and Steps C/D/E never match on `572` alone, only on `5721`/`57210`/`57210000`, none
+  of which collide anywhere in the fleet. So Steps C/D/E's plain value-equality joins, while not
+  literally scoped via `C_AcctSchema_Element`, have never actually been ambiguous in practice: they
+  work because `5721`/`57210`/`57210000` happen to be unique-per-tenant values today (each row was
+  freshly minted by this fix's own Step A/B on the ONE wired element), not because of an explicit
+  guard. **Decision: since R30 is an already-applied, immutable migration (see above), do NOT edit
+  the `.sql` file — not even the Background comment — to correct the imprecise claim.** Recording
+  the correction here instead: Background point 4's blanket "every statement... ONLY via
+  `C_AcctSchema_Element`" is accurate for `@check` and Steps A/B (which DO join
+  `c_acctschema_element`) but NOT for Steps C/D/E, which resolve their target rows by
+  `ad_client_id` + plain `value` equality, paired to the SAME apply's own newly-inserted `5721`/leaf
+  row via `c_element_id` equality between the two joined `c_elementvalue` aliases — never via
+  `c_acctschema_element` itself. Correctness in practice rests on an unstated invariant (no tenant
+  has two elements sharing a `5721`/`57210`/`57210000` value), verified true fleet-wide today, not
+  on the AC-element join the comment claims. `docs/etendo-ad/onboarding-gaps.md`'s A7 entry repeats
+  the same overstated claim in its own "Fix" paragraph — annotated with a caveat there rather than
+  rewritten, for the same immutable-migration-adjacent reason (keep the historical record intact,
+  correct via annotation).
+  - **Apply generally:** a future fix using the same "insert new leaf → reparent via
+    value-matched-sibling UPDATE" pattern (Steps C/D here) should scope the sibling match
+    explicitly to the newly-inserted row's own `c_element_id` from the START (e.g. carry the
+    `@uuid_<KEY>@` token's element through, or re-derive it via the same `c_acctschema_element`
+    join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
+    OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
+    orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.

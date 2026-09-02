@@ -131,6 +131,19 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('SO-NULL')).toBeInTheDocument();
   });
 
+  // ETP-4567 (QA finding — bug A): `displayAmount = grandTotal > 0 ? formattedTotal
+  // : documentNo` falls back to the document number for a NEGATIVE grand total too
+  // (a return/credit scenario), even though `formattedTotal` is a perfectly valid
+  // signed amount. The fix drops the `> 0` gate entirely so the real (possibly
+  // negative) total is always shown — mirroring how the working subtotal line
+  // elsewhere in the app already renders signed totals unconditionally.
+  it('shows the real formatted NEGATIVE grandTotal, not documentNo and not a zeroed amount (ETP-4567)', () => {
+    renderModal({ data: makeData({ grandTotalAmount: -450.75, documentNo: 'SO-NEG', 'currency$_identifier': 'EUR' }) });
+    expect(screen.getByText(/-450,75\s€/)).toBeInTheDocument();
+    expect(screen.queryByText('SO-NEG')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^0([.,]00)?$/)).not.toBeInTheDocument();
+  });
+
   it('uses linkedOrders grandTotal, falling back to linkedOrder currency when the document has none of its own', () => {
     const data = {
       documentNo: 'SO-002',
@@ -425,28 +438,43 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(screen.queryByText('Sales PL')).not.toBeInTheDocument();
     });
 
-    it('auto-selects the price list flagged as default', async () => {
+    // ETP-4942 (round 3): this modal always passes allowGenericFallback: false —
+    // it has no "optional" variant, so the system `default` flag / first-match
+    // fallback must never silently satisfy the field. Only a real
+    // `data.resolvedPriceListId` (server-resolved from the linked order or the
+    // BP's own tariff) may auto-select.
+
+    it('does NOT auto-select a price list flagged as system-default when no resolvedPriceListId is provided (mandatory field must not autofill)', async () => {
       mockPriceListFetch([
         makePriceList({ id: 'pl-a', name: 'PL A', default: false }),
         makePriceList({ id: 'pl-b', name: 'PL B', default: true }),
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        const select = screen.getByTestId('select-control');
-        expect(select.value).toBe('pl-b');
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).toBeDisabled();
     });
 
-    it('falls back to the first matching price list when none is flagged default', async () => {
+    it('leaves the price list unselected (confirm disabled) instead of falling back to the first match when none is flagged default and none is resolved', async () => {
+      // Regression guard for a real false-positive found in review: asserting
+      // `select.value` here is NOT a valid check — the native <select> mock falls
+      // back to rendering its first <option> whenever `value` matches no option
+      // (the `__empty__` sentinel option is not rendered once the list is
+      // non-empty), so `select.value === 'pl-a'` would pass even if the component
+      // never actually selected anything. Assert the real state instead: the
+      // confirm button, which is driven directly by `priceListId` truthiness.
       mockPriceListFetch([
         makePriceList({ id: 'pl-a', name: 'PL A', default: false }),
         makePriceList({ id: 'pl-b', name: 'PL B', default: false }),
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        const select = screen.getByTestId('select-control');
-        expect(select.value).toBe('pl-a');
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).toBeDisabled();
     });
 
     it('confirm button is disabled until a price list is auto-selected/chosen, even with the checkbox checked', async () => {
@@ -457,19 +485,40 @@ describe('CreateInvoiceConfirmModal', () => {
       expect(confirmBtn).toBeDisabled();
     });
 
-    it('confirm button becomes enabled once a default price list is auto-selected', async () => {
-      mockPriceListFetch([makePriceList({ id: 'pl-only', default: true })]);
-      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
+    it('auto-selects the price list resolved server-side (data.resolvedPriceListId) and enables the confirm button', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'pl-a', name: 'PL A', default: false }),
+        makePriceList({ id: 'pl-only', name: 'Resolved PL', default: false }),
+      ]);
+      renderModal({
+        data: makeData({ resolvedPriceListId: 'pl-only' }),
+        showPriceListPicker: true, isSOTrx: true, apiBaseUrl,
+      });
       await waitFor(() => {
         const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
         expect(confirmBtn).not.toBeDisabled();
       });
     });
 
-    it('calls onConfirm with the selected priceListId when confirmed', async () => {
+    it('purchase variant (isSOTrx=false): does not auto-select any price list without a resolved default, even one flagged system-default', async () => {
+      mockPriceListFetch([
+        makePriceList({ id: 'pl-a', name: 'Purchase PL A', salesPriceList: false, default: true }),
+      ]);
+      renderModal({ showPriceListPicker: true, isSOTrx: false, apiBaseUrl });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+      });
+      const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
+      expect(confirmBtn).toBeDisabled();
+    });
+
+    it('calls onConfirm with the resolved priceListId when confirmed', async () => {
       mockPriceListFetch([makePriceList({ id: 'pl-selected', default: true })]);
       const onConfirm = vi.fn();
-      renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onConfirm });
+      renderModal({
+        data: makeData({ resolvedPriceListId: 'pl-selected' }),
+        showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onConfirm,
+      });
       await waitFor(() => {
         expect(screen.getByText('soCreateDocsBtn').closest('button')).not.toBeDisabled();
       });

@@ -10,5 +10,29 @@
       "20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit",
       "20260826T121500Z__R27-deactivate-r16-duplicate-roles"
     ]
+  },
+  {
+    "fixId": "20260803T140000Z__R18-stuck-average-cost-anchor",
+    "checksum": "7555a2dd4775907021467632ea35cfb732544ba04fc1a9f4a01696070d808013",
+    "checksumAlgorithm": "sha256",
+    "reason": "Superseded by the Standard-cost remediation path. R18 seeded Average-cost M_Costing rows (costtype AVA), but Etendo Go now provisions and validates Standard costing rules, whose posting-time lookup requires Standard/legacy Standard costs (costtype STA/ST). Keeping R18 active would add obsolete Average anchors that do not satisfy the current Standard-cost checks and can mislead future investigations. The original .sql file stays byte-for-byte untouched and is skipped through the retirement mechanism.",
+    "retiredBy": "ETP-4706",
+    "retiredUtc": "2026-08-28T12:00:00.000Z",
+    "supersededBy": [
+      "20260828T120000Z__R28-standard-cost-anchor"
+
+    ]
+  },
+  {
+    "fixId": "20260716T120000Z__R14-payment-method-multicurrency",
+    "checksum": "dc2621d860ccfe985b77fb83ded2ddc570c6f3cf2082859b101a4f5777df8554",
+    "checksumAlgorithm": "sha256",
+    "reason": "Its effect 2 enforces the ETP-4503 exception that forced multicurrency OFF on the bank-transfer link of PSD2-connected Bank accounts, which ETP-5084 removed: a PIS transfer converts the invoice amount to the account currency before instructing the bank, so a cross-currency transfer is supported and that link is multicurrency like every other payment method. R14's @check has no awareness it was superseded -- on an untouched tenant it would re-apply the removed exception, and on an already-fixed tenant R14 and R29 would fight on every run (R29 turns the link on, R14 turns it back off). R14's .sql stays byte-for-byte untouched (already applied to real tenants, immutable, checksum tracked here). R29 is a strict superset of R14's still-wanted effects 1a + 1b: it enables both multicurrency columns on every method template and every per-account link, with no exception.",
+    "retiredBy": "ETP-5084",
+    "retiredUtc": "2026-08-31T12:00:00.000Z",
+    "supersededBy": [
+      "20260831T120000Z__R29-transfer-link-multicurrency"
+
+    ]
   }
 ]
