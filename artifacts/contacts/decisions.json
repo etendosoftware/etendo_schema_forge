@@ -137,7 +137,7 @@
       "enabled": true,
       "spec": "contacts",
       "entity": "businessPartner",
-      "formats": ["csv", "txt"],
+      "formats": ["csv", "txt", "xlsx"],
       "limit": { "maxRows": 5000, "concurrency": 4 },
       "dedupe": { "scope": "database", "key": ["taxID"] },
       "descriptor": "contacts",
@@ -157,11 +157,11 @@
         { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name (Contact)", "example": "Fernández", "headerScope": "contact" },
         { "target": "phone", "aliases": ["telefono de contacto"], "label": "Phone (Contact)", "example": "610 000 002", "headerScope": "contact" },
         { "target": "position", "aliases": ["cargo"], "label": "Position", "example": "Responsable de compras", "headerScope": "contact" },
-        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address", "example": "Calle Mayor 12", "labelKey": "importHeaderAddress", "headerScope": "contact" },
-        { "target": "city", "aliases": ["ciudad"], "label": "City", "example": "Sevilla", "labelKey": "importHeaderCity", "headerScope": "contact" },
-        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code", "example": "41001", "labelKey": "importHeaderPostalCode", "headerScope": "contact" },
-        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country", "example": "España", "headerScope": "contact", "labelKey": "importHeaderCountry" },
-        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region", "example": "Sevilla", "labelKey": "importHeaderRegion", "headerScope": "contact" }
+        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address", "example": "Calle Mayor 12", "labelKey": "importHeaderAddress", "headerScope": "address" },
+        { "target": "city", "aliases": ["ciudad"], "label": "City", "example": "Sevilla", "labelKey": "importHeaderCity", "headerScope": "address" },
+        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code", "example": "41001", "labelKey": "importHeaderPostalCode", "headerScope": "address" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country", "example": "España", "headerScope": "address", "labelKey": "importHeaderCountry" },
+        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region", "example": "Sevilla", "labelKey": "importHeaderRegion", "headerScope": "address" }
       ]
     }
   },

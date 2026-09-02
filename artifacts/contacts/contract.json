@@ -1,7 +1,7 @@
 {
   "version": "0.52.0",
-  "generatedAt": "2026-09-01T10:50:41.136Z",
-  "checksum": "4ac67f13ac89ea0a",
+  "generatedAt": "2026-09-02T13:45:00.000Z",
+  "checksum": "d2482480ffd23b87",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -144,7 +144,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -374,7 +375,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -386,7 +387,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -400,7 +401,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -411,7 +412,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -430,7 +431,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
@@ -5379,7 +5380,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -5609,7 +5611,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5621,7 +5623,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5635,7 +5637,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -5646,7 +5648,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -5665,7 +5667,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
