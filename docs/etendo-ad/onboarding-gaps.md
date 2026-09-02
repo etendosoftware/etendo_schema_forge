@@ -1511,6 +1511,24 @@ simulated row above).
 
 **Status:** both fronts (original N1 + this follow-up) shipped 2026-09-01 under **ETP-5117**.
 
+**Correction (2026-09-02, same ETP-5117 branch):** `ad_preference` has a `Selected` column
+(`character(1)`, `NOT NULL DEFAULT 'N'`, `Preference.PROPERTY_SELECTED`/`setSelected`/
+`isSelected`). R31's original preference INSERT never set it, so every row it created landed at
+the schema default `'N'` — inconsistent with the shape of a row an operator creates by hand via
+the Classic Preference window (confirmed on the shared dev DB: several hand-made
+`ETSG_ForceTestMode` rows carry `Selected='Y'`). None of the 3 consuming handlers filters on
+`Selected` — this is a data-correctness/consistency-with-Classic fix, not a functional one.
+
+- **Preventive:** `OnboardingForceTestModeService#forceTestModeForFreeTenant` now calls
+  `Preference#setSelected(true)` on the row it builds — every tenant onboarded from this deploy
+  forward is born with `Selected='Y'`.
+- **Corrective:** `20260902T120000Z__R33-force-test-mode-selected-backfill.sql` — a NEW dated fix
+  (R31 already carries a real ledger row from live validation against the shared dev DB and is
+  immutable per the framework's own rule). Backfills `Selected='Y'` on any tenant's own active
+  `ETSG_ForceTestMode` row still reading `Selected='N'`, scoped to `:client_id`, idempotent
+  (`@check`/`@apply` share the same guard).
+- `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-09-02T12:00:00Z` (R33).
+
 ---
 
 ## Recommended Order of Operations

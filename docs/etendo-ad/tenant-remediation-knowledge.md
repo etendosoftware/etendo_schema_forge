@@ -1896,3 +1896,23 @@ as the immutability trigger for a data-fix `.sql` file.
   fit as its own file regardless — R31 and R32 have disjoint `@check` gates (mutually exclusive
   plan states) and could safely coexist forever without either ever undoing the other's effect for
   the same tenant.
+- **2026-09-02 — `ad_preference` has a `Selected` column that R31 forgot: `character(1)`,
+  `NOT NULL DEFAULT 'N'`, check `Y`/`N`, exposed on the DAL model as `Preference.PROPERTY_SELECTED`
+  / `setSelected(Boolean)` / `isSelected()`.** Confirmed via `\d ad_preference` on the shared dev
+  DB. Rows an operator creates by hand in Classic for `ETSG_ForceTestMode` land with
+  `Selected='Y'` (verified: several real hand-made rows on the shared dev DB carry it) — but
+  `OnboardingForceTestModeService#forceTestModeForFreeTenant`'s original `Preference` build never
+  called `setSelected`, so every row it created (including the real R31 `APPLIED` row against
+  GOClient, 2026-09-01) landed at the schema default `'N'`. **None of the 3 consuming handlers
+  (`ForceTestModeEventHandler` VeriFactu/SII/TicketBAI) filters on `Selected` in their lookup — this
+  was NOT a functional/cascade bug, purely a data-correctness/consistency-with-Classic-conventions
+  one**, caught by explicit human review of the live DB rather than by any test. **Apply
+  generally: when building a DAL entity to mirror the shape of a row an operator creates by hand in
+  Classic, diff EVERY non-nullable/checkbox column on the real table against what the code sets —
+  `Selected` (and similarly-easy-to-miss checkbox-style columns) won't surface as a bug via any
+  functional test because the consuming code may not read it at all; only a direct DB comparison
+  against a hand-made row catches it.** Fixed: `OnboardingForceTestModeService` now calls
+  `preference.setSelected(true)` (preventive); `20260902T120000Z__R33-force-test-mode-selected-
+  backfill.sql` backfills existing `Selected='N'` rows for already-onboarded tenants (corrective,
+  NEW dated fix — R31 immutable, same precedent as R32 above). `ONBOARDING_PROVISIONED_THROUGH`
+  bumped to R33's timestamp, `2026-09-02T12:00:00Z`.
