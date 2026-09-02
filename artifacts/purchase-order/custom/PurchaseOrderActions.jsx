@@ -570,7 +570,6 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
 // ── PoCheckboxCard ─────────────────────────────────────────────────────────────
 
 function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
-  const apiFetch = useApiFetch(base);
   return (
     <div
       onClick={disabled ? undefined : onChange}
@@ -614,7 +613,7 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
 
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  const apiFetch = useApiFetch(base);
   const ui = useUI();
   const {
     needsReceipt, needsInvoice,
@@ -829,7 +828,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
   // active scheme's headers, and the CSRF proof on every unsafe method.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  const apiFetch = useApiFetch(base);
 
   useEffect(() => {
     if (!orderId) return;
