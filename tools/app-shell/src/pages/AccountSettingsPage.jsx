@@ -119,6 +119,7 @@ export default function AccountSettingsPage() {
         open={changePasswordOpen}
         onOpenChange={setChangePasswordOpen}
         onSuccess={handlePasswordChanged}
+        hasPassword={!!authMethods?.password?.enabled}
         data-testid="ChangePasswordDialog__account" />
     </div>
   );

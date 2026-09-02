@@ -200,7 +200,7 @@ is the one worth reading carefully:
 | 6 | Reset confirm creates the password, SSO identity intact | LOCAL | DB showed `password_hash` set **and** `auth_provider = google` |
 | 7 | Log in with the newly created password on an SSO account | LOCAL | both methods coexist, proven at runtime |
 | 8 | Change password (supplying the current one) | LOCAL | pre-existing behaviour |
-| 9 | Enrol a password through change-password when there is none | UNIT | the `enrolling` branch; no local run |
+| 9 | Enrol a password through change-password when there is none | LOCAL | browser, once the dialog stopped demanding a password that does not exist |
 | 10 | SSO login, existing account | **EXP** | E2. Needs a real Google assertion |
 | 11 | SSO login, brand-new account | **EXP** | E2 |
 | 12 | Throttle: 3 mails per recipient per 900 s | **EXP** | E7 area; local sink does not exercise the real limiter |
@@ -233,7 +233,7 @@ is the one worth reading carefully:
 | 29 | Retry after a failed load recovers | LOCAL | browser |
 | 30 | The 409 reaches the user translated, not as the generic sentence | LOCAL | forced the real race; toast read the Spanish copy |
 | 31 | Account entry in the user menu, unconditional | LOCAL | browser |
-| 32 | Password change still signs the user out | UNIT | covered in specs; not re-run in the browser after the move |
+| 32 | Password change still signs the user out | LOCAL | browser; redirected to `/onboarding?returnTo=/account` and back after signing in |
 
 ### Deploy-time and infrastructure
 
@@ -255,7 +255,15 @@ cannot provide: a real Google assertion, and the real mail gateway. That is the 
 risk — the parts we could exercise, we exercised; the parts we could not are the ones that touch
 another system.
 
-The two **UNIT** items worth naming: item 9, the change-password enrolment branch, has never served
-a real request; and item 32, the sign-out after a password change, moved from the menu to the page
-during 4b and was re-covered by tests but not re-clicked. Neither is exotic, both are cheap to
-confirm the moment somebody is in front of the screen.
+Both of those UNIT items were closed the same afternoon, by sitting in front of the screen — and
+item 9 turned out to be a **fourth defect of the same family**. `ChangePasswordDialog` demanded the
+current password as a `required` field regardless, so on an account with no password the form could
+not be submitted at all: the browser refused it before any request left. The server's `enrolling`
+branch was reachable only through the mailed recovery link, never from settings. The dialog now
+takes `hasPassword`, hides the field, retitles itself *Crear una contraseña*, sends no
+`currentPassword`, and the row's button reads *Crear*.
+
+That is now four defects found by using the screen and zero found by reading it. The pattern is
+consistent enough to state plainly: **a capability the server supports is not shipped until some
+path in the UI reaches it.** Each of the four was a server branch that worked perfectly and a UI
+that could not get there.

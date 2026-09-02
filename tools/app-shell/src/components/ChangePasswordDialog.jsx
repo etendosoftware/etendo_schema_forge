@@ -27,11 +27,17 @@ const PLATFORM_TOKEN_KEY = 'sf_platform_token';
  * in again with the new password (the app routes unauthenticated users back to
  * the onboarding page automatically).
  */
-export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
+export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPassword = true }) {
   const ui = useUI();
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // An account with no local password is ENROLLING one, not changing it. The server has always
+  // supported that branch, but this dialog demanded the current password as a required field — a
+  // password that does not exist — so the form could never be submitted and an SSO user had no way
+  // to set one from settings at all. The mailed recovery link was the only route.
+  const enrolling = !hasPassword;
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -52,7 +58,12 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
     setLoading(true);
     try {
       const token = localStorage.getItem(PLATFORM_TOKEN_KEY);
-      await changePassword(fetch, detectBaseUrl(), token, form);
+      // Send no currentPassword at all when enrolling — the server reads it with optString and
+      // skips verification precisely because there is nothing to verify.
+      const payload = enrolling
+        ? { newPassword: form.newPassword, confirmPassword: form.confirmPassword }
+        : form;
+      await changePassword(fetch, detectBaseUrl(), token, payload);
       // Rotated token is discarded on purpose: we sign the user out so they
       // re-authenticate with the new password.
       onSuccess?.();
@@ -82,23 +93,25 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
           <DialogHeader data-testid="DialogHeader__c015d3">
             <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__c015d3">
               <Lock className="h-4 w-4" data-testid="Lock__c015d3" />
-              {ui('onboardingChangePasswordTitle')}
+              {enrolling ? ui('accountCreatePasswordTitle') : ui('onboardingChangePasswordTitle')}
             </DialogTitle>
-            <DialogDescription data-testid="DialogDescription__c015d3">{ui('changePasswordLogoutNotice')}</DialogDescription>
+            <DialogDescription data-testid="DialogDescription__c015d3">{enrolling ? ui('createPasswordLogoutNotice') : ui('changePasswordLogoutNotice')}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2">
-            <Label htmlFor="change-current-password" data-testid="Label__c015d3">{ui('onboardingCurrentPasswordLabel')}</Label>
-            <Input
-              id="change-current-password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={form.currentPassword}
-              onChange={setField('currentPassword')}
-              disabled={loading}
-              data-testid="Input__c015d3" />
-          </div>
+          {!enrolling && (
+            <div className="space-y-2">
+              <Label htmlFor="change-current-password" data-testid="Label__c015d3">{ui('onboardingCurrentPasswordLabel')}</Label>
+              <Input
+                id="change-current-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={form.currentPassword}
+                onChange={setField('currentPassword')}
+                disabled={loading}
+                data-testid="Input__c015d3" />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="change-new-password" data-testid="Label__c015d3">{ui('onboardingNewPasswordLabel')}</Label>
             <Input
@@ -146,7 +159,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }) {
                   {ui('onboardingSavingPassword')}
                 </>
               ) : (
-                ui('onboardingSavePasswordAction')
+                enrolling ? ui('accountCreatePasswordAction') : ui('onboardingSavePasswordAction')
               )}
             </Button>
           </DialogFooter>

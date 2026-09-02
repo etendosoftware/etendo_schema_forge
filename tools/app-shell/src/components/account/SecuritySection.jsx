@@ -105,7 +105,7 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
                 onClick={onChangePassword}
                 data-testid="auth-method-change-password"
               >
-                {ui('accountMethodChange')}
+                {password.enabled ? ui('accountMethodChange') : ui('accountMethodCreate')}
               </Button>
               {password.enabled && removeButton('password')}
             </>
