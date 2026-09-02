@@ -1243,8 +1243,10 @@ describe('ReconciliationSplitPanel', () => {
       });
       setUpPartialLineWithCandidate();
 
+      // No `failureReason` in this response, so the toast carries no description at all
+      // (`undefined`, never an empty options object that would render a blank description row).
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
       // Verify the EXACT interpolation values the component computed from the resolved result.
@@ -1256,19 +1258,85 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
     });
 
-    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+    it('total failure (successful HTTP, everything failed): the UN-RECONCILE error copy, reload/selection-clear STILL run', async () => {
       removeState.removeOperation = vi.fn().mockResolvedValue({
         transactionIds: [], failedTransactionIds: ['A', 'B'],
       });
       setUpPartialLineWithCandidate();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      // The action-specific key. This branch used to fall back to `financeReconcileToastError`,
+      // whose copy reads "Error al conciliar" — the wrong action entirely for an un-reconcile.
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoveError', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.warning).not.toHaveBeenCalled();
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
       await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    // ── the backend-supplied CAUSE ────────────────────────────────────────────
+    // The un-reconcile helpers swallow their exceptions so one failure does not abort the batch, so
+    // the response has always been able to say WHICH ids failed. What it could not say is WHY — the
+    // reason stayed in the server log. It now travels as `failureReason` on the same 200, and the
+    // panel shows it verbatim as the sonner description under the action-specific title.
+    const CLOSED_PERIOD = 'The accounting period is closed and the document cannot be unposted';
+
+    it('total failure: shows the backend failureReason as the toast description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: CLOSED_PERIOD }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure: never falls back to the generic "Error al conciliar" key', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // Regression guard: the generic reconcile-error copy is not merely un-toasted, it is never
+      // even requested from i18n on this (resolved-response) path. It stays reserved for the catch
+      // branch, where the request itself failed and no action can be named.
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError');
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError', undefined);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+    });
+
+    it('partial failure: keeps the partial key and adds the reason as the description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        'financeReconcileToastOperationPartiallyRemoved', { description: CLOSED_PERIOD }));
+      expect(toast.error).not.toHaveBeenCalled();
+      // The counts are unchanged by the added description.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+    });
+
+    it('full success: never attaches a description, even if the backend echoes a reason', async () => {
+      // Defensive: `failureReason` is only meaningful alongside failed ids. With none, the success
+      // branch runs and the toast keeps its single-argument shape.
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1449,11 +1517,62 @@ describe('ReconciliationSplitPanel', () => {
       await user.click(screen.getByTestId('recon-remove-accept'));
 
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
       expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
       // Always reload, even on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    // ── total failure on the REACTIVATE path ──────────────────────────────────
+    // Same accumulator and same 200 envelope as the un-reconcile path, but the title must name the
+    // action the user actually chose: `...ReactivateError`, not `...RemoveError` — and least of all
+    // the old generic `financeReconcileToastError` ("Reconciliation error").
+    const REACTIVATE_BLOCKED = 'The accounting period is closed and cannot be reactivated';
+
+    /** Selects the 2-doc reconciled line and confirms the Reactivar cartel. */
+    async function confirmReactivate() {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+    }
+
+    it('total failure: the REACTIVATE error copy with the backend reason as description', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+        failureReason: REACTIVATE_BLOCKED,
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', { description: REACTIVATE_BLOCKED }));
+      // Not the un-reconcile copy, and not the generic reconcile copy either.
+      expect(toast.error).not.toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: REACTIVATE_BLOCKED });
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastOperationRemoveError')).toBe(false);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure with no failureReason: same key, and NO description object at all', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', undefined));
+      // Explicitly `undefined`, not `{}` / `{ description: undefined }` — sonner renders an empty
+      // description row for the latter, which reads as a truncated message.
+      const [, options] = toast.error.mock.calls[0];
+      expect(options).toBeUndefined();
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
     });
 
