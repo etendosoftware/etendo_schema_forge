@@ -42,6 +42,7 @@ This folder is the entry point for documentation that describes how generated an
 | [goods-receipt.md](goods-receipt.md) | Custom goods-receipt flow |
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
+| [matched-purchase-invoices.md](matched-purchase-invoices.md) | Read-only receipt-invoice link consultation window |
 
 ## Inventory
 

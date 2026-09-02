@@ -1,0 +1,160 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "purchases",
+    "name": "Matched Purchase Invoices",
+    "readOnly": true,
+    "hideCreate": true,
+    "hideDelete": true,
+    "hideDeleteButton": true,
+    "hidePrint": true,
+    "attachments": false,
+    "customComponents": {
+      "bulkActions": "MatchedInvoiceBulkActions"
+    },
+    "summaryFields": [],
+    "noHeaderBorder": true,
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
+      }
+    ],
+    "labelOverrides": {
+      "es_ES": {
+        "C_InvoiceLine_ID": "Línea de factura",
+        "M_InOutLine_ID": "Línea de albarán",
+        "M_Product_ID": "Producto",
+        "Qty": "Cantidad",
+        "DateTrx": "Fecha de transacción",
+        "Processed": "Procesada"
+      },
+      "en_US": {
+        "C_InvoiceLine_ID": "Invoice Line",
+        "M_InOutLine_ID": "Goods Receipt Line",
+        "M_Product_ID": "Product",
+        "Qty": "Quantity",
+        "DateTrx": "Transaction Date",
+        "Processed": "Processed"
+      }
+    }
+  },
+  "entities": {
+    "matchedInvoice": {
+      "javaQualifier": "matchedInvoiceHandler",
+      "orderBy": [{ "field": "transactionDate", "direction": "DESC" }],
+      "fields": {
+        "invoiceLine": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "goodsShipmentLine": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "product": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 3
+        },
+        "quantity": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "section": "principal",
+          "seq": 4
+        },
+        "transactionDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "section": "principal",
+          "seq": 5,
+          "dot": false
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": true,
+          "section": "principal",
+          "seq": 6,
+          "badge": true,
+          "badgeLabels": {
+            "true": { "en_US": "Yes", "es_ES": "Sí" },
+            "false": { "en_US": "No", "es_ES": "No" }
+          }
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "section": "principal",
+          "seq": 7,
+          "badge": true,
+          "visibleWhenCapability": "showAccountingFields",
+          "badgeLabels": {
+            "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
+        },
+        "etblkpBulkposting": {
+          "visibility": "discarded",
+          "reason": "Bulk-posting action flag — this window has no accounting/posting actions (ETP-5075)."
+        },
+        "etblkpAccountingstatus": {
+          "visibility": "discarded",
+          "reason": "Accounting status flag — this window has no accounting/posting actions (ETP-5075)."
+        },
+        "processNow": {
+          "visibility": "discarded",
+          "reason": "Process-trigger checkbox — window is read-only, no user-triggered document processes (ETP-5075)."
+        },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "active": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
+    },
+    "accounting": {
+      "exclude": true,
+      "reason": "Accounting tab is out of scope — this window shows only the receipt-invoice match, not the journal entries it posts (ETP-5075)."
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"]
+}

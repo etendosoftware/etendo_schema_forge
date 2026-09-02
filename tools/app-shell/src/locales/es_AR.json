@@ -13809,7 +13809,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -16211,6 +16211,9 @@
     "Return Shipment": {
       "label": "Albarán de devolución"
     },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
+    },
     "Purchase Invoice": {
       "label": "Factura de Compra"
     },
@@ -16725,6 +16728,9 @@
     "reactivate": "Reactivar",
     "reactivateOrder": "Reactivar pedido",
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
+    "bulkRowAlreadyPosted": "Ya está contabilizado",
+    "bulkRowNotPosted": "No está contabilizado",
+    "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "confirmBulk": "Confirmar",
     "documentAction": "Acción de documento",
@@ -21594,7 +21600,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -22234,6 +22240,9 @@
     },
     "Return Shipment": {
       "label": "Albarán de Devolución"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
     },
     "Account": {
       "label": "Plan de cuentas"

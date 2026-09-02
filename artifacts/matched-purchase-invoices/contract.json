@@ -1,0 +1,956 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-09-02T14:40:15.987Z",
+  "updatedAt": "2026-09-02T21:18:24.005Z",
+  "checksum": "1a279f0a1147d301",
+  "frontendContract": {
+    "window": {
+      "id": "107",
+      "name": "Matched Purchase Invoices",
+      "primaryEntity": "matchedInvoice",
+      "category": "purchases",
+      "hidePrint": true,
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
+      "customComponents": {
+        "bulkActions": "MatchedInvoiceBulkActions"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "summaryFields": [],
+      "labelOverrides": {
+        "es_ES": {
+          "C_InvoiceLine_ID": "Línea de factura",
+          "M_InOutLine_ID": "Línea de albarán",
+          "M_Product_ID": "Producto",
+          "Qty": "Cantidad",
+          "DateTrx": "Fecha de transacción",
+          "Processed": "Procesada"
+        },
+        "en_US": {
+          "C_InvoiceLine_ID": "Invoice Line",
+          "M_InOutLine_ID": "Goods Receipt Line",
+          "M_Product_ID": "Product",
+          "Qty": "Quantity",
+          "DateTrx": "Transaction Date",
+          "Processed": "Processed"
+        }
+      },
+      "noHeaderBorder": true,
+      "attachments": false,
+      "layoutType": "default"
+    },
+    "entities": {
+      "matchedInvoice": {
+        "tableName": "M_MatchInv",
+        "tabId": "408",
+        "tabName": "Matched Invoice",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "invoiceLine",
+            "apiKey": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "label": "Invoice Line",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "InvoiceLine",
+            "inputMode": "search",
+            "section": "principal",
+            "seq": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "label": "Goods Receipt Line",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "InOutLine",
+            "inputMode": "search",
+            "section": "principal",
+            "seq": 2,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Product",
+            "inputMode": "search",
+            "section": "principal",
+            "seq": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "quantity",
+            "apiKey": "quantity",
+            "column": "Qty",
+            "label": "Quantity",
+            "type": "quantity",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "DateTrx",
+            "label": "Transaction Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 5,
+            "dot": false,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "label": "Processed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            },
+            "section": "principal",
+            "seq": 6,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Yes",
+                "es_ES": "Sí"
+              },
+              "false": {
+                "en_US": "No",
+                "es_ES": "No"
+              }
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "section": "principal",
+            "seq": 7,
+            "explicitType": true,
+            "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          }
+        ],
+        "searchableFields": [
+          "invoiceLine",
+          "goodsShipmentLine",
+          "product"
+        ],
+        "computedFields": [
+          {
+            "name": "processed",
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          }
+        ],
+        "javaQualifier": "matchedInvoiceHandler"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "107",
+      "name": "Matched Purchase Invoices",
+      "primaryEntity": "matchedInvoice",
+      "category": "purchases",
+      "hidePrint": true,
+      "hideCreate": true,
+      "readOnly": true,
+      "hideDelete": true,
+      "hideDeleteButton": true,
+      "customComponents": {
+        "bulkActions": "MatchedInvoiceBulkActions"
+      },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "summaryFields": [],
+      "labelOverrides": {
+        "es_ES": {
+          "C_InvoiceLine_ID": "Línea de factura",
+          "M_InOutLine_ID": "Línea de albarán",
+          "M_Product_ID": "Producto",
+          "Qty": "Cantidad",
+          "DateTrx": "Fecha de transacción",
+          "Processed": "Procesada"
+        },
+        "en_US": {
+          "C_InvoiceLine_ID": "Invoice Line",
+          "M_InOutLine_ID": "Goods Receipt Line",
+          "M_Product_ID": "Product",
+          "Qty": "Quantity",
+          "DateTrx": "Transaction Date",
+          "Processed": "Processed"
+        }
+      },
+      "noHeaderBorder": true,
+      "attachments": false
+    },
+    "entities": {
+      "matchedInvoice": {
+        "tableName": "M_MatchInv",
+        "tabId": "408",
+        "tabName": "Matched Invoice",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoiceLine",
+            "apiKey": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "apiKey": "quantity",
+            "column": "Qty",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "DateTrx",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_MatchInv_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "matchedInvoiceHandler"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/matchedInvoice",
+        "entity": "matchedInvoice",
+        "supportedFilters": [
+          "invoiceLine",
+          "goodsShipmentLine",
+          "product"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/matchedInvoice/:id",
+        "entity": "matchedInvoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/matchedInvoice",
+        "entity": "matchedInvoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/matchedInvoice/:id",
+        "entity": "matchedInvoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/matchedInvoice/:id",
+        "entity": "matchedInvoice",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "matched-purchase-invoices",
+    "baseUrl": "/sws/neo/matched-purchase-invoices",
+    "crud": {
+      "matchedInvoice": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/matched-purchase-invoices/matchedInvoice",
+        "detailUrl": "/sws/neo/matched-purchase-invoices/matchedInvoice/{id}",
+        "supportedFilters": [
+          "invoiceLine",
+          "goodsShipmentLine",
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "column": "C_InvoiceLine_ID",
+        "reference": "InvoiceLine",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/invoiceLine"
+      },
+      {
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "column": "M_InOutLine_ID",
+        "reference": "InOutLine",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/goodsShipmentLine"
+      },
+      {
+        "entity": "matchedInvoice",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/product"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "matchedInvoice",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases",
+      "readOnly": true
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "C_InvoiceLine_ID": "Línea de factura",
+        "M_InOutLine_ID": "Línea de albarán",
+        "M_Product_ID": "Producto",
+        "Qty": "Cantidad",
+        "DateTrx": "Fecha de transacción",
+        "Processed": "Procesada"
+      },
+      "en_US": {
+        "C_InvoiceLine_ID": "Invoice Line",
+        "M_InOutLine_ID": "Goods Receipt Line",
+        "M_Product_ID": "Product",
+        "Qty": "Quantity",
+        "DateTrx": "Transaction Date",
+        "Processed": "Processed"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-matchedInvoice-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "matchedInvoice",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in matchedInvoice should exist"
+      },
+      {
+        "id": "t-crud-flags-matchedInvoice",
+        "category": "crud-flags",
+        "entity": "matchedInvoice",
+        "runner": "node",
+        "description": "CRUD flags for 'matchedInvoice' should all be booleans"
+      },
+      {
+        "id": "t-displaylogic-evaluable-matchedInvoice-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "matchedInvoice",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in matchedInvoice should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-matchedInvoice-posted",
+        "category": "displaylogic-valid",
+        "entity": "matchedInvoice",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in matchedInvoice should be valid JS"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-goodsShipmentLine",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Field 'goodsShipmentLine' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-invoiceLine",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Field 'invoiceLine' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-posted",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-processed",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-product",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-quantity",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-presence-matchedInvoice-transactionDate",
+        "category": "field-presence",
+        "entity": "matchedInvoice",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should be present in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-goodsShipmentLine",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Field 'goodsShipmentLine' should have type 'string' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-invoiceLine",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Field 'invoiceLine' should have type 'string' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-posted",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-processed",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should have type 'boolean' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-product",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-quantity",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should have type 'number' in matchedInvoice"
+      },
+      {
+        "id": "t-field-type-matchedInvoice-transactionDate",
+        "category": "field-type",
+        "entity": "matchedInvoice",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "Field 'transactionDate' should have type 'string' in matchedInvoice"
+      },
+      {
+        "id": "t-rule-declared-matched-purchase-invoices-Matched-Invoice-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "matched-purchase-invoices-Matched Invoice-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'matched-purchase-invoices-Matched Invoice-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-matched-purchase-invoices-Matched-Invoice-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "matched-purchase-invoices-Matched Invoice-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'matched-purchase-invoices-Matched Invoice-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Post",
+        "category": "rule-declared",
+        "rule": "Post",
+        "runner": "node",
+        "description": "Rule 'Post' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Posted",
+        "category": "rule-declared",
+        "rule": "Posted",
+        "runner": "node",
+        "description": "Rule 'Posted' (process) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-matchedInvoice-goodsShipmentLine",
+        "category": "searchable-filters",
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Field 'goodsShipmentLine' should be a supported filter for matchedInvoice"
+      },
+      {
+        "id": "t-searchable-filters-matchedInvoice-invoiceLine",
+        "category": "searchable-filters",
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Field 'invoiceLine' should be a supported filter for matchedInvoice"
+      },
+      {
+        "id": "t-searchable-filters-matchedInvoice-product",
+        "category": "searchable-filters",
+        "entity": "matchedInvoice",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for matchedInvoice"
+      },
+      {
+        "id": "t-selector-endpoint-matchedInvoice-goodsShipmentLine",
+        "category": "selector-endpoint",
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'goodsShipmentLine' in matchedInvoice should exist"
+      },
+      {
+        "id": "t-selector-endpoint-matchedInvoice-invoiceLine",
+        "category": "selector-endpoint",
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoiceLine' in matchedInvoice should exist"
+      },
+      {
+        "id": "t-selector-endpoint-matchedInvoice-product",
+        "category": "selector-endpoint",
+        "entity": "matchedInvoice",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in matchedInvoice should exist"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-active",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-client",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-createdBy",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-creationDate",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-id",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-organization",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-processNow",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-updated",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-system-field-matchedInvoice-updatedBy",
+        "category": "system-field",
+        "entity": "matchedInvoice",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for matchedInvoice"
+      },
+      {
+        "id": "t-visibility-matchedInvoice",
+        "category": "visibility",
+        "entity": "matchedInvoice",
+        "runner": "node",
+        "description": "Entity 'matchedInvoice' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 40,
+      "byCategory": {
+        "action-endpoint": 1,
+        "crud-flags": 1,
+        "displaylogic-evaluable": 1,
+        "displaylogic-valid": 1,
+        "field-presence": 7,
+        "field-type": 7,
+        "rule-declared": 4,
+        "searchable-filters": 3,
+        "selector-endpoint": 3,
+        "system-field": 11,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 40,
+        "junit": 0
+      }
+    }
+  }
+}

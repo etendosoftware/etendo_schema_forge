@@ -13652,7 +13652,7 @@
       "label": "Language"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "User": {
       "label": "Users"
@@ -16624,6 +16624,9 @@
     "reactivate": "Reactivate",
     "reactivateOrder": "Reactivate Order",
     "cannotReactivateLinkedDocs": "Cannot reactivate: order has linked documents",
+    "bulkRowAlreadyPosted": "Already posted",
+    "bulkRowNotPosted": "Not posted",
+    "docTypeMatchedInvoices": "Receipt-Invoice Link",
     "bulkCompletion": "Bulk Completion",
     "confirmBulk": "Confirm",
     "documentAction": "Document Action",
@@ -24553,7 +24556,7 @@
       "label": "Price List Schema"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "Matched Purchase Orders": {
       "label": "Matched Purchase Orders"
@@ -25599,6 +25602,9 @@
     },
     "Return Shipment": {
       "label": "Return Shipment"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Receipt-Invoice Link"
     }
   },
   "statuses": {
