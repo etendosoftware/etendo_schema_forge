@@ -928,7 +928,10 @@ export function resolveHeaderContent(headerContent, data, bpBanner) {
   if (!bpBanner) return resolvedHeader;
   return (
     <>
-      <BlockingBpBanner {...bpBanner} currencyCode={data?.['currency$_identifier'] ?? null} />
+      <BlockingBpBanner
+        {...bpBanner}
+        currencyCode={data?.['currency$_identifier'] ?? null}
+        data-testid="BlockingBpBanner__dfc406" />
       {resolvedHeader}
     </>
   );
