@@ -40,7 +40,7 @@ nothing about which of these five a user actually hits.
 | 2 | **Download** inside the preview | same component, same blob | the blob from (1) |
 | 3 | **Email — detail view** (envelope in the topbar) | the window's `artifacts/<window>/custom/*Actions.jsx` / `*TopbarExtra.jsx` → `SendDocumentModal pdfBlobUrl=` | its own `useXxxPdf` (no cacheConfig → always fresh) |
 | 4 | **Email — grid row** (hover envelope) | each window's `index.jsx` → `useRowEmailModal({ usePdf })`, or `ReturnWindowShell`'s `emailAction.usePdf` | that hook; **without `usePdf` it silently falls back to `useNoPdf`** |
-| 5 | **Print** — detail button and multi-select in the list | `DetailView` → `DocumentPrintDrawer`, `ListView` → `printDocuments()` | `documentPdfRegistry.js` (no hooks; works for N records) |
+| 5 | **Print** — detail button and multi-select in the list | `DetailView` → `DocumentPrintDrawer`, `ListView` → `printDocuments()` | `documentPdfRegistry.js` (no hooks; works for N records). List multi-select excludes Draft documents from the batch first — see D12 |
 
 Plus two consumers that are easy to forget:
 
@@ -196,6 +196,7 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D9 | Movement documents keep their own template | ETP-4912 | quantities and a receiver signature, no prices. A registry entry therefore carries a renderer, not just a data builder |
 | D10 | `SendDocumentModal` falls back to the registry when no caller supplies a PDF | ETP-4912 | the generic modal in `ListView` has no hook, so it used to preview **and attach** the artifact. One fix covers every present and future consumer |
 | D11 | The PDF hook runs on demand, not on mount | ETP-4912 | `InvoiceTopbarExtra` rendered a full PDF just for opening a completed invoice in edit mode. Now the id is passed only once a consumer opens |
+| D12 | `ListView`'s multi-select `printDocuments()` excludes Draft (`documentStatus === 'DR'`) documents from the batch before rendering anything; if the whole selection is Draft, nothing is generated and an info toast (`printAllDraftExcluded`) is shown instead | ETP-5124 | generic, decisions-driven: the caller (`ListView`'s `toPrintableDocument`) forwards `documentStatus` only for rows that carry it — the same field every document window's `hidePrintWhen: { documentStatus: { notEquals: 'CO' } }` already reads — so a window without that grid field keeps printing everything unfiltered (fail-open) instead of breaking. Partial exclusion is silent by design (AC#6); only the all-Draft case needs a notice (AC#7). The single-document drawer print is unaffected — it is already gated at the button level by `hidePrintWhen` and never reaches this code path in a Draft state |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).

@@ -17843,6 +17843,7 @@
     "comingSoon": "Próximamente",
     "reportServiceUnavailable": "El servicio de reportes no está disponible. Intentalo de nuevo en un momento.",
     "pdfGenerationFailed": "No se pudo generar el PDF. Intentalo de nuevo.",
+    "printAllDraftExcluded": "Todos los documentos seleccionados están en Borrador y no se pueden imprimir. Complétalos primero.",
     "report": "Informe",
     "format": "Formato",
     "records": "registros",

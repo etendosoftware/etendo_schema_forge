@@ -32,6 +32,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 
+/**
+ * Normalizes a selected grid row into what `printDocuments()` needs to exclude Draft
+ * documents from a multi-select print batch (ETP-5124 AC#6/AC#7). Returns a bare id
+ * when the row carries no `documentStatus` — a plain id already selected, or a window
+ * whose decisions.json doesn't declare that field with `grid: true` — so
+ * `printDocuments`'s fail-open default (never treat a missing status as Draft) applies
+ * unchanged; returns `{ id, documentStatus }` only when a status is actually available
+ * to filter on.
+ */
+function toPrintableDocument(row) {
+  const id = row?.id || row;
+  const documentStatus = (row && typeof row === 'object') ? row.documentStatus : undefined;
+  return documentStatus !== undefined ? { id, documentStatus } : id;
+}
+
 function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
   if (quickFilters?.length) {
     const labels = Array.isArray(preset.quickFilterLabels) ? preset.quickFilterLabels : [];
@@ -1015,7 +1030,7 @@ export function ListView({
                     size="icon"
                     title={ui('print')}
                     aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    onClick={() => printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl)}
                     data-testid="Button__620cbc">
                     <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
                   </Button>
