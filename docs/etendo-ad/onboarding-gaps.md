@@ -1448,7 +1448,7 @@ all-dimensions-NULL `C_ValidCombination` per active `C_AcctSchema` (mirroring
 subaccount already has one on ANY schema (mirrors `findGlItemLinkedToAnyCombinationOf` — verified
 against this DB's own hand-made GL Items, e.g. "Capital social"/"Sueldos y salarios", which were
 correctly reused, not duplicated), and otherwise mints exactly one new `C_Glitem` row per
-subaccount (`composeGlItemName`'s ETP-5101 `"<name> <code>"` format) shared across every schema
+subaccount (`composeGlItemName`'s ETP-5101 `"<code> <name>"` format, code leading) shared across every schema
 that needs one. Idempotency key is the natural combination itself (`glitem_debit_acct`), never the
 GL Item name, matching the Java's own documented key choice.
 
@@ -1490,8 +1490,8 @@ convergence, both before N2 was found and after it was fixed); CUT bumped.
 
 ### N2 — `C_Glitem.Name` (varchar(60)) is too short for `composeGlItemName`'s composed format (discovered 2026-09-01, FIXED 2026-09-02)
 
-**Symptom:** `composeGlItemName`'s `"<name> <searchKey>"` format (ETP-5101 §2.1) originally had no
-length guard, but `C_Glitem.Name` is `varchar(60)` while `C_ElementValue.Name` is `varchar(255)`.
+**Symptom:** `composeGlItemName`'s concatenated format (ETP-5101 §2.1) originally had no length
+guard, but `C_Glitem.Name` is `varchar(60)` while `C_ElementValue.Name` is `varchar(255)`.
 Spanish PGC account names routinely exceed that once the 8-digit code is appended — e.g. "Reversión
 del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo otras partes
 vinculadas 79620000" (124 chars). Confirmed live: **294 of GOClient's 658 leaf subaccounts (45%)**
@@ -1508,10 +1508,10 @@ preventive path, purely because of this length limit.
 
 **Fixed, same session, on BOTH fronts:**
 - **Preventive (Java, `GlItemProvisioningSupport`):** `composeGlItemName` + a new `truncateToFit`
-  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Truncates the NAME portion only, hard cut
-  (`String#substring(0, n)`, no ellipsis) — the CODE always survives intact (it is what
-  disambiguates two subaccounts sharing a name, the entire point of appending it). Budget when a
-  code is present: `60 - (1 + code.length())`; `60` flat otherwise.
+  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Format is `"<searchKey> <name, truncated to fit>"` — the
+  code leads (it is the more useful sort/scan key in a flat GL Item list) and always survives
+  intact; the NAME portion is truncated, hard cut (`String#substring(0, n)`, no ellipsis). Budget
+  when a code is present: `60 - (1 + code.length())`; `60` flat otherwise.
 - **Corrective (`R31-glitem-subaccount-backfill.sql`):** mirrors the EXACT same formula in SQL
   (`left(str, n)` is Postgres's `String#substring(0, n)`; `GREATEST(..., 0)` mirrors Java's
   `Math.max(0, maxLength)`), so both fronts converge on byte-identical GL Item names — not merely

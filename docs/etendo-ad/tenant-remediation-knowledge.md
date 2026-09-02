@@ -1775,8 +1775,9 @@ as the immutability trigger for a data-fix `.sql` file.
 - **2026-09-01 — `ElementValue.searchKey` (Java) stores in `C_ElementValue.Value` (DB), never a
   separate "search key" column.** Confirmed via `ElementValue.java`'s own javadoc
   (`"Property searchKey stored in column Value in table C_ElementValue"`). Matters directly for
-  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<name> <searchKey>"` format
-  is really `"<name> <value>"` — the same 5/8-digit posting code documented elsewhere in this file
+  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<searchKey> <name>"` format
+  (code leading, per the 2026-09-02 reorder note below) is really `"<value> <name>"` — the same
+  5/8-digit posting code documented elsewhere in this file
   (e.g. `40700000`). **Apply:** any corrective `.sql` that needs to mirror `composeGlItemName` must
   read `ev.value`, not invent a nonexistent `searchkey` column.
 - **2026-09-01 — `AccountingCombination.stDimension`/`ndDimension` (Java) map to
@@ -1791,7 +1792,7 @@ as the immutability trigger for a data-fix `.sql` file.
   combination that happens to share the account+schema).
 - **2026-09-01 — `C_Glitem.Name` is `varchar(60)`; `C_ElementValue.Name` is `varchar(255)` — a real,
   currently-unguarded mismatch (gap N2 — RESOLVED 2026-09-02, see the dated note below).**
-  `composeGlItemName`'s `"<name> <code>"` format has no length check. Confirmed live: 294 of
+  `composeGlItemName`'s concatenated format has no length check. Confirmed live: 294 of
   GOClient's 658 leaf subaccounts needing a new GL Item (45%) produce a composed name over 60
   chars — Spanish PGC account names are long (e.g. "Reversión del deterioro de participaciones en
   instrumentos de patrimonio neto a largo plazo otras partes vinculadas 79620000", 124 chars).
@@ -1815,7 +1816,9 @@ as the immutability trigger for a data-fix `.sql` file.
   portion only via `String#substring(0, n)` (hard cut, no ellipsis) — the CODE always survives
   intact (always exactly 8 digits per `ChartOfAccountsHandler#isValidAccountCode`; it is what
   disambiguates two subaccounts sharing a name, the entire point of appending it in the first
-  place). Budget when a code is present: `60 - (1 + code.length())` (dynamic, not a hardcoded 51,
+  place; as of the 2026-09-02 reorder note below, the code LEADS the composed name rather than
+  trailing it, but the budget math is unaffected — see that note). Budget when a code is present:
+  `60 - (1 + code.length())` (dynamic, not a hardcoded 51,
   so it stays correct even if the 8-digit invariant ever changes); `60` flat when no code. SQL
   (`R31-glitem-subaccount-backfill.sql`) mirrors this EXACT formula: `left(str, n)` is Postgres's
   `String#substring(0, n)`; `GREATEST(60 - length(code) - 1, 0)` mirrors Java's `Math.max(0,
@@ -1892,3 +1895,24 @@ as the immutability trigger for a data-fix `.sql` file.
   runs `@check`, no writes at all) can still confirm the CLI's own argument/binding path end-to-end.
   A genuinely committed run then needs either the user's own terminal or explicit interactive
   approval — flag this rather than attempting to route around the classifier.
+- **2026-09-02 — `composeGlItemName` reordered to lead with the code — every doc mention of the
+  format string that was `"<name> <code>"`/`"<name, truncated> <searchKey>"` is now stale;
+  supersede those illustrations, not the underlying budget math.** Same session, after N2's
+  truncation fix shipped: the coordinator flipped `composeGlItemName` (Java) from `name + " " +
+  code` (name truncated, code trailing and never truncated) to `code + " " + name` (code leading
+  and never truncated, name truncated) — i.e. the CODE is now a fixed-length PREFIX rather than a
+  never-truncated SUFFIX. Rationale per the updated javadoc: the code is the more useful sort/scan
+  key in a flat GL Item list, so it should lead. **The `GL_ITEM_NAME_MAX_LENGTH = 60` budget math
+  is completely unaffected** — `truncateToFit(name, 60 - (code.length() + 1))` is identical either
+  way, only which side of the `" "` separator the code sits on changed. `R31-glitem-subaccount-
+  backfill.sql` was updated in the SAME PR (both the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation) to swap `left(name, budget) || ' '
+  || code` for `code || ' ' || left(name, budget)`, re-validated byte-for-byte against the new
+  Java order on GOClient (658/658) and QA Testing (61/61) in rolled-back transactions — 0
+  mismatches. **Apply generally:** when a corrective SQL fix mirrors a Java string-composition
+  formula byte-for-byte (the whole point of R31's design), a Java-side reorder of the SAME
+  fields — not just a length/threshold change — is an equally load-bearing drift risk; grep for the
+  literal format-string documentation (`<name> <code>`, `<code> <name>`, etc.) across every doc
+  that describes it, not just the `.sql` file itself, since a stale illustration in
+  `onboarding-gaps.md`/`onboarding-and-datafixes-map.md` will mislead the NEXT person who touches
+  this fix into mirroring the wrong (now-superseded) order.

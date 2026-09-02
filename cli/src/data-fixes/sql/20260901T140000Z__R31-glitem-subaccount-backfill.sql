@@ -82,10 +82,11 @@
 -- C_Glitem: Client/Org copied from the SUBACCOUNT (never the schema) -- matches
 -- createGlItem(subaccount): glItem.setClient(subaccount.getClient()),
 -- glItem.setOrganization(subaccount.getOrganization()). Name = composeGlItemName's ETP-5101 format
--- "<name, truncated to fit> <searchKey>" (searchKey stored in C_ElementValue.Value -- confirmed via
+-- "<searchKey> <name, truncated to fit>" (searchKey stored in C_ElementValue.Value -- confirmed via
 -- ElementValue.java's PROPERTY_SEARCHKEY javadoc), falling back to the (possibly truncated) bare
 -- name when the code is blank (should not happen for a real leaf, kept total to match the Java).
--- See the N2 section above for the truncation formula. EnableInCash/
+-- The code leads (never truncated -- it is the more useful sort/scan key in a flat GL Item list),
+-- the name is the truncated part. See the N2 section above for the truncation formula. EnableInCash/
 -- EnableInFinInvoices left at their column defaults ('N'/'N', confirmed via information_schema),
 -- exactly what createGlItem's untouched OBProvider default object would carry -- satisfies every
 -- CHECK constraint on the table with C_TaxCategory_ID/C_Tax_ID/C_Withholding_ID all NULL.
@@ -108,24 +109,28 @@
 --
 -- N2 -- C_Glitem.Name is varchar(60), C_ElementValue.Name is varchar(255) -- FIXED, both fronts
 -- --------------------------------------------------------------------------------------------
--- composeGlItemName's "<name> <searchKey>" format originally had no length guard. Confirmed live
--- on this DB: for GOClient alone, 294 of the 658 subaccounts that need a brand-new GL Item (45%)
--- produce a composed name over 60 chars (Spanish PGC account names are long -- e.g. "Reversion del
--- deterioro de participaciones en instrumentos de patrimonio neto a largo plazo otras partes
--- vinculadas 79620000", 124 chars). This was not unique to this backfill: the same 60-char limit
--- also silently blocked the LIVE preventive path (GlItemProvisioningSupport#ensureGlItemForSchema
+-- composeGlItemName's concatenated format originally had no length guard. Confirmed live on this
+-- DB: for GOClient alone, 294 of the 658 subaccounts that need a brand-new GL Item (45%) produce a
+-- composed name over 60 chars (Spanish PGC account names are long -- e.g. "Reversion del deterioro
+-- de participaciones en instrumentos de patrimonio neto a largo plazo otras partes vinculadas
+-- 79620000", 124 chars). This was not unique to this backfill: the same 60-char limit also
+-- silently blocked the LIVE preventive path (GlItemProvisioningSupport#ensureGlItemForSchema
 -- swallows the length-validation failure per schema, best-effort). Fixed on the Java side in the
 -- SAME session (composeGlItemName + a new truncateToFit helper, GL_ITEM_NAME_MAX_LENGTH=60): the
 -- NAME portion is hard-truncated (String#substring, no ellipsis), the 8-digit CODE always survives
--- intact (it is what disambiguates two subaccounts sharing a name -- the entire point of appending
+-- intact (it is what disambiguates two subaccounts sharing a name -- the entire point of prepending
 -- it) -- budget = 60 - (1 + code.length()) for the name when a code is present, 60 flat otherwise.
--- This fix mirrors that EXACT formula in SQL (Postgres `left(str, n)` is `String#substring(0, n)`
--- here), so it converges on the identical bytes the live path now produces, not merely "no longer
--- diverges going forward" -- a subaccount touched by BOTH fronts (e.g. backfilled by R31, later
--- renamed via a live PUT) must get the SAME GL Item name either way. The length guard that used to
--- gate `subaccounts_needing_new_item` is gone entirely: every composed name fits by construction
--- once truncation is applied, so nothing is skipped anymore. `@report` now lists which subaccounts
--- actually got a truncated (not verbatim) name, for operator visibility -- mirrors R19's pattern.
+-- composeGlItemName was later reordered (still same session) to lead with the code -- "<searchKey>
+-- <name, truncated to fit>" -- since the code is the more useful sort/scan key in a flat GL Item
+-- list; the 60-char budget math is unchanged, only which side of the space the code sits on. This
+-- fix mirrors that EXACT current formula in SQL (Postgres `left(str, n)` is `String#substring(0,
+-- n)` here), so it converges on the identical bytes the live path now produces, not merely "no
+-- longer diverges going forward" -- a subaccount touched by BOTH fronts (e.g. backfilled by R31,
+-- later renamed via a live PUT) must get the SAME GL Item name either way. The length guard that
+-- used to gate `subaccounts_needing_new_item` is gone entirely: every composed name fits by
+-- construction once truncation is applied, so nothing is skipped anymore. `@report` now lists
+-- which subaccounts actually got a truncated (not verbatim) name, for operator visibility --
+-- mirrors R19's pattern.
 
 -- @check
 -- DISTINCT ON (subaccount, schema), lowest combo id wins -- MUST mirror @apply's own
@@ -260,15 +265,16 @@ WITH natural_combos AS (
     get_uuid() AS new_glitem_id
   FROM subaccounts_needing_new_item n
 ), created_items AS (
-  -- composeGlItemName's own format, byte-for-byte: "<name, truncated to fit> <searchKey>"
+  -- composeGlItemName's own format, byte-for-byte: "<searchKey> <name, truncated to fit>"
   -- (searchKey = C_ElementValue.Value), falling back to the (possibly truncated) bare name when
-  -- the code is blank. Mirrors truncateToFit(name, GL_ITEM_NAME_MAX_LENGTH - suffix.length())
+  -- the code is blank. Mirrors truncateToFit(name, GL_ITEM_NAME_MAX_LENGTH - prefix.length())
   -- exactly: `left(str, n)` is Postgres's `String#substring(0, n)` (a hard cut, no ellipsis);
   -- GREATEST(..., 0) mirrors Java's Math.max(0, maxLength) so a pathological code >= 59 chars
   -- (never happens today -- ChartOfAccountsHandler#isValidAccountCode enforces exactly 8 digits --
   -- kept for exact parity with the Java rather than assuming that invariant here) still produces a
   -- non-negative substring length instead of Postgres's own negative-n "all but last |n| chars"
-  -- extension, which would silently disagree with Java's clamp-to-zero behavior.
+  -- extension, which would silently disagree with Java's clamp-to-zero behavior. The code always
+  -- leads and is never truncated -- it is what disambiguates two subaccounts sharing a name.
   INSERT INTO c_glitem (
     c_glitem_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,
     name, description, enableincash, enableinfininvoices, c_taxcategory_id, c_tax_id, c_withholding_id
@@ -277,7 +283,7 @@ WITH natural_combos AS (
     itc.new_glitem_id, itc.ad_client_id, itc.subaccount_org_id, 'Y', now(), '0', now(), '0',
     CASE
       WHEN itc.subaccount_code IS NULL OR itc.subaccount_code = '' THEN left(itc.subaccount_name, 60)
-      ELSE left(itc.subaccount_name, GREATEST(60 - length(itc.subaccount_code) - 1, 0)) || ' ' || itc.subaccount_code
+      ELSE itc.subaccount_code || ' ' || left(itc.subaccount_name, GREATEST(60 - length(itc.subaccount_code) - 1, 0))
     END,
     NULL, 'N', 'N', NULL, NULL, NULL
   FROM items_to_create itc
@@ -339,7 +345,7 @@ FROM (
     ev.name AS account_name,
     CASE
       WHEN ev.value IS NULL OR ev.value = '' THEN left(ev.name, 60)
-      ELSE left(ev.name, GREATEST(60 - length(ev.value) - 1, 0)) || ' ' || ev.value
+      ELSE ev.value || ' ' || left(ev.name, GREATEST(60 - length(ev.value) - 1, 0))
     END AS expected_truncated_name,
     length(ev.name || ' ' || ev.value) AS original_composed_length,
     vc.c_validcombination_id AS combo_id
