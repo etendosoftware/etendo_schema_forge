@@ -293,6 +293,27 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
 matchers, and returns the original (untranslated) message if neither matches — never throws and
 never silently swallows an unrecognized backend error.
 
+**Multi-line messages (ETP-5109).** Some backends accumulate several result messages into one
+newline-joined buffer before returning it — `SaltEdgeAccountLinkHelper.fetchAccountTransactions`
+appends its max-fetch-interval warning immediately before the connection-inactive one, so two
+individually translatable messages arrive as a single string that matches no skeleton as a whole.
+When the message as a whole resolves to nothing and contains a newline, `translateBackendError`
+retries **line by line**: every line that matches is translated, every line that does not is kept
+verbatim, and if no line resolves the original message is returned untouched. A new matcher gets
+this for free — it needs no awareness of the multi-line case.
+
+**Two traps when writing the locale string:**
+
+1. **`useUI` interpolation is not global.** It is `text.replace(`{${p}}`, params[p])`
+   (`app-shell-core/src/i18n/useUI.js`), and `String.replace` with a *string* pattern substitutes
+   only the FIRST occurrence. A literal that mentions the same placeholder twice renders the second
+   one as raw `{param}` in the UI. Reword so each placeholder appears once
+   (see `backendError.psd2ImportDateBeyondMaxInterval`, whose English original repeats its `%0`).
+2. **A backend template written with `%s` never interpolates.** `OBMessageUtils.getI18NMessage`
+   substitutes `%0` only, so an `AD_MESSAGE` authored with `%s` reaches the user with the literal
+   `%s` in it. That makes the string constant, i.e. an exact-match entry rather than a matcher —
+   `PSD2_NoActiveConnectionForAccount` is the live example.
+
 ## Shared RelatedDocuments Components
 
 The `tools/app-shell/src/components/related-documents/` library provides i18n-ready building blocks:

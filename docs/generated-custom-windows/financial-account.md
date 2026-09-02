@@ -480,6 +480,20 @@ native app-shell UI; only the bank login is an external popup.
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
   "Sincronizar extractos" button that replaces the manual import/create split-button.
+- **Sync result messages are translated in the frontend, not by Core (ETP-4891, ETP-5109).** The
+  bridge returns HTTP 200 with `{status, message}`, where `message` is the raw `AD_MESSAGE` text
+  built by `SaltEdgeAccountLinkHelper.fetchAccountTransactions`. `com.etendoerp.psd2.bank.integration`
+  ships its es_ES text in a separate `.es_es` translation module, so an environment that never
+  imported that pack resolves `AD_MESSAGE_TRL` to the English string with `istranslated = 'N'` — and
+  the toast reads English on a Spanish UI. The SPA therefore maps these strings itself in
+  `tools/app-shell/src/lib/backendErrors.js` (`translateBackendError`), covering
+  `PSD2_TransactionsObtained`, `PSD2_NoNewTransactionsFound`, the bank-error wrapper,
+  `PSD2_ConnectionWentInactive`, `PSD2_ConsentExpiredReconnect`,
+  `PSD2_ImportDateBeyondMaxInterval` and `PSD2_NoActiveConnectionForAccount`. Two consequences worth
+  knowing before touching either side: those English strings are a **de facto wire contract** —
+  rewording one on the Java side silently un-translates the toast — and because the helper can
+  append several messages into one newline-joined buffer, `translateBackendError` resolves the
+  string **line by line**.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
   a sync icon, both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
