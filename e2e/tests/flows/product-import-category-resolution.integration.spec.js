@@ -55,14 +55,14 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
 
     const categoriesResponse = await page.request.get(
       '/sws/neo/product-category/productCategory?limit=1000',
-      { headers: apiAuthHeaders(page) },
+      { headers: await apiAuthHeaders(page) },
     );
     const categoriesPayload = { status: categoriesResponse.status(), body: await categoriesResponse.json() };
     expect(categoriesPayload.status).toBe(200);
     const categories = categoriesPayload.body?.response?.data ?? categoriesPayload.body?.data ?? [];
     const defaultsResponse = await page.request.get(
       '/sws/neo/product/product/defaults',
-      { headers: apiAuthHeaders(page) },
+      { headers: await apiAuthHeaders(page) },
     );
     const defaultsPayload = { status: defaultsResponse.status(), body: await defaultsResponse.json() };
     expect(defaultsPayload.status).toBe(200);

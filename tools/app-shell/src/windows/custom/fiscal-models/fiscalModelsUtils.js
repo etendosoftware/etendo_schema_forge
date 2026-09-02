@@ -675,7 +675,10 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
  * action is always a meaningful follow-up.
  */
 export async function validate349Vies(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone. Under the cookie session the client holds no
+  // token, so a `!token` gate is permanently false and the request is simply never
+  // issued - no error, no failed response, just a button that does nothing.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period });

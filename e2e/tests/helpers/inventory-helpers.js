@@ -142,8 +142,8 @@ function normalize(value) {
 // ETP-4576: the session is no longer readable from localStorage — replay what
 // the application itself authenticates with (see `apiAuthHeaders`). Empty under
 // the cookie scheme, which is correct: page.request shares the context's jar.
-function getAuthHeaders(page) {
-  return { ...apiAuthHeaders(page), 'Content-Type': 'application/json' };
+async function getAuthHeaders(page) {
+  return { ...(await apiAuthHeaders(page)), 'Content-Type': 'application/json' };
 }
 
 /** Extracts the single record object NEO wraps CRUD create/update responses in
@@ -256,7 +256,7 @@ export async function ensureStockOnHand(page, { productName, warehouseName, minQ
     throw new Error('ensureStockOnHand requires a positive minQty.');
   }
 
-  const headers = getAuthHeaders(page);
+  const headers = await getAuthHeaders(page);
 
   const warehouseId = await resolveWarehouseId(page, { warehouseName, headers });
   const { productId, uomId } = await resolveProduct(page, { productName, warehouseName, headers });

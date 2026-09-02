@@ -58,7 +58,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
 
     const categoriesResponse = await page.request.get(
       '/sws/neo/business-partner-category/businessPartnerCategory?limit=1000',
-      { headers: apiAuthHeaders(page) },
+      { headers: await apiAuthHeaders(page) },
     );
     const categoriesPayload = { status: categoriesResponse.status(), body: await categoriesResponse.json() };
     expect(categoriesPayload.status).toBe(200);

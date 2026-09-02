@@ -43,7 +43,7 @@ test.describe('Onboarding invoice readiness', () => {
 
     const selectorRes = await page.request.get(
       '/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0',
-      { headers: apiAuthHeaders(page) },
+      { headers: await apiAuthHeaders(page) },
     );
     const selectorResponse = { status: selectorRes.status(), body: await selectorRes.json() };
 

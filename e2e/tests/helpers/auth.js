@@ -60,8 +60,25 @@ export function captureApiCredentials(page) {
  * is correct, not a failure: the context's cookie jar already carries it.
  * `login()` starts the capture, so call this only after logging in.
  */
-export function apiAuthHeaders(page) {
-  return { ...(capturedApiHeaders.get(page) || {}) };
+export async function apiAuthHeaders(page) {
+  const headers = { ...(capturedApiHeaders.get(page) || {}) };
+  // The CSRF proof is ASKED FOR, never replayed from a captured request. Two reasons the
+  // spied value is not good enough: entering an environment ROTATES the session (see
+  // `handleSessionEnvironment`), so a proof captured before that is already stale and comes
+  // back 403; and if the app happens to issue only reads after login there is no unsafe
+  // request to capture one from at all. `GET /sws/go/session` answers with the CURRENT
+  // csrfToken, and `page.request` shares the context's cookie jar, so this call
+  // authenticates itself.
+  try {
+    const res = await page.request.get('/sws/go/session');
+    if (res.ok()) {
+      const body = await res.json().catch(() => null);
+      if (body?.csrfToken) headers['X-Go-CSRF'] = body.csrfToken;
+    }
+  } catch {
+    // No cookie session (bearer, or not logged in yet): whatever was captured is all there is.
+  }
+  return headers;
 }
 
 export async function login(page, {

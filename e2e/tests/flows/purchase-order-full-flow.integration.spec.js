@@ -1007,7 +1007,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       // lives in memory (bearer) or in an HttpOnly cookie. Replay whatever the
       // app itself authenticates with; page.request shares the cookie jar.
       const reread = await page.request.get(`/sws/neo/purchase-order/header/${recordId}`, {
-        headers: apiAuthHeaders(page),
+        headers: await apiAuthHeaders(page),
       });
       expect(reread.ok(),
         `Re-reading the saved PO should succeed (got ${reread.status()})`,

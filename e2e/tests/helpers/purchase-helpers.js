@@ -226,7 +226,7 @@ function pickDeterministicFixture(candidates) {
 async function findVendorFixture(page) {
   // ETP-4576: the session is no longer readable from localStorage — replay what
   // the application itself authenticates with (see `apiAuthHeaders`).
-  const headers = apiAuthHeaders(page);
+  const headers = await apiAuthHeaders(page);
 
   const filtered = await queryVendorFixtureCandidates(page, headers, { useCriteria: true });
   if (filtered.length > 0) {
@@ -459,7 +459,7 @@ async function ensureVendorPaymentFieldsSet(page) {
 async function fetchVendorLocationCount(page, bpId) {
   const res = await page.request.get('/sws/neo/contacts/locationAddress', {
     params: { parentId: bpId },
-    headers: apiAuthHeaders(page),
+    headers: await apiAuthHeaders(page),
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorAddress: location lookup failed (${res.status()}): ${await res.text()}`);
