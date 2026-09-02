@@ -528,3 +528,85 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
     expect(result.current.error).toBeInstanceOf(Error);
   });
 });
+
+// ETP-4965 — useNeoPost used to build the thrown Error out of `error.message` + status only, and
+// DISCARD the rest of the parsed body. That made every machine-readable field the backend already
+// sends invisible to callers: the 400's `code` (which tells the panel to open the accounting-concept
+// picker and retry instead of just red-toasting an English sentence) and the 409's
+// `remainderLineId` (which tells it to retarget the pending sub-line). Attaching the parsed JSON to
+// `err.body` is the prerequisite for both flows.
+describe('useNeoPost error body (ETP-4965)', () => {
+  it('attaches the parsed error body to the thrown error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: { message: 'An accounting concept is required', status: 400 },
+        code: 'GL_ITEM_REQUIRED',
+        differenceAmount: '0.38',
+      }),
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    // The message/status contract is unchanged...
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toBe('An accounting concept is required');
+    expect(caught.status).toBe(400);
+    // ...and the rest of the body is now reachable, which is the whole point.
+    expect(caught.body).toEqual({
+      error: { message: 'An accounting concept is required', status: 400 },
+      code: 'GL_ITEM_REQUIRED',
+      differenceAmount: '0.38',
+    });
+    expect(caught.body.code).toBe('GL_ITEM_REQUIRED');
+    // The same error instance is what `error` exposes, so a component reading either sees the body.
+    expect(result.current.error.body.code).toBe('GL_ITEM_REQUIRED');
+  });
+
+  it('exposes the 409 remainderLineId so the caller can retarget the pending sub-line', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error: { message: 'Statement line is already reconciled', status: 409 },
+        remainderLineId: 'LP1-rem',
+      }),
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    expect(caught.status).toBe(409);
+    expect(caught.body.remainderLineId).toBe('LP1-rem');
+  });
+
+  it('leaves body undefined (never throws) when the error payload is not JSON', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => { throw new Error('not json'); },
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    expect(caught.message).toBe('HTTP 500');
+    expect(caught.status).toBe(500);
+    // `json` parsed to null — reading `.code` off the body must not blow up in the caller.
+    expect(caught.body ?? null).toBeNull();
+  });
+});
