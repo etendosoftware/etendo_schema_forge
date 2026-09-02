@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { loadLocaleDictionary, makeRealTMenu } from '../../../windows/custom/shared/__tests__/testUtils/realLocaleUI.js';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
 // hooks, sub-components, lib helpers). Mirror the mocks used by
@@ -249,7 +247,8 @@ describe('getLinesContainerClassName', () => {
 // contract.json's window.category — see artifacts/<window>/generated/web/<window>/*.jsx),
 // and it is only as correct as the `menus`/`windows`/`ui` locale entries that
 // `useMenuLabel()`'s real lookup chain (ui -> menus -> windows -> tabs ->
-// genericLabels -> raw key, mirrored below) resolves each segment against.
+// genericLabels -> raw key, mirrored by makeRealTMenu below) resolves each
+// segment against.
 // Both ListView and DetailView translate that same breadcrumb string through
 // the SAME algorithm (ListView.jsx's inline `breadcrumb.split(' / ').map(tMenu)…`
 // is getFullBreadcrumb(breadcrumb, tMenu, '', label) with an empty title — see
@@ -257,24 +256,9 @@ describe('getLinesContainerClassName', () => {
 // above), so exercising getFullBreadcrumb/getWindowTitle here with a real
 // locale dictionary covers both the list and the detail page for these two
 // windows without needing to render either component tree.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const localesDir = join(__dirname, '..', '..', '..', 'locales');
-const esES = JSON.parse(readFileSync(join(localesDir, 'es_ES.json'), 'utf8'));
-const enUS = JSON.parse(readFileSync(join(localesDir, 'en_US.json'), 'utf8'));
-const esAR = JSON.parse(readFileSync(join(localesDir, 'es_AR.json'), 'utf8'));
-
-// Mirrors useMenuLabel()'s real lookup order against a real dictionary,
-// without needing a full LocaleProvider/React tree (same helper shape as
-// windows/custom/calendar/__tests__/calendar-window-title.i18n.vitest.jsx).
-function makeTMenu(dictionary) {
-  return (key) =>
-    dictionary?.ui?.[key]?.label ??
-    dictionary?.menus?.[key]?.label ??
-    dictionary?.windows?.[key]?.label ??
-    dictionary?.tabs?.[key]?.label ??
-    dictionary?.genericLabels?.[key] ??
-    key;
-}
+const esES = loadLocaleDictionary('es_ES');
+const enUS = loadLocaleDictionary('en_US');
+const esAR = loadLocaleDictionary('es_AR');
 
 // The generated artifacts' own hardcoded breadcrumb constants — kept in sync
 // manually here since they are generator output (never hand-edited):
@@ -284,30 +268,29 @@ const CHART_OF_ACCOUNTS_BREADCRUMB = 'Finance / Chart of Accounts';
 const ASSET_GROUP_BREADCRUMB = 'Finance / Asset Group';
 
 describe.each([
-  ['es_ES', esES, 'Plan de cuentas'],
-  ['en_US', enUS, 'Chart of Accounts'],
-  ['es_AR', esAR, 'Plan de cuentas'],
-])('chart-of-accounts breadcrumb (%s)', (_locale, dictionary, expectedName) => {
-  const tMenu = makeTMenu(dictionary);
+  ['es_ES', esES, 'Plan de cuentas', 'Finanzas'],
+  ['en_US', enUS, 'Chart of Accounts', 'Finance'],
+  ['es_AR', esAR, 'Plan de cuentas', 'Finanzas'],
+])('chart-of-accounts breadcrumb (%s)', (_locale, dictionary, expectedName, expectedSection) => {
+  const tMenu = makeRealTMenu(dictionary);
 
   it(`resolves the window title to "${expectedName}"`, () => {
     expect(getWindowTitle(CHART_OF_ACCOUNTS_BREADCRUMB, tMenu, 'ignored')).toBe(expectedName);
   });
 
-  it(`resolves the full breadcrumb to "Finanzas / ${expectedName}" (not the stale "Contabilidad" section)`, () => {
+  it(`resolves the full breadcrumb to "${expectedSection} / ${expectedName}" (not the stale "Contabilidad" section)`, () => {
     const breadcrumb = getFullBreadcrumb(CHART_OF_ACCOUNTS_BREADCRUMB, tMenu, '', expectedName);
-    const expectedSection = dictionary.ui.Finance.label;
     expect(breadcrumb).toBe(`${expectedSection} / ${expectedName}`);
     expect(breadcrumb).not.toContain('Contabilidad');
   });
 });
 
 describe.each([
-  ['es_ES', esES, 'Grupo de activos'],
-  ['en_US', enUS, 'Asset Group'],
-  ['es_AR', esAR, 'Grupo de activos'],
-])('asset-group breadcrumb (%s)', (_locale, dictionary, expectedName) => {
-  const tMenu = makeTMenu(dictionary);
+  ['es_ES', esES, 'Grupo de activos', 'Finanzas'],
+  ['en_US', enUS, 'Asset Group', 'Finance'],
+  ['es_AR', esAR, 'Grupo de activos', 'Finanzas'],
+])('asset-group breadcrumb (%s)', (_locale, dictionary, expectedName, expectedSection) => {
+  const tMenu = makeRealTMenu(dictionary);
 
   it(`resolves the window title to "${expectedName}" (not the stale "Asset Category" translation)`, () => {
     const title = getWindowTitle(ASSET_GROUP_BREADCRUMB, tMenu, 'ignored');
@@ -316,9 +299,8 @@ describe.each([
     expect(title).not.toContain('Asset Category');
   });
 
-  it(`resolves the full breadcrumb to "Finanzas / ${expectedName}"`, () => {
+  it(`resolves the full breadcrumb to "${expectedSection} / ${expectedName}"`, () => {
     const breadcrumb = getFullBreadcrumb(ASSET_GROUP_BREADCRUMB, tMenu, '', expectedName);
-    const expectedSection = dictionary.ui.Finance.label;
     expect(breadcrumb).toBe(`${expectedSection} / ${expectedName}`);
     expect(breadcrumb).not.toContain('Categoría de Activos');
   });

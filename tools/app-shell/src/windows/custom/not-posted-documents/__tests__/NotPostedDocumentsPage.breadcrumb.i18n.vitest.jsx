@@ -81,10 +81,14 @@ beforeEach(() => {
   setMetaMock.mockClear();
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('NotPostedDocumentsPage — breadcrumb against the real locale dictionary (ETP-4945)', () => {
   it('resolves the es_ES breadcrumb to "Finanzas / Documentos no contabilizados" (previously missing entirely)', async () => {
     activeUi = realUiEs;
-    globalThis.fetch = mkFetch(ROWS);
+    vi.stubGlobal('fetch', mkFetch(ROWS));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     await waitFor(() => expect(setMetaMock).toHaveBeenCalled());
@@ -93,21 +97,21 @@ describe('NotPostedDocumentsPage — breadcrumb against the real locale dictiona
     expect(lastCall.title).toBe('Documentos no contabilizados');
   });
 
-  it('resolves the en_US breadcrumb to "Finance / Unposted Documents"', async () => {
+  it('resolves the en_US breadcrumb to "Finance / Not Posted Documents"', async () => {
     activeUi = realUiEn;
-    globalThis.fetch = mkFetch(ROWS);
+    vi.stubGlobal('fetch', mkFetch(ROWS));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     await waitFor(() => expect(setMetaMock).toHaveBeenCalled());
     const lastCall = setMetaMock.mock.calls.at(-1)[0];
-    expect(lastCall.breadcrumb).toBe(`Finance / ${enUS.genericLabels.notPostedDocuments}`);
+    expect(lastCall.breadcrumb).toBe('Finance / Not Posted Documents');
   });
 });
 
 describe('NotPostedDocumentsPage — filter labels against the real locale dictionary (ETP-4945)', () => {
   it('renders "Desde"/"Hasta" for the date-range filters in es_ES, not the hardcoded English "From"/"To"', async () => {
     activeUi = realUiEs;
-    globalThis.fetch = mkFetch([]);
+    vi.stubGlobal('fetch', mkFetch([]));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     await waitFor(() => expect(screen.getByTestId('npd-filter-apply')).toBeInTheDocument());
@@ -119,7 +123,7 @@ describe('NotPostedDocumentsPage — filter labels against the real locale dicti
 
   it('renders "From"/"To" in en_US', async () => {
     activeUi = realUiEn;
-    globalThis.fetch = mkFetch([]);
+    vi.stubGlobal('fetch', mkFetch([]));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     await waitFor(() => expect(screen.getByTestId('npd-filter-apply')).toBeInTheDocument());
@@ -131,7 +135,7 @@ describe('NotPostedDocumentsPage — filter labels against the real locale dicti
 describe('NotPostedDocumentsPage — document-type badge translation (ETP-4945)', () => {
   it('renders the mapped label for a known document-type code, not the raw code', async () => {
     activeUi = realUiEs;
-    globalThis.fetch = mkFetch(ROWS);
+    vi.stubGlobal('fetch', mkFetch(ROWS));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     const row = await screen.findByTestId('npd-row-doc-1');
@@ -141,7 +145,7 @@ describe('NotPostedDocumentsPage — document-type badge translation (ETP-4945)'
 
   it('falls back to the raw code for a document type absent from the filter-options catalog', async () => {
     activeUi = realUiEs;
-    globalThis.fetch = mkFetch(ROWS);
+    vi.stubGlobal('fetch', mkFetch(ROWS));
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
 
     const row = await screen.findByTestId('npd-row-doc-2');
