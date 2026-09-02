@@ -384,6 +384,7 @@ export const api = {
   "actions": [
     {
       "entity": "header",
+      "field": "aPRMAddpayment",
       "column": "EM_APRM_Addpayment",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aPRMAddpayment",
       "processId": "9BED7889E1034FE68BD85D5D16857320",
@@ -391,6 +392,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "aPRMProcessinvoice",
       "column": "EM_APRM_Processinvoice",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aPRMProcessinvoice",
       "processId": "B54318B49E984B9CB855AEFB1F474CD6",
@@ -398,6 +400,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "documentAction",
       "column": "DocAction",
       "url": "/sws/neo/sales-invoice/header/{id}/action/documentAction",
       "processId": "111",
@@ -405,6 +408,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "createLinesFromOrder",
       "column": "Createfromorders",
       "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFromOrder",
       "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
@@ -412,6 +416,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "createLinesFromShipment",
       "column": "Createfrominouts",
       "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFromShipment",
       "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
@@ -419,6 +424,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "copyFrom",
       "column": "CopyFrom",
       "url": "/sws/neo/sales-invoice/header/{id}/action/copyFrom",
       "processId": "210",
@@ -426,6 +432,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "calculatePromotions",
       "column": "Calculate_Promotions",
       "url": "/sws/neo/sales-invoice/header/{id}/action/calculatePromotions",
       "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
@@ -433,6 +440,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
@@ -440,6 +448,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "tBAIQRcode",
       "column": "em_tbai_qrcode",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tBAIQRcode",
       "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
@@ -447,6 +456,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "etvfacRectCreate",
       "column": "EM_Etvfac_Rect_Create",
       "url": "/sws/neo/sales-invoice/header/{id}/action/etvfacRectCreate",
       "processId": "E36A8BA259164E78AFDDC760172C18F5",
@@ -454,6 +464,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "tbaiXmlgenerator",
       "column": "EM_Tbai_Xmlgenerator",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiXmlgenerator",
       "processId": "BE2486102F2C41779B760609FD69A225",
@@ -461,6 +472,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "eTPRRemovePayment",
       "column": "EM_Etpr_Remove_Payment",
       "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
       "processId": "745FCF75B6F14024B96CC14429D8E952",
@@ -468,6 +480,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "tbaiVoidxmlgenerator",
       "column": "EM_Tbai_Voidxmlgenerator",
       "url": "/sws/neo/sales-invoice/header/{id}/action/tbaiVoidxmlgenerator",
       "processId": "535A8BAE44A34759A7C8FF40D62A5070",
@@ -475,6 +488,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "aeatsiiSend",
       "column": "EM_Aeatsii_Send",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiSend",
       "processId": "2ECF46DAAEEB486EAF79D3594D50DE5F",
@@ -482,6 +496,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "aeatsiiModif",
       "column": "EM_Aeatsii_Modif",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiModif",
       "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
@@ -489,6 +504,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/sales-invoice/header/{id}/action/processNow",
       "processId": "111",
@@ -496,6 +512,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "generateTo",
       "column": "GenerateTo",
       "url": "/sws/neo/sales-invoice/header/{id}/action/generateTo",
       "processId": "142",
@@ -503,11 +520,13 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "createLinesFrom",
       "column": "CreateFrom",
       "url": "/sws/neo/sales-invoice/header/{id}/action/createLinesFrom"
     },
     {
       "entity": "header",
+      "field": "aeatsiiDup",
       "column": "EM_Aeatsii_Dup",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiDup",
       "processId": "92C02F9A367140C085D1EE3BD27C4E96",
@@ -515,6 +534,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "aeatsiiUnsubscribe",
       "column": "EM_Aeatsii_Unsubscribe",
       "url": "/sws/neo/sales-invoice/header/{id}/action/aeatsiiUnsubscribe",
       "processId": "BE564945CB2D4892AC0EE51204C5DB7D",
@@ -522,6 +542,7 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "psd2GenerateBankPayment",
       "column": "EM_Psd2_Generate_Bank_Payment",
       "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
       "processId": "0661406A983B4D8EA611F8596F114D52",
@@ -529,6 +550,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "explode",
       "column": "Explode",
       "url": "/sws/neo/sales-invoice/lines/{id}/action/explode",
       "processId": "6E1ADD5C8B6B4ACB82237DAA8114451E",
@@ -536,6 +558,7 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "matchLCCosts",
       "column": "Match_Lccosts",
       "url": "/sws/neo/sales-invoice/lines/{id}/action/matchLCCosts",
       "processId": "281FFDFAB31C4394A2EAA73A6F9F3A3F",
@@ -543,6 +566,7 @@ export const api = {
     },
     {
       "entity": "paymentPlan",
+      "field": "updatePaymentPlan",
       "column": "Update_Payment_Plan",
       "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/updatePaymentPlan",
       "processId": "FB740AB61B0E42B198D2C88D3A0D0CE6",
@@ -550,6 +574,7 @@ export const api = {
     },
     {
       "entity": "paymentPlan",
+      "field": "aprmModifPaymentINPlan",
       "column": "EM_Aprm_Modif_Paym_Sched",
       "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/aprmModifPaymentINPlan",
       "processId": "4EEB3497082C4F2182E16A4371CD5D96",
@@ -557,6 +582,7 @@ export const api = {
     },
     {
       "entity": "paymentPlan",
+      "field": "aprmModifPaymentOUTPlan",
       "column": "EM_Aprm_Modif_Paym_Out_Sched",
       "url": "/sws/neo/sales-invoice/paymentPlan/{id}/action/aprmModifPaymentOUTPlan",
       "processId": "6F87442DF7BC43AB8A666BDED2F7D64E",

@@ -565,6 +565,7 @@ export const api = {
   "actions": [
     {
       "entity": "businessPartner",
+      "field": "setNewCurrency",
       "column": "Update_Currency",
       "url": "/sws/neo/contacts/businessPartner/{id}/action/setNewCurrency",
       "processId": "B5C942145F354ABEBC9F16235D80D776",
@@ -572,6 +573,7 @@ export const api = {
     },
     {
       "entity": "customer",
+      "field": "setNewCurrency",
       "column": "Update_Currency",
       "url": "/sws/neo/contacts/customer/{id}/action/setNewCurrency",
       "processId": "B5C942145F354ABEBC9F16235D80D776",
@@ -579,6 +581,7 @@ export const api = {
     },
     {
       "entity": "vendorCreditor",
+      "field": "setNewCurrency",
       "column": "Update_Currency",
       "url": "/sws/neo/contacts/vendorCreditor/{id}/action/setNewCurrency",
       "processId": "B5C942145F354ABEBC9F16235D80D776",
@@ -586,6 +589,7 @@ export const api = {
     },
     {
       "entity": "employee",
+      "field": "setNewCurrency",
       "column": "Update_Currency",
       "url": "/sws/neo/contacts/employee/{id}/action/setNewCurrency",
       "processId": "B5C942145F354ABEBC9F16235D80D776",
@@ -593,6 +597,7 @@ export const api = {
     },
     {
       "entity": "contact",
+      "field": "grantPortalAccess",
       "column": "Grant_Portal_Access",
       "url": "/sws/neo/contacts/contact/{id}/action/grantPortalAccess",
       "processId": "97FFD59B991D49BFB5153C309B009272",
@@ -600,6 +605,7 @@ export const api = {
     },
     {
       "entity": "contact",
+      "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/contacts/contact/{id}/action/processNow"
     }
