@@ -28,7 +28,15 @@ vi.mock('@generated/dashboard/generated/config', () => ({
 }));
 
 vi.mock('@/auth/AuthContext', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  // ETP-5088 — widget visibility now decides what this hook fetches at all. These suites are
+  // about the mapping, not the gating, so they run as a client-admin (every gate open), which is
+  // exactly how they behaved before the gating landed. The gating itself is covered by
+  // `src/lib/__tests__/dashboardWidgetAccess.test.js` and `pages/__tests__/DashboardPage.vitest.jsx`.
+  useAuth: () => ({
+    token: 'test-token',
+    windowAccess: {},
+    capabilities: { isAdminOrClientAdmin: true },
+  }),
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({

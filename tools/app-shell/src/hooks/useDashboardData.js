@@ -3,6 +3,7 @@ import { kpisConfig, actions } from '@generated/dashboard/generated/config';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { createDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { useDashboardWidgetAccess } from '@/hooks/useDashboardWidgetAccess.js';
 import { useDashboardDateRange } from '@/components/dashboard/DashboardDateRangeContext';
 
 /* ------------------------------------------------------------------
@@ -341,12 +342,22 @@ export function useDashboardData() {
 
   const apiFetch = useApiFetch();
 
+  // ETP-5088 — role-derived widget visibility. A widget this role cannot see is not merely
+  // hidden: its request is never issued (`skipUnlessVisible` below), so a restricted role costs
+  // fewer round trips instead of fetching data it will not be shown.
+  const access = useDashboardWidgetAccess();
+  const { isWidgetVisible, filterFeed, pendingAmountsVisibility } = access;
+
   const fetchData = useCallback(async () => {
     if (!token) {
       setData(buildEmptyFallback());
       setLoading(false);
       return;
     }
+
+    // Resolves to the widget's fetch when visible, and to a `null` result — indistinguishable
+    // from an unavailable widget downstream — when it is not.
+    const skipUnlessVisible = (visible, run) => (visible ? run() : Promise.resolve(null));
 
     setLoading(true);
     try {
@@ -357,15 +368,17 @@ export function useDashboardData() {
       ] = await Promise.allSettled([
         // ETP-5011: the Financial Summary widget is always a calendar-year figure
         // and does not follow the date-range selector, so `kpis` is fetched without `range`.
-        fetchWidget(apiFetch, 'kpis', null),
-        fetchWidget(apiFetch, 'trends', range),
+        skipUnlessVisible(isWidgetVisible('kpis'), () => fetchWidget(apiFetch, 'kpis', null)),
+        skipUnlessVisible(isWidgetVisible('trends'), () => fetchWidget(apiFetch, 'trends', range)),
+        // Feed widgets are always fetched and then filtered PER ITEM below — each entry carries
+        // its own target window, so the widget stays and only unreachable rows drop out.
         fetchWidget(apiFetch, 'pending-tasks', range),
         fetchWidget(apiFetch, 'activity', range),
-        fetchWidget(apiFetch, 'recent-invoices', range),
-        fetchWidget(apiFetch, 'best-products', range),
-        fetchWidget(apiFetch, 'best-sellers', range),
-        fetchWidget(apiFetch, 'pending-amounts', range),
-        fetchWidget(apiFetch, 'top-clients', range),
+        skipUnlessVisible(isWidgetVisible('recentInvoices'), () => fetchWidget(apiFetch, 'recent-invoices', range)),
+        skipUnlessVisible(isWidgetVisible('bestProducts'), () => fetchWidget(apiFetch, 'best-products', range)),
+        skipUnlessVisible(isWidgetVisible('bestSellers'), () => fetchWidget(apiFetch, 'best-sellers', range)),
+        skipUnlessVisible(pendingAmountsVisibility.visible, () => fetchWidget(apiFetch, 'pending-amounts', range)),
+        skipUnlessVisible(isWidgetVisible('topClients'), () => fetchWidget(apiFetch, 'top-clients', range)),
       ]);
 
       const kpisData    = kpisRes.status    === 'fulfilled' ? kpisRes.value    : null;
@@ -410,8 +423,17 @@ export function useDashboardData() {
         revenueTrend: mappedTrends ?? empty.revenueTrend,
         expenseTrend: mappedTrends?.expenseValues ?? [],
         topClients: mapTopClients(topClientsData) ?? [],
-        pendingTasks: mapPendingTasks(pendingData),
-        recentMessages: mapActivity(activityData) || [],
+        // ETP-5088 — PER_ITEM gating. Every pending task carries the window it navigates to
+        // (`WidgetPendingTasksHandler` sets it on each task it builds), so an unresolvable task
+        // is dropped: fail closed.
+        pendingTasks: filterFeed(mapPendingTasks(pendingData)),
+        // The activity feed is filtered server-side too: `WidgetActivityHandler` resolves each
+        // entry's window from its document type + `issotrx` and now emits `navigation`, dropping
+        // what the role cannot open. `dropUnresolved: false` is therefore about COMPATIBILITY,
+        // not permissiveness — against an Etendo GO older than ETP-5088 the entries carry no
+        // `navigation`, and dropping them would empty the feed for everyone instead of filtering
+        // it. Tighten to the default (fail closed) once the minimum supported GO version emits it.
+        recentMessages: filterFeed(mapActivity(activityData) || [], { dropUnresolved: false }),
         recentInvoices: mapRecentInvoices(invoicesData) ?? [],
         bestProducts: mapBestProducts(bestProductsData) ?? [],
         bestSellers: mapBestSellers(bestSellersData) ?? [],
@@ -423,7 +445,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false);
     }
-  }, [token, apiFetch, range]);
+  }, [token, apiFetch, range, isWidgetVisible, filterFeed, pendingAmountsVisibility]);
 
   useEffect(() => {
     fetchData();

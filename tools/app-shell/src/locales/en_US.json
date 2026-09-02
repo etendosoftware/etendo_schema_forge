@@ -19043,6 +19043,8 @@
     "financeAccountStatementLinesMatchedYes": "Matched",
     "financeAccountStatementLinesMatchedNo": "Not matched",
     "dashboardTitle": "Home",
+    "dashboardNoWidgetsTitle": "No widgets available for your role",
+    "dashboardNoWidgetsSubtitle": "Your role has no access to the data these panels show. Contact your administrator if you think this is a mistake.",
     "dashboardGreetingHello": "Hello, {name}",
     "dashboardGreetingHeadline": "These are your pending tasks",
     "dashboardCopilotCta": "How can I help you today?",

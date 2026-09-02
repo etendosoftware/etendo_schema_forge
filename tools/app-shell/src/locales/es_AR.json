@@ -18525,6 +18525,8 @@
     "financeAccountStatementLinesMatchedYes": "Conciliado",
     "financeAccountStatementLinesMatchedNo": "Sin conciliar",
     "dashboardTitle": "Inicio",
+    "dashboardNoWidgetsTitle": "No hay widgets disponibles para tu rol",
+    "dashboardNoWidgetsSubtitle": "Tu rol no tiene acceso a los datos que muestran estos paneles. Contactá a tu administrador si creés que es un error.",
     "dashboardGreetingHello": "Hola, {name}",
     "dashboardGreetingHeadline": "Estas son tus tareas pendientes",
     "dashboardCopilotCta": "¿En qué te puedo ayudar hoy?",

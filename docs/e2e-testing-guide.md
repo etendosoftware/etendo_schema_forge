@@ -165,6 +165,9 @@ etendo.go.email.provider.baseUrl=http\://127.0.0.1\:8025/send
 etendo.go.email.provider.apiKey=e2e-only-secret
 ```
 
+> **Local setup with Tomcat in Docker?** `127.0.0.1` is wrong there and fails silently — read the
+> subsection below before setting this.
+
 The API key must match `E2E_EMAIL_SINK_API_KEY` in `playwright.config.js`; the adapter sends it as
 `x-api-key` and the sink rejects a mismatch with 401. `config/Openbravo.properties` is gitignored,
 so this stays a local change. Same wiring the ETP-4894 invitation-email spec already needed — see
@@ -172,6 +175,57 @@ so this stays a local change. Same wiring the ETP-4894 invitation-email spec alr
 
 Without it the mail goes to the real provider, the wall stays up with no readable inbox, and
 `passEmailConfirmationWall` fails naming both remedies.
+
+#### ⚠️ Local environment: with Tomcat in Docker, `127.0.0.1` is the WRONG address
+
+The `127.0.0.1` above is only correct when Tomcat runs **on the host**. Playwright starts the sink
+on the host, so from inside a Tomcat container `127.0.0.1:8025` is that container's own loopback —
+nothing is listening there and every send dies with `java.net.ConnectException: Connection refused`.
+
+**How to tell which case you are in.** Tomcat is dockerized when this property is `true` — it is
+set in BOTH files and they must agree:
+
+```properties
+# gradle.properties  AND  config/Openbravo.properties
+docker_com.etendoerp.tomcat=true
+```
+
+`true` (the usual local setup, container `etendo-tomcat-1`) → use the host alias instead:
+
+```properties
+etendo.go.email.provider.baseUrl=http\://host.docker.internal\:8025/send
+etendo.go.email.provider.apiKey=e2e-only-secret
+```
+
+`false` (Tomcat on the host, e.g. a SmartTomcat/IDE launch) → keep `127.0.0.1`.
+
+Verify it rather than assuming — one command, from inside the container, with the sink running:
+
+```bash
+docker exec etendo-tomcat-1 sh -c \
+  'curl -s -o /dev/null -w "%{http_code}\n" --max-time 4 http://host.docker.internal:8025/health'
+# 200 → reachable.  000 → wrong address (or the sink is not running).
+```
+
+**A green onboarding run does NOT prove the sink is wired.** This is the trap: with the address
+wrong, `onboarding-register` still passes, because a failed send makes the backend drop the
+verification token and fall through its own fail-open (see *The escape hatch* below) — the wall
+never comes up, so nothing needs to read a mailbox. Only the specs that actually read the mail
+(`user-invitation.email.integration.spec.js`) fail, and they fail with a bare
+`Timed out waiting for custom to <address>`, which points at the sink and not at Tomcat.
+
+Check the send status directly instead of inferring it from the suite:
+
+```sql
+SELECT created, contract_name, status FROM etgo_email_safety
+WHERE record_type = 'AUDIT' ORDER BY created DESC LIMIT 10;
+```
+
+`SENT` means it left Etendo. `PROVIDER_FAILED` on every row means the provider URL is unreachable —
+with `docker_com.etendoerp.tomcat=true`, suspect this section first. `etgo_invitation.status` tells
+the same story per invitation (`DELIVERY_FAILED` vs `SENT`).
+
+Changing the property needs a Tomcat restart to take effect.
 
 **The escape hatch** is the backend's own fail-open: leave `etendo.go.email.provider.apiKey` or
 `baseUrl` unset (or set `etendo.go.email.provider.enabled=false`) and the send fails, the backend
