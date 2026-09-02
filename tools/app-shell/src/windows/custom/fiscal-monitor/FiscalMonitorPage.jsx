@@ -176,7 +176,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
 
   useSetPageMeta({
     title: PROFILE_LABELS[profile] ?? '',
-    breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${ui('fiscalMonitor.systemFiscal')} / ${PROFILE_LABELS[profile] ?? ''}`,
+    breadcrumb: `${ui('finance')} / ${ui('fiscal.monitor.nav')}`,
     recordCount: _totalCountMeta,
   });
 

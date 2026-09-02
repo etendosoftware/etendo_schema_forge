@@ -165,6 +165,23 @@ describe('isSecureUrl', () => {
     assert.equal(isSecureUrl(null), false);
     assert.equal(isSecureUrl(undefined), false);
   });
+
+  // ETP-5031 — a real value that shipped on the Contacts window: "https://asda"
+  // has the right scheme but a garbage single-label host with no dot/TLD at
+  // all. The old check (`/^https:\/\/\S+/`) accepted this; it must not anymore.
+  it('rejects a host with no dot/TLD (the reported "https://asda" case)', () => {
+    assert.equal(isSecureUrl('https://asda'), false);
+    assert.equal(isSecureUrl('https://localhost'), false);
+  });
+
+  it('accepts a multi-label domain (subdomain + country-code TLD)', () => {
+    assert.equal(isSecureUrl('https://sub.example.co.uk'), true);
+  });
+
+  it('accepts a domain with a port', () => {
+    assert.equal(isSecureUrl('https://example.com:8080'), true);
+    assert.equal(isSecureUrl('https://example.com:8080/path'), true);
+  });
 });
 
 describe('isWebsiteField', () => {

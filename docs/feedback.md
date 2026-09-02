@@ -1248,3 +1248,44 @@ The stub always invoked `onAuthenticated`, so the test asserted the page's react
 **Lesson:** When the "obvious" filter signal (here, role count) has any genuine real-world counterexample, don't ship it — sample the actual data for a structural signal instead. And when a list filter needs an extra predicate, inject it before the query executes (HQL-level), never after the page is already sliced — a post-fetch filter on a paginated list silently breaks pagination instead of failing loudly.
 
 **Known theoretical limitation (QA, non-blocking, zero current risk):** the filter's signal is "does `username` end up blank", not "is this genuinely a BP-contact placeholder". A user created directly through the classic Openbravo `Users` window with a blank username — bypassing the Go SPA entirely, which is the only path that derives `username` from `email` — would be silently excluded from the Go SPA Users grid even if later granted a real, active role through the classic backend. Zero such rows exist on the current DB (every real `AD_User` today either has `username` set by the Go create path or is a genuine BP-contact placeholder), so this is not an active bug, just a structural edge the filter cannot distinguish. Worth reconsidering if classic-backend user provisioning for Go-managed tenants ever becomes a supported path.
+
+## [2026-09-01] ETP-5100 — Business dates rendered through UTC hid movements created after 21:00
+
+**Symptom.** A funds transfer completed successfully (toast, balance updated, tab badge
+incremented) but the movement did not appear in the list. Reported live; first reproduced with
+"Cualquier tipo" + "Últimos 30 días", so it was not a filter.
+
+**Cause.** Six hand-rolled formatters in the finance handlers rendered a business timestamp as a
+UTC instant: `DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC)`.
+A row stored at 21:43 local (UTC-3) went out as `2026-09-02T00:43:02Z`; React's range filter reads
+the `yyyy-MM-dd` prefix (`parseCalendarDate`), saw tomorrow, and hid the row.
+
+**Why only transfers.** Every other flow sends a date-only value, so it lands at `00:00:00`, and
+midnight in UTC-3 still formats to the same day. A transfer sends no `transferDate`, so Classic
+dates it `now()` — with the wall-clock time.
+
+**Two things worth remembering:**
+
+1. *The rest of the platform never had this bug.* Core's serializers (`JsonUtils.createDateFormat`
+   / `createDateTimeFormat`) never call `setTimeZone`, so they format in the server's zone. The six
+   formatters were outliers that also contradicted the module's own documented contract
+   (`NeoDateFormat.ISO_DATETIME`, no `Z`). When something looks broken "everywhere", check whether
+   the broken code is actually the exception — here 198 invoices and 166 shipments carry a
+   wall-clock time too and were always fine, because they go through the generic CRUD path.
+2. *The sixth site was found only via a test.* A grep for the ISO pattern found five; `DMY_DASH`
+   (`FinancialAccountTransactionsSupport`, the CSV "Payment" column) had the same
+   `.withZone(ZoneOffset.UTC)` with a `dd-MM-yyyy` pattern, so it did not match. It surfaced when a
+   test asserted on `paymentLabel`. Grep for the *defect* (`withZone(ZoneOffset.UTC)`), not for the
+   format string.
+
+**Test trap.** The existing assertions paired a UTC-instant input with a UTC-rendered expectation,
+which was timezone-independent under the old formatter. Naively dropping the `Z` from the expected
+string would have made them pass in a UTC CI and fail on a UTC-3 dev machine. They were rebuilt
+around civil values (`Timestamp.valueOf`), plus two tests that pin the default zone to `-03:00` and
+`+05:00` and assert the rendering is identical.
+
+**Known debt (accepted, no data-fix).** An older write path stored the raw UTC instant, leaving
+rows at `D-1 21:00:00`. For those the two bugs cancelled, so correcting the formatter makes them
+display one day early. 17 such rows here (10 `fin_bankstatementline`, 7 `fin_finacc_transaction`),
+identifiable by an exact `21:00:00.000` with no milliseconds. Decision was to ship the formatter
+fix alone. Full write-up: `com.etendoerp.go/docs/neo-headless.md` §4.3.1.
