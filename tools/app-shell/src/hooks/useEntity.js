@@ -16,6 +16,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
 import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
@@ -583,6 +584,25 @@ export function getNumericFieldViolation(fields, editing) {
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-5031 — Contacts-only text-field hard save-block (length + unsafe chars),
+// mirroring getNumericFieldViolation's shape/contract. A no-op for every window
+// other than 'contacts' — getContactsTextFieldError gates on `windowName` as its
+// first check, so this never affects any other window's save path. Unlike the
+// numeric check, the caller passes only the fields the user changed THIS
+// session (same scoping as the email/website/phone checks) — a pre-existing
+// over-limit value on an untouched legacy field must never block an unrelated
+// edit.
+export function getContactsTextFieldViolation(windowName, fields, editing) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTextFieldError(windowName, f, editing?.[f.key]);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -1435,6 +1455,22 @@ export function useEntity(entity, childEntity, {
         const changedFormFields = [...formFieldsRef.current.values()]
             .flat()
             .filter(f => userChangedKeysRef.current.has(f.key));
+        // ETP-5031: Contacts-only text-field hard save-block (length + unsafe
+        // chars). No-op for every other window — see getContactsTextFieldViolation.
+        // Scoped to `changedFormFields`, same as the email/website/phone checks
+        // below — never untouched legacy values on an existing record, so a
+        // pre-existing over-limit value never blocks an unrelated edit.
+        const contactsViolation = getContactsTextFieldViolation(specName, changedFormFields, editing);
+        if (contactsViolation) {
+            return reportInvalidFormatField(
+                contactsViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsViolation.key}`,
+                contactsViolation.errorParams,
+            );
+        }
         const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);

@@ -684,3 +684,81 @@ on every save to a top-level locale file while `make dev` is already running —
 extra commit is needed for the `taxIDField` change (or the `TaxID` `labelOverrides` change above)
 to take effect; it was spot-checked locally by re-running the slicer once, confirming
 `generated/core.es_ES.json` picked up `"NIF"`.
+
+## ETP-5031 — Text-field length and unsafe-character validation
+
+Free-text fields accepted any content with no length limit and no charset guard — a phone
+field took `abc!@#`, a name field took `<script>alert(1)</script>`, and the record saved
+without objection. The prior fix (email/website/phone **format**, name-heuristic, applies
+repo-wide) never covered **length** or the **Name** field, and left grid/inline-edit
+inconsistent with the form (missing the website check there).
+
+**Scope is deliberately this window only.** `getContactsTextFieldError` (new module,
+`tools/app-shell/src/components/contract-ui/contactsFieldValidation.js`) gates on
+`windowName !== 'contacts'` as its very first check, so importing it into the shared
+components (`EntityForm`, `useEntity`, `DataTable`, `InlineLinesPanel`) cannot affect any
+other window. This was a deliberate tradeoff over wiring the repo-wide `validation` object
+already resolved in every window's `contract.json` (via the generic `validateRecord` engine
+published in `@etendosoftware/app-shell-core`) — that would have turned on `maxLength`
+enforcement across all 47+ windows at once, out of scope for this fix.
+
+**Length limits are hardcoded**, sourced directly from `artifacts/contacts/contract.json`'s
+resolved `validation.maxLength` for each text field of `businessPartner` (`name`,
+`etgoFirstname`, `etgoLastname`, `taxID`, `etgoWeb`, `etgoEmail`, `etgoPhone`) and `contact`
+(`firstName`, `lastName`, `email`, `phone`, `position`, `comments`) — not read from the
+contract at runtime, because the generator does not emit `maxLength` into the field literals
+the components receive (only `key`/`column`/`type`/`label`/`required`/`section`).
+
+**Unsafe characters** (`hasUnsafeChars`): ASCII control characters (excluding tab/newline/CR,
+the normal editing ones) and any `<`/`>` — enough to catch the `<script>` injection case
+without attempting full HTML sanitization. Checked after length, so a value failing both
+surfaces the length error first.
+
+Wired at the same 4 call sites as the existing numeric/format validators: `EntityForm`'s
+on-blur toast, `useEntity`'s hard save-block gate, `DataTable`'s inline-add row, and
+`InlineLinesPanel`'s inline cell edit — `windowName`/`specName` now threads all the way from
+`DetailView` through `SecondaryTableTab` into both grid components, closing a gap where it
+previously stopped short. While there, the grid/inline-edit paths also gained the
+`getWebsiteFieldError` check that the form already had but they were missing.
+
+The save-block gate in `useEntity` is scoped to fields the user actually edited **this
+session** (same scoping as the email/website/phone checks), not every registered field — a
+pre-existing over-limit or unsafe value on an untouched legacy record never blocks an
+unrelated edit.
+
+New i18n keys (`genericLabels`, both `en_US.json`/`es_ES.json`): `fieldMaxLengthError`
+(interpolates `{maxLength}`) and `fieldInvalidCharacters`.
+
+Regression coverage: `contactsFieldValidation.test.js` (length, unsafe chars, `<script>`, and
+the window-scoping gate — asserts `null` for any window other than `contacts` regardless of
+value).
+
+**Follow-up — keystroke-level phone filtering.** The save-time format check above (`abc!@#`
+blocked with a toast on Save) left a UX gap: the user could still type the disallowed text
+into the field and see nothing happen until they tried to save. `filterContactsInputValue`
+(same module) closes that gap for phone-like fields (`etgoPhone`, `phone`, any field whose
+key/column contains "phone") by stripping every character outside the phone charset
+(`\d+()-. ` and whitespace) as the value is typed — a disallowed character never appears in
+the input at all, instead of appearing and then being rejected on Save. Same `windowName
+!== 'contacts'` gate. Wired into the header form's plain `<Input onChange>` in `EntityForm.jsx`
+and the inline-add row's `onChange` in `DataTable.jsx`. The `InlineLinesPanel` inline-edit
+cell (editing an existing Person's phone in the grid) still relies on the save-time block only
+— its `<Input>` is uncontrolled and reaching it would need threading `specName` through two
+more render layers (`renderLineCell` → `EditCell`), left for a follow-up if needed.
+
+**Follow-up — "Página web" required a real domain shape, not just the scheme.**
+`isSecureUrl` (`recipientEdits.js`, repo-wide, not Contacts-scoped) only checked that the
+value started with `https://` followed by any non-whitespace — `"https://asda"` passed as
+"secure", a real value that shipped on this window. Tightened to require a domain-shaped host
+after the scheme: at least one `label.` segment followed by a 2+ letter TLD (`SECURE_URL_RE`).
+`"https://asda"` is now correctly rejected; `"https://acme.com"` / `"https://sub.acme.co.uk"`
+still pass. The `websiteInsecureUrl` message text was also corrected — since both Contacts and
+Organization always show a fixed, non-editable `https://` chip via `inputPrefix`, the actual
+mistake is never "wrong scheme", it's an incomplete domain, so the old "must use a secure URL"
+wording was misleading (the URL genuinely was already `https://`). New text: "Introduce un
+dominio válido, por ejemplo dominio.com" / "Enter a valid domain, e.g. example.com". This is a
+generic, repo-wide fix (not gated to `windowName === 'contacts'`) — it strengthens the same
+shared validator both Contacts and Organization already call.
+
+Regression coverage: `recipientEdits.test.js` (`isSecureUrl` — rejects a dotless host, accepts
+a multi-label domain and a domain with a port).
