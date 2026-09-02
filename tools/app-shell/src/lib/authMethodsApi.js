@@ -10,9 +10,52 @@
  * the core repo is a separate change.
  */
 
-import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { buildAuthHeaders, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
 
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
+
+/**
+ * Codes the removal endpoint answers with, mapped to UI dictionary keys.
+ *
+ * The core package's own `AUTH_ERROR_UI_KEYS` cannot carry these: the endpoint is ours, and adding
+ * to that table means a PR in the core repo. Callers should consult this map first and fall back to
+ * the core one, which is what `resolveAuthMethodErrorKey` does.
+ */
+export const AUTH_METHOD_ERROR_UI_KEYS = {
+  LAST_AUTH_METHOD: 'accountMethodLastRemaining',
+  AUTH_METHOD_NOT_FOUND: 'accountMethodNotFound',
+};
+
+/**
+ * Resolves an error code to a UI dictionary key, ours first, then the core table.
+ *
+ * Returns null for an unmapped code so the caller can fall back to the server's `userMessage` and
+ * then to a generic sentence. A raw code is never a dictionary key — passing one to `ui()` yields
+ * the code back, which is how English backend text used to reach users (ETP-5022).
+ */
+export function resolveAuthMethodErrorKey(code) {
+  if (!code) return null;
+  return AUTH_METHOD_ERROR_UI_KEYS[code] || AUTH_ERROR_UI_KEYS[code] || null;
+}
+
+/**
+ * Reads the servlet's error envelope, which is NESTED: `{ error: { code, message, userMessage } }`
+ * (`EtendoGoJwtServlet.writeError`). This used to read it flat and so lost both fields for every
+ * failure — the 409 telling the user this is their only sign-in method arrived as the generic
+ * "could not be removed". Mirrors the core package's own `buildApiError`, including the older
+ * responses whose `error` is a bare code string.
+ */
+function buildRemovalError(payload) {
+  const flatCode = typeof payload?.error === 'string' ? payload.error : null;
+  const nested = flatCode ? null : payload?.error;
+  const error = new Error(
+    nested?.message || payload?.message || 'Could not remove the authentication method'
+  );
+  error.code = nested?.code || flatCode || null;
+  error.userMessage = nested?.userMessage || nested?.message || payload?.message || null;
+  return error;
+}
+
 
 /** Reads the platform token the account endpoints authenticate with. */
 export function readPlatformToken() {
@@ -52,10 +95,7 @@ export async function removeAuthMethod(fetchImpl, baseUrl, token, method, curren
     payload = null;
   }
   if (!response.ok) {
-    const error = new Error(payload?.message || 'Could not remove the authentication method');
-    error.code = payload?.code || null;
-    error.userMessage = payload?.userMessage || payload?.message || null;
-    throw error;
+    throw buildRemovalError(payload);
   }
   return payload;
 }

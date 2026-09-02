@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { fetchAccount } from '@etendosoftware/etendo-go-core/onboarding/api';
-import { removeAuthMethod, readPlatformToken } from '@/lib/authMethodsApi.js';
+import { removeAuthMethod, resolveAuthMethodErrorKey, readPlatformToken } from '@/lib/authMethodsApi.js';
 import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog.jsx';
 import { SecuritySection } from '@/components/account/SecuritySection.jsx';
@@ -52,7 +52,13 @@ export default function AccountSettingsPage() {
       setAuthMethods(result?.authMethods || null);
       toast.success(ui('accountMethodRemoved'));
     } catch (err) {
-      toast.error(err?.userMessage || ui('accountMethodRemoveFailed'));
+      // Resolve the server's code through the dictionary first. Preferring `userMessage` would show
+      // the backend's English sentence to a Spanish user, which is exactly the defect ETP-5022 fixed
+      // for the change-password codes; it stays only as the fallback for an unmapped code.
+      const uiKey = resolveAuthMethodErrorKey(err?.code);
+      toast.error(
+        (uiKey && ui(uiKey)) || err?.userMessage || ui('accountMethodRemoveFailed')
+      );
     } finally {
       setRemoving(null);
     }

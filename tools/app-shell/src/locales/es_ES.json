@@ -24581,6 +24581,8 @@
     "accountMethodRemoveLastTooltip": "Es tu único método de acceso. Añade otro antes de quitar este.",
     "accountMethodRemoveConfirmTitle": "¿Quitar este método de acceso?",
     "accountMethodRemoveConfirmBody": "Después de quitarlo ya no podrás entrar con él. Los que queden seguirán funcionando.",
+    "accountMethodLastRemaining": "Es tu única forma de iniciar sesión. Añade otro método antes de quitar este.",
+    "accountMethodNotFound": "Ese método de acceso no está habilitado en esta cuenta.",
     "accountMethodRemoveFailed": "No se pudo quitar el método de acceso.",
     "accountMethodRemoved": "Método de acceso quitado.",
     "accountMethodsLoadFailed": "No se pudieron cargar tus métodos de acceso."
