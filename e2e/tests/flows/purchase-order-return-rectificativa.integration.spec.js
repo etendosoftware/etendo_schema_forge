@@ -112,7 +112,17 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
       // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
       // panel, so a bare 'tbody tr' locator always resolves to that invisible element.
-      await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
+      // Re-assert after the panel settles: the row count can flash the right
+      // value and then re-render (related panels finishing their fetches), so a
+      // single toHaveCount races that reload.
+      const rectLines = page.locator('[data-testid^="line-row-"]');
+      await expect(rectLines).toHaveCount(1, { timeout: 15_000 });
+      await page.getByText(/cargando|loading/i)
+        .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+      await expect(rectLines,
+        'Line count should still read 1 after related panels finish loading',
+      ).toHaveCount(1, { timeout: 15_000 });
     });
 
     await test.step('Confirm the order with receipt generation only', async () => {
