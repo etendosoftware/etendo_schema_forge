@@ -95,10 +95,18 @@ function StatusBadge({ kind }) {
   );
 }
 
-/** Badge kind for a candidate row: reconciled (read-only) → invoice → suggested → pending. */
+/**
+ * Badge kind for a candidate row: reconciled (read-only) → invoice → near match → suggested →
+ * pending.
+ *
+ * `nearMatch` outranks `suggested` because the backend sets BOTH on a within-tolerance 1:1 hit
+ * (ETP-4965): it is a suggestion, but one carrying a real amount/date deviation, and the red badge
+ * is the only thing that says so before the user reconciles.
+ */
 function badgeKindFor(cand, readOnly) {
   if (readOnly) return 'reconciled';
   if (cand.kind === 'invoice') return 'invoice';
+  if (cand.nearMatch) return 'difference';
   return cand.suggested ? 'suggested' : 'pending';
 }
 
@@ -790,7 +798,7 @@ function CandidateOperationsPanel({
 /** Bottom action bar with the running totals and the reconcile / placeholder buttons. */
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
-  busy, onCancel, onReconcile, onReactivate,
+  busy, onCancel, onReconcile, onReactivate, differenceNotice = null,
 }) {
   const ui = useUI();
   return (
@@ -808,10 +816,22 @@ function ReconciliationActionBar({
           </div>
           <div className="flex items-center justify-between px-3 text-sm leading-5">
             <span className="font-medium text-[hsl(var(--foreground))]">{ui('financeReconcileBarRemaining')}</span>
-            <span className={cn('font-semibold', Math.abs(remaining) <= RECONCILE_TOLERANCE ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--destructive))]')}>
+            {/* A within-tolerance shortfall is NOT an error: it gets posted to the account's
+                accounting concept the moment the user reconciles (ETP-4965). Painting it in the
+                destructive red reserved for "you cannot reconcile this" told the opposite story and
+                is why the difference case read as a dead end. */}
+            <span className={cn('font-semibold', Math.abs(remaining) <= RECONCILE_TOLERANCE || differenceNotice ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--destructive))]')}>
               {formatSigned(remaining, currency)}
             </span>
           </div>
+          {differenceNotice && (
+            <p
+              className="px-3 text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+              data-testid="recon-action-difference-notice"
+            >
+              {differenceNotice}
+            </p>
+          )}
         </div>
       )}
       <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -1254,10 +1274,26 @@ export function ReconciliationSplitPanel({
   // unlink doesn't lose the selection and the right panel always reflects fresh amounts/txns.
   const selectedLine = useMemo(() => {
     if (!selectedLineSel) return null;
-    return lines.find((l) => l.id === selectedLineSel.id
-        || (selectedLineSel.matchGroupId && l.matchGroupId === selectedLineSel.matchGroupId))
-      || selectedLineSel;
-  }, [lines, selectedLineSel]);
+    const live = lines.find((l) => l.id === selectedLineSel.id
+        || (selectedLineSel.matchGroupId && l.matchGroupId === selectedLineSel.matchGroupId));
+    if (!live) {
+      // While a reload is in flight this means nothing — `lines` is momentarily stale — so the
+      // stored selection is kept, which is what stops a head-id shift after a split from dropping
+      // it. Once the load has settled, the absence is real and the selection is gone.
+      return linesLoading ? selectedLineSel : null;
+    }
+    // The line is still loaded, but `lines` holds EVERY state: the left table renders the
+    // client-side filtered `visibleLines`. Un-reconciling sends a line from "Conciliadas" back to
+    // "Pendiente", so it drops out of the table while remaining in `lines` — and the right panel
+    // went on rendering its candidates and action bar with nothing selected on the left. Mirror the
+    // table's own status predicate (`visibleLines` below), including its null/empty = "Todos" case.
+    // Search is deliberately NOT mirrored: typing to look something up is a transient view change,
+    // not the line moving.
+    if (leftStatus && (live.state || 'pending') !== leftStatus) {
+      return null;
+    }
+    return live;
+  }, [lines, selectedLineSel, linesLoading, leftStatus]);
   const sourceMeta = SOURCE_META[rightSource] ?? SOURCE_META.receipts;
   const invoiceMode = sourceMeta.kind === 'invoices';
   const candidateLineId = resolveCandidateLineId(selectedLine);
@@ -1435,7 +1471,35 @@ export function ReconciliationSplitPanel({
     };
   }, [invoiceMode, soleInvoice, lineAmount, selectedSum, writeoffLimit]);
 
-  const submitReconcile = async (methodId) => {
+  /**
+   * Whether the current shortfall is one the backend will post to an accounting concept instead of
+   * leaving as a pending remainder (ETP-4965). `amountTolerance` is a PERCENTAGE of the line, and 0
+   * / absent means the feature is off — the same convention
+   * `AutoMatchSupport.differenceTolerance` applies server-side. Only advisory: the server recomputes
+   * this and is the boundary.
+   */
+  const differenceNotice = useMemo(() => {
+    const pct = Number(amountTolerance) || 0;
+    if (invoiceMode || isReconciledLine || pct <= 0) return null;
+    if (!selectedLine || selectedOpIds.size === 0) return null;
+    const gap = Math.abs(remaining);
+    if (gap <= RECONCILE_TOLERANCE) return null;
+    // Over-coverage stays an error: out of scope, and the reconcile button is disabled anyway.
+    if (Math.sign(remaining) !== Math.sign(lineAmount)) return null;
+    if (gap > Math.abs(lineAmount) * pct / 100) return null;
+    const amount = formatCurrency(currency, gap);
+    return glItemDifference?.name
+      ? ui('financeReconcileBarDifferenceNotice', { amount, concept: glItemDifference.name })
+      : ui('financeReconcileBarDifferenceNoticeNoConcept', { amount });
+  }, [amountTolerance, invoiceMode, isReconciledLine, selectedLine, selectedOpIds, remaining,
+      lineAmount, currency, glItemDifference, ui]);
+
+  // Set when the backend answers GL_ITEM_REQUIRED: the match carries a postable difference but the
+  // account has no concept configured, so the user picks one and we resubmit. Shape matches
+  // `differenceState` so DifferenceModal renders unchanged.
+  const [glItemPrompt, setGlItemPrompt] = useState(null);
+
+  const submitReconcile = async (methodId, glItemId) => {
     try {
       const payload = {
         // For a PARTIAL line, reconcile the remainder against its pending sub-line
@@ -1458,15 +1522,37 @@ export function ReconciliationSplitPanel({
         // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
       }
+      if (glItemId) payload.glItemId = glItemId;
       await reconcile(payload);
       toast.success(ui('financeReconcileToastSuccess'));
       setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
       setWriteoff(false);
+      setGlItemPrompt(null);
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
+      // The match leaves a postable difference and the account has no concept configured. Ask for
+      // one and resubmit rather than dead-ending on a toast — the reconcile is one field away.
+      if (err?.code === 'GL_ITEM_REQUIRED') {
+        setMethodModalOpen(false);
+        setGlItemPrompt({
+          methodId: methodId ?? null,
+          remainder: Number(err?.body?.differenceAmount ?? remaining) || remaining,
+          lineTotal: lineAmount,
+          reconciled: selectedSum,
+        });
+        return;
+      }
+      // A 409 on the group head names the pending sub-line the caller should have targeted; retarget
+      // the selection there instead of leaving the user on a line they cannot act on.
+      const retargetId = err?.body?.remainderLineId;
+      if (retargetId && retargetId !== candidateLineId) {
+        setSelectedLineSel({ id: retargetId, matchGroupId: selectedLine?.matchGroupId ?? null });
+        setSelectedOpIds(new Set());
+        reloadLines();
+      }
       toast.error(err?.message || ui('financeReconcileToastError'));
     }
   };
@@ -1574,14 +1660,22 @@ export function ReconciliationSplitPanel({
       // all-or-nothing throw), so surface it instead of assuming the whole request succeeded.
       const failedCount = result?.failedTransactionIds?.length ?? 0;
       const removedCount = result?.transactionIds?.length ?? 0;
+      // The backend now travels the CAUSE alongside the count (a closed accounting period being by
+      // far the commonest, and the only one the user can act on). Previously it stayed in the server
+      // log and this branch fell back to `financeReconcileToastError` — whose copy reads "Error al
+      // conciliar", the wrong action entirely for an un-reconcile.
+      const reason = result?.failureReason;
       if (failedCount > 0 && removedCount > 0) {
         toast.warning(ui('financeReconcileToastOperationPartiallyRemoved', {
           removed: removedCount,
           total: removedCount + failedCount,
           failed: failedCount,
-        }));
+        }), reason ? { description: reason } : undefined);
       } else if (failedCount > 0) {
-        toast.error(ui('financeReconcileToastError'));
+        toast.error(ui(isReactivateAction
+          ? 'financeReconcileToastOperationReactivateError'
+          : 'financeReconcileToastOperationRemoveError'),
+        reason ? { description: reason } : undefined);
       } else {
         toast.success(ui(isReactivateAction
           ? 'financeReconcileToastOperationReactivated'
@@ -1663,10 +1757,24 @@ export function ReconciliationSplitPanel({
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? requestRemoveSelected : handleReconcile}
               onReactivate={isReconciledLine ? requestReactivateSelected : undefined}
+              differenceNotice={differenceNotice}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
       </div>
+      {/* ETP-4965: the same modal the "post the difference" banner uses, reached from the other
+          direction — the user pressed Conciliar on a match with a postable difference and the
+          account has no concept configured, so the backend asked for one. Reused rather than
+          duplicated: its `info` only needs {lineTotal, reconciled, remainder}. */}
+      <DifferenceModal
+        open={!!glItemPrompt}
+        info={glItemPrompt}
+        currency={currency}
+        defaultGlItem={glItemDifference}
+        busy={reconciling}
+        onConfirm={({ glItemId }) => submitReconcile(glItemPrompt?.methodId ?? null, glItemId)}
+        onClose={() => setGlItemPrompt(null)}
+        data-testid="DifferenceModal__gl-item-required" />
       <RemoveOperationConfirmDialog
         open={!!removeRequest}
         count={removeRequest?.count ?? 0}

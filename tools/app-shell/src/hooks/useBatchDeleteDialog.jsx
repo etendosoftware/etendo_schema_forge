@@ -23,7 +23,9 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  *   - deleting: true while the batch is in flight.
  *
  * On confirm: runs `deleteOneFn` for every item (via `runBatchDelete`), fires
- * the single outcome toast (via `toastBatchDeleteOutcome`), then calls
+ * the single outcome toast (via `toastBatchDeleteOutcome` — which names the
+ * reason when every failure shares one, so `deleteOneFn` should reject with the
+ * backend's own message rather than a bare status code), then calls
  * `onOutcome(succeededItems, failedItems)` so the host can update its own
  * selection state:
  *   - all succeeded  → host clears the selection.
@@ -53,8 +55,8 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome }) {
     if (!pendingItems?.length) return;
     setDeleting(true);
     try {
-      const { succeeded, failed } = await runBatchDelete(pendingItems, deleteOneFn);
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: pendingItems.length });
+      const { succeeded, failed, errors } = await runBatchDelete(pendingItems, deleteOneFn);
+      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: pendingItems.length });
       setPendingItems(null);
       onOutcome?.(succeeded, failed);
     } finally {
