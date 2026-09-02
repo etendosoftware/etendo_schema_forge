@@ -122,4 +122,39 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await page.getByTestId('vector-search-target-picker-trigger').click();
     await expect(page.getByTestId('vector-search-scope')).toContainText('Todas las ventanas');
   });
+
+  test('keyboard navigation marks an item and closes after opening it', async ({ page }) => {
+    await page.keyboard.press('Control+k');
+    const input = page.getByTestId('global-search-input');
+    await expect(input).toBeVisible({ timeout: 5_000 });
+    const items = page.locator('[data-global-search-item="true"]');
+    await expect(items.first()).toBeVisible({ timeout: 5_000 });
+
+    await input.press('ArrowDown');
+    await expect(items.first()).toHaveAttribute('data-selected', 'true');
+    await input.press('Enter');
+    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  test('clicking a menu item navigates and resets the global query', async ({ page }) => {
+    await page.keyboard.press('Control+k');
+    const input = page.getByTestId('global-search-input');
+    await input.fill('contacts');
+    const contactsItem = page.locator('[data-global-search-item="true"]').filter({ hasText: /Contactos|Contacts/i }).first();
+    await expect(contactsItem).toBeVisible({ timeout: 5_000 });
+    await contactsItem.click();
+    await expect(page).toHaveURL(/\/contacts(?:$|\?)/, { timeout: 8_000 });
+    await expect(input).toHaveValue('');
+  });
+
+  test('backspace at the start of a query clears the current-window scope', async ({ page }) => {
+    await page.goto('/product');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    const input = page.getByTestId('global-search-input');
+    await input.fill('pan');
+    await input.press('Home');
+    await input.press('Backspace');
+    await expect(page.getByTestId('topbar-vector-search-scope')).toHaveCount(0);
+    await expect(input).toHaveValue('pan');
+  });
 });
