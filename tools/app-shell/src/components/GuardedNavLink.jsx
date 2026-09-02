@@ -37,7 +37,7 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
         event.preventDefault();
         requestNavigation(() => navigate(to));
       }}
-      data-testid={rest['data-testid'] ?? 'NavLink__1b6d6d'} />
+    />
   );
 }
 
