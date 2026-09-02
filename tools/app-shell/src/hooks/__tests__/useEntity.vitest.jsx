@@ -508,6 +508,73 @@ describe('useEntity', () => {
       expect(body.empty).toBeUndefined(); // empty value skipped
       expect(body.name).toBe('Real Name');
     });
+
+    // ETP-5101 regression: buildSavePayload sends only the changed-field DIFF, and at
+    // least one backend entity's PATCH response only echoes back a subset of fields
+    // (whatever it wrote + a few identity/audit columns) — not the full record. Before
+    // the fix, performSave did `setSelected(resolvedSaved); setEditing({ ...resolvedSaved })`,
+    // a full replace that silently dropped any field the response omitted from BOTH
+    // `selected` and `editing`, even though that field never actually changed.
+    it('preserves a field the PATCH response omits, even though it never changed (ETP-5101)', async () => {
+      const existing = { id: 'acc-1', name: 'Original', accountType: 'E', code: '5010' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') {
+          // Response omits accountType and code entirely — only echoes what it wrote (name) + id.
+          return { ok: true, json: async () => ({ response: { data: [{ id: 'acc-1', name: 'Renamed' }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      act(() => {
+        result.current.handleChange('name', 'Renamed');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      // The field the response omitted must keep its last-known value, not be dropped.
+      expect(result.current.selected.accountType).toBe('E');
+      expect(result.current.selected.code).toBe('5010');
+      expect(result.current.editing.accountType).toBe('E');
+      expect(result.current.editing.code).toBe('5010');
+      // The field the response DID include is applied.
+      expect(result.current.selected.name).toBe('Renamed');
+      expect(result.current.editing.name).toBe('Renamed');
+    });
+
+    it('still overwrites a field with an explicit null the PATCH response returns (ETP-5101)', async () => {
+      // The merge must not be over-cautious: a field the response DOES include — even
+      // an explicit `null` — is a real server-side change and must not be masked back
+      // to the prior value.
+      const existing = { id: 'acc-2', name: 'Original', note: 'Some note' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') {
+          return { ok: true, json: async () => ({ response: { data: [{ id: 'acc-2', name: 'Original', note: null }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      // handleSave PATCHes as long as editing.id is set, regardless of an actual diff.
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(result.current.selected.note).toBeNull();
+      expect(result.current.editing.note).toBeNull();
+    });
   });
 
   // ---------------------------------------------------------------------------
