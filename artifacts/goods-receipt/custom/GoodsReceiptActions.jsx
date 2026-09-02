@@ -45,7 +45,11 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   });
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
   // active scheme's headers, and the CSRF proof on every unsafe method.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     const handler = () => setShowConfirm(true);
@@ -284,7 +288,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 // ── ConfirmReceiptInvoicedModal (variant B — receipt already fully invoiced) ──
 
 function ConfirmReceiptInvoicedModal({ data, base, recordId, onConfirmed, onClose }) {
-  const apiFetch = useApiFetch(base);
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -430,7 +434,7 @@ function ConfirmReceiptInvoicedModal({ data, base, recordId, onConfirmed, onClos
 // ── CloneReceiptModal ─────────────────────────────────────────────────────────
 
 function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) {
-  const apiFetch = useApiFetch(base);
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

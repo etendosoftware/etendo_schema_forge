@@ -122,7 +122,11 @@ function DatosSection({ data, ui }) {
 const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const [lines, setLines] = useState(null);
 
   const refreshSignal = useRecordRefreshSignal(data?.id);
@@ -212,7 +216,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
 
 export default function PaymentBottomPanel({ data, token, apiBaseUrl }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

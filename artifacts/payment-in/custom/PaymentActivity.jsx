@@ -29,7 +29,11 @@ function todayFmt() {
  */
 export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const [linkedInvoices, setLinkedInvoices] = useState([]);
   const [localNotes, setLocalNotes] = useState([]);
   const [noteText, setNoteText] = useState('');

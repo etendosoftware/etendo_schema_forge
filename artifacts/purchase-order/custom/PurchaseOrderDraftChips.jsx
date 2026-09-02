@@ -25,7 +25,11 @@ export default function PurchaseOrderDraftChips({ data, recordId, token, apiBase
     let cancelled = false;
 
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
     Promise.all([
       apiFetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`)

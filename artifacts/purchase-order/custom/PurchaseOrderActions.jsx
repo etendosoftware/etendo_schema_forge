@@ -60,7 +60,11 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
   // active scheme's headers, and the CSRF proof on every unsafe method.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -251,7 +255,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
 export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, onSave }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  const apiFetch = useApiFetch('');
   const ui      = useUI();
   const [createReceipt,  setCreateReceipt]  = useState(false);
   const [createInvoice,  setCreateInvoice]  = useState(false);
@@ -613,7 +617,7 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
 
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch(base);
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const {
     needsReceipt, needsInvoice,
@@ -828,7 +832,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
   // active scheme's headers, and the CSRF proof on every unsafe method.
-  const apiFetch = useApiFetch(base);
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     if (!orderId) return;

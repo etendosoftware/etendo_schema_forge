@@ -40,7 +40,11 @@ export default function RejectQuotationModal({
   const entityUrl = `${apiBaseUrl}/quotation`;
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
   // active scheme's headers, and the CSRF proof on every unsafe method.
-  const apiFetch = useApiFetch(apiBaseUrl);
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // The selector URL mirrors the one EntityForm builds for the rejectReason
   // field (see tools/app-shell/src/components/contract-ui/EntityForm.jsx:626).
