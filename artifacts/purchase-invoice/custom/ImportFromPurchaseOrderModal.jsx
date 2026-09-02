@@ -1,10 +1,11 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/purchase-invoice/header/${invoiceId}`, { headers }),
+    apiFetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    apiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    apiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedOrderLines = new Set();
@@ -37,8 +38,8 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
-  const res = await fetch(`${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const res = await apiFetch(`${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -64,15 +65,15 @@ const getDocDisplay = (doc) => ({
   date: doc.orderDate,
 });
 
-const afterImport = async ({ importedDocIds, sharedContext, base, headers, invoiceId }) => {
+const afterImport = async ({ importedDocIds, sharedContext, base, invoiceId }) => {
   const { orderDiscountMap } = sharedContext;
   const discounts = [...importedDocIds].map(id => orderDiscountMap[id]).filter(v => v > 0);
   if (discounts.length === 0) return;
   const uniqueDiscounts = [...new Set(discounts)];
   if (uniqueDiscounts.length !== 1) return;
-  await fetch(`${base}/purchase-invoice/header/${invoiceId}`, {
+  await apiFetch(`${base}/purchase-invoice/header/${invoiceId}`, {
     method: 'PATCH',
-    headers,
+    
     body: JSON.stringify({ etgoTotalDiscount: uniqueDiscounts[0] }),
   });
 };
@@ -100,6 +101,11 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
 };
 
 export default function ImportFromPurchaseOrderModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

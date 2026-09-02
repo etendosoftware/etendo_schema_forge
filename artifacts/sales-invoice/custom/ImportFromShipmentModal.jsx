@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Shipment lines don't carry pricing — we resolve unit price, tax, and uOM
@@ -16,7 +17,7 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * already-covered _PSTD / _CURR / _UOM.
  */
 
-const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, auxData = {}) => {
+const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {}) => {
   const formState = {
     ...invoiceHeader,
     ...auxData,
@@ -30,9 +31,9 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
         auxiliaryValues[k] = String(v);
       }
     }
-    const res = await fetch(`${base}/sales-invoice/lines/callout`, {
+    const res = await apiFetch(`${base}/sales-invoice/lines/callout`, {
       method: 'POST',
-      headers,
+      
       body: JSON.stringify({
         field: 'product', value: productId, formState,
         ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
@@ -59,9 +60,9 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
 
     if (unitPrice) {
       const cascadeState = { ...formState, ...result, invoicedQuantity: qty || 1 };
-      const cascadeRes = await fetch(`${base}/sales-invoice/lines/callout`, {
+      const cascadeRes = await apiFetch(`${base}/sales-invoice/lines/callout`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({ field: 'PriceActual', value: String(unitPrice), formState: cascadeState }),
       });
       if (cascadeRes.ok) {
@@ -82,7 +83,7 @@ const resolveLinePrice = async (base, headers, productId, qty, invoiceHeader, au
   }
 };
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   // Fetch header first so we can pass its priceList to the product selector.
   // ProductPriceSelectorPolicy only enriches _PSTD / _PLIST when priceList is
   // provided as a context param; without it the callout receives PSTD=0 and
@@ -91,10 +92,10 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     JSON.stringify([{ fieldName: 'goodsShipmentLine', operator: 'notNull' }]),
   );
   const [shipRes, invLinesRes, allInvoicedLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`, { headers }),
-    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
+    apiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    apiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    apiFetch(`${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`),
+    apiFetch(`${base}/sales-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedShipmentLines = new Set();
@@ -125,7 +126,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
 
   const priceListId = invoiceHeader.priceList;
   const selectorUrl = `${base}/sales-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await fetch(selectorUrl, { headers });
+  const selectorRes = await apiFetch(selectorUrl);
 
   const productAuxMap = {};
   if (selectorRes.ok) {
@@ -162,7 +163,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     const orderCurrencyMap = {};
     await Promise.all(orderIds.map(async (id) => {
       try {
-        const r = await fetch(`${base}/sales-order/header/${id}`, { headers });
+        const r = await apiFetch(`${base}/sales-order/header/${id}`);
         if (r.ok) {
           const o = (await r.json())?.response?.data?.[0];
           if (o) orderCurrencyMap[id] = o.currency;
@@ -180,8 +181,8 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
-  const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const res = await apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -193,7 +194,7 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const orderDiscounts = {};
   await Promise.all(orderLineIds.map(async (id) => {
     try {
-      const r = await fetch(`${base}/sales-order/lines/${id}`, { headers });
+      const r = await apiFetch(`${base}/sales-order/lines/${id}`);
       if (r.ok) {
         const d = await r.json();
         const ol = d?.response?.data?.[0];
@@ -205,7 +206,7 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   return Promise.all(lines.map(async (l) => {
     const imported = alreadyImportedShipmentLines?.has(l.id) || alreadyImportedOrderLines?.has(l.salesOrderLine) || invoicedElsewhere?.has(l.id);
     const qty = Number(l.movementQuantity) || 1;
-    const priceData = l.product ? await resolveLinePrice(base, headers, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
+    const priceData = l.product ? await resolveLinePrice(base, l.product, qty, invoiceHeader, productAuxMap[l.product] || {}) : {};
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
@@ -229,10 +230,10 @@ const getDocDisplay = (doc) => {
   };
 };
 
-const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base, headers }) => {
+const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base }) => {
   const { invoiceHeader, productAuxMap } = sharedContext;
   // Re-resolve price for the actual import qty so lineNetAmount is correct.
-  const priceData = await resolveLinePrice(base, headers, line.product, qty, invoiceHeader, productAuxMap[line.product] || {});
+  const priceData = await resolveLinePrice(base, line.product, qty, invoiceHeader, productAuxMap[line.product] || {});
   const calloutGrossUnitPrice = Number(priceData.grossUnitPrice) || 0;
   const calloutUnitPrice = Number(priceData.unitPrice) || calloutGrossUnitPrice || Number(line._unitPrice) || 0;
   // listPrice is the catalog price before any discount.
@@ -270,6 +271,11 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 };
 
 export default function ImportFromShipmentModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

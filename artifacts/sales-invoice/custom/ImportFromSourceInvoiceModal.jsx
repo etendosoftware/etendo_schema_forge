@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Import invoice lines from a completed, plain "Factura" (FAC subtype) sales
@@ -48,15 +49,15 @@ import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
  * `fetchLines` marks matching source lines `_alreadyImported`, blocking re-selection.
  */
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const facOnlyCriteria = encodeURIComponent(JSON.stringify([
     { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
     { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
   ]));
   const [invRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`, { headers }),
-    fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
+    apiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`),
+    apiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    apiFetch(`${base}/sales-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedSourceLineIds = new Set();
@@ -85,8 +86,8 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   return { documents, sharedContext: { alreadyImportedSourceLineIds }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
-  const res = await fetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const res = await apiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -136,14 +137,14 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   };
 };
 
-const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
+const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
   // the ones already imported — send the FULL set, not just guard on exactly one.
   if (importedDocIds.size === 0) return;
   try {
-    await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
+    await apiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
       method: 'PATCH',
-      headers,
+      
       body: JSON.stringify({ originInvoices: [...importedDocIds] }),
     });
   } catch {
@@ -152,6 +153,11 @@ const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
 };
 
 export default function ImportFromSourceInvoiceModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

@@ -1,4 +1,5 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function enrichLines(lines) {
   return lines
@@ -15,10 +16,10 @@ function enrichLines(lines) {
     .filter(l => Number(l.invoicedQuantity) > 0);
 }
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
   const [res, headerRes] = await Promise.all([
-    fetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`, { headers }),
+    apiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
   ]);
   if (!res.ok) return { documents: [], sharedContext: { linesCache: {} } };
 
@@ -43,9 +44,9 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => 
   const lineResults = await Promise.all(
     candidates.map(async inv => {
       try {
-        const r = await fetch(
+        const r = await apiFetch(
           `${base}/purchase-invoice/lines?parentId=${inv.id}&_startRow=0&_endRow=200`,
-          { headers },
+          {},
         );
         return { id: inv.id, lines: r.ok ? (await r.json())?.response?.data || [] : [] };
       } catch {
@@ -65,13 +66,13 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => 
   return { documents, sharedContext: { linesCache }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
+const fetchLines = async ({ base, docId, sharedContext }) => {
   const cached = sharedContext?.linesCache?.[docId];
   if (cached) return enrichLines(cached);
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`,
-      { headers },
+      {},
     );
     return res.ok ? enrichLines((await res.json())?.response?.data || []) : [];
   } catch {
@@ -94,6 +95,11 @@ const buildLineBody = async ({ line, qty, invoiceId: receiptId, lineNo }) => ({
 });
 
 export default function ImportFromPurchaseInvoiceModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

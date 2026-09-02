@@ -1,13 +1,14 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId }) {
+async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
   // Fetch current shipment lines directly (by parentId) + other draft shipments list in parallel.
   // Avoids relying on the current shipment appearing in the paginated list.
   const [currentLinesRes, shipmentsRes] = await Promise.all([
     currentShipmentId
-      ? fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`, { headers })
+      ? apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`)
       : Promise.resolve(null),
-    fetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`, { headers }),
+    apiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
   ]);
 
   const draftInfo = {};
@@ -28,7 +29,7 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentI
     );
     const lineResults = await Promise.all(
       otherDrafts.map(s =>
-        fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers })
+        apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`)
           .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
       ),
     );
@@ -46,11 +47,11 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentI
   return draftInfo;
 }
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId: shipmentId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
   const [invoicesRes, draftInfo, headerRes] = await Promise.all([
-    fetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId: shipmentId }),
-    fetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`, { headers }),
+    apiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId: shipmentId }),
+    apiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
   ]);
 
   let shipmentCurrency = null;
@@ -73,13 +74,13 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: shipmentId }) =>
   return { documents, sharedContext: { ordersByInvoiceId, draftInfo }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
+const fetchLines = async ({ base, docId, sharedContext }) => {
   const orderId = sharedContext.ordersByInvoiceId?.[docId];
 
   const [invoiceLinesRes, orderLinesRes] = await Promise.all([
-    fetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers }),
+    apiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`),
     orderId
-      ? fetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`, { headers })
+      ? apiFetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`)
       : Promise.resolve(null),
   ]);
 
@@ -134,6 +135,11 @@ const buildLineBody = async ({ line, qty, invoiceId: shipmentId, lineNo }) => ({
 });
 
 export default function ImportFromSalesInvoiceModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

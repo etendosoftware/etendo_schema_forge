@@ -1,7 +1,7 @@
 import { useUI } from '@/i18n';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 
-export default function GoodsShipmentConfirmModal({ base, headers, recordId, data, onConfirmed, onClose }) {
+export default function GoodsShipmentConfirmModal({ base, recordId, data, onConfirmed, onClose }) {
   const ui = useUI();
   // ETP-4942 — a shipment with no linked sales order has no price list of its own
   // (createInvoiceHeaderFromShipment falls back to the Business Partner's default,
@@ -18,7 +18,6 @@ export default function GoodsShipmentConfirmModal({ base, headers, recordId, dat
   return (
     <ConfirmInOutModal
       base={base}
-      headers={headers}
       recordId={recordId}
       specName="goods-shipment"
       entityName="goodsShipment"

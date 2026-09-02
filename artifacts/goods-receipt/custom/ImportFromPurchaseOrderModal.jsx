@@ -1,13 +1,14 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
-async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId }) {
+async function fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId }) {
   // Fetch current receipt lines directly (by parentId) + other draft receipts list in parallel.
   // Avoids relying on the current receipt appearing in the paginated list.
   const [currentLinesRes, receiptsRes] = await Promise.all([
     currentReceiptId
-      ? fetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${currentReceiptId}&_startRow=0&_endRow=200`, { headers })
+      ? apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${currentReceiptId}&_startRow=0&_endRow=200`)
       : Promise.resolve(null),
-    fetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=100&_sortBy=movementDate desc`, { headers }),
+    apiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
   ]);
 
   const draftInfo = {};
@@ -28,7 +29,7 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId
     );
     const lineResults = await Promise.all(
       otherDrafts.map(s =>
-        fetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers })
+        apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${s.id}&_startRow=0&_endRow=200`)
           .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
       ),
     );
@@ -46,11 +47,11 @@ async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId
   return draftInfo;
 }
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
   const [ordersRes, draftInfo, headerRes] = await Promise.all([
-    fetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetchDraftInfoByOrderLine({ base, headers, bpId, currentReceiptId: receiptId }),
-    fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`, { headers }),
+    apiFetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId: receiptId }),
+    apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
   ]);
 
   let receiptCurrency = null;
@@ -73,10 +74,10 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId: receiptId }) => 
   return { documents, sharedContext: { draftInfo }, excludedByCurrency };
 };
 
-export const fetchLines = async ({ base, headers, docId, sharedContext }) => {
-  const res = await fetch(
+export const fetchLines = async ({ base, docId, sharedContext }) => {
+  const res = await apiFetch(
     `${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`,
-    { headers },
+    {},
   );
   if (!res.ok) return [];
   const lines = (await res.json())?.response?.data || [];
@@ -120,17 +121,22 @@ const buildLineBody = async ({ line, qty, invoiceId: receiptId, lineNo }) => ({
   lineNo,
 });
 
-const afterImport = async ({ importedDocIds, base, headers, invoiceId }) => {
+const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   if (importedDocIds.size !== 1) return;
   const [orderId] = importedDocIds;
-  await fetch(`${base}/goods-receipt/goodsReceipt/${invoiceId}`, {
+  await apiFetch(`${base}/goods-receipt/goodsReceipt/${invoiceId}`, {
     method: 'PATCH',
-    headers,
+    
     body: JSON.stringify({ salesOrder: orderId }),
   });
 };
 
 export default function ImportFromPurchaseOrderModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}
