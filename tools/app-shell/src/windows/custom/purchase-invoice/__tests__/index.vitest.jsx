@@ -67,7 +67,7 @@ vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
 
 vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
   useCreateContactModal: vi.fn(() => ({
-    headers: { Authorization: 'Bearer tkn' },
+    headers: { Authorization: 'Bearer tkn', 'Accept-Language': 'es_ES' },
     createContactCtxValue: { open: vi.fn() },
     contactPortal: <div data-testid="contact-portal" />,
   })),
@@ -144,7 +144,7 @@ vi.mock('@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage',
 let lastListViewProps;
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,6 +162,10 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     lastHeaderPageProps = null;
     rowDeleteConfig = null;
     currentWindowAccessTier = 'full';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // ETP-4520 — the hand-rolled ListView below only picks up the runtime
@@ -262,8 +266,48 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     expect(screen.queryByTestId('clone-modal')).not.toBeInTheDocument();
   });
 
+  // ETP-5012: "overdue" must mean due date < today — not just "Completed
+  // with an outstanding balance", which used to wrongly include invoices
+  // whose due date hasn't arrived yet.
   it('sets initialAdvancedFilter and initialColumns for the overdue filter param', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 25, 12, 0, 0));
     searchParams = new URLSearchParams('filter=overdue');
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.initialAdvancedFilter).toMatchObject({
+      rowOperator: 'and',
+      conditions: [
+        { field: 'documentStatus', operator: 'equals', value: 'CO' },
+        { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+        { field: 'eTGODueDate', operator: 'lessThan', value: '2026-08-25' },
+      ],
+    });
+    expect(lastListViewProps.initialAdvancedFilter.conditions).toHaveLength(3);
+    expect(lastListViewProps.initialColumns).not.toBeNull();
+  });
+
+  // ETP-5012: guards the local-calendar-day helper against the UTC bug of
+  // `new Date().toISOString().slice(0, 10)` — late evening in a negative-UTC
+  // timezone would otherwise resolve "today" to the day before.
+  it('resolves "today" as a local calendar day, not the UTC day', () => {
+    vi.useFakeTimers();
+    // 2026-08-25 23:30 in UTC-3 is already 2026-08-26 in UTC.
+    vi.setSystemTime(new Date(2026, 7, 25, 23, 30, 0));
+    searchParams = new URLSearchParams('filter=overdue');
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.initialAdvancedFilter.conditions[2]).toMatchObject({
+      field: 'eTGODueDate',
+      operator: 'lessThan',
+      value: '2026-08-25',
+    });
+  });
+
+  // ETP-5012: the dashboard totals card shows the TOTAL pending balance
+  // (any due date), so it needs its own filter distinct from "overdue".
+  it('sets initialAdvancedFilter without a date condition for the pending filter param', () => {
+    searchParams = new URLSearchParams('filter=pending');
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastListViewProps.initialAdvancedFilter).toMatchObject({
@@ -273,6 +317,7 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
         { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
       ],
     });
+    expect(lastListViewProps.initialAdvancedFilter.conditions).toHaveLength(2);
     expect(lastListViewProps.initialColumns).not.toBeNull();
   });
 

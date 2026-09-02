@@ -4,7 +4,11 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // A tree needs its FULL leaf list upfront to know which top-level folders exist —
 // it can't discover them via ListView's incremental "scroll near bottom, load a bit
 // more" pagination (ListView only fetches one BATCH_SIZE page per `data` prop, and
@@ -51,6 +55,7 @@ function buildTreeColumns(ui) {
       label: ui('accountTreeFilterCode'),
       required: true,
       backendSortKey: 'searchKey',
+      filterable: false,
     },
     {
       key: 'name',
@@ -58,6 +63,7 @@ function buildTreeColumns(ui) {
       type: 'string',
       label: ui('accountTreeFilterName'),
       required: true,
+      filterable: false,
     },
     {
       key: 'accountType',
@@ -68,6 +74,7 @@ function buildTreeColumns(ui) {
       enumLabels: Object.fromEntries(
         Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => [code, ui(uiKey)]),
       ),
+      filterable: false,
     },
     {
       key: 'active',
@@ -79,6 +86,7 @@ function buildTreeColumns(ui) {
         true: ui('yes'),
         false: ui('no'),
       },
+      filterable: false,
     },
     {
       key: 'ytdDebit',
@@ -230,6 +238,63 @@ function flattenVisible(nodes, expanded) {
 }
 
 /**
+ * Recursively collects the id of every virtual (folder) node in a tree, at every
+ * depth — not just the root siblings. Shared by `expandAll` and by the filter's
+ * ancestor-auto-expand logic (see `filterTree` below) so both use the same genuine
+ * deep walk. `expandAll`'s previous bug was exactly a shallow, root-array-only
+ * check — this helper exists so that mistake has one fix point, not two.
+ */
+function collectVirtualIds(nodes, acc = []) {
+  for (const node of nodes) {
+    if (node.isVirtual) {
+      acc.push(node.id);
+      if (node.children?.length) collectVirtualIds(node.children, acc);
+    }
+  }
+  return acc;
+}
+
+const ALL_FILTER = 'all';
+
+/**
+ * A leaf "matches" if it satisfies every active filter criterion. Virtual
+ * folder nodes never match directly — `filterTree` below decides whether a
+ * folder survives based on its descendants, not on this function.
+ */
+function matchesLeafFilter(item, filters) {
+  const { text, accountType } = filters;
+  if (text) {
+    const q = text.toLowerCase();
+    const codeMatch = String(item.searchKey ?? '').toLowerCase().includes(q);
+    const nameMatch = String(item.name ?? '').toLowerCase().includes(q);
+    if (!codeMatch && !nameMatch) return false;
+  }
+  return accountType === ALL_FILTER || item.accountType === accountType;
+}
+
+/**
+ * Recursively prunes a tree, keeping only leaves that match `filters` and every
+ * virtual ancestor that leads to at least one match. Must walk `node.children`
+ * at every depth — a shallow top-level-only check here would repeat the exact
+ * `expandAll` bug (Task 1): matches nested more than one level deep would be
+ * silently dropped instead of surfaced.
+ */
+function filterTree(nodes, filters) {
+  const result = [];
+  for (const node of nodes) {
+    if (node.isVirtual) {
+      const children = filterTree(node.children ?? [], filters);
+      if (children.length > 0) {
+        result.push({ ...node, children });
+      }
+    } else if (matchesLeafFilter(node, filters)) {
+      result.push(node);
+    }
+  }
+  return result;
+}
+
+/**
  * A leaf subaccount whose code ends in "0000" is a protected parent-like placeholder
  * (e.g. `20000000` under breakdown `2000`) — it is technically `issummary='N'` in the DB
  * but must render as non-editable, matching the backend's
@@ -243,7 +308,7 @@ function isProtectedLeafCode(item) {
   return typeof item.searchKey === 'string' && item.searchKey.endsWith('0000');
 }
 
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui }) {
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui, activeChecked, activeDisabled, onActiveToggle }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
   const isProtected = isProtectedLeafCode(item);
@@ -254,8 +319,8 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       role="row"
       aria-selected={isSelected}
       className={[
-        'flex items-center gap-3 px-4 py-2 cursor-pointer text-sm select-none transition-colors',
-        isSelected ? 'bg-[var(--status-info-bg)]' : 'hover:bg-[hsl(var(--muted))]',
+        'flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm select-none transition-colors',
+        isSelected ? 'bg-[hsl(var(--muted))]' : 'hover:bg-[hsl(var(--muted))]/50',
         isSummary ? 'font-semibold text-[hsl(var(--foreground))]' : 'font-normal text-[hsl(var(--muted-foreground))]',
       ].join(' ')}
       onClick={() => onRowClick(item)}
@@ -307,6 +372,22 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       <span className="shrink-0 w-40 truncate text-[hsl(var(--muted-foreground))]">
         {accountTypeLabel(ui, item.accountType)}
       </span>
+
+      {/* Active/inactive toggle — leaf rows only, disabled for protected placeholders */}
+      {!item.isVirtual && (
+        <span
+          className="shrink-0 flex items-center justify-center w-10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Switch
+            checked={activeChecked}
+            disabled={isProtected || activeDisabled}
+            onCheckedChange={(next) => onActiveToggle(item, next)}
+            aria-label={ui('active')}
+            data-testid={`account-tree-active-toggle-${item.id}`}
+          />
+        </span>
+      )}
     </div>
   );
 }
@@ -366,6 +447,7 @@ export default function AccountTreeView({
   ...rest
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const treeColumns = useMemo(() => buildTreeColumns(ui), [ui]);
 
   // Self-fetch: the full leaf-account list, loaded directly (bypassing ListView's
@@ -383,9 +465,9 @@ export default function AccountTreeView({
     (async () => {
       setIsFetchingFull(true);
       try {
-        const res = await fetch(
-          `${apiBaseUrl}/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+        const res = await apiFetch(
+          `/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
+          { token },
         );
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();
@@ -406,12 +488,34 @@ export default function AccountTreeView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, token, fetchGeneration]);
+  }, [apiBaseUrl, token, apiFetch, fetchGeneration]);
 
   // Refetch the complete dataset after a new sub-account is saved, in addition to
   // whatever `onDataMutated` triggers on the caller's side (ListView's own
   // one-page refresh).
   const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
+
+  const [optimisticActiveToggles, setOptimisticActiveToggles] = useState({});
+  const [savingActiveToggles, setSavingActiveToggles] = useState({});
+
+  const handleActiveToggle = useCallback((item, nextChecked) => {
+    const toggleKey = `${item.id}:active`;
+    runInlineToggleRequest({
+      apiBaseUrl,
+      entity: 'elementValue',
+      row: { id: item.id },
+      col: { key: 'active' },
+      token,
+      checked: nextChecked,
+      toggleKey,
+      setOptimisticToggles: setOptimisticActiveToggles,
+      setSavingToggles: setSavingActiveToggles,
+      onDataMutated: refetchFull,
+      ui,
+    }).catch((err) => {
+      console.error('[AccountTreeView] Failed to toggle account active status:', err);
+    });
+  }, [apiBaseUrl, token, refetchFull, ui]);
 
   // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
@@ -425,6 +529,30 @@ export default function AccountTreeView({
   useEffect(() => {
     persistExpanded(expanded);
   }, [expanded]);
+
+  const [filterText, setFilterText] = useState('');
+  const [filterAccountType, setFilterAccountType] = useState(ALL_FILTER);
+
+  const hasActiveFilter =
+    filterText.trim() !== '' || filterAccountType !== ALL_FILTER;
+
+  const filters = useMemo(
+    () => ({ text: filterText.trim(), accountType: filterAccountType }),
+    [filterText, filterAccountType],
+  );
+
+  const filteredTree = useMemo(
+    () => (hasActiveFilter ? filterTree(tree, filters) : tree),
+    [tree, filters, hasActiveFilter],
+  );
+
+  // While a filter is active, every surviving virtual folder must be expanded —
+  // this OVERRIDES the manual `expanded` state without mutating it, so clearing
+  // the filter reveals the manual state exactly as the user left it.
+  const effectiveExpanded = useMemo(
+    () => (hasActiveFilter ? new Set(collectVirtualIds(filteredTree)) : expanded),
+    [hasActiveFilter, filteredTree, expanded],
+  );
 
   useEffect(() => {
     onColumnsReady?.(treeColumns);
@@ -453,8 +581,8 @@ export default function AccountTreeView({
   );
 
   const visibleRows = useMemo(
-    () => flattenVisible(tree, expanded),
-    [tree, expanded],
+    () => flattenVisible(filteredTree, effectiveExpanded),
+    [filteredTree, effectiveExpanded],
   );
 
   const selectedRecord = useMemo(
@@ -463,7 +591,7 @@ export default function AccountTreeView({
   );
 
   const expandAll = useCallback(
-    () => setExpanded(new Set(tree.filter((n) => n.isVirtual).map((n) => n.id))),
+    () => setExpanded(new Set(collectVirtualIds(tree))),
     [tree],
   );
   const collapseAll = useCallback(() => setExpanded(new Set()), []);
@@ -474,70 +602,51 @@ export default function AccountTreeView({
     refetchFull();
   }, [onDataMutated, refetchFull]);
 
-  return (
-    <div data-testid="account-tree" role="grid" {...rest}>
-      {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[hsl(var(--border-subtle))] bg-card">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={expandAll}
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-          >
-            {ui('expand')}
-          </button>
-          <span className="text-[hsl(var(--border-control))] select-none">|</span>
-          <button
-            type="button"
-            onClick={collapseAll}
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-          >
-            {ui('collapse')}
-          </button>
-          {isFetchingFull && (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-              {ui('accountTreeLoadingFull')}
-            </span>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 bg-[hsl(var(--foreground))] text-primary-foreground rounded-full hover:bg-[hsl(var(--foreground))] transition-colors"
-        >
-          + {ui('newSubAccount')}
-        </button>
+  let treeBody;
+  if (effectiveData.length === 0) {
+    treeBody = (
+      <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+        {ui('accountTreeNoAccounts')}
       </div>
-
-      {effectiveData.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          {ui('accountTreeNoAccounts')}
+    );
+  } else if (hasActiveFilter && visibleRows.length === 0) {
+    treeBody = (
+      <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+        {ui('noResultsFound')}
+      </div>
+    );
+  } else {
+    treeBody = (
+      <>
+        {/* ── Column headers ── */}
+        <div
+          role="row"
+          className="flex items-center gap-3 px-4 h-11 border-b border-[hsl(var(--border-subtle))]"
+        >
+          {/* Spacer for toggle column */}
+          <span className="w-4 shrink-0" />
+          <span className="shrink-0 w-24 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('accountTreeCode')}
+          </span>
+          <span className="flex-1 min-w-0 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('name')}
+          </span>
+          <span className="shrink-0 w-40 text-sm font-medium text-[hsl(var(--muted-foreground))]">
+            {ui('accountTreeFilterType')}
+          </span>
+          <span className="shrink-0 w-10 text-sm font-medium text-[hsl(var(--muted-foreground))] text-center">
+            {ui('accountTreeFilterActive')}
+          </span>
         </div>
-      ) : (
-        <>
-          {/* ── Column headers ── */}
-          <div
-            role="row"
-            className="flex items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))]"
-          >
-            {/* Spacer for toggle column */}
-            <span className="w-4 shrink-0" />
-            <span className="shrink-0 w-24 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
-              {ui('accountTreeCode')}
-            </span>
-            <span className="flex-1 min-w-0 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
-              {ui('name')}
-            </span>
-            <span className="shrink-0 w-40 text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
-              {ui('accountTreeFilterType')}
-            </span>
-          </div>
 
-          {/* ── Tree rows ── */}
-          <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
-            {visibleRows.map((item) => (
+        {/* ── Tree rows ── */}
+        <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
+          {visibleRows.map((item) => {
+            const toggleKey = `${item.id}:active`;
+            const rawActive = Object.hasOwn(optimisticActiveToggles, toggleKey)
+              ? optimisticActiveToggles[toggleKey]
+              : item.active;
+            return (
               <AccountTreeRow
                 key={item.id}
                 item={item}
@@ -546,12 +655,84 @@ export default function AccountTreeView({
                 onToggle={handleToggle}
                 onRowClick={handleRowClick}
                 ui={ui}
+                activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
+                activeDisabled={!!savingActiveToggles[toggleKey]}
+                onActiveToggle={handleActiveToggle}
                 data-testid="AccountTreeRow__acc34a"
               />
-            ))}
-          </div>
-        </>
-      )}
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div data-testid="account-tree" role="grid" {...rest}>
+      {/* ── Toolbar ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[hsl(var(--border-subtle))] bg-card">
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={expandAll}
+            data-testid="account-tree-expand-button"
+          >
+            {ui('expand')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={collapseAll}
+            data-testid="account-tree-collapse-button"
+          >
+            {ui('collapse')}
+          </Button>
+          {isFetchingFull && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              {ui('accountTreeLoadingFull')}
+            </span>
+          )}
+        </div>
+
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={() => setIsModalOpen(true)}
+          data-testid="account-tree-new-subaccount-button"
+        >
+          + {ui('newSubAccount')}
+        </Button>
+      </div>
+
+      {/* ── Filter row ── */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))] bg-card">
+        <input
+          type="text"
+          data-testid="account-tree-filter-text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder={ui('search')}
+          className="h-8 flex-1 max-w-xs rounded-md border border-[hsl(var(--border-control))] bg-card px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))]"
+        />
+        <select
+          data-testid="account-tree-filter-type"
+          value={filterAccountType}
+          onChange={(e) => setFilterAccountType(e.target.value)}
+          className="h-8 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 text-xs cursor-pointer"
+        >
+          <option value={ALL_FILTER}>{ui('all')}</option>
+          {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
+            <option key={code} value={code}>{ui(uiKey)}</option>
+          ))}
+        </select>
+      </div>
+
+      {treeBody}
 
       {/* ── New Sub-account modal ── */}
       <NewAccountModal

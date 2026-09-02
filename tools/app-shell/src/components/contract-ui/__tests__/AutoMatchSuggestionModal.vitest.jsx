@@ -13,7 +13,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -99,6 +99,7 @@ describe('AutoMatchSuggestionModal', () => {
     applyMock.mockReset().mockResolvedValue({});
     toast.success.mockReset();
     toast.error.mockReset();
+    toast.warning.mockReset();
   });
 
   it('renders nothing when open is false', () => {
@@ -206,6 +207,63 @@ describe('AutoMatchSuggestionModal', () => {
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalled());
   });
 
+  // ── Per-group partial-success outcome (ETP-4951: shared-batch reconciliation) ──
+  // applySuggestions now shares ONE reconciliation across the whole batch, so a per-group failure no
+  // longer aborts the request — it resolves with `results[]` carrying a mix of success entries and
+  // `{ error }` entries. handleApply must read that per-group outcome instead of always showing a
+  // flat success toast regardless of what actually happened.
+
+  it('shows a partial-success warning toast when some groups succeeded and some failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { error: { message: 'boom' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringContaining('financeReconcileAutomatchToastPartial'),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('shows an error toast (not a warning) when every group in the batch failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { error: { message: 'boom 1' } },
+        { error: { message: 'boom 2' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('financeReconcileAutomatchToastError'),
+    );
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the plain success toast when every group in the batch succeeded', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { reconciliationId: 'r1', statementLineId: 'line-2' },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('calls onClose when cancel is clicked', () => {
     const { props } = renderModal();
     fireEvent.click(screen.getByTestId('automatch-modal-cancel'));
@@ -311,5 +369,102 @@ describe('AutoMatchSuggestionModal', () => {
     expect(screen.getByText(expectedOperationAmount)).toBeInTheDocument();
     // No money amount anywhere in the dialog should render the EUR symbol for a USD account.
     expect(document.body.textContent).not.toContain('€');
+  });
+
+  // ── Missing accounting concept: the edit-account affordance (ETP-4965) ────────
+  //
+  // A mass automatch cannot ask for an accounting concept line by line, so a group whose
+  // within-tolerance difference has no `EM_Aprm_Glitem_Diff` to post against comes back as a
+  // per-group `GL_ITEM_REQUIRED` failure. The only thing the user can do about it is configure the
+  // concept on the account — hence the modal STAYS OPEN and offers a direct link there, instead of
+  // closing over a toast that names a setting the user then has to go hunting for.
+  //
+  // The button is deliberately conditional on BOTH signals: the failure must have actually
+  // happened (`needsGlItem`) and the host must have given us somewhere to navigate
+  // (`onEditAccount`). It is not a permanent fixture of the footer.
+
+  const GL_ITEM_REQUIRED_FAILURE = {
+    statementLineId: 'line-2',
+    code: 'GL_ITEM_REQUIRED',
+    differenceAmount: '0.38',
+    error: { message: 'A difference GL item is required' },
+  };
+
+  const EDIT_ACCOUNT_BUTTON = 'automatch-modal-edit-account';
+
+  it('does not offer the edit-account button before any apply has run', () => {
+    renderModal({ onEditAccount: vi.fn() });
+    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
+  });
+
+  it('does not offer the edit-account button after a fully successful apply', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { reconciliationId: 'r1', statementLineId: 'line-2' },
+      ],
+    });
+    const { props } = renderModal({ onEditAccount: vi.fn() });
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
+    expect(props.onEditAccount).not.toHaveBeenCalled();
+  });
+
+  it('offers the edit-account button once a group fails with GL_ITEM_REQUIRED', async () => {
+    applyMock.mockResolvedValue({
+      results: [{ reconciliationId: 'r1', statementLineId: 'line-1' }, GL_ITEM_REQUIRED_FAILURE],
+    });
+    renderModal({ onEditAccount: vi.fn() });
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    const button = await screen.findByTestId(EDIT_ACCOUNT_BUTTON);
+    expect(button).toBeInTheDocument();
+    // Label comes from i18n (the mock echoes the key back) — never a hardcoded string.
+    expect(button).toHaveTextContent('financeReconcileAutomatchEditAccount');
+  });
+
+  it('keeps the modal open on GL_ITEM_REQUIRED — onSuccess runs but onClose does not', async () => {
+    applyMock.mockResolvedValue({
+      results: [{ reconciliationId: 'r1', statementLineId: 'line-1' }, GL_ITEM_REQUIRED_FAILURE],
+    });
+    const { props } = renderModal({ onEditAccount: vi.fn() });
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    // onSuccess still fires: the groups that DID succeed were reconciled, so the list behind the
+    // modal has to refresh either way. Only the closing is skipped.
+    await vi.waitFor(() => expect(props.onSuccess).toHaveBeenCalledTimes(1));
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('automatch-suggestion-modal')).toBeInTheDocument();
+    // ...and the partial outcome is still reported, exactly as on the closing path.
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking the edit-account button calls onEditAccount and only then closes', async () => {
+    applyMock.mockResolvedValue({ results: [GL_ITEM_REQUIRED_FAILURE] });
+    const { props } = renderModal({ onEditAccount: vi.fn() });
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    fireEvent.click(await screen.findByTestId(EDIT_ACCOUNT_BUTTON));
+
+    expect(props.onEditAccount).toHaveBeenCalledTimes(1);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    // Order matters: closing first would unmount the caller's context before it navigates.
+    expect(props.onEditAccount.mock.invocationCallOrder[0])
+      .toBeLessThan(props.onClose.mock.invocationCallOrder[0]);
+  });
+
+  it('does not offer the edit-account button when the host passed no onEditAccount', async () => {
+    applyMock.mockResolvedValue({ results: [GL_ITEM_REQUIRED_FAILURE] });
+    const { props } = renderModal(); // no onEditAccount in the default props
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    // The apply resolved and its failure was reported...
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    // ...the modal still stays open (that part does not depend on the affordance)...
+    expect(props.onClose).not.toHaveBeenCalled();
+    // ...but with nowhere to navigate, no dead button is rendered.
+    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
   });
 });

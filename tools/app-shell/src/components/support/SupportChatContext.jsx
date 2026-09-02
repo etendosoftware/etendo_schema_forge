@@ -108,7 +108,13 @@ function reducer(state, action) {
     case 'SET_LOADING_CONVERSATIONS':
       return { ...state, isLoadingConversations: true, error: null };
     case 'SET_ACTIVE_CONVERSATION':
-      return { ...state, activeConversationId: action.id, messages: [] };
+      // Resets the shared draft here, not on widget close — this is the only action that
+      // represents the user actually navigating to a DIFFERENT conversation (from the
+      // Mensajes list, or starting a fresh one). `input` otherwise survives closing/reopening
+      // the widget, so a message the user was mid-typing isn't lost just because they closed
+      // the chat panel; it's the 'new' → real-id promotion after the first AI reply (handled
+      // by ADD_CONVERSATION, not this action) that must NOT clear it.
+      return { ...state, activeConversationId: action.id, messages: [], input: '' };
     case 'SET_MESSAGES':
       return { ...state, messages: action.messages, isLoadingMessages: false };
     case 'SET_LOADING_MESSAGES':
@@ -139,19 +145,39 @@ function reducer(state, action) {
             // rating, ...) snapshots that conversation's summary at the START of the
             // request. If it's slow (the AI/Jira round trip can take several seconds) and a
             // faster response — another request, or the 15s background poll — already
-            // landed a newer lastMessage/lastActivity in the meantime, this stale snapshot
-            // must not overwrite it. Every other field (status, rated, humanTakeover, ...)
-            // still applies unconditionally — those are authoritative regardless of timing.
-            const incomingIsStale = incoming.lastActivity && c.lastActivity &&
-              new Date(incoming.lastActivity) < new Date(c.lastActivity);
-            if (incomingIsStale) {
-              const { lastActivity, lastMessage, ...rest } = incoming;
-              return { ...c, ...rest };
-            }
-            return { ...c, ...incoming };
+            // landed newer server state in the meantime, this stale snapshot must not
+            // overwrite it. `updatedAt` is the entity's real audit timestamp (bumped by
+            // every server-side save, including the async human-takeover flip, which never
+            // touches lastActivity/lastMessage) — the only reliable way to tell which
+            // response actually reflects newer DB state, since network responses don't
+            // resolve in dispatch order. Confirmed bug without this: the "talk to a human"
+            // bar could flicker hidden→visible→hidden as a stale response landed after a
+            // fresher one and reverted assigneeKind back to 'ai'.
+            const incomingIsStale = incoming.updatedAt && c.updatedAt &&
+              new Date(incoming.updatedAt) < new Date(c.updatedAt);
+            return incomingIsStale ? c : { ...c, ...incoming };
           })
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
       };
+    case 'MERGE_CONVERSATIONS': {
+      // Used by the 15s background poll instead of SET_CONVERSATIONS: that poll's response
+      // can land out of order relative to another in-flight request for the same
+      // conversation (another poll tick, or a slow sendMessage/close/rating round trip).
+      // Same updatedAt-based staleness guard as UPDATE_CONVERSATION, applied per-item across
+      // the whole incoming list — see its comment for why arrival order can't be trusted.
+      const currentById = new Map(state.conversations.map((c) => [c.id, c]));
+      const merged = action.conversations.map((incoming) => {
+        const existing = currentById.get(incoming.id);
+        if (!existing) return incoming;
+        const incomingIsStale = incoming.updatedAt && existing.updatedAt &&
+          new Date(incoming.updatedAt) < new Date(existing.updatedAt);
+        return incomingIsStale ? existing : incoming;
+      });
+      return {
+        ...state,
+        conversations: merged.sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
+      };
+    }
     case 'DISMISS_RATING':
       return {
         ...state,
@@ -479,7 +505,12 @@ export function SupportChatProvider({ children }) {
               existing.unread !== c.unread ||
               existing.status !== c.status ||
               existing.rated !== c.rated ||
-              existing.lastActivity !== c.lastActivity
+              existing.lastActivity !== c.lastActivity ||
+              // Escalation to a human takes effect via a background webhook, asynchronous to
+              // the message-send response that triggered it (see _do_escalate on the ADK
+              // side) — this poll is what eventually picks up assigneeKind flipping to
+              // 'human' so the "talk to a human" bar hides once escalation actually lands.
+              existing.assigneeKind !== c.assigneeKind
             );
           });
         if (hasChange) {
@@ -498,7 +529,7 @@ export function SupportChatProvider({ children }) {
               playReceiveSound();
             }
           });
-          dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
+          dispatch({ type: 'MERGE_CONVERSATIONS', conversations: incoming });
         }
       } catch (_) { /* silent */ }
     }, 15000);

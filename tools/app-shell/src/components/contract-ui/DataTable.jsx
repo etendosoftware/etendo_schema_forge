@@ -48,6 +48,7 @@ import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
 
+import { apiFetch } from '@/auth/api.js';
 /**
  * Resolve a value from an object using a dotted path (e.g. `_aux._LOC`).
  */
@@ -162,12 +163,10 @@ export async function runInlineToggleRequest({
   setOptimisticToggles(prev => ({ ...prev, [toggleKey]: checked }));
   setSavingToggles(prev => ({ ...prev, [toggleKey]: true }));
   try {
-    const res = await fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
+    const res = await apiFetch(`${apiBaseUrl}/${entity}/${row.id}`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      baseUrl: '',
+      token,
       body: JSON.stringify({ [col.key]: checked }),
     });
     if (!res.ok) {
@@ -2128,6 +2127,7 @@ export function DataTable({
   const quickActionsCol = oneIfTrue(quickActionsEnabled);
   const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
   const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
+  // ETP-5030 — InlineLinesPanel's `computeRowClassName` mirrors the `bg-primary/5` literal for tab grids; keep the two in sync.
   const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders

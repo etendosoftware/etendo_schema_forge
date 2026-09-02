@@ -36,6 +36,12 @@ describe('SalesInvoiceWindow — wiring', () => {
   it('routes to HeaderPage when a recordId is present', () => {
     assert.match(src, /if\s*\(recordId\)/);
   });
+
+  it('does not hardcode hidePrint on ListView (ETP-4728 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/,
+      'the bulk "Print (N)" grid button must not be hidden via listViewOptions — ' +
+      'ETP-4728 restored it for sales-invoice, mirroring sales-order (ETP-4729)');
+  });
 });
 
 // ETP-4888 point 5 — Tax SIF quick-fix modal shortcut on invoice lines. The
@@ -57,10 +63,10 @@ describe('SalesInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
     assert.match(src, /const\s+LINE_TAX_SIF_TRIGGER_ENABLED\s*=\s*true\s*;/);
   });
 
-  it('calls the hook with apiBaseUrl, token, enabled, recordId and windowCategory: "sales"', () => {
+  it('calls the hook with apiBaseUrl, token, enabled, recordId, windowCategory: "sales" and specName: "sales-invoice"', () => {
     assert.match(
       src,
-      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'sales',?\s*\n?\s*\}\)/,
+      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'sales',\s*specName:\s*'sales-invoice',?\s*\n?\s*\}\)/,
     );
   });
 

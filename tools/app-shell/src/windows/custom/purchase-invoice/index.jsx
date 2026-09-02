@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
@@ -136,7 +137,7 @@ export default function PurchaseInvoiceWindow(props) {
   const breadcrumb = 'Purchases / Purchase Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases', specName: 'purchase-invoice',
   });
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -208,17 +209,23 @@ export default function PurchaseInvoiceWindow(props) {
   const docStatus = searchParams.get('DocStatus');
 
   const isOverdue = filterParam === 'overdue';
+  const isPending = filterParam === 'pending';
   const isPaymentsDueToday = filterParam === 'paymentsDueToday';
-  const isInvoiceFilter = isOverdue || isPaymentsDueToday;
+  const isInvoiceFilter = isOverdue || isPending || isPaymentsDueToday;
 
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayCalendarISO();
 
+  // ETP-5012: "overdue" must mean due date < today, not just "completed with
+  // an outstanding balance" — that broader set (any pending balance,
+  // regardless of due date) is now "pending", used by the dashboard's totals
+  // card. Otherwise a future-dated invoice was wrongly counted as overdue.
   const initialAdvancedFilter = isInvoiceFilter
     ? {
         rowOperator: 'and',
         conditions: [
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
           { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+          ...(isOverdue ? [{ field: 'eTGODueDate', operator: 'lessThan', value: todayISO }] : []),
           ...(isPaymentsDueToday
             ? [{ field: 'eTGODueDate', operator: 'equals', value: todayISO }]
             : []),

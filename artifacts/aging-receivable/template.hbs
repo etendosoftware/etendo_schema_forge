@@ -6,17 +6,38 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; text-transform: upp
 .bp-header-row td { font-weight: bold; font-size: 13px; padding-top: 12px; padding-bottom: 2px; border: none; background: transparent; }
 .bp-subtotal-row td { font-weight: bold; border-top: 1px solid #aaa; border-bottom: 2px solid #333; }
 .doc-row td { border: none; font-size: 11px; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
+{{#if meta.isInteractive}}
 .bp-drilldown-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
 .bp-drilldown-link:hover { opacity: 0.75; text-decoration: none; }
 .doc-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
 .doc-link:hover { opacity: 0.75; text-decoration: none; }
+{{/if}}
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
+@media print {
+  .bp-drilldown-link, .doc-link { color: inherit !important; text-decoration: none !important; cursor: default !important; }
+}
 .report-empty { padding: 48px 0; text-align: center; color: #888; font-size: 14px; }
 </style></head>
 <body><div class="report-container">
 
   <div class="report-header">
     <div class="report-title">{{meta.title}}</div>
+    {{> document-branding}}
   </div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
+  </div>
+  {{/if}}
 
   {{#if rows.length}}
 
@@ -140,9 +161,7 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; text-transform: upp
 
   {{/if}}
 
-  <div class="report-footer">
-    <div>{{meta.recordCount}} {{meta.ui.records}}</div>
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
-
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div></body></html>

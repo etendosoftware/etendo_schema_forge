@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, FileText, Layers, Lock, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
@@ -59,11 +59,19 @@ function isoToLocal(iso) {
  * Maps a backend statement line (from `?action=lines`) into the editable row
  * shape used by the grid. The committed FK pickers need a `{ id, name }`; the
  * line carries both the id and the joined name (bpartnerFkName / glItemName).
+ *
+ * `matched` (ETP-4921) is the one field that is NOT editable state: it says the line is already
+ * linked to a financial-account transaction, which core's own `APRM_FIN_BNKSTM_LINE_CHECK_TRG`
+ * trigger protects from any update or delete — by any caller, and regardless of whether the
+ * parent statement has been reactivated back to draft. Such a row renders read-only and is left
+ * out of the save payload entirely (the backend keeps it as-is; see `deleteUnmatchedLines` in
+ * BankStatementsHandler.java).
  */
 function lineToRow(l) {
   lineSeq += 1;
   return {
     id: `e${lineSeq}`,
+    matched: !!l.matched,
     date: isoToLocal(l.date) || toLocalIso(new Date()),
     reference: l.reference && l.reference !== '**' ? l.reference : '',
     description: l.description || '',
@@ -249,6 +257,50 @@ function LinesHeader({ ui }) {
   );
 }
 
+/**
+ * A MATCHED statement line (ETP-4921): rendered as plain read-only text in the same grid tracks,
+ * with a lock affordance and no delete button.
+ *
+ * This is not a styling choice — the line is genuinely immutable. Core's
+ * `APRM_FIN_BNKSTM_LINE_CHECK_TRG` raises on any update or delete of a line whose
+ * `FIN_FinAcc_Transaction_ID` is set, for every caller, and independently of whether the parent
+ * statement has been reactivated back to draft. That is exactly what Classic shows too: it lets
+ * you reactivate a partially reconciled statement, then refuses to save an edit to a matched line
+ * ("Bank Statement Line is already matched. It can not be modified nor deleted."). Offering the
+ * inputs here would be offering an edit the database will reject.
+ */
+function MatchedRow({ row, ui, money }) {
+  const cell = 'truncate px-2 text-sm text-[hsl(var(--muted-foreground))]';
+  const amount = cn(cell, 'text-right tabular-nums');
+  return (
+    <div
+      className={cn(LINES_GRID, 'items-center bg-[hsl(var(--muted))]/40 px-6 py-1.5')}
+      data-testid={`manual-line-matched-${row.id}`}
+    >
+      <span className={cell}>{row.date}</span>
+      <span className={cell}>{row.reference}</span>
+      <span className={cell} title={row.description}>{row.description}</span>
+      <span className={cell}>{row.contactName}</span>
+      <span className={cell}>{row.contact?.name ?? ''}</span>
+      <span className={cell}>{row.glItem?.name ?? ''}</span>
+      <span className={amount}>{parseAmount(row.out) ? money(parseAmount(row.out)) : ''}</span>
+      <span className={amount}>{parseAmount(row.in) ? money(parseAmount(row.in)) : ''}</span>
+      <span className="flex items-center justify-end">
+        {/* The lock replaces the delete button in the same track, so the grid stays aligned and
+            the row visibly explains why it offers no actions. */}
+        <span
+          className="flex h-8 w-8 items-center justify-center text-[hsl(var(--text-disabled))]"
+          title={ui('financeAccountStatementsManualLineMatchedTooltip')}
+          aria-label={ui('financeAccountStatementsManualLineMatchedTooltip')}
+          data-testid="manual-line-lock"
+        >
+          <Lock className="h-4 w-4" data-testid="Lock__6b4086" />
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** A statement line — always inline-editable, cell by cell (no edit/display toggle). */
 function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSide = true }) {
   const set = (field) => (e) => onChange(row.id, field, e.target.value);
@@ -326,7 +378,7 @@ function LineEditHint({ ui }) {
   );
 }
 
-function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide }) {
+function EditableLines({ rows, setRows, ui, money, currencySym, currencySymRightSide }) {
   // The row whose cell currently has focus — drives the inline keyboard hint.
   const [focusedId, setFocusedId] = useState(null);
 
@@ -337,12 +389,15 @@ function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide })
 
   // Full-bleed table (extends to the modal padding edges so the header / row
   // separators span the full width, per the design). Rows are always editable
-  // cell by cell — no edit/display toggle.
+  // cell by cell — no edit/display toggle, EXCEPT matched lines (ETP-4921), which the database
+  // refuses to modify at all and so render as read-only text.
   return (
     <div className="-mx-6">
       <LinesHeader ui={ui} data-testid="LinesHeader__6b4086" />
       <div className="divide-y divide-[hsl(var(--border-subtle))]">
-        {rows.map((r) => (
+        {rows.map((r) => (r.matched ? (
+          <MatchedRow key={r.id} row={r} ui={ui} money={money} data-testid="MatchedRow__6b4086" />
+        ) : (
           <div
             key={r.id}
             onFocusCapture={() => setFocusedId(r.id)}
@@ -373,7 +428,7 @@ function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide })
               data-testid="EditRow__6b4086" />
             {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
           </div>
-        ))}
+        )))}
       </div>
       <div className="border-t border-[hsl(var(--border-subtle))] px-6 py-2">
         <AddLineButton
@@ -577,7 +632,9 @@ export function ManualStatementModal({
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
   const { updateStatement, busy } = useStatementActions();
-  // Only fetch lines while editing an open draft.
+  // Only fetch lines while editing an open draft. No refresh token is needed here (unlike the
+  // expanded accordion row): `path` itself flips null → url on every open, which is already a
+  // dependency change and so already forces a fresh fetch of the just-saved lines.
   const { lines: loadedLines, loading: linesLoading } =
     useBankStatementLines(editing && open ? statement.id : null);
   const saving = creating || busy;
@@ -636,8 +693,17 @@ export function ManualStatementModal({
       toast.error(ui('financeAccountStatementsManualErrorName'));
       return;
     }
-    const usable = rows.filter((r) => !isBlankLine(r));
-    if (usable.length === 0) {
+    // ETP-4921 — matched lines are excluded from the payload entirely: they are immutable at the
+    // DB level, and `?action=update` keeps them in place rather than deleting-and-recreating (see
+    // deleteUnmatchedLines in BankStatementsHandler.java). Sending them would be asking the
+    // backend to rewrite a row core's trigger forbids touching.
+    const editable = rows.filter((r) => !r.matched);
+    const matchedCount = rows.length - editable.length;
+    const usable = editable.filter((r) => !isBlankLine(r));
+    // A statement whose every line is matched has nothing left to send, and that is fine: the
+    // header edit still applies and the matched lines keep the statement non-empty. Only reject
+    // when there is genuinely nothing at all.
+    if (usable.length === 0 && matchedCount === 0) {
       toast.error(ui('financeAccountStatementsManualErrorLines'));
       return;
     }
@@ -735,6 +801,7 @@ export function ManualStatementModal({
               rows={rows}
               setRows={setRowsDirty}
               ui={ui}
+              money={money}
               currencySym={currencySym}
               currencySymRightSide={currencySymRightSide}
               data-testid="EditableLines__6b4086" />

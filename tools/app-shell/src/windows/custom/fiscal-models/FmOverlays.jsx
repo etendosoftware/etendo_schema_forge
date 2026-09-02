@@ -6,6 +6,7 @@ import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDow
 import { Checkbox } from '@/components/ui/checkbox';
 import './fiscal-models.css';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function parseCityLine(cityLine) {
   if (!cityLine) return { postal: '', city: '', province: '' };
   // Format: "28001 - Madrid (Madrid)" — postal optional, region in parens optional
@@ -788,6 +789,7 @@ function CfgSection349({ t }) {
 export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // Available tabs: always Declarante, then per-model tabs for active models
   const modelTab = model ?? '303';
@@ -802,8 +804,9 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   useEffect(() => {
     if (!token || !apiBaseUrl) return;
     const controller = new AbortController();
-    fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
+    apiFetch(`${neoBase(apiBaseUrl)}/session`, {
+      baseUrl: '',
+      token,
       signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : null)
@@ -821,7 +824,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [token, apiBaseUrl]);
+  }, [token, apiBaseUrl, apiFetch]);
 
   const set = (key) => (e) => { setForm(prev => ({ ...prev, [key]: e.target.value })); setIsDirty(true); };
 

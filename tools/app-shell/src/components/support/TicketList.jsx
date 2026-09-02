@@ -100,12 +100,15 @@ export function TicketList({ conversations, activeConversationId, isLoading, onS
                 <div className={`sc-ticket-av${human ? ' human' : ''}`}>
                   {human
                     ? (conv.assigneeInitials || (conv.assigneeName?.[0]) || 'A')
-                    : <ValerIATile size={28} radius={999} data-testid="ValerIATile__258569" />
+                    : <ValerIATile size={36} radius={999} data-testid="ValerIATile__258569" />
                   }
                 </div>
                 <div className="sc-grow">
                   <div className="sc-ticket-head">
-                    <div className="sc-t-title">{conv.subject || ui('supportDefaultSubject')}</div>
+                    <div className="sc-t-title">
+                      {conv.jiraTicketKey && <span className="sc-t-key">{conv.jiraTicketKey} - </span>}
+                      {conv.subject || ui('supportDefaultSubject')}
+                    </div>
                     <div className="sc-t-time">{relativeTime(conv.lastActivity || conv.updatedAt, ui)}</div>
                   </div>
                   <div className="sc-t-preview">{conv.lastMessage || conv.preview || ''}</div>
