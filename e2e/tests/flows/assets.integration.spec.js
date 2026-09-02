@@ -194,10 +194,10 @@ async function applyNameAndGrupoFilter(page, name) {
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('textbox').first().fill(name);
 
-  // Condition 2 — Grupo activo Es Genérico (FK value = IdentifierMultiPicker).
+  // Condition 2 — Grupo de activo Es Genérico (FK value = IdentifierMultiPicker).
   await panel.getByRole('button', { name: 'Añadir condición' }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
-  await page.getByRole('option', { name: /Grupo activo|Asset Category|Categor/i }).click();
+  await page.getByRole('option', { name: /^Grupo de activo$|^Asset Group$/i }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
