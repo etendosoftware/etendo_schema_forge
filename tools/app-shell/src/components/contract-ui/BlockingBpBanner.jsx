@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency';
 
 /**
- * ETP-5024 — persistent inline warning for the two Business-Partner blocking
+ * ETP-5024 — persistent inline notice for the two Business-Partner blocking
  * conditions (credit limit exceeded / BP on hold) that used to surface only as an
  * auto-dismissing toast. Renders nothing until one of the two sources below reports
  * a condition, then stays visible — unlike a toast — until it is explicitly cleared.
+ *
+ * Tone: `info` (blue), not `warning` (amber) — confirmed with product (Vale) on
+ * the Jira ticket: "el tipo de mensaje que será tipo info (azul) y no una warning
+ * (amarillo)". The icon follows suit (`Info`, InfoBanner's own default) rather
+ * than keeping the amber-associated `AlertTriangle`, to avoid a triangle icon
+ * looking mismatched on a blue background.
  *
  * Rendered from `resolveHeaderContent` (detailViewHelpers.jsx), which DetailView.jsx
  * calls unchanged — no new argument needed there (DetailView.jsx is a governed God
@@ -118,7 +124,7 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
   if (!banner) return null;
 
   return (
-    <InfoBanner tone="warning" icon={AlertTriangle} className="mb-4" data-testid="bp-blocking-banner">
+    <InfoBanner tone="info" icon={Info} className="mb-4" data-testid="bp-blocking-banner">
       {resolveBannerText(banner, effectiveCurrencyCode)}
     </InfoBanner>
   );

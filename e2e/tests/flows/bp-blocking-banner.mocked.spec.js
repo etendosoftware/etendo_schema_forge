@@ -7,7 +7,7 @@ import { login } from '../helpers/auth.js';
  * Two Business-Partner conditions — credit limit exceeded and BP on hold —
  * used to surface as an auto-dismissing toast. ETP-5024 replaces that with a
  * PERSISTENT inline banner (`data-testid="bp-blocking-banner"`, InfoBanner
- * tone="warning") rendered above the header, sourced from either:
+ * tone="info") rendered above the header, sourced from either:
  *
  *   - useCallout's response when the Business Partner field changes (a
  *     `businessPartner` callout whose `messages` include a matching text), or

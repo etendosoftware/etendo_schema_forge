@@ -301,7 +301,7 @@ describe('BlockingBpBanner (ETP-5024)', () => {
     expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
   });
 
-  it('renders InfoBanner with a warning tone (non-dismissible)', () => {
+  it('renders InfoBanner with an info tone (non-dismissible)', () => {
     render(
       <BlockingBpBanner
         calloutResult={null}
