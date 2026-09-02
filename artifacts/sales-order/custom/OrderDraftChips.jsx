@@ -5,6 +5,11 @@ import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [state, setState] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -21,11 +26,6 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
     if (!isCompleted || !recordId) return;
     let cancelled = false;
 
-  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
-  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
-  // starts with that same base, so a configured base turns a cross-spec call into
-  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
-  const apiFetch = useApiFetch('');
 
     Promise.all([
       apiFetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`)
