@@ -1244,13 +1244,14 @@ export function ReconciliationSplitPanel({
   // candidates by default. `last12m` is a preset dateRangeBounds and DateRangePopover
   // both already support, so nothing else changes.
   //
-  // The trigger text comes from this preset, NOT from the placeholder. It used to be
-  // the other way round: the placeholder was `financeReconcileFilterDate`, whose
-  // literal value is "Últimos 12 meses", so picking "Todo el tiempo" — encoded as
-  // `null`, indistinguishable from "nothing chosen" — left the button still reading
-  // "Últimos 12 meses" even though the filter had widened (ETP-4956). The placeholder
-  // is now `dateRangeAnyTime` ("Cualquier fecha"), matching every other
-  // DateRangePopover call site in the app.
+  // The trigger text comes from this preset, NOT from the placeholder. It used to
+  // be the other way round: the placeholder was `financeReconcileFilterDate`,
+  // whose es_ES value happens to read the same as `dateRangeLast12Months`. The
+  // all-time option (`dateRangeAllTime`) is encoded as a `null` value, which is
+  // indistinguishable from "nothing chosen", so computeTriggerLabel fell through
+  // to the placeholder and the button kept naming a 12-month window even though
+  // the filter had widened (ETP-4956). The placeholder is now
+  // `dateRangeAnyTime`, matching every other DateRangePopover call site.
   const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last12m' });
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSource, setRightSource] = useState('receipts');

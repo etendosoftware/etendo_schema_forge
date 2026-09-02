@@ -121,13 +121,23 @@ const toSet = (value) => (Array.isArray(value)
 /**
  * "Empty" for a column that stores an absent amount as 0.
  *
- * The statements grid renders `Number(totalOut) > 0 ? amount : '—'`, so 0 and
+ * The statements grid renders `Number(totalOut) > 0 ? amount : dash`, so 0 and
  * null are visually identical there. `emptyWhenZero: true` on such a column
- * makes "Is empty" match exactly the rows that display "—" (ETP-4956).
+ * makes "Is empty" match exactly the rows that display the dash (ETP-4956).
+ *
+ * The NaN guard is load-bearing and NOT equivalent to a bare `Number(raw) <= 0`
+ * (which is what Sonar's S1940 suggests for the inverted `!(Number(raw) > 0)`
+ * this replaced): an absent amount coerces to NaN, every comparison against NaN
+ * is false, so `NaN <= 0` would report a missing value as NOT empty — the
+ * opposite of what the grid shows for it. It guards NaN specifically rather
+ * than all non-finite values, so Infinity keeps reading as a real amount, which
+ * is what the grid's own `> 0` does with it.
  */
-const isBlank = (raw, col) => (col?.emptyWhenZero
-  ? !(Number(raw) > 0)
-  : raw == null || String(raw).trim() === '');
+const isBlank = (raw, col) => {
+  if (!col?.emptyWhenZero) return raw == null || String(raw).trim() === '';
+  const n = Number(raw);
+  return Number.isNaN(n) || n <= 0;
+};
 
 /**
  * Operator → predicate dispatch table for string / enum / identifier columns.
