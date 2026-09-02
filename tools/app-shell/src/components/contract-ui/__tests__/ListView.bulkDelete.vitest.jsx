@@ -250,6 +250,64 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
   });
 });
 
+// Regression — the idle top-right toolbar's "Print" button (opens the
+// whole-list report via setShowReport) used to stay visible even while rows
+// were selected, duplicating the SelectionToolbar's own separate Print icon
+// (which bulk-prints only the selected rows via printDocuments). Fixed by
+// gating the idle button on `selectedRows.length === 0`. Both buttons share
+// the same `data-testid="Button__620cbc"` (pre-existing, unrelated to this
+// fix), so the two are distinguished structurally: the idle button renders a
+// visible "print" text node and no `title` attribute, while the
+// SelectionToolbar's button renders only an icon behind a `title`/aria-label.
+describe('ListView — idle-toolbar Print button visibility vs. row selection', () => {
+  const defaultProps = {
+    entity: 'testEntity',
+    Table: SelectableCapturingTable,
+    entityLabel: 'Test Entity',
+    windowName: 'test-entity',
+    token: 'fake-token',
+    apiBaseUrl: 'http://localhost/api',
+  };
+
+  function selectRows() {
+    fireEvent.click(screen.getByTestId('trigger-select'));
+  }
+
+  function idlePrintButton() {
+    return screen.queryAllByTestId('Button__620cbc').find(
+      (btn) => !btn.hasAttribute('title') && btn.textContent.includes('print')
+    );
+  }
+  function selectionPrintButton() {
+    return screen.queryByTitle('print');
+  }
+
+  it('shows the idle-toolbar Print button when no rows are selected', () => {
+    render(<ListView {...defaultProps} />);
+    expect(idlePrintButton()).toBeTruthy();
+    expect(selectionPrintButton()).not.toBeInTheDocument();
+  });
+
+  it('hides the idle-toolbar Print button once rows are selected, while the SelectionToolbar keeps its own Print icon', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    expect(idlePrintButton()).toBeFalsy();
+    expect(selectionPrintButton()).toBeInTheDocument();
+  });
+
+  it('re-shows the idle-toolbar Print button after clearing the selection', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(idlePrintButton()).toBeFalsy();
+
+    fireEvent.click(screen.getByTitle('close'));
+
+    expect(idlePrintButton()).toBeTruthy();
+    expect(selectionPrintButton()).not.toBeInTheDocument();
+  });
+});
+
 // ETP-4656 — additive coverage: `selectionBarRightActions` also receives a
 // `reselectFailed` field (the same `applyBulkDeleteOutcome` callback wired as
 // useBulkRowDelete's `onSuccess` above), so a host running its own delete

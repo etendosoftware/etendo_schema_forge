@@ -32,7 +32,7 @@
       {{#each rows}}
         {{#if (isGroupBreak 'orgname' (lookup this 'orgname'))}}
         <tr class="group-header group-level-0">
-          <td colspan="4" style="background: #1a1a2e; color: #ffffff; font-weight: 600; padding: 2mm 4mm; font-size: 11pt;">
+          <td colspan="4" style="background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); font-weight: 600; padding: 2mm 4mm; font-size: 11pt;">
             Organization: {{lookup this 'orgname'}}
           </td>
         </tr>
