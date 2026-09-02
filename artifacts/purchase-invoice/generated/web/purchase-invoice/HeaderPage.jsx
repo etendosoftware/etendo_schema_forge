@@ -969,7 +969,7 @@ export const api = {
   "labelOverrides": {
     "es_ES": {
       "POReference": "Nº documento",
-      "OutstandingAmt": "Pendiente de pago",
+      "OutstandingAmt": "Saldo pendiente",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de recepción",
       "C_DocTypeTarget_ID": "Tipo de documento",
@@ -978,11 +978,14 @@ export const api = {
     },
     "en_US": {
       "POReference": "Document No.",
-      "OutstandingAmt": "Pending Payment",
+      "OutstandingAmt": "Outstanding Amount",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Reception Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount"
+    },
+    "es_AR": {
+      "OutstandingAmt": "Saldo pendiente"
     }
   }
 };

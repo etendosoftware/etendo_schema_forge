@@ -17697,7 +17697,7 @@
     "statusColumn": "Status",
     "statusDocColumn": "Doc. Status",
     "impTotal": "Total Amount",
-    "pendingPaymentColumn": "Pending Payment",
+    "pendingPaymentColumn": "Outstanding Amount",
     "cobrada": "Collected",
     "pagada": "Paid",
     "invoiceReceipts": "Invoice Receipts",
