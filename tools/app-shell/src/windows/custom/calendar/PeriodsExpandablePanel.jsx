@@ -429,9 +429,10 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
         return (
           <Fragment key={period.id}>
             <TableRow
-              className={isExpanded ? 'bg-primary/5 ring-1 ring-focus-ring hover:bg-primary/10' : 'cursor-pointer hover:bg-muted/50'}
+              className={isExpanded ? 'cursor-pointer bg-primary/5 ring-1 ring-focus-ring hover:bg-primary/10' : 'cursor-pointer hover:bg-muted/50'}
+              onClick={() => toggleExpand(period.id)}
               data-testid="TableRow__711967">
-              <TableCell data-testid="TableCell__711967">
+              <TableCell data-testid="TableCell__711967" onClick={(e) => e.stopPropagation()}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -460,7 +461,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                   label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
                   data-testid="Tag__711967" />
               </TableCell>
-              <TableCell className="text-right" data-testid="TableCell__711967">
+              <TableCell className="text-right" data-testid="TableCell__711967" onClick={(e) => e.stopPropagation()}>
                 <Button
                   type="button"
                   variant="outline"
