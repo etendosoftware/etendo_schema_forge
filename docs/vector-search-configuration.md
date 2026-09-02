@@ -55,11 +55,12 @@ The user-facing `contacts` spec is backed by `C_BPartner`. Its target is `busine
 
 1. Run `update.database` after versioning the source data, then `export.database`; a clean diff confirms ownership and dataset export are stable.
 2. Query `GET /sws/neo/vectorsearch` with a valid session and the declared target. A `422 VECTOR_COLLECTION_NOT_FOUND` means the target's source, provider, or collection is not active yet.
-3. Through MCP, call `neo_vector_search` with `query` and a `targets` array. It is read-only and requires `neo:read`; DB Extended authorizes each target against its physical source entity before searching.
+3. Through MCP, call `neo_vector_search` with `query` and a `targets` array. It is read-only and requires `neo:read`; the authenticated NEO adapter authorizes each target against its physical source entity and an active Schema Forge window grant before DB Extended searches it.
 4. In the command palette, enter at least three characters. On an opted-in window, verify that its localized removable scope pill appears and that the request includes only that target; remove it and verify the request includes every opted-in target. During the request, the localized semantic-loading placeholder is visible. Semantic results render before page-navigation results, show the contract label and score, and open the matching spec in edit mode.
 
 ## Edge cases
 
 - A contract target without an active vector source causes the combined semantic request to fail; deploy contract and source configuration together.
 - Organization access is resolved server-side from the active role. A record outside the readable organization tree must not be returned.
+- A target without an active Schema Forge window mapping, or without `AD_Window_Access` for the current role, is denied. This is intentional fail-closed behavior for the second data surface created by semantic indexing.
 - Scores are nearest-neighbour ranking signals, not confidence probabilities. Use a configured minimum score and evaluate domain-specific thresholds before treating a match as relevant.
