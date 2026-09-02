@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 function enrichLines(lines) {
   return lines
@@ -18,8 +19,8 @@ function enrichLines(lines) {
 
 const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
   const [res, headerRes] = await Promise.all([
-    apiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
+    moduleApiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
   ]);
   if (!res.ok) return { documents: [], sharedContext: { linesCache: {} } };
 
@@ -44,7 +45,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
   const lineResults = await Promise.all(
     candidates.map(async inv => {
       try {
-        const r = await apiFetch(
+        const r = await moduleApiFetch(
           `${base}/purchase-invoice/lines?parentId=${inv.id}&_startRow=0&_endRow=200`,
           {},
         );
@@ -70,7 +71,7 @@ const fetchLines = async ({ base, docId, sharedContext }) => {
   const cached = sharedContext?.linesCache?.[docId];
   if (cached) return enrichLines(cached);
   try {
-    const res = await apiFetch(
+    const res = await moduleApiFetch(
       `${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`,
       {},
     );

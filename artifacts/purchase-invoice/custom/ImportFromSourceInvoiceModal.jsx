@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { getApSubtype } from './purchaseInvoiceSubtype';
 
 /**
@@ -61,7 +62,7 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
         auxiliaryValues[k] = String(v);
       }
     }
-    const res = await apiFetch(`${base}/purchase-invoice/lines/callout`, {
+    const res = await moduleApiFetch(`${base}/purchase-invoice/lines/callout`, {
       method: 'POST',
       
       body: JSON.stringify({
@@ -93,8 +94,8 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
 
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [res, invLinesRes] = await Promise.all([
-    apiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    apiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/purchase-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
   ]);
 
   let documents = [];
@@ -125,7 +126,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -156,7 +157,7 @@ const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   // the ones already imported — send the FULL set, not just guard on exactly one.
   if (importedDocIds.size === 0) return;
   try {
-    await apiFetch(`${base}/purchase-invoice/header/${invoiceId}`, {
+    await moduleApiFetch(`${base}/purchase-invoice/header/${invoiceId}`, {
       method: 'PATCH',
       
       body: JSON.stringify({ originInvoices: [...importedDocIds] }),

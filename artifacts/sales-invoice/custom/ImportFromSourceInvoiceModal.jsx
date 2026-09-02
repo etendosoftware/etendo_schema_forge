@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 /**
  * Import invoice lines from a completed, plain "Factura" (FAC subtype) sales
@@ -55,9 +56,9 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
     { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
   ]));
   const [invRes, invLinesRes, headerRes] = await Promise.all([
-    apiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`),
-    apiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    apiFetch(`${base}/sales-invoice/header/${invoiceId}`),
+    moduleApiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`),
+    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedSourceLineIds = new Set();
@@ -87,7 +88,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/sales-invoice/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -142,7 +143,7 @@ const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   // the ones already imported — send the FULL set, not just guard on exactly one.
   if (importedDocIds.size === 0) return;
   try {
-    await apiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
+    await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
       method: 'PATCH',
       
       body: JSON.stringify({ originInvoices: [...importedDocIds] }),

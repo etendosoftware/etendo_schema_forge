@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 /**
  * Import invoice lines from a completed Return to Vendor Shipment (Albarán de
@@ -47,7 +48,7 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
         auxiliaryValues[k] = String(v);
       }
     }
-    const res = await apiFetch(`${base}/purchase-invoice/lines/callout`, {
+    const res = await moduleApiFetch(`${base}/purchase-invoice/lines/callout`, {
       method: 'POST',
       
       body: JSON.stringify({
@@ -74,7 +75,7 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
 
     if (unitPrice) {
       const cascadeState = { ...formState, ...result, invoicedQuantity: qty || 1 };
-      const cascadeRes = await apiFetch(`${base}/purchase-invoice/lines/callout`, {
+      const cascadeRes = await moduleApiFetch(`${base}/purchase-invoice/lines/callout`, {
         method: 'POST',
         
         body: JSON.stringify({ field: 'PriceActual', value: String(unitPrice), formState: cascadeState }),
@@ -99,9 +100,9 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
 
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [returnRes, invLinesRes, headerRes] = await Promise.all([
-    apiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    apiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    apiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
+    moduleApiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedReceiptLines = new Set();
@@ -117,7 +118,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 
   const priceListId = invoiceHeader.priceList;
   const selectorUrl = `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await apiFetch(selectorUrl);
+  const selectorRes = await moduleApiFetch(selectorUrl);
 
   const productAuxMap = {};
   if (selectorRes.ok) {
@@ -151,7 +152,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/return-to-vendor-shipment/returnToVendorShipmentLine?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];

@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 /**
  * Goods receipt lines don't carry pricing — we resolve unit price, tax, and
@@ -21,7 +22,7 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
         auxiliaryValues[k] = String(v);
       }
     }
-    const res = await apiFetch(`${base}/purchase-invoice/lines/callout`, {
+    const res = await moduleApiFetch(`${base}/purchase-invoice/lines/callout`, {
       method: 'POST',
       
       body: JSON.stringify({
@@ -48,7 +49,7 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
 
     if (unitPrice) {
       const cascadeState = { ...formState, ...result, invoicedQuantity: qty || 1 };
-      const cascadeRes = await apiFetch(`${base}/purchase-invoice/lines/callout`, {
+      const cascadeRes = await moduleApiFetch(`${base}/purchase-invoice/lines/callout`, {
         method: 'POST',
         
         body: JSON.stringify({ field: 'PriceActual', value: String(unitPrice), formState: cascadeState }),
@@ -73,9 +74,9 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
 
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [receiptRes, invLinesRes, headerRes] = await Promise.all([
-    apiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    apiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    apiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
+    moduleApiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/purchase-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedReceiptLines = new Set();
@@ -95,7 +96,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 
   const priceListId = invoiceHeader.priceList;
   const selectorUrl = `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0${priceListId ? `&priceList=${encodeURIComponent(priceListId)}` : ''}`;
-  const selectorRes = await apiFetch(selectorUrl);
+  const selectorRes = await moduleApiFetch(selectorUrl);
 
   const productAuxMap = {};
   if (selectorRes.ok) {
@@ -132,7 +133,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
     const orderCurrencyMap = {};
     await Promise.all(orderIds.map(async (id) => {
       try {
-        const r = await apiFetch(`${base}/purchase-order/header/${id}`);
+        const r = await moduleApiFetch(`${base}/purchase-order/header/${id}`);
         if (r.ok) {
           const o = (await r.json())?.response?.data?.[0];
           if (o) orderCurrencyMap[id] = o.currency;
@@ -151,7 +152,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -162,7 +163,7 @@ const fetchLines = async ({ base, docId, sharedContext }) => {
   const orderDiscounts = {};
   await Promise.all(orderLineIds.map(async (id) => {
     try {
-      const r = await apiFetch(`${base}/purchase-order/lines/${id}`);
+      const r = await moduleApiFetch(`${base}/purchase-order/lines/${id}`);
       if (r.ok) {
         const d = await r.json();
         const ol = d?.response?.data?.[0];

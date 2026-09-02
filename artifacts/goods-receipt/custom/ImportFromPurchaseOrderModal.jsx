@@ -1,14 +1,15 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 async function fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId }) {
   // Fetch current receipt lines directly (by parentId) + other draft receipts list in parallel.
   // Avoids relying on the current receipt appearing in the paginated list.
   const [currentLinesRes, receiptsRes] = await Promise.all([
     currentReceiptId
-      ? apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${currentReceiptId}&_startRow=0&_endRow=200`)
+      ? moduleApiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${currentReceiptId}&_startRow=0&_endRow=200`)
       : Promise.resolve(null),
-    apiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
+    moduleApiFetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
   ]);
 
   const draftInfo = {};
@@ -29,7 +30,7 @@ async function fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId }) {
     );
     const lineResults = await Promise.all(
       otherDrafts.map(s =>
-        apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${s.id}&_startRow=0&_endRow=200`)
+        moduleApiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${s.id}&_startRow=0&_endRow=200`)
           .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
       ),
     );
@@ -49,9 +50,9 @@ async function fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId }) {
 
 const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
   const [ordersRes, draftInfo, headerRes] = await Promise.all([
-    apiFetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
     fetchDraftInfoByOrderLine({ base, bpId, currentReceiptId: receiptId }),
-    apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
+    moduleApiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}`),
   ]);
 
   let receiptCurrency = null;
@@ -75,7 +76,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId: receiptId }) => {
 };
 
 export const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(
+  const res = await moduleApiFetch(
     `${base}/purchase-order/lines?parentId=${docId}&_startRow=0&_endRow=200`,
     {},
   );
@@ -124,7 +125,7 @@ const buildLineBody = async ({ line, qty, invoiceId: receiptId, lineNo }) => ({
 const afterImport = async ({ importedDocIds, base, invoiceId }) => {
   if (importedDocIds.size !== 1) return;
   const [orderId] = importedDocIds;
-  await apiFetch(`${base}/goods-receipt/goodsReceipt/${invoiceId}`, {
+  await moduleApiFetch(`${base}/goods-receipt/goodsReceipt/${invoiceId}`, {
     method: 'PATCH',
     
     body: JSON.stringify({ salesOrder: orderId }),

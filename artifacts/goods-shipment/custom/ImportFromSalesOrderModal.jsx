@@ -1,14 +1,15 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
   // Fetch current shipment lines directly (by parentId) + other draft shipments list in parallel.
   // Avoids relying on the current shipment appearing in the paginated list.
   const [currentLinesRes, shipmentsRes] = await Promise.all([
     currentShipmentId
-      ? apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`)
+      ? moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`)
       : Promise.resolve(null),
-    apiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
+    moduleApiFetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`),
   ]);
 
   const draftInfo = {};
@@ -29,7 +30,7 @@ async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
     );
     const lineResults = await Promise.all(
       otherDrafts.map(s =>
-        apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`)
+        moduleApiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`)
           .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
       ),
     );
@@ -49,9 +50,9 @@ async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
 
 const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
   const [ordersRes, draftInfo, headerRes] = await Promise.all([
-    apiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=orderDate desc`),
+    moduleApiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=orderDate desc`),
     fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId: shipmentId }),
-    apiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
+    moduleApiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
   ]);
 
   let shipmentCurrency = null;
@@ -75,7 +76,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
 };
 
 export const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const lines = (await res.json())?.response?.data || [];
   return lines.map(l => {

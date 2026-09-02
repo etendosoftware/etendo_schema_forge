@@ -1,11 +1,12 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
-    apiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
-    apiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
-    apiFetch(`${base}/sales-invoice/header/${invoiceId}`),
+    moduleApiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedOrderLines = new Set();
@@ -39,7 +40,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
-  const res = await apiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
+  const res = await moduleApiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -71,7 +72,7 @@ const afterImport = async ({ importedDocIds, sharedContext, base, invoiceId }) =
   if (discounts.length === 0) return;
   const uniqueDiscounts = [...new Set(discounts)];
   if (uniqueDiscounts.length !== 1) return;
-  await apiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
+  await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
     method: 'PATCH',
     
     body: JSON.stringify({ etgoTotalDiscount: uniqueDiscounts[0] }),
