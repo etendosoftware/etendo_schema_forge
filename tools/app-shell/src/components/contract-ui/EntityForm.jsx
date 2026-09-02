@@ -9,7 +9,8 @@ import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -545,7 +546,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled, maxLength }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -592,7 +593,11 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
         // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
         // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
         const raw = e.target.value;
-        const v = (isNumber && raw.trim() === '') ? '0' : raw;
+        let v = (isNumber && raw.trim() === '') ? '0' : raw;
+        // Silently clamp to the field's declared `max` (e.g. Annual Depreciation % ≤ 100).
+        // This is a correction, not a validation — it never blocks the commit or shows a
+        // toast, unlike getNumericFieldError below which only handles `min`/`integer`. ETP-4887.
+        v = clampNumericFieldMax(f, v);
         // Re-sync the displayed buffer to the (possibly coerced) committed value.
         setBuffer(v);
         // Only COMMIT (fires the callout via onChange) when the value differs from the
@@ -612,6 +617,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
       className={className}
       required={required}
       disabled={disabled}
+      maxLength={maxLength}
     />
   );
 }
@@ -1082,6 +1088,16 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       // subsequent successful save must be able to clear it, not just one raised by
       // the save gate itself.
       trackSaveBlockToast(toastId);
+      return;
+    }
+    // ETP-5031: Contacts-only text-field validation (length + unsafe chars). A
+    // no-op for every other window — getContactsTextFieldError gates on
+    // windowName === 'contacts' as its first check.
+    const contactsErr = getContactsTextFieldError(windowName, f, value);
+    if (contactsErr) {
+      const toastId = `contacts-field-${f.key}`;
+      toast.error(ui(contactsErr.key, contactsErr.params), { id: toastId });
+      trackSaveBlockToast(toastId);
     }
   };
 
@@ -1118,6 +1134,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
     ) : (
       <Input
@@ -1126,7 +1143,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         data-testid={`field-${f.key}`}
         type={getInputType(f)}
         value={getFieldValue(isReadOnly, displayValue, data, f)}
-        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+        onChange={(e) => onChange?.(f.key, filterContactsInputValue(windowName, f, e.target.value), f.column)}
         onBlur={(e) => {
           if (!isReadOnly) {
             validateNumericOnBlur(f, e.target.value);
@@ -1137,6 +1154,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
       />
     );
     return (
@@ -1180,6 +1198,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           onBlur={() => onFieldBlur?.(f.key)}
           placeholder={placeholder}
           disabled={isReadOnly}
+          maxLength={f.maxLength}
           className={[
             'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,

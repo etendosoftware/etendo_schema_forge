@@ -57,8 +57,8 @@ const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@' },
     { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
-    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
-    { key: 'storageBin', column: 'M_Locator_ID', type: 'search', required: true, label: 'Warehouse', reference: 'Locator', inputMode: 'search', displayFromCatalog: true },
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0, min: 1 },
+    { key: 'storageBin', column: 'M_Locator_ID', type: 'search', required: true, label: 'Warehouse', reference: 'Locator', inputMode: 'search' },
   ],
   derived: [
 
@@ -165,9 +165,22 @@ export const api = {
   },
   "window": {
     "category": "inventory"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "M_Locator_ID": "Warehouse"
+    },
+    "es_ES": {
+      "M_Locator_ID": "Almacén"
+    },
+    "es_AR": {
+      "M_Locator_ID": "Almacén"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:InternalConsumptionPage
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
   const windowAccessTier = useWindowAccess('800076');
@@ -206,6 +219,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         customMenuContent={InternalConsumptionActions}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />
       </>
@@ -226,6 +240,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       hideLink
       SortIconComponent={SortIcon}
       RefreshIconComponent={RefreshIcon}
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

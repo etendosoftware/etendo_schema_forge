@@ -476,7 +476,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             data-testid="MoreOptionsMenu__4f6c0d" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
-          Tesorería / Modelo 303 - {periodLabel}
+          {ui('finance')} / {ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}
         </div>
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}

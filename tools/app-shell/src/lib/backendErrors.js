@@ -23,6 +23,16 @@ const BACKEND_ERROR_MAP = {
   // case and is a harmless no-op in the first (ETP-5084).
   'The selected template is not supported by the chosen provider. Please select a different template.':
     'backendError.pisTemplateNotSupportedByProvider',
+  // PSD2 AIS sync, raised by SaltEdgeAccountLinkHelper.fetchAccountTransactions when the account has
+  // no connection in status 'AC' (ETP-5109). This one is an EXACT match, not a parameterized matcher
+  // like its siblings further down, for a reason worth knowing before "fixing" the odd `%s` below:
+  // the AD_MESSAGE template is written with `%s`, but OBMessageUtils.getI18NMessage only substitutes
+  // `%0`, so the account name is never interpolated and the literal `%s` reaches the user. The
+  // string is therefore constant. That is a latent backend bug in
+  // com.etendoerp.psd2.bank.integration; if its template is ever corrected to `%0`, this entry stops
+  // matching and has to become a parameterized matcher.
+  'No active bank connection found for financial account %s. Connect the account first.':
+    'backendError.psd2NoActiveConnection',
   // Multi-currency payment registration (com.etendoerp.go PaymentCurrencyConverter, ETP-4504) — plain
   // English literals with no AD_MESSAGE behind them. The modal mirrors the first two client-side and
   // keeps the buttons disabled, so they are mostly unreachable; the format/non-positive ones are
@@ -364,6 +374,100 @@ function matchSyncFetchFailed(msg) {
   return detail ? { detail } : null;
 }
 
+// StringPropertyValidator.validate() (core, org.openbravo.base.validation) — raised whenever a
+// saved string value exceeds its AD column's field length. The raw message has no
+// AD_Message/i18n involvement at all: `ValidationException.getMessage()` prefixes it with
+// "<EntityName>.<PropertyName>: " and the validator itself appends "Value too long. Length <N>,
+// maximum allowed <M> [<value, possibly truncated to 100 chars>]" (ETP-4984, Assets Name/
+// Description). The entity/field prefix and the truncated value are dynamic and not needed for
+// the toast, so this matcher locates the fixed "Value too long. Length " / ", maximum allowed "
+// markers with indexOf rather than requiring a startsWith match on the whole message — same
+// plain-string-slicing rationale as the matchers above (no regex, no ReDoS surface over
+// entity/field/value names).
+const FIELD_TOO_LONG_MARKER = 'Value too long. Length ';
+const FIELD_TOO_LONG_MID = ', maximum allowed ';
+const FIELD_TOO_LONG_VALUE_OPEN = ' [';
+
+function matchFieldTooLong(msg) {
+  const markerIdx = msg.indexOf(FIELD_TOO_LONG_MARKER);
+  if (markerIdx === -1 || !msg.endsWith(']')) return null;
+  const afterMarker = msg.slice(markerIdx + FIELD_TOO_LONG_MARKER.length);
+  const midIdx = afterMarker.indexOf(FIELD_TOO_LONG_MID);
+  if (midIdx === -1) return null;
+  const length = afterMarker.slice(0, midIdx);
+  const afterMid = afterMarker.slice(midIdx + FIELD_TOO_LONG_MID.length);
+  const valueOpenIdx = afterMid.indexOf(FIELD_TOO_LONG_VALUE_OPEN);
+  if (valueOpenIdx === -1) return null;
+  const maxLength = afterMid.slice(0, valueOpenIdx);
+  if (!length || !maxLength) return null;
+  return { maxLength };
+}
+
+// ETP-5109: the remaining PSD2 sync messages, siblings of the three ETP-4891 ones above on the very
+// same `SaltEdgeAccountLinkHelper.fetchAccountTransactions` code path. They were left unmapped, so
+// an inactive/expired connection reported itself in English on a Spanish UI (reproduced live: the
+// "Sincronizar extractos" toast rendered `PSD2_ConnectionWentInactive` verbatim).
+//
+// Worth stating precisely, because it is not the same story as the ETP-4891 comment above: these
+// AD_MESSAGEs DO ship an es_ES translation in the `.es_es` module, but the AD_MESSAGE_TRL row
+// resolves to the English text with `istranslated = 'N'` unless the environment actually imported
+// the translation pack. Translating here is what makes the toast locale-correct regardless of how
+// a given client's Core was provisioned.
+const CONNECTION_WENT_INACTIVE_PREFIX = 'The connection for account ';
+const CONNECTION_WENT_INACTIVE_SUFFIX = ' was found inactive during synchronization.'
+  + ' Please reconnect the account.';
+
+function matchConnectionWentInactive(msg) {
+  if (!msg.startsWith(CONNECTION_WENT_INACTIVE_PREFIX)
+    || !msg.endsWith(CONNECTION_WENT_INACTIVE_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(
+    CONNECTION_WENT_INACTIVE_PREFIX.length,
+    -CONNECTION_WENT_INACTIVE_SUFFIX.length,
+  );
+  return account ? { account } : null;
+}
+
+const CONSENT_EXPIRED_PREFIX = 'The bank consent for financial account ';
+const CONSENT_EXPIRED_SUFFIX = ' has expired. Please reconnect the account.';
+
+function matchConsentExpired(msg) {
+  if (!msg.startsWith(CONSENT_EXPIRED_PREFIX) || !msg.endsWith(CONSENT_EXPIRED_SUFFIX)) {
+    return null;
+  }
+  const account = msg.slice(CONSENT_EXPIRED_PREFIX.length, -CONSENT_EXPIRED_SUFFIX.length);
+  return account ? { account } : null;
+}
+
+// The AD_MESSAGE template repeats `%0`, so the same day count appears twice in the rendered string.
+// Both occurrences are captured and required to agree — a message whose two numbers differ is not
+// this message and must not be translated as if it were.
+//
+// The `backendError.psd2ImportDateBeyondMaxInterval` locale strings deliberately mention `{days}`
+// ONLY ONCE, unlike the English original: useUI's interpolation is
+// `text.replace(`{${p}}`, params[p])` (app-shell-core/src/i18n/useUI.js:26), and String.replace with
+// a string pattern substitutes the first occurrence only — a second `{days}` would render literally
+// in the toast. Do not "restore" the repetition without first making that interpolation global.
+const IMPORT_DATE_INTERVAL_PREFIX = 'The requested start date exceeds the maximum fetch interval of ';
+const IMPORT_DATE_INTERVAL_MID = ' days supported by this provider.'
+  + ' Only transactions within the last ';
+const IMPORT_DATE_INTERVAL_SUFFIX = ' days may be available.';
+
+function matchImportDateBeyondMaxInterval(msg) {
+  if (!msg.startsWith(IMPORT_DATE_INTERVAL_PREFIX)
+    || !msg.endsWith(IMPORT_DATE_INTERVAL_SUFFIX)) {
+    return null;
+  }
+  const middle = msg.slice(IMPORT_DATE_INTERVAL_PREFIX.length, -IMPORT_DATE_INTERVAL_SUFFIX.length);
+  const midIdx = middle.indexOf(IMPORT_DATE_INTERVAL_MID);
+  if (midIdx === -1) return null;
+  const days = middle.slice(0, midIdx);
+  const daysAgain = middle.slice(midIdx + IMPORT_DATE_INTERVAL_MID.length);
+  if (!days || days !== daysAgain) return null;
+  return { days };
+}
+
 // Runs the parameterized matchers in order and returns the winning translation
 // key + params, with no translation call involved — pure "which skeleton matched"
 // decision. Kept separate from translateParameterized() below so the "call t(),
@@ -454,6 +558,10 @@ const PARAMETERIZED_MATCHERS = [
   [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
   [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
   [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+  [matchFieldTooLong, 'backendError.fieldTooLong'],
+  [matchConnectionWentInactive, 'backendError.psd2ConnectionWentInactive'],
+  [matchConsentExpired, 'backendError.psd2ConsentExpired'],
+  [matchImportDateBeyondMaxInterval, 'backendError.psd2ImportDateBeyondMaxInterval'],
 ];
 
 function resolveParameterizedMatch(msg) {
@@ -507,14 +615,44 @@ export async function parseBackendErrorMessage(res) {
   return raw;
 }
 
-export function translateBackendError(msg, t) {
-  if (!msg || typeof t !== 'function') return msg;
-  const trimmed = msg.trim();
+// Translates ONE already-trimmed backend message, or returns null when nothing matched — including
+// the case where a skeleton did match but its i18n key is missing, since an untranslated result is
+// indistinguishable from no result for the caller's purposes.
+function translateSingleMessage(trimmed, t) {
   const key = BACKEND_ERROR_MAP[trimmed];
   if (key) {
     const translated = t(key);
     // Guard: if t() returns the key itself the translation is missing — keep original
-    return (translated && translated !== key) ? translated : msg;
+    return (translated && translated !== key) ? translated : null;
   }
-  return translateParameterized(trimmed, t) ?? msg;
+  return translateParameterized(trimmed, t);
+}
+
+export function translateBackendError(msg, t) {
+  if (!msg || typeof t !== 'function') return msg;
+  const trimmed = msg.trim();
+
+  const single = translateSingleMessage(trimmed, t);
+  if (single !== null) return single;
+
+  // ETP-5109: the PSD2 sync path accumulates its result messages into ONE StringBuilder joined by
+  // newlines — SaltEdgeAccountLinkHelper.fetchAccountTransactions appends the max-fetch-interval
+  // warning immediately before the connection-inactive one — so two individually translatable
+  // messages can arrive as a single multi-line string that matches no skeleton as a whole, and the
+  // user reads both in English. Translating line by line covers that; a line that matches nothing
+  // is kept verbatim, so a mixed result degrades to "the parts we know" instead of all-or-nothing.
+  if (!trimmed.includes('\n')) return msg;
+
+  let anyTranslated = false;
+  const lines = trimmed.split('\n').map((line) => {
+    const lineTrimmed = line.trim();
+    if (!lineTrimmed) return line;
+    const translatedLine = translateSingleMessage(lineTrimmed, t);
+    if (translatedLine === null) return line;
+    anyTranslated = true;
+    return translatedLine;
+  });
+
+  // Nothing resolved: return the original untouched, exactly as an unmatched single message does.
+  return anyTranslated ? lines.join('\n') : msg;
 }

@@ -16,7 +16,8 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
@@ -577,12 +578,53 @@ export function getInvalidPhoneFields(fields, editing) {
 // Returns { key, errorKey, errorParams } for the first violating field, or null
 // when clean. `errorParams` carries the i18n interpolation values (e.g. { min })
 // so the toast can render "Value must be at least 1" rather than a generic text.
+// Silent safety-net clamp for numeric fields with a declared `max` (e.g. Annual
+// Depreciation % <= 100). EntityForm's onBlur already clamps this on the input, but
+// that only fires if the user left the field before saving — clicking Save directly
+// (e.g. right after typing, or a programmatic save) reaches performSave with the raw,
+// unclamped value still in `editing`. Clamp it here, on the object used to build the
+// payload, so an over-limit value is never persisted. Silent: never blocks save, no
+// toast, no field error — unlike getNumericFieldViolation below (min/integer). ETP-4887.
+// Returns `editing` unchanged (same reference) when nothing needed clamping, so
+// callers can cheaply detect "did anything change" via a reference check.
+export function clampNumericFieldsForSave(editing, fields) {
+    let clamped = editing;
+    for (const f of fields) {
+        if (f?.max == null) continue;
+        const clampedValue = clampNumericFieldMax(f, editing?.[f.key]);
+        if (clampedValue !== editing?.[f.key]) {
+            if (clamped === editing) clamped = { ...editing };
+            clamped[f.key] = clampedValue;
+        }
+    }
+    return clamped;
+}
+
 export function getNumericFieldViolation(fields, editing) {
     const isReadOnly = getReadOnly(editing);
     const isVisible = getVisible(editing);
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-5031 — Contacts-only text-field hard save-block (length + unsafe chars),
+// mirroring getNumericFieldViolation's shape/contract. A no-op for every window
+// other than 'contacts' — getContactsTextFieldError gates on `windowName` as its
+// first check, so this never affects any other window's save path. Unlike the
+// numeric check, the caller passes only the fields the user changed THIS
+// session (same scoping as the email/website/phone checks) — a pre-existing
+// over-limit value on an untouched legacy field must never block an unrelated
+// edit.
+export function getContactsTextFieldViolation(windowName, fields, editing) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTextFieldError(windowName, f, editing?.[f.key]);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -946,6 +988,24 @@ export function useEntity(entity, childEntity, {
             ([key, val]) => key !== 'id' && val !== selected[key]
         );
     }, [editing, selected]);
+
+    /**
+     * The list query minus its row window: the sort plus every filter layer, composed exactly
+     * as `refresh` composes it.
+     *
+     * Exposed (ETP-4997) so a feature that must re-run the SAME server-side query the grid is
+     * showing — the CSV export — reuses this composition instead of re-deriving it. The grid
+     * is filtered and paginated server-side, so exporting `items` would silently export only
+     * the pages the user happened to scroll; and `applyFilterParams` is module-private, so
+     * without this there is no way to reproduce the criteria from outside.
+     */
+    const buildListQuery = useCallback(() => {
+        const colDef = columnDefs[sortColumn] || { key: sortColumn };
+        const queryParams = new URLSearchParams();
+        queryParams.append('_sortBy', resolveBackendSort(colDef, sortDirection));
+        applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
+        return queryParams;
+    }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;
@@ -1412,7 +1472,13 @@ export function useEntity(entity, childEntity, {
         // the toast becomes purely cosmetic. No-op for every window whose fields declare
         // neither `min` nor `integer`. ETP-4542.
         const allFormFields = [...formFieldsRef.current.values()].flat();
-        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        // ETP-4887: silently clamp any field with a declared `max` before it reaches
+        // the save gate/payload — see clampNumericFieldsForSave for the full rationale.
+        const clampedEditing = clampNumericFieldsForSave(editing, allFormFields);
+        if (clampedEditing !== editing) {
+            setEditing(clampedEditing);
+        }
+        const numericViolation = getNumericFieldViolation(allFormFields, clampedEditing);
         if (numericViolation) {
             // Same id as EntityForm's on-blur toast for this field (ETP-4542):
             // when Save is clicked without leaving the input first, blur fires
@@ -1435,25 +1501,41 @@ export function useEntity(entity, childEntity, {
         const changedFormFields = [...formFieldsRef.current.values()]
             .flat()
             .filter(f => userChangedKeysRef.current.has(f.key));
-        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        // ETP-5031: Contacts-only text-field hard save-block (length + unsafe
+        // chars). No-op for every other window — see getContactsTextFieldViolation.
+        // Scoped to `changedFormFields`, same as the email/website/phone checks
+        // below — never untouched legacy values on an existing record, so a
+        // pre-existing over-limit value never blocks an unrelated edit.
+        const contactsViolation = getContactsTextFieldViolation(specName, changedFormFields, editing);
+        if (contactsViolation) {
+            return reportInvalidFormatField(
+                contactsViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsViolation.key}`,
+                contactsViolation.errorParams,
+            );
+        }
+        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
         }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
         if (invalidWebsites.length > 0) {
             return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
         }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
-        const url = getUrl(isNew, apiBaseUrl, entity, editing);
+        const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
         const method = getMethod(isNew);
         const payload = buildSavePayload({
             isNew,
             selected,
-            editing,
+            editing: clampedEditing,
             entity,
             apiBaseUrl,
             backendDefaultKeysRef,
@@ -1873,6 +1955,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }
