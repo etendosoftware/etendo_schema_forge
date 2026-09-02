@@ -43,6 +43,12 @@ const FIXES_WITH_REPORT = new Set([
   // limit (gap N2) and was therefore skipped rather than truncated — same "flag, don't guess"
   // pattern as R19/R28. See cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js.
   '20260901T140000Z__R31-glitem-subaccount-backfill',
+  // R32 resyncs C_Glitem.Name for already-linked GL Items whose composed name went stale (gap N3);
+  // its @report lists every row this run actually renamed — subaccount code/name plus old_name ->
+  // new_name — read back from the temp table @apply fills from its own UPDATE ... RETURNING, since
+  // the pre-apply name is gone by the time @report runs. Operator visibility, not a "skipped work"
+  // flag: empty on a clean re-run. See cli/test/data-fixes-r32-glitem-name-resync.test.js.
+  '20260902T090000Z__R32-glitem-name-resync',
 ]);
 
 async function loadCatalogFiles() {
