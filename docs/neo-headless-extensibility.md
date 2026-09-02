@@ -487,6 +487,61 @@ public NeoResponse afterHandle(NeoContext ctx) {
 }
 ```
 
+### Post-hook: Provision a Scheduled Process from a Shared Cross-Cutting Service
+
+**Trigger condition:** suspect this problem whenever a config-like entity, once saved and active
+through GO, must trigger an ongoing background job that Classic UI's operator would otherwise set
+up by hand in a different window entirely (e.g. Process Request) — and the same provisioning
+logic is needed from more than one handler/entity (two different config specs that both unlock
+the same kind of background job).
+
+**Don't duplicate the provisioning logic per handler.** Put it in a plain shared service class
+(not a `NeoHandler` itself — it has no `@Named` qualifier, it is just called by handlers), and
+have each handler's `afterHandle` call it after determining its own entity became active. This
+keeps `NeoHandlerUtils`-style per-window logic out of the handlers while still following the
+Golden Rule (no window-specific `if` chains in generic services): the service is a plain Java
+class, the *decision of when to call it* stays in each entity's own handler.
+
+**Example (ETP-5117):** `SiiTbaiAutoSendScheduleService` creates (idempotently, scoped to
+client + organization) and best-effort-activates a twice-a-day `AD_Process_Request` that sends
+invoices via the SII / TicketBAI process. Two unrelated handlers — `SiiConfigDeactivateHandler`
+(`sii-config-deactivate-handler`) and `TbaiConfigSequenceHandler`
+(`tbai-config-sequence-handler`) — each call it from their own `afterHandle`, once their own
+entity (`AEATSII_CONFIG` / `TBAI_Config`) is confirmed active after a create-or-update save:
+
+```java
+private void scheduleAutoSendIfActive(NeoContext context, String recordId) {
+  MyConfig config = OBDal.getInstance().get(MyConfig.class, recordId);
+  if (config == null || !Boolean.TRUE.equals(config.isActive())) return;
+  OBContext obContext = context.getObContext();
+  if (obContext == null || obContext.getUser() == null || obContext.getRole() == null) return;
+  String requestId = scheduleService.ensureAutoSendSchedule(config.getClient().getId(),
+      config.getOrganization().getId(), obContext.getUser().getId(), obContext.getRole().getId(),
+      MyScheduleService.PROCESS_SEARCH_KEY, "…description…");
+  scheduleService.activateSchedule(requestId); // best-effort, see below
+}
+```
+
+The `AD_Process` to schedule is resolved by search key, never a hardcoded UUID (module
+sourcedata) — same defensive, non-fatal null-guard as `OnboardingBankConnectionSyncService`.
+
+**Activation timing differs from an onboarding-triggered schedule.** A schedule created during
+onboarding is provisioned inside a multi-step orchestrated transaction, with an explicit
+post-commit call to activate it (the orchestrator calls the "create" step, commits, then calls
+"activate" separately — see `OnboardingBankConnectionSyncService`). A `NeoHandler.afterHandle`
+hook has no equivalent "after commit" callback to hang activation off. The pattern here is to
+attempt activation **immediately**, still best-effort (caught, logged, swallowed): if the
+enclosing request's transaction has not committed yet when `OBScheduler` queries the row on its
+own connection, activation simply fails silently and the row's `SCH` status means it is still
+picked up on the next scheduler initialization — the same degraded-but-safe fallback the
+onboarding service documents for its own activation failures. This is why a test for "activation
+best-effort failure doesn't break the CRUD response" belongs in the suite for this shape.
+
+Real implementation: `SiiTbaiAutoSendScheduleService` (`com.etendoerp.go.schemaforge`), called
+from `SiiConfigDeactivateHandler`/`TbaiConfigSequenceHandler` (ETP-5117). GO-only by design (no
+Hibernate-level `EntityPersistenceEventObserver` — a config saved only through Classic UI gets no
+automatic schedule).
+
 ### Post-hook: Sync a Related Entity from a Parent Field
 
 **Trigger condition:** suspect this problem whenever a single-value column on the saved entity
