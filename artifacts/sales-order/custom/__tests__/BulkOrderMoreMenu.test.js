@@ -86,7 +86,8 @@ describe('BulkOrderMoreMenu source', () => {
   });
 
   it('through apiFetch, never a hand-built credential header', () => {
-    assert.match(src, /apiFetch\(/);
+    // module-level helpers cannot hold a hook, so they use the module apiFetch under an alias
+    assert.match(src, /\b(?:module)?[aA]piFetch\(/);
     assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
