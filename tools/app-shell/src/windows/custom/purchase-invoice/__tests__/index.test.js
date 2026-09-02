@@ -3,36 +3,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerLabelOverrideTests, OUTSTANDING_AMT_CASE } from '../../shared/__tests__/testUtils/labelOverrideAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
 
-// The wrapper bypasses the generated HeaderPage when listing, so the spec's
-// labelOverrides do not reach DataTable. The local LABEL_OVERRIDES constant
-// is the only thing that renames AD columns in this view — keep these tests
-// in sync with artifacts/purchase-invoice/decisions.json → window.labelOverrides.
-
 describe('PurchaseInvoiceWindow — LABEL_OVERRIDES', () => {
-  it('relabels POReference as "Nº documento" / "Document No." in the custom list wrapper', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?POReference:\s*'Nº documento'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?POReference:\s*'Document No\.'/);
-  });
-
-  // ETP-5106: the column was renamed from "Pendiente de pago" / "Pending Payment"
-  // to payment-balance wording, and es_AR — which carried no overrides at all and
-  // therefore fell through to the raw AD label ("Total Pendiente") — was added.
-  it('renames OutstandingAmt to "Saldo pendiente" / "Outstanding Amount"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?OutstandingAmt:\s*'Saldo pendiente'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?OutstandingAmt:\s*'Outstanding Amount'/);
-    assert.match(src, /es_AR:\s*\{[\s\S]*?OutstandingAmt:\s*'Saldo pendiente'/);
-  });
-
-  // ETP-4303: the AP delivery-status column is a reception status from the buyer's
-  // perspective, so it was renamed from "Estado de entrega" to "Estado de recepción".
-  it('renames em_etgo_delivery_status to "Estado de recepción" / "Reception Status"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Estado de recepción'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Reception Status'/);
-  });
+  registerLabelOverrideTests(assert, src, [
+    { column: 'POReference', labels: { es_ES: 'Nº documento', en_US: 'Document No.' } },
+    OUTSTANDING_AMT_CASE,
+    // ETP-4303: the AP delivery-status column is a reception status from the buyer's
+    // perspective, so it was renamed from "Estado de entrega" to "Estado de recepción".
+    { column: 'em_etgo_delivery_status', labels: { es_ES: 'Estado de recepción', en_US: 'Reception Status' } },
+  ]);
 
   it('passes LABEL_OVERRIDES into the ListView', () => {
     assert.match(src, /labelOverrides=\{LABEL_OVERRIDES\}/);
