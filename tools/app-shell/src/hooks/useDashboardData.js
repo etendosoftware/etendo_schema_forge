@@ -162,6 +162,7 @@ const PENDING_TASK_RULES = [
   { match: (l, t) => l.startsWith('/goods-receipt') || t.includes('pending reception'),   singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
   { match: (l, t) => l.startsWith('/goods-shipment') || t.includes('pending delivery'),   singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
   { match: (l, t) => t.includes('collection') && t.includes('due today'),                 singular: 'collectionsDueToday',    plural: 'collectionsDueToday_plural'    },
+  { match: (l, t) => t.includes('payment') && t.includes('overdue'),                      singular: 'paymentsOverdue',        plural: 'paymentsOverdue_plural'        },
   { match: (l, t) => t.includes('payment') && t.includes('due today'),                    singular: 'paymentsDueToday',       plural: 'paymentsDueToday_plural'       },
   { match: (l, t) => l === '/physical-inventory' || t.includes('low stock alert'),        singular: 'lowStockAlert',          plural: 'lowStockAlerts'                },
 ];

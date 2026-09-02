@@ -215,6 +215,30 @@ describe('useDashboardData — inferPendingTaskKey (PENDING_TASK_RULES)', () => 
     expect(result.current.pendingTasks[0].taskKey).toBe('paymentsDueToday');
   });
 
+  // ---- Rule (ETP-5017): payment overdue — checked before "payment due today" ----
+
+  it('infersPendingTaskKeyFromTextPaymentsOverdue — count > 1 → plural', async () => {
+    mockFetchWithPendingTasks([
+      { link: '', text: '3 payments overdue', count: 3 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('paymentsOverdue_plural');
+  });
+
+  it('infersPendingTaskKeyFromTextPaymentsOverdue — count 1 → singular', async () => {
+    mockFetchWithPendingTasks([
+      { link: '', text: '1 payment overdue', count: 1 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('paymentsOverdue');
+  });
+
   // ---- Rule 6: physical-inventory / low stock alert ----
 
   it('infersPendingTaskKeyFromLinkPhysicalInventory — link match, count > 1 → plural', async () => {
