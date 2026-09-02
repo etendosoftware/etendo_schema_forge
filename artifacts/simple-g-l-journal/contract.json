@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-07-30T04:12:10.997Z",
-  "checksum": "101372bce7f34703",
+  "updatedAt": "2026-08-31T11:36:23.257Z",
+  "checksum": "86d6d6ad62398160",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -68,6 +68,7 @@
             },
             "defaultValue": "@DESCRIPTION0@",
             "seq": 30,
+            "gridOrder": 1,
             "validation": {
               "required": true,
               "maxLength": 255
@@ -86,7 +87,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -95,6 +96,11 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL",
             "seq": 10,
+            "labels": {
+              "en_US": "Date",
+              "es_ES": "Fecha"
+            },
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -117,7 +123,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -128,6 +134,7 @@
             "inputMode": "search",
             "defaultValue": "@SQL= SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')",
             "seq": 20,
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -150,7 +157,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -160,6 +167,7 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -261,6 +269,7 @@
               "true": "green",
               "false": "orange"
             },
+            "gridOrder": 6,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -270,6 +279,101 @@
               "evaluable": false,
               "reason": "session-preference",
               "js": null
+            }
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "label": "Document Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "DR"
+            },
+            "enumValues": [
+              {
+                "value": "CL",
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
+              },
+              {
+                "value": "CO",
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
+              },
+              {
+                "value": "DR",
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
+              },
+              {
+                "value": "NA",
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
+              },
+              {
+                "value": "WP",
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
+              },
+              {
+                "value": "RE",
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
+              },
+              {
+                "value": "TEMP",
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
+              },
+              {
+                "value": "IP",
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
+              },
+              {
+                "value": "??",
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
+              },
+              {
+                "value": "VO",
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
+              }
+            ],
+            "defaultValue": "DR",
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 60
             }
           },
           {
@@ -390,7 +494,12 @@
           }
         ],
         "searchableFields": [
-          "description"
+          "description",
+          "accountingDate",
+          "period",
+          "currency",
+          "posted",
+          "documentStatus"
         ],
         "computedFields": [
           {
@@ -440,6 +549,13 @@
             "derivation": {
               "type": "computed",
               "source": "'N'"
+            }
+          },
+          {
+            "name": "documentStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "DR"
             }
           }
         ],
@@ -985,7 +1101,7 @@
             "apiKey": "documentStatus",
             "column": "DocStatus",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1541,7 +1657,12 @@
         "path": "/gLJournal",
         "entity": "gLJournal",
         "supportedFilters": [
-          "description"
+          "description",
+          "accountingDate",
+          "period",
+          "currency",
+          "posted",
+          "documentStatus"
         ]
       },
       {
@@ -1615,7 +1736,12 @@
         "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
         "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
         "supportedFilters": [
-          "description"
+          "description",
+          "accountingDate",
+          "period",
+          "currency",
+          "posted",
+          "documentStatus"
         ]
       },
       "gLJournalLine": {
@@ -1848,6 +1974,14 @@
         "field": "description",
         "runner": "node",
         "description": "Default value for 'description' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-documentStatus",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Default value for 'documentStatus' in gLJournal should be a string"
       },
       {
         "id": "t-default-value-type-gLJournal-multigeneralLedger",
@@ -2122,6 +2256,14 @@
         "description": "Field 'description' should be present in gLJournal"
       },
       {
+        "id": "t-field-presence-gLJournal-documentStatus",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should be present in gLJournal"
+      },
+      {
         "id": "t-field-presence-gLJournal-multigeneralLedger",
         "category": "field-presence",
         "entity": "gLJournal",
@@ -2296,6 +2438,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-documentStatus",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should have type 'string' in gLJournal"
       },
       {
         "id": "t-field-type-gLJournal-multigeneralLedger",
@@ -3615,12 +3765,52 @@
         "description": "Rule 'SL_JournalLineAmt_CurrencyRateType' (callout) should be declared"
       },
       {
+        "id": "t-searchable-filters-gLJournal-accountingDate",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be a supported filter for gLJournal"
+      },
+      {
+        "id": "t-searchable-filters-gLJournal-currency",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be a supported filter for gLJournal"
+      },
+      {
         "id": "t-searchable-filters-gLJournal-description",
         "category": "searchable-filters",
         "entity": "gLJournal",
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be a supported filter for gLJournal"
+      },
+      {
+        "id": "t-searchable-filters-gLJournal-documentStatus",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should be a supported filter for gLJournal"
+      },
+      {
+        "id": "t-searchable-filters-gLJournal-period",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Field 'period' should be a supported filter for gLJournal"
+      },
+      {
+        "id": "t-searchable-filters-gLJournal-posted",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be a supported filter for gLJournal"
       },
       {
         "id": "t-selector-endpoint-gLJournal-businessPartner",
@@ -3813,14 +4003,6 @@
         "field": "documentNo",
         "runner": "node",
         "description": "System field 'documentNo' should exist in backend but not frontend for gLJournal"
-      },
-      {
-        "id": "t-system-field-gLJournal-documentStatus",
-        "category": "system-field",
-        "entity": "gLJournal",
-        "field": "documentStatus",
-        "runner": "node",
-        "description": "System field 'documentStatus' should exist in backend but not frontend for gLJournal"
       },
       {
         "id": "t-system-field-gLJournal-documentType",
@@ -4246,25 +4428,25 @@
       }
     ],
     "summary": {
-      "total": 324,
+      "total": 331,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 10,
+        "default-value-type": 11,
         "displaylogic-evaluable": 11,
         "displaylogic-valid": 11,
-        "field-presence": 22,
-        "field-type": 22,
+        "field-presence": 23,
+        "field-type": 23,
         "readonlylogic-evaluable": 20,
         "readonlylogic-valid": 20,
         "rule-declared": 123,
-        "searchable-filters": 1,
+        "searchable-filters": 6,
         "selector-endpoint": 12,
-        "system-field": 64,
+        "system-field": 63,
         "visibility": 2
       },
       "byRunner": {
-        "node": 324,
+        "node": 331,
         "junit": 0
       }
     }

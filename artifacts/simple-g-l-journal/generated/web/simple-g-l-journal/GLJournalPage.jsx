@@ -19,7 +19,7 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'documentStatus';
 // @sf-generated-end summary:gLJournal
 
 // @sf-generated-start extraBadges:gLJournal
@@ -85,7 +85,12 @@ export const api = {
       "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
       "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
       "supportedFilters": [
-        "description"
+        "description",
+        "accountingDate",
+        "period",
+        "currency",
+        "posted",
+        "documentStatus"
       ]
     },
     "gLJournalLine": {
