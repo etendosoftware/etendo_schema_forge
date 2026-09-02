@@ -24346,6 +24346,7 @@
     "accountMethodRemoveLastTooltip": "This is your only sign-in method. Add another before removing this one.",
     "accountMethodRemoveConfirmTitle": "Remove this sign-in method?",
     "accountMethodRemoveConfirmBody": "Once removed you will not be able to sign in with it. The remaining ones keep working.",
+    "accountMethodCurrentPasswordRequired": "Enter your current password to remove it.",
     "accountMethodLastRemaining": "This is the only way you can sign in. Add another method before removing this one.",
     "accountMethodNotFound": "That sign-in method is not enabled on this account.",
     "accountMethodRemoveFailed": "The sign-in method could not be removed.",

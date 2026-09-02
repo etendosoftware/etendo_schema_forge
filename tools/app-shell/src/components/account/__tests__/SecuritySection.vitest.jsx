@@ -206,14 +206,15 @@ describe('SecuritySection', () => {
       expect(onRemove).not.toHaveBeenCalled();
     });
 
-    it('reports the confirmed method to the caller and closes the confirmation', async () => {
+    it('reports the confirmed identity to the caller and closes the confirmation', async () => {
       const user = userEvent.setup();
       const { onRemove } = renderSection(bothMethods);
 
       await user.click(screen.getByTestId('auth-method-remove-google'));
       await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
 
-      expect(onRemove).toHaveBeenCalledWith('google');
+      // An identity needs no re-authentication, so the password argument travels empty.
+      expect(onRemove).toHaveBeenCalledWith('google', '');
       expect(screen.queryByTestId('auth-method-remove-confirm')).not.toBeInTheDocument();
     });
 
@@ -222,9 +223,10 @@ describe('SecuritySection', () => {
       const { onRemove } = renderSection(bothMethods);
 
       await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.type(screen.getByTestId('auth-method-remove-current-password'), 'hunter2');
       await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
 
-      expect(onRemove).toHaveBeenCalledWith('password');
+      expect(onRemove).toHaveBeenCalledWith('password', 'hunter2');
     });
 
     it('abandons the removal when the confirmation is declined', async () => {
@@ -244,11 +246,12 @@ describe('SecuritySection', () => {
 
       await user.click(screen.getByTestId('auth-method-remove-google'));
       await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.type(screen.getByTestId('auth-method-remove-current-password'), 'hunter2');
       await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
 
       expect(screen.queryAllByTestId('auth-method-remove-confirm')).toHaveLength(0);
       expect(onRemove).toHaveBeenCalledTimes(1);
-      expect(onRemove).toHaveBeenCalledWith('password');
+      expect(onRemove).toHaveBeenCalledWith('password', 'hunter2');
     });
 
     it('locks the method being removed while the request is in flight', async () => {
@@ -257,6 +260,87 @@ describe('SecuritySection', () => {
       expect(screen.getByTestId('auth-method-remove-google')).toBeDisabled();
       // The other method stays usable: only the one in flight is held.
       expect(screen.getByTestId('auth-method-remove-password')).toBeEnabled();
+    });
+
+    // The servlet requires the current password to remove the password, and answers 400
+    // CHANGE_PASSWORD_MISSING_CREDENTIALS without it — so before the confirmation collected one,
+    // that button could not succeed at all. An identity is not proved by the password, so it asks
+    // for nothing.
+    it('asks for the current password before removing the password', async () => {
+      const user = userEvent.setup();
+      renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+
+      expect(screen.getByTestId('auth-method-remove-current-password')).toBeInTheDocument();
+      expect(screen.getByTestId('auth-method-remove-confirm-yes')).toBeDisabled();
+    });
+
+    it('asks for nothing before removing an identity', async () => {
+      const user = userEvent.setup();
+      renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-google'));
+
+      expect(screen.queryByTestId('auth-method-remove-current-password')).not.toBeInTheDocument();
+      expect(screen.getByTestId('auth-method-remove-confirm-yes')).toBeEnabled();
+    });
+
+    it('releases the confirm button once a current password has been typed', async () => {
+      const user = userEvent.setup();
+      renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.type(screen.getByTestId('auth-method-remove-current-password'), 'h');
+
+      expect(screen.getByTestId('auth-method-remove-confirm-yes')).toBeEnabled();
+    });
+
+    it('spends no request on an empty password field', async () => {
+      const user = userEvent.setup();
+      const { onRemove } = renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
+
+      // The server would only answer that a field the user was never shown is missing.
+      expect(onRemove).not.toHaveBeenCalled();
+    });
+
+    it('discards a typed password when the confirmation is declined', async () => {
+      const user = userEvent.setup();
+      renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.type(screen.getByTestId('auth-method-remove-current-password'), 'hunter2');
+      await user.click(screen.getByTestId('auth-method-remove-confirm-no'));
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+
+      expect(screen.getByTestId('auth-method-remove-current-password')).toHaveValue('');
+    });
+
+    it('discards a typed password when the other row is asked instead', async () => {
+      const user = userEvent.setup();
+      const { onRemove } = renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+      await user.type(screen.getByTestId('auth-method-remove-current-password'), 'hunter2');
+      await user.click(screen.getByTestId('auth-method-remove-google'));
+      await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
+
+      // The identity removal must not carry a password the user typed for a different act.
+      expect(onRemove).toHaveBeenCalledWith('google', '');
+    });
+
+    it('labels the field with the shared current-password label', async () => {
+      const user = userEvent.setup();
+      renderSection(bothMethods);
+
+      await user.click(screen.getByTestId('auth-method-remove-password'));
+
+      // Same dictionary key the change-password form uses; ui() echoes it.
+      expect(screen.getByLabelText('onboardingCurrentPasswordLabel'))
+        .toBe(screen.getByTestId('auth-method-remove-current-password'));
     });
 
     it('redraws from the payload the caller supplies after a removal succeeds', () => {

@@ -24,6 +24,10 @@ const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 export const AUTH_METHOD_ERROR_UI_KEYS = {
   LAST_AUTH_METHOD: 'accountMethodLastRemaining',
   AUTH_METHOD_NOT_FOUND: 'accountMethodNotFound',
+  // The servlet reuses the change-password code when a password removal arrives without the
+  // current password. The core table maps it to the change-password wording, which is wrong here —
+  // it talks about changing a password, not removing one — so ours wins for this endpoint.
+  CHANGE_PASSWORD_MISSING_CREDENTIALS: 'accountMethodCurrentPasswordRequired',
 };
 
 /**
@@ -61,6 +65,24 @@ function buildRemovalError(payload) {
 export function readPlatformToken() {
   if (typeof window === 'undefined') return null;
   return window.localStorage?.getItem(PLATFORM_TOKEN_KEY) || null;
+}
+
+/**
+ * Stores a rotated platform token.
+ *
+ * Removing a method rotates the session server-side (`removeAuthMethod` generates a fresh token and
+ * writes it through `updateSessionToken`), so the token the browser holds stops working the instant
+ * the call succeeds. Dropping the new one leaves the user authenticated in appearance only: the
+ * screen redraws correctly and the very next request answers 401. That is what happened before this
+ * existed, and it is silent — there is no error at the moment of the act.
+ *
+ * This is deliberately NOT what a password change does: that one discards the token on purpose and
+ * signs the user out, because the credential they authenticated with is the one that just changed.
+ * Removing one of several methods leaves the others valid, so the session should survive.
+ */
+export function writePlatformToken(token) {
+  if (typeof window === 'undefined' || !token) return;
+  window.localStorage?.setItem(PLATFORM_TOKEN_KEY, token);
 }
 
 /**

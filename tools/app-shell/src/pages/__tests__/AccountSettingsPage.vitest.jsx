@@ -54,6 +54,7 @@ vi.mock('@/components/ChangePasswordDialog.jsx', () => ({
   ) : null),
 }));
 
+import { AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
 import AccountSettingsPage from '../AccountSettingsPage.jsx';
 
 const BOTH_METHODS = {
@@ -115,29 +116,79 @@ describe('AccountSettingsPage', () => {
       expect(screen.queryByTestId('auth-method-remove-password')).not.toBeInTheDocument();
     });
 
-    it('reports a failed load and still renders the section rather than staying blank', async () => {
+    // These two used to assert that a failed load still rendered the section. That is the defect,
+    // not the contract: with no authMethods the section falls back to `{ enabled: false }` and the
+    // screen states "no password set" for an account whose password_hash is present in the
+    // database. A false claim about the account's security, which then invites the user to add a
+    // password they already have. Rewritten to pin the error state that replaced it.
+    it('shows the error block instead of the section when the load fails', async () => {
       fetchAccount.mockRejectedValue(new Error('network down'));
 
       render(<AccountSettingsPage />);
 
-      await waitFor(() => expect(toastError).toHaveBeenCalledWith('accountMethodsLoadFailed'));
-      expect(screen.getByTestId('account-security-section')).toBeInTheDocument();
+      expect(await screen.findByTestId('account-settings-load-error')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
       expect(screen.queryByText('loading')).not.toBeInTheDocument();
+      expect(toastError).toHaveBeenCalledWith('accountMethodsLoadFailed');
     });
 
-    it('survives an account payload that carries no authMethods at all', async () => {
-      fetchAccount.mockResolvedValue({});
+    it('never claims the password is unset when it simply could not read the account', async () => {
+      fetchAccount.mockRejectedValue(new Error('network down'));
 
       render(<AccountSettingsPage />);
+      await screen.findByTestId('account-settings-load-error');
+
+      // The exact sentence the bug produced. Nothing about the account's methods may be asserted
+      // on screen while the account is unknown.
+      expect(screen.queryByText('accountMethodPasswordDisabled')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('auth-method-row-password')).not.toBeInTheDocument();
+    });
+
+    it('treats a 200 whose body carries no authMethods as a failure, not as an empty account',
+      async () => {
+        // The shape that produced the false claim: the request succeeded, so nothing looked wrong.
+        fetchAccount.mockResolvedValue({});
+
+        render(<AccountSettingsPage />);
+
+        expect(await screen.findByTestId('account-settings-load-error')).toBeInTheDocument();
+        expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
+        expect(toastError).toHaveBeenCalledWith('accountMethodsLoadFailed');
+      });
+
+    it('recovers the section when Retry succeeds after a failed load', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue({ authMethods: BOTH_METHODS });
+
+      render(<AccountSettingsPage />);
+      await user.click(await screen.findByTestId('account-settings-retry'));
 
       expect(await screen.findByTestId('account-security-section')).toBeInTheDocument();
-      expect(toastError).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('account-settings-load-error')).not.toBeInTheDocument();
+      expect(fetchAccount).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps offering Retry when the retry fails as well', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockRejectedValue(new Error('still down'));
+
+      render(<AccountSettingsPage />);
+      await user.click(await screen.findByTestId('account-settings-retry'));
+
+      expect(await screen.findByTestId('account-settings-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
     });
   });
 
   describe('removing a sign-in method', () => {
-    async function confirmRemoval(user, method) {
+    async function confirmRemoval(user, method, currentPassword) {
       await user.click(await screen.findByTestId(`auth-method-remove-${method}`));
+      if (currentPassword) {
+        await user.type(
+          screen.getByTestId('auth-method-remove-current-password'), currentPassword,
+        );
+      }
       await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
     }
 
@@ -149,8 +200,96 @@ describe('AccountSettingsPage', () => {
       await confirmRemoval(user, 'google');
 
       await waitFor(() => expect(removeAuthMethod).toHaveBeenCalledWith(
-        fetch, 'https://base', 'platform-token', 'google',
+        fetch, 'https://base', 'platform-token', 'google', '',
       ));
+    });
+
+    it('carries the typed current password through to the removal call', async () => {
+      const user = userEvent.setup();
+      removeAuthMethod.mockResolvedValue({ token: 'rotated', authMethods: BOTH_METHODS });
+
+      render(<AccountSettingsPage />);
+      await confirmRemoval(user, 'password', 'hunter2');
+
+      await waitFor(() => expect(removeAuthMethod).toHaveBeenCalledWith(
+        fetch, 'https://base', 'platform-token', 'password', 'hunter2',
+      ));
+    });
+
+    it('translates the missing-credentials refusal in the words of a removal', async () => {
+      const user = userEvent.setup();
+      // The servlet reuses the change-password code here. The core table's wording talks about
+      // changing a password, not removing one, so the local map has to win.
+      const refusal = new Error('refused');
+      refusal.code = 'CHANGE_PASSWORD_MISSING_CREDENTIALS';
+      removeAuthMethod.mockRejectedValue(refusal);
+
+      render(<AccountSettingsPage />);
+      await confirmRemoval(user, 'password', 'hunter2');
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith('accountMethodCurrentPasswordRequired'));
+      expect(toastError).not.toHaveBeenCalledWith(
+        AUTH_ERROR_UI_KEYS.CHANGE_PASSWORD_MISSING_CREDENTIALS,
+      );
+    });
+
+    // BUG A. The servlet rotates the session on EVERY removal — generateToken() +
+    // updateSessionToken() — and returns the new one as `token`. Keeping only `authMethods` left
+    // the browser holding a dead token: the screen redrew perfectly and the next request answered
+    // 401, with nothing at the moment of the act to say so.
+    it('stores the rotated token the removal returned, so the session survives', async () => {
+      const user = userEvent.setup();
+      localStorage.setItem('sf_platform_token', 'old-token');
+      removeAuthMethod.mockResolvedValue({ token: 'rotated-token', authMethods: BOTH_METHODS });
+
+      render(<AccountSettingsPage />);
+      await confirmRemoval(user, 'google');
+
+      await waitFor(() =>
+        expect(localStorage.getItem('sf_platform_token')).toBe('rotated-token'));
+    });
+
+    it('keeps the stored token when the removal response carries none', async () => {
+      const user = userEvent.setup();
+      localStorage.setItem('sf_platform_token', 'old-token');
+      removeAuthMethod.mockResolvedValue({ authMethods: BOTH_METHODS });
+
+      render(<AccountSettingsPage />);
+      await confirmRemoval(user, 'google');
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+      // Clobbering it with the absent value would log the user out just as silently.
+      expect(localStorage.getItem('sf_platform_token')).toBe('old-token');
+    });
+
+    it('leaves the stored token alone when the removal fails', async () => {
+      const user = userEvent.setup();
+      localStorage.setItem('sf_platform_token', 'old-token');
+      removeAuthMethod.mockRejectedValue(new Error('boom'));
+
+      render(<AccountSettingsPage />);
+      await confirmRemoval(user, 'google');
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(localStorage.getItem('sf_platform_token')).toBe('old-token');
+    });
+
+    it('locks the last remaining method again after the one before it was removed', async () => {
+      const user = userEvent.setup();
+      // What the browser run showed: password + google both live, google goes, and the password
+      // button locks itself because the response's `removable` no longer lists it.
+      removeAuthMethod.mockResolvedValue({
+        token: 'rotated-token',
+        authMethods: { password: { enabled: true }, identities: [], removable: [] },
+      });
+
+      render(<AccountSettingsPage />);
+      expect(await screen.findByTestId('auth-method-remove-password')).toBeEnabled();
+      await confirmRemoval(user, 'google');
+
+      await waitFor(() =>
+        expect(screen.getByTestId('auth-method-remove-password')).toBeDisabled());
     });
 
     it('redraws the list from the methods the server returned, not from a local guess', async () => {

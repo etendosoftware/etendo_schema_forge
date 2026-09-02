@@ -4,6 +4,7 @@ import {
   readPlatformToken,
   removeAuthMethod,
   resolveAuthMethodErrorKey,
+  writePlatformToken,
 } from '../authMethodsApi.js';
 
 /**
@@ -183,6 +184,16 @@ describe('resolveAuthMethodErrorKey', () => {
     expect(resolveAuthMethodErrorKey('AUTH_METHOD_NOT_FOUND')).toBe('accountMethodNotFound');
   });
 
+  it('overrides the core wording for the code the servlet reuses from change-password', () => {
+    // The servlet answers CHANGE_PASSWORD_MISSING_CREDENTIALS when a password removal arrives
+    // without the current password. The core table maps it to sentence about changing a password,
+    // which is the wrong act to describe here, so the local map must win.
+    expect(resolveAuthMethodErrorKey('CHANGE_PASSWORD_MISSING_CREDENTIALS'))
+      .toBe('accountMethodCurrentPasswordRequired');
+    expect(resolveAuthMethodErrorKey('CHANGE_PASSWORD_MISSING_CREDENTIALS'))
+      .not.toBe(AUTH_ERROR_UI_KEYS.CHANGE_PASSWORD_MISSING_CREDENTIALS);
+  });
+
   it('falls through to the core table for a code the auth endpoints share', () => {
     expect(resolveAuthMethodErrorKey('INVALID_CURRENT_PASSWORD'))
       .toBe(AUTH_ERROR_UI_KEYS.INVALID_CURRENT_PASSWORD);
@@ -224,5 +235,56 @@ describe('readPlatformToken', () => {
     localStorage.setItem('sf_platform_token', '');
 
     expect(readPlatformToken()).toBeNull();
+  });
+});
+
+/**
+ * The servlet rotates the session on every removal, so the token in hand dies the moment the call
+ * succeeds. Dropping the replacement is invisible at the moment of the act — the screen redraws and
+ * the NEXT request answers 401 — which is why this has tests of its own rather than only being
+ * exercised through the page.
+ */
+describe('writePlatformToken', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('replaces the stored token with the rotated one', () => {
+    localStorage.setItem('sf_platform_token', 'old-token');
+
+    writePlatformToken('rotated-token');
+
+    expect(readPlatformToken()).toBe('rotated-token');
+  });
+
+  it('stores a token when the session had none yet', () => {
+    writePlatformToken('rotated-token');
+
+    expect(readPlatformToken()).toBe('rotated-token');
+  });
+
+  it('leaves the stored token untouched when handed nothing', () => {
+    localStorage.setItem('sf_platform_token', 'old-token');
+
+    // A response without a token must not clobber a working session: that would log the user out
+    // exactly as silently as losing the rotation did.
+    writePlatformToken(undefined);
+    writePlatformToken(null);
+    writePlatformToken('');
+
+    expect(readPlatformToken()).toBe('old-token');
+  });
+
+  it('does not invent an entry when handed nothing and none was stored', () => {
+    writePlatformToken(undefined);
+
+    expect(localStorage.getItem('sf_platform_token')).toBeNull();
+  });
+
+  it('round-trips through readPlatformToken, which is its only reader', () => {
+    writePlatformToken('rotated-token');
+
+    expect(localStorage.getItem('sf_platform_token')).toBe('rotated-token');
+    expect(readPlatformToken()).toBe('rotated-token');
   });
 });
