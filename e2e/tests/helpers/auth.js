@@ -69,14 +69,42 @@ export async function apiAuthHeaders(page) {
   // request to capture one from at all. `GET /sws/go/session` answers with the CURRENT
   // csrfToken, and `page.request` shares the context's cookie jar, so this call
   // authenticates itself.
+  //
+  // Fails LOUDLY when the session answers but carries no proof. A helper that quietly
+  // returns credential-less headers is what cost two full integration runs: every write
+  // came back 403 from deep inside a fixture, pointing at the fixture instead of at the
+  // credential. A 401/network error stays silent on purpose - that is the legitimate
+  // "bearer scheme, or not logged in yet" case, where the captured header is all there is.
+  // ETP-4576 — `Origin` is as mandatory as the token itself. GoSessionSecurity gates every
+  // unsafe request on `isOriginAllowed(request) && isCsrfValid(...)`, and `page.request`
+  // sends neither Origin nor Referer: it is not a browser navigation. So a request from a
+  // helper came back "CSRF validation failed" even carrying a perfectly valid proof, which
+  // is what made this read as a token problem for two full runs. Same-origin as the page.
+  try {
+    const origin = new URL(page.url()).origin;
+    if (origin && origin !== 'null') headers.Origin = origin;
+  } catch {
+    // about:blank or similar — nothing sensible to declare.
+  }
+
+  let status = null;
+  let body = null;
   try {
     const res = await page.request.get('/sws/go/session');
-    if (res.ok()) {
-      const body = await res.json().catch(() => null);
-      if (body?.csrfToken) headers['X-Go-CSRF'] = body.csrfToken;
-    }
+    status = res.status();
+    if (res.ok()) body = await res.json().catch(() => null);
   } catch {
-    // No cookie session (bearer, or not logged in yet): whatever was captured is all there is.
+    return headers;
+  }
+  if (status === 200) {
+    if (!body?.csrfToken) {
+      throw new Error(
+        `apiAuthHeaders: GET /sws/go/session answered 200 but carried no csrfToken `
+        + `(keys: ${body ? Object.keys(body).join(',') : 'no JSON body'}). `
+        + 'Every unsafe request from this helper would go out with no proof and come back 403.',
+      );
+    }
+    headers['X-Go-CSRF'] = body.csrfToken;
   }
   return headers;
 }
