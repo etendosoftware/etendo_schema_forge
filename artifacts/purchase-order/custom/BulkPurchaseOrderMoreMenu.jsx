@@ -22,6 +22,9 @@
 // aggregation consumed by useBulkActionToast.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -48,7 +51,7 @@ const orderCriteria = (orderId) => encodeURIComponent(JSON.stringify([
 // pattern used in PurchaseOrderActions.jsx for the single-record flow.
 async function hasDraftPurchaseInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await apiFetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/purchase-invoice/header?criteria=${orderCriteria(orderId)}&_limit=50`,
       {},
     );
@@ -62,7 +65,7 @@ async function hasDraftPurchaseInvoice(orderId, apiBaseUrl) {
 
 async function hasDraftGoodsReceipt(orderId, apiBaseUrl) {
   try {
-    const res = await apiFetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/goods-receipt/goodsReceipt?criteria=${orderCriteria(orderId)}&_limit=50`,
       {},
     );

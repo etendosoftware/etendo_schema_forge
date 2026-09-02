@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -67,7 +70,7 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   if (paymentIds.length === 0) return [];
   const base = neoBase(apiBaseUrl);
   const results = await Promise.all(paymentIds.map(id =>
-    apiFetch(`${base}/payment-in/finPayment/${id}`, {
+    moduleApiFetch(`${base}/payment-in/finPayment/${id}`, {
     })
       .then(r => r.ok ? r.json() : null)
       .then(j => j?.response?.data?.[0] || null)
@@ -115,7 +118,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
 
     // Shipments via criteria; invoices via listInvoices action (finds all, even when C_Order_ID is null)
     const shipmentPromise = fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', recordId, token, apiBaseUrl);
-    const invoicePromise = apiFetch(
+    const invoicePromise = moduleApiFetch(
       `${apiBaseUrl}/header/${recordId}/action/listInvoices`,
       { },
     )

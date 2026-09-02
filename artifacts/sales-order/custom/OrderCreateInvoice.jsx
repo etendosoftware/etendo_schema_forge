@@ -265,6 +265,8 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
 export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, onSave }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui       = useUI();
   const [createShipment,  setCreateShipment]  = useState(false);
   const [createInvoice,   setCreateInvoice]   = useState(false);
@@ -616,6 +618,8 @@ function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, te
 // ── CreateDocsModal (CO orders — create docs without re-confirming) ───────────
 
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   const {
     needsShip, needsInvoice,

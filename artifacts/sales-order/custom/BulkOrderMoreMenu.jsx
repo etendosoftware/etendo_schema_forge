@@ -21,6 +21,9 @@
 // sessionStorage, consumed by useBulkActionToast on next page load.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -43,7 +46,7 @@ const DRAFT = 'DR';
 // "fail-open" pattern in OrderCreateInvoice.jsx.
 async function hasDraftInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
+    const res = await moduleApiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
     if (!res.ok) return false;
     const data = (await res.json())?.response?.data;
     return Boolean(data?.exists);
@@ -61,7 +64,7 @@ async function hasDraftShipment(orderId, apiBaseUrl) {
     const criteria = encodeURIComponent(JSON.stringify([
       { fieldName: 'salesOrder', operator: 'equals', value: orderId },
     ]));
-    const res = await apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`);
+    const res = await moduleApiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`);
     if (!res.ok) return false;
     const shipments = (await res.json())?.response?.data ?? [];
     return shipments.some((s) => s.documentStatus === DRAFT);
