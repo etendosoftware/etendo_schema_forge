@@ -7,7 +7,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -783,7 +783,18 @@ export function ListView({
   const [deselectTrigger, setDeselectTrigger] = useState(0);
   const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
+
+  const handleBulkPrint = useCallback(async () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    try {
+      await printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl);
+    } finally {
+      setIsPrinting(false);
+    }
+  }, [isPrinting, windowName, selectedRows, token, ui, apiBaseUrl]);
 
   const handlePreviewClose = useCallback(() => {
     if (previewRow) {
@@ -1013,11 +1024,14 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    title={ui('print')}
-                    aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    title={isPrinting ? ui('generating') : ui('print')}
+                    aria-label={isPrinting ? ui('generating') : ui('print')}
+                    disabled={isPrinting}
+                    onClick={handleBulkPrint}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {isPrinting
+                      ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+                      : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />}
                   </Button>
                 )}
                 {onCloneRow && (
