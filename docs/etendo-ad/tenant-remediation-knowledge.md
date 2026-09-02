@@ -1769,3 +1769,85 @@ as the immutability trigger for a data-fix `.sql` file.
     join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
     OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
     orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.
+
+## ETP-5117 — Gap N1: forcing SII/TicketBAI/VeriFactu test mode for Demo/free tenants (2026-09-01)
+
+- **2026-09-01 — `Preferences.setPreferenceValue(...)` is the WRONG tool for a preference whose
+  consumer reads `Preference.client`, not `Preference.visibleAtClient` — verified by reading its
+  full source (`org.openbravo.erpCommon.businessUtility.Preferences`, not `secureApp` — that
+  package does not exist in this codebase).** Its insert branch (`prefs.size()==0`) ALWAYS does
+  `preference.setClient(OBDal.getInstance().get(Client.class, "0"))` (hardcoded System) and only
+  ever encodes the caller's `client` argument into `VisibleAtClient`. That is exactly right for
+  `TenantPlanService`'s own `ETGO_TenantPlan` preference, because `resolvePlan` reads it back via
+  `pref.visibleAtClient.id = :clientId` — a matched pair. It is exactly WRONG for
+  `ETSG_ForceTestMode`: `ForceTestModeEventHandler#findPreference` (VeriFactu) and its SII/
+  TicketBAI siblings (`SiiForceTestModeEventHandler`, `com.smf.ticketbai.events.
+  ForceTestModeEventHandler`) all resolve it with `Restrictions.eq(Preference.PROPERTY_CLIENT,
+  client)` — the row's own `AD_Client_ID` column, never `VisibleAtClient` — by deliberate design
+  (see that class's own javadoc: an earlier version DID use the standard
+  `Preferences.getPreferenceValue()` precedence engine and caused `HibernateException: Found
+  shared references to a collection` from repeatedly cycling `OBContext.setAdminMode()` across
+  many clients in one request; switched to a same-Client-only, no-admin-mode-bypass design
+  instead). **Apply generally: before reusing `Preferences.setPreferenceValue`/
+  `getPreferenceValue` for ANY `AD_Preference` property, read that property's own consumer(s)
+  first** — Etendo has (at least) two independent, incompatible preference-scoping conventions
+  live in this codebase (`VisibleAtClient`-based precedence vs. plain `Client`-ownership lookup),
+  and picking the wrong one silently writes a row nothing will ever find. Confirmed live: the 3
+  pre-existing `ETSG_ForceTestMode='Y'` rows on this DB (AyelenG, F&B International Group,
+  MariaG — created by hand via the Classic Preference window before this ticket) all have
+  `AD_Client_ID=<tenant>` / `VisibleAtClient_ID=NULL`, matching the `Preference.client`-scoped
+  read exactly, not the `setPreferenceValue` shape.
+- **2026-09-01 — The three fiscal event handlers' "cascade only on UPDATE, never on INSERT" guard
+  means raw SQL can NEVER trigger it, under any circumstance — confirmed by reading
+  `PersistenceEventOBInterceptor`/`EntityPersistenceEventObserver`.** `EntityNewEvent`/
+  `EntityUpdateEvent` are constructed ONLY by Openbravo's Hibernate `Interceptor` on a flush of
+  entities loaded/saved through `OBDal`/Hibernate. A plain JDBC/native-SQL `INSERT` or `UPDATE`
+  against `ad_preference` (or the config tables) never touches that pipeline, so it fires zero
+  observers — full stop, independent of the handlers' own insert-vs-update guard. **Apply:** a
+  corrective `.sql` data-fix for this preference's ALREADY-EXISTING config rows cannot rely on the
+  cascade at all; it must directly `UPDATE` each config table's own flag column
+  (`etvfac_verifactu_config.is_dev_env`, `aeatsii_config.produccion`,
+  `tbai_config.production_env`) in the same fix. The corresponding PREVENTIVE Java service, by
+  contrast, needs no such backfill — a freshly-onboarded tenant has zero config rows yet, so each
+  handler's Observer B correctly resolves the flag from the preference the first time the tenant's
+  own config row is ever created (whenever that happens, via the app, not onboarding).
+- **2026-09-01 — Physical column names for the 3 fiscal config tables' test-mode flag, and their
+  semantics are NOT uniform.** `etvfac_verifactu_config.is_dev_env` (`'Y'` = test/dev — INVERTED
+  vs. the other two), `aeatsii_config.produccion` (`'Y'` = production, so test mode = `'N'`),
+  `tbai_config.production_env` (`'Y'` = production, so test mode = `'N'`). Confirmed via `\d` on
+  each table (Postgres). Verified none of the "block"/"check" triggers on these 3 tables
+  (`etvfac_vfactu_config_block_trg`, `*_check_sifs_configs_trg`, `*_one_active_config_trg`) fire
+  on a plain flag UPDATE that leaves `isactive` unchanged — they only guard deactivation
+  (`isactive: Y→N`) and cross-SIF-module conflicts, so a corrective fix's direct column UPDATE is
+  safe without needing to touch `isactive`.
+- **2026-09-01 — On this shared dev DB, GOClient/QA Testing's `aeatsii_config`/`tbai_config` rows
+  already read `produccion='N'`/`production_env='N'` (test mode) even WITHOUT any
+  `ETSG_ForceTestMode` preference row at all — this is pre-existing dev-DB configuration noise,
+  not something this fix caused or should be read as "the fix already ran everywhere."** Only
+  AyelenG/F&B International Group/MariaG had an actual `ETSG_ForceTestMode='Y'` row before this
+  ticket. **Apply:** when live-validating a fix like this on a shared dev DB, don't assume a
+  tenant's current "looks-already-correct" state proves the preference mechanism is what put it
+  there — check the actual preference row's existence separately from the config table's flag
+  value.
+- **2026-09-01 — DECISION: SQL-only (`@type: sql`), not `@type: webhook`, despite the
+  Hibernate-cascade limitation above — because the corrective fix does not need the cascade at
+  all, it replicates its EFFECT directly.** The `sql_first_criterion` webhook escape hatch exists
+  for logic too complex/stateful to replicate in hand SQL; here the "logic" a webhook would add is
+  just "go through DAL so the observer fires" — but the observer's own effect (set 3 possible
+  target columns to a value derived from one preference) is itself trivial to write as 3 guarded
+  `UPDATE`s. No non-trivial logic is being duplicated. Also consistent with the standing
+  `@type: webhook` execution gap already recorded above (2026-08-03, R20 section): the runner
+  still throws `"@type webhook not implemented yet"`, so choosing SQL avoids building unused
+  execution-path plumbing for a single ticket, same reasoning R20 used to stay SQL-only for its
+  own 2-tenant edge case.
+- **2026-09-01 — DEFERRED, not decided in this ticket: whether `TenantPlanService#markProductive`
+  (the paid-upgrade path) should also flip an existing `ETSG_ForceTestMode='Y'` row back to
+  `'N'`.** The human's request only covered the demo→forced-test-mode direction. Left as an open
+  question for a follow-up ticket — flagged explicitly in `onboarding-gaps.md`'s N1 entry and the
+  PR/task report, not silently decided either way. If ever implemented, the write MUST go through
+  DAL (`OBDal.getInstance().save(preference)` on the EXISTING row, an UPDATE) rather than raw SQL,
+  specifically so `ForceTestModeEventHandler`'s Observer A cascades the flip to the tenant's
+  already-existing config rows — the exact opposite of the corrective-fix reasoning above (there,
+  raw SQL was the deliberate choice; here, DAL would be the deliberate choice, precisely because a
+  human explicitly flipping a live productive tenant's mode is a rare, one-time, already-DAL-
+  reachable action — not a bulk multi-tenant remediation sweep).

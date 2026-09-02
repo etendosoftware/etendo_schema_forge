@@ -28,6 +28,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
+| N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -1402,6 +1403,83 @@ preventive fix above) — merely redundant, never incorrect.
 live-validated in a rolled-back transaction, then **run for real against the shared dev DB**
 (2026-08-27T14:18:28Z) — 69 owners backfilled, 26 already had an email, 0 failures; a re-run
 confirmed 0 rows remaining (idempotent).
+
+---
+
+## N — Tenant Plan / Fiscal Test Mode
+
+### N1 — Demo/free tenants cannot submit SII/TicketBAI/VeriFactu in test mode without a manual edit (ETP-5117)
+
+**Symptom:** SII, TicketBAI and VeriFactu each read a client-scoped `ETSG_ForceTestMode`
+`AD_Preference` (owned by `com.etendoerp.sif.general`, `Y`/`N`, PROPERTY-shaped — `ISPROPERTYLIST='Y'`,
+`PROPERTY='ETSG_ForceTestMode'`) to decide whether to submit to the real AEAT/administration
+endpoint or a test/sandbox one. The bundled default (`AD_Preference_ID
+6DCB1CD4A0414D78BB97441626B62835`, `AD_Client_ID='0'`, `VALUE='N'`) means every tenant without its
+own override row defaults to REAL submissions — including a brand-new Demo/free tenant created
+purely to trial the product. Before this fix, forcing test mode required an operator to manually
+create the per-client preference row in Classic; there was no way to do it from Etendo GO itself,
+and every self-registered free tenant stayed exposed to real fiscal submission by default.
+
+**Root cause (why this cannot be closed with plain `AD_Preference` SQL alone):**
+`com.etendoerp.verifactu.eventhandler.ForceTestModeEventHandler` (and its
+`org.openbravo.module.sii.eventhandlers.SiiForceTestModeEventHandler` /
+`com.smf.ticketbai.events.ForceTestModeEventHandler` siblings) resolve the preference with a
+**`Preference.client`-scoped** `OBCriteria` query (the row's own `AD_Client_ID` column) —
+deliberately NOT Etendo's standard `Preferences.getPreferenceValue()` precedence engine (that
+was tried first and reverted: it required an admin-mode bypass for the cross-client read and
+corrupted Hibernate's shared session state across many tenants in one request — see the class's
+own javadoc). Two consequences:
+1. A row written the "normal" way, via `Preferences.setPreferenceValue(property, value,
+   isListProperty, client, ...)`, would carry `AD_Client_ID='0'` (that helper's insert branch
+   always pins ownership to the System client and encodes the target tenant only in
+   `VisibleAtClient`) — **invisible** to these handlers' `Preference.client`-scoped lookup. The
+   correct write must build/save the `Preference` entity directly with `Client` set to the tenant.
+2. Each handler's cascade to already-existing `VerifactuConfig`/`AEATSIIConfig`/`TbaiConfig` rows
+   fires **only on UPDATE of the `Preference` row via Hibernate/DAL, never on INSERT, and never
+   at all for a plain SQL statement** (raw SQL never touches the Hibernate session, so no
+   `EntityPersistenceEvent` is ever raised). So a corrective fix for an **already-onboarded**
+   tenant that only wrote the preference row would leave that tenant's pre-existing
+   `IS_DEV_ENV`/`PRODUCCION`/`PRODUCTION_ENV` columns silently stale.
+
+**Preventive fix:** `OnboardingForceTestModeService#forceTestModeForFreeTenant`, wired as a new
+step in `EtendoGoJwtServlet#ensureOnboardingDataset` (right after `wireAdminIdentity`, before the
+baseline stamp — the org must already exist as the new row's visibility scope). Gated by
+`TenantPlanService#resolvePlan(clientId) == PLAN_FREE`; a paid/productive onboarding is left
+completely untouched. Idempotent: a tenant that already owns its own active row (e.g. a resumed
+onboarding pass, ETP-4428 reconcile model, or an operator's own prior manual choice) is never
+overwritten. **Never writes to the System-level default row** (`AD_Client_ID='0'`) — always
+inserts a brand-new, per-Client row for the tenant being onboarded.
+
+**Corrective fix:** `20260901T120000Z__R31-force-test-mode-demo-tenants.sql` — two independent,
+individually-guarded effects, both excluded for a tenant that resolves as `PLAN_PRODUCTIVE`:
+1. Inserts the client's own `ETSG_ForceTestMode='Y'` row (guarded on "no active own-client row
+   already exists").
+2. Directly backfills any pre-existing `etvfac_verifactu_config.is_dev_env`,
+   `aeatsii_config.produccion`, or `tbai_config.production_env` column still reading as
+   production for that client (guarded per-row on its own current value) — the direct-column
+   backfill this corrective fix needs that the preventive service does not, precisely because a
+   freshly-onboarded tenant has zero pre-existing config rows to cascade into.
+
+**Live-validated (2026-09-01)** against the shared dev DB: fleet-wide dry-run across all 29
+tenants found 4 already `SKIPPED_NOT_NEEDED` (3 — F&B International Group, MariaG, AyelenG —
+already owned a hand-created `ETSG_ForceTestMode='Y'` row; GOClient fixed for real this session)
+and 25 `WOULD_APPLY`; a real run against GOClient (`802509E12436405C86BA1FD5B1DF508C`) →
+`APPLIED (1 row)` (the preference insert only — its SII/TicketBAI config rows already read as
+test mode on this DB) → re-run `SKIPPED_NOT_NEEDED`; the config-table backfill effect and the
+productive-tenant exclusion were additionally verified in rolled-back transactions (a row forced
+to `produccion='Y'`/`production_env='Y'` was correctly flipped back to `'N'` by the fix; a
+simulated `ETGO_TenantPlan='productive'` row correctly made the free-plan subquery return 0
+rows).
+
+**Deferred, not fixed here (explicitly flagged for human decision):** whether converting a Demo
+tenant to productive (`markProductive`, the paid-upgrade path) should flip
+`ETSG_ForceTestMode` back to `'N'`. The human's request for this ticket only covers the
+demo→forced-test-mode direction; a productive tenant simply never gets the preventive write, but
+an EXISTING free tenant that already has the row (from this fix) and later upgrades keeps reading
+test mode until an operator manually clears the row. Left for a follow-up ticket — see the PR/task
+report for the explicit call-out.
+
+**Status:** both fronts shipped 2026-09-01 under **ETP-5117**.
 
 ---
 
