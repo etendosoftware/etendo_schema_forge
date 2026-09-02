@@ -290,6 +290,7 @@ export default function TopBar({
               }}
               placeholder={resolvedPlaceholder}
               aria-label={resolvedPlaceholder}
+              cmdk-input=""
               className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
               data-testid="global-search-input"
             />
