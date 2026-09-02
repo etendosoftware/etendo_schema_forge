@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { BlockingBpBanner } from '../BlockingBpBanner.jsx';
 import { useCurrency } from '@/hooks/useCurrency';
 
@@ -267,217 +267,26 @@ describe('BlockingBpBanner (ETP-5024)', () => {
     expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
   });
 
-  it('clears when completionSignal bumps (document completed successfully), after the minimum visible duration', () => {
-    vi.useFakeTimers();
-    try {
-      const { rerender } = render(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={0}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
+  it('clears when completionSignal bumps (document completed successfully)', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={0}
+        recordId="doc-1"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
 
-      // Banner has already been up for longer than MIN_VISIBLE_MS (3000ms) by
-      // the time completion succeeds — the ORIGINAL "already visible from a
-      // past failed attempt" use case — so the clear fires immediately, same
-      // as before this fix.
-      act(() => {
-        vi.advanceTimersByTime(5000);
-      });
-
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={1}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  // Bug found in manual testing: an EXISTING document, no field change this
-  // session, whose Confirm-time peek raises `blockingCondition` for the FIRST
-  // time in the same tick the completion request succeeds — the banner used
-  // to appear and vanish near-instantly, unreadable ("es como que parece
-  // peor, no se llega a ver y lo confirma!"). The completionSignal clear path
-  // now enforces MIN_VISIBLE_MS before it is allowed to remove a banner that
-  // just appeared.
-  describe('minimum visible duration before a completionSignal clear (ETP-5024 "peek and vanish" fix)', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it('keeps a just-appeared banner visible for at least the minimum duration when completionSignal bumps right after', () => {
-      const { rerender } = render(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={null}
-          completionSignal={0}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-
-      // The Confirm-time peek raises the condition — a render on its own,
-      // BEFORE the (awaited) completion request resolves. This is the real
-      // sequence in useEntity.js: `setBlockingCondition(peekCondition)` fires
-      // synchronously, then the code `await`s the actual Complete request —
-      // an async gap that always produces a distinct commit here, so this
-      // component's `bannerAppearedAt` gets set from a banner that is
-      // genuinely, if extremely briefly, on its own before completion.
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={CREDIT_LIMIT}
-          completionSignal={0}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      // The completion request resolves successfully right after (near-zero
-      // elapsed time) — completionSignal bumps, exactly like the live bug.
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={CREDIT_LIMIT}
-          completionSignal={1}
-          recordId="doc-1"
-        />,
-      );
-
-      // Still visible immediately after — this is the exact regression: it
-      // must NOT have vanished in the same tick it appeared.
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      // Not enough time has passed yet — still visible.
-      act(() => {
-        vi.advanceTimersByTime(2000);
-      });
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      // Now the minimum duration has elapsed — the deferred clear fires.
-      act(() => {
-        vi.advanceTimersByTime(1001);
-      });
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-    });
-
-    it('clears without an artificial extra wait when the banner has already been visible long enough', () => {
-      const { rerender } = render(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={0}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      // Banner has been up well past MIN_VISIBLE_MS before completion succeeds.
-      act(() => {
-        vi.advanceTimersByTime(4000);
-      });
-
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={1}
-          recordId="doc-1"
-        />,
-      );
-
-      // Cleared right away — no extra setTimeout wait needed.
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-    });
-
-    it('does not let a stale deferred clear wipe out a NEWER banner condition that appeared during the wait', () => {
-      const { rerender } = render(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={0}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toHaveTextContent('on hold');
-
-      // First completion attempt (e.g. a peek) bumps completionSignal almost
-      // immediately — schedules a deferred clear ~3000ms out.
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={ON_HOLD}
-          completionSignal={1}
-          recordId="doc-1"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      // Before that deferred clear fires, the banner is cleared (recordId
-      // change / new document) and a DIFFERENT condition appears fresh —
-      // a genuine new falsy -> truthy transition, resetting bannerAppearedAt.
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={null}
-          completionSignal={1}
-          recordId="doc-2"
-        />,
-      );
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={CREDIT_LIMIT}
-          completionSignal={1}
-          recordId="doc-2"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toHaveTextContent('credit limit');
-
-      // Advance PAST when the FIRST (now-stale) deferred clear would have
-      // fired (~3000ms from the first bump, ~2500ms from here) — the newer
-      // banner must survive it.
-      act(() => {
-        vi.advanceTimersByTime(2600);
-      });
-      expect(screen.getByTestId('bp-blocking-banner')).toHaveTextContent('credit limit');
-
-      // The newer banner still respects its OWN minimum-duration window: a
-      // second completionSignal bump right after must not clear it instantly
-      // either.
-      rerender(
-        <BlockingBpBanner
-          calloutResult={null}
-          blockingCondition={CREDIT_LIMIT}
-          completionSignal={2}
-          recordId="doc-2"
-        />,
-      );
-      expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
-
-      act(() => {
-        vi.advanceTimersByTime(3001);
-      });
-      expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
-    });
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={1}
+        recordId="doc-1"
+      />,
+    );
+    expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
   });
 
   it('does NOT clear on mount just because completionSignal starts at 0 (0 -> 0 is not a change)', () => {

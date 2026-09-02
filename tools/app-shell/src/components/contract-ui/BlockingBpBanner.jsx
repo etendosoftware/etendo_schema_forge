@@ -30,22 +30,6 @@ import { useCurrency } from '@/hooks/useCurrency';
  * its own ref-based "did it change" effect rather than folded into a plain value
  * comparison (0 → 0 must not look like a change on mount).
  *
- * MIN_VISIBLE_MS (ETP-5024 follow-up — "peek and vanish" bug): the Confirm-time
- * peek (see `useEntity.js`'s `peekBusinessPartnerCallout` calls) can raise a
- * banner for the FIRST time in the very same tick the document goes on to
- * complete successfully — i.e. `blockingCondition` transitions to truthy and
- * `completionSignal` bumps almost back-to-back. The original "banner already
- * visible from a past failed attempt" use case is fine with an instant clear
- * (the user already read it, maybe retried, now it succeeded) — but a banner
- * the user never got a chance to read, gone before the eye lands on it, reads
- * as if nothing happened (reported live: "no se llega a ver y lo confirma!").
- * So the `completionSignal` clear path specifically enforces a minimum visible
- * duration, measured from `bannerAppearedAtRef` (set below): if the banner
- * hasn't been up for `MIN_VISIBLE_MS` yet, the clear is deferred via
- * `setTimeout` for the remaining time instead of firing immediately. The OTHER
- * two clear paths (BP-change via `calloutResult`, and `recordId` change) are
- * untouched — they still clear the instant their own effect runs.
- *
  * `recordId` resets the banner when the user navigates to a different document
  * — a blocking condition on one document must never bleed into the next one
  * opened, whether that "next one" is another existing record or a brand-new
@@ -89,37 +73,12 @@ import { useCurrency } from '@/hooks/useCurrency';
  * dropping the number entirely would leave a banner that reads like a truncated
  * sentence with no amount at all.
  */
-// Minimum time (ms) a banner must stay visible before the `completionSignal`
-// clear path is allowed to remove it — long enough to read a short sentence,
-// not just glance at it. See the MIN_VISIBLE_MS doc block above.
-const MIN_VISIBLE_MS = 3000;
-
 export function BlockingBpBanner({ calloutResult, blockingCondition, completionSignal, recordId, currencyCode }) {
   const [banner, setBanner] = useState(null);
   const completionSignalRef = useRef(completionSignal);
   const prevRecordIdRef = useRef(recordId);
   const sessionCurrencyCode = useCurrency();
   const effectiveCurrencyCode = currencyCode ?? sessionCurrencyCode ?? null;
-
-  // Tracks when the CURRENTLY-shown banner first appeared, updated only on a
-  // falsy -> truthy transition (a condition replacing another while already
-  // shown does NOT reset it — the banner has already been up since the first
-  // one appeared). `prevBannerRef` is the "did banner just change" detector;
-  // `bannerAppearedAtRef` is what the completionSignal clear effect reads.
-  const prevBannerRef = useRef(banner);
-  const bannerAppearedAtRef = useRef(banner ? Date.now() : null);
-  // The deferred clear's in-flight setTimeout id (so a second completionSignal
-  // bump — or unmount — can cancel a still-pending one) and a snapshot token
-  // (the appearedAt timestamp at schedule time) so the callback can detect a
-  // NEWER banner having appeared in the meantime and no-op instead of wiping it.
-  const pendingClearTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    if (!prevBannerRef.current && banner) {
-      bannerAppearedAtRef.current = Date.now();
-    }
-    prevBannerRef.current = banner;
-  }, [banner]);
 
   useEffect(() => {
     const prevRecordId = prevRecordIdRef.current;
@@ -150,50 +109,11 @@ export function BlockingBpBanner({ calloutResult, blockingCondition, completionS
   }, [blockingCondition]);
 
   useEffect(() => {
-    if (completionSignalRef.current === completionSignal) return;
-    completionSignalRef.current = completionSignal;
-
-    // Cancel any deferred clear still in flight from a PRIOR completionSignal
-    // bump — a fresh bump always supersedes it (only one deferred clear should
-    // ever be pending at a time).
-    if (pendingClearTimeoutRef.current != null) {
-      clearTimeout(pendingClearTimeoutRef.current);
-      pendingClearTimeoutRef.current = null;
-    }
-
-    const appearedAt = bannerAppearedAtRef.current;
-    const elapsed = appearedAt != null ? Date.now() - appearedAt : Infinity;
-
-    if (!banner || elapsed >= MIN_VISIBLE_MS) {
-      // No banner currently shown, or it's already been visible long enough —
-      // clear immediately, exactly as before.
+    if (completionSignalRef.current !== completionSignal) {
+      completionSignalRef.current = completionSignal;
       setBanner(null);
-      return;
     }
-
-    // Not visible long enough yet — defer the clear for the remaining time.
-    const remaining = MIN_VISIBLE_MS - elapsed;
-    pendingClearTimeoutRef.current = setTimeout(() => {
-      pendingClearTimeoutRef.current = null;
-      // Stale guard: if a NEWER banner condition appeared while this clear was
-      // waiting, bannerAppearedAtRef will have moved past `appearedAt` — in
-      // that case this deferred clear is stale and must be a no-op so it
-      // doesn't wipe out the newer banner.
-      if (bannerAppearedAtRef.current === appearedAt) {
-        setBanner(null);
-      }
-    }, remaining);
   }, [completionSignal]);
-
-  // Cancel any pending deferred clear on unmount.
-  useEffect(() => {
-    return () => {
-      if (pendingClearTimeoutRef.current != null) {
-        clearTimeout(pendingClearTimeoutRef.current);
-        pendingClearTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   if (!banner) return null;
 
