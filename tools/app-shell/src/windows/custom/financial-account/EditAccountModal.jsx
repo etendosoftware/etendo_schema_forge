@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -257,14 +257,32 @@ async function persistAccountEdits({
   }
 }
 
-async function runSync({ account, sync, refresh, onSaved, ui, setBusy }) {
+/**
+ * Runs a "Sincronizar ahora", persisting the pending edits first (ETP-5104).
+ *
+ * Saving before syncing is not a convenience — it is the fix for two symptoms of the same bug. The
+ * bridge reads the import date range from the DB, so an unsaved range was silently ignored and the
+ * import ran with the previously stored dates; and `refresh()` below rewrites both `form` and
+ * `initial` from the server, so whatever the user had typed was then overwritten in place ("los
+ * campos se restablecen"). Persisting first makes the sync use the values on screen AND makes the
+ * refresh a no-op for them.
+ *
+ * `beforeSync` is a REF, not a plain callback: it is filled in by the modal body, which is where
+ * the other form hooks (fields / reconciliation / accounting) are declared — long after this hook
+ * runs. It throws to abort, which is exactly what the `catch` below already handles.
+ */
+async function runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync }) {
   setBusy(true);
   try {
+    await beforeSync?.current?.();
     const res = await sync(account.id);
     await refresh();
     onSaved?.();
     notifySyncResult(res, ui);
   } catch (err) {
+    // `handled` marks a failure beforeSync already reported with the save path's own wording —
+    // toasting `err.message` on top of it would show the same problem twice, the second time raw.
+    if (err?.handled) return;
     toast.error(err.message === 'BANK_CONNECTION_TIMEOUT' ? ui('financeAccountsBankConnectionTimeout') : err.message);
   } finally {
     setBusy(false);
@@ -500,13 +518,32 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
 }
 
 /**
+ * True when both import dates are set and "Importar desde" is later than "Importar hasta".
+ *
+ * Compares the ISO strings exactly as `DateInput` emits them (`yyyy-mm-dd`, see
+ * components/forms/fields.jsx) — in that format lexicographic order IS chronological order, so the
+ * check is exact and completely timezone-free. Deliberately NOT `parseCalendarDate`: no `Date` is
+ * ever constructed here, so the date-only shift this repo guards against (ETP-4850) cannot occur,
+ * and pulling in a parser would only add a way to get it wrong.
+ *
+ * An empty box means "no bound" and never invalidates: a range with only one end is legal, and
+ * blocking Save on a half-typed form would be worse than the bug this guards.
+ */
+function isImportRangeInvalid({ importFromDate, importToDate } = {}) {
+  if (!importFromDate || !importToDate) return false;
+  return importFromDate > importToDate;
+}
+
+/**
  * Bank connection panel state + actions.
  *
  * Covers both live connections and soft-disconnected ones: a deactivated connection still needs
  * its status fetched so the panel can offer "Reconectar" instead of pretending the account never
  * had a bank link (ETP-4764).
  */
-function useBankConnection(open, account, bankConnected, onSaved, onClose, bankReconnectable) {
+function useBankConnection(
+  open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSync,
+) {
   const ui = useUI();
   const { fetchStatus, sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const [status, setStatus] = useState(null);
@@ -550,9 +587,19 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose, bankR
     }
   }, [open, hasBankLink, refresh]);
 
+  // ETP-5104 CP-4: an inverted range never reaches the bridge. Without this the sync fails deep
+  // inside the PSD2 module (SaltEdgeConnectionHelper.validateDateRange), whose OBException is
+  // caught and re-wrapped into PSD2_ErrorRetrievingRransactionsForTheAccount — an untranslated
+  // toast carrying the Salt Edge connection id and raw Java timestamps.
   const handleSync = useCallback(
-    () => runSync({ account, sync, refresh, onSaved, ui, setBusy }),
-    [account, sync, refresh, onSaved, ui],
+    () => {
+      if (isImportRangeInvalid(form)) {
+        toast.error(ui('financeAccountsBankConnectionImportRangeInvalid'));
+        return Promise.resolve();
+      }
+      return runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync });
+    },
+    [account, sync, refresh, onSaved, ui, form, beforeSync],
   );
   const handleReconnect = useCallback(
     () => runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }),
@@ -587,7 +634,7 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose, bankR
 
   return {
     status, loading, busy, form, setForm, refresh, connected, reconnectable,
-    hasBankLink: liveHasBankLink, settingsDirty,
+    hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
     handleSync, handleReconnect, handleDisconnect, handleDeleteConnection,
   };
 }
@@ -1045,8 +1092,12 @@ export function EditAccountModal({
   // reconnect flow.
   const bankReconnectable = account?.bankReconnectable === true;
   const hasTransactions = account?.hasTransactions === true;
+  // Filled in below, once every form hook exists. "Sincronizar ahora" persists the whole form
+  // before syncing (ETP-5104), and the connection hook is declared before the hooks holding the
+  // rest of the form — a ref is the only way to hand it something it cannot see yet.
+  const beforeSyncRef = useRef(null);
   const bankConnection = useBankConnection(
-    open, account, bankConnected, onSaved, onClose, bankReconnectable,
+    open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSyncRef,
   );
   // Anything that must not diverge from the linked bank account keys off this, not off
   // `bankConnected`: a deactivated account is still bound to one Salt Edge account (ETP-4764).
@@ -1106,11 +1157,17 @@ export function EditAccountModal({
     || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
-  const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !recon.amountToleranceInvalid;
+  // What makes the form unsavable, independently of whether anything changed. Split out of
+  // `canSave` because "Sincronizar ahora" needs the same verdict without the `dirty`/`saving`
+  // terms: it must refuse to sync a form it cannot persist rather than sync stale dates.
+  const saveBlocked = fields.name.trim() === '' || fields.ibanInvalid
+    || recon.amountToleranceInvalid || bankConnection.rangeInvalid;
+  const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
-  const handleSave = async () => {
+  // Persists everything the modal holds and nothing else — no toast, no close. Shared by
+  // "Guardar cambios" and by the save-before-sync step (ETP-5104), which must not close the modal.
+  const persistAll = async () => {
     setSaving(true);
     setError(null);
     try {
@@ -1125,23 +1182,50 @@ export function EditAccountModal({
         saveImportSettings,
         saveAccountingConfiguration,
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reportSaveError = (err) => {
+    if (err.status === 409) {
+      setError(ui('financeAccountsNewNameExists'));
+    } else {
+      // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
+      // this window's whole 400 family — including the String.format-interpolated country/IBAN
+      // messages that an exact-match table structurally cannot reach (ETP-4896 QA follow-up).
+      // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
+      // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
+      // another tab, an API/MCP-shaped body).
+      toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await persistAll();
       toast.success(ui('financeAccountsEditSuccess'));
       onSaved?.();
       onClose?.();
     } catch (err) {
-      if (err.status === 409) {
-        setError(ui('financeAccountsNewNameExists'));
-      } else {
-        // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
-        // this window's whole 400 family — including the String.format-interpolated country/IBAN
-        // messages that an exact-match table structurally cannot reach (ETP-4896 QA follow-up).
-        // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
-        // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
-        // another tab, an API/MCP-shaped body).
-        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
-      }
-    } finally {
-      setSaving(false);
+      reportSaveError(err);
+    }
+  };
+
+  // ETP-5104: "Sincronizar ahora" saves first. Anything it reports is reported HERE, with the
+  // save-path wording, and re-thrown carrying `handled` so runSync aborts the sync without
+  // toasting the same failure a second time in its own (raw `err.message`) wording.
+  beforeSyncRef.current = async () => {
+    if (!dirty) return;
+    if (saveBlocked) {
+      toast.error(ui('financeAccountsEditError'));
+      throw Object.assign(new Error('EDIT_ACCOUNT_FORM_INVALID'), { handled: true });
+    }
+    try {
+      await persistAll();
+    } catch (err) {
+      reportSaveError(err);
+      throw Object.assign(err, { handled: true });
     }
   };
 
@@ -1675,6 +1759,15 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
           </div>
         </Field>
       </div>
+
+      {/* ETP-5104. Sits under the whole grid rather than inside one Field: the error belongs to the
+          PAIR of dates, and `Field` has no error slot anyway (components/forms/fields.jsx). Same
+          shape as the amount-tolerance error in the reconciliation section. */}
+      {bankConnection.rangeInvalid ? (
+        <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
+          {ui('financeAccountsBankConnectionImportRangeInvalid')}
+        </p>
+      ) : null}
 
       {reauthMessage ? (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3" data-testid="bank-connection-edit-reauth-banner">

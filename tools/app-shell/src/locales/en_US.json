@@ -18423,6 +18423,7 @@
     "financeAccountsBankConnectionImportSection": "Statement import",
     "financeAccountsBankConnectionImportFrom": "Import from",
     "financeAccountsBankConnectionImportTo": "Import to",
+    "financeAccountsBankConnectionImportRangeInvalid": "The \"Import from\" date cannot be later than the \"Import to\" date.",
     "financeAccountsBankConnectionGrouping": "Statement grouping",
     "financeAccountsBankConnectionGroupingNone": "Default",
     "financeAccountsBankConnectionGroupingPlaceholder": "Select grouping…",
