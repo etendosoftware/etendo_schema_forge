@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-07-21T12:35:20.219Z",
-  "checksum": "f5d9fa9ee28f4f14",
+  "updatedAt": "2026-09-01T00:51:13.982Z",
+  "checksum": "047d3a78b16e2793",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -145,7 +145,7 @@
             "enumVariants": {
               "O": "green",
               "N": "neutral",
-              "C": "neutral",
+              "C": "red",
               "P": "red",
               "M": "orange"
             },

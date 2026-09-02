@@ -65,6 +65,23 @@ export function tomorrowCalendarISO(reference = new Date()) {
   );
 }
 
+/**
+ * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
+ * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".
+ */
+export function formatCalendarMonthYear(raw, locales = 'en-GB') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  const formatter = new Intl.DateTimeFormat(normalizeLocale(locales), {
+    month: 'long', year: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const year = parts.find((part) => part.type === 'year')?.value;
+  if (!month || !year) return formatter.format(date);
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year}`;
+}
+
 export function getCalendarDateRelation(raw, reference = new Date()) {
   const date = parseCalendarDate(raw);
   if (!date) return null;
