@@ -85,7 +85,7 @@ const OUTSTANDING_COLUMN = {
   column: 'OutstandingAmt',
   type: 'custom',
   filterMode: 'numeric',
-  label: 'Pendiente de pago',
+  label: 'Saldo pendiente',
 };
 
 const DUE_DATE_COLUMN = {

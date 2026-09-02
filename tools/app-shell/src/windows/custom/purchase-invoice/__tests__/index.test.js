@@ -18,9 +18,13 @@ describe('PurchaseInvoiceWindow — LABEL_OVERRIDES', () => {
     assert.match(src, /en_US:\s*\{[\s\S]*?POReference:\s*'Document No\.'/);
   });
 
-  it('renames OutstandingAmt to "Pendiente de pago" / "Pending Payment"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?OutstandingAmt:\s*'Pendiente de pago'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?OutstandingAmt:\s*'Pending Payment'/);
+  // ETP-5106: the column was renamed from "Pendiente de pago" / "Pending Payment"
+  // to payment-balance wording, and es_AR — which carried no overrides at all and
+  // therefore fell through to the raw AD label ("Total Pendiente") — was added.
+  it('renames OutstandingAmt to "Saldo pendiente" / "Outstanding Amount"', () => {
+    assert.match(src, /es_ES:\s*\{[\s\S]*?OutstandingAmt:\s*'Saldo pendiente'/);
+    assert.match(src, /en_US:\s*\{[\s\S]*?OutstandingAmt:\s*'Outstanding Amount'/);
+    assert.match(src, /es_AR:\s*\{[\s\S]*?OutstandingAmt:\s*'Saldo pendiente'/);
   });
 
   // ETP-4303: the AP delivery-status column is a reception status from the buyer's
