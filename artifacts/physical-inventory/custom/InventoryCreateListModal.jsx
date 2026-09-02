@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const QTY_OPTIONS = [
   { value: 'N', key: 'qtyNotZero' },
@@ -19,17 +20,15 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
   const [submitting, setSubmitting] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
-    fetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`, { headers })
+    apiFetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((j) => setCategories(j?.items || []))
       .catch(() => {});
-  }, [base, headers]);
+  }, [base, apiFetch]);
 
   const handleGenerate = async () => {
     if (submitting) return;
@@ -42,9 +41,9 @@ export default function InventoryCreateListModal({ inventoryId, warehouseId, api
       if (categoryId) {
         body.M_Product_Category_ID = categoryId;
       }
-      const res = await fetch(`${apiBaseUrl}/inventory/${inventoryId}/action/generateList`, {
+      const res = await apiFetch(`${apiBaseUrl}/inventory/${inventoryId}/action/generateList`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify(body),
       });
       if (!res.ok) {

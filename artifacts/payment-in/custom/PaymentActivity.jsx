@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const STATUS_LABELS = {
   RPPC: 'Payment Cleared',
@@ -27,20 +28,21 @@ function todayFmt() {
  * User-added notes are stored in local state and appended to the timeline.
  */
 export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [linkedInvoices, setLinkedInvoices] = useState([]);
   const [localNotes, setLocalNotes] = useState([]);
   const [noteText, setNoteText] = useState('');
 
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) return;
+    if (!recordId || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/payment-in/finPaymentScheduleDetail?parentId=${recordId}&_startRow=0&_endRow=100`,
-          { headers },
+          {},
         );
         if (!res.ok) return;
         const details = (await res.json())?.response?.data || [];
@@ -50,7 +52,7 @@ export default function PaymentActivity({ data, recordId, token, apiBaseUrl }) {
         const invoices = [];
         await Promise.all(scheduleIds.map(async (schedId) => {
           try {
-            const r = await fetch(`${base}/sales-invoice/paymentPlan/${schedId}`, { headers });
+            const r = await apiFetch(`${base}/sales-invoice/paymentPlan/${schedId}`);
             if (!r.ok) return;
             const row = (await r.json())?.response?.data?.[0];
             if (row?.invoice) {

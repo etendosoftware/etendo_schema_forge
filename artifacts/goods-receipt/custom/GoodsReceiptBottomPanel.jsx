@@ -5,6 +5,7 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from '@/windows/custom/goods-receipt/RelatedDocuments';
 import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromPurchaseInvoiceModal from './ImportFromPurchaseInvoiceModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function GoodsReceiptBottomPanel(props) {
   return <LinesBottomSection {...props} relatedDocuments={RelatedDocuments} showTotals={false} />;
@@ -18,7 +19,8 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // Auto-open the correct modal when forceOpen is set (after save+navigate for new records).
   useEffect(() => {
@@ -79,7 +81,6 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportOrderModal(false)}
           onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
         />,
@@ -90,7 +91,6 @@ function GoodsReceiptLinesEmptyState({ data, onAddLine, canAddLine = true, recor
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportInvoiceModal(false)}
           onSuccess={() => { setShowImportInvoiceModal(false); onRefresh?.(); }}
         />,
@@ -110,7 +110,8 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // Auto-open the correct modal when forceOpen is set (after save+navigate for new records).
   useEffect(() => {
@@ -179,7 +180,6 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportOrderModal(false)}
           onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
         />,
@@ -190,7 +190,6 @@ const GoodsReceiptLineActions = forwardRef(function GoodsReceiptLineActions(
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportInvoiceModal(false)}
           onSuccess={() => { setShowImportInvoiceModal(false); onRefresh?.(); }}
         />,

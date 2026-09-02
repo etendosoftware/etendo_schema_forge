@@ -8,6 +8,7 @@ import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
 import ImportFromGoodsReturnModal from './ImportFromGoodsReturnModal';
 import ImportFromSourceInvoiceModal from './ImportFromSourceInvoiceModal';
 import { getApSubtype } from './purchaseInvoiceSubtype';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
 
@@ -39,7 +40,8 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
   const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
   const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     if (forceOpen) {
@@ -132,7 +134,6 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportReceiptModal(false)}
           onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
         />,
@@ -143,7 +144,6 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportOrderModal(false)}
           onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
         />,
@@ -154,7 +154,6 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportReturnModal(false)}
           onSuccess={() => { setShowImportReturnModal(false); onRefresh?.(); }}
         />,
@@ -165,7 +164,6 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportSourceModal(false)}
           onSuccess={() => { setShowImportSourceModal(false); onRefresh?.(); }}
         />,
@@ -189,7 +187,8 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
   const isRectificativa = getApSubtype(data) === 'RECTIFICATIVA';
   const pendingModal = useRef(isRectificativa ? 'return' : 'receipt');
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     if (forceOpen) {
@@ -252,7 +251,6 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportReceiptModal(false)}
           onSuccess={() => { setShowImportReceiptModal(false); onRefresh?.(); }}
         />,
@@ -263,7 +261,6 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportOrderModal(false)}
           onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
         />,
@@ -274,7 +271,6 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportReturnModal(false)}
           onSuccess={() => { setShowImportReturnModal(false); onRefresh?.(); }}
         />,
@@ -285,7 +281,6 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowImportSourceModal(false)}
           onSuccess={() => { setShowImportSourceModal(false); onRefresh?.(); }}
         />,

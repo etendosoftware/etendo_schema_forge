@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI, getStoredLocale } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, onClose }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
@@ -12,21 +15,17 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
   const [invalidCount, setInvalidCount] = useState(0);
   const [missingPctCount, setMissingPctCount] = useState(0);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    // Propagate the UI locale so backend AD_Message translations match the
-    // language the user selected in the frontend.
-    'Accept-Language': getStoredLocale(),
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component. It also carries
+  // Accept-Language, which this block used to add by hand: the shared builders have done
+  // that since ETP-5022, so the backend still resolves AD_Message in the UI's language.
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/header/${recordId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${apiBaseUrl}/header/${recordId}`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -44,7 +43,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [recordId, apiBaseUrl, headers]);
+  }, [recordId, apiBaseUrl, apiFetch]);
 
   const d = freshData || {};
   const name     = d.name || d.documentNo || '';
@@ -67,9 +66,9 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBaseUrl}/header/${recordId}/action/Processed`,
-        { method: 'POST', headers, body: JSON.stringify({ fieldValues: { Processed: 'Y' } }) },
+        { method: 'POST', body: JSON.stringify({ fieldValues: { Processed: 'Y' } }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

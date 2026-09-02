@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import {
   DocChip,
   RelatedDocumentsShell,
@@ -66,8 +67,7 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   if (paymentIds.length === 0) return [];
   const base = neoBase(apiBaseUrl);
   const results = await Promise.all(paymentIds.map(id =>
-    fetch(`${base}/payment-in/finPayment/${id}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    apiFetch(`${base}/payment-in/finPayment/${id}`, {
     })
       .then(r => r.ok ? r.json() : null)
       .then(j => j?.response?.data?.[0] || null)
@@ -77,6 +77,8 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
 }
 
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
@@ -113,9 +115,9 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
 
     // Shipments via criteria; invoices via listInvoices action (finds all, even when C_Order_ID is null)
     const shipmentPromise = fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', recordId, token, apiBaseUrl);
-    const invoicePromise = fetch(
+    const invoicePromise = apiFetch(
       `${apiBaseUrl}/header/${recordId}/action/listInvoices`,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      { },
     )
       .then(r => r.ok ? r.json() : null)
       .then(j => j?.response?.data ?? [])

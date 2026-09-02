@@ -4,6 +4,7 @@ import { LinesBottomSection, LinesEmptyState } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 import RelatedDocuments from './RelatedDocuments';
 import ImportFromShipmentModal from '@/windows/custom/return-material-receipt/ImportFromShipmentModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function ReturnMaterialReceiptBottomPanel(props) {
   // Import-only lines (ETP-4462): this window sets `window.maxDetailLines: 0`,
@@ -58,7 +59,8 @@ function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBas
   const [showModal, setShowModal] = useState(false);
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -104,7 +106,6 @@ function ReturnReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBas
           targetId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); onRefresh?.(); }}
         />
@@ -122,7 +123,8 @@ const ReturnReceiptLineActions = forwardRef(function ReturnReceiptLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -165,7 +167,6 @@ const ReturnReceiptLineActions = forwardRef(function ReturnReceiptLineActions(
           targetId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); onRefresh?.(); }}
         />,

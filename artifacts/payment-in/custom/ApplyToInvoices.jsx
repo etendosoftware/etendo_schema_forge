@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function formatAmount(value, currency) {
   const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
@@ -52,14 +53,13 @@ export default function ApplyToInvoices({
     return apiBaseUrl.replace(/\/[^/]+$/, '');
   }, [apiBaseUrl]);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // Fetch pending invoices when BP changes
   useEffect(() => {
-    if (!businessPartnerId || !recordId || !token || !base) {
+    if (!businessPartnerId || !recordId || !base) {
       setInvoices([]);
       setSelected(new Set());
       setAmounts({});
@@ -72,9 +72,9 @@ export default function ApplyToInvoices({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/payment-in/finPayment/${recordId}/action/pendingInvoices?bpartnerId=${businessPartnerId}`,
-          { headers },
+          {},
         );
         if (!res.ok) throw new Error(`Failed to fetch pending invoices (${res.status})`);
         const json = await res.json();
@@ -99,7 +99,7 @@ export default function ApplyToInvoices({
 
     fetchInvoices();
     return () => { cancelled = true; };
-  }, [businessPartnerId, recordId, token, base, headers]);
+  }, [businessPartnerId, recordId, token, base, apiFetch]);
 
   // Selection helpers
   const toggleLine = useCallback((scheduleId) => {
@@ -167,11 +167,11 @@ export default function ApplyToInvoices({
 
     try {
       // Step 1: Apply payment to selected invoices
-      const applyRes = await fetch(
+      const applyRes = await apiFetch(
         `${base}/payment-in/finPayment/${recordId}/action/applyToInvoices`,
         {
           method: 'POST',
-          headers,
+          
           body: JSON.stringify({ invoices: selectedInvoices }),
         },
       );
@@ -182,11 +182,11 @@ export default function ApplyToInvoices({
       }
 
       // Step 2: Process Payment (aPRMProcessPayment action)
-      const processRes = await fetch(
+      const processRes = await apiFetch(
         `${base}/payment-in/finPayment/${recordId}/action/aPRMProcessPayment`,
         {
           method: 'POST',
-          headers,
+          
           body: JSON.stringify({}),
         },
       );
@@ -204,7 +204,7 @@ export default function ApplyToInvoices({
     } finally {
       setSaving(false);
     }
-  }, [invoices, selected, amounts, totalApplied, paymentNum, base, recordId, headers, onRefresh, onSave, isDirty]);
+  }, [invoices, selected, amounts, totalApplied, paymentNum, base, recordId, apiFetch, onRefresh, onSave, isDirty]);
 
   // No business partner selected
   if (!businessPartnerId) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_ICONS, CHIP_COLORS, neoBase, fetchById } from '@/components/related-documents';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * RelatedDocuments for Payment Out.
@@ -11,6 +12,8 @@ import { useUI } from '@/i18n';
  * Then fetches the invoice header for documentStatus badge.
  */
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -18,18 +21,17 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const ui = useUI();
 
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) { setLoading(false); return; }
+    if (!recordId || !apiBaseUrl) { setLoading(false); return; }
     setLoading(true);
 
     const base = neoBase(apiBaseUrl);
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     (async () => {
       try {
         // Step 1: Get schedule details for this payment
-        const detailRes = await fetch(
+        const detailRes = await apiFetch(
           `${base}/payment-out/finPaymentScheduleDetail?parentId=${recordId}&_startRow=0&_endRow=100`,
-          { headers },
+          {},
         );
         if (!detailRes.ok) { setLoading(false); return; }
         const details = (await detailRes.json())?.response?.data || [];

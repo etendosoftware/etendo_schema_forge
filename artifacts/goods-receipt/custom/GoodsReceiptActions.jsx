@@ -10,6 +10,7 @@ import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -42,10 +43,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     token,
     apiBaseUrl,
   });
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     const handler = () => setShowConfirm(true);
@@ -66,11 +66,11 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/return-to-vendor-shipment/returnToVendorShipment/_/action/availableReceiptLines`,
           {
             method: 'POST',
-            headers,
+            
             body: JSON.stringify({ receiptId: recordId, businessPartner: bpId }),
           },
         );
@@ -80,15 +80,15 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [wizardOpen, recordId, base, headers, data?.businessPartner]);
+  }, [wizardOpen, recordId, base, apiFetch, data?.businessPartner]);
 
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/createPurchaseInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -164,7 +164,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
             <ConfirmReceiptInvoicedModal
               data={data}
               base={base}
-              headers={headers}
               recordId={recordId}
               onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
               onClose={() => setShowConfirm(false)}
@@ -175,7 +174,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
             <ConfirmGoodsReceiptModal
               data={data}
               base={base}
-              headers={headers}
               recordId={recordId}
               onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
               onClose={() => setShowConfirm(false)}
@@ -265,7 +263,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         receiptData={data}
         lines={returnLines}
         base={base}
-        headers={headers}
         onSuccess={(result) => { setWizardOpen(false); setReturnedDoc(result); }}
         onError={(msg) => toast.error(msg)}
       />
@@ -275,7 +272,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           receiptId={recordId}
           data={data}
           base={base}
-          headers={headers}
           onClose={() => setShowClone(false)}
           onCloned={(newId) => { setShowClone(false); navigate(`/goods-receipt/${newId}`); }}
         />,
@@ -287,7 +283,8 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
 // ── ConfirmReceiptInvoicedModal (variant B — receipt already fully invoiced) ──
 
-function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirmed, onClose }) {
+function ConfirmReceiptInvoicedModal({ data, base, recordId, onConfirmed, onClose }) {
+  const apiFetch = useApiFetch(base);
   const ui = useUI();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -310,9 +307,9 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+        { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -432,7 +429,8 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
 
 // ── CloneReceiptModal ─────────────────────────────────────────────────────────
 
-function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
+function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) {
+  const apiFetch = useApiFetch(base);
   const ui = useUI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -444,12 +442,12 @@ function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=999`, { headers })
+    apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=999`)
       .then(r => r.ok ? r.json() : null)
       .then(json => { if (!cancelled) setLines(json?.response?.data ?? []); })
       .catch(() => { if (!cancelled) setLines([]); });
     return () => { cancelled = true; };
-  }, [receiptId, base, headers]);
+  }, [receiptId, base, apiFetch]);
 
   const statusMap = {
     DR: { label: ui('orderStatusDraft'), bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
@@ -463,7 +461,7 @@ function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST', headers });
+      const res = await apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST' });
       const json = await res.json();
       if (!res.ok) {
         setError(json?.response?.error?.message || ui('cloneReceiptError'));

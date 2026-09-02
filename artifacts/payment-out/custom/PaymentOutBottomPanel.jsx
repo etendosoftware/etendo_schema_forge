@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
 
@@ -121,17 +122,17 @@ function DatosSection({ data, ui }) {
 const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState(null);
   const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}` };
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-out/lines?parentId=${data.id}&_startRow=0&_endRow=200`, { headers });
+        const res = await apiFetch(`${base}/payment-out/lines?parentId=${data.id}&_startRow=0&_endRow=200`);
         if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
         const rows = (await res.json())?.response?.data || [];
         if (!cancelled) setLines(rows);
@@ -209,6 +210,8 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
 }
 
 export default function PaymentOutBottomPanel({ data, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

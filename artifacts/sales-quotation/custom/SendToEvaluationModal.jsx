@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -16,18 +17,17 @@ export default function SendToEvaluationModal({
   const [lineCount, setLineCount] = useState(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${entityUrl}/${quotationId}`, { headers }),
-          fetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${entityUrl}/${quotationId}`),
+          apiFetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -42,7 +42,7 @@ export default function SendToEvaluationModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [quotationId, entityUrl, apiBaseUrl, headers]);
+  }, [quotationId, entityUrl, apiBaseUrl, apiFetch]);
 
   const d              = freshData || data || {};
   const documentNo     = d.documentNo || '';
@@ -69,9 +69,9 @@ export default function SendToEvaluationModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${entityUrl}/${quotationId}/action/DocAction`,
-        { method: 'POST', headers, body: JSON.stringify({ fieldValues: {} }) },
+        { method: 'POST', body: JSON.stringify({ fieldValues: {} }) },
       );
       if (!res.ok) {
         const errJson = await res.json().catch(() => null);

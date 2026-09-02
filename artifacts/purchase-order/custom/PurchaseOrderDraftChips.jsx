@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { getProgressTone } from '@/lib/progressTone';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const CRITERIA = (field, value) =>
   encodeURIComponent(JSON.stringify([{ fieldName: field, operator: 'equals', value }]));
@@ -24,17 +25,14 @@ export default function PurchaseOrderDraftChips({ data, recordId, token, apiBase
     let cancelled = false;
 
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+  const apiFetch = useApiFetch(apiBaseUrl);
 
     Promise.all([
-      fetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`, { headers })
+      apiFetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`)
         .then(r => r.ok ? r.json() : null)
         .then(j => j?.response?.data ?? [])
         .catch(() => []),
-      fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`, { headers })
+      apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`)
         .then(r => r.ok ? r.json() : null)
         .then(j => j?.response?.data ?? [])
         .catch(() => []),

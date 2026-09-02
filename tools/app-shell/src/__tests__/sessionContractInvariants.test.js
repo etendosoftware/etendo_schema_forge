@@ -220,45 +220,6 @@ const G1_DEBT = new Set([
   // (see ARTIFACTS above) surfaced these at once; they were never swept because no
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
-  'artifacts/amortization/custom/AmortizationConfirmModal.jsx',
-  'artifacts/goods-receipt/custom/GoodsReceiptActions.jsx',
-  'artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx',
-  'artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx',
-  'artifacts/goods-shipment/custom/GoodsShipmentActions.jsx',
-  'artifacts/goods-shipment/custom/GoodsShipmentBottomPanel.jsx',
-  'artifacts/internal-consumption/custom/InternalConsumptionActions.jsx',
-  'artifacts/payment-in/custom/ApplyToInvoices.jsx',
-  'artifacts/payment-in/custom/NewPaymentModal.jsx',
-  'artifacts/payment-in/custom/PaymentActivity.jsx',
-  'artifacts/payment-in/custom/PaymentActivityPanel.jsx',
-  'artifacts/payment-in/custom/PaymentBottomPanel.jsx',
-  'artifacts/payment-in/custom/PaymentSummaryCard.jsx',
-  'artifacts/payment-in/custom/RelatedDocuments.jsx',
-  'artifacts/payment-out/custom/PaymentOutBottomPanel.jsx',
-  'artifacts/payment-out/custom/RelatedDocuments.jsx',
-  'artifacts/physical-inventory/custom/GenerateLinesModal.jsx',
-  'artifacts/physical-inventory/custom/InventoryCreateListModal.jsx',
-  'artifacts/physical-inventory/custom/InventoryMenuContent.jsx',
-  'artifacts/physical-inventory/custom/InventoryTopbarActions.jsx',
-  'artifacts/purchase-invoice/custom/PurchaseInvoiceBottomPanel.jsx',
-  'artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx',
-  'artifacts/purchase-order/custom/PurchaseOrderActions.jsx',
-  'artifacts/purchase-order/custom/PurchaseOrderDraftChips.jsx',
-  'artifacts/return-material-receipt/custom/ReturnMaterialReceiptBottomPanel.jsx',
-  'artifacts/return-to-vendor-shipment/custom/ReturnToVendorShipmentBottomPanel.jsx',
-  'artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx',
-  'artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx',
-  'artifacts/sales-invoice/custom/PaymentPlanBlock.jsx',
-  'artifacts/sales-order/custom/BulkOrderMoreMenu.jsx',
-  'artifacts/sales-order/custom/OrderConfirmModal.jsx',
-  'artifacts/sales-order/custom/OrderCreateInvoice.jsx',
-  'artifacts/sales-order/custom/OrderDraftChips.jsx',
-  'artifacts/sales-order/custom/RelatedDocuments.jsx',
-  'artifacts/sales-quotation/custom/CreateRejectReasonModal.jsx',
-  'artifacts/sales-quotation/custom/QuotationConfirmModal.jsx',
-  'artifacts/sales-quotation/custom/QuotationTopbarActions.jsx',
-  'artifacts/sales-quotation/custom/RejectQuotationModal.jsx',
-  'artifacts/sales-quotation/custom/SendToEvaluationModal.jsx',
   'components/contract-ui/PriceListPicker.jsx',
 ]);
 
@@ -279,14 +240,6 @@ const G2_DEBT = new Set([
   // Same measured-not-migrated batch as G1's. A `!token` gate here is the silent
   // failure at its most literal: the window's panel renders, and its action simply
   // never fires.
-  'artifacts/payment-in/custom/ApplyToInvoices.jsx',
-  'artifacts/payment-in/custom/PaymentActivity.jsx',
-  'artifacts/payment-in/custom/PaymentActivityPanel.jsx',
-  'artifacts/payment-in/custom/PaymentBottomPanel.jsx',
-  'artifacts/payment-in/custom/PaymentSummaryCard.jsx',
-  'artifacts/payment-out/custom/PaymentOutBottomPanel.jsx',
-  'artifacts/payment-in/custom/RelatedDocuments.jsx',
-  'artifacts/payment-out/custom/RelatedDocuments.jsx',
 ]);
 
 /**
@@ -304,39 +257,16 @@ const G3_DEBT = new Set([
   // (see ARTIFACTS above) surfaced these at once; they were never swept because no
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
-  'artifacts/amortization/custom/AmortizationConfirmModal.jsx',
-  'artifacts/goods-receipt/custom/GoodsReceiptActions.jsx',
   'artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx',
   'artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx',
-  'artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx',
-  'artifacts/goods-shipment/custom/GoodsShipmentActions.jsx',
-  'artifacts/goods-shipment/custom/ReturnWizard.jsx',
-  'artifacts/internal-consumption/custom/InternalConsumptionActions.jsx',
-  'artifacts/payment-in/custom/ApplyToInvoices.jsx',
-  'artifacts/payment-in/custom/NewPaymentModal.jsx',
-  'artifacts/payment-in/custom/PaymentActivityPanel.jsx',
-  'artifacts/physical-inventory/custom/GenerateLinesModal.jsx',
-  'artifacts/physical-inventory/custom/InventoryCreateListModal.jsx',
-  'artifacts/physical-inventory/custom/InventoryMenuContent.jsx',
-  'artifacts/physical-inventory/custom/InventoryTopbarActions.jsx',
   'artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx',
   'artifacts/purchase-invoice/custom/ImportFromGoodsReturnModal.jsx',
   'artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx',
   'artifacts/purchase-invoice/custom/ImportFromSourceInvoiceModal.jsx',
-  'artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx',
-  'artifacts/purchase-order/custom/PurchaseOrderActions.jsx',
   'artifacts/sales-invoice/custom/ImportFromOrderModal.jsx',
   'artifacts/sales-invoice/custom/ImportFromReturnShipmentModal.jsx',
   'artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx',
   'artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx',
-  'artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx',
-  'artifacts/sales-order/custom/BulkOrderMoreMenu.jsx',
-  'artifacts/sales-order/custom/OrderConfirmModal.jsx',
-  'artifacts/sales-order/custom/OrderCreateInvoice.jsx',
-  'artifacts/sales-quotation/custom/CreateRejectReasonModal.jsx',
-  'artifacts/sales-quotation/custom/QuotationConfirmModal.jsx',
-  'artifacts/sales-quotation/custom/RejectQuotationModal.jsx',
-  'artifacts/sales-quotation/custom/SendToEvaluationModal.jsx',
 ]);
 
 const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const STORAGE_KEY = 'bulkActionResult';
 const COMPLETED = 'CO';
@@ -40,9 +41,9 @@ const DRAFT = 'DR';
 // { exists, count, id?, documentNo? } for a single sales-order ID. On a network
 // error the check fails open (lets the create call proceed) — matching the
 // "fail-open" pattern in OrderCreateInvoice.jsx.
-async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
+async function hasDraftInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`, { headers });
+    const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
     if (!res.ok) return false;
     const data = (await res.json())?.response?.data;
     return Boolean(data?.exists);
@@ -54,13 +55,13 @@ async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
 // No checkDraftShipment endpoint exists yet, so we query the goods-shipment
 // entity directly filtered by salesOrder — same pattern used in
 // OrderCreateInvoice.jsx for the single-record flow.
-async function hasDraftShipment(orderId, apiBaseUrl, headers) {
+async function hasDraftShipment(orderId, apiBaseUrl) {
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const criteria = encodeURIComponent(JSON.stringify([
       { fieldName: 'salesOrder', operator: 'equals', value: orderId },
     ]));
-    const res = await fetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`, { headers });
+    const res = await apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`);
     if (!res.ok) return false;
     const shipments = (await res.json())?.response?.data ?? [];
     return shipments.some((s) => s.documentStatus === DRAFT);
@@ -70,10 +71,7 @@ async function hasDraftShipment(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+  const apiFetch = useApiFetch(apiBaseUrl);
   const isInvoice = action === 'createDraftInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -90,16 +88,16 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
       // proceed; the backend handler then rejects with "no pending lines" for
       // fully-fulfilled orders, which we surface as the row failure message.
       const alreadyHasDraft = isInvoice
-        ? await hasDraftInvoice(row.id, apiBaseUrl, headers)
-        : await hasDraftShipment(row.id, apiBaseUrl, headers);
+        ? await hasDraftInvoice(row.id, apiBaseUrl)
+        : await hasDraftShipment(row.id, apiBaseUrl);
       if (alreadyHasDraft) {
         const messageKey = isInvoice ? 'soBulkOrderHasDraftInvoice' : 'soBulkOrderHasDraftShipment';
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await apiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({}),
       });
       if (!res.ok) {

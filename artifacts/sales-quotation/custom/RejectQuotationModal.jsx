@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import CreateRejectReasonModal from './CreateRejectReasonModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Reject confirmation for Sales Quotation in Under Evaluation (UE).
@@ -37,10 +38,9 @@ export default function RejectQuotationModal({
   const blurTimeoutRef = useRef(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // The selector URL mirrors the one EntityForm builds for the rejectReason
   // field (see tools/app-shell/src/components/contract-ui/EntityForm.jsx:626).
@@ -49,7 +49,7 @@ export default function RejectQuotationModal({
   useEffect(() => {
     let cancelled = false;
     setLoadingReasons(true);
-    fetch(`${reasonsUrl}?limit=200&offset=0`, { headers })
+    apiFetch(`${reasonsUrl}?limit=200&offset=0`)
       .then((res) => (res.ok ? res.json() : null))
       .then((payload) => {
         if (cancelled) return;
@@ -69,7 +69,7 @@ export default function RejectQuotationModal({
         setLoadingReasons(false);
       });
     return () => { cancelled = true; };
-  }, [reasonsUrl, headers]);
+  }, [reasonsUrl, apiFetch]);
 
   const documentNo = data?.documentNo || '';
 
@@ -113,11 +113,11 @@ export default function RejectQuotationModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${entityUrl}/${quotationId}/action/rejectQuotation`,
         {
           method: 'POST',
-          headers,
+          
           body: JSON.stringify({ rejectReason: selected.id }),
         },
       );

@@ -29,9 +29,12 @@ describe('InternalConsumptionActions', () => {
     assert.match(src, /\/internalConsumption\/\$\{recordId\}\/action\/processNow/);
   });
 
-  it('uses method POST with an Authorization Bearer header', () => {
+  // ETP-4576 — the credential is apiFetch's, not the component's: it picks the active
+  // scheme's headers and the CSRF proof. A hand-built Authorization here would be the bug.
+  it('POSTs through apiFetch, never a hand-built credential header', () => {
     assert.match(src, /method:\s*'POST'/);
-    assert.match(src, /Authorization:\s*`Bearer \$\{token\}`/);
+    assert.match(src, /apiFetch\(/);
+    assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
   it('sends a flat { action: VO } body (NOT the old CO process, NOT wrapped in fieldValues)', () => {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import InventoryCreateListModal from './InventoryCreateListModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function IconBtn({ label, onClick, disabled, children }) {
   const [rect, setRect] = useState(null);
@@ -54,6 +55,8 @@ function IconBtn({ label, onClick, disabled, children }) {
 }
 
 export default function InventoryTopbarActions({ data, recordId, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -66,9 +69,8 @@ export default function InventoryTopbarActions({ data, recordId, token, apiBaseU
     if (updating) return;
     setUpdating(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
+      const res = await apiFetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
       if (!res.ok) {

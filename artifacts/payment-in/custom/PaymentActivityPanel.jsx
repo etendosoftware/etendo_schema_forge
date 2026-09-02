@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const STATUS_LABELS = {
   RPPC: 'statusCleared',
@@ -33,6 +34,8 @@ function todayFmt() {
  * - Timeline styled with vertical connecting line and dot markers.
  */
 export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [linkedInvoices, setLinkedInvoices] = useState([]);
   const [persistedNotes, setPersistedNotes] = useState([]);
   const [noteText, setNoteText] = useState('');
@@ -79,15 +82,14 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
 
   // Fetch linked invoices
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) return;
+    if (!recordId || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/payment-in/finPaymentScheduleDetail?parentId=${recordId}&_startRow=0&_endRow=100`,
-          { headers },
+          {},
         );
         if (!res.ok) return;
         const details = (await res.json())?.response?.data || [];
@@ -97,7 +99,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
         const invoices = [];
         await Promise.all(scheduleIds.map(async (schedId) => {
           try {
-            const r = await fetch(`${base}/sales-invoice/paymentPlan/${schedId}`, { headers });
+            const r = await apiFetch(`${base}/sales-invoice/paymentPlan/${schedId}`);
             if (!r.ok) return;
             const row = (await r.json())?.response?.data?.[0];
             if (row?.invoice) {
@@ -116,9 +118,8 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
 
   // Save note to description field via PATCH
   const saveNoteToDescription = useCallback(async (noteTextValue) => {
-    if (!recordId || !token || !apiBaseUrl) return false;
+    if (!recordId || !apiBaseUrl) return false;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     // Build updated description: append new timestamped note
     const timestamp = new Date().toISOString();
@@ -127,11 +128,11 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
     const updatedDesc = currentDesc ? `${currentDesc}\n${newLine}` : newLine;
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/payment-in/finPayment/${recordId}`,
         {
           method: 'PATCH',
-          headers,
+          
           body: JSON.stringify({ description: updatedDesc }),
         },
       );

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function MiniCheck({ checked, onChange }) {
   return (
@@ -78,6 +79,8 @@ export default function ReturnWizard({
   onSuccess,
   onError,
 }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch(apiBaseUrl);
   const ui = useUI();
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState(() => new Set());
@@ -102,9 +105,8 @@ export default function ReturnWizard({
       const orderId = shipmentData?.salesOrder;
       if (orderId && token && apiBaseUrl) {
         const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
         // Fetch order header for currency
-        fetch(`${base}/sales-order/header/${orderId}`, { headers })
+        apiFetch(`${base}/sales-order/header/${orderId}`)
           .then(r => r.ok ? r.json() : null)
           .then(j => {
             const order = j?.response?.data?.[0];
@@ -112,7 +114,7 @@ export default function ReturnWizard({
           })
           .catch(() => {});
         // Fetch order lines for prices
-        fetch(`${base}/sales-order/lines?parentId=${orderId}&_limit=200`, { headers })
+        apiFetch(`${base}/sales-order/lines?parentId=${orderId}&_limit=200`)
           .then(r => r.ok ? r.json() : { response: { data: [] } })
           .then(j => {
             const orderLines = j.response?.data || [];
@@ -168,14 +170,13 @@ export default function ReturnWizard({
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
       const payload = {
         lines: selectedLines.map((l) => ({ lineId: l.id, returnQuantity: quantities[l.id] })),
         reason,
       };
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBaseUrl}/goodsShipment/${shipmentData.id}/action/createReturn`,
-        { method: 'POST', headers, body: JSON.stringify(payload) },
+        { method: 'POST', body: JSON.stringify(payload) },
       );
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));

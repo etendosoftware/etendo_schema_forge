@@ -9,6 +9,7 @@ import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
 import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function CopyIcon() {
   return (
@@ -43,10 +44,9 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [showReject, setShowReject] = useState(false);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const status = data?.documentStatus;
 
@@ -95,7 +95,6 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           recordId={recordId}
           data={data}
           apiBaseUrl={apiBaseUrl}
-          headers={headers}
           cloneActionName="cloneRecord"
           headerEntity="quotation"
           onClose={() => setShowClone(false)}
