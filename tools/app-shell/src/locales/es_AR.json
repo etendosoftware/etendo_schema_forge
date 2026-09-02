@@ -17974,6 +17974,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferRateMissing": "No hay tasa de cambio vigente de {from} a {to}. Ingresala manualmente.",
     "cpPendingPrefix": "Pendiente",
     "cpLeaveCredit": "Dejar a crédito",
     "cpLeaveCreditHint": "{amount} a favor del tercero",

@@ -18308,6 +18308,7 @@
     "financeAccountTransferFx": "Currency conversion",
     "financeAccountTransferRate": "Conversion rate",
     "financeAccountTransferRatePlaceholder": "1.00",
+    "financeAccountTransferRateMissing": "No current exchange rate from {from} to {to}. Enter it manually.",
     "financeAccountTransferReceiveAmount": "Destination account will receive",
     "financeAccountTransferBankFee": "Apply bank fee",
     "financeAccountTransferBankFeeFrom": "Fee · source",

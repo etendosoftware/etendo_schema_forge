@@ -793,10 +793,55 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 "Transfer funds" moves money between two financial accounts of the organization. Two entry points:
 
-- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source.
+- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source. Both mount sites must pass the modal's **`onSuccess`** callback to refresh their own data: this one passed `onDone` until ETP-5100, and since React silently drops an unknown prop, a transfer launched from here went through correctly but left the grid showing stale balances — which reads as "nothing happened" and invites a duplicate transfer. Guarded by `tools/app-shell/test/funds-transfer-props.test.js`.
 - **Account detail** → the **Transferir fondos** item inside the Movements toolbar split-button (▾ next to "Nuevo movimiento"), with the current account as source.
 
 Both render `windows/custom/financial-account/FundsTransferModal.jsx` — a single-step modal (shared `@/components/ui/dialog`, with inline searchable dropdowns so wheel/touchpad scrolling works inside the modal). Fields: source account (pre-filled, read-only, with available balance), destination account (searchable; other org accounts), **accounting item / GL (required, searchable)**, amount (currency symbol via the shared `formatCurrency`), currency-conversion block (shown only when the destination currency differs — multi-currency; the "Tasa de conversión" rate field with the source→destination currency badges alongside its label, no separate "Conversión de divisa" heading — plus, inline next to the rate input, a compact read-only "≈ {amount}" box, `data-testid="transfer-receive-amount"`, previewing `amount × rate` in the destination currency via `formatCurrency`; shows "—" until both amount and rate are valid positive numbers), Bank Fee checkbox (reveals two fee fields — source and destination — mirroring Classic), description (default "Funds Transfer Transaction"). Client guards: destination + accounting item required, amount > 0, amount ≤ source balance; the backend re-validates and rejects same-account / over-balance / cross-org transfers. On confirm it calls `useFundsTransfer()` → `POST …financial-account-transactions?action=transfer`; the backend delegates to Etendo Classic's `FundsTransferActionHandler.createTransfer(...)`, creating the paired withdrawal (source) + deposit (destination) — plus optional bank-fee expenses on the source and/or destination — left **Pending** (`PWNC` / `RDNC`) until reconciled.
+
+**The conversion rate is prefilled, not typed blind.** When the two accounts hold different currencies the rate field seeds itself from the system rate for the pair, via the shared `useConversionRate` hook (`windows/custom/shared/useConversionRate.js`, written for the Cobros/Pagos modal in ETP-4504) → `GET /sws/neo/validate-exchange-rate`. Three things about that call are load-bearing:
+
+- **The date is today** (`todayCalendarISO()`, not `toISOString()`, per the date-only policy). The transfer payload carries no `transferDate`, so Classic dates the document today — asking for any other day's rate would book a document at a rate that was never in force for it.
+- **`apiBaseUrl` is `${getApiBase()}/sws/neo/financial-account-transactions`.** The hook strips the LAST path segment, and `validate-exchange-rate` hangs off `/sws/neo` with no entity segment — `/sws/neo/<spec>/validate-exchange-rate` is a 404. Passing this modal's own endpoint leaves exactly `/sws/neo`.
+- **The token comes from `useAuthOptional()`, never `useAuth()`.** `useAuth` throws outside an `AuthProvider`, which would take the whole modal down in any context that lacks one (the existing test suite included); without a token the hook simply returns no rate and the field stays manual. See `docs/request-policy.md`.
+
+The seeding effect keys on `[multiCurrency, source.currencyIso, dest.currencyIso, conversion.rate]`, so **a manual edit stands until the currency pair itself changes** (the field is still fully editable — a user who wants a different rate just types it). The clear on a pair change matters as much as the prefill: without it a hand-typed EUR→USD rate would survive a switch of destination to GBP and book one pair at another pair's rate — the ETP-4504 W1 failure, which would otherwise replay here verbatim. Moving to a same-currency destination empties the field and drops `conversionRate` from the payload entirely.
+
+When the pair has **no rate on file** (`hasRate: false`, after loading settles) the field stays empty and a hint renders below it — `data-testid="transfer-rate-missing"`, i18n key `financeAccountTransferRateMissing` with `{from}`/`{to}`. It is deliberately not a blocker: Confirm already requires a positive rate, so the user types it and continues. The point is to explain why it prefilled last time and not this time. Note the endpoint already falls back to the **inverse** direction (`TO→FROM`, returning `1/rate`, `NeoExchangeRateService:107`), so this hint means neither direction is configured. Unlike the Cobros/Pagos modal there is **no `rateIsOne` guard** here — `FinancialAccountTransactionsSupport.resolveConversionRate` passes the user's value straight through to Classic rather than 400-ing on 1.0, so adding one would be a new business rule, not parity.
+
+**The movements list orders by the CALENDAR DAY, not the raw timestamp** (ETP-5100):
+`ORDER BY TO_CHAR(ft.statementdate,'YYYY-MM-DD') DESC, ft.line DESC`, and the running-balance
+window uses the same key so the Saldo column keeps matching the order it is displayed against.
+`statementdate` is declared `Date` in the AD, so a time-of-day in it is noise and must not
+participate in the sort. Sorting on the raw value let any row that happened to carry a wall-clock
+time float above movements created LATER the same day at 00:00 — a transfer stamped 23:11 sat
+above a manual movement created at 23:15, and the newest row was not on top. Truncating in the
+query fixes the rows already stored that way as well, so no data migration was needed. `TO_CHAR`
+rather than a cast: it truncates identically on PostgreSQL and Oracle (an Oracle `DATE` keeps
+seconds), and `'YYYY-MM-DD'` sorts lexicographically the same as chronologically.
+
+**The transfer is dated with a date-only value** (`transferDate: todayCalendarISO()`), so the
+backend stores local midnight. Omitting it let Classic stamp `now()` — a wall-clock time in a
+column the Application Dictionary declares as type **`Date`**, where the time is not a datum.
+Two things broke because of it: (a) the movements list orders by `statementdate DESC, line DESC`,
+so a transfer stamped 23:11 sorted *above* a manual movement created later the same day at 00:00,
+and the newest row was not on top; (b) it was the only flow producing an evening timestamp, which
+is what exposed the UTC-rendering bug below. Every other flow in the app already sends a date-only
+value. It also makes the document date and the date the conversion rate was looked up for the same
+day by contract instead of by coincidence.
+
+**Business dates are rendered through `formatCalendarDate`, never in UTC** (ETP-5100). Three
+helpers here — `MovementsTable.formatDate`, `StatementLinesInline.formatDate` and the shared
+`lib/formatSigned.formatDate` (used by the reconciliation panel, cash close, `ReconciledTxnsModal`,
+`ClearedItemsInline` and `ReconciliationListTable`) — used to do `new Date(iso)` +
+`Intl.DateTimeFormat(..., timeZone: 'UTC')`, on the premise that the backend always sent UTC
+midnight. That premise held only while the backend was ALSO formatting in UTC; the two errors
+cancelled for midnight values and both surfaced for anything else. A movement created at 22:59
+local (UTC-3) displayed as the next day and was filtered out of "Últimos 30 días" entirely — the
+row was in the database and in the balance, but not in the list. `formatCalendarDate`
+(`lib/dateOnly.js`) reads the leading `yyyy-MM-dd` and builds the Date with the local-time
+constructor, so it is correct for either wire shape. The `AutoMatchSuggestionModal` already used
+it; these three were the stragglers. Backend counterpart and the full write-up:
+`com.etendoerp.go/docs/neo-headless.md` §4.3.1.
 
 **A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
 

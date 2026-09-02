@@ -15,6 +15,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
 import { MovementRowKebab } from './MovementRowKebab';
@@ -23,18 +24,22 @@ import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financ
 import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
- * Formats an ISO date string using the user's locale. The movement date is a
- * date-only value the backend sends as UTC midnight (e.g. "2026-06-10T00:00:00Z"),
- * so it MUST be formatted in UTC — otherwise a negative-offset timezone (e.g.
- * UTC-3) shifts it to the previous calendar day (showing 09/06 for a 10/06 date).
+ * Formats a business date for display, via the canonical `formatCalendarDate`.
+ *
+ * It reads the leading `yyyy-MM-dd` and builds the Date with the LOCAL-time
+ * constructor, so the calendar day survives regardless of the host's offset —
+ * and regardless of whether the payload carries a zone suffix.
+ *
+ * This used to be `new Date(iso)` + `Intl.DateTimeFormat(..., timeZone: 'UTC')`,
+ * on the premise that the backend always sent UTC midnight. ETP-5100 removed
+ * that premise (NEO now emits the civil `yyyy-MM-dd'T'HH:mm:ss` in the server's
+ * own zone), and the two UTC assumptions then stacked instead of cancelling:
+ * `new Date("2026-09-01T22:59:10")` parses as LOCAL, and rendering that instant
+ * back in UTC pushed it to 02/09. Going through the shared helper removes the
+ * assumption entirely rather than swapping it for the opposite one.
  */
 function formatDate(isoString, bcpLocale) {
-  if (!isoString) return '—';
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(bcpLocale, {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-  }).format(d);
+  return formatCalendarDate(isoString, bcpLocale);
 }
 
 const SKELETON_ROWS = [1, 2, 3, 4, 5];
