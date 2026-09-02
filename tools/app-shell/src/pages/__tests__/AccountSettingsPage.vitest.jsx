@@ -44,15 +44,26 @@ vi.mock('@/auth/useLogout.js', () => ({
 
 // The dialog itself is covered by ChangePasswordDialog.vitest.jsx; here it only has to be able to
 // report success, which is the behaviour this page owns.
+const changePasswordDialogRender = vi.fn();
 vi.mock('@/components/ChangePasswordDialog.jsx', () => ({
-  ChangePasswordDialog: ({ open, onSuccess, onOpenChange }) => (open ? (
-    <div data-testid="change-password-dialog">
-      <button type="button" data-testid="change-password-success" onClick={onSuccess} />
-      <button type="button" data-testid="change-password-close"
-              onClick={() => onOpenChange?.(false)} />
-    </div>
-  ) : null),
+  ChangePasswordDialog: (props) => {
+    changePasswordDialogRender(props);
+    const { open, onSuccess, onOpenChange, hasPassword } = props;
+    return open ? (
+      <div data-testid="change-password-dialog" data-has-password={String(hasPassword)}>
+        <button type="button" data-testid="change-password-success" onClick={onSuccess} />
+        <button type="button" data-testid="change-password-close"
+                onClick={() => onOpenChange?.(false)} />
+      </div>
+    ) : null;
+  },
 }));
+
+function lastDialogProps() {
+  const calls = changePasswordDialogRender.mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  return calls[calls.length - 1][0];
+}
 
 import { AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
 import AccountSettingsPage from '../AccountSettingsPage.jsx';
@@ -458,5 +469,98 @@ describe('AccountSettingsPage', () => {
     expect(screen.getByTestId('account-settings-page')).toBeInTheDocument();
     expect(screen.getByText('accountSettingsTitle')).toBeInTheDocument();
     await screen.findByTestId('account-security-section');
+  });
+
+  describe('telling the password form what the account already has', () => {
+    const SSO_ONLY = {
+      password: { enabled: false },
+      identities: [{ provider: 'google', email: 'u@e.com' }],
+      removable: [],
+    };
+
+    it('reports hasPassword true when the server says the password is enabled', async () => {
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-security-section');
+
+      expect(lastDialogProps().hasPassword).toBe(true);
+    });
+
+    it('reports hasPassword false for an SSO-only account, which opens the enrolment', async () => {
+      fetchAccount.mockResolvedValue({ authMethods: SSO_ONLY });
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-security-section');
+
+      expect(lastDialogProps().hasPassword).toBe(false);
+    });
+
+    it('reports hasPassword false when the payload carries no password entry at all', async () => {
+      fetchAccount.mockResolvedValue({
+        authMethods: { identities: [{ provider: 'google', email: 'u@e.com' }], removable: [] },
+      });
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-security-section');
+
+      expect(lastDialogProps().hasPassword).toBe(false);
+    });
+
+    it('never claims a password exists when the account could not be read', async () => {
+      fetchAccount.mockRejectedValue(new Error('network down'));
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-settings-load-error');
+
+      expect(lastDialogProps().hasPassword).toBe(false);
+    });
+
+    it('hands the flag down as a boolean, never as the raw payload value', async () => {
+      fetchAccount.mockResolvedValue({
+        authMethods: { password: { enabled: 'yes' }, identities: [], removable: [] },
+      });
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-security-section');
+
+      expect(lastDialogProps().hasPassword).toBe(true);
+    });
+
+    it('opens the form in the enrolling shape from the Create button', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockResolvedValue({ authMethods: SSO_ONLY });
+
+      render(<AccountSettingsPage />);
+      const button = await screen.findByTestId('auth-method-change-password');
+      expect(button).toHaveTextContent('accountMethodCreate');
+      await user.click(button);
+
+      expect(screen.getByTestId('change-password-dialog'))
+        .toHaveAttribute('data-has-password', 'false');
+    });
+
+    it('opens the form in the changing shape when the account has a password', async () => {
+      const user = userEvent.setup();
+
+      render(<AccountSettingsPage />);
+      const button = await screen.findByTestId('auth-method-change-password');
+      expect(button).toHaveTextContent('accountMethodChange');
+      await user.click(button);
+
+      expect(screen.getByTestId('change-password-dialog'))
+        .toHaveAttribute('data-has-password', 'true');
+    });
+
+    it('signs the user out after an enrolment, not only after a change', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockResolvedValue({ authMethods: SSO_ONLY });
+
+      render(<AccountSettingsPage />);
+      await user.click(await screen.findByTestId('auth-method-change-password'));
+      await user.click(screen.getByTestId('change-password-success'));
+
+      expect(logout).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+      expect(localStorage.getItem('sf_onboarding_notice')).toBe('password-changed');
+    });
   });
 });

@@ -369,4 +369,62 @@ describe('SecuritySection', () => {
 
     expect(onChangePassword).toHaveBeenCalledTimes(1);
   });
+
+  describe('the password row names its action after what the account has', () => {
+    it('offers Change when the account already has a password', () => {
+      renderSection({ password: { enabled: true }, identities: [], removable: [] });
+
+      const button = screen.getByTestId('auth-method-change-password');
+      expect(button).toHaveTextContent('accountMethodChange');
+      expect(button).not.toHaveTextContent('accountMethodCreate');
+    });
+
+    it('offers Create when the account has none, so the enrolment has a way in', () => {
+      renderSection({
+        password: { enabled: false },
+        identities: [{ provider: 'google', email: 'u@e.com' }],
+        removable: [],
+      });
+
+      const button = screen.getByTestId('auth-method-change-password');
+      expect(button).toHaveTextContent('accountMethodCreate');
+      expect(button).not.toHaveTextContent('accountMethodChange');
+    });
+
+    it('offers Create on a null payload rather than promising a password that may not exist', () => {
+      renderSection(null);
+
+      expect(screen.getByTestId('auth-method-change-password'))
+        .toHaveTextContent('accountMethodCreate');
+    });
+
+    it('relabels the button when the payload changes under it', () => {
+      const { rerender } = renderSection({
+        password: { enabled: false }, identities: [], removable: [],
+      });
+      expect(screen.getByTestId('auth-method-change-password'))
+        .toHaveTextContent('accountMethodCreate');
+
+      rerender(
+        <SecuritySection
+          authMethods={{ password: { enabled: true }, identities: [], removable: [] }}
+          onRemove={vi.fn()}
+          onChangePassword={vi.fn()} />,
+      );
+
+      expect(screen.getByTestId('auth-method-change-password'))
+        .toHaveTextContent('accountMethodChange');
+    });
+
+    it('asks the page to open the form from the Create side too', async () => {
+      const user = userEvent.setup();
+      const { onChangePassword } = renderSection({
+        password: { enabled: true }, identities: [], removable: [],
+      });
+
+      await user.click(screen.getByTestId('auth-method-change-password'));
+
+      expect(onChangePassword).toHaveBeenCalledTimes(1);
+    });
+  });
 });
