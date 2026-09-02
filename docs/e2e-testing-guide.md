@@ -165,6 +165,9 @@ etendo.go.email.provider.baseUrl=http\://127.0.0.1\:8025/send
 etendo.go.email.provider.apiKey=e2e-only-secret
 ```
 
+> **Local setup with Tomcat in Docker?** `127.0.0.1` is wrong there and fails silently — read the
+> subsection below before setting this.
+
 The API key must match `E2E_EMAIL_SINK_API_KEY` in `playwright.config.js`; the adapter sends it as
 `x-api-key` and the sink rejects a mismatch with 401. `config/Openbravo.properties` is gitignored,
 so this stays a local change. Same wiring the ETP-4894 invitation-email spec already needed — see
@@ -172,6 +175,57 @@ so this stays a local change. Same wiring the ETP-4894 invitation-email spec alr
 
 Without it the mail goes to the real provider, the wall stays up with no readable inbox, and
 `passEmailConfirmationWall` fails naming both remedies.
+
+#### ⚠️ Local environment: with Tomcat in Docker, `127.0.0.1` is the WRONG address
+
+The `127.0.0.1` above is only correct when Tomcat runs **on the host**. Playwright starts the sink
+on the host, so from inside a Tomcat container `127.0.0.1:8025` is that container's own loopback —
+nothing is listening there and every send dies with `java.net.ConnectException: Connection refused`.
+
+**How to tell which case you are in.** Tomcat is dockerized when this property is `true` — it is
+set in BOTH files and they must agree:
+
+```properties
+# gradle.properties  AND  config/Openbravo.properties
+docker_com.etendoerp.tomcat=true
+```
+
+`true` (the usual local setup, container `etendo-tomcat-1`) → use the host alias instead:
+
+```properties
+etendo.go.email.provider.baseUrl=http\://host.docker.internal\:8025/send
+etendo.go.email.provider.apiKey=e2e-only-secret
+```
+
+`false` (Tomcat on the host, e.g. a SmartTomcat/IDE launch) → keep `127.0.0.1`.
+
+Verify it rather than assuming — one command, from inside the container, with the sink running:
+
+```bash
+docker exec etendo-tomcat-1 sh -c \
+  'curl -s -o /dev/null -w "%{http_code}\n" --max-time 4 http://host.docker.internal:8025/health'
+# 200 → reachable.  000 → wrong address (or the sink is not running).
+```
+
+**A green onboarding run does NOT prove the sink is wired.** This is the trap: with the address
+wrong, `onboarding-register` still passes, because a failed send makes the backend drop the
+verification token and fall through its own fail-open (see *The escape hatch* below) — the wall
+never comes up, so nothing needs to read a mailbox. Only the specs that actually read the mail
+(`user-invitation.email.integration.spec.js`) fail, and they fail with a bare
+`Timed out waiting for custom to <address>`, which points at the sink and not at Tomcat.
+
+Check the send status directly instead of inferring it from the suite:
+
+```sql
+SELECT created, contract_name, status FROM etgo_email_safety
+WHERE record_type = 'AUDIT' ORDER BY created DESC LIMIT 10;
+```
+
+`SENT` means it left Etendo. `PROVIDER_FAILED` on every row means the provider URL is unreachable —
+with `docker_com.etendoerp.tomcat=true`, suspect this section first. `etgo_invitation.status` tells
+the same story per invitation (`DELIVERY_FAILED` vs `SENT`).
+
+Changing the property needs a Tomcat restart to take effect.
 
 **The escape hatch** is the backend's own fail-open: leave `etendo.go.email.provider.apiKey` or
 `baseUrl` unset (or set `etendo.go.email.provider.enabled=false`) and the send fails, the backend
@@ -233,6 +287,63 @@ formatting is already covered by `cashCloseMath.test.js`, and re-parsing `1.234,
 only buys locale brittleness. The two UI-level assertions about the arithmetic are deliberately
 boolean — `cash-close-unbalanced-note` before declaring, `cash-close-balanced-pill` after — which is
 what proves the live recalculation without pinning a number to a locale.
+
+---
+
+## Organization Save — Two-Entity Write (`E2E_ORGANIZATION_INTEGRATION`)
+
+The "Organización" screen (`/organization`) is the only screen that writes **two entities in
+one save** — `AD_Org` (spec entity `organization`) and `AD_OrgInfo` (spec entity
+`information`), which in Etendo **share the same primary key value**. That combination made it
+the first screen to reproduce the two chained defects fixed under ETP-5112, and both are now
+guarded by a pair of specs:
+
+| Spec | Mode | Covers |
+|---|---|---|
+| `organization-save.mocked.spec.js` | mocked, runs in CI | the client contract: each PATCH carries the `updated` token **its own** GET returned, and the two PATCHes are serialized |
+| `organization-save.integration.spec.js` | live backend, gated | the server half: both PATCHes actually answer `200` |
+
+What they protect:
+
+- **Bug 1 — 400 `missing_updated`.** ETP-5073 made the backend require the record's `updated`
+  optimistic-locking token. Only `useEntity` remembered it, so panels reading with `apiFetch`
+  directly patched without one. Fixed centrally in `@etendosoftware/app-shell-core`
+  (`auth/api.js` harvests the token on every GET).
+- **Bug 1b — the token cache must be keyed by `(entity, id)`, not by `id`.** Because `AD_Org`
+  and `AD_OrgInfo` share the id, an id-only cache let the second GET clobber the first record's
+  token and one PATCH went out with the other record's version. The mocked spec returns two
+  deliberately different tokens under the same id and asserts they are never crossed.
+- **Bug 2 — 500 false concurrency conflict.** With the token fixed, the two PATCHes (then fired
+  with `Promise.all`) landed on two Tomcat threads in the same millisecond, and core's
+  `JsonToDataConverter` parses `updated` through a `private final static SimpleDateFormat`,
+  which is not thread-safe. One write came back 500 with "The record you are saving has already
+  been changed by another user" against a record nobody else had touched. Fixed in
+  `useOrganizationData.js` by awaiting the two PATCHes in sequence.
+
+**The non-overlap test asserts non-overlap, not arrival order.** `Promise.all` also dispatches
+in order, so an order-only assertion would pass against the exact bug. The mocked spec holds the
+first PATCH open for 150ms inside the route handler and asserts the second one *starts* after
+the first one *finished*. Copy that shape for any other screen that writes more than one entity.
+
+Run the mocked spec (no backend needed):
+
+```bash
+cd e2e && npx playwright test tests/flows/organization-save.mocked.spec.js --project=mocked
+```
+
+Run the live one — it **writes to the tenant's own organization record**, so it is skipped
+unless explicitly enabled and is not run by any CI job:
+
+```bash
+cd e2e
+E2E_ORGANIZATION_INTEGRATION=1 E2E_USE_MOCK=0 E2E_PASSWORD=<pass> \
+  npx playwright test tests/flows/organization-save.integration.spec.js --project=integration
+```
+
+It writes only the phone field (optional, free-text, no callout, no uniqueness constraint) with
+a unique timestamp-derived value, and restores the original in a `finally` — so a run leaves the
+tenant as it found it and repeated runs never collide. The restore re-reads the record first:
+the write moved the `updated` token on, and the restoring PATCH needs the current one.
 
 ---
 

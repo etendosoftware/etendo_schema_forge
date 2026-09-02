@@ -115,7 +115,7 @@ async function installFiscalConfigMocks(page) {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [{ id: 'tbai-cfg-1' }] } }),
+      body: JSON.stringify({ response: { data: [{ id: 'tbai-cfg-1', etsgSifTerritory: 'BIZKAIA' }] } }),
     });
   });
   for (const emptyCfg of ['sii-config', 'verifactu-config']) {

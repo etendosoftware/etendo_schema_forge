@@ -77,6 +77,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+// The left panel's footer total goes through the shared signed-money formatter. Importing it here
+// (instead of hardcoding '1.191,69 €') keeps the expectation on the same canonical formatting path
+// the component uses, so the instance-wide separators cannot make the assertion lie.
+import { formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -500,21 +504,61 @@ describe('ReconciliationSplitPanel', () => {
     expect(rows[2]).toBe('recon-cand-row-C1');
   });
 
-  // ── Client-side state filter (T7) ─────────────────────────────────────────────
+  // ── Client-side state filter (T7 / ETP-5033) ─────────────────────────────────
+  //
+  // The backend assigns each statement line exactly ONE `state`: pending | suggested | byRule |
+  // difference | reconciled. The filter codes are therefore NOT all mutually exclusive: 'pending'
+  // — which is also the DEFAULT filter — means "everything not reconciled", so suggested, byRule
+  // and difference lines are on screen when the panel opens (ETP-5033: strict equality used to
+  // hide exactly the lines the user has to act on). 'suggested' / 'byRule' / 'difference' /
+  // 'reconciled' stay strict subsets, and the "Todos" entry (null) shows everything.
+  // Membership itself is unit-tested in reconciliationStatusFilter.test.js.
 
-  it('shows only lines matching the active leftStatus filter', () => {
-    // Four lines: two pending, one suggested, one byRule.
+  // One line per engine-computed state, so a single fixture set can drive the whole matrix.
+  const LINE_ST_PENDING = { id: 'SP', date: '2026-05-10T00:00:00Z', description: 'Plain pending line', state: 'pending', status: 'pending', amount: -10 };
+  const LINE_ST_SUGGESTED = { id: 'SS', date: '2026-05-11T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
+  const LINE_ST_BYRULE = { id: 'SB', date: '2026-05-12T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
+  const LINE_ST_DIFFERENCE = { id: 'SD', date: '2026-05-13T00:00:00Z', description: 'Difference line', state: 'difference', status: 'pending', amount: -5 };
+  const LINE_ST_RECONCILED = { id: 'SR', date: '2026-05-14T00:00:00Z', description: 'Reconciled line', state: 'reconciled', status: 'reconciled', amount: 500 };
+  const ALL_STATE_LINES = [
+    LINE_ST_PENDING, LINE_ST_SUGGESTED, LINE_ST_BYRULE, LINE_ST_DIFFERENCE, LINE_ST_RECONCILED,
+  ];
+  const ALL_STATE_COUNTS = { all: 5, pending: 1, suggested: 1, byRule: 1, difference: 1, reconciled: 1 };
+
+  /**
+   * Drives the status dropdown the same way the source-filter tests drive theirs: the
+   * DistinctValuesFilter trigger renders the ACTIVE label, and the open popover renders one
+   * button per code (plus the "Todos" row). Both are matched by their i18n key, which the mock
+   * echoes back verbatim.
+   */
+  function selectStatus(activeLabelKey, nextLabelKey) {
+    fireEvent.click(screen.getByText(new RegExp(activeLabelKey)));
+    fireEvent.click(screen.getByText(new RegExp(nextLabelKey)));
+  }
+
+  /** The ids of every statement row currently rendered in the left panel. */
+  function visibleLineIds() {
+    return screen
+      .queryAllByTestId(/^recon-line-row-/)
+      .map((el) => el.getAttribute('data-testid').replace('recon-line-row-', ''));
+  }
+
+  it('treats the default pending filter as "not reconciled", keeping suggested and by-rule lines visible', () => {
+    // Four lines: two plain pending, one suggested, one byRule — all four are non-reconciled, so
+    // all four must be on screen under the default filter.
     const LINE_SUGGESTED = { id: 'LS', date: '2026-05-10T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
     const LINE_BYRULE = { id: 'LR', date: '2026-05-11T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
     setLines([LINE_A, LINE_B, LINE_SUGGESTED, LINE_BYRULE]);
     linesState.counts = { all: 4, pending: 2, suggested: 1, byRule: 1, difference: 0, reconciled: 0 };
     renderPanel();
 
-    // Default leftStatus is 'pending' — only LINE_A and LINE_B (state: 'pending') visible.
+    // Default leftStatus is 'pending' = "not reconciled" — nothing here is reconciled, so the
+    // list is complete. Before ETP-5033 the last two assertions were the opposite (the suggested
+    // and by-rule rows were filtered out by the DEFAULT filter, which is the bug).
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LS')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LR')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LS')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LR')).toBeInTheDocument();
   });
 
   it('passes counts from the hook to the status filter component', () => {
@@ -525,22 +569,93 @@ describe('ReconciliationSplitPanel', () => {
     // ReconciliationStatusFilter renders labelFor(code) = `${ui(key)} (${countFor(code)})`.
     // With our i18n mock returning the key, the label includes the count.
     // The active label (pending) is visible in the trigger button; the others are in the popover.
+    // The pending count is the SUM of its members — 3 pending + 1 suggested + 0 byRule +
+    // 1 difference = 5 — because the filter itself shows all four (ETP-5033); a chip reading 3
+    // would contradict the 5 rows below it.
     // Use a text-content function matcher to handle elements that split text across children.
-    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('3'))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('5'))).toBeInTheDocument();
   });
 
   it('visibleTotal reflects filtered lines, not all lines', () => {
-    // Three lines: two pending (amounts -8.31 and 1200), one suggested (-100).
-    const LINE_SUGGESTED2 = { id: 'LS2', date: '2026-05-12T00:00:00Z', description: 'S line', state: 'suggested', status: 'pending', amount: -100 };
-    setLines([LINE_A, LINE_B, LINE_SUGGESTED2]);
-    // Default leftStatus is 'pending' — only LINE_A (-8.31) and LINE_B (1200) are visible.
+    // Three lines: two non-reconciled (amounts -8.31 and 1200) and one RECONCILED (500). Under
+    // the default 'pending' filter only the first two are visible, so only they may count toward
+    // the footer total. (A suggested line would no longer work as the excluded one — it is now
+    // visible under the default filter, and its amount legitimately joins the total.)
+    setLines([LINE_A, LINE_B, LINE_ST_RECONCILED]);
+    linesState.counts = { all: 3, pending: 2, suggested: 0, byRule: 0, difference: 0, reconciled: 1 };
     renderPanel();
 
-    // The footer total must show the sum of only visible (pending) lines: -8.31 + 1200 = 1191.69.
-    // The panel renders visibleTotal with MoneyAmount; in our mock MoneyAmount renders the value.
-    // We check the total footer row which renders formatSigned(visibleTotal, currency).
-    // Since formatSigned is internal, we verify the footer does NOT show -100 (the suggested line).
-    expect(screen.queryByText(/-100/)).not.toBeInTheDocument();
+    // The reconciled row is filtered out, so its amount is nowhere in the list.
+    expect(visibleLineIds()).toEqual(['L1', 'L2']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+
+    // The footer renders ui('financeReconcileFooterTotal', { amount: formatSigned(total, cur) }).
+    // The i18n mock has no `{amount}` placeholder in the key itself, so the interpolated string
+    // never reaches the DOM — read it off the captured call instead. Expected: -8.31 + 1200 =
+    // 1191.69, i.e. the visible subset only (1691.69 would mean the reconciled line leaked in).
+    const footerCalls = uiCalls.filter((c) => c.key === 'financeReconcileFooterTotal');
+    expect(footerCalls.length).toBeGreaterThan(0);
+    expect(footerCalls.at(-1).vars.amount).toBe(formatSigned(1191.69, 'EUR'));
+  });
+
+  it('shows the four non-reconciled states and hides the reconciled one under the default filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+  });
+
+  it('narrows to only the suggested line when the filter switches to suggested', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusSuggested');
+
+    expect(visibleLineIds()).toEqual(['SS']);
+  });
+
+  it('narrows to only the difference line when the filter switches to difference', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDifference');
+
+    expect(visibleLineIds()).toEqual(['SD']);
+  });
+
+  it('narrows to only the by-rule line when the filter switches to byRule', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusByRule');
+
+    expect(visibleLineIds()).toEqual(['SB']);
+  });
+
+  it('shows only the reconciled line under the reconciled filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    expect(visibleLineIds()).toEqual(['SR']);
+  });
+
+  it('shows every line under the "Todos" entry', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    // The "Todos" row calls onChange(null) — the only way to clear the status filter.
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD', 'SR']);
   });
 
   // ── Source filter visibility (single "Tipo de transacción" selector) ──────────
@@ -1184,8 +1299,10 @@ describe('ReconciliationSplitPanel', () => {
       });
       setUpPartialLineWithCandidate();
 
+      // No `failureReason` in this response, so the toast carries no description at all
+      // (`undefined`, never an empty options object that would render a blank description row).
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
       // Verify the EXACT interpolation values the component computed from the resolved result.
@@ -1197,19 +1314,85 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
     });
 
-    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+    it('total failure (successful HTTP, everything failed): the UN-RECONCILE error copy, reload/selection-clear STILL run', async () => {
       removeState.removeOperation = vi.fn().mockResolvedValue({
         transactionIds: [], failedTransactionIds: ['A', 'B'],
       });
       setUpPartialLineWithCandidate();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      // The action-specific key. This branch used to fall back to `financeReconcileToastError`,
+      // whose copy reads "Error al conciliar" — the wrong action entirely for an un-reconcile.
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoveError', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.warning).not.toHaveBeenCalled();
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
       await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    // ── the backend-supplied CAUSE ────────────────────────────────────────────
+    // The un-reconcile helpers swallow their exceptions so one failure does not abort the batch, so
+    // the response has always been able to say WHICH ids failed. What it could not say is WHY — the
+    // reason stayed in the server log. It now travels as `failureReason` on the same 200, and the
+    // panel shows it verbatim as the sonner description under the action-specific title.
+    const CLOSED_PERIOD = 'The accounting period is closed and the document cannot be unposted';
+
+    it('total failure: shows the backend failureReason as the toast description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: CLOSED_PERIOD }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure: never falls back to the generic "Error al conciliar" key', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // Regression guard: the generic reconcile-error copy is not merely un-toasted, it is never
+      // even requested from i18n on this (resolved-response) path. It stays reserved for the catch
+      // branch, where the request itself failed and no action can be named.
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError');
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError', undefined);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+    });
+
+    it('partial failure: keeps the partial key and adds the reason as the description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        'financeReconcileToastOperationPartiallyRemoved', { description: CLOSED_PERIOD }));
+      expect(toast.error).not.toHaveBeenCalled();
+      // The counts are unchanged by the added description.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+    });
+
+    it('full success: never attaches a description, even if the backend echoes a reason', async () => {
+      // Defensive: `failureReason` is only meaningful alongside failed ids. With none, the success
+      // branch runs and the toast keeps its single-argument shape.
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1390,11 +1573,62 @@ describe('ReconciliationSplitPanel', () => {
       await user.click(screen.getByTestId('recon-remove-accept'));
 
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
       expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
       // Always reload, even on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    // ── total failure on the REACTIVATE path ──────────────────────────────────
+    // Same accumulator and same 200 envelope as the un-reconcile path, but the title must name the
+    // action the user actually chose: `...ReactivateError`, not `...RemoveError` — and least of all
+    // the old generic `financeReconcileToastError` ("Reconciliation error").
+    const REACTIVATE_BLOCKED = 'The accounting period is closed and cannot be reactivated';
+
+    /** Selects the 2-doc reconciled line and confirms the Reactivar cartel. */
+    async function confirmReactivate() {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+    }
+
+    it('total failure: the REACTIVATE error copy with the backend reason as description', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+        failureReason: REACTIVATE_BLOCKED,
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', { description: REACTIVATE_BLOCKED }));
+      // Not the un-reconcile copy, and not the generic reconcile copy either.
+      expect(toast.error).not.toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: REACTIVATE_BLOCKED });
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastOperationRemoveError')).toBe(false);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure with no failureReason: same key, and NO description object at all', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', undefined));
+      // Explicitly `undefined`, not `{}` / `{ description: undefined }` — sonner renders an empty
+      // description row for the latter, which reads as a truncated message.
+      const [, options] = toast.error.mock.calls[0];
+      expect(options).toBeUndefined();
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
     });
 

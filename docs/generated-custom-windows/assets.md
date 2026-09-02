@@ -914,4 +914,110 @@ Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition
 
 1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
 2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
+
+## ETP-4984 — Name/Description overlong-save prevention + backend "too long" message translation
+
+### Problem
+
+**Nombre** (`name`, column `Name`) has a 60-character limit and **Descripción** (`description`, column `Description`) a 255-character limit in `artifacts/assets/contract.json`'s `validation.maxLength` (the AD column's field length), but neither the header form nor any client-side check enforced it. A user could type past the limit, click save, and the request would reach the backend — which rejects it with a raw Hibernate `StringPropertyValidator` message (`"<Entity>.<Property>: Value too long. Length <N>, maximum allowed <M> [<value, possibly truncated to 100 chars>]"`), untranslated and in English, surfaced verbatim in the toast. Nothing told the user which field was the problem or how many characters they were over.
+
+### Fix — two layers, deliberately scoped beyond Assets
+
+**1. Prevention — native `maxLength` on the input (Assets-specific field config, generic mechanism)**
+
+`AssetsDetailPanel.jsx`'s `name` field descriptor now carries `maxLength: 60` and `description` carries `maxLength: 255`, matching `contract.json`'s `validation.maxLength` for each. `EntityForm.jsx` gained a new **opt-in, per-field `maxLength` prop-forwarding mechanism**: `DeferredInput` accepts a `maxLength` prop and forwards it to the underlying `<input>`, and the render call sites for the plain text input, the header input, and the textarea now pass `maxLength={f.maxLength}` from the field descriptor. A field that doesn't declare `maxLength` gets `undefined`, which is a no-op for the native `maxLength` HTML attribute — so this is additive and does nothing for every other field/window that doesn't opt in. Any window's custom or generated field config can now set `maxLength: N` on a field descriptor to get the same native browser-level cap; this is not an Assets-only capability, it just happens to be Assets that adopted it first.
+
+**2. Safety net — backend message translation (repo-wide by nature, not Assets-specific)**
+
+The native `maxLength` cap is prevention, not a guarantee — a paste that bypasses the input's native truncation, or any other write path that reaches the server without going through this form, can still trigger the backend's raw validator message. `backendErrors.js` gained a new parameterized matcher, `matchFieldTooLong`, that recognizes the `StringPropertyValidator` message shape (locates the fixed `"Value too long. Length "` / `", maximum allowed "` markers via `indexOf`/`slice`, not regex — same ReDoS-avoidance rationale as the existing parameterized matchers) and maps it to a new `backendError.fieldTooLong` key, interpolating the extracted `maxLength`. This matcher is **not** scoped to Assets or to `name`/`description` — it fires for the same backend message on any entity/field, in any window, whenever a saved string value exceeds its AD column's length. This breadth was a deliberate, human-confirmed design choice (the translation mechanism in `backendErrors.js` is already repo-wide by convention — see `docs/i18n-guide.md`'s "Backend Error Translation" section), not scope creep introduced by this Assets fix.
+
+### New i18n keys
+
+Added to both `en_US.json` and `es_ES.json` under `genericLabels`:
+
+- `backendError.fieldTooLong` — `"This value is too long. It must not exceed {maxLength} characters."` / `"Este valor es demasiado largo. No puede superar los {maxLength} caracteres."`
+
+### Files changed
+
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — `name` field descriptor gains `maxLength: 60`, `description` gains `maxLength: 255`.
+- `tools/app-shell/src/components/contract-ui/EntityForm.jsx` — new generic `maxLength` prop on `DeferredInput`, forwarded to the native input; `maxLength={f.maxLength}` wired at the text input, header input, and textarea render call sites.
+- `tools/app-shell/src/lib/backendErrors.js` — new `matchFieldTooLong` parameterized matcher + `FIELD_TOO_LONG_MARKER`/`FIELD_TOO_LONG_MID`/`FIELD_TOO_LONG_VALUE_OPEN` delimiters, registered in the parameterized-matcher list ahead of the fallthrough.
+- `tools/app-shell/src/locales/en_US.json`, `es_ES.json` — new `backendError.fieldTooLong` key.
+
+### Manual verification (ETP-4984)
+
+1. Open an asset and type more than 60 characters into **Nombre**; confirm the input stops accepting characters at 60 (native browser cap, no error needed).
+2. Type more than 255 characters into **Descripción**; confirm the same native cap at 255.
+3. Bypass the cap (e.g. paste a long string directly into the field via devtools, or hit the backend with an overlong value through another path) and save; confirm the toast shows the translated message ("Este valor es demasiado largo. No puede superar los 60 caracteres." / "This value is too long. It must not exceed 60 characters.") instead of the raw Hibernate string, in both `es_ES` and `en_US`.
+4. Confirm any other window/field hitting the same backend "Value too long" message on save also gets the translated toast — this is not gated to Assets.
 3. End-to-end: create an asset omitting `usableLifeMonths` with a Time/non-yearly setup, invoke Create Amortization, and confirm the gate still returns `PRECONDITIONS_UNMET` (the proactive hint does not replace enforcement).
+
+## ETP-4983 — Search Key uniqueness validation per Organization
+
+### Problem
+
+Classic Etendo maintained document-number uniqueness at the database level via sequences. When the Assets window was migrated to Etendo GO (no document sequence, no built-in uniqueness for `searchKey`), the Identificador field became freely duplicable within the same client and organization — a data integrity gap. Creating two assets with identical Search Keys was possible but not validated. This ticket enforces **per-organization uniqueness** of the `searchKey` (Identificador) at the backend layer.
+
+### Solution
+
+A new `AssetSearchKeyUniqueHandler` (in `com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/AssetSearchKeyUniqueHandler.java`) implements the validation as a CDI-managed `EntityPersistenceEventObserver`:
+
+- **Observes:** Asset (`A_Asset`) create and update events
+- **Scope:** Per-organization (not client-wide) — two assets CAN share the same Search Key if they belong to different organizations of the same client
+- **Enforcement:** On every save attempt (both Classic AD window direct OBDal and Etendo GO NEO routes), the handler queries for existing assets in the same organization with the same search key. If found (excluding the current record's own id on update), an `OBException` is thrown.
+- **Ignores:** Active flag — an inactive duplicate still blocks the search key, matching database-level unique constraint semantics
+- **Error message:** New AD_MESSAGE `ETGO_AssetSearchKeyDuplicate` with English text "There is already an asset with this identifier in this organization."
+
+### Frontend error mapping
+
+The backend exception message is translated at the frontend via the existing `backendErrors.js` mechanism:
+
+- **backendErrors.js:** Maps the AD_MESSAGE text to `backendError.assetSearchKeyDuplicate` (line 33)
+- **i18n keys added to all three locales:**
+  - `en_US.json`: `"backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization."`
+  - `es_ES.json`: `"Ya existe un activo con este identificador en esta organización."`
+  - `es_AR.json`: Same as `es_ES`
+
+When a user attempts to create or update an asset with a duplicate Search Key in the same org, the validation fires before the record is persisted, and a Spanish error toast appears: **"Ya existe un activo con este identificador en esta organización."**
+
+### Architecture note
+
+The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pattern employed by `AssetGroupNameUniqueHandler` for enforcing Asset Category name uniqueness (Client-scoped, not Organization-scoped). Both handlers respond to OBDal persistence events at the model layer, ensuring the validation applies regardless of whether the save originated from the Classic AD window, NEO Headless, or any direct API call. This is distinct from the `NeoHandler` pattern (which hooks the NEO HTTP request layer only).
+
+### Tests
+
+- **Backend (`com.etendoerp.go`):** `AssetSearchKeyUniqueHandlerTest.java` covers:
+  - Same org, duplicate key → throws `OBException`
+  - Different org, same key → succeeds (allows duplication across orgs)
+  - Update with own key → succeeds (self-update excluded)
+  - Null or blank search key → succeeds (validation skipped for empty values)
+  - Missing organization → succeeds (validation skipped if org is null)
+- **Frontend (`tools/app-shell`):** `backendErrors.test.js` verifies:
+  - Error message mapping from backend text to `backendError.assetSearchKeyDuplicate` key
+  - Regression coverage for the sibling `assetGroupNameDuplicate` mapping (closed a pre-existing test gap)
+
+### Manual verification (ETP-4983)
+
+1. **Create an asset with a given Search Key in Organization A:**
+   - Open `/assets` or navigate to Assets from the Finance menu
+   - Create a new asset record with **Identificador** = `"ASSET-001"`, **Name** = "Test Asset 1", and **Organization** = Organization A
+   - Save and confirm the record is persisted
+
+2. **Attempt to create a duplicate in the same organization — expect rejection:**
+   - Create a second asset with **Identificador** = `"ASSET-001"`, different **Name** = "Test Asset 2", same **Organization** = Organization A
+   - Click **Save** and confirm an error toast appears: **"Ya existe un activo con este identificador en esta organización."** (Spanish) or **"There is already an asset with this identifier in this organization."** (English, depending on session locale)
+   - Confirm the record is NOT saved (the form remains in edit mode, no success toast)
+
+3. **Verify that the same key IS allowed in a different organization:**
+   - Create a new asset with **Identificador** = `"ASSET-001"`, different **Name** = "Test Asset 3", **Organization** = Organization B (a different organization of the same client)
+   - Click **Save** and confirm the record is saved successfully (no error)
+   - This confirms the uniqueness check is scoped by organization, not client-wide
+
+4. **Update an existing asset without changing its Search Key — expect success:**
+   - Open an existing asset with **Identificador** = `"ASSET-001"`
+   - Edit another field (e.g. **Nombre** / Name)
+   - Click **Save** and confirm the save succeeds (no false-positive duplicate error)
+
+5. **Verify translation in both locales:**
+   - Switch the session locale to Spanish and repeat steps 2–3 — confirm the error message reads **"Ya existe un activo con este identificador en esta organización."**
+   - Switch the session locale to English — confirm it reads **"There is already an asset with this identifier in this organization."**

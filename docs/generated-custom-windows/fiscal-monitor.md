@@ -339,6 +339,8 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - Route: `/fiscal-monitor` (custom window).
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Entry point: `FiscalMonitorPage.jsx` — fetches profile + KPIs, renders OrgLead header, delegates to section components.
+- Breadcrumb: `Finanzas / Monitor fiscal` (`` `${ui('finance')} / ${ui('fiscal.monitor.nav')}` ``, `FiscalMonitorPage.jsx`). ETP-4945 replaced the previous 4-segment string (`Configuración / Monitor de facturas / Sistema fiscal activo / {profile}`), which put the window under the wrong section and used a third, disagreeing translation for the window name.
+- **Caveat (pre-existing, untouched by ETP-4945):** the page title and breadcrumb do not render at all when the organization has no fiscal profile configured — `useSetPageMeta` is still called with the corrected breadcrumb value, but `TopBar`'s gating on the "unconfigured" empty state (`profile === 'unconfigured'`, see `FmEmpty` above) means the header never shows it in that state. Verified live during QA for this ticket; not something ETP-4945 introduced or is expected to fix.
 - The page container uses `overflow-y: auto` so long multi-section views (e.g. `sii+tbai`) are scrollable within the fixed app shell container.
 
 ## Manual verification

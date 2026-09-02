@@ -15,6 +15,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
 import { MovementRowKebab } from './MovementRowKebab';
@@ -23,18 +24,22 @@ import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financ
 import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
 
 /**
- * Formats an ISO date string using the user's locale. The movement date is a
- * date-only value the backend sends as UTC midnight (e.g. "2026-06-10T00:00:00Z"),
- * so it MUST be formatted in UTC — otherwise a negative-offset timezone (e.g.
- * UTC-3) shifts it to the previous calendar day (showing 09/06 for a 10/06 date).
+ * Formats a business date for display, via the canonical `formatCalendarDate`.
+ *
+ * It reads the leading `yyyy-MM-dd` and builds the Date with the LOCAL-time
+ * constructor, so the calendar day survives regardless of the host's offset —
+ * and regardless of whether the payload carries a zone suffix.
+ *
+ * This used to be `new Date(iso)` + `Intl.DateTimeFormat(..., timeZone: 'UTC')`,
+ * on the premise that the backend always sent UTC midnight. ETP-5100 removed
+ * that premise (NEO now emits the civil `yyyy-MM-dd'T'HH:mm:ss` in the server's
+ * own zone), and the two UTC assumptions then stacked instead of cancelling:
+ * `new Date("2026-09-01T22:59:10")` parses as LOCAL, and rendering that instant
+ * back in UTC pushed it to 02/09. Going through the shared helper removes the
+ * assumption entirely rather than swapping it for the opposite one.
  */
 function formatDate(isoString, bcpLocale) {
-  if (!isoString) return '—';
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(bcpLocale, {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-  }).format(d);
+  return formatCalendarDate(isoString, bcpLocale);
 }
 
 const SKELETON_ROWS = [1, 2, 3, 4, 5];
@@ -419,6 +424,50 @@ export function buildMovementSortColumns(ui) {
   ];
 }
 
+/**
+ * ETP-5030 — resolves the movement row's classes so exactly ONE background
+ * utility is ever emitted, mirroring `computeRowClassName` in
+ * components/contract-ui/InlineLinesPanel.jsx (the shared reference).
+ *
+ * Emitting two background classes on the same element does NOT let the "last
+ * one wins": Tailwind resolves competing utilities by stylesheet order, not by
+ * the order they appear in the attribute, so the row can silently render
+ * unshaded. Hence the explicit if/else chain instead of appending a class.
+ *
+ * `hoverBackgroundClass` tracks the resting background for the same reason the
+ * row already carried a `hover:bg-card`: TableRow's own base class is
+ * `hover:bg-muted/50`, so without a `hover:` counterpart the tint vanishes the
+ * moment the pointer is over the row — which is exactly when the user clicks
+ * the checkbox, and precisely the "ticking it does nothing" bug being fixed.
+ *
+ * Selection outranks the deep-link highlight (consistent with the shared
+ * components); the highlight keeps its own cue as a ring, which is box-shadow
+ * and therefore costs no layout — the same move InlineLinesPanel made, and
+ * already precedented on table rows by DataTable's `isSelectedLine`.
+ */
+function computeMovementRowClassName({ selected, highlighted, expanded, rowCanExpand }) {
+  let backgroundClass;
+  let hoverBackgroundClass;
+  if (selected) {
+    backgroundClass = 'bg-primary/5';
+    hoverBackgroundClass = 'hover:bg-primary/5';
+  } else if (highlighted) {
+    backgroundClass = 'bg-[hsl(var(--muted))]';
+    hoverBackgroundClass = 'hover:bg-[hsl(var(--muted))]';
+  } else {
+    backgroundClass = 'bg-card';
+    hoverBackgroundClass = 'hover:bg-card';
+  }
+  return [
+    'group relative transition-shadow',
+    rowCanExpand ? 'cursor-pointer' : '',
+    backgroundClass,
+    hoverBackgroundClass,
+    highlighted ? 'ring-1 ring-focus-ring' : '',
+    expanded ? 'z-20 border-b-0 [&>td]:border-b-0' : 'hover:z-10 hover:shadow-lg',
+  ].filter(Boolean).join(' ');
+}
+
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit,
@@ -485,13 +534,12 @@ export function MovementsTable({
       <Fragment key={movement.id} data-testid="Fragment__ae5a16">
         <TableRow
           data-testid={`movement-row-${movement.id}`}
-          className={`group relative transition-shadow ${rowCanExpand ? 'cursor-pointer' : ''} ${
-            highlighted ? 'bg-[hsl(var(--muted))]' : 'bg-card'
-          } ${
-            expanded
-              ? 'z-20 border-b-0 [&>td]:border-b-0 hover:bg-card'
-              : 'hover:z-10 hover:bg-card hover:shadow-lg'
-          }`}
+          className={computeMovementRowClassName({
+            selected: selectedIds.has(movement.id),
+            highlighted,
+            expanded,
+            rowCanExpand,
+          })}
           onClick={() => { if (rowCanExpand) toggleExpand(movement.id); }}
         >
           {/* Expand chevron (circular button) */}

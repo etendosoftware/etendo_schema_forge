@@ -7,6 +7,9 @@
     "sendDocument": {
       "allowEmail": false
     },
+    "attachments": {
+      "saveBeforeAttach": true
+    },
     "hideDeleteWhenComplete": true,
     "hidePrintWhen": true,
     "relatedDocuments": true,
@@ -58,9 +61,6 @@
       }
     ],
     "lineEntityConfig": "invoice",
-    "headerExtra": {
-      "customForm": "SifErrorBanner"
-    },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
       "enabled": true,

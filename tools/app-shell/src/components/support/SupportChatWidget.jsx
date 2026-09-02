@@ -366,12 +366,6 @@ export function SupportChatWidget() {
     }
   };
 
-  const handleCloseConversation = () => {
-    if (activeConversationId && activeConversationId !== 'new') {
-      actions.closeConversation(activeConversationId);
-    }
-  };
-
   const handleReopenConversation = () => {
     // Reopen the SAME conversation (same thread, same ADK session — the agent keeps the prior
     // context automatically) via the backend's /reopen endpoint. This used to just call
@@ -405,7 +399,6 @@ export function SupportChatWidget() {
         onClose={actions.close}
         onSubmitRating={handleSubmitRating}
         onDismissRating={handleDismissRating}
-        onCloseConversation={handleCloseConversation}
         onReopenConversation={handleReopenConversation}
         isExpanded={isExpanded}
         onToggleExpand={() => setIsExpanded((v) => !v)}

@@ -3,18 +3,31 @@
 <html><head><meta charset="UTF-8">
 <style>
 {{{css}}}
+/* Trial Balance is the only report whose header row uses table-layout: fixed
+   (needed so its 6 percentage-width columns stay aligned between the header
+   row and every .acct-block's own body rows) — a real column width instead
+   of the auto-sizing every other report's thead gets. Combined with the
+   shared .report-table thead th's `white-space: nowrap`, that means a header
+   that doesn't fit its fixed column doesn't grow it, it bleeds text into the
+   next one instead: "ACCOUNT NO." into "NAME", and — worse, since it embeds
+   a dynamic formatted date — "BALANCE AS OF 2026-08-13" into "DEBIT". Both
+   only showed up once Inter (ETP-5013) made bold uppercase header text
+   measurably wider than whatever it rendered with before. Overridden here,
+   scoped to this report only, so every header wraps onto a second line
+   instead of overflowing when it doesn't fit. */
+.report-table thead th { white-space: normal; line-height: 1.2; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
 {{#if meta.isInteractive}}
 .account-link { cursor: pointer; color: #2563eb; text-decoration: underline; font-weight: 600; }
 .account-link:hover { opacity: 0.75; text-decoration: none; }
 {{/if}}
-/* Belt-and-suspenders for the SAME "looks clickable but isn't" bug
-   (ETP-5013 follow-up): a browser's own Cmd/Ctrl+P on the live interactive
-   preview renders THIS page directly — bypassing our /render?format=pdf
-   endpoint (and meta.isInteractive) entirely — so the `if` above alone
-   still leaves the link blue there. `@media print` catches every printed
-   output uniformly (our own jsreport PDF included — its chrome-pdf recipe
-   emulates print media, same reason the `@page` rule above already sizes
-   correctly), while leaving the on-screen interactive color untouched. */
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
 @media print {
   .account-link { color: inherit !important; text-decoration: none !important; cursor: default !important; font-weight: inherit !important; }
 }
@@ -76,7 +89,7 @@
       {{#each this.dimensionRows}}
       <tr>
         <td></td>
-        <td>{{this.dimensionValue}}</td>
+        <td>{{#if this.dimensionId}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{../account_id}}',accountValue:'{{../account_no}}',accountName:'{{../account_name}}',dimensionGroupBy:'{{@root.meta.params.groupBy}}',dimensionId:'{{this.dimensionId}}',dimensionValue:'{{this.dimensionValue}}'},'*')">{{this.dimensionValue}}</span>{{else}}{{this.dimensionValue}}{{/if}}</td>
         <td class="cell-amount">{{formatCurrency this.opening_balance}}</td>
         <td class="cell-amount">{{formatCurrency this.activity_debit}}</td>
         <td class="cell-amount">{{formatCurrency this.activity_credit}}</td>

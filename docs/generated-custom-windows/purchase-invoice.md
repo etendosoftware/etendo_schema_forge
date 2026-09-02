@@ -26,7 +26,8 @@ Use this window to register supplier invoices, keep the payable document aligned
 - Detail interaction: the record page uses the generated header page with a custom lines table, a custom topbar, summary amounts, notes editing, footer totals, and related-document chips. The principal header section shows `POReference` as `Document No.` / `Nº documento`, placed right after `Business Partner`, while the internal AD `documentNo` field stays hidden in this custom workflow. `POReference` remains editable after completion, but becomes read-only once the invoice has been declared to the AEAT SII (`EM_Aeatsii_Issent = 'Y'`) — see the dedicated section below.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - A **SIF** tab (Suministro Inmediato de Facturación) is available in the detail tab strip when the organisation is configured for SII (TBAI and Verifactu are not shown for purchase invoices at all — see below). The tab is declared in `decisions.json → window.extraTabs` and rendered by the shared `tools/app-shell/src/windows/custom/shared/SifTab.jsx` component. For purchase invoices the SII panel uses the `aeatsiiClaveTipoFc` field and the purchase-specific invoice type options (F6 / LC / F5 / F1). **ETP-4401:** the per-invoice `tbaiIssent` field (and its sibling `tbaiSequence`/`tbaiInvoicenum`/`tbaiInvoiceseq` fields on the sales side) now carries an explicit `"visibility": "discarded"` override in `decisions.json` so it no longer reaches the frontend contract, because TBAI chaining sequences are now generated automatically per fiscal configuration by the `TbaiConfigSequenceHandler` NeoHandler instead of being tracked per invoice. When no fiscal target is active for the organisation, the SIF tab now disappears entirely from the detail tab strip instead of showing an empty-state message: `SifTab.jsx` reports its own visibility via the `onVisibilityChange` callback that `tools/app-shell/src/components/contract-ui/DetailView.jsx` passes to every `placement: 'tab'` custom tab, and the view redirects to the first remaining tab if the hidden tab was the active one. Editable fields are patched immediately on blur via `PATCH /sws/neo/purchase-invoice/header/{id}`.
-- **Line-level "tax needs SIF configuration" shortcut (ETP-4888 point 5):** on the lines grid's `tax` cell, an amber warning-color badge (`text-status-warning-foreground`) renders inline right next to the tax value itself (`InlineLinesPanel`'s `cellBadges` slot, `docs/ui-customization.md` §14e) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII, which has nothing to configure at tax level (its equivalent, `aeatsiiCauseExemption`, lives on the invoice header and is handled by the SIF tab above, unaffected by this feature). Clicking it opens `TaxSifModal.jsx` — a standalone dialog shared with sales-invoice (own vertical layout: tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer — see `docs/ui-design-guidelines.md`), that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to show the same 0–2 applicable fields the Tax window's own header form would, and saves the fix directly without leaving the invoice. Gated by `decisions.json → window.lineTaxSifTrigger` (see `docs/decisions-reference.md`); the "missing" check is driven by a backend selector enrichment (`InvoiceLineTaxSifSelectorPolicy`, `com.etendoerp.go`) that projects the relevant `C_Tax` columns onto the tax selector's response, scoped to this window and sales-invoice only — see `docs/ui-customization.md` §14e for the full mechanism.
+- **Line-level "tax needs SIF configuration" shortcut (ETP-4888 point 5):** on the lines grid's `tax` cell, an amber warning-color badge (`text-status-warning-foreground`) renders inline right next to the tax value itself (`InlineLinesPanel`'s `cellBadges` slot, `docs/ui-customization.md` §14e) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII, which has nothing to configure at tax level (its equivalent, `aeatsiiCauseExemption`, lives on the invoice header and is handled by the SIF tab above, unaffected by this feature). Clicking it opens `TaxSifModal.jsx` — a standalone dialog shared with sales-invoice (own vertical layout: tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer — see `docs/ui-design-guidelines.md`), that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to show the same 0–2 applicable fields the Tax window's own header form would, and saves the fix directly without leaving the invoice. Gated by `decisions.json → window.lineTaxSifTrigger` (see `docs/decisions-reference.md`); the "missing" check is driven by a backend selector enrichment (`InvoiceLineTaxSifSelectorPolicy`, `com.etendoerp.go`) that projects the relevant `C_Tax` columns onto the tax selector's response, scoped to this window and sales-invoice only — see `docs/ui-customization.md` §14e for the full mechanism. **ETP-5027 — document-direction gate:** the badge (and therefore the modal) is additionally gated by `getInvoiceFiscalTargets(specName, profile, tbaiRecord.etsgSifTerritory)`, threaded into `selectSifFields({ targets })` via `useTaxSifLineRowActions`. On a PURCHASE document VERI*FACTU **never** applies (it only ever sends sales — `VerifactuUtils.java:159,507`, `ETVFAC_C_INVOICE_SET_VERIFACTU.xml:71`) and TicketBAI applies **only when the TBAI territory is BIZKAIA** (Batuz/LROE is the sole purchase path — `PurchaseInvoiceBatuzRegister.java`, `SynchronizeUtils.java:266`; there is no Gipuzkoa/Araba purchase schema). Outside those cases no badge is shown and the modal never opens, because the key could never be transmitted.
+- **SIF error banner removed from the header (ETP-5057):** the invoice header no longer renders a red `SifErrorBanner` card for SII submission errors — the `headerExtra.customForm: "SifErrorBanner"` wiring was removed from `decisions.json` and the (now-orphaned) `SifErrorBanner.jsx` component (both the shared implementation and the per-window re-export) was deleted. SII incident detail — rejection reasons, error codes, structured AEAT responses — now lives exclusively in the Fiscal Monitor (`/fiscal-monitor`; see `docs/generated-custom-windows/fiscal-monitor.md`, section "SII section (`SiiMonitorSection`)"). VeriFactu does not apply to purchase invoices (see "Verifactu does not apply to purchase invoices" below), so this window's banner only ever showed the SII half. The invoice itself still shows its existing minimal sending-status indicator unchanged by this removal: the SII `FiscalStatusBadge` status pill column in `PurchaseInvoiceHeaderTable` (list) and the status badge in the SIF tab panel (detail) — no new indicator was added.
 
 ## Reactive behavior and dependencies
 
@@ -111,6 +112,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 - `tools/app-shell/src/hooks/__tests__/useEntity-dirty-state.test.js` verifies the `isDirtyHeader` computation (dirty when editing differs from selected, clean when they match, new-record initial state) and the `refreshHeaderTotals` selective merge (server-computed totals update while user-edited fields in `editing` are preserved using `userChangedKeysRef`).
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dirtyState.test.js` guards the `isDirty` composite expression, the `additionalDirtyState` extension prop, and the save-button disabled conditions (new record always active, existing record gated by `!isDirty`, Confirm button never gated by dirty state).
 - The generated `HeaderPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `C_Invoice` AD table.
+- **ETP-4315 QA follow-up — attach-before-save on a new invoice**: `decisions.json → window.attachments.saveBeforeAttach: true` (only window with this flag today). Dropping a file on a brand-new, unsaved invoice used to fail silently — `recordId` is the literal string `"new"` while creating, which is truthy, so the dropzone stayed enabled but the upload 404'd against a non-existent `C_Invoice` id. `AttachmentsTab.jsx` now checks `isNew && config.saveBeforeAttach`: it force-saves the header via the already-passed `onSaveHeader({ navigateAfter: false })` (same mechanism `secondaryTabs.requireSavedRecord` uses for Exchange Rates on this window), uploads against the id it returns (`useAttachments.upload(file, { recordId })` — the hook now accepts an override id for exactly this case), then calls `onGoToSavedRecord(saved)` to land on the persisted record with the tab still open. A failed save (validation) shows the usual toast and never attempts the upload. Deliberately **not** applied to every window — see the ETP-4315 comment thread: other windows are a separate follow-up to *disable* the dropzone until saved, not to auto-save on drop.
 - `e2e/tests/flows/invoice-preview-modal.spec.js` — 5 Playwright tests for `GenericPreviewModal` lifecycle in mock mode: row click opens the modal, X button dismisses it, backdrop click dismisses it, tabs are rendered and switching works, Edit navigates to the detail URL.
 - `e2e/tests/flows/invoice-preview-persistence.spec.js` — 7 Playwright tests for file persistence in mock mode: drop zone visible when no file is cached, GET fires with correct `specName=purchase-invoice` and `recordId`, file upload triggers POST with correct body params, file view is shown when a cached file exists, delete button sends DELETE and restores the drop zone, completed sales invoice fires GET with `specName=sales-invoice`, draft sales invoice does NOT fire GET (storeCondition=false).
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
@@ -430,13 +432,65 @@ heuristic, not exhaustive):
   enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
   `FinancialAccountsPageHandler`), and
 - the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
-- the account currency is **EUR** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+- the **account** currency is **EUR**, **USD** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+
+The currency test is on the selected bank account, **not** the invoice (ETP-5084) — the money leaves
+the bank in the account's own currency, so that is what decides both eligibility and the template.
+The **invoice may be in any currency** that has a conversion rate; see *Cross-currency transfers*
+below. Until ETP-5084 both this gate and the backend's read the invoice currency, which is why a USD
+invoice used to hide the PIS block entirely. When the account list does not carry a currency at all
+(an older backend omits it) the gate falls back to the invoice currency, preserving the old behavior
+instead of hiding the block everywhere.
 
 The block offers a **payment template** select (`cpPisTemplateLabel` — SEPA / DOMESTIC / FPS,
-from the AD "Template List for Bank Payments" ref-list, defaulting by currency: EUR→SEPA,
-GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
+from the AD "Template List for Bank Payments" ref-list, defaulting by the **account** currency:
+EUR→SEPA, USD→DOMESTIC, GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
 `C_BP_BankAccount` IBANs, or a hand-typed one), plus an amber transfer summary and an SCA hint.
 The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
+
+The default is re-derived whenever the selected account's currency changes, so switching to a
+connected GBP account moves the template from SEPA to FPS. A template the user picks by hand is never
+overwritten afterwards. Note that **no currency maps to DOMESTIC except USD** — for a EUR or GBP
+account it remains a manual choice.
+
+### Cross-currency transfers — ETP-5084
+
+When the invoice currency differs from the account currency, the amount is **converted to the account
+currency before the bank is instructed**, and the bank is told the account's currency
+(`PisPaymentBridge` sends `amount` = the converted figure, `currency_id` = the account's). The PIS
+block's amber summary states that converted figure — what will actually leave the account — with the
+invoice amount and the rate as a following clause (`cpPisAlertConverted`), so the user is never asked
+to authorize a number the modal did not show them.
+
+**The rate is the one in the modal's conversion field** (the editable `cpConversionRate` from
+ETP-4504, prefilled from `validate-exchange-rate`). Deliberately so: it is the same value, applied
+through the same `PaymentCurrencyConverter.convertedAmount`, that the replayed payment is booked at as
+`financialTransactionAmount`. The amount instructed to the bank and the amount posted to the ledger
+therefore agree by construction. A request that omits the rate entirely (a direct API caller, never
+the SPA) gets it seeded from the invoice's own exchange rate —
+`PaymentCurrencyConverter.seedInvoiceRateIfAbsent`, the ETP-4502 contract: the invoice's
+`ConversionRateDoc` first, then the general table — written back **into the request body**, because
+that body is the intent snapshot the replay reads.
+
+The request body itself is unchanged: `actual_payment` stays in the invoice currency and
+`conversionRate` rides along; the backend does the conversion.
+
+### Backend errors are shown verbatim, not as "no se pudo guardar" — ETP-5084
+
+`registerPayment` answers a rejection in NEO Headless's own envelope,
+`{error:{message,status}}`. The modal's `extractSaveError` only read Etendo's JsonDataService shape
+(`response.error.message`), so **every** backend rejection on this endpoint — an unsupported PIS
+template, a bad conversion rate, a failed eligibility check — collapsed into the generic
+`cpSaveFailed` copy and the real reason was visible only in the network tab. It now reads the NEO
+shape first and passes the message through `translateBackendError`, so it appears in the UI language.
+
+The most common one in practice: **the connected provider does not offer the selected template**
+(`backendError.pisTemplateNotSupportedByProvider`). Salt Edge providers differ in which templates
+they accept, and the currency default (USD→DOMESTIC) is only a default — if the bank refuses it, pick
+another template in the select. A message with no mapping in `lib/backendErrors.js` is shown raw,
+which is still far better than the generic copy.
+
+The draft-delete in the payment-history popup (`deletePayment`) had the same gap and was fixed with it.
 
 ### Confirm behavior
 
@@ -614,8 +668,9 @@ transaction. Elsewhere the `PPM` status answers the same question on its own.
   `pisTemplates`, `pisSupplierAccounts`), `PisPaymentBridge` (composes the public PSD2
   `GenerateBankPayment` with Etendo Go's own `return_to`).
 
-Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
-PIS, other currencies, scheduled payments.
+Scope: purchase invoices only. Bank accounts in EUR (SEPA), USD (DOMESTIC) or GBP (FPS); the invoice
+may be in **any** currency with a conversion rate (ETP-5084). Out of scope: receipts, batch/multi-invoice
+PIS, bank accounts in other currencies, scheduled payments.
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -814,7 +869,7 @@ The SII **Causa de Exención** in the SIF tab is now an **editable selector** ag
 
 - **Gating (mirrors the SII module's `ExemptTaxes` handler):** editable only when the invoice carries an exempt tax, is a draft, and has not been sent to SII (`siiFieldReadOnly`); otherwise visible-but-read-only. The SII exemption cause is optional (`ISMANDATORY=N`) — this is a parity/completeness improvement, not a submission fix.
 - **`hasExemptTaxes` (backend-served):** `AbstractInvoiceHeaderHandler#enrichHasExemptTaxes` injects it on the purchase- and sales-invoice header, detecting exempt taxes over **active invoice LINES only** (`c_invoiceline → c_tax.istaxexempt='Y'`), deliberately **not** `c_invoicetax` (stale rows linger there in Go drafts and would keep the field editable after the exempt line is removed). `refreshHeaderTotals` keeps it fresh after line add/edit/delete so the field re-locks correctly. Do not re-add the `c_invoicetax` branch (rationale comment in the code).
-- **Line-save signals (`InvoiceLineHandler`):** on a line save that leaves the invoice with exempt taxes and no header cause, the handler stamps `exemptionCauseAutoFilled` (if a default cause exists → auto-fill + info toast) or `exemptionCauseWarning` (no default → one-shot warning toast "Debería indicarse una causa de exención… solapa SIF"); mutually exclusive, raw-SQL/fail-safe. Auto-fill is dormant in Go (no default seeded) so the warning path is what fires.
+- **Line-save signals (`InvoiceLineHandler`):** on a line save that leaves the invoice with exempt taxes and no header cause, the handler stamps `exemptionCauseAutoFilled` (if a default cause exists → auto-fill + info toast) or `exemptionCauseWarning` (no default → one-shot warning toast "Debería indicarse una causa de exención… solapa SIF"); mutually exclusive, raw-SQL/fail-safe. Auto-fill is dormant in Go (no default seeded) so the warning path is what fires. **ETP-5027 — both toasts are SII-only:** they are gated on `showSii` in `SifTab.jsx`. The header exemption cause (`C_INVOICE.EM_Aeatsii_Cause_Exemption_ID`) and its selector exist only in the SII panel; VERI*FACTU and TicketBAI keep the exemption cause on the TAX master (`C_TAX.EM_Etvfac_Exemption_Cause` / `EM_Tbai_Exemptioncause`) and warn at the tax level on the invoice line — that line-level warning is itself direction-gated (ETP-5027, `getInvoiceFiscalTargets()`): VERI*FACTU never sends purchases and TicketBAI only sends them under BIZKAIA, so on a purchase invoice outside those cases neither warning shows, which is correct. `shouldAutoFillExemptionCause` does not check the org's fiscal system, so on a VERI*FACTU-only or TBAI-only org the SII column is always null and the flag fired on every exempt-line save — a false positive pointing at a field the UI never renders. The gate is frontend-only (the backend flag is left as-is); `showSii` is in the effect deps and the one-shot ref is latched only when a toast actually fires, so a late-resolving profile still gets its warning.
 - **Onboarding / data provisioning:** exemption causes E1–E6 (IVA, all `isdefault=N`) are seeded for new tenants via `modules/com.etendoerp.go/referencedata/sampledata/GOClient/AEATSII_CAUSE_EXEMPTION.xml` and for existing tenants via `cli/src/data-fixes/sql/20260803T120000Z__R17-sii-cause-exemption.sql`. Seeded with **no default cause** by design (correct cause is per-operation; Go has no cause-exemption maintenance window). See `docs/etendo-ad/tenant-remediation-knowledge.md`.
 - Tests: `SifTab.vitest.jsx`, `useEntity.coverage.vitest.jsx`, backend `AbstractInvoiceHeaderHandlerTest`/`InvoiceLineHandlerTest`, and the mocked E2E `e2e/tests/flows/sif-exemption-cause.mocked.spec.js` (covers both invoice types). Also fixed: `SelectorInput.jsx` keeps a controlled `''` when empty so clearing takes effect on the first pick.
 ## Factura Rectificativa — ETP-4737

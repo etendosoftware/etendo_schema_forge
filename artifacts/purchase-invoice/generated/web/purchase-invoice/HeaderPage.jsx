@@ -10,7 +10,6 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
-import SifErrorBanner from '@/windows/custom/purchase-invoice/SifErrorBanner';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
@@ -1022,13 +1021,12 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
-        formFooter={SifErrorBanner}
         hideDeleteWhenComplete
         hidePrintWhen={true}
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {"saveBeforeAttach":true} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
