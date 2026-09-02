@@ -43,17 +43,21 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
 
     apiFetch(`/paymentPlan?parentId=${parentId}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data) => {
+      // `async` so both exits are the same type (an array): the early one returned a bare
+      // [] while the other returned a Promise, which is javascript:S3800. Awaiting here
+      // leaves the behaviour identical - the outer .then() unwrapped that Promise anyway.
+      .then(async (data) => {
         const schedules = data?.response?.data ?? data?.data ?? [];
         if (schedules.length === 0) return [];
-        return Promise.all(
+        const results = await Promise.all(
           schedules.map((s) =>
             apiFetch(`/paymentDetails?parentId=${s.id}`)
               .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
               .then((d) => d?.response?.data ?? d?.data ?? [])
               .catch(() => [])
           )
-        ).then((results) => results.flat());
+        );
+        return results.flat();
       })
       .then((details) => setRows(details))
       .catch(() => setRows([]))
