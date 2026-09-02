@@ -117,6 +117,9 @@
       },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "sales-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",
@@ -2899,6 +2902,9 @@
         }
       },
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "sales-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",

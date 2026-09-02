@@ -3,6 +3,9 @@
   "window": {
     "category": "inventory",
     "name": "Product",
+    "vectorSearch": {
+      "target": "product"
+    },
     "breadcrumb": "Inventory / Product",
     "layoutType": "gallery",
     "sidebarLayout": true,

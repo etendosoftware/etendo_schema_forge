@@ -43,7 +43,7 @@ describe('CommandPalette', () => {
   });
 
   it('renders translated label inside CommandItem span', () => {
-    assert.match(src, /<span>\s*\{translatedLabel\}\s*<\/span>/);
+    assert.match(src, /<span>\s*<HighlightedQuery\s+text=\{translatedLabel\}\s+query=\{query\}\s*\/?>\s*<\/span>/);
   });
 
   it('does not hardcode English group names as literal strings outside JSX', () => {
@@ -59,5 +59,72 @@ describe('CommandPalette', () => {
 
   it('skips groups where all items are hidden (returns null)', () => {
     assert.match(src, /visibleItems\.length\s*===\s*0\s*\)\s*return\s*null/);
+  });
+
+  it('uses contract-declared vector targets for semantic results', () => {
+    assert.match(src, /resolveVectorSearchTargets/);
+    assert.match(src, /useVectorSearchContracts/);
+    assert.match(src, /useVectorSearch/);
+  });
+
+  it('keeps vector matches opt-in and renders them as a separate result group', () => {
+    assert.match(src, /exactVectorMatches\.length\s*>\s*0/);
+    assert.match(src, /relevantSearchResults/);
+  });
+
+  it('renders semantic matches before menu navigation groups', () => {
+    const semanticGroup = src.indexOf('data-testid="vector-search-relevant"');
+    const menuGroups = src.indexOf('menuConfig.menu.filter');
+    assert.ok(semanticGroup >= 0 && semanticGroup < menuGroups);
+  });
+
+  it('keeps semantic matches visible even when their label does not contain the query text', () => {
+    assert.match(src, /value\s*=\s*\{`\$\{query\}\s+\$\{label\}/);
+  });
+
+  it('shows a searching placeholder while vector search is in flight', () => {
+    assert.match(src, /isVectorSearchLoading/);
+    assert.match(src, /data-testid="vector-search-loading"/);
+    assert.match(src, /role="status"/);
+  });
+
+  it('opens a semantic result in its contract-declared window record route', () => {
+    assert.match(src, /resolveVectorSearchTargets/);
+    assert.match(src, /navigate\(`\/\$\{target\.specName\}\/\$\{match\.id\}`\)/);
+    assert.match(src, /onSelect=\{\(\)\s*=>\s*handleVectorSelect\(match\)\}/);
+  });
+
+  it('shows the normalized vector similarity score for each semantic match', () => {
+    assert.match(src, /match\.score/);
+    assert.match(src, /Math\.round\(match\.score\s*\*\s*100\)/);
+  });
+
+  it('shows the contract-declared entity label on each semantic match', () => {
+    assert.match(src, /tMenu\(target\.label\)\s*\|\|\s*target\.label/);
+    assert.match(src, /\{entityLabel\}/);
+  });
+
+  it('defaults semantic search to the contract target of the current window and lets users clear it', () => {
+    assert.match(src, /useLocation/);
+    assert.match(src, /resolveVectorSearchTargetForPath/);
+    assert.match(src, /requestedVectorSearchTargetKeys/);
+    assert.match(src, /data-testid="vector-search-scope"/);
+    assert.match(src, /setSelectedVectorTargetKeys\(null\)/);
+  });
+
+  it('renders contract-declared window-filter suggestions before navigation results', () => {
+    assert.match(src, /resolveWindowSearchSuggestions/);
+    assert.match(src, /window-filter-suggestions/);
+    assert.match(src, /navigate\(suggestion\.path\)/);
+  });
+
+  it('queries each target independently when all windows are selected', () => {
+    assert.match(src, /selectedVectorTargetKeys\s*===\s*null/);
+    assert.match(src, /useVectorSearch/);
+  });
+
+  it('renders the related-results group at most once without a more-results action', () => {
+    assert.equal((src.match(/data-testid="vector-search-related"/g) || []).length, 1);
+    assert.doesNotMatch(src, /search-more-related|setShowRelatedMatches|searchMoreRelated/);
   });
 });

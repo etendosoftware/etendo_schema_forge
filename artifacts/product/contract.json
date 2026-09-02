@@ -9,6 +9,9 @@
       "name": "Product",
       "primaryEntity": "product",
       "category": "inventory",
+      "vectorSearch": {
+        "target": "product"
+      },
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,
@@ -2442,6 +2445,9 @@
       "name": "Product",
       "primaryEntity": "product",
       "category": "inventory",
+      "vectorSearch": {
+        "target": "product"
+      },
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,

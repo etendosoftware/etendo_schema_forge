@@ -138,6 +138,9 @@
       ],
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",
@@ -5372,6 +5375,9 @@
         }
       ],
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",

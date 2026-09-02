@@ -4,6 +4,8 @@
 
 Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.
 
+Global semantic search opts this window in through `go.purchase-invoice`. It indexes only `C_Invoice` records where `IsSOTrx = N`, using `DocumentNo` as content; selecting a result opens this window's editable record route.
+
 ## What this window should allow
 
 - Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as "Document No." / "Nº documento") alongside the other payable-identifying fields used by this workflow.

@@ -352,7 +352,10 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     const valueTrigger = popover.getByRole('button', { name: 'Seleccionar valor' });
     await valueTrigger.click();
 
-    const searchInput = page.getByPlaceholder('Buscar');
+    // The global search bar also contains a longer placeholder beginning with
+    // "Buscar". Use the picker input's exact placeholder to avoid matching
+    // both controls now that global search is present on every window.
+    const searchInput = page.locator('input[placeholder="Buscar"]');
     await expect(searchInput).toBeVisible({ timeout: 5_000 });
 
     // Validate the searcher: typing a fragment of the label narrows the

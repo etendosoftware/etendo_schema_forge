@@ -14,6 +14,7 @@ identity of separate data series and is not a UI status or theme role.
 
 ## What this window should allow
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
+- Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.
 - Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
@@ -81,6 +82,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 
 ## Manual verification
 1. Open `/product` and confirm the list is a gallery of product cards rather than a flat table.
+1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
 4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
@@ -119,6 +121,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.test.js` verifies that `ProductSidebar` uses the shared `formatDashboardAxisTick` utility for Y-axis labels and does not define a local formatting function. Beyond that, automated evidence in this repo is structural and contract-backed rather than end-to-end proof of the full product workflow.
 
 ## Pipeline regeneration — ETP-4402
