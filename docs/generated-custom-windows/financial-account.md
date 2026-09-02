@@ -537,6 +537,44 @@ Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
 
+### Widget language and the waiting overlay (ETP-5102)
+
+**The Salt Edge widget opens in the language of whoever asked.** It used to always open in
+Spanish: the `attempt.locale` sent when creating the Salt Edge session was the literal `"es"` in
+all three payload builders of the PSD2 module — `BankIntegrationUtils.buildAndConnect` (connect),
+`BankIntegrationUtils.reconnectSaltEdgeConnection` (reconnect) and
+`GenerateBankPayment.processPayment` (PIS). They now call
+`SaltEdgeLocaleResolver.resolve()` (`com.etendoerp.psd2.bank.integration`), which reads
+`OBContext.getOBContext().getLanguage()` and maps the Etendo code onto the widget's own locale
+(`es_ES → es`, `en_US`/`en_GB` → `en`, keeping the region only where Salt Edge distinguishes it:
+`es_MX → es-MX`, `pt_BR → pt-BR`, `zh_CN`, `zh_TW`). An unknown or missing language falls back to
+`es`, the previous behaviour.
+
+No frontend change and no new bridge parameter were needed: the GO locale already reaches the
+`OBContext` on every NEO request, because `NeoAuthenticator.authenticateJwt` applies the SPA's
+`Accept-Language` header to it (`NeoAuthenticator.java:109-111` → `NeoLanguage.applyToContext`).
+Verified live: with GO in Spanish and the Classic user in *English (USA)*,
+`GET /sws/neo/listmenu` carries `Accept-Language: es_ES`. **The fix therefore reaches Etendo
+Classic too** — the PSD2 module is shared and depends only on Core, so it cannot tell which front
+end is calling; in the AD window the widget now follows the user's AD language. Deliberate
+consequence, not a side effect: it is the same bug on both sides.
+
+> Anyone touching `SaltEdgeLocaleResolver` must keep it on Core APIs only. PSD2 declares
+> dependencies on Core and the Openbravo Framework and has zero references to
+> `com.etendoerp.go` — the dependency runs GO → PSD2. Reaching for GO's `NeoLanguage` helper
+> would invert it and break every Classic-only installation.
+
+**The "Conectando con tu banco…" overlay has no close button, on purpose.** `DialogContent`
+(app-shell-core) always renders a Radix close X and offers no prop to suppress it, while
+`BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
+the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
+now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
+`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
+picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
+created or linked and the user can retry without reloading. Wiring the X instead would have
+required an external abort handle that `launchSaltEdgePopup` does not expose.
+
 ### Bank logo (ETP-4764 follow-up)
 
 The connected provider's logo image is persisted rather than fetched live per row. It lives on
