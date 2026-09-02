@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowUpRight } from 'lucide-react';
+import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -8,8 +8,9 @@ import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
-import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function PeriodLink({ label, onClick }) {
   return (
     <button
@@ -42,36 +43,12 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [processedMap, setProcessedMap] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const recordId = recordIdProp ?? data?.id;
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [barVisible, setBarVisible] = useState(false);
   const [barClosing, setBarClosing] = useState(false);
-  const [barRect, setBarRect] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const barAnchorRef = useRef(null);
-
-  useEffect(() => {
-    if (!barVisible) return;
-    const el = barAnchorRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-    }
-    window.addEventListener('scroll', measure, true);
-    window.addEventListener('resize', measure, true);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure, true);
-    };
-  }, [barVisible]);
 
   useEffect(() => {
     if (selectedRows.size > 0) {
@@ -104,8 +81,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
-    const url = `${apiBaseUrl}/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`;
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`/amortizationLine?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`)
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -116,7 +92,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         const ids = [...new Set(normalizedRows.map(l => l.amortization).filter(Boolean))];
         return Promise.all(
           ids.map(id =>
-            fetch(`${amortBase}/header/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+            apiFetch(`${amortBase}/header/${id}`, { baseUrl: '' })
               .then(r => r.ok ? r.json() : null)
               .then(json => {
                 const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
@@ -129,7 +105,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .then(entries => setProcessedMap(new Map(entries ?? [])))
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl, apiFetch]);
 
   // ETP-4981 — a failed DELETE (e.g. blocked server-side for a line whose
   // amortization plan is already confirmed) was never surfaced: Promise
@@ -145,10 +121,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     try {
       const ids = [...selectedRows];
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
-          method: 'DELETE',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }).then(async (res) => {
+        apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;
         }),
@@ -161,7 +134,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     } finally {
       setDeleting(false);
     }
-  }, [apiBaseUrl, token, selectedRows, fetchLines, ui]);
+  }, [apiFetch, selectedRows, fetchLines, ui]);
 
   useEffect(() => {
     fetchLines();
@@ -235,10 +208,18 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
               {lines.map((line) => {
                 const rowId = line.id ?? line.sEQNoAsset;
                 const isSelected = selectedRows.has(rowId);
+                // ETP-5030 — exactly ONE background per row, mirroring
+                // `computeRowClassName` (contract-ui/InlineLinesPanel.jsx).
+                // The `hover:` half is not optional: the pointer is over the
+                // row at the instant the checkbox is clicked, so without it
+                // `hover:bg-muted/30` would repaint over the tint at exactly
+                // the moment the user looks for feedback.
                 return (
                   <tr
                     key={rowId}
-                    className="hover:bg-muted/30"
+                    className={isSelected
+                      ? 'bg-primary/5 hover:bg-primary/5'
+                      : 'hover:bg-muted/30'}
                   >
                     <td className="py-3 pr-2" style={{ width: 40 }}>
                       <Checkbox
@@ -296,20 +277,30 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   return (
     <div className="pt-2 pb-5">
       {renderBody()}
-      <div ref={barAnchorRef} style={{ height: 48 }} />
-      <LinesSelectionBar
+      <SelectionToolbar
         visible={barVisible}
         closing={barClosing}
-        barRect={barRect}
-        count={selectedRows.size}
-        selectedLabel={ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
-        deleting={deleting}
-        deleteTitle={ui('delete') ?? 'Eliminar'}
-        closeTitle={ui('close') ?? 'Cerrar'}
-        onDelete={handleDeleteSelected}
         onClose={clearSelection}
-        compact
-        data-testid="LinesSelectionBar__34159c" />
+        closeTitle={ui('close') ?? 'Cerrar'}
+        data-testid="SelectionToolbar__34159c">
+        <span className="text-sm font-medium">
+          {ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
+        </span>
+        {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label: the
+            applied Figma instance's own canvas render has no stroke around
+            this icon, just red icon color — ghost, like every other
+            secondary action. */}
+        <button
+          type="button"
+          disabled={deleting}
+          title={ui('delete') ?? 'Eliminar'}
+          aria-label={ui('delete') ?? 'Eliminar'}
+          onClick={handleDeleteSelected}
+          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
+        </button>
+      </SelectionToolbar>
     </div>
   );
 }

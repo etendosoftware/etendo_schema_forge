@@ -3,73 +3,110 @@
 <html><head><meta charset="UTF-8">
 <style>
 {{{css}}}
+/* Trial Balance is the only report whose header row uses table-layout: fixed
+   (needed so its 6 percentage-width columns stay aligned between the header
+   row and every .acct-block's own body rows) — a real column width instead
+   of the auto-sizing every other report's thead gets. Combined with the
+   shared .report-table thead th's `white-space: nowrap`, that means a header
+   that doesn't fit its fixed column doesn't grow it, it bleeds text into the
+   next one instead: "ACCOUNT NO." into "NAME", and — worse, since it embeds
+   a dynamic formatted date — "BALANCE AS OF 2026-08-13" into "DEBIT". Both
+   only showed up once Inter (ETP-5013) made bold uppercase header text
+   measurably wider than whatever it rendered with before. Overridden here,
+   scoped to this report only, so every header wraps onto a second line
+   instead of overflowing when it doesn't fit. */
+.report-table thead th { white-space: normal; line-height: 1.2; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
+{{#if meta.isInteractive}}
 .account-link { cursor: pointer; color: #2563eb; text-decoration: underline; font-weight: 600; }
 .account-link:hover { opacity: 0.75; text-decoration: none; }
-/* Dimension containers (ETP-4898) — same visual language as Libro Mayor's
-   dim-group: a bordered box per dimension value, with a chip-badge header,
-   holding that dimension's account rows. Only used when "Agrupar por" picks
-   a dimension; the flat single-level table below is untouched otherwise. */
-.dim-group { border: 1px solid #cbd5e1; border-radius: 2mm; margin-bottom: 4mm; overflow: hidden; }
-.dim-group-head { display: flex; align-items: center; gap: 3mm; background: #000000; color: #ffffff; padding: 2.5mm 4mm; }
-.dim-group-head .chip { font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.6); border-radius: 3mm; padding: 0.5mm 2mm; }
-.dim-group-head .value { font-weight: 700; font-size: 10.5pt; }
-.dim-group-body { padding: 0; }
-.dim-group-body .report-table { margin: 0; }
+{{/if}}
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
+@media print {
+  .account-link { color: inherit !important; text-decoration: none !important; cursor: default !important; font-weight: inherit !important; }
+}
+/* Account blocks (ETP-5013) — one bordered block PER ACCOUNT, its dimension
+   breakdown nested inside and the account itself as the block's closing total
+   row. Matches Classic's real Trial Balance layout (verified against a real
+   Classic PDF export) — replaces the ETP-4898 "dim-group" card, which nested
+   accounts inside a dimension instead and made every dimension's "total" net
+   to 0 (summing unrelated accounts for one contact has no accounting
+   meaning). Only used when "Agrupar por" picks a dimension; the flat
+   single-level table below is untouched. */
+.acct-block { margin-bottom: 3mm; }
+/* .acct-total is ALSO the flat (ungrouped) branch's single grand-total row
+   (below) — its own border-top is all that row needs, so the heavy
+   between-blocks separator is scoped to .acct-block (grouped mode only),
+   never bare .acct-total, or it leaks into the flat view's Total row too. */
 .acct-total td { font-weight: 700; background: #f1f5f9; border-top: 1px solid #cbd5e1 !important; }
+.acct-block .acct-total td { border-bottom: 2px solid #1a1a2e !important; }
+/* The heavy separator only makes sense BETWEEN blocks — after the last
+   account, nothing follows it, so it read as a stray line before the footer. */
+.acct-block:last-of-type .acct-total td { border-bottom: none !important; }
 </style>
 </head>
 <body><div class="report-container">
   <div class="report-header">
-    <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} {{meta.ui.records}}</div></div>
+    <div><div class="report-title">{{meta.title}}</div>
+</div>
+    {{> document-branding}}
   </div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
+  </div>
+  {{/if}}
 
 
   {{#ifCond meta.params.groupBy '!==' ''}}
-  <div class="dim-groups">
-    {{#each meta.tbGroups}}
-    <div class="dim-group">
-      <div class="dim-group-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{this.dimensionValue}}</span></div>
-      <div class="dim-group-body">
-        <table class="report-table" style="table-layout: fixed;">
-          <colgroup>
-            <col style="width:10%"><col style="width:30%"><col style="width:15%">
-            <col style="width:12%"><col style="width:12%"><col style="width:15%">
-          </colgroup>
-          <thead>
-            <tr>
-              <th style="width:10%">{{@root.meta.labels.account_no}}</th>
-              <th style="width:30%">{{@root.meta.labels.account_name}}</th>
-              <th style="width:15%" class="cell-amount">{{@root.meta.labels.balanceAsOf}} {{@root.meta.params.dateFrom}}</th>
-              <th style="width:12%" class="cell-amount">{{@root.meta.labels.activity_debit}}</th>
-              <th style="width:12%" class="cell-amount">{{@root.meta.labels.activity_credit}}</th>
-              <th style="width:15%" class="cell-amount">{{@root.meta.labels.balanceAsOf}} {{@root.meta.params.dateTo}}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#each this.accounts}}
-            <tr>
-              <td>{{#ifCond @root.meta.params.accountLevel '===' 'S'}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{lookup this 'account_id'}}',accountValue:'{{lookup this 'account_no'}}',accountName:'{{lookup this 'account_name'}}'},'*')">{{lookup this 'account_no'}}</span>{{else}}{{lookup this 'account_no'}}{{/ifCond}}</td>
-              <td>{{lookup this 'account_name'}}</td>
-              <td class="cell-amount">{{formatCurrency (lookup this 'opening_balance')}}</td>
-              <td class="cell-amount">{{formatCurrency (lookup this 'activity_debit')}}</td>
-              <td class="cell-amount">{{formatCurrency (lookup this 'activity_credit')}}</td>
-              <td class="cell-amount">{{formatCurrency (lookup this 'closing_balance')}}</td>
-            </tr>
-            {{/each}}
-            <tr class="acct-total">
-              <td colspan="2">{{@root.meta.ui.total}}</td>
-              <td class="cell-amount">{{formatCurrency (sumField this.accounts 'opening_balance')}}</td>
-              <td class="cell-amount">{{formatCurrency (sumField this.accounts 'activity_debit')}}</td>
-              <td class="cell-amount">{{formatCurrency (sumField this.accounts 'activity_credit')}}</td>
-              <td class="cell-amount">{{formatCurrency (sumField this.accounts 'closing_balance')}}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {{/each}}
-  </div>
+  {{#each meta.tbGroups}}
+  <table class="report-table acct-block" style="table-layout: fixed;">
+    <colgroup>
+      <col style="width:10%"><col style="width:30%"><col style="width:15%">
+      <col style="width:12%"><col style="width:12%"><col style="width:15%">
+    </colgroup>
+    {{#ifCond @index '===' 0}}
+    <thead>
+      <tr>
+        <th style="width:10%">{{@root.meta.labels.account_no}}</th>
+        <th style="width:30%">{{@root.meta.labels.account_name}}</th>
+        <th style="width:15%" class="cell-amount">{{@root.meta.labels.balanceAsOf}} {{@root.meta.params.dateFrom}}</th>
+        <th style="width:12%" class="cell-amount">{{@root.meta.labels.activity_debit}}</th>
+        <th style="width:12%" class="cell-amount">{{@root.meta.labels.activity_credit}}</th>
+        <th style="width:15%" class="cell-amount">{{@root.meta.labels.balanceAsOf}} {{@root.meta.params.dateTo}}</th>
+      </tr>
+    </thead>
+    {{/ifCond}}
+    <tbody>
+      {{#each this.dimensionRows}}
+      <tr>
+        <td></td>
+        <td>{{this.dimensionValue}}</td>
+        <td class="cell-amount">{{formatCurrency this.opening_balance}}</td>
+        <td class="cell-amount">{{formatCurrency this.activity_debit}}</td>
+        <td class="cell-amount">{{formatCurrency this.activity_credit}}</td>
+        <td class="cell-amount">{{formatCurrency this.closing_balance}}</td>
+      </tr>
+      {{/each}}
+      <tr class="acct-total">
+        <td>{{#ifCond @root.meta.params.accountLevel '===' 'S'}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{this.account_id}}',accountValue:'{{this.account_no}}',accountName:'{{this.account_name}}'},'*')">{{this.account_no}}</span>{{else}}{{this.account_no}}{{/ifCond}}</td>
+        <td>{{this.account_name}}</td>
+        <td class="cell-amount">{{formatCurrency this.opening_balance}}</td>
+        <td class="cell-amount">{{formatCurrency this.activity_debit}}</td>
+        <td class="cell-amount">{{formatCurrency this.activity_credit}}</td>
+        <td class="cell-amount">{{formatCurrency this.closing_balance}}</td>
+      </tr>
+    </tbody>
+  </table>
+  {{/each}}
   {{else}}
   <table class="report-table" style="table-layout: fixed;">
     <colgroup>
@@ -108,8 +145,7 @@
   </table>
   {{/ifCond}}
 
-  <div class="report-footer">
-    <div class="report-summary">{{meta.ui.total}}: {{meta.recordCount}} {{meta.ui.records}}</div>
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div></body></html>

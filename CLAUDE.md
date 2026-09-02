@@ -32,7 +32,7 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | qa.md | Sentinel | QA | Methodical |
 | documentarian.md | Sage | DOCS | Comprehensive |
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
-| merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER the epic** (the block hits the epic once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
+| merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER `develop`** (the block hits `develop` once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
 
 When spawning agents, use `subagent_type="general-purpose"` and include the agent identity/role in the prompt.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
@@ -55,7 +55,7 @@ Include the agent's name, role, and key rules in the prompt passed to the subage
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
 | "Check ETP-4321 for the merge block" / "is it ready to merge?" | **Blockie** | Pre-flight PR verification across the 3 repos for a merge block |
-| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never the epic) |
+| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never `develop` directly) |
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
@@ -262,6 +262,18 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 - A comparator that only orders full timestamp instants (no local-getter reads, no day-bucket keys) is timezone-independent and does not need this helper — don't over-apply the fix where the bug can't occur.
 - Before writing a new date formatter or date-bucketing comparator, **grep for `parseCalendarDate`/`formatCalendarDate` first** — there is almost certainly an existing pattern to copy in a sibling window/component (10+ call sites already use it).
 
+## Authenticated Requests (MANDATORY)
+
+**Every request to the backend MUST go through the shared helper — never a bare `fetch`.** A raw `fetch` re-decides the headers, the base URL, `credentials`, the `FormData` boundary and what an expired session does, and getting the headers wrong is SILENT: a missing `Accept-Language` makes the backend resolve reference data (`*_Trl` names: countries, UoMs, `AD_Ref_List`) in the user's AD language instead of the UI locale, with no error anywhere. That shipped three times (ETP-4685, then ETP-5022 across País / UOM / UOM for Weight) before ETP-5022 migrated all 293 raw calls across 121 files.
+
+- **Component or hook:** `const apiFetch = useApiFetch(apiBaseUrl)` from `@/auth/useApiFetch.js`. Put `apiFetch` in the dependency array of any callback/effect that uses it.
+- **Plain module:** `import { apiFetch } from '@etendosoftware/app-shell-core/auth/api'` — the core subpath, NEVER the `@/auth/api.js` barrel (it re-exports `.jsx`, which plain `node --test` cannot load).
+- Options beyond `fetch`'s own: `on401: 'ignore'` (the 401 is a domain answer, not an expired session), `baseUrl: ''` (the URL is already complete or points outside the base), `token` (a plain module was handed one), `credentials`.
+- A test that needs a token supplies a **session**, not a `token` prop — mock `useAuthOptional` from `@etendosoftware/app-shell-core/auth`, spreading the original, and return a stable object.
+- Two guardrails fail the build on regression: `tools/app-shell/test/auth-header-policy.test.js` (hand-rolled `Authorization`) and `tools/app-shell/test/no-raw-fetch.test.js` (bare `fetch`). Genuine non-API calls (`blob:` URLs, the `/jsreport/*` container proxy) opt out with a `raw-fetch-ok: <reason>` comment; unauthenticated-by-design files are listed in the second test.
+
+Full reference (why, the 401-to-logout wiring, working without an `AuthProvider`, the documented exceptions): `docs/request-policy.md`.
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).
@@ -279,7 +291,7 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
 - **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
-**Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs). Note that
+**Bypass:** `git commit --no-verify` (WIP only — never on a PR targeting `develop`). Note that
 `git push --no-verify` is a different matter and is blocked for agents — see
 **Agent Guardrails** below.
 

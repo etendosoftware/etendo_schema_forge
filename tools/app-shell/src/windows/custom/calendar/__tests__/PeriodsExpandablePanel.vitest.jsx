@@ -63,6 +63,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 function selectOpenCloseOption(value) {
   fireEvent.change(screen.getByTestId('select-control'), { target: { value } });
@@ -498,11 +499,12 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
 
     fireEvent.click(screen.getByTestId('document-select-d1'));
     expect(screen.getByTestId('document-bulk-bar-p1')).toBeInTheDocument();
-    // The count suffix on the bulk button is a raw JSX literal (not routed through ui()), so
-    // it's a reliable assertion target regardless of whether a LocaleProvider is present —
-    // unlike `document-selection-count`, whose text comes entirely from ui('selected'), which
-    // falls back to the untranslated key (no {count} substitution) without a real dictionary.
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(1)');
+    // The bulk button itself carries no "(count)" suffix — deliberately removed (ETP-4972
+    // live-QA finding: redundant, the pill's own counter segment already shows it). This
+    // test file's `render()` wraps every call in a real `LocaleProvider` with real dictionaries
+    // (see the file-header comment), so `document-selection-count` reliably reflects the real
+    // `ui('selected')` translation, not a raw/untranslated fallback.
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('1 Selected');
   });
 
   it('tracks multiple selected rows and shows the correct count', async () => {
@@ -511,11 +513,11 @@ describe('PeriodsExpandablePanel — bulk document selection and open/close', ()
     fireEvent.click(screen.getByTestId('document-select-d2'));
     fireEvent.click(screen.getByTestId('document-select-d3'));
 
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(3)');
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('3 Selected');
 
     // Unselecting one drops the count back down, not to zero.
     fireEvent.click(screen.getByTestId('document-select-d2'));
-    expect(screen.getByTestId('document-bulk-openclose-p1')).toHaveTextContent('(2)');
+    expect(screen.getByTestId('document-selection-count')).toHaveTextContent('2 Selected');
   });
 
   it('clears the selection when the period is collapsed or a different period is expanded', async () => {
@@ -851,7 +853,16 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
     expect(stickyWrapperFor('p1').className).not.toMatch(/sticky/);
   });
 
-  it('keeps the bulk action bar inside the same sticky wrapper as the period row once documents are selected', async () => {
+  // ETP-4972 — before this ticket, the bulk action bar was an in-flow
+  // element rendered as a child of this same sticky-positioned wrapper, so
+  // it inherited the row's own sticky/scroll behavior. It now renders
+  // through the shared `SelectionToolbar`, which portals straight to
+  // `document.body` with true viewport-fixed coordinates — it is no longer
+  // a DOM descendant of the wrapper at all, and doesn't need to be: it can
+  // never scroll away or be clipped regardless of where the period row
+  // ends up. This test now verifies that split explicitly, rather than
+  // asserting an ancestry relationship that no longer exists.
+  it('period row keeps its sticky positioning once documents are selected; the bulk action bar itself floats independently via the portaled SelectionToolbar', async () => {
     render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Feb-2027'));
 
@@ -861,7 +872,12 @@ describe('PeriodsExpandablePanel — sticky expanded period row + bulk action ba
 
     const p1Wrapper = stickyWrapperFor('p1');
     expect(p1Wrapper.className).toMatch(/\bsticky\b/);
-    expect(p1Wrapper.querySelector('[data-testid="document-bulk-bar-p1"]')).toBeInTheDocument();
+    // The bar is NOT nested inside the sticky wrapper anymore...
+    expect(p1Wrapper.querySelector('[data-testid="document-selection-count"]')).toBeNull();
+    // ...it lives in SelectionToolbar's own portaled, fixed-position pill.
+    const bar = screen.getByTestId('document-selection-count').closest('.selection-toolbar');
+    expect(bar).toBeTruthy();
+    expect(bar.closest('.fixed')).toBeTruthy();
   });
 
   it('moves the sticky unit to the newly expanded period, and the previous one is no longer sticky', async () => {
@@ -1034,5 +1050,95 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
     const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('ZZZ');
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP A (Tailwind utility on the row element). Before the fix the document
+// row had NO selection feedback at all — ticking its checkbox only moved the
+// bulk-action bar, the row itself never changed.
+//
+// This row deliberately carries a background and nothing else: nothing behind it
+// paints one (the `pl-8` list container and the outer `border-b` wrapper are
+// transparent; the sticky `bg-card` is on the period header, a sibling above,
+// not an ancestor), and the row has no hover background of its own. That is why
+// the hover case below asserts the ABSENCE of any `hover:bg-*` utility — with
+// nothing to repaint over it, the tint is unconditional and survives hover by
+// construction. A `hover:bg-*` appearing here later would be the regression.
+describe('PeriodsExpandablePanel — ETP-5030 selected-row shading', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/periodControl')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
+      }
+      if (url.includes('/documents')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [DOC, DOC2, DOC3] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  /** The document row <div> that owns the given document checkbox. */
+  const rowOf = (docId) => screen.getByTestId(`document-select-${docId}`).parentElement;
+
+  async function renderExpandedDocuments() {
+    render(<PeriodsExpandablePanel parentId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    await waitFor(() => screen.getByText('Jan-2027'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('document-select-d1'));
+  }
+
+  it('tints ONLY the ticked document row and leaves the others untinted', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+    // Negative half: the untouched rows must not have picked up the tint. They
+    // keep their layout classes, so the row element is definitely still there.
+    expect(backgroundUtilities(rowOf('d2'))).toEqual([]);
+    expect(backgroundUtilities(rowOf('d3'))).toEqual([]);
+    expect(rowOf('d2').className).toContain('flex items-center gap-2 py-1.5');
+  });
+
+  it('removes the tint when the document row is unticked', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual([]);
+  });
+
+  it('keeps the tint under the pointer: the selected row declares no hover background that could repaint over it', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+
+    const row = rowOf('d1');
+    // Exactly one background utility, and no `hover:bg-*` at all — so the tint
+    // cannot be covered while the pointer is on the row, which is precisely
+    // when the user clicks the checkbox and looks for feedback.
+    expect(countBackgroundUtilities(row)).toBe(1);
+    expect(hoverBackgroundUtilities(row)).toEqual([]);
+  });
+
+  it('drops the tint from every row when the selection is cleared from the bulk bar', async () => {
+    await renderExpandedDocuments();
+
+    fireEvent.click(screen.getByTestId('document-select-d1'));
+    fireEvent.click(screen.getByTestId('document-select-d2'));
+    expect(backgroundUtilities(rowOf('d1'))).toEqual(['bg-primary/5']);
+    expect(backgroundUtilities(rowOf('d2'))).toEqual(['bg-primary/5']);
+
+    // Collapsing the period clears the selection (existing behaviour), so the
+    // tint must not survive a re-expand.
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    fireEvent.click(screen.getByTestId('period-row-expand-p1'));
+    await waitFor(() => screen.getByTestId('document-select-d1'));
+
+    expect(backgroundUtilities(rowOf('d1'))).toEqual([]);
+    expect(backgroundUtilities(rowOf('d2'))).toEqual([]);
   });
 });

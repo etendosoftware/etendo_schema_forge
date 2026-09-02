@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import { ListChecks } from 'lucide-react';
+import { FileCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 
@@ -87,16 +87,36 @@ export default function BulkDocumentAction({
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5"
-        onClick={handleOpen}
+      {/* ETP-4972 — plain hand-rolled button (not the shared shadcn Button):
+          Button's size="sm" bakes in text-xs + `[&_svg]:size-4`, and that
+          descendant selector beats a child's own `h-3.5 w-3.5` classes on
+          CSS specificity alone regardless of Tailwind/twMerge class order —
+          it was rendering this button smaller-text/bigger-icon than the
+          sibling "Crear factura" button (BulkInvoiceFromShipment.jsx), which
+          made the pair look mismatched even though both are Figma "Size: md".
+          Mirrors that button's classes exactly so both render identically.
+          Keeps its text label: Ale (design) confirmed icon-only is fine for
+          universally-recognized actions (print, clone, delete) but this one
+          needs it — the same checklist icon here means "Confirmar" in some
+          windows and "Procesado masivo" in others depending on `labelKey`,
+          so the icon alone isn't even consistently meaningful. Figma
+          "Confirmar" button (Button 7, verified in Dev Mode): icon
+          file-checkmark → lucide FileCheck, padding 7px/12px, gap 4px. */}
+      <button
+        type="button"
         disabled={running}
+        onClick={handleOpen}
+        title={ui(labelKey)}
+        className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
+        style={{
+          color: 'hsl(var(--floating-toolbar-fg))',
+          cursor: running ? 'not-allowed' : 'pointer',
+          opacity: running ? 0.5 : 1,
+        }}
         data-testid="Button__90fe6a">
-        <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__90fe6a" />
-        {ui(labelKey)} ({selectedRows.length})
-      </Button>
+        <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__90fe6a" />
+        {ui(labelKey)}
+      </button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
         <DialogContent data-testid="DialogContent__90fe6a">
           <DialogHeader data-testid="DialogHeader__90fe6a">

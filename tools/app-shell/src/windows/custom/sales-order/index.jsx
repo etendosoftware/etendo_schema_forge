@@ -103,7 +103,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   // ETP-4888 point 5 follow-up — see LINE_TAX_SIF_TRIGGER_ENABLED above for the
   // decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales', specName: 'sales-order',
   });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated

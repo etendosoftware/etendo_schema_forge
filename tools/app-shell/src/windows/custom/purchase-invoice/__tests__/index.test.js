@@ -64,10 +64,10 @@ describe('PurchaseInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
     assert.match(src, /const\s+LINE_TAX_SIF_TRIGGER_ENABLED\s*=\s*true\s*;/);
   });
 
-  it('calls the hook with apiBaseUrl, token, enabled, recordId and windowCategory: "purchases"', () => {
+  it('calls the hook with apiBaseUrl, token, enabled, recordId, windowCategory: "purchases" and specName: "purchase-invoice"', () => {
     assert.match(
       src,
-      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'purchases',?\s*\n?\s*\}\)/,
+      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'purchases',\s*specName:\s*'purchase-invoice',?\s*\n?\s*\}\)/,
     );
   });
 

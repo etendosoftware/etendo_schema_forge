@@ -102,8 +102,8 @@ outstanding amount and the user turned on the "Ajustar diferencia" toggle at cre
 `purchase-invoice.md` for the `NewPaymentEntryModal` toggle), the shortfall was not left as a
 pending balance — it was written off. This row shows that written-off amount, i.e. the part of the
 invoice the customer/vendor was released from paying because it was posted to the business
-partner group's write-off account instead. It is **not** a discount, credit, or G/L-item
-allocation — no accounting concept is chosen by the user; the destination account is resolved from
+partner group's write-off account instead. It is **not** a discount, credit, or accounting-account
+allocation — no accounting account is chosen by the user; the destination account is resolved from
 configuration (see `financial-account.md`).
 
 `writeoffAmount` was flipped from `discarded` to `readOnly` in `decisions.json` for this reason —

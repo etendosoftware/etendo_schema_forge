@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { hasClientPdf, buildClientPdfBlob } from '@/windows/custom/shared/documentPdfRegistry.js';
 import { sendDocumentEmail } from './documentEmailSend.js';
 import RecipientChipEditor from './RecipientChipEditor.jsx';
 import { buildRecipientEdits, normalizeRecipientList } from './recipientEdits.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ETP-4226 — default send policy: editable To/CC recipients everywhere unless
 // the window's `decisions.json → window.sendDocument` override says otherwise.
 const DEFAULT_SEND_POLICY = { editableRecipients: true, cc: true, maxRecipients: 10 };
@@ -64,6 +65,7 @@ async function sendDocumentFromModal({
   onClose,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const data = await sendDocumentEmail({
     apiBaseUrl,
@@ -75,6 +77,10 @@ async function sendDocumentFromModal({
     pdfBlobUrl: cachePreviewBeforeSend ? pdfBlobUrl : null,
     recipientEdits,
     messageEdits,
+    // ETP-5003 — the caller passed this all along and it was dropped right here, so every send
+    // reached the module with no language and rendered its catalog copy in Spanish while the
+    // operator was reading English on screen. The module logs a WARN when it arrives empty.
+    language,
   });
 
   if (data.status === 'SENT' || data.status === 'DUPLICATE') {
@@ -90,13 +96,13 @@ async function sendDocumentFromModal({
   toast.error(errorMessage);
 }
 
-async function renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError) {
+async function renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError) {
   setPdfLoading(true);
   setPdfError(null);
   try {
-    const res = await fetch(`/api/reports/${reportId}/render`, {
+    const res = await apiFetch(`/api/reports/${reportId}/render`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      baseUrl: '',
       body: JSON.stringify({ format: 'html', params: { documentId } }),
     });
     if (!res.ok) throw new Error(`Preview failed (${res.status})`);
@@ -202,17 +208,17 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChang
   );
 }
 
-async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token) {
-  const res = await fetch(`/api/reports/${reportId}/render`, {
+async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, apiFetch) {
+  const res = await apiFetch(`/api/reports/${reportId}/render`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    baseUrl: '',
     body: JSON.stringify({ format: 'html', params: { documentId } }),
   });
   if (!res.ok) throw new Error('Failed to render');
   const html = await res.text();
-  const pdfRes = await fetch('/jsreport/api/report', {
+  const pdfRes = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify({ template: { content: html, engine: 'none', recipe: 'chrome-pdf', chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' } }, data: {} }),
   });
   if (!pdfRes.ok) throw new Error('PDF generation failed');
@@ -233,11 +239,9 @@ function resolveContactsBaseUrl(apiBaseUrl) {
   return apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
 }
 
-async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmail, setTo, isCancelled }) {
+async function loadBusinessPartnerEmail({ apiBaseUrl, apiFetch, bPartnerId, hasEmail, setTo, isCancelled }) {
   const contactsBaseUrl = resolveContactsBaseUrl(apiBaseUrl);
-  const response = await fetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
+  const response = await apiFetch(`${contactsBaseUrl}/businessPartner/${bPartnerId}`, { baseUrl: '' });
   const data = response.ok ? await response.json() : null;
   if (isCancelled()) return;
   const records = data?.response?.data ?? data?.data ?? [];
@@ -245,7 +249,7 @@ async function loadBusinessPartnerEmail({ apiBaseUrl, token, bPartnerId, hasEmai
   if (!hasEmail && withEmail.length > 0) setTo(withEmail[0].etgoEmail);
 }
 
-function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, token, reportId, setPdfError, setPdfLoading }) {
+function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, token, apiFetch, reportId, setPdfError, setPdfLoading }) {
   if (pdfBlobUrl) {
     node.src = `${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=1`;
     setPdfError(null);
@@ -260,7 +264,7 @@ function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, to
   }
 
   if (documentId && token) {
-    renderPdfIntoIframe(node, reportId, documentId, token, setPdfLoading, setPdfError);
+    renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError);
   }
 }
 
@@ -342,6 +346,8 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  */
 export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
+  const { locale } = useLocaleSwitch();
 
   // ETP-4912 — most callers hand over the PDF their own useXxxPdf hook produced. The
   // generic one (ListView's fallback modal) has no hook, so it used to leave this empty
@@ -390,7 +396,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     setEmailLoading(true);
     loadBusinessPartnerEmail({
       apiBaseUrl,
-      token,
+      apiFetch,
       bPartnerId,
       hasEmail,
       setTo: (email) => {
@@ -403,7 +409,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       .catch(() => {})
       .finally(() => { if (!cancelled) setEmailLoading(false); });
     return () => { cancelled = true; };
-  }, [hasEmail, bPartnerId, apiBaseUrl, token]);
+  }, [hasEmail, bPartnerId, apiBaseUrl, token, apiFetch]);
 
   // Cross-channel precedence mirror (backend `to > cc`): an address present in
   // To is silently dropped from CC, and adding it to CC merges into To.
@@ -433,9 +439,27 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   // kept around so handleSend can tell whether the operator actually changed
   // either one; an untouched send must stay byte-identical to the legacy
   // payload (no `messageEdits` key at all).
+  // ETP-5003 — the operator must read exactly what the customer will receive, so both fields start
+  // filled with the copy the backend composes when nothing is edited.
+  //
+  // ⚠ KEEP IN SYNC with the module's message catalog, which owns the same two sentences for a send
+  // that carries no edits:
+  //   com.etendoerp.go/.../email/render/messages/emails_*.properties
+  //   → document.subject.withRecipient  and  document.body
+  // They are composed here rather than fetched, to save the round trip. That trade only holds while
+  // both sides say the same thing — they diverged once already, and the operator read one subject
+  // while the customer received another. `defaultCopyInSync.test.js` fails when they drift; fix the
+  // mismatch rather than relaxing the test.
   const defaultSubject = `${documentType} #${documentNo} — ${bpName}`;
+  // ETP-5003 — the greeting is part of the editable message, not something the backend adds
+  // afterwards: the operator has to be able to read and change how the customer is addressed.
+  // The module skips its own greeting whenever a message is supplied, so this is the only one.
+  const defaultMessage = [
+    bpName ? ui('sendModalDefaultGreeting', { bpName }) : null,
+    ui('sendModalDefaultMessage', { documentType, documentNo }),
+  ].filter(Boolean).join('\n\n');
   const [subject, setSubject] = useState(defaultSubject);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(!effectivePdfUrl);
@@ -455,11 +479,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       pdfBlobLoading: effectivePdfLoading,
       documentId,
       token,
+      apiFetch,
       reportId,
       setPdfError,
       setPdfLoading,
     });
-  }, [documentId, token, reportId, effectivePdfUrl, effectivePdfLoading]);
+  }, [documentId, token, apiFetch, reportId, effectivePdfUrl, effectivePdfLoading]);
 
   const handleDownload = async () => {
     if (downloading) return;
@@ -472,7 +497,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
 
     setDownloading(true);
     try {
-      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, token);
+      await fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, apiFetch);
     } catch (err) {
       toast.error(err.message);
     }
@@ -489,11 +514,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       const recipientEdits = editableRecipients
         ? buildRecipientEdits(baseRecipientsRef.current, { to: toRecipients, cc: ccRecipients })
         : null;
-      // Untouched subject/message yield null here, keeping the command
-      // byte-identical to the legacy one (mirrors recipientEdits above).
-      const messageEdits = (subject !== defaultSubject || message !== '')
-        ? { subject, message }
-        : null;
+      // ETP-5003 — subject and message always travel, edited or not. They used to be omitted when
+      // untouched, leaving the module to recompose them from its own catalog in whatever language
+      // the command carried: a command with no language rebuilt them in Spanish while the operator
+      // had just read them in English on this very screen. Sending what is on screen removes the
+      // whole class of divergence — there is no second copy left to drift.
+      const messageEdits = { subject, message };
       await sendDocumentFromModal({
         apiBaseUrl,
         token,
@@ -512,6 +538,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         setSendFeedback,
         onClose,
         recipientEdits,
+        language: locale,
         messageEdits,
       });
     } catch {

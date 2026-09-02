@@ -810,7 +810,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listViewOptions={{"hidePrint":true}}
       dateFilterKey="orderDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{"actions":{"email":{"visibleWhen":"@DocumentStatus@='CO'"}}}}

@@ -65,10 +65,9 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
-import LinesSelectionBar from './LinesSelectionBar.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import { DetailMoreActionsMenu } from './DetailMoreActionsMenu.jsx';
 import DetailSidePanel from './DetailSidePanel.jsx';
-import LinesBulkActionBar from './LinesBulkActionBar.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -103,14 +102,26 @@ const NO_GATE_EXCLUSIONS = Object.freeze([]);
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { apiFetch } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
+// ETP-5073 / DOC-08: switching to another line while one is being edited used to discard the
+// edit silently. Scoped deliberately — `requestTransition` is told to look at `lineEdits` alone,
+// because a dirty HEADER is not endangered by changing line, and prompting about it would train
+// users to click through the dialog without reading it.
+import { requestTransition } from '@/lib/unsavedChanges.js';
+// ETP-5073 / DOC-04: both line write paths — the sidebar save and the inline grid autosave —
+// reuse the SAME conflict dialog the header uses, so a concurrent edit is reported identically
+// wherever it happens.
+import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
 export {
-  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
+  SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar,
 } from './detailViewHelpers.jsx';
 
 /**
@@ -237,10 +248,10 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
     secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
     let res;
     try {
-      res = await fetch(childUrl, {
+      res = await apiFetch(childUrl, {
         method: 'PATCH',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), 'Content-Type': 'application/json'},
         body: JSON.stringify({[fieldKey]: value}),
+        token, baseUrl: '',
       });
     } catch (err) {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
@@ -342,10 +353,10 @@ export function buildSecondaryLineHandlers(deps) {
       const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
       const fieldValues = {};
       normalizePatchFieldValues(secondaryLineEdits, fieldValues, st.addLineFields?.entry);
-      const res = await fetch(secUrl, {
+      const res = await apiFetch(secUrl, {
         method: 'PATCH',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
         body: JSON.stringify(fieldValues),
+        token, baseUrl: '',
       });
       if (res.ok) {
         // Server response wins over the local edits: it carries
@@ -384,9 +395,9 @@ export function buildSecondaryLineHandlers(deps) {
       const { succeeded, failed } = await runBatchDelete(rows, (row) => {
         const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
             || `${apiBaseUrl}/${st.key}/${row.id}`;
-        return fetch(childUrl, {
+        return apiFetch(childUrl, {
           method: 'DELETE',
-          headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+          token, baseUrl: '',
         }).then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return row;
@@ -500,8 +511,6 @@ function secondaryAddLineBar(props) {
     return null;
   }
   return (
-    // Wrapper measured by the secondary selection bar — its
-    // `position: fixed` portal overlays exactly this region.
     // Mirrors the primary header-lines add-button wrapper (shared
     // getAddLineWrapperClassName/Style helpers) so both paths get the
     // same top border, vertical spacing and padding — keeps alignment
@@ -511,8 +520,8 @@ function secondaryAddLineBar(props) {
     // sticky bottom-0 variant is only correct for the tall PRIMARY
     // header-lines area — applying it here makes the button overlap the
     // last table row when the scroll container is resized.
+    // ETP-4972: no longer measured — SelectionToolbar below is viewport-fixed.
     <div
-      ref={props.secondaryAddLineWrapperRef}
       className="relative"
       // No borderTop: the child table already renders its own bottom
       // border, so the primary path's top divider would double up here.
@@ -534,20 +543,27 @@ function secondaryAddLineBar(props) {
           for non-inlineEditable tabs (e.g. Direcciones/Personas de contacto), matching
           the onSelectionChange wiring above and the row-level onDeleteRow gate below. */}
       {(props.linesLayout === "inlineEditable" || props.enableSecondaryRowDelete) && (props.crud?.[props.st.key]?.delete ?? true) && (
-          <LinesSelectionBar
+          <SelectionToolbar
             visible={props.secondaryBarVisible[props.st.key] ?? false}
             closing={props.secondaryBarClosing[props.st.key] ?? false}
-            barRect={props.secondaryBarRects[props.st.key]}
-            count={(props.secondarySelectedRows[props.st.key] ?? []).length}
-            selectedLabel={props.selectedLabel}
-            totalLabel={null}
-            deleting={props.secondaryDeleting[props.st.key] ?? false}
-            deleteTitle={props.deleteLabel}
-            closeTitle={props.closeTitle}
-            compact
-            onDelete={props.onDelete}
             onClose={props.onClose}
-            data-testid="LinesSelectionBar__fa3275" />
+            closeTitle={props.closeTitle}
+            data-testid="SelectionToolbar__fa3275">
+            <span className="text-sm font-medium">{props.selectedLabel}</span>
+            {/* ETP-4972 — icon-only, no border, no visible label: applied
+                Figma instance's own canvas render has no stroke around this
+                icon, just red icon color. */}
+            <button
+              type="button"
+              disabled={props.secondaryDeleting[props.st.key] ?? false}
+              title={props.deleteLabel}
+              aria-label={props.deleteLabel}
+              onClick={props.onDelete}
+              className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+            </button>
+          </SelectionToolbar>
       )}
     </div>
   );
@@ -568,10 +584,25 @@ export function SecondaryTableTab(props) {
   // blocks the empty-state add trigger for the maxDetailLines:0 (import-only)
   // case — a tab capped at >=1 still shows it while empty, same as today.
   const canAddMore = resolveCanAddSecondaryLines(props.st, secondaryChildren.length);
+  // ETP-4836 — the illustration itself must not depend on hasAddFields: tabs whose
+  // rows are entirely backend-managed (no addLineFields declared, e.g. invoices'
+  // Exchange Rates) still need "no records" feedback instead of a blank area, same
+  // as the primary Lines tab (shouldShowLinesEmptyState has no such gate). Only the
+  // "+ Add" CTA itself stays conditional on the tab actually supporting manual add.
+  // Must still yield to an open side detail panel (secondaryDetailSidebar below) —
+  // same guard it uses — otherwise a still-selected/closing line's edit panel gets
+  // replaced by the empty-state illustration whenever its tab's children are empty.
+  const detailSidebarOpen = props.st.Form && !props.st.Panel
+    && (props.selectedSecondaryLine?._tabKey === props.st.key || props.closingSecondaryLine);
   const showEmptyState = secondaryChildren.length === 0 && !isAddingThis
-    && props.hook.editing && hasAddFields && canAddMore && !props.st.customAddModal && !tabReadOnly;
+    && props.hook.editing && !props.st.customAddModal && !tabReadOnly && !detailSidebarOpen;
   if (showEmptyState) {
-    return secondaryTabEmptyState({ ui: props.ui, onAddLineClick: props.onAddLineClick, addLineLabel: props.addLineLabel });
+    const canAddViaEmptyState = hasAddFields && canAddMore;
+    return secondaryTabEmptyState({
+      ui: props.ui,
+      onAddLineClick: canAddViaEmptyState ? props.onAddLineClick : undefined,
+      addLineLabel: props.addLineLabel,
+    });
   }
   return (
     <>
@@ -685,7 +716,23 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields }) {
+// Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
+// priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
+// the header's, so without this prune the callout would receive businessPartner=null and NEO
+// returns listPrice=0. The addRow flow doesn't hit this because it starts from an empty values
+// object, but existing rows include denormalized parent keys.
+function pruneInheritedParentKeys(row, headerSnapshot) {
+  const cleanRow = { ...row };
+  for (const k of Object.keys(headerSnapshot)) {
+    const v = cleanRow[k];
+    if (v === null || v === undefined || v === '') {
+      delete cleanRow[k];
+    }
+  }
+  return cleanRow;
+}
+
+export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
     // and numeric strings coerced for BigDecimal — mirrors the side-panel save at line ~1750. `coerce`
@@ -697,22 +744,10 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     const coerce = buildRowValueCoercer(fields);
     const payloadValue = coerce(value, fieldKey);
 
-    // Build the row snapshot the callout sees: existing row + the change.
-    // Strip null/empty inherited keys that the parent has set (e.g.
-    // businessPartner, priceList on OrderLine). buildCalloutFormState
-    // by contract does NOT overwrite a row value with the header's,
-    // so without this prune the callout would receive
-    // businessPartner=null and NEO returns listPrice=0. The addRow
-    // flow doesn't hit this because it starts from an empty values
-    // object, but existing rows include denormalized parent keys.
+    // Build the row snapshot the callout sees: existing row (minus the parent's null/empty
+    // inherited keys — see pruneInheritedParentKeys) + the change.
     const headerSnapshot = hook.editing || hook.selected || {};
-    const cleanRow = {...row};
-    for (const k of Object.keys(headerSnapshot)) {
-      const v = cleanRow[k];
-      if (v === null || v === undefined || v === '') {
-        delete cleanRow[k];
-      }
-    }
+    const cleanRow = pruneInheritedParentKeys(row, headerSnapshot);
     const snapshot = {...cleanRow, [fieldKey]: payloadValue};
     if (opts?.identifier !== undefined) {
       snapshot[fieldKey + '$_identifier'] = opts.identifier;
@@ -763,10 +798,10 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     // computed — matches the side-panel save flow.
     prepareLineForPost(fieldValues);
 
-    const res = await fetch(childUrl, {
+    const res = await apiFetch(childUrl, {
       method: 'PATCH',
-      headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
       body: JSON.stringify(fieldValues),
+      token, baseUrl: '',
     });
     if (res.ok) {
       applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
@@ -783,9 +818,18 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
       // still surfaces the SIF warning toast.
       if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
     } else {
+      // ETP-5073 / DOC-04: a concurrency conflict gets the shared dialog, with the same
+      // "discard and refresh" button the sidebar and the header offer — the inline grid used to
+      // report it as a plain toast, which said what happened but left the user to find the reload.
+      // Asked first so it reads the CLONED body before extractErrorMessage consumes the original.
+      const raised = await raiseRowSaveConflict?.(res, row.id);
       const msg = await extractErrorMessage(res);
-      toast.error(msg || ui('networkError'));
-      throw new Error(msg || 'PATCH failed');
+      if (!raised) toast.error(msg || ui('networkError'));
+      // The throw is what stops InlineLinesPanel from claiming the row was saved, but its catch
+      // also toasts — so every inline failure used to surface TWICE (identical text, two stacked
+      // toasts). `userNotified` tells it the user has already been told, here by the toast above
+      // or by the conflict dialog.
+      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
     }
   } : undefined;
 }
@@ -796,9 +840,9 @@ export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, c
     try {
       const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-      const res = await fetch(childUrl, {
+      const res = await apiFetch(childUrl, {
         method: 'DELETE',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
+        token, baseUrl: '',
       });
       if (res.ok) {
         hook.handleDeleteChild(row.id);
@@ -970,13 +1014,10 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return fetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
           body: JSON.stringify({ fieldValues }),
+          token, baseUrl: '',
         }).then(res => ({ res, row }));
       })
     );
@@ -1200,6 +1241,7 @@ export function DetailView({
     [Form, gateExclusions]
   );
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
+  const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
   // back-fill it generically here. Windows that already get it from the
@@ -1442,16 +1484,6 @@ export function DetailView({
     }
     return secondaryAddRowRefs.current[key];
   }, []);
-  // Per-tab refs powering the selection bar in secondary inline-editable tabs.
-  // Mirrors `addLineWrapperRef` + `inlineLinesRef` from the primary lines flow,
-  // one entry per tab key so each tab measures and clears independently.
-  const secondaryAddLineWrapperRefs = useRef({});
-  const getSecondaryAddLineWrapperRef = useCallback((key) => {
-    if (!secondaryAddLineWrapperRefs.current[key]) {
-      secondaryAddLineWrapperRefs.current[key] = { current: null };
-    }
-    return secondaryAddLineWrapperRefs.current[key];
-  }, []);
   const secondaryInlineLinesRefs = useRef({});
   const getSecondaryInlineLinesRef = useCallback((key) => {
     if (!secondaryInlineLinesRefs.current[key]) {
@@ -1591,37 +1623,7 @@ export function DetailView({
   const [secondarySelectedRows, setSecondarySelectedRows] = useState({});
   const [secondaryBarVisible, setSecondaryBarVisible] = useState({});
   const [secondaryBarClosing, setSecondaryBarClosing] = useState({});
-  const [secondaryBarRects, setSecondaryBarRects] = useState({});
   const [secondaryDeleting, setSecondaryDeleting] = useState({});
-  // Position of the AddLineButton wrapper in viewport coordinates. Drives the
-  // portal-rendered selection bar so its downward shadow always renders OUTSIDE
-  // the linesScrollRef's overflow-auto clipping boundary, regardless of how
-  // many rows are in the table.
-  const addLineWrapperRef = useRef(null);
-  const [barRect, setBarRect] = useState(null);
-  useEffect(() => {
-    if (!selectionBarVisible) return;
-    const el = addLineWrapperRef.current;
-    const scrollEl = linesScrollRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-      if (scrollEl) ro.observe(scrollEl);
-    }
-    const events = ['scroll', 'resize'];
-    events.forEach(e => window.addEventListener(e, measure, true));
-    return () => {
-      ro?.disconnect();
-      events.forEach(e => window.removeEventListener(e, measure, true));
-    };
-  }, [selectionBarVisible, linesLayout]);
   // When the bottom section (Docs/Notes/Totals) grows because the user expanded
   // an inner block (e.g., "Añadir descuento total"), the lines area shrinks via
   // flex-1, and rows previously at the bottom of the visible scroll get covered.
@@ -1746,38 +1748,6 @@ export function DetailView({
       }
     };
   }, []);
-  // Measure each visible secondary tab's add-line wrapper so its bar can be
-  // portaled with `position: fixed`. Only the active tab actually mounts its
-  // wrapper (inactive tabs unmount their content), so refs from other tabs
-  // resolve to null and are skipped naturally.
-  useEffect(() => {
-    const cleanups = [];
-    for (const st of secondaryTabs) {
-      if (!secondaryBarVisible[st.key]) continue;
-      const el = secondaryAddLineWrapperRefs.current[st.key]?.current;
-      if (!el) continue;
-      const measure = () => {
-        const r = el.getBoundingClientRect();
-        setSecondaryBarRects(prev => ({
-          ...prev,
-          [st.key]: { top: r.top, left: r.left, width: r.width, height: r.height },
-        }));
-      };
-      measure();
-      let ro = null;
-      if (typeof ResizeObserver !== 'undefined') {
-        ro = new ResizeObserver(measure);
-        ro.observe(el);
-      }
-      const events = ['scroll', 'resize'];
-      events.forEach(e => window.addEventListener(e, measure, true));
-      cleanups.push(() => {
-        ro?.disconnect();
-        events.forEach(e => window.removeEventListener(e, measure, true));
-      });
-    }
-    return () => cleanups.forEach(fn => fn());
-  }, [secondaryBarVisible, secondaryTabs]);
   // Clear secondary-tab selection state when the active tab changes. The
   // InlineLinesPanel resets its internal checkboxes on unmount, so we mirror
   // that here so the bar doesn't outlive the row checks.
@@ -1799,6 +1769,13 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
+  // ETP-5022: publish to the global registry so a language change (which reloads the page)
+  // and F5 / tab close both warn before discarding these edits.
+  // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
+  // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
+  // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
+  // is what stops the navigation.
+  useUnsavedChangesGuard(isDirty, () => hook.handleSave({ silent: true }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1907,9 +1884,7 @@ export function DetailView({
     (async () => {
       try {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-        const sessionRes = await fetch(`${neoBase}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
         if (!sessionRes.ok || cancelled) return;
         const session = await sessionRes.json();
         const orgCurrencyId = session?.currencyId;
@@ -1935,9 +1910,9 @@ export function DetailView({
           return;
         }
 
-        const rateRes = await fetch(
+        const rateRes = await apiFetch(
           `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          { token, baseUrl: '' },
         );
         if (!rateRes.ok || cancelled) {
           activeCurrencyConversionRef.current = null;
@@ -1962,7 +1937,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField, apiFetch]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2035,7 +2010,10 @@ export function DetailView({
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
-  // Save header first (if new), then open add-line form.
+  // Save header first (if new), then open add-line form. A second click while the create is
+  // still in flight cannot duplicate the document: concurrent creates share one in-flight
+  // promise (saveInFlightRef in useEntity), so this awaits the same record the first click is
+  // creating and then navigates to it.
   const handleAddLineClick = useCallback(async () => {
     if (isNew) {
       const saved = await hook.handleSave();
@@ -2069,6 +2047,7 @@ export function DetailView({
   // knows which modal to auto-open via the forceOpen mechanism.
   const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
+      // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);
@@ -2321,18 +2300,16 @@ export function DetailView({
             hook.handleChange('currency', previousCurrency);
           };
           try {
-            const sessionRes = await fetch(`${neoBase}/session`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
             if (!sessionRes.ok) { revert(); return; }
             const session = await sessionRes.json();
             const orgCurrencyId = session?.currencyId;
             // No rate needed when changing TO the org currency — that's just removing
             // the conversion. Allow without validation.
             if (!orgCurrencyId || orgCurrencyId === value) return;
-            const rateRes = await fetch(
+            const rateRes = await apiFetch(
               `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { headers: { Authorization: `Bearer ${token}` } },
+              { token, baseUrl: '' },
             );
             if (!rateRes.ok) { revert(); return; }
             const rateData = await rateRes.json();
@@ -2359,7 +2336,7 @@ export function DetailView({
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
     executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField, apiFetch]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
@@ -2423,13 +2400,10 @@ export function DetailView({
         formState: formStateForCallout,
         ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
       };
-      const res = await fetch(`${apiBaseUrl}/${detailEntity}/callout`, {
+      const res = await apiFetch(`${apiBaseUrl}/${detailEntity}/callout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload),
+        token, baseUrl: '',
       });
       if (!res.ok) return;
       const calloutData = await res.json();
@@ -2476,11 +2450,11 @@ export function DetailView({
     } catch {
       // Callout is best-effort
     }
-  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor]);
+  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch]);
 
-  const data = transformRecord
-    ? transformRecord(hook.editing || currentItem || {})
-    : (hook.editing || currentItem || {});
+  const data = transformRecord ? transformRecord(hook.editing || currentItem || {}) : (hook.editing || currentItem || {});
+  // ETP-5052: display-only `data` + `hasLines` merge for HEADER `<Form>` calls only — see buildHeaderFormData in detailViewHelpers.jsx. Never persisted.
+  const headerFormData = useMemo(() => buildHeaderFormData(data, hook.children), [data, hook.children]);
 
   // Send total-discount percentage to the backend on blur. Also mirror the
   // saved value into the editing state so subsequent form saves don't overwrite
@@ -2489,13 +2463,10 @@ export function DetailView({
     const currentId = data?.id || recordId;
     if (!currentId || isNew) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
+      const res = await apiFetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ etgoTotalDiscount: pct }),
+        token, baseUrl: '',
       });
       if (!res.ok) {
         toast.error(await extractErrorMessage(res));
@@ -2516,7 +2487,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, apiBaseUrl, entity, token, hook, ui, extractErrorMessage]);
+  }, [data?.id, recordId, isNew, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
@@ -2526,13 +2497,10 @@ export function DetailView({
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${currentId}`, {
+      const res = await apiFetch(`${apiBaseUrl}/${entity}/${currentId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ [notesField]: value }),
+        token, baseUrl: '',
       });
       if (!res.ok) {
         toast.error(await extractErrorMessage(res));
@@ -2543,7 +2511,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage]);
+  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   // Guard that controls whether "+ Add Lines" is shown.
   // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
@@ -2571,6 +2539,103 @@ export function DetailView({
   const allEntryFields = addLineFields.entry ?? [];
   const hiddenEntryDefaults = addLineFields.hidden ?? [];
   const editableChildFields = allEntryFields.filter(f => f.type === 'number' || f.type === 'amount');
+
+  // ETP-5073 / DOC-04 — conflict handling for both line write paths (sidebar save and inline grid
+  // autosave). See useLineSaveConflict.js for why it lives outside this file.
+  const {
+    buildSelectedLineUrl, raiseLineSaveConflict, raiseRowSaveConflict,
+  } = useLineSaveConflict({
+    api, detailEntity, apiBaseUrl, apiFetch, token, hook, ui,
+    selectedLine, setSelectedLine, setLineEdits, setLineEditColumns,
+  });
+
+  /**
+   * Saves the line open in the sidebar.
+   *
+   * Extracted from an inline `onClick` (ETP-5073). It had to become a named callback so its error
+   * branch could recognise the concurrency conflict and raise the shared dialog; as an inline
+   * handler it only had a generic toast, which is why a stale line first showed the bare string
+   * `OBJSON_StaleDate` and then untranslated prose. The success path is unchanged.
+   */
+  const handleSaveLine = useCallback(async () => {
+    // Guarded because buildSelectedLineUrl uses optional chaining: without this an absent
+    // selectedLine would build `.../undefined` and fire a real request, which is worse than the
+    // TypeError the inline handler used to throw — a silent bogus write beats no diagnosis only
+    // for the code, never for the user. The button is only rendered with a line open, so this is
+    // defence, not an expected path.
+    if (!selectedLine?.id) return false;
+    setSavingLine(true);
+    try {
+      const childUrl = buildSelectedLineUrl();
+      // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
+      // Merge with selectedLine so listPrice/discount are always available.
+      const patchData = { ...(selectedLine ?? {}), ...lineEdits };
+      prepareLineForPost(patchData);
+      const patchEdits = { ...lineEdits };
+      if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
+      const fieldValues = {};
+      normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
+      const res = await apiFetch(childUrl, {
+        method: 'PATCH',
+        body: JSON.stringify(fieldValues),
+        token, baseUrl: '',
+      });
+      if (res.ok) {
+        setLineEdits(null);
+        setLineEditColumns({});
+        toast.success(ui('recordSaved'));
+        // Always refresh from persisted record — backend may recompute
+        // derived fields (lineNetAmount, discounts) on save.
+        try {
+          const freshRes = await apiFetch(childUrl, { token, baseUrl: '' });
+          if (freshRes.ok) {
+            const freshJson = await freshRes.json();
+            const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
+            if (freshLine?.id) {
+              hook.handleUpdateChild(selectedLine.id, freshLine);
+              setSelectedLine(prev => ({ ...prev, ...freshLine }));
+            }
+          } else {
+            hook.handleUpdateChild(selectedLine.id, fieldValues);
+            setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+          }
+        } catch (_) {
+          hook.handleUpdateChild(selectedLine.id, fieldValues);
+          setSelectedLine(prev => ({ ...prev, ...fieldValues }));
+        }
+        return true;
+      }
+      if (!(await raiseLineSaveConflict(res))) {
+        toast.error(await extractErrorMessage(res));
+      }
+      return false;
+    } catch (err) {
+      toast.error(err.message || ui('networkError'));
+      return false;
+    } finally { setSavingLine(false); }
+  }, [selectedLine, buildSelectedLineUrl, lineEdits, allEntryFields, apiFetch, token, hook,
+    extractErrorMessage, raiseLineSaveConflict, ui]);
+
+  /**
+   * ETP-5073 / DOC-08: guards switching to another line while one is being edited.
+   *
+   * Defined here, below handleSaveLine, so it can hand the prompt a saver — a `const` cannot be
+   * named in a dependency array declared above its own initialiser.
+   *
+   * Passing `save` is not a nicety. Without it the prompt falls back to the GLOBAL saver, which
+   * saves every dirty form: with a dirty header open at the same time, "Guardar y salir" saved the
+   * HEADER, reported success and switched line, silently discarding the line edit the prompt was
+   * raised to protect. Scoped `isDirty` for the reason above; scoped `save` for this one.
+   */
+  const guardLineSwitch = useCallback((openLine) => {
+    requestTransition(openLine, {
+      isDirty: () => lineEdits != null,
+      // handleSaveLine answers false when the write was refused (a validation error, or the
+      // concurrency conflict), which is what keeps the prompt from switching away from a line
+      // whose edits were never persisted.
+      save: handleSaveLine,
+    });
+  }, [lineEdits, handleSaveLine]);
 
   const [panelCounts, setPanelCounts] = useState({});
   useEffect(() => { setPanelCounts({}); }, [parentRecordId]);
@@ -3222,7 +3287,7 @@ export function DetailView({
                               registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
-                              data={data}
+                              data={headerFormData}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
@@ -3249,7 +3314,7 @@ export function DetailView({
                                   registerGateExclusions={registerGateExclusions}
                                   entity={entity}
                                   windowName={windowName}
-                                  data={data}
+                                  data={headerFormData}
                                   onChange={handleChangeWithCallout}
                                   catalogs={catalogs}
                                   layout="horizontal"
@@ -3366,33 +3431,18 @@ export function DetailView({
                             <div className={getLinesContainerClassName(linesLayout, embedded)}>
                               {/* Table + add button */}
                               <div className="flex-1 min-w-0">
-                                {/* Bulk action bar: delete + detail processes (classic only) */}
-                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <LinesBulkActionBar
-                                    linesLayout={linesLayout}
-                                    api={api}
-                                    detailEntity={detailEntity}
-                                    isDocumentReadOnly={isDocumentReadOnly}
-                                    selectedChildRows={selectedChildRows}
-                                    detailProcesses={detailProcesses}
-                                    ui={ui}
-                                    executingDetailProcess={executingDetailProcess}
-                                    setDetailParamDialogProcess={setDetailParamDialogProcess}
-                                    executeDetailProcessImpl={executeDetailProcessImpl}
-                                    detailProcessDeps={detailProcessDeps}
-                                    tMenu={tMenu}
-                                    deletingChildren={deletingChildren}
-                                    setDeletingChildren={setDeletingChildren}
-                                    confirmDelete={confirmDelete}
-                                    apiBaseUrl={apiBaseUrl}
-                                    token={token}
-                                    hook={hook}
-                                    selectedLine={selectedLine}
-                                    setSelectedLine={setSelectedLine}
-                                    setSelectedChildRows={setSelectedChildRows}
-                                    data-testid="LinesBulkActionBar__7c75ad"
-                                  />
-                                )}
+                                {/* Bulk action bar: delete + detail processes (classic only).
+                                    ETP-4972 — floating SelectionToolbar, reuses the primary
+                                    selectionBarVisible/Closing lifecycle (mutually exclusive
+                                    with the inlineEditable bar below by linesLayout). */}
+                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && renderDetailBulkActionBar({
+                                  visible: selectionBarVisible, closing: selectionBarClosing,
+                                  linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+                                  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess,
+                                  executeDetailProcessImpl, detailProcessDeps, tMenu, deletingChildren,
+                                  setDeletingChildren, confirmDelete, apiBaseUrl, token, hook,
+                                  selectedLine, setSelectedLine, setSelectedChildRows,
+                                })}
                                 <DetailTable
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
@@ -3402,13 +3452,13 @@ export function DetailView({
                                   linesLayout={linesLayout}
                                   labelOverrides={labelOverrides}
                                   isDocumentReadOnly={isDocumentReadOnly}
-                                  onRowClick={buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine)}
+                                  onRowClick={buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guardLineSwitch)}
                                   selectedRowId={selectedLine?.id}
                                   onSelectionChange={setSelectedChildRows}
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges}
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields })}
+                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields, raiseRowSaveConflict })}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
@@ -3503,10 +3553,10 @@ export function DetailView({
                                             for (const f of editableChildFields) {
                                               fieldValues[f.column] = editingChild[f.key];
                                             }
-                                            const res = await fetch(childUrl, {
+                                            const res = await apiFetch(childUrl, {
                                               method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                                               body: JSON.stringify({ fieldValues }),
+                                              token, baseUrl: '',
                                             });
                                             if (res.ok) {
                                               hook.handleUpdateChild(editingChild.id, editableChildFields.reduce((acc, f) => ({ ...acc, [f.key]: editingChild[f.key] }), {}));
@@ -3532,9 +3582,9 @@ export function DetailView({
                                           try {
                                             const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
                                               || `${apiBaseUrl}/${detailEntity}/${editingChild.id}`;
-                                            const res = await fetch(childUrl, {
+                                            const res = await apiFetch(childUrl, {
                                               method: 'DELETE',
-                                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                              token, baseUrl: '',
                                             });
                                             if (res.ok) { hook.handleDeleteChild(editingChild.id); setEditingChild(null); }
                                           } finally { setSavingChild(false); }
@@ -3549,7 +3599,6 @@ export function DetailView({
 
                                 {canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, DetailExtraActions, canAddLines) && (
                                   <div
-                                    ref={addLineWrapperRef}
                                     className={getAddLineWrapperClassName(linesLayout)}
                                     style={getAddLineWrapperStyle(linesLayout)}
                                   >
@@ -3582,51 +3631,63 @@ export function DetailView({
                                         onForceOpenHandled={() => setForceOpenImport(false)}
                                         data-testid="DetailExtraActions__fa3275" />
                                     )}
-                                    {/* Selection toolbar — portaled to document.body so the
-                              downward shadow renders OUTSIDE the linesScrollRef's
-                              overflow-auto clipping boundary even when scroll is
-                              engaged (many rows). Positioned via fixed coords from
-                              `barRect`, measured off `addLineWrapperRef`. */}
+                                    {/* Selection toolbar — portaled to document.body, TRUE
+                              viewport-fixed (ETP-4972), not anchored to this wrapper. */}
                                     {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
-                                      <LinesSelectionBar
+                                      <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}
-                                        barRect={barRect}
-                                        count={selectedChildRows.length}
-                                        selectedLabel={ui('selected', { count: selectedChildRows.length })}
-                                        totalLabel={getSelectedLinesTotalLabel(bottomSection, selectedChildRows, lineConfig, data)}
-                                        deleting={deletingChildren}
-                                        deleteTitle={ui('delete')}
-                                        closeTitle={ui('close')}
-                                        onDelete={async () => {
-                                          if (!(await confirmDelete())) return;
-                                          setDeletingChildren(true);
-                                          try {
-                                            // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                            // batchDelete.js); replaces the old two-independent-if
-                                            // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                            // pattern this bar predates.
-                                            const { succeeded, failed } = await deleteSelectedChildRows({
-                                              selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                                            });
-                                            for (const row of succeeded) {
-                                              hook.handleDeleteChild(row.id);
-                                              if (selectedLine?.id === row.id) setSelectedLine(null);
-                                            }
-                                            inlineLinesRef.current?.clearSelection?.();
-                                            setSelectedChildRows([]);
-                                            toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                          } catch (err) {
-                                            toast.error(err.message || ui('networkError'));
-                                          } finally {
-                                            setDeletingChildren(false);
-                                          }
-                                        }}
                                         onClose={() => {
                                           inlineLinesRef.current?.clearSelection?.();
                                           setSelectedChildRows([]);
                                         }}
-                                        data-testid="LinesSelectionBar__fa3275" />
+                                        closeTitle={ui('close')}
+                                        data-testid="SelectionToolbar__fa3275">
+                                        {/* ETP-4972 — no amount subtitle here: the Figma "Floating
+                                            Toolbar | Dark" spec shows only the plain "N Seleccionados"
+                                            counter, nothing else in that segment. The previous
+                                            LinesSelectionBar carried an optional totalLabel line (the
+                                            selected-rows subtotal) that Figma doesn't have — dropped to
+                                            match. getSelectedLinesTotalLabel() itself is kept (still
+                                            covered by its own tests) in case a future design brings
+                                            the total back, just not called from here. */}
+                                        <span className="text-sm font-medium">
+                                          {ui('selected', { count: selectedChildRows.length })}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          disabled={deletingChildren}
+                                          title={ui('delete')}
+                                          onClick={async () => {
+                                            if (!(await confirmDelete())) return;
+                                            setDeletingChildren(true);
+                                            try {
+                                              // ETP-4656 — shared triage + single-toast-per-outcome (see
+                                              // batchDelete.js); replaces the old two-independent-if
+                                              // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
+                                              // pattern this bar predates.
+                                              const { succeeded, failed } = await deleteSelectedChildRows({
+                                                selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                                              });
+                                              for (const row of succeeded) {
+                                                hook.handleDeleteChild(row.id);
+                                                if (selectedLine?.id === row.id) setSelectedLine(null);
+                                              }
+                                              inlineLinesRef.current?.clearSelection?.();
+                                              setSelectedChildRows([]);
+                                              toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
+                                            } catch (err) {
+                                              toast.error(err.message || ui('networkError'));
+                                            } finally {
+                                              setDeletingChildren(false);
+                                            }
+                                          }}
+                                          aria-label={ui('delete')}
+                                          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+                                        </button>
+                                      </SelectionToolbar>
                                     )}
                                   </div>
                                 )}
@@ -3708,56 +3769,7 @@ export function DetailView({
                                         <>
                                           <button
                                             disabled={savingLine}
-                                            onClick={async () => {
-                                              setSavingLine(true);
-                                              try {
-                                                const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
-                                                  || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                                // Derive unitPrice = listPrice × (1-discount/100) before PATCH.
-                                                // Merge with selectedLine so listPrice/discount are always available.
-                                                const patchData = { ...(selectedLine ?? {}), ...lineEdits };
-                                                prepareLineForPost(patchData);
-                                                const patchEdits = { ...lineEdits };
-                                                if (patchData.unitPrice !== undefined) patchEdits.unitPrice = patchData.unitPrice;
-                                                const fieldValues = {};
-                                                normalizePatchFieldValues(patchEdits, fieldValues, allEntryFields);
-                                                const res = await fetch(childUrl, {
-                                                  method: 'PATCH',
-                                                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                  body: JSON.stringify(fieldValues),
-                                                });
-                                                if (res.ok) {
-                                                  setLineEdits(null);
-                                                  setLineEditColumns({});
-                                                  toast.success('Record saved');
-                                                  // Always refresh from persisted record — backend may recompute
-                                                  // derived fields (lineNetAmount, discounts) on save.
-                                                  try {
-                                                    const freshRes = await fetch(childUrl, {
-                                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                                                    });
-                                                    if (freshRes.ok) {
-                                                      const freshJson = await freshRes.json();
-                                                      const freshLine = freshJson?.response?.data?.[0] ?? freshJson;
-                                                      if (freshLine?.id) {
-                                                        hook.handleUpdateChild(selectedLine.id, freshLine);
-                                                        setSelectedLine(prev => ({ ...prev, ...freshLine }));
-                                                      }
-                                                    } else {
-                                                      hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                                      setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                                    }
-                                                  } catch (_) {
-                                                    hook.handleUpdateChild(selectedLine.id, fieldValues);
-                                                    setSelectedLine(prev => ({ ...prev, ...fieldValues }));
-                                                  }
-                                                } else {
-                                                  toast.error(await extractErrorMessage(res));
-                                                }
-                                              } catch (err) {
-                                                toast.error(err.message || 'Network error');
-                                              } finally { setSavingLine(false); }
-                                            }}
+                                            onClick={handleSaveLine}
                                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                           >
                                             {getSaveButtonLabel(savingLine, ui)}
@@ -3779,9 +3791,9 @@ export function DetailView({
                                             try {
                                               const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
                                                 || `${apiBaseUrl}/${detailEntity}/${selectedLine.id}`;
-                                              const res = await fetch(childUrl, {
+                                              const res = await apiFetch(childUrl, {
                                                 method: 'DELETE',
-                                                headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                token, baseUrl: '',
                                               });
                                               if (res.ok) {
                                                 hook.handleDeleteChild(selectedLine.id);
@@ -3895,11 +3907,9 @@ export function DetailView({
                                 secondaryAddRowRef={getSecondaryAddRowRef(st.key)}
                                 secondaryAddRowSeed={secondaryAddRowSeed}
                                 secondaryChildDefaults={secondaryHooks[stIdx]?.childDefaults}
-                                secondaryAddLineWrapperRef={getSecondaryAddLineWrapperRef(st.key)}
                                 hideChevron={hideAddLineChevron}
                                 secondaryBarVisible={secondaryBarVisible}
                                 secondaryBarClosing={secondaryBarClosing}
-                                secondaryBarRects={secondaryBarRects}
                                 secondaryDeleting={secondaryDeleting}
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}
@@ -3951,7 +3961,7 @@ export function DetailView({
                               registerGateExclusions={registerGateExclusions}
                               entity={entity}
                               windowName={windowName}
-                              data={data}
+                              data={headerFormData}
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
@@ -3986,7 +3996,7 @@ export function DetailView({
                         registerGateExclusions={registerGateExclusions}
                         entity={entity}
                         windowName={windowName}
-                        data={data}
+                        data={headerFormData}
                         onChange={() => { }}
                         catalogs={catalogs}
                         section="other"
@@ -4213,9 +4223,9 @@ export function DetailView({
                 setSavingSecondaryLine(true);
                 try {
                   const secUrl = `${apiBaseUrl}/${secondaryDeleteConfirm.tabKey}/${secondaryDeleteConfirm.id}`;
-                  const res = await fetch(secUrl, {
+                  const res = await apiFetch(secUrl, {
                     method: 'DELETE',
-                    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    token, baseUrl: '',
                   });
                   if (res.ok) {
                     secondaryHooks[secondaryDeleteConfirm.tabIndex]?.handleDeleteChild(secondaryDeleteConfirm.id);

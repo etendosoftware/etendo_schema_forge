@@ -3,7 +3,9 @@ import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'luci
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { toast } from 'sonner';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 const PERIOD_VALUES = ['0A', '1T', '2T', '3T', '4T',
@@ -44,6 +46,13 @@ function parseNeoError(json) {
     if (msgs.length) return msgs.join(' · ');
   }
   return json?.message ?? null;
+}
+
+// Stable signature of the new-line draft, used to tell "the user changed
+// something" from "this is the exact draft that already failed"
+function draftSignature(draft) {
+  const d = draft ?? {};
+  return JSON.stringify(Object.keys(d).sort((a, b) => a.localeCompare(b)).map(k => [k, d[k]]));
 }
 
 // NEO does not send expanded reversedInvoice$documentNo/$invoiceDate/$grandTotalAmt
@@ -110,6 +119,7 @@ function InfoTooltip({ text }) {
 // NEO ignores arbitrary query-param filters, so all filtering is client-side.
 function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [search, setSearch] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +127,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
-    fetch(`${apiBaseUrl}/header?_startRow=0&_endRow=500`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch('/header?_startRow=0&_endRow=500')
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         // NEO does not expose `updated` — sort by invoiceDate desc, then
@@ -131,7 +141,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   const MAX_VISIBLE = 5;
   const { filtered, hiddenCount } = useMemo(() => {
@@ -215,13 +225,14 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
 // ── YearPickerSelect ──────────────────────────────────────────────────────────
 // Loads fiscal years from /fiscal-calendar instead of the broken NEO selector.
 function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, readOnly }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [years, setYears] = useState(null);
 
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         const rows = parseRows(json);
@@ -231,7 +242,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
         setYears(opts);
       })
       .catch(() => setYears([]));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   if (readOnly) {
     return (
@@ -352,7 +363,6 @@ function ExpandedForm({
   onCancel,
   onSave,
   saving,
-  error,
   model349Active,
 }) {
   const t = useLabel(labelOverrides);
@@ -504,10 +514,9 @@ function ExpandedForm({
           )}
         </div>
       )}
-      {/* Draft-only: error + save / cancel buttons */}
-      {isDraft && error && (
-        <p className="text-sm text-destructive" data-testid="text__saveError">{error}</p>
-      )}
+      {/* Draft-only: save / cancel buttons. Save/patch/delete errors are
+          surfaced ONLY as a toast (ETP-5027) — one error, one toast, on every
+          path, never an inline paragraph duplicating the same message. */}
       {isDraft && (
         <div className="flex items-center gap-2 pt-1">
           <button
@@ -551,6 +560,7 @@ export default function ReversedInvoicesPanel({
   restoreDraft,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -562,8 +572,14 @@ export default function ReversedInvoicesPanel({
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({});
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(null);
   const addRowRef = useRef(null);
+  // Signature of the draft whose POST was rejected. The rectifications tab stays
+  // MOUNTED when the user switches tabs (DetailView hides inactive tabs with
+  // display:none), so the document-level capture-phase mousedown below fires on
+  // every tab click and used to re-run handleSaveNewLine() with the very same
+  // rejected draft — one extra failed POST (and, before this fix, one extra
+  // toast) per tab change, unbounded. Re-arms as soon as the draft changes.
+  const failedDraftRef = useRef(null);
 
   // Track whether data has been fetched at least once
   const fetchedRef = useRef(false);
@@ -584,12 +600,12 @@ export default function ReversedInvoicesPanel({
   useEffect(() => {
     if (!apiBaseUrl || !token) return;
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    fetch(`${neoBase}/fiscal-models-catalog`, { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(`${neoBase}/fiscal-models-catalog`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(json => setActiveModels(json ?? {}))
       .catch(() => {})
       .finally(() => setCatalogLoaded(true));
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, apiFetch]);
 
   const model349Active = catalogLoaded && activeModels?.['349'] === true;
 
@@ -608,7 +624,13 @@ export default function ReversedInvoicesPanel({
       // Restore the in-progress draft (and its save error) carried across the
       // save-header navigation, so a failed child POST loses nothing
       if (restoreDraft?.draft) setNewLine(restoreDraft.draft);
-      if (restoreDraft?.error) setSaveError(restoreDraft.error);
+      if (restoreDraft?.error) {
+        toast.error(restoreDraft.error);
+        // The draft carried across the navigation is the one the backend just
+        // rejected: keep the re-fire guard armed so the click-outside auto-save
+        // does not re-POST (and re-toast) it on the next tab switch.
+        failedDraftRef.current = draftSignature(restoreDraft.draft);
+      }
       setAddingLine(true);
     }
   }, [autoOpenAdd, recordId, restoreDraft]);
@@ -626,10 +648,7 @@ export default function ReversedInvoicesPanel({
     if (!recordId || !apiBaseUrl || !token) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/reversedInvoices?_startRow=0&_endRow=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
       const json = await res.json();
       // NEO ignores query-param filters — keep only rows of THIS invoice
@@ -639,7 +658,7 @@ export default function ReversedInvoicesPanel({
     } catch { /* silent */ } finally {
       setLoading(false);
     }
-  }, [recordId, apiBaseUrl, token, onCountChange]);
+  }, [recordId, apiBaseUrl, token, onCountChange, apiFetch]);
 
   // Lazy fetch on first activation
   useEffect(() => {
@@ -657,8 +676,11 @@ export default function ReversedInvoicesPanel({
       if (!el || el.contains(e.target)) return;
       const portals = ['[data-radix-popper-content-wrapper]', '[role="listbox"]', '[role="dialog"]'];
       for (const sel of portals) { if (e.target.closest?.(sel)) return; }
-      if (newLine.reversedInvoice) handleSaveNewLine();
-      else { setAddingLine(false); setNewLine({}); }
+      if (!newLine.reversedInvoice) { setAddingLine(false); setNewLine({}); return; }
+      // Do not retry a draft the backend already rejected unchanged — keep the
+      // form open (its error was already toasted) so the user can fix the fields
+      if (failedDraftRef.current === draftSignature(newLine)) return;
+      handleSaveNewLine();
     }
     document.addEventListener('mousedown', handler, true);
     return () => document.removeEventListener('mousedown', handler, true);
@@ -667,9 +689,8 @@ export default function ReversedInvoicesPanel({
   // ── PATCH helpers ──────────────────────────────────────────────────────────
   async function patchLine(lineId, payload) {
     try {
-      const res = await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
+      const res = await apiFetch(`/reversedInvoices/${lineId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -684,8 +705,20 @@ export default function ReversedInvoicesPanel({
           return { ...p, [lineId]: edits };
         });
         fetchLines();
+      } else {
+        // Without this branch a rejected PATCH (e.g. the AEAT349 corrective DB
+        // trigger) failed completely silently: the checkbox just reverted on the
+        // next fetchLines() with no explanation — ETP-5027.
+        let msg = ui('rectSaveError');
+        try {
+          msg = parseNeoError(await res.json()) || msg;
+        } catch { /* keep default */ }
+        toast.error(msg);
+        fetchLines();
       }
-    } catch { /* silent */ }
+    } catch {
+      toast.error(ui('rectSaveError'));
+    }
   }
 
   // The AEAT349 DB trigger validates the whole group at once: corrective='Y'
@@ -723,12 +756,20 @@ export default function ReversedInvoicesPanel({
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
-      await fetch(`${apiBaseUrl}/reversedInvoices/${lineId}`, {
+      const res = await apiFetch(`/reversedInvoices/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        let msg = ui('rectSaveError');
+        try {
+          msg = parseNeoError(await res.json()) || msg;
+        } catch { /* keep default */ }
+        toast.error(msg);
+      }
       fetchLines();
-    } catch { /* silent */ } finally { setDeleting(null); }
+    } catch {
+      toast.error(ui('rectSaveError'));
+    } finally { setDeleting(null); }
   }
 
   // ── create ─────────────────────────────────────────────────────────────────
@@ -736,7 +777,6 @@ export default function ReversedInvoicesPanel({
     if (!newLine.reversedInvoice) return;
     if (!recordId && !onSaveHeader) return;
     setSaving(true);
-    setSaveError(null);
     try {
       // The parent invoice FK is mandatory — on an unsaved invoice, persist the
       // header FIRST (without navigating, to keep this form alive), then POST
@@ -746,7 +786,8 @@ export default function ReversedInvoicesPanel({
       if (!parentId) {
         savedHeader = await onSaveHeader({ navigateAfter: false });
         if (!savedHeader?.id) {
-          setSaveError(ui('rectSaveError'));
+          toast.error(ui('rectSaveError'));
+          failedDraftRef.current = draftSignature(newLine);
           return;
         }
         parentId = savedHeader.id;
@@ -754,14 +795,14 @@ export default function ReversedInvoicesPanel({
       // Strip the display-only identifier before POSTing the payload
       const payload = { ...newLine };
       delete payload['reversedInvoice$_identifier'];
-      const res = await fetch(`${apiBaseUrl}/reversedInvoices`, {
+      const res = await apiFetch(`/reversedInvoices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ invoice: parentId, ...payload }),
       });
       if (res.ok) {
         setNewLine({});
         setAddingLine(false);
+        failedDraftRef.current = null;
         if (savedHeader) {
           // Land on the saved record with this tab active — the remount refetches
           onGoToSavedRecord?.(savedHeader);
@@ -773,17 +814,23 @@ export default function ReversedInvoicesPanel({
         try {
           msg = parseNeoError(await res.json()) || msg;
         } catch { /* keep default */ }
+        // Toast-only on every path (ETP-5027): the owner validated that these
+        // backend messages (e.g. the AEAT349 corrective trigger) must surface in
+        // the toast, never as inline red text next to the fields.
+        failedDraftRef.current = draftSignature(newLine);
         if (savedHeader) {
           // Header WAS created: navigate to it (staying on /new would make every
           // tab switch re-save a "new" header → duplicate invoices + repeated
-          // "Record created" toasts). The draft and error survive the remount.
+          // "Record created" toasts). The draft and error survive the remount,
+          // where the error is re-emitted as a toast.
           onGoToSavedRecord?.(savedHeader, { reopenAdd: true, draft: newLine, error: msg });
           return;
         }
-        setSaveError(msg);
+        toast.error(msg);
       }
     } catch {
-      setSaveError(ui('rectSaveError'));
+      toast.error(ui('rectSaveError'));
+      failedDraftRef.current = draftSignature(newLine);
     } finally { setSaving(false); }
   }
 
@@ -942,9 +989,11 @@ export default function ReversedInvoicesPanel({
                       bpId={data?.businessPartner}
                       recordId={recordId}
                       onSave={handleSaveNewLine}
-                      onCancel={() => { setAddingLine(false); setNewLine({}); setSaveError(null); }}
+                      onCancel={() => {
+                        setAddingLine(false); setNewLine({});
+                        failedDraftRef.current = null;
+                      }}
                       saving={saving}
-                      error={saveError}
                       model349Active={model349Active}
                       data-testid="ExpandedForm__4395d6" />
                   </div>

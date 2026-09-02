@@ -3,6 +3,7 @@ import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * CurrencyRatePicker — searchable currency selector for order header fields.
  *
@@ -47,6 +48,7 @@ export function CurrencyRatePicker({
   isReadOnly,
   precision = 4,
 }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
   const orgPrecision = useCurrencyPrecision();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -76,10 +78,7 @@ export function CurrencyRatePicker({
     const fetchId = hasRecord ? recordId : 'new';
     (async () => {
       try {
-        const res = await fetch(
-          `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions`, { token });
         if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
@@ -93,7 +92,7 @@ export function CurrencyRatePicker({
       }
     })();
     return () => { cancelled = true; };
-  }, [open, hasRecord, recordId, apiBaseUrl, token]); // hasRecord kept so re-fetch fires when record gets saved
+  }, [open, hasRecord, recordId, apiBaseUrl, token, apiFetch]); // hasRecord kept so re-fetch fires when record gets saved
 
   // Eagerly fetch options when the record is first saved so the rate is visible in the
   // trigger and the pencil icon appears without requiring the user to open the dropdown.
@@ -103,10 +102,7 @@ export function CurrencyRatePicker({
     const fetchId = recordId;
     (async () => {
       try {
-        const res = await fetch(
-          `${apiBaseUrl}/${entityPath}/${fetchId}/action/currencyOptions`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions`, { token });
         if (cancelled || !res.ok) return;
         const json = await res.json();
         const list = json?.response?.data ?? json ?? [];
@@ -114,7 +110,7 @@ export function CurrencyRatePicker({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [hasRecord, recordId, apiBaseUrl, token]);
+  }, [hasRecord, recordId, apiBaseUrl, token, apiFetch]);
 
   // Auto-focus the search input when dropdown opens
   useEffect(() => {

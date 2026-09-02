@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Checkbox } from '@/components/ui/checkbox';
-import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 // ETP-4529 — DimBadge, DimSummary, and DimensionGrid (the "Dimensiones contables"
 // badge/summary/expand-grid pattern this file originated) were extracted to the
 // shared tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx, so
@@ -27,6 +27,7 @@ import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar';
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ── field definitions ────────────────────────────────────────────────
 const CORE_FIELDS = [
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', reference: 'Asset', inputMode: 'selector', required: true, readOnlyLogic: (r) => r['posted'] === 'Y' },
@@ -68,6 +69,7 @@ export default function AmortizationLinesTable({
   const orgCurrency = useCurrency() ?? 'USD';
   const navigate = useNavigate();
   const location = useLocation();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -81,8 +83,6 @@ export default function AmortizationLinesTable({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectionBarVisible, setSelectionBarVisible] = useState(false);
   const [selectionBarClosing, setSelectionBarClosing] = useState(false);
-  const [barRect, setBarRect] = useState(null);
-  const addLineWrapperRef = useRef(null);
   const addRowRef = useRef(null);
   const recordId = recordIdProp ?? data?.id;
 
@@ -128,32 +128,10 @@ export default function AmortizationLinesTable({
     return undefined;
   }, [selectedRows.size, selectionBarVisible]);
 
-  // Measure the footer wrapper so the bar floats over the "Add line" area.
-  useEffect(() => {
-    if (!selectionBarVisible) return undefined;
-    const el = addLineWrapperRef.current;
-    if (!el) return undefined;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    };
-    measure();
-    let ro = null;
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
-    const events = ['scroll', 'resize'];
-    events.forEach(e => window.addEventListener(e, measure, true));
-    return () => {
-      ro?.disconnect();
-      events.forEach(e => window.removeEventListener(e, measure, true));
-    };
-  }, [selectionBarVisible]);
-
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
-    fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/lines?parentId=${recordId}&_startRow=0&_endRow=500&_sortBy=sEQNoAsset+asc`)
       .then(r => r.ok ? r.json() : { data: [] })
       .then(json => {
         const rows = json?.response?.data ?? json?.data ?? json?.rows ?? [];
@@ -170,7 +148,7 @@ export default function AmortizationLinesTable({
       })
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
-  }, [recordId, apiBaseUrl, token]);
+  }, [recordId, apiBaseUrl, apiFetch]);
 
   useEffect(() => { fetchLines(); }, [fetchLines]);
 
@@ -199,9 +177,8 @@ export default function AmortizationLinesTable({
   async function saveField(lineId, line, fieldKey, value) {
     if (String(line[fieldKey] ?? '') === String(value ?? '')) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
+      const res = await apiFetch(`/lines/${lineId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ [fieldKey]: value }),
       });
       if (res.ok) { fetchLines(); onRefresh?.(); }
@@ -232,9 +209,8 @@ export default function AmortizationLinesTable({
   async function deleteLine(lineId) {
     setDeleting(lineId);
     try {
-      const res = await fetch(`${apiBaseUrl}/lines/${lineId}`, {
+      const res = await apiFetch(`/lines/${lineId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         fetchLines();
@@ -263,9 +239,8 @@ export default function AmortizationLinesTable({
     setBulkDeleting(true);
     try {
       const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        fetch(`${apiBaseUrl}/lines/${id}`, {
+        apiFetch(`/lines/${id}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return id;
@@ -286,9 +261,8 @@ export default function AmortizationLinesTable({
     if (!newLine.asset) return;
     setSaving('new');
     try {
-      const res = await fetch(`${apiBaseUrl}/lines`, {
+      const res = await apiFetch('/lines', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ...newLine, amortization: recordId, currency: data?.currency }),
       });
       if (res.ok) {
@@ -612,8 +586,8 @@ export default function AmortizationLinesTable({
       {addingLine && (
         <p className="text-xs text-muted-foreground mt-1 text-center">{ui('inlineAddHint')}</p>
       )}
-      {/* ── Add line button (always visible; wrapper measured for the selection bar) ── */}
-      <div ref={addLineWrapperRef}>
+      {/* ── Add line button (always visible) ── */}
+      <div>
         {!isReadOnly && (
           <div className="px-2 py-2">
             <AddLineButton
@@ -636,19 +610,30 @@ export default function AmortizationLinesTable({
         </div>
       )}
       {/* ── shared floating selection bar (same as Sales Order) ── */}
-      <LinesSelectionBar
+      <SelectionToolbar
         visible={selectionBarVisible}
         closing={selectionBarClosing}
-        barRect={barRect}
-        count={selectedRows.size}
-        selectedLabel={ui('selected', { count: selectedRows.size })}
-        totalLabel={null}
-        deleting={bulkDeleting}
-        deleteTitle={ui('delete')}
-        closeTitle={ui('close')}
-        onDelete={bulkDelete}
         onClose={() => setSelectedRows(new Set())}
-        data-testid="LinesSelectionBar__fecdcf" />
+        closeTitle={ui('close')}
+        data-testid="SelectionToolbar__fecdcf">
+        <span className="text-sm font-medium">
+          {ui('selected', { count: selectedRows.size })}
+        </span>
+        {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label: the
+            applied Figma instance's own canvas render has no stroke around
+            this icon, just red icon color — ghost, like every other
+            secondary action. */}
+        <button
+          type="button"
+          disabled={bulkDeleting}
+          title={ui('delete')}
+          aria-label={ui('delete')}
+          onClick={bulkDelete}
+          className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
+        </button>
+      </SelectionToolbar>
     </div>
   );
 }
