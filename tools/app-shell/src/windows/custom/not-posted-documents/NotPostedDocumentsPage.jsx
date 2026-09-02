@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -59,6 +59,14 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   // ── Filter options (fetched once) ────────────────────────────────────────────
   const [filterOptions, setFilterOptions] = useState({ documentTypes: [], accountingStatuses: [] });
+
+  // row.documentType is the raw AD_Ref_List code (e.g. "GLJ", "PI") that backs
+  // filterOptions.documentTypes — reuse those already-translated {value,label}
+  // pairs to render the badge instead of the raw code (ETP-4945).
+  const documentTypeLabels = useMemo(
+    () => new Map(filterOptions.documentTypes.map(o => [o.value, o.label])),
+    [filterOptions.documentTypes]
+  );
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -225,7 +233,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
   }
 
-  useSetPageMeta({ title: ui('notPostedDocuments'), recordCount: rows.length });
+  useSetPageMeta({
+    title: ui('notPostedDocuments'),
+    breadcrumb: `${ui('finance')} / ${ui('notPostedDocuments')}`,
+    recordCount: rows.length,
+  });
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
@@ -280,7 +292,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
                     />
                   </td>
                   <td>
-                    <span className="npd-doc-type-badge">{row.documentType}</span>
+                    <span className="npd-doc-type-badge">
+                      {documentTypeLabels.get(row.documentType) ?? row.documentType}
+                    </span>
                   </td>
                   <td>{row.description}</td>
                   <td className="npd-date">{formatDate(row.accountingDate)}</td>
@@ -328,12 +342,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         </div>
 
         <div className="npd-filter-field">
-          <label>From</label>
+          <label>{ui('filterFrom')}</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </div>
 
         <div className="npd-filter-field">
-          <label>To</label>
+          <label>{ui('filterTo')}</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
         </div>
 

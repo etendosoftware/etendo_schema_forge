@@ -26,6 +26,13 @@ debug contracts.
 - Generate and download the submission file (`.txt`) for Modelo 303.
 - Show blocking and warning incident counts inline; a blocking count prevents file generation.
 
+## Interaction model
+
+- Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
+- Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
+- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (`FmModel303Page.jsx`) and `Finanzas / Modelos Fiscales / Modelo 349 - {periodLabel}` (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again.
+
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
 `FmListPage` calls `useFiscalAutoCompute` **four times** — once per (model × draft-vs-other)
