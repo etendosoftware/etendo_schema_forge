@@ -1064,6 +1064,248 @@ describe('translateBackendError — bank-statement sync result (ETP-4891)', () =
   });
 });
 
+// ── ETP-5109: PSD2 connection-state sync messages ────────────────────────────────
+//
+// Siblings of the ETP-4891 sync trio above — same `SaltEdgeAccountLinkHelper` code path, same
+// "Sincronizar extractos" toast — but reporting the state of the PSD2 connection itself. Each one
+// comes from an AD_MESSAGE in `com.etendoerp.psd2.bank.integration`:
+//
+//   PSD2_ConnectionWentInactive       → backendError.psd2ConnectionWentInactive
+//   PSD2_ConsentExpiredReconnect      → backendError.psd2ConsentExpired
+//   PSD2_ImportDateBeyondMaxInterval  → backendError.psd2ImportDateBeyondMaxInterval
+//   PSD2_NoActiveConnectionForAccount → backendError.psd2NoActiveConnection
+//
+// Root cause, and why the translation belongs in the frontend: an es_ES AD_MESSAGE_TRL row DOES
+// exist for these messages, but it carries `istranslated = 'N'` and the English text, so
+// OBMessageUtils resolves the same English string whatever the session language is. Translating
+// here is what makes the toast locale-correct regardless of how a client's Core was provisioned —
+// the same precedent already set by the ETP-4891 matchers above.
+//
+// Reproduced live on a Spanish session: the sync returned HTTP 200 with
+// `{ status: 'WARNING', message: '<English text>' }` and the toast rendered
+// PSD2_ConnectionWentInactive verbatim in English.
+describe('translateBackendError — PSD2 connection-state sync messages (ETP-5109)', () => {
+  const es = fakeUiTranslator({
+    'backendError.psd2ConnectionWentInactive':
+      'La conexión de la cuenta {account} se encontró inactiva durante la sincronización.'
+      + ' Por favor, reconecta la cuenta.',
+    'backendError.psd2ConsentExpired':
+      'El consentimiento bancario de la cuenta {account} ha expirado.'
+      + ' Por favor, reconecta la cuenta.',
+    // The literal deliberately carries `{days}` ONCE, even though the English message repeats the
+    // number: useUI()'s interpolation is `String.replace` with a STRING pattern, which substitutes
+    // only the first occurrence, so a second `{days}` would reach the toast as literal text. Do not
+    // "restore" the repetition to mirror the backend wording.
+    'backendError.psd2ImportDateBeyondMaxInterval':
+      'La fecha de inicio solicitada supera el intervalo máximo de {days} días de este proveedor.'
+      + ' Sólo pueden estar disponibles los movimientos de ese período.',
+    'backendError.psd2NoActiveConnection':
+      'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+  });
+
+  // The account name is a free-form financial-account identifier: it contains spaces, a dash and
+  // the ticket id, so the matcher cannot lean on any character class — only on the fixed
+  // prefix/suffix around it.
+  const INACTIVE_RAW = 'The connection for account Fake Demo Bank - Savings account ETP-5109'
+    + ' was found inactive during synchronization. Please reconnect the account.';
+  const CONSENT_RAW = 'The bank consent for financial account Fake Demo Bank - Savings account'
+    + ' ETP-5109 has expired. Please reconnect the account.';
+  const INTERVAL_RAW = 'The requested start date exceeds the maximum fetch interval of 90 days'
+    + ' supported by this provider. Only transactions within the last 90 days may be available.';
+  // Literal `%s` on purpose: the AD_MESSAGE template is written with `%s`, but
+  // OBMessageUtils.getI18NMessage only substitutes `%0`, so the placeholder is never replaced and
+  // reaches the user raw. The rendered string is therefore constant → exact match, not a
+  // parameterized matcher.
+  const NO_CONNECTION_RAW = 'No active bank connection found for financial account %s.'
+    + ' Connect the account first.';
+
+  describe('"The connection for account <name> was found inactive..." parameterized match', () => {
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(INACTIVE_RAW, es),
+        'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se encontró inactiva'
+          + ' durante la sincronización. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(INACTIVE_RAW, (k) => k), INACTIVE_RAW);
+    });
+  });
+
+  describe('"The bank consent for financial account <name> has expired." parameterized match', () => {
+    it('translates to es_ES, interpolating the account name', () => {
+      assert.equal(
+        translateBackendError(CONSENT_RAW, es),
+        'El consentimiento bancario de la cuenta Fake Demo Bank - Savings account ETP-5109 ha'
+          + ' expirado. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(CONSENT_RAW, (k) => k), CONSENT_RAW);
+    });
+  });
+
+  // The AD_MESSAGE template repeats `%0`, so the day count is rendered TWICE in the English string
+  // the matcher has to recognise — but only ONCE in the translated one (see the dictionary comment
+  // above). The raw input therefore keeps both numbers; only the translated literal is single-slot.
+  describe('"...maximum fetch interval of <days> days... last <days> days..." parameterized match', () => {
+    it('translates to es_ES, interpolating the day count into the single {days} slot', () => {
+      assert.equal(
+        translateBackendError(INTERVAL_RAW, es),
+        'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este proveedor.'
+          + ' Sólo pueden estar disponibles los movimientos de ese período.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(INTERVAL_RAW, (k) => k), INTERVAL_RAW);
+    });
+  });
+
+  describe('"No active bank connection found for financial account %s." exact match', () => {
+    it('translates to es_ES (no params — the backend never fills the placeholder)', () => {
+      assert.equal(
+        translateBackendError(NO_CONNECTION_RAW, es),
+        'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(NO_CONNECTION_RAW, (k) => k), NO_CONNECTION_RAW);
+    });
+  });
+
+  it('does not cross-match between the four connection-state skeletons', () => {
+    const EXPECTED = new Map([
+      [INACTIVE_RAW, /se encontró inactiva/],
+      [CONSENT_RAW, /consentimiento bancario/],
+      [INTERVAL_RAW, /intervalo máximo/],
+      [NO_CONNECTION_RAW, /conexión bancaria activa/],
+    ]);
+
+    for (const [raw, own] of EXPECTED) {
+      const result = translateBackendError(raw, es);
+      assert.match(result, own);
+      for (const [otherRaw, other] of EXPECTED) {
+        if (otherRaw === raw) continue;
+        assert.doesNotMatch(result, other);
+      }
+    }
+  });
+
+  it('passes through unrelated messages that merely mention a connection or an account', () => {
+    [
+      'The connection test for the account finished successfully.',
+      'The bank consent for financial account has been renewed.',
+      'No active bank connection found.',
+      'Only transactions within the last 90 days may be available.',
+    ].forEach((raw) => {
+      assert.equal(translateBackendError(raw, es), raw);
+    });
+  });
+});
+
+// ── ETP-5109: multi-line backend messages ────────────────────────────────────────
+//
+// `SaltEdgeAccountLinkHelper.fetchAccountTransactions` accumulates its result messages into ONE
+// StringBuilder joined by newlines: `appendExceededIntervalWarning` runs at :558, immediately
+// before the inactive-connection check at :559, so a single sync can return both. As one blob the
+// string matches no skeleton, so before this change two perfectly translatable messages were
+// rendered in English side by side.
+//
+// translateBackendError therefore falls back to translating line by line: a line that matches is
+// translated, a line that does not is kept verbatim, and if nothing at all resolves the original
+// message is returned untouched — a mixed result degrades to "the parts we know" instead of
+// all-or-nothing. Single-line messages keep their previous behaviour exactly (the fallback only
+// runs when the trimmed message contains a newline).
+describe('translateBackendError — multi-line backend messages (ETP-5109)', () => {
+  const es = fakeUiTranslator({
+    'backendError.psd2ConnectionWentInactive':
+      'La conexión de la cuenta {account} se encontró inactiva durante la sincronización.'
+      + ' Por favor, reconecta la cuenta.',
+    'backendError.psd2ImportDateBeyondMaxInterval':
+      'La fecha de inicio solicitada supera el intervalo máximo de {days} días de este proveedor.'
+      + ' Sólo pueden estar disponibles los movimientos de ese período.',
+  });
+
+  const INTERVAL_RAW = 'The requested start date exceeds the maximum fetch interval of 90 days'
+    + ' supported by this provider. Only transactions within the last 90 days may be available.';
+  const INACTIVE_RAW = 'The connection for account Fake Demo Bank - Savings account ETP-5109'
+    + ' was found inactive during synchronization. Please reconnect the account.';
+  const UNKNOWN_RAW = 'Something else entirely went wrong.';
+
+  const INTERVAL_ES = 'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este'
+    + ' proveedor. Sólo pueden estar disponibles los movimientos de ese período.';
+  const INACTIVE_ES = 'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se'
+    + ' encontró inactiva durante la sincronización. Por favor, reconecta la cuenta.';
+
+  // No regression: the line-by-line path must not change how a plain single message behaves.
+  describe('single-line messages behave exactly as before', () => {
+    it('translates a matching single-line message', () => {
+      assert.equal(translateBackendError(INACTIVE_RAW, es), INACTIVE_ES);
+    });
+
+    it('returns a non-matching single-line message untouched', () => {
+      assert.equal(translateBackendError(UNKNOWN_RAW, es), UNKNOWN_RAW);
+    });
+  });
+
+  // The real payload: the interval warning followed by the inactive-connection message.
+  it('translates both lines of the real sync payload, preserving the order and the newline', () => {
+    const raw = `${INTERVAL_RAW}\n${INACTIVE_RAW}`;
+    assert.equal(translateBackendError(raw, es), `${INTERVAL_ES}\n${INACTIVE_ES}`);
+  });
+
+  it('keeps a non-matching line verbatim while translating the matching one', () => {
+    assert.equal(
+      translateBackendError(`${UNKNOWN_RAW}\n${INACTIVE_RAW}`, es),
+      `${UNKNOWN_RAW}\n${INACTIVE_ES}`,
+    );
+    // ...and in the other order, so the result is not order-dependent.
+    assert.equal(
+      translateBackendError(`${INACTIVE_RAW}\n${UNKNOWN_RAW}`, es),
+      `${INACTIVE_ES}\n${UNKNOWN_RAW}`,
+    );
+  });
+
+  it('trims each line before the lookup, so padded lines still match', () => {
+    const raw = `  ${INTERVAL_RAW}  \n\t${INACTIVE_RAW}`;
+    assert.equal(translateBackendError(raw, es), `${INTERVAL_ES}\n${INACTIVE_ES}`);
+  });
+
+  it('preserves blank lines between translated lines', () => {
+    const raw = `${INTERVAL_RAW}\n\n${INACTIVE_RAW}`;
+    assert.equal(translateBackendError(raw, es), `${INTERVAL_ES}\n\n${INACTIVE_ES}`);
+  });
+
+  // When nothing resolves the message is returned as-is — `msg`, not the trimmed/rejoined copy —
+  // so the caller sees byte-for-byte what the backend sent, spacing included.
+  it('returns the original message untouched, spacing included, when no line matches', () => {
+    const raw = `  ${UNKNOWN_RAW}\n   Another unrelated failure.  `;
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  describe('missing translation key (guard)', () => {
+    it('leaves every line untranslated rather than rendering the i18n keys', () => {
+      const raw = `${INTERVAL_RAW}\n${INACTIVE_RAW}`;
+      assert.equal(translateBackendError(raw, (k) => k), raw);
+    });
+
+    it('keeps only the line whose key is missing untranslated', () => {
+      const partial = fakeUiTranslator({
+        'backendError.psd2ConnectionWentInactive':
+          'La conexión de la cuenta {account} se encontró inactiva durante la sincronización.'
+          + ' Por favor, reconecta la cuenta.',
+        // psd2ImportDateBeyondMaxInterval intentionally absent.
+      });
+      const raw = `${INTERVAL_RAW}\n${INACTIVE_RAW}`;
+      assert.equal(translateBackendError(raw, partial), `${INTERVAL_RAW}\n${INACTIVE_ES}`);
+    });
+  });
+});
+
 // ── ETP-4983: asset (category / search key) uniqueness validation ────────────────
 //
 // AssetHandler (com.etendoerp.go) rejects a duplicate asset category name / asset
