@@ -48,7 +48,13 @@ afterEach(() => {
 
 function renderAt(path, {
   windowMap = { 'sales-order': { slug: 'sales-order' } },
-  auth = { loginPath: '/login', initialSession: { token: 'test-token' } },
+  // ETP-4576: `credentialMode` defaults to `auto`, so AuthProvider restores the session
+  // from the server on mount and `status` sits at 'booting' until that settles. AuthGate
+  // renders its `bootingFallback` (null by default) meanwhile, so without opting out this
+  // test renders an empty body and every route assertion below fails. The subject here is
+  // route composition, not the restore, so it takes the documented `null` escape hatch -
+  // which makes `status` resolve synchronously from the seeded token.
+  auth = { loginPath: '/login', initialSession: { token: 'test-token' }, restoreSession: null },
   // DashboardPage waits on `useCurrency()` resolving to a non-null value before leaving its
   // skeleton state. With a token set, CurrencyProvider's effect fetches `${apiBaseUrl}/session`
   // for real (no fetch mock here) and silently swallows the failure, leaving the currency code

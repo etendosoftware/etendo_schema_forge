@@ -38,14 +38,24 @@ describe('validate349Vies — request', () => {
     });
   });
 
-  it('does not call the network at all without a token or apiBaseUrl', async () => {
+  // ETP-4576: the gate is `apiBaseUrl` alone. Under the cookie session the client holds
+  // no token, so gating on one would be permanently false and the button would silently
+  // do nothing. The `error: 'no_token'` code is kept as-is - it is internal to this module
+  // and renaming it would touch five unrelated call sites.
+  it('does not call the network at all without an apiBaseUrl', async () => {
     const fetchMock = stubJson({ validated: 1 });
 
     expect(await validate349Vies(DECL, {})).toEqual({ ok: false, error: 'no_token' });
     expect(await validate349Vies(DECL, { token: 'tok' })).toEqual({ ok: false, error: 'no_token' });
-    expect(await validate349Vies(DECL, { apiBaseUrl: API })).toEqual({ ok: false, error: 'no_token' });
     expect(await validate349Vies(DECL)).toEqual({ ok: false, error: 'no_token' });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('DOES issue the request with only an apiBaseUrl, since the cookie carries the credential', async () => {
+    const fetchMock = stubJson({ validated: 1 });
+
+    expect(await validate349Vies(DECL, { apiBaseUrl: API })).toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

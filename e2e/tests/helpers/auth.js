@@ -14,6 +14,13 @@
 const MOCK_MODE_OVERRIDE = process.env.E2E_USE_MOCK;
 const IS_MOCK_MODE = MOCK_MODE_OVERRIDE === '1' || (MOCK_MODE_OVERRIDE !== '0' && !process.env.BASE_URL);
 
+// ETP-4576 — the organization the MOCKED session restore reports. Exported because a spec
+// can no longer choose it by seeding `sf_auth_selected_org`: that key is one of the legacy
+// ones `purgeLegacyAuthStorage` wipes on mount, so the org the app actually uses is the one
+// this payload names. A spec whose assertions depend on the id (rather than merely on some
+// org existing) must read it from here.
+export const MOCK_ORG_ID = 'e2e-mock-org';
+
 export const DEFAULT_USER = process.env.E2E_USER || 'goadmin@etendo.software';
 export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
 
@@ -177,11 +184,11 @@ export async function login(page, {
             // and the mocked suite exercises the shipped default, which is still the bearer
             // path. A cookie-scheme run is the job of the dual-scheme suites, not of every spec.
             account: { name: 'admin', email: 'admin@e2e.test' },
-            environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: 'e2e-mock-org' },
+            environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: MOCK_ORG_ID },
             roleList: [{
               id: 'e2e-mock-role',
               name: 'Administrator',
-              orgList: [{ id: 'e2e-mock-org', name: 'E2E Org' }],
+              orgList: [{ id: MOCK_ORG_ID, name: 'E2E Org' }],
             }],
           }),
         });

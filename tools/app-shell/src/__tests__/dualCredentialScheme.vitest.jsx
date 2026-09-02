@@ -128,12 +128,19 @@ describe('useBankConnectionActions — the same call site under both schemes', (
     expectNoAuthorizationHeader();
   });
 
-  it('bearer scheme: the POST carries the bearer token and NOT the CSRF proof', async () => {
+  // ETP-4576: an unsafe request carries the proof whenever one is HELD, without consulting
+  // the scheme. Gating it on `mode !== bearer` reads tidier and was tried: the browser
+  // attaches a same-origin session cookie on its own, whatever the client believes it is
+  // doing, and the backend validates CSRF the moment it sees that cookie on an unsafe
+  // method. So a client that decides it is in bearer mode loses that bet as a 403 on the
+  // write while every read still succeeds - the shape that took three confirm flows down
+  // in the integration suite. Sending it under a scheme that ignores it costs nothing.
+  it('bearer scheme: the POST carries the bearer token, and the proof too when one is held', async () => {
     declareBearerSession();
     await runSync();
 
     expectBearerHeader();
-    expectNoCsrfHeader();
+    expect(recordedHeaders()['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
   });
 
   it('bearer scheme: the GET carries the bearer token too', async () => {
@@ -175,11 +182,18 @@ describe('useStatementActions — a plain POST-only call site under both schemes
     expectNoAuthorizationHeader();
   });
 
-  it('bearer scheme: carries the bearer token, no CSRF proof', async () => {
+  // ETP-4576: an unsafe request carries the proof whenever one is HELD, without consulting
+  // the scheme. Gating it on `mode !== bearer` reads tidier and was tried: the browser
+  // attaches a same-origin session cookie on its own, whatever the client believes it is
+  // doing, and the backend validates CSRF the moment it sees that cookie on an unsafe
+  // method. So a client that decides it is in bearer mode loses that bet as a 403 on the
+  // write while every read still succeeds - the shape that took three confirm flows down
+  // in the integration suite. Sending it under a scheme that ignores it costs nothing.
+  it('bearer scheme: carries the bearer token, and the proof too when one is held', async () => {
     declareBearerSession();
     await runProcess();
 
     expectBearerHeader();
-    expectNoCsrfHeader();
+    expect(recordedHeaders()['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
   });
 });

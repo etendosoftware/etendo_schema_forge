@@ -67,8 +67,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
 }));
 
+// ETP-4576: InvoiceTopbarExtra reads its installments through apiFetch now, not a raw
+// fetch, so this mock has to DELEGATE to the `global.fetch` stub installed in beforeEach.
+// Returning a bare `vi.fn()` hands the component `undefined` instead of a response, the
+// installments list comes back empty, and it takes the early return that owns no
+// SendToSifButton - which reads exactly like the button having been deleted.
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: vi.fn(() => vi.fn()),
+  useApiFetch: vi.fn(() => (...args) => global.fetch(...args)),
 }));
 
 // The org profile that UNMASKS the bug — 'verifactu' would hide it entirely.
