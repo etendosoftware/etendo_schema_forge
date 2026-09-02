@@ -1,17 +1,14 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-27T15:11:37.217Z",
-  "checksum": "ae4716072f313613",
+  "updatedAt": "2026-09-02T13:23:27.063Z",
+  "checksum": "54ac9fe2efd5fee7",
   "frontendContract": {
     "window": {
       "id": "140",
       "name": "Product",
       "primaryEntity": "product",
       "category": "inventory",
-      "vectorSearch": {
-        "target": "product"
-      },
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,
@@ -76,6 +73,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -2445,9 +2445,6 @@
       "name": "Product",
       "primaryEntity": "product",
       "category": "inventory",
-      "vectorSearch": {
-        "target": "product"
-      },
       "sidebarLayout": true,
       "hidePrint": true,
       "hideMoreMenu": true,
@@ -2512,6 +2509,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",

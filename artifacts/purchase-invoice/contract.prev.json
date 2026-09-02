@@ -110,6 +110,9 @@
       },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "purchase-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",
@@ -5256,6 +5259,9 @@
         "allowEmail": false
       },
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "purchase-invoice"
+      },
       "statusPills": [
         {
           "field": "posted",
