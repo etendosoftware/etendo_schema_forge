@@ -233,16 +233,42 @@ Decide explicitly what happens to the existing implicit auto-link on email match
 Recommendation: **keep it, still gated on `isEmailAuthoritative()`**, because dropping it would break
 users who rely on it today — but stop it being the *only* way to link.
 
-### Phase 4 — Remove a method · P1
+### Phase 4 — Remove a method · **DONE 2026-09-02**
 
-`DELETE`-style endpoints for the password and for one identity, both enforcing §4.
+`POST /auth-methods/remove` for the password and for one identity, both enforcing §4. Verified
+end-to-end in a browser against the deployed backend, not only in tests.
+
+**Removing the password requires the current password; removing an identity requires nothing.**
+That asymmetry is the answer to decision 4 below, and it is the server's rule, not the screen's:
+`removeAuthMethod` answers `400 CHANGE_PASSWORD_MISSING_CREDENTIALS` for a password removal that
+carries none. The reasoning is that the password is what proves you hold the password — it proves
+nothing about whether you hold the Google account, so demanding it there would be theatre.
+
+**Every removal rotates the session token** (`generateToken()` + `updateSessionToken`) and returns
+it as `token`. A caller that keeps only `authMethods` is left holding a dead token: the screen
+redraws correctly and the next request answers 401, with no error at the moment of the act. This
+is the opposite of the password-change flow, which discards the token deliberately and signs the
+user out — there the credential that just changed is the one they authenticated with.
+
+Three defects were found by clicking through the real screen, none of which the contract or the
+unit tests would have surfaced:
+- the rotated token was discarded, killing the session on the next request;
+- a failed `/me` left `authMethods` null, and the section's `{ enabled: false }` fallback made the
+  screen state "no password set" for an account that had one — a false claim about the account's
+  security that invites the user to add a credential they already have;
+- the password Remove button was enabled but sent no `currentPassword`, so it answered 400 every
+  time. A control that can never succeed.
+
+The lesson is the third one: all three passed review as code and would have passed a test suite
+written from the same reading. **Ship-readiness for a screen means using it.**
 
 ### Phase 4b — Account settings surface · P1, ships with Phase 4
 
 The UI restructure in §6: a **Cuenta** entry replacing **Cambiar contraseña** in the user menu, an
 account settings surface, and a Security section driven entirely by `authMethods`. It depends on
 Phase 1 (the server must be able to answer "what does this account have") and lands together with
-Phase 4 (removal), since a list with a dead Remove button is worse than no list.
+Phase 4 (removal), since a list with a dead Remove button is worse than no list — which is exactly
+what the password row was until the `currentPassword` gap was closed. **DONE 2026-09-02.**
 
 ### Phase 5 — A second provider · P2
 
@@ -253,6 +279,45 @@ endpoints.** That is the acceptance test for whether this design actually worked
 
 Note the registry's default constructor hardcodes a singleton map (`:42`) — Phase 5 makes provider
 registration config-driven.
+
+#### Extensibility audit, 2026-09-02
+
+Run against the shipped code rather than against this plan's promise, because the promise above is
+the thing being checked. Verdict: **the backend half is as cheap as claimed; the login screen is
+not.**
+
+Ready, nothing to change:
+
+- **Schema.** `AUTH_PROVIDER` is `varchar(60)` with no `CHECK` and no enum, so a new provider is a
+  row, not a migration. The only two constraints are the ones that should exist:
+  `(auth_provider, external_subject)` stops two accounts claiming one identity, and
+  `(account, auth_provider)` stops two Googles on one account.
+- **Backend registry.** `"google"` as a *value* survives in exactly two places — the registry
+  constant and `EtendoGoGoogleIdentityVerifier`. Every other match in the module is Guava
+  (`com.google.common`).
+- **`SecuritySection`.** Knows no provider: it renders whatever `identities` contains. No
+  production file under `tools/app-shell/src` names Google at all.
+- **The removal endpoint** already takes a provider id, not an enum.
+
+Must change, and the first one is the dangerous one:
+
+1. **`soleIdentityOf` fails silently, not loudly.** `updateSsoSession` records the sign-in via
+   `identities.get(0)`. Its javadoc says the name is meant "to stop compiling honestly" once a
+   second identity is allowed — **it does not**. A name breaks no build. The day `linkIfCompatible`
+   relaxes, this keeps compiling and writes the login onto the wrong identity row, with no
+   exception and no log. It is the single point in the whole extension that degrades quietly, and
+   the cheap fix is to make it throw when it finds more than one — a no-op today, since there
+   never is more than one.
+2. **`linkIfCompatible`** refuses a second identity by design (Phase 3 relaxes it). Correct as-is,
+   listed so it is not mistaken for an oversight.
+3. **`SSO_PAYLOAD_BUILDERS`** in `etendo-go-core` holds only `google`; a new provider needs its
+   builder there.
+4. **`AuthSsoOptions` cannot show two buttons.** It takes `providers` but never renders it — the
+   prop is only an emptiness guard, and the real button is injected by the Google SDK into a
+   `buttonRef` div. There is nowhere for a second button to go. This is a redesign and a PR in
+   `etendo-go-core`, not configuration, and it is the part this plan did not account for.
+5. Cosmetic: the identity row prints the raw provider id (`google`, lowercase), with no display
+   name and no icon.
 
 ### Phase 6 — Guard rails and observability · P1
 
@@ -462,10 +527,13 @@ Delegate authoring to the `test-generator` subagent per CLAUDE.md.
    wording for now.
 3. **Keep the implicit auto-link on email match?** Recommendation: keep, still gated on
    `isEmailAuthoritative()`.
-4. **Re-authentication** before adding and before removing a method: required, or is the session
-   enough?
+4. **Re-authentication** before adding and before removing a method. **Decided 2026-09-02:** the
+   session is enough, except that removing the *password* requires the current password — see
+   Phase 4. Adding a provider needs nothing extra: completing the provider's own flow IS a fresh
+   authentication.
 5. **Email verification after unlinking the last identity** (§4.2): keep verified, or re-verify?
-7. **Account settings as a route or a modal?** Recommendation: route `/account` (§6.3).
+7. **Account settings as a route or a modal?** **Decided 2026-09-02:** route `/account` (§6.3),
+   implemented in Phase 4b.
 8. **Does a password change still force a logout** once it lives in a settings screen (§6.4)?
 9. **Jira**: AUTH-05 has no ticket. Branch and ticket creation go through Clerk.
 
