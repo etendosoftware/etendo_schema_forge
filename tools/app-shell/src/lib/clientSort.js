@@ -22,6 +22,19 @@
  */
 
 /**
+ * True when a cell value carries no ordering information (null / undefined / '').
+ *
+ * Shared by `compareCellValues` (blank-handling branches) and `sortRows` (direction
+ * short-circuit) so both agree on what counts as blank.
+ *
+ * @param {*} v the value to check
+ * @returns {boolean}
+ */
+function isBlank(v) {
+  return v === null || v === undefined || v === '';
+}
+
+/**
  * Three-way compare of two cell values, ascending.
  *
  * Blank values (null / undefined / '') always sort LAST, in both directions: they carry no
@@ -36,8 +49,8 @@
  * @returns {number} negative, zero or positive
  */
 export function compareCellValues(a, b, locale) {
-  const aBlank = a === null || a === undefined || a === '';
-  const bBlank = b === null || b === undefined || b === '';
+  const aBlank = isBlank(a);
+  const bBlank = isBlank(b);
   if (aBlank && bBlank) return 0;
   if (aBlank) return 1;
   if (bBlank) return -1;
@@ -71,5 +84,12 @@ export function sortRows(rows, { key, direction = 'asc', accessors = {}, locale 
   if (!key || !Array.isArray(rows) || rows.length < 2) return rows ?? [];
   const read = accessors[key] ?? ((row) => row?.[key]);
   const sign = direction === 'desc' ? -1 : 1;
-  return [...rows].sort((a, b) => sign * compareCellValues(read(a), read(b), locale));
+  return [...rows].sort((a, b) => {
+    const av = read(a);
+    const bv = read(b);
+    // Blank-handling is direction-invariant (blanks always sort last, both asc and desc) — only
+    // apply `sign` when comparing two real values, or a desc sort would flip blanks to the top.
+    if (isBlank(av) || isBlank(bv)) return compareCellValues(av, bv, locale);
+    return sign * compareCellValues(av, bv, locale);
+  });
 }

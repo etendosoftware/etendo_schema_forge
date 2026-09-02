@@ -20,9 +20,6 @@
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"
     },
-    "headerExtra": {
-      "customForm": "SifErrorBanner"
-    },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
       "enabled": true,

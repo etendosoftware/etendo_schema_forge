@@ -93,7 +93,9 @@ describe('ListView — import labels + translator forwarded to ImportDialog', ()
   it('resolves each child sub-slice key through useUI (including generic keys reused per the i18n guide)', () => {
     const { labels } = openImport();
     expect(labels.dropzone.dropHere).toBe('importDropHere');
-    expect(labels.dropzone.dropHint).toBe('importDropHint');
+    // ETP-4997: the hint carries a {formats} placeholder that ImportDropzone fills from the
+    // window's own `formats` declaration, so it can no longer name formats the input rejects.
+    expect(labels.dropzone.dropHint).toBe('importDropHintFormats');
     expect(labels.progress.title).toBe('importProgressTitle');
     expect(labels.mapping.notImported).toBe('importNotImported');
     // Reused generic keys — not import-prefixed, per the "reuse before adding" rule.
