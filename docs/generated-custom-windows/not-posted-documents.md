@@ -248,7 +248,7 @@ Props: `{ token, apiBaseUrl }` — `apiBaseUrl` is already spec-scoped.
 
 - Breadcrumb: `Finanzas / Documentos no contabilizados` (`` `${ui('finance')} / ${ui('notPostedDocuments')}` ``, passed to `useSetPageMeta`). Previously this window passed no `breadcrumb` key at all — `TopBar` renders nothing when `breadcrumb` is falsy, so the window had no breadcrumb whatsoever before this fix, even though its `title` (`ui('notPostedDocuments')`) was already correctly translated.
 - The date-range filter labels now read `ui('filterFrom')` / `ui('filterTo')` (`"Desde"`/`"Hasta"` in `es_ES.json`, `"From"`/`"To"` in `en_US.json`) instead of hardcoded English `<label>From</label>` / `<label>To</label>`.
-- The document-type badge (`.npd-doc-type-badge`) now shows the translated label instead of the raw `row.documentType` string, by mapping it through the already-translated `{value, label}` pairs `filterOptions.documentTypes` returns (`documentTypeLabels` map built with `useMemo`) — no new lookup table or backend change needed, since `NoPostedDocumentDS`'s `documentType` values (e.g. `"Goods Shipment"`) already match the filter dropdown's own option values.
+- The document-type badge (`.npd-doc-type-badge`) now shows the translated label instead of the raw `row.documentType` code, by mapping it through the already-translated `{value, label}` pairs `filterOptions.documentTypes` returns (`documentTypeLabels` map built with `useMemo`, keyed by `o.value`) — no new lookup table or backend change needed, since `NoPostedDocumentDS`'s `documentType` is already the same AD_Ref_List code (e.g. `"GLJ"`, `"PI"`) used as the filter dropdown's own option `value`, not a human-readable label.
 
 ### Accounting status multi-select
 
