@@ -111,12 +111,20 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
       // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
       // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
-      // panel, so a bare 'tbody tr' locator always resolves to that invisible element.
-      // Re-assert after the panel settles: the row count can flash the right
-      // value and then re-render (related panels finishing their fetches), so a
-      // single toHaveCount races that reload.
+      // panel, so a bare 'tbody tr' locator never matches this window's grid.
+      //
+      // That is why the wait below has to be generous, and why it is the FIRST real
+      // gate on the line existing at all: addProductLine() ends on
+      // `expect(page.locator('tbody tr').first()).toBeVisible()`, which for this window
+      // is satisfied by an unrelated table and therefore returns before the line has
+      // rendered here. The observed flake was this assertion timing out with the
+      // locator resolving to 0 elements for its whole budget — the row arrives late,
+      // it does not flash and re-render — so the fix is a longer budget on the right
+      // locator, plus the settle below to catch a late re-render on top of that.
       const rectLines = page.locator('[data-testid^="line-row-"]');
-      await expect(rectLines).toHaveCount(1, { timeout: 15_000 });
+      await expect(rectLines,
+        'The saved line should render in the InlineLinesPanel grid',
+      ).toHaveCount(1, { timeout: 45_000 });
       await page.getByText(/cargando|loading/i)
         .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
