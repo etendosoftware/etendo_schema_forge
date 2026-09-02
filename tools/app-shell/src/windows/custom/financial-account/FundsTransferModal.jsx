@@ -316,9 +316,10 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   const multiCurrency = !!(source && dest && dest.currencyIso !== source.currencyIso);
 
   // ── conversion-rate prefill ─────────────────────────────────────────────────
-  // The payload carries no transferDate, so Classic dates the transfer today —
-  // the rate in force is therefore looked up for the same day. todayCalendarISO
-  // (not toISOString) keeps the calendar day correct under a negative UTC offset.
+  // One `rateDate` drives BOTH the rate lookup and the payload's `transferDate` (see
+  // handleConfirm), so the day a transfer is booked on and the day its rate was in force
+  // for cannot drift apart. todayCalendarISO (not toISOString) keeps the calendar day
+  // correct under a negative UTC offset.
   // useAuthOptional, not useAuth: this modal must still render (rate simply not
   // prefilled) outside an AuthProvider — useAuth throws there, per docs/request-policy.md.
   const token = useAuthOptional()?.token;
@@ -373,6 +374,15 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
       sourceAccountId,
       destinationAccountId: destId,
       amount: String(amountNum),
+      // Send the day explicitly so the backend stores local MIDNIGHT (parseLocalDate).
+      // Omitting it let Classic date the transfer with now(), i.e. a wall-clock time in a
+      // column the AD declares as `Date` — the time is not a datum there, and every other
+      // flow in the app sends a date-only value. It also broke the movements list, which
+      // orders by `statementdate DESC, line DESC`: a transfer stamped 23:11 sorted above a
+      // manual movement created later the same day at 00:00. With every row on the same
+      // day tying, `line DESC` decides and newest-first holds again.
+      // Same day the rate was prefilled for, now by contract rather than by coincidence.
+      transferDate: rateDate,
       description,
       bankFee,
     };

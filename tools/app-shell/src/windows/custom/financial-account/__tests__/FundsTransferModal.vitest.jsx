@@ -48,6 +48,7 @@ vi.mock('@/components/ui/dialog', () => ({
 }));
 
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { FundsTransferModal } from '../FundsTransferModal.jsx';
 
 const SRC = { id: 'SRC', name: 'BBVA', iban: 'ES91', currencyIso: 'EUR', currentBalance: 1000, active: true };
@@ -313,6 +314,10 @@ describe('FundsTransferModal', () => {
       sourceAccountId: 'SRC',
       destinationAccountId: 'DST',
       amount: '100',
+      // ETP-5100 — the day is now sent explicitly (see the dedicated describe
+      // block below for why). This is an exact-shape assertion, so the new key
+      // belongs here too.
+      transferDate: todayCalendarISO(),
       description: 'financeAccountTransferDescriptionDefault',
       bankFee: false,
       glItemId: 'GL1',
@@ -509,6 +514,91 @@ describe('FundsTransferModal', () => {
         amount: '100',
         conversionRate: '1.085',
       });
+    });
+  });
+
+  // ── transferDate (ETP-5100) ──────────────────────────────────────────────
+  //
+  // The payload now names the day explicitly. Omitting it let Classic date the
+  // transfer with `now()`, i.e. a full wall-clock timestamp written into a
+  // column the AD declares as type `Date` — the time is not a datum there, and
+  // every other flow in this app sends a date-only value.
+  //
+  // It is not cosmetic. The movements list orders by `statementdate DESC, line
+  // DESC`, so a transfer stamped 23:11 sorted ABOVE a manual movement created
+  // later the same day at 00:00 — newest-first visibly broke. With every row on
+  // a given day tying on `statementdate`, `line DESC` decides and the order
+  // holds again. Sending the day also makes the transfer land on the same date
+  // the conversion rate was prefilled for, by contract rather than by
+  // coincidence: the modal derives both from the same `rateDate`.
+  //
+  // `todayCalendarISO()` (not `toISOString().slice(0,10)`) is what the modal
+  // uses, and what this asserts: west of UTC the UTC-based form returns
+  // YESTERDAY from ~21:00 local onward, which would have re-created the very
+  // off-by-one day this ticket fixed, on the write path this time.
+  describe('transferDate', () => {
+    // Sibling of the conversion-rate block, which leaves these module-level
+    // values configured; reset them so this block starts from a known state.
+    beforeEach(() => {
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      conversionCalls.length = 0;
+    });
+
+    function confirmSameCurrencyTransfer() {
+      renderModal();
+      selectDest('DST');
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+    }
+
+    it('sends the local calendar day in the confirm payload', async () => {
+      confirmSameCurrencyTransfer();
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      expect(transfer.mock.calls[0][0]).toMatchObject({ transferDate: todayCalendarISO() });
+    });
+
+    it('sends a bare yyyy-MM-dd, never a timestamp', async () => {
+      // The whole point of the change: no time component may reach a `Date`
+      // column. A `T`, a `Z` or an offset here means the wall-clock stamp is
+      // back and the list ordering breaks again.
+      confirmSameCurrencyTransfer();
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      expect(transfer.mock.calls[0][0].transferDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('sends the same day the conversion rate was prefilled for', async () => {
+      // Both derive from the modal's single `rateDate`, so the booking date and
+      // the rate date cannot drift apart.
+      mockConversion = { rate: 1.1, hasRate: true, loading: false };
+      renderModal();
+      selectDest('USD');
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      const rateRequest = conversionCalls.at(-1);
+      expect(transfer.mock.calls[0][0].transferDate).toBe(rateRequest.date);
+      expect(transfer.mock.calls[0][0].transferDate).toBe(todayCalendarISO());
+    });
+
+    it('is unaffected by a host zone behind UTC late in the day', async () => {
+      // Regression guard for the UTC-based "today": on UTC-3 at 23:11 local,
+      // `new Date().toISOString().slice(0,10)` yields tomorrow's UTC date, and
+      // west of UTC in the small hours it yields yesterday's. `todayCalendarISO`
+      // reads local getters, so the answer is the local calendar day either way.
+      const originalTz = process.env.TZ;
+      process.env.TZ = 'America/Argentina/Buenos_Aires';
+      try {
+        confirmSameCurrencyTransfer();
+        await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+        expect(transfer.mock.calls[0][0].transferDate).toBe(todayCalendarISO());
+      } finally {
+        process.env.TZ = originalTz;
+      }
     });
   });
 });

@@ -808,6 +808,41 @@ The seeding effect keys on `[multiCurrency, source.currencyIso, dest.currencyIso
 
 When the pair has **no rate on file** (`hasRate: false`, after loading settles) the field stays empty and a hint renders below it — `data-testid="transfer-rate-missing"`, i18n key `financeAccountTransferRateMissing` with `{from}`/`{to}`. It is deliberately not a blocker: Confirm already requires a positive rate, so the user types it and continues. The point is to explain why it prefilled last time and not this time. Note the endpoint already falls back to the **inverse** direction (`TO→FROM`, returning `1/rate`, `NeoExchangeRateService:107`), so this hint means neither direction is configured. Unlike the Cobros/Pagos modal there is **no `rateIsOne` guard** here — `FinancialAccountTransactionsSupport.resolveConversionRate` passes the user's value straight through to Classic rather than 400-ing on 1.0, so adding one would be a new business rule, not parity.
 
+**The movements list orders by the CALENDAR DAY, not the raw timestamp** (ETP-5100):
+`ORDER BY TO_CHAR(ft.statementdate,'YYYY-MM-DD') DESC, ft.line DESC`, and the running-balance
+window uses the same key so the Saldo column keeps matching the order it is displayed against.
+`statementdate` is declared `Date` in the AD, so a time-of-day in it is noise and must not
+participate in the sort. Sorting on the raw value let any row that happened to carry a wall-clock
+time float above movements created LATER the same day at 00:00 — a transfer stamped 23:11 sat
+above a manual movement created at 23:15, and the newest row was not on top. Truncating in the
+query fixes the rows already stored that way as well, so no data migration was needed. `TO_CHAR`
+rather than a cast: it truncates identically on PostgreSQL and Oracle (an Oracle `DATE` keeps
+seconds), and `'YYYY-MM-DD'` sorts lexicographically the same as chronologically.
+
+**The transfer is dated with a date-only value** (`transferDate: todayCalendarISO()`), so the
+backend stores local midnight. Omitting it let Classic stamp `now()` — a wall-clock time in a
+column the Application Dictionary declares as type **`Date`**, where the time is not a datum.
+Two things broke because of it: (a) the movements list orders by `statementdate DESC, line DESC`,
+so a transfer stamped 23:11 sorted *above* a manual movement created later the same day at 00:00,
+and the newest row was not on top; (b) it was the only flow producing an evening timestamp, which
+is what exposed the UTC-rendering bug below. Every other flow in the app already sends a date-only
+value. It also makes the document date and the date the conversion rate was looked up for the same
+day by contract instead of by coincidence.
+
+**Business dates are rendered through `formatCalendarDate`, never in UTC** (ETP-5100). Three
+helpers here — `MovementsTable.formatDate`, `StatementLinesInline.formatDate` and the shared
+`lib/formatSigned.formatDate` (used by the reconciliation panel, cash close, `ReconciledTxnsModal`,
+`ClearedItemsInline` and `ReconciliationListTable`) — used to do `new Date(iso)` +
+`Intl.DateTimeFormat(..., timeZone: 'UTC')`, on the premise that the backend always sent UTC
+midnight. That premise held only while the backend was ALSO formatting in UTC; the two errors
+cancelled for midnight values and both surfaced for anything else. A movement created at 22:59
+local (UTC-3) displayed as the next day and was filtered out of "Últimos 30 días" entirely — the
+row was in the database and in the balance, but not in the list. `formatCalendarDate`
+(`lib/dateOnly.js`) reads the leading `yyyy-MM-dd` and builds the Date with the local-time
+constructor, so it is correct for either wire shape. The `AutoMatchSuggestionModal` already used
+it; these three were the stragglers. Backend counterpart and the full write-up:
+`com.etendoerp.go/docs/neo-headless.md` §4.3.1.
+
 **A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
 
 **Layout note:** the modal's body wrapper (`<div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">`, right below the header) carries `min-w-0`. `DialogContent` renders as `display: grid`, and grid items default to `min-width: auto` — without this, an extremely long value anywhere deep inside (e.g. `transfer-receive-amount` computing a huge product) inflates this whole column past the dialog's own `max-w-[600px]`, and only the rightmost sliver gets clipped, cropping every row uniformly instead of just the offending field. Confirmed live via Playwright (`getBoundingClientRect()` before/after) — do not remove this class when touching this wrapper.
