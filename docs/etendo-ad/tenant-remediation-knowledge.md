@@ -1916,3 +1916,68 @@ as the immutability trigger for a data-fix `.sql` file.
   that describes it, not just the `.sql` file itself, since a stale illustration in
   `onboarding-gaps.md`/`onboarding-and-datafixes-map.md` will mislead the NEXT person who touches
   this fix into mirroring the wrong (now-superseded) order.
+
+## ETP-5101 — N3: `C_Glitem.Name` resync for already-linked GL Items (2026-09-02)
+
+- **2026-09-02 — R31/N1's "reuse never touches the GL Item's name" is a statement about R31's OWN
+  narrow scope (INSERT-only), not a permanent protection for hand-made GL Items — confirmed by
+  reading the live Java, not assumed.** `GlItemProvisioningSupport#ensureGlItemForSchema`'s
+  existing-link branch (fires whenever `findGlItemAccountsByCombination` already finds a link for
+  the subaccount's natural combination) calls `syncGlItemName` UNCONDITIONALLY — no hand-made/
+  auto-provisioned distinction anywhere in that method. Live evidence: GOClient's own "Capital
+  social" (one of the 2 pre-ETP-5020 manual rows, explicitly called out in R31's own header as
+  "correctly reused, not duplicated") is precisely the row R32's `@check` flags as needing a
+  resync today — its bare pre-ETP-5101 name no longer matches `composeGlItemName`'s current
+  composed output. **Apply generally:** when a sibling fix's header describes what IT deliberately
+  does not do, read that as scoped to that fix's own choice, not as an invariant the wider system
+  upholds — verify against the actual consumer (here, `ensureGlItemForSchema`) before assuming a
+  category of row (hand-made, in this case) is protected somewhere else.
+- **2026-09-02 — A subaccount CAN be linked to two genuinely DIFFERENT `C_Glitem` rows across its
+  own active schemas — a real, pre-existing multi-GL-Item-per-subaccount state, not a duplicate to
+  collapse in SQL.** Confirmed live on QA Testing: subaccount `11100` ("Petty Cash") has 2 active
+  schemas, each linked (via its own natural combination) to a DIFFERENT `C_Glitem` row ("GL Item
+  1" / "GL Item 2") — neither R31 nor the live Java's reuse invariant ever produced this (both
+  always reuse the SAME GL Item across schemas going forward); this predates both. **Apply:** any
+  fix resyncing/deduplicating GL Item state per subaccount must key its dedup on `c_glitem_id`
+  (the actual row being touched), never on `subaccount_id` — deduping by subaccount would either
+  silently drop one of the two legitimately-distinct rows from being resynced, or attempt to merge
+  two independent GL Items into one, neither of which R32 needed to do (both simply get resynced to
+  the same expected name independently, since the composed name depends only on the subaccount).
+- **2026-09-02 — `@report` needing the PRE-image (old value) of a row `@apply` is about to
+  overwrite cannot use R19/R31's "recompute independently, post-apply" pattern — it needs the
+  UPDATE's own `RETURNING` output, captured before the report's separate query runs.** R31's
+  `@report` works by recomputing an expected value from source data that never changes across a
+  run (it's reporting a stable PROPERTY of the row: "was this name truncated", true on every
+  idempotent re-run). R32 needed to report "did THIS run change this value", which requires the
+  value BEFORE this run's own `UPDATE` — already gone by the time `@report`'s separate `SELECT`
+  executes (confirmed via `run.js`: `@apply` and `@report` are two separate `client.query()` calls
+  on the same connection/transaction, `BEGIN` before `@apply`, `COMMIT` after `@report`). **Fix
+  pattern used:** `@apply`'s own data-modifying CTE chain ends in `SELECT ... INTO TEMP TABLE
+  <name> FROM updated` (where `updated` is the `UPDATE ... RETURNING` CTE) instead of feeding a
+  second real-table `INSERT` (R31/R18/R28's usual target) — a session-scoped Postgres temp table,
+  visible to `@report`'s separate query on the SAME connection before `COMMIT`, and safely undone
+  either by `ROLLBACK` (temp table creation is transactional DDL, fully undone) or by
+  end-of-session cleanup once the pooled connection is later reused for an unrelated fix/tenant
+  (no `ON COMMIT DROP` needed in practice, since nothing in this framework re-runs `@apply` twice
+  on the same still-open connection without an intervening `COMMIT`/`ROLLBACK`). **Apply
+  generally:** before assuming "recompute independently, post-apply" (R31's pattern) is always
+  sufficient for a `@report` section, check whether the report needs a value the `@apply` is about
+  to destroy — if so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a
+  workaround to avoid.
+- **2026-09-02 — Live sweep on the current (un-migrated) dev DB, R31 itself never committed here.**
+  GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000
+  Capital social"`). QA Testing: 3 (the 2 "Petty Cash" GL Items above, plus "Fees" →
+  `"62900 Otros servicios"` on subaccount `62900`). Both fully live-validated in `BEGIN...ROLLBACK`
+  transactions using the real `parseFix`/`inlineParams` templating (not a hand-simplified query):
+  `@check` correctly non-zero pre-apply, `@apply` updates exactly the expected row count, `@report`
+  lists the correct old→new pairs, `@check` re-run in the SAME transaction (post-apply) converges
+  to 0, and `@apply` re-run affects 0 further rows (idempotent). Nothing committed to the shared
+  dev DB by this validation.
+- **2026-09-02 — `ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped for R32, unlike R31.**
+  Not a correctness gap: this data-fix's own author was explicitly scoped to `etendo_schema_forge`
+  only (the preventive Java, `syncGlItemNameAfterUpdate`, was already committed in an EARLIER step
+  of the SAME session by a different scope) — bumping the CUT is optional per the framework's own
+  table ("`.sql`-only, no CUT bump" is always safe, merely redundant for tenants the preventive
+  front already covers) and `@check`'s own convergence-to-0 for any subaccount touched by a live
+  rename since the preventive fix shipped makes the redundancy provably harmless, not just assumed
+  safe.
