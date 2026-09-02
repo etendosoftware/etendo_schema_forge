@@ -1840,14 +1840,59 @@ as the immutability trigger for a data-fix `.sql` file.
   still throws `"@type webhook not implemented yet"`, so choosing SQL avoids building unused
   execution-path plumbing for a single ticket, same reasoning R20 used to stay SQL-only for its
   own 2-tenant edge case.
-- **2026-09-01 — DEFERRED, not decided in this ticket: whether `TenantPlanService#markProductive`
-  (the paid-upgrade path) should also flip an existing `ETSG_ForceTestMode='Y'` row back to
-  `'N'`.** The human's request only covered the demo→forced-test-mode direction. Left as an open
-  question for a follow-up ticket — flagged explicitly in `onboarding-gaps.md`'s N1 entry and the
-  PR/task report, not silently decided either way. If ever implemented, the write MUST go through
-  DAL (`OBDal.getInstance().save(preference)` on the EXISTING row, an UPDATE) rather than raw SQL,
-  specifically so `ForceTestModeEventHandler`'s Observer A cascades the flip to the tenant's
-  already-existing config rows — the exact opposite of the corrective-fix reasoning above (there,
-  raw SQL was the deliberate choice; here, DAL would be the deliberate choice, precisely because a
-  human explicitly flipping a live productive tenant's mode is a rare, one-time, already-DAL-
-  reachable action — not a bulk multi-tenant remediation sweep).
+- **2026-09-01 — RESOLVED same-day (was DEFERRED): `TenantPlanService#markProductive` (the
+  paid-upgrade path) now REMOVES an existing client-scoped `ETSG_ForceTestMode` row entirely —
+  it does NOT flip it to `'N'` and leave it.** Human follow-up correction to the original
+  delivery: a value-flip to `'N'` would still be a real, permanent per-client override sitting in
+  `AD_Preference`; the actual goal is for the tenant to fall back to inheriting the System-level
+  default row, which means the row must not exist (or not be active) at all.
+- **2026-09-01 — Confirmed by reading ALL THREE handlers' full source (not assumed, matching the
+  explicit instruction to verify before choosing delete vs. deactivate): NONE of
+  `ForceTestModeEventHandler` (com.etendoerp.verifactu), `SiiForceTestModeEventHandler`
+  (org.openbravo.module.sii), or TicketBAI's `ForceTestModeEventHandler` (com.smf.ticketbai)
+  declares an `EntityDeleteEvent`/`onDelete` observer at all.** Each only wires `onSave`
+  (`EntityNewEvent`, and even then explicitly skips the `Preference` entity — "creating a brand
+  new preference row is a rare, one-time setup action") and `onUpdate`/`handleEvent`
+  (`EntityUpdateEvent`). **Apply: a plain `OBDal.getInstance().remove(preference)` DELETE fires
+  ZERO cascade on any of the three** — safe in the sense that it can never mis-fire, but useless
+  on its own for reverting already-existing config rows to production; it must be preceded by an
+  UPDATE that actually changes the value (see next bullet).
+- **2026-09-01 — Equally important, easy-to-miss trap: NONE of the three handlers' Observer-A
+  cascade branches (`handlePreferenceChange`/`processPreferenceChange`/`processPreferenceEvent`)
+  reads `Preference.active` at all — only `Preference.searchKey` (the VALUE column).** So a
+  PLAIN DEACTIVATE-ONLY flip (`IsActive: Y→N`, `VALUE` left unchanged at `'Y'`) is NOT a safe
+  no-op: it still fires the cascade (ANY Hibernate/DAL update on the `Preference` entity does,
+  regardless of which column changed — `EntityUpdateEvent` doesn't carry a "did the observer's
+  own field of interest change" flag, only the event's target entity type), but the handler
+  recomputes `devEnv`/`produccin`/`productionEnv` from the STILL-'Y' current VALUE state and
+  keeps pushing TEST mode onto every active config row for that client — the exact OPPOSITE of
+  what reverting a now-productive tenant needs. **Apply: reverting to production correctly
+  requires a TWO-STEP DAL write** — (1) `preference.setSearchKey("N"); OBDal.save(preference);
+  OBDal.flush();` (this update's cascade correctly reverts every existing config row to
+  production, since it now reads the real new VALUE), THEN (2)
+  `OBDal.getInstance().remove(preference); OBDal.flush();` (fires nothing, per the previous
+  bullet, and leaves no lingering row of any value). Implemented as
+  `OnboardingForceTestModeService#revertTestModeForProductiveTenant`. **This class of bug (an
+  event-handler's cascade decision keyed on a business-value column, not the standard framework
+  `IsActive`/soft-delete convention) is worth checking for on ANY future Etendo entity observer
+  before assuming "deactivate" is equivalent to "revert to default" — it is only true if the
+  observer's own code explicitly reads `IsActive`, which none of these three do.**
+- **2026-09-01 — Corrective SQL fix (R32) does NOT need the two-step dance the Java preventive
+  service needs.** Raw SQL never fires ANY Hibernate/DAL observer regardless of which column
+  changes or whether it's an UPDATE vs DELETE (established earlier for R31 — the pipeline is
+  never entered at all for a plain `psql`/JDBC statement). So R32 directly performs both real
+  effects itself in one transaction: `UPDATE`s the 3 config tables' own columns back to
+  production, then `DELETE`s the stale preference row — no intermediate value-flip needed, because
+  there is no cascade to trigger correctly in the first place. **Apply generally: "does this
+  write need to go through DAL to trigger an observer's side effect" is a question that only
+  applies to the Java/preventive front; the SQL/corrective front should always just replicate the
+  observer's END STATE directly, since it can never rely on the observer firing.**
+- **2026-09-01 — Why R32 is a NEW dated fix, not an edit to R31.** By the time this follow-up
+  landed, R31 already carried a real `APPLIED`/`SKIPPED_NOT_NEEDED` row in
+  `ETGO_DATA_FIX_HISTORY` on the shared dev DB from this session's own live validation earlier
+  the same day — so the "editing an unshipped fix in place is OK only if zero ledger rows exist
+  ANYWHERE" precedent (2026-07-02 entry above, R9) no longer applied. A companion fix in the
+  OPPOSITE direction (target: `PLAN_PRODUCTIVE` tenants, not `PLAN_FREE` ones) was also a cleaner
+  fit as its own file regardless — R31 and R32 have disjoint `@check` gates (mutually exclusive
+  plan states) and could safely coexist forever without either ever undoing the other's effect for
+  the same tenant.

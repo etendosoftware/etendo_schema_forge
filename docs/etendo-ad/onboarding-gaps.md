@@ -1471,15 +1471,45 @@ to `produccion='Y'`/`production_env='Y'` was correctly flipped back to `'N'` by 
 simulated `ETGO_TenantPlan='productive'` row correctly made the free-plan subquery return 0
 rows).
 
-**Deferred, not fixed here (explicitly flagged for human decision):** whether converting a Demo
-tenant to productive (`markProductive`, the paid-upgrade path) should flip
-`ETSG_ForceTestMode` back to `'N'`. The human's request for this ticket only covers the
-demo→forced-test-mode direction; a productive tenant simply never gets the preventive write, but
-an EXISTING free tenant that already has the row (from this fix) and later upgrades keeps reading
-test mode until an operator manually clears the row. Left for a follow-up ticket — see the PR/task
-report for the explicit call-out.
+**RESOLVED (same-day follow-up, 2026-09-01):** converting a Demo tenant to productive
+(`markProductive`, the paid-upgrade path) now removes the tenant's own `ETSG_ForceTestMode` row
+entirely — never flips it to `'N'` and leaves it, which would still be a real, permanent
+per-client override; the goal is for resolution to fall back to inheriting the System default.
 
-**Status:** both fronts shipped 2026-09-01 under **ETP-5117**.
+**Mechanism, confirmed by reading all three handlers' `dispatch`/`handleEvent` source (not
+assumed):** none of `ForceTestModeEventHandler` (VeriFactu), `SiiForceTestModeEventHandler`, or
+TicketBAI's `ForceTestModeEventHandler` declares an `EntityDeleteEvent` observer at all — a
+DELETE fires **zero** cascade, on any of the three. And none of their cascade branches
+(`handlePreferenceChange`/`processPreferenceChange`/`processPreferenceEvent`) checks `IsActive` —
+only the row's current `SearchKey` (VALUE) — so a plain deactivate-only flip (`IsActive: Y→N`,
+VALUE left `'Y'`) would still fire the cascade (any DAL update on the Preference entity does) but
+would recompute from the unchanged VALUE and keep pushing TEST mode onto existing config rows —
+the opposite of what reverting to productive needs. The correct sequence is a **two-step DAL
+write**: (1) flip `SearchKey` to `'N'` and save — this update fires the real cascade, correctly
+reverting every already-existing `VerifactuConfig`/`AEATSIIConfig`/`TbaiConfig` row to
+production; (2) then remove the row entirely, which fires nothing (no observer reacts to delete)
+and leaves no override behind.
+
+**Preventive:** `OnboardingForceTestModeService#revertTestModeForProductiveTenant`, called from
+`EtendoGoJwtServlet` right after a successful `tenantPlanService.markProductive(...)` (best-effort,
+same philosophy as `markProductive` itself — never allowed to abort an otherwise-successful paid
+signup). Idempotent: a productive tenant with no own row is a no-op.
+
+**Corrective:** `20260901T130000Z__R32-revert-test-mode-productive-tenants.sql` — a NEW dated
+fix, not a re-edit of R31 (R31 already carries a real ledger row on the shared dev DB from this
+session's own live validation, so it is treated as shipped/immutable per the framework's own
+rule). Since raw SQL never fires any of the three handlers' cascades regardless of value-vs-active
+(see R31's own header), R32 needs no two-step dance: it directly reverts the 3 config tables'
+own columns to production AND deletes the stale preference row, all gated on the tenant resolving
+as `PLAN_PRODUCTIVE`. Live-validated in a rolled-back transaction (simulated MariaG — a tenant
+with a real pre-existing `ETSG_ForceTestMode='Y'` row and an active VeriFactu config row —
+marked productive: `@check` matched, `@apply` correctly flipped `is_dev_env` to `'N'` and deleted
+the preference row, then rolled back); fleet-wide dry-run across all 29 tenants on the shared dev
+DB → 29/29 `SKIPPED_NOT_NEEDED` (no tenant currently resolves as `PLAN_PRODUCTIVE` on this DB, so
+no false positives to check against a real conversion — the mechanism itself was validated via the
+simulated row above).
+
+**Status:** both fronts (original N1 + this follow-up) shipped 2026-09-01 under **ETP-5117**.
 
 ---
 
