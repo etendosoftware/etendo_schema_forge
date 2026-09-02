@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import LocationModalField from '@/components/contract-ui/LocationModalField.jsx';
 import PrefixedInput from '@/components/contract-ui/PrefixedInput.jsx';
 import { getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { filterPhoneCharacters } from '@/components/contract-ui/contactsFieldValidation.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useOrganizationData } from './useOrganizationData.js';
 import OrgLogoField from './OrgLogoField.jsx';
@@ -80,6 +81,13 @@ function getMissingRequiredFields(form) {
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
+
+// ETP-5031 follow-up — the real AD column length (EM_Etgo_Phone), read from
+// artifacts/organization/contract.json's resolved validation.maxLength — same
+// column Contacts' etgoPhone maps to, same 60-char limit. Applied as a plain
+// HTML `maxLength` attribute below (hard truncation, no toast needed) since
+// this page has no per-field inline error UI for phone.
+const PHONE_MAX_LENGTH = 60;
 
 function getInvalidFormatErrorKey(form) {
   return getEmailFieldError(EMAIL_FIELD_DESCRIPTOR, form.email)
@@ -476,7 +484,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               <Input
                 id="org-phone"
                 value={form.phone}
-                onChange={e => updateField('phone', e.target.value)}
+                onChange={e => updateField('phone', filterPhoneCharacters(e.target.value))}
+                maxLength={PHONE_MAX_LENGTH}
                 className="bg-card hover:bg-muted focus-visible:bg-card"
                 data-testid="OrganizationPage__phone" />
             </div>

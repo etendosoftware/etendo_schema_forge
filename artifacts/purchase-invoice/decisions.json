@@ -61,9 +61,6 @@
       }
     ],
     "lineEntityConfig": "invoice",
-    "headerExtra": {
-      "customForm": "SifErrorBanner"
-    },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
       "enabled": true,

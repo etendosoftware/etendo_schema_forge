@@ -19,6 +19,9 @@ import {
 import {
   DifferenceBanner, DifferenceModal, differenceState,
 } from './ReconciliationDifference.jsx';
+import {
+  STATUS_CODES, countForStatus, matchesStatus,
+} from './reconciliationStatusFilter.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
@@ -64,7 +67,6 @@ const SKELETON_CELL_KEYS = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5'];
 // Elevation shadow shared by the selected row in both panels.
 const ELEVATED_SHADOW =
   'shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]';
-const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
 // i18n label key per status code, shared by the filter and the row badges.
 const STATUS_LABEL_KEY = {
   pending: 'financeReconcileFilterStatusPending',
@@ -130,7 +132,9 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
 
 function ReconciliationStatusFilter({ value, onChange, counts = {} }) {
   const ui = useUI();
-  const countFor = (code) => counts[code] ?? 0;
+  // Summed over the states each code covers, not read straight off `counts` — the "Pendiente" entry
+  // is a superset, so its own bucket would under-report the rows it shows (ETP-5033).
+  const countFor = (code) => countForStatus(counts, code);
   return (
     <DistinctValuesFilter
       value={value}
@@ -1289,7 +1293,7 @@ export function ReconciliationSplitPanel({
     // table's own status predicate (`visibleLines` below), including its null/empty = "Todos" case.
     // Search is deliberately NOT mirrored: typing to look something up is a transient view change,
     // not the line moving.
-    if (leftStatus && (live.state || 'pending') !== leftStatus) {
+    if (!matchesStatus(live.state, leftStatus)) {
       return null;
     }
     return live;
@@ -1351,7 +1355,8 @@ export function ReconciliationSplitPanel({
     const q = leftSearch.trim().toLowerCase();
     return lines.filter((l) => {
       // Client-side state filter (null/empty = "Todos"); the backend already computed l.state.
-      if (leftStatus && (l.state || 'pending') !== leftStatus) return false;
+      // Membership, not equality: "Pendiente" covers every non-reconciled state (ETP-5033).
+      if (!matchesStatus(l.state, leftStatus)) return false;
       if (!q) return true;
       return [l.description, l.partnerName, l.referenceNo]
         .some((v) => (v || '').toLowerCase().includes(q));

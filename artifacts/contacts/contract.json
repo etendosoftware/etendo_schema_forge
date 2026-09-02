@@ -1,8 +1,7 @@
 {
   "version": "0.52.0",
-  "generatedAt": "2026-08-27T21:15:30.861Z",
-  "updatedAt": "2026-08-31T14:33:49.362Z",
-  "checksum": "6433bedc8fef87d0",
+  "generatedAt": "2026-09-02T14:00:00.000Z",
+  "checksum": "ea7d24f53dd6dc01",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -54,6 +53,7 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
+          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
@@ -103,7 +103,8 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto"
+          "C_BP_Group_ID": "Categoría de contacto",
+          "TaxID": "NIF"
         }
       },
       "primaryTabs": [
@@ -144,7 +145,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -296,7 +298,7 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "CIF/NIF",
+            "label": "NIF",
             "required": true,
             "example": "B12345678",
             "column": "TaxID",
@@ -374,7 +376,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -386,7 +388,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -400,7 +402,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -411,7 +413,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -430,7 +432,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
@@ -5289,6 +5291,7 @@
         "locationAddress": {
           "tabOrder": 3,
           "label": "Location",
+          "addLineLabelKey": "addAddress",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
         },
@@ -5338,7 +5341,8 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto"
+          "C_BP_Group_ID": "Categoría de contacto",
+          "TaxID": "NIF"
         }
       },
       "primaryTabs": [
@@ -5378,7 +5382,8 @@
         "entity": "businessPartner",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -5530,7 +5535,7 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "CIF/NIF",
+            "label": "NIF",
             "required": true,
             "example": "B12345678",
             "column": "TaxID",
@@ -5608,7 +5613,7 @@
             "label": "Address",
             "example": "Calle Mayor 12",
             "labelKey": "importHeaderAddress",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5620,7 +5625,7 @@
             "label": "City",
             "example": "Sevilla",
             "labelKey": "importHeaderCity",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "required": false,
@@ -5634,7 +5639,7 @@
             "label": "Postal Code",
             "example": "41001",
             "labelKey": "importHeaderPostalCode",
-            "headerScope": "contact"
+            "headerScope": "address"
           },
           {
             "target": "country",
@@ -5645,7 +5650,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
-            "headerScope": "contact",
+            "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
             "required": false,
@@ -5664,7 +5669,7 @@
             "label": "Region",
             "example": "Sevilla",
             "labelKey": "importHeaderRegion",
-            "headerScope": "contact"
+            "headerScope": "address"
           }
         ]
       }
@@ -10887,6 +10892,14 @@
             "required": false
           },
           {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "smfswsDefaultWsRole",
             "apiKey": "smfswsDefaultWsRole",
             "column": "EM_Smfsws_Default_Ws_Role_ID",
@@ -10939,14 +10952,6 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
             "visibility": "system",
             "required": true
           }
@@ -12133,7 +12138,8 @@
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
         "EM_Etgo_Lastname": "Apellidos",
-        "C_BP_Group_ID": "Categoría de contacto"
+        "C_BP_Group_ID": "Categoría de contacto",
+        "TaxID": "NIF"
       }
     }
   },

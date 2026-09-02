@@ -34,4 +34,21 @@ describe('useClientSort — structure', () => {
     assert.match(src, /setSortKey\(null\)/);
     assert.doesNotMatch(src, /setSortKey\('creationDate'\)/);
   });
+
+  // ETP-5083: `initialSort` + the one-shot first-click override. Behaviour is covered end-to-end
+  // in useClientSort.vitest.jsx; this locks the structural invariants a future edit could break.
+  it('accepts an optional initialSort and tracks whether the one-shot override is still available', () => {
+    assert.match(src, /initialSort/);
+    assert.match(src, /useState\(initialSort\?\.key \?\? null\)/);
+    assert.match(src, /useState\(initialSort\?\.direction \?\? 'asc'\)/);
+    assert.match(src, /seedUntouchedRef = useRef\(Boolean\(initialSort\)\)/);
+  });
+
+  // The override must fire at most once — consumed on the very first toggleSort call regardless
+  // of which column it lands on — and only jump to a direction when that first click lands on
+  // the seeded column itself.
+  it('consumes the one-shot flag on the first toggle and only overrides when the seeded column is clicked', () => {
+    assert.match(src, /if \(seedUntouchedRef\.current\) \{\s*seedUntouchedRef\.current = false;/);
+    assert.match(src, /if \(key === initialSort\.key\) \{/);
+  });
 });
