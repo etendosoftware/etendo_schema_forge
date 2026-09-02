@@ -56,6 +56,22 @@ Unlike the APRM codes above, `BMP` (Bill of Materials Production), `DD` (Doubtfu
 
 To re-enable any of the 5 (e.g. a future decision to scope the exclusion per-tenant instead of globally), remove its code from `APRM_DISABLED_TYPES` in `NotPostedDocumentsHandler.java`.
 
+### Two SEPARATE table-id maps — "Enabled" above does not guarantee posting works (ETP-5075)
+
+The "Enabled" column above reflects only `DOCUMENT_TYPE_CODE_TO_TABLE_ID` (keyed by the
+short `AD_Ref_List` **code**, e.g. `MI`) — it decides whether a type shows up as a **filter
+option** at all. A completely separate map, `DOCUMENT_TYPE_TO_TABLE_ID` (keyed by
+`NoPostedDocumentDS`'s raw row **label** string, e.g. `"Matched Invoice"` — singular, not
+the code), enriches each grid **row** with the `tableId` the frontend needs to actually
+`POST /action/post` it. A code can be "Enabled ✅" here and still be unpostable from every
+row if that second map has no entry — exactly what happened for `MI`/Matched Invoices until
+ETP-5075 added `DOCUMENT_TYPE_TO_TABLE_ID.put("Matched Invoice", "472")`. See
+[`matched-purchase-invoices.md`](matched-purchase-invoices.md)'s "Not Posted Documents
+integration" section for the full three-map picture (a third, `ROW_DOC_TYPE_LABEL_KEYS` in
+the frontend, only affects display text, not posting).
+
+**When onboarding a new document type here, check BOTH maps**, not just the dropdown.
+
 Verification queries:
 ```sql
 -- See the actual posted distribution per table

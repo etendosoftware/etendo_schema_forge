@@ -13,6 +13,51 @@ function formatDate(raw) {
   return s.slice(0, 10);
 }
 
+/**
+ * ETP-5075 — document-type codes whose Etendo GO window was renamed, mapped to our own
+ * i18n key so the filter reads the same name the user sees in the menu.
+ *
+ * The backend (`NotPostedDocumentsHandler#refListDocumentTypes`) labels each option from
+ * core's own `AD_REF_LIST_TRL` translation, which is shared with Etendo Classic — `MI`
+ * translates to "Facturas cuadradas" there, while this window ships as "Relación
+ * albarán-factura". Overriding here keeps the fix in the presentation layer: no core AD
+ * data is touched, so Classic is unaffected, and the strings stay in the locale files
+ * where every other user-visible string lives (`docs/i18n-guide.md`).
+ *
+ * Same pattern `windows/custom/calendar/PeriodsExpandablePanel.jsx` already uses for
+ * document *categories* (its `MXI: 'calendarDocCategoryMatchInvoice'` entry).
+ *
+ * Add an entry only when a GO window's name genuinely diverges from core's translation —
+ * anything absent here keeps the backend's label untouched (see `docTypeLabel`).
+ */
+const DOC_TYPE_LABEL_KEYS = {
+  MI: 'docTypeMatchedInvoices',
+};
+
+/** Backend label unless we deliberately renamed that document type's window. */
+function docTypeLabel(option, ui) {
+  const key = DOC_TYPE_LABEL_KEYS[option.value];
+  return key ? ui(key) : option.label;
+}
+
+/**
+ * Same override, different keyspace: each GRID ROW's `documentType` is core's raw
+ * `NoPostedDocumentDS` label string (e.g. `"Matched Invoice"`, singular — confirmed live,
+ * it is what both the row badge and the `postRow` "unknown tableId" error literally render
+ * verbatim), NOT the `MI` code the filter dropdown uses. Kept as its own map rather than
+ * merged into `DOC_TYPE_LABEL_KEYS` — the two are keyed on genuinely different strings, and
+ * conflating them would make either lookup silently miss.
+ */
+const ROW_DOC_TYPE_LABEL_KEYS = {
+  'Matched Invoice': 'docTypeMatchedInvoices',
+};
+
+/** Backend row label unless we deliberately renamed that document type's window. */
+function rowDocTypeLabel(row, ui) {
+  const key = ROW_DOC_TYPE_LABEL_KEYS[row.documentType];
+  return key ? ui(key) : row.documentType;
+}
+
 function MultiSelect({ options, selected, onToggle, 'data-testid': dataTestId }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -280,7 +325,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
                     />
                   </td>
                   <td>
-                    <span className="npd-doc-type-badge">{row.documentType}</span>
+                    <span className="npd-doc-type-badge">{rowDocTypeLabel(row, ui)}</span>
                   </td>
                   <td>{row.description}</td>
                   <td className="npd-date">{formatDate(row.accountingDate)}</td>
@@ -313,7 +358,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           <select data-testid="npd-filter-document-type" value={document} onChange={e => setDocument(e.target.value)}>
             <option value="">—</option>
             {filterOptions.documentTypes.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>{docTypeLabel(o, ui)}</option>
             ))}
           </select>
         </div>
