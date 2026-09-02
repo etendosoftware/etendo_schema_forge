@@ -20,8 +20,13 @@
 // `parseFloat('2026-09-01') === 2026` — i.e. EVERY date collapsed to its year
 // and "Before"/"After" could not discriminate at all.
 
-import { parseCalendarDate } from '@/lib/dateOnly';
-import { resolveFilterMode } from '@/lib/gridQuery';
+// Relative, NOT the `@/` alias: this module has a plain `node --test` suite
+// (__tests__/advancedFilterApply.test.js, picked up by `make test-all-coverage`
+// and by CI), and the bare Node resolver cannot resolve the Vite alias — an
+// aliased import here makes the whole test file fail to load with
+// ERR_MODULE_NOT_FOUND.
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
+import { resolveFilterMode } from '../../../lib/gridQuery.js';
 
 /** Case-insensitive string projection. Trims so a stray leading/trailing space
  * in the typed value (or in the stored data) never silently kills a match. */
