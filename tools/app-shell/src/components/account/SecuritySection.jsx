@@ -73,8 +73,8 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
         data-testid={`auth-method-remove-${method}`}
       >
         {removing === method
-          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          : <Trash2 className="h-3.5 w-3.5" />}
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__20cc4d" />
+          : <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__20cc4d" />}
         <span className="ml-1.5">{ui('accountMethodRemove')}</span>
       </Button>
     );
@@ -82,14 +82,14 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
 
   return (
     <Card data-testid="account-security-section">
-      <CardContent className="pt-6">
+      <CardContent className="pt-6" data-testid="CardContent__20cc4d">
         <h2 className="text-base font-semibold">{ui('accountSettingsSecurity')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{ui('accountSettingsSecurityIntro')}</p>
 
         <div className="mt-4">
           {renderRow(
             'password',
-            <KeyRound className="h-4 w-4" />,
+            <KeyRound className="h-4 w-4" data-testid="KeyRound__20cc4d" />,
             ui('accountMethodPassword'),
             password.enabled
               ? ui('accountMethodPasswordEnabled')
@@ -114,7 +114,7 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
           {identities.map((identity) =>
             renderRow(
               identity.provider,
-              <ShieldCheck className="h-4 w-4" />,
+              <ShieldCheck className="h-4 w-4" data-testid="ShieldCheck__20cc4d" />,
               identity.provider,
               identity.email,
               identity.lastLogin
@@ -134,7 +134,10 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
             </p>
             {needsPassword && (
               <div className="mt-3 space-y-1.5">
-                <Label htmlFor="auth-method-remove-current-password" className="text-xs">
+                <Label
+                  htmlFor="auth-method-remove-current-password"
+                  className="text-xs"
+                  data-testid="Label__20cc4d">
                   {ui('onboardingCurrentPasswordLabel')}
                 </Label>
                 <Input
