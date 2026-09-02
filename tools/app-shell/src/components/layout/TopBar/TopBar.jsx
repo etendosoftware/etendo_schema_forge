@@ -277,6 +277,14 @@ export default function TopBar({
                 handleSearchClick(event);
               }}
               onKeyDown={(event) => {
+                // When the input owns focus, handle the shortcut here and stop
+                // propagation so the document listener cannot toggle twice.
+                if (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSearchOpen((isOpen) => !isOpen);
+                  return;
+                }
                 if (event.key === 'Escape') {
                   event.preventDefault();
                   setSearchOpen(false);

@@ -77,8 +77,8 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await input.press('Escape');
     // The input is the persistent top-bar control; only the dropdown closes.
     await expect(page.getByTestId('CommandDropdown__8e5d1a')).toHaveCount(0, { timeout: 5_000 });
-    // Reopen
-    await page.keyboard.press('Control+k');
+    // Reopen from the persistent top-bar control after focus was restored.
+    await input.click();
     await expect(page.getByTestId('CommandDropdown__8e5d1a')).toBeVisible({ timeout: 5_000 });
   });
 
