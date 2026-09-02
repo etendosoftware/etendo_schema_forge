@@ -1164,6 +1164,7 @@ export function ListView({
                   isDefaultSort={isDefaultSort}
                   SortIconComponent={SortIconComponent}
                   iconButtonHover={iconButtonHover}
+                  labelOverrides={labelOverrides}
                   data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
