@@ -252,6 +252,62 @@ describe('R32 data-fix — @report reads back from the exact TEMP TABLE @apply w
   });
 });
 
+describe('R32 data-fix — self-cleaning DROP TABLE (ETP-5101 REVIEW FINDING B2)', () => {
+  // A committed session-scoped TEMP TABLE survives client.release() (node-postgres does not
+  // issue DISCARD ALL), and this framework's pool is reused across tenants — so a second
+  // tenant's @apply on the SAME pooled connection would hit "relation ... already exists" and
+  // abort the whole chain (run.js's applyChain halts on a failed @apply) unless @apply itself
+  // self-cleans first. This is the LEAST battle-tested part of this fix: it was verified live
+  // via psql once (see the file's own header), not by the automated suite, so these are the
+  // guardrails that would have caught the DROP going missing, being misspelled, or landing in
+  // the wrong position.
+  it('@apply\'s first executable STATEMENT (ignoring leading -- comments) is DROP TABLE IF EXISTS, before any CTE', () => {
+    // Strip @apply's own leading `-- ...` prose lines (the fix file always documents a
+    // statement immediately above it) so this checks the first real SQL statement, not the
+    // first line of text.
+    const firstStatement = fix.apply
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('--'))[0];
+    assert.match(firstStatement, /^DROP TABLE IF EXISTS \w+;$/);
+
+    const dropMatch = normApply.match(/DROP TABLE IF EXISTS (\w+);/);
+    assert.ok(dropMatch, '@apply must contain "DROP TABLE IF EXISTS <name>;"');
+    const dropIdx = normApply.indexOf(dropMatch[0]);
+    const withIdx = normApply.indexOf('WITH natural_combos AS');
+    assert.ok(withIdx > -1, 'natural_combos CTE not found');
+    assert.ok(dropIdx < withIdx, 'the DROP must execute BEFORE the CTE that recreates the table');
+    // Nothing but the DROP statement itself (plus comments) should precede the CTE.
+    const beforeCte = normApply.slice(0, withIdx);
+    assert.equal((beforeCte.match(/;/g) || []).length, 1, 'exactly one statement (the DROP) before the CTE');
+  });
+
+  it('the DROP TABLE target is textually identical to the INTO TEMP TABLE / @report table name (a typo would leave a stale table across pooled-connection reuse)', () => {
+    const dropMatch = normApply.match(/DROP TABLE IF EXISTS (\w+);/);
+    const intoMatch = normApply.match(/INTO TEMP TABLE (\w+)/);
+    const reportMatch = normReport.match(/FROM (\w+)/);
+    assert.ok(dropMatch && intoMatch && reportMatch);
+    assert.equal(dropMatch[1], 'etgo_r32_glitem_name_resync');
+    assert.equal(dropMatch[1], intoMatch[1]);
+    assert.equal(dropMatch[1], reportMatch[1]);
+  });
+
+  it('uses IF EXISTS (must not fail on a brand-new session where the temp table was never created)', () => {
+    assert.match(normApply, /DROP TABLE IF EXISTS/);
+    assert.doesNotMatch(normApply, /^DROP TABLE etgo_r32_glitem_name_resync;/);
+  });
+
+  it('@check carries NO DROP TABLE (read-only; only @apply may self-clean)', () => {
+    assert.doesNotMatch(normCheck, /DROP TABLE/i);
+  });
+
+  it('inlineFreshUuids/inlineParams leave the DROP statement intact (no stray bind tokens or uuid labels inside it)', () => {
+    const clientId = 'C'.repeat(32);
+    const inlined = inlineParams(fix.apply, { client_id: clientId });
+    assert.match(inlined, /^-- .*\n(?:-- .*\n)*DROP TABLE IF EXISTS etgo_r32_glitem_name_resync;/m);
+  });
+});
+
 describe('R32 data-fix — parseFix/inlineParams round-trip cleanly (smoke parse)', () => {
   it('parseFix does not throw and produces well-formed sections from the file\'s marker lines', () => {
     assert.doesNotThrow(() => parseFix(rawText, FIX_ID));

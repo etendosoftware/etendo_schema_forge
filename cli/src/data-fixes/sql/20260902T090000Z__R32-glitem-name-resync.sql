@@ -110,15 +110,21 @@
 -- with a `SELECT ... INTO TEMP TABLE` instead of a second real-table INSERT since nothing here
 -- should survive past this run). The runner (run.js) opens ONE client connection for the whole
 -- fix (BEGIN -> @apply -> @report -> COMMIT, see that file's own comment), so the temp table
--- created inside @apply is visible to @report's separate query in the SAME session before COMMIT,
--- and `ON COMMIT DROP`-equivalent cleanup happens automatically: a session-scoped temp table
--- created inside a transaction that never commits (ROLLBACK, or the framework's own rolled-back
--- validation runs) is undone along with everything else, since CREATE is DDL and fully
--- transactional in Postgres; one that DOES commit is dropped at end-of-session when the pooled
--- connection is later reused for an unrelated fix/tenant pair, well before any name collision
--- could occur. A run whose @apply updates 0 rows still creates the (empty) temp table, so @report
--- always runs cleanly and simply returns 0 rows -> `detail` stays null, same as "no @report
--- section" per parse-fix.js's own documented default.
+-- created inside @apply is visible to @report's separate query in the SAME session before COMMIT.
+--
+-- ETP-5101 REVIEW FINDING (B2): a COMMITted session-scoped temp table is NOT dropped when the
+-- backend connection is later returned to the pool -- node-postgres's `client.release()` (see
+-- db.js's createDbPool) returns the socket to the pool without issuing `DISCARD ALL` or ending the
+-- backend session, and this framework's pool is reused across tenants/fixes (`max: 5`). Since R32
+-- runs per-tenant (confirmed live: GOClient + QA Testing both need it), a second tenant reusing the
+-- SAME pooled connection would hit "relation etgo_r32_glitem_name_resync already exists" and abort
+-- the whole chain for that tenant (run.js's applyChain halts on a failed @apply). @apply therefore
+-- leads with an explicit DROP, making every run self-cleaning regardless of connection reuse; a run
+-- whose @apply updates 0 rows still (re)creates the (empty) temp table, so @report always runs
+-- cleanly and simply returns 0 rows -> `detail` stays null, same as "no @report section" per
+-- parse-fix.js's own documented default. (A ROLLBACKed run -- including the framework's own
+-- validation runs -- undoes the CREATE along with everything else, since it is DDL and fully
+-- transactional in Postgres; the DROP only matters for connection reuse AFTER a commit.)
 
 -- @check
 WITH natural_combos AS (
@@ -162,6 +168,10 @@ WHERE gi.name IS DISTINCT FROM (
 LIMIT 1;
 
 -- @apply
+-- Self-cleaning leading statement -- see header's B2 note: a committed temp table survives
+-- client.release() and must not be assumed gone when this fix runs against the next tenant on a
+-- reused pooled connection.
+DROP TABLE IF EXISTS etgo_r32_glitem_name_resync;
 WITH natural_combos AS (
   -- Textually identical to @check's own CTE above -- see the header's symmetry note.
   SELECT DISTINCT ON (ev.c_elementvalue_id, s.c_acctschema_id)
