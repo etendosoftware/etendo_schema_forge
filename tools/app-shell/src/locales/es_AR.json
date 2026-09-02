@@ -14024,7 +14024,7 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -16865,6 +16865,8 @@
     "postingFailed": "Error al contabilizar",
     "filterDocumentType": "Tipo de documento",
     "filterAccountingStatus": "Estado contable",
+    "filterFrom": "Desde",
+    "filterTo": "Hasta",
     "accountingDate": "Fecha contable",
     "accountingStatus": "Estado contable",
     "postedStatus": "Contabilizado",
@@ -19552,7 +19554,7 @@
     "customerDataSection": "Datos de cliente",
     "vendorDataSection": "Datos de proveedor",
     "fiscal.title": "Configuración Fiscal",
-    "fiscal.monitor.nav": "Monitor de facturas",
+    "fiscal.monitor.nav": "Monitor fiscal",
     "fiscal.wip.badge": "Trabajo en progreso",
     "fiscal.wip.tooltip": "Esta ventana está en desarrollo activo. Los campos, el diseño y el comportamiento pueden cambiar sin previo aviso y no son definitivos.",
     "fiscal.territory.question": "¿En qué territorio fiscal opera esta organización?",
@@ -20264,6 +20266,7 @@
     "purchaseOrders": "Órdenes de compra",
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
+    "finance": "Finanzas",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -20384,6 +20387,7 @@
     "fm.kpi.deadline_days": "días",
     "fm.kpi.deadline_blocking": "bloq.",
     "fm.list.title": "Declaraciones",
+    "fm.breadcrumb.section": "Modelos Fiscales",
     "fm.list.count": "declaraciones",
     "fm.filter.all": "Todos",
     "fm.filter.model_prefix": "Modelo",
@@ -21792,7 +21796,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
