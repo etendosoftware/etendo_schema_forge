@@ -418,6 +418,8 @@ generated `<Page>` component, sorted by `tabOrder`.
 |----------|------|---------|---------|
 | `tabOrder` | number | `99` | Global sort weight across the ENTIRE tab strip (ETP-4415) — not just among secondary tabs. Lower sorts first. Also settable on `customPanelTabs[]`/`extraTabs[]` items and `attachments` (default `999`, i.e. after secondaryTabs); the lines tab uses `window.detailTabOrder` (or the legacy `window.detailTabIndex`, see below) instead, since it isn't declared per-entry. A window declaring no `tabOrder` anywhere renders in exactly the pre-ETP-4415 order. |
 | `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
+| `labelKey` | string | `null` | i18n key resolved through `useUI()`, substituted for `tMenu(label)` wherever the tab's translated label is composed into a generic template (`entityDetail`, `addEntity`) — the label text only, not the whole template. |
+| `addLineLabelKey` | string | `null` | **(ETP-5021)** Full i18n key that REPLACES the tab's "add" button text entirely, bypassing the generic `addEntity` ("Añadir {label}") composition — use when the action must match a standardized CTA used elsewhere in the app (verb + prefix + casing) rather than the generic tab-name-derived phrasing. E.g. `locationAddress` sets `"addLineLabelKey": "addAddress"` so its button reads the same "+ Añadir dirección" as the document-header `PartnerAddressPicker` (`C_BPartner_Location_ID` fields), instead of the generic "Añadir Dirección". Implemented by `resolveAddLineLabel(st, ui, tMenu)` in `detailViewHelpers.jsx`. `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`) now emits `labelKey`/`addLineLabelKey` onto the generated `secondaryTabs` array entry alongside `tabOrder`/`requireSavedRecord`/`customAddModal` — verified locally with `LOCAL_CORE=1` against `schema_forge_core` branch `feature/ETP-5021` (commit `927042462`), whose PR is pending review/merge/publish. **Not yet in the published package this repo pins** — `contacts`'s committed `BusinessPartnerPage.jsx` therefore does not carry `addLineLabelKey` yet (the offline UI-drift check regenerates against the pinned version and would otherwise fail). Once the core package is published and bumped here (`docs/repo-topology.md`), re-run `make regen ONLY=contacts` and commit the result — no other change needed. |
 | `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
 | `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
 | `requireSavedRecord` | boolean | `false` | Blocks opening/adding to this tab until the header record itself has been saved (no `id` yet). |
@@ -1196,6 +1198,20 @@ selected.
   ]
 }
 ```
+
+**Precedence over callouts (ETP-5039).** A mapping target is an explicit user choice, so
+`applyOnSelectMappings` registers every `to` key as *touched*. A callout fired by the same
+selection (e.g. the product callout returning the AD locator `Value`, `AS-0-0-0`) therefore
+cannot overwrite it. The protection extends to the `to$_identifier` companion key, where the
+display label lives — in `applyCalloutUpdates` (`tools/app-shell/src/lib/applyCalloutUpdates.js`)
+a `X$_identifier` key inherits the base key `X`'s membership in both `touched` and
+`forceCalloutFields`. Consequences:
+
+- A field the user picked keeps **both** its value and its label against a callout default.
+- A field declared in `forceCalloutFields` still wins, and its label is refreshed with it —
+  no value/label mismatch.
+- Untouched autocompleted fields (prices, discounts, amounts) are recalculated by callouts
+  exactly as before.
 
 ### Custom Renderer (`customRenderer`)
 

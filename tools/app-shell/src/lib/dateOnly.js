@@ -49,6 +49,39 @@ export function todayCalendarISO(reference = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Tomorrow's date as a `yyyy-MM-dd` string, in the LOCAL calendar.
+ *
+ * Built with the local-time `Date` constructor, which rolls the month and year
+ * over correctly and is immune to DST shifts — unlike adding 86400000 ms, which
+ * lands on the same calendar day when the clock falls back an hour.
+ *
+ * Useful for expressing "on or before today" against a date-only field where
+ * only a strict `lessThan` operator is available: `< tomorrow` is `<= today`.
+ */
+export function tomorrowCalendarISO(reference = new Date()) {
+  return todayCalendarISO(
+    new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() + 1),
+  );
+}
+
+/**
+ * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
+ * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".
+ */
+export function formatCalendarMonthYear(raw, locales = 'en-GB') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  const formatter = new Intl.DateTimeFormat(normalizeLocale(locales), {
+    month: 'long', year: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const year = parts.find((part) => part.type === 'year')?.value;
+  if (!month || !year) return formatter.format(date);
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year}`;
+}
+
 export function getCalendarDateRelation(raw, reference = new Date()) {
   const date = parseCalendarDate(raw);
   if (!date) return null;

@@ -36,7 +36,8 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
         if (typeof event.button === 'number' && event.button !== 0) return;
         event.preventDefault();
         requestNavigation(() => navigate(to));
-      }} />
+      }}
+    />
   );
 }
 

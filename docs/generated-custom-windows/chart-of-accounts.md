@@ -17,6 +17,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 ## Interaction model
 - Route: `/chart-of-accounts` for the list and `/chart-of-accounts/:recordId` for record detail.
 - Visibility: visible from the Finance menu as **Chart of Accounts**.
+- Breadcrumb: `Finanzas / Plan de cuentas` — driven by `decisions.json → window.category: "finance"`, which the generated `ElementValuePage.jsx` resolves through `tMenu()` alongside the window name. ETP-4945 corrected this from `category: "accounting"`, which rendered the wrong section (`Contabilidad / Plan de cuentas`).
 - Implementation type: generated window route loaded from the app-shell window registry.
 - Window shape: single-entity window for `elementValue`, with a custom grouped tree table (`AccountTreeView.jsx`) replacing the generated list table.
 - Record detail titles use the account code (`searchKey`) rather than the internal record id.

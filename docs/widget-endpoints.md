@@ -296,6 +296,18 @@ Each task uses either `filter` (quick-filter preset) or `params` (column-filter 
         "amount": "$12,400"
       },
       {
+        "type": "warning",
+        "text": "2 payments overdue",
+        "navigation": {
+          "type": "list",
+          "window": "purchase-invoice",
+          "filter": "paymentsDue"
+        },
+        "link": "/purchase-invoice?filter=paymentsDue",
+        "count": 2,
+        "taskKey": "paymentsOverdue_plural"
+      },
+      {
         "type": "info",
         "text": "4 goods receipts pending",
         "navigation": {
@@ -320,23 +332,31 @@ Each task uses either `filter` (quick-filter preset) or `params` (column-filter 
         "taskKey": "pendingSalesDeliveries_plural"
       }
     ],
-    "count": 3
+    "count": 4
   }
 }
 ```
 
 Fields: `type` (`warning`|`info`), `text` (description), `navigation` (preferred semantic target — uses `filter` for quick-filter presets or `params` for column-filter pre-population), `link` (legacy route path during migration), `count` (numeric), `taskKey` (i18n key used by `PendingTasksRail`), `amount` (optional formatted string), `detail` (optional extra text).
 
-**Task inventory** (as of ETP-4004):
+**Task inventory** (as of ETP-5017):
 
 | taskKey | Window | Navigation type | Target |
 |---------|--------|----------------|--------|
 | `overdueInvoices` | `sales-invoice` | `filter` | `overdue` |
 | `collectionsDueToday` | `sales-invoice` | `filter` | `collectionsDueToday` |
-| `paymentsDueToday` | `purchase-invoice` | `filter` | `paymentsDueToday` |
+| `paymentsDueToday` | `purchase-invoice` | `filter` | `paymentsDue` |
+| `paymentsOverdue` | `purchase-invoice` | `filter` | `paymentsDue` |
 | `pendingReceptions` | `goods-receipt` | `params` | `DocStatus=DR` |
 | `pendingSalesDeliveries` | `goods-shipment` | `params` | `DocStatus=DR` |
 | `lowStockAlerts` | `physical-inventory` | — | direct link |
+
+`paymentsDueToday` and `paymentsOverdue` are two states of the SAME card ("Pagos"): the
+backend combines invoices due today and past-due invoices into a single count, and picks
+`paymentsOverdue` over `paymentsDueToday` whenever at least one invoice is already overdue —
+the more critical state wins. Both drill down into the same `paymentsDue` filter, which shows
+every unpaid purchase invoice with a due date on or before today (unlike `overdueInvoices` on
+the sales side, which is a single state with no "due today" counterpart — see ETP-5012).
 
 ### widget-activity
 
