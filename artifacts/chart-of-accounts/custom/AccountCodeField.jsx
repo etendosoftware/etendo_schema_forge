@@ -8,10 +8,13 @@ const ACCOUNT_CODE_LENGTH = 8;
  * AccountCodeField — split prefix + suffix editor for 8-digit chart-of-accounts codes.
  *
  * Props:
- *   value     — current full 8-digit code (string)
- *   onChange  — (newFullCode: string) => void  — always fires with the complete 8-char value
- *   record    — full form data object (used to detect summaryLevel and codePrefix)
- *   readOnly  — when true, renders as a single locked display
+ *   value       — current full 8-digit code (string)
+ *   onChange    — (newFullCode: string) => void  — always fires with the complete 8-char value
+ *   record      — full form data object (used to detect summaryLevel and codePrefix)
+ *   readOnly    — when true, renders as a single locked display
+ *   placeholder — 4-digit suffix hint for the empty-suffix state (e.g. the last used
+ *                 number under the selected prefix). Falls back to `codeSuffixPlaceholder`
+ *                 ("0000") when not supplied.
  *
  * Render rules:
  *   - summaryLevel === 'Y' OR readOnly  → single read-only display  (data-testid="account-code-readonly")
@@ -23,7 +26,7 @@ const ACCOUNT_CODE_LENGTH = 8;
  *   - On blur: validates total code length === 8; shows inline error if not
  *   - Error key: "codeExact8Digits" in genericLabels (both en_US.json and es_ES.json)
  */
-export default function AccountCodeField({ value = '', onChange, record, readOnly = false }) {
+export default function AccountCodeField({ value = '', onChange, record, readOnly = false, placeholder }) {
   const ui = useUI();
   const isSummary = record?.summaryLevel === 'Y';
   const isReadOnlyDisplay = isSummary || readOnly;
@@ -98,7 +101,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           maxLength={4}
-          placeholder={ui('codeSuffixPlaceholder')}
+          placeholder={placeholder ?? ui('codeSuffixPlaceholder')}
           className="h-10 flex-1 rounded-r-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>

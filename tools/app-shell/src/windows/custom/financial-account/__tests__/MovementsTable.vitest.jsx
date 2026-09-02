@@ -1,4 +1,9 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // i18n translator returns the key itself, so we assert on key strings.
 vi.mock('@/i18n', () => ({
@@ -23,6 +28,49 @@ vi.mock('../MovementRowKebab', () => ({
 }));
 vi.mock('@/components/ui/money-amount', () => ({
   MoneyAmount: ({ value }) => <span data-testid="money">{String(value)}</span>,
+}));
+
+// ETP-5101 — the "más información" panel now renders a live ChipSelect (via
+// useDimensionLookup, which calls useAuth()) for editable dimensions. Mocked the same way
+// NewTransactionModal.vitest.jsx already does for the identical hook, so the panel can mount
+// without an AuthProvider in the tree. ChipSelect resolves a deterministic { id, name } keyed
+// off its `testId` (movement-dimension-<key>), so payload assertions can tell which dimension
+// was picked/cleared.
+const toastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: { error: (...a) => toastError(...a), success: vi.fn() },
+}));
+
+vi.mock('@/hooks/useMovementLookups', () => ({
+  useDimensionLookup: () => ({ results: [], loading: false }),
+}));
+
+const updateMovement = vi.fn();
+vi.mock('@/hooks/useCreateMovement', async (importOriginal) => {
+  // Keep the REAL buildDimensionUpdatePayload — Part 2's payload-shape assertions need the
+  // actual field mapping, not a re-implemented stand-in.
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useUpdateMovement: () => ({ updateMovement, updating: false }),
+  };
+});
+
+vi.mock('@/components/forms/fields', () => ({
+  ChipSelect: ({ value, onChange, testId }) => (
+    <div>
+      <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
+      <button
+        type="button"
+        data-testid={`${testId}-pick`}
+        onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
+        pick
+      </button>
+      <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>
+        clear
+      </button>
+    </div>
+  ),
 }));
 
 // Inject an extra contract column with NO renderer in MOVEMENT_CELL_RENDERERS so
@@ -91,6 +139,8 @@ function Harness(props) {
       selectedIds={props.selectedIds ?? new Set()}
       onSelectionChange={props.onSelectionChange ?? vi.fn()}
       highlightTxnId={props.highlightTxnId}
+      onReload={props.onReload}
+      accountCurrencyId={props.accountCurrencyId ?? null}
       sortKey={sortKey}
       sortDirection={sortDirection}
       onSort={toggleSort}
@@ -152,10 +202,14 @@ describe('MovementsTable — expandable dimensions panel', () => {
   });
 
   it('shows only project, cost center and product as read-only fields (never organization)', () => {
+    // ETP-5101 — posted: 'Y' keeps this movement OUT of the new editable-dimensions gate, so the
+    // panel still renders the original plain disabled <Input> this test is about (which fields are
+    // shown/hidden), independent of the new editability feature covered separately below.
     renderTable({
       enabledDimensions: ['organization', 'project', 'costcenter', 'product', 'campaign', 'bpartner'],
       movements: [
         baseMovement({
+          posted: 'Y',
           dimensions: {
             organization: 'Org Y',  // must NOT show — organization is excluded from the panel
             project: 'Proj A',
@@ -686,5 +740,195 @@ describe('MovementsTable — ETP-5030 selected-row shading', () => {
     // The highlight cue survives as a ring (box-shadow, no layout cost).
     expect(row1.className).toContain('ring-1');
     expect(row1.className).toContain('ring-focus-ring');
+  });
+});
+
+// ── ETP-5101 — editable Project/Cost center/Product in the "más información" panel ─────────
+// A dimension only ever becomes a live ChipSelect when BOTH: (a) it is one of the three
+// EDITABLE_DIMENSION_KEYS, and (b) ctx.canEditDimensions(movement) is true — i.e. the movement
+// is a GL transaction (no paymentId) and not posted. Every other combination keeps the original
+// plain disabled <Input>.
+describe('MovementsTable — editable dimensions (ETP-5101)', () => {
+  beforeEach(() => {
+    updateMovement.mockReset();
+    toastError.mockClear();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  // Real shape captured from GET /sws/neo/financial-account-transactions, trimmed to what
+  // buildDimensionUpdatePayload and the panel actually read.
+  const editableMovement = (over = {}) => baseMovement({
+    posted: 'N',
+    paymentId: undefined,
+    trxType: 'BPD',
+    date: '2026-08-28T00:00:00Z',
+    depositAmount: 14.52,
+    withdrawalAmount: 0,
+    description: 'Factura Nº : 10000016.',
+    glItemId: '',
+    bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+    projectId: '',
+    costcenterId: '',
+    productId: '',
+    dimensions: { project: '', costcenter: '', product: '' },
+    ...over,
+  });
+
+  it('renders a live ChipSelect (not a disabled Input) for project/costCenter/product on a not-posted, non-payment-linked movement', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByTestId('movement-dimension-project-value')).toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-dimension-costcenter-value')).toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-dimension-product-value')).toBeInTheDocument();
+    // No disabled Input rendered for any of the three.
+    expect(within(panel).queryByDisplayValue('Proj A')).not.toBeInTheDocument();
+    expect(within(panel).queryByDisplayValue('CC 1')).not.toBeInTheDocument();
+    expect(within(panel).queryByDisplayValue('Prod X')).not.toBeInTheDocument();
+  });
+
+  it('keeps the plain disabled Input for a POSTED movement, even though it would otherwise be editable', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        posted: 'Y',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-costcenter-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-product-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+  });
+
+  it('keeps the plain disabled Input for a payment-linked movement, even when NOT posted', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        posted: 'N',
+        paymentId: 'pay-1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+  });
+
+  // Direct/unit-level check (per the ticket's own note): the allowlist itself never includes
+  // the dimensions the backend has no write path for, regardless of canEditDimensions — this
+  // window's contract mock above only ever surfaces project/costCenter/product in the panel, so
+  // there is no way to get e.g. organization to actually render here to assert on.
+  it('EDITABLE_DIMENSION_KEYS only ever contains project/costcenter/product — never organization, activity, campaign, salesregion, user1 or user2', () => {
+    const src = readFileSync(join(__dirname, '..', 'MovementsTable.jsx'), 'utf8');
+    const match = src.match(/EDITABLE_DIMENSION_KEYS\s*=\s*new Set\(\[([^\]]*)\]\)/);
+    expect(match).not.toBeNull();
+    const keys = match[1].split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean);
+    expect(keys.sort()).toEqual(['costcenter', 'product', 'project']);
+    for (const excluded of ['organization', 'activity', 'campaign', 'salesregion', 'user1', 'user2']) {
+      expect(keys).not.toContain(excluded);
+    }
+  });
+
+  it('saves a picked dimension via updateMovement (payload matches buildDimensionUpdatePayload) and reloads on success', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockResolvedValue({ id: 'm1' });
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(updateMovement).toHaveBeenCalledOnce());
+    expect(updateMovement.mock.calls[0][0]).toMatchObject({
+      id: 'm1',
+      trxType: 'BPD',
+      transactionDate: '2026-08-28T00:00:00Z',
+      accountingDate: '2026-08-28T00:00:00Z',
+      depositAmount: 14.52,
+      paymentAmount: 0,
+      currencyId: 'cur-eur',
+      description: 'Factura Nº : 10000016.',
+      glItemId: null,
+      bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+      costcenterId: null,
+      productId: null,
+      projectId: 'movement-dimension-project-id',
+      process: false,
+    });
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+  });
+
+  it('clears a dimension by sending null for its id field, not undefined or an omitted key', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockResolvedValue({ id: 'm1' });
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({
+        id: 'm1',
+        projectId: 'proj-old',
+        dimensions: { project: 'Old Proj' },
+      })],
+      onReload,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-clear'));
+
+    await waitFor(() => expect(updateMovement).toHaveBeenCalledOnce());
+    const payload = updateMovement.mock.calls[0][0];
+    expect(payload).toHaveProperty('projectId', null);
+    expect(payload.projectId).not.toBeUndefined();
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+  });
+
+  it('shows the translated/raw backend error on a failed save and does NOT reload', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockRejectedValueOnce(new Error('Backend says no'));
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Backend says no'));
+    expect(onReload).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic dimension-update error key when the backend gives no message, and does NOT reload', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockRejectedValueOnce(new Error(''));
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountTxRowDimensionUpdateError'));
+    expect(onReload).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ import {
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
 import { AccountBadgeSelect } from '@/components/contract-ui';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
+import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -159,6 +160,23 @@ export default function NewAccountModal({
     return parent ? String(parent.searchKey) : '';
   }, [form.parentAccountId, parentOptions]);
 
+  // ETP-5101 — hint the last-used 4-digit suffix under the selected prefix, so the
+  // user isn't guessing which numbers are already taken. `accountRows` only ever
+  // contains leaf (posting) accounts, matching deriveDefaultAccountType's own scope
+  // above. Falls back to AccountCodeField's own default ("0000") when nothing exists
+  // yet under the prefix.
+  const lastUsedSuffix = useMemo(() => {
+    if (!selectedParentCodePrefix) return undefined;
+    let max = -1;
+    for (const a of accountRows) {
+      const code = String(a.searchKey ?? '');
+      if (code.length !== 8 || !code.startsWith(selectedParentCodePrefix)) continue;
+      const suffix = Number(code.slice(4));
+      if (Number.isFinite(suffix) && suffix > max) max = suffix;
+    }
+    return max >= 0 ? String(max).padStart(4, '0') : undefined;
+  }, [accountRows, selectedParentCodePrefix]);
+
   // Re-initialise once per open/currentRecord cycle. `initDoneRef` resets on
   // open so a fresh session always recomputes, but once initialization has
   // run it latches — later parentOptions changes (e.g. a background refetch)
@@ -246,14 +264,14 @@ export default function NewAccountModal({
       });
 
       if (!res.ok) {
-        const msg = await res.text().catch(() => '');
+        const msg = await parseBackendErrorMessage(res);
         throw new Error(msg || `Error ${res.status}`);
       }
 
       toast.success(ui('newSubAccountSuccess'));
       onSaved?.();
     } catch (err) {
-      toast.error(ui('newSubAccountError'));
+      toast.error(translateBackendError(err.message, ui) || ui('newSubAccountError'));
       // eslint-disable-next-line no-console
       console.error('[NewAccountModal] save failed:', err);
     } finally {
@@ -332,6 +350,7 @@ export default function NewAccountModal({
                 onChange={handleCodeChange}
                 record={accountCodeRecord}
                 readOnly={false}
+                placeholder={lastUsedSuffix}
                 data-testid="AccountCodeField__2c756f"
               />
             </div>

@@ -38,6 +38,11 @@ const FIXES_WITH_REPORT = new Set([
   // branch — same "flag, don't guess" pattern as R19. See
   // cli/test/data-fixes-r28-owner-email-backfill.test.js.
   '20260827T120000Z__R28-owner-email-backfill',
+  // R31 backfills C_Glitem/C_Glitem_Acct for pre-ETP-5020 subaccounts; its @report lists every
+  // subaccount whose composed "<name> <code>" GL Item name would exceed C_Glitem.Name's 60-char
+  // limit (gap N2) and was therefore skipped rather than truncated — same "flag, don't guess"
+  // pattern as R19/R28. See cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js.
+  '20260901T140000Z__R31-glitem-subaccount-backfill',
 ]);
 
 async function loadCatalogFiles() {

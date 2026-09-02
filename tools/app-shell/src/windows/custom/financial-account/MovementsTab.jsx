@@ -261,6 +261,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onSort={toggleSort}
           onReload={onReload}
           onEdit={setEditMovement}
+          accountCurrencyId={account?.currencyId}
           data-testid="MovementsTable__c1f76a" />
       </div>
       {batchDeleteDialog}

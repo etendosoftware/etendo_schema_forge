@@ -307,6 +307,11 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // ETP-5101 — hides the record-count badge next to the window title. Use this
+  // when `hook.items.length` doesn't represent a meaningful count for the
+  // window (e.g. AccountTreeView's own self-fetched tree: ListView only ever
+  // hands it one paginated batch of leaves, not the full materialized structure).
+  hideRecordCount = false,
   // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
   // just its individual controls. For windows whose headerTable renders its own
   // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
@@ -803,7 +808,7 @@ export function ListView({
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hook.items.length,
+    recordCount: hideRecordCount ? undefined : hook.items.length,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
   }, [favActive, hook.items.length]);
