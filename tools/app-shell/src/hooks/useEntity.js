@@ -17,7 +17,7 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
@@ -578,6 +578,28 @@ export function getInvalidPhoneFields(fields, editing) {
 // Returns { key, errorKey, errorParams } for the first violating field, or null
 // when clean. `errorParams` carries the i18n interpolation values (e.g. { min })
 // so the toast can render "Value must be at least 1" rather than a generic text.
+// Silent safety-net clamp for numeric fields with a declared `max` (e.g. Annual
+// Depreciation % <= 100). EntityForm's onBlur already clamps this on the input, but
+// that only fires if the user left the field before saving — clicking Save directly
+// (e.g. right after typing, or a programmatic save) reaches performSave with the raw,
+// unclamped value still in `editing`. Clamp it here, on the object used to build the
+// payload, so an over-limit value is never persisted. Silent: never blocks save, no
+// toast, no field error — unlike getNumericFieldViolation below (min/integer). ETP-4887.
+// Returns `editing` unchanged (same reference) when nothing needed clamping, so
+// callers can cheaply detect "did anything change" via a reference check.
+export function clampNumericFieldsForSave(editing, fields) {
+    let clamped = editing;
+    for (const f of fields) {
+        if (f?.max == null) continue;
+        const clampedValue = clampNumericFieldMax(f, editing?.[f.key]);
+        if (clampedValue !== editing?.[f.key]) {
+            if (clamped === editing) clamped = { ...editing };
+            clamped[f.key] = clampedValue;
+        }
+    }
+    return clamped;
+}
+
 export function getNumericFieldViolation(fields, editing) {
     const isReadOnly = getReadOnly(editing);
     const isVisible = getVisible(editing);
@@ -1450,7 +1472,13 @@ export function useEntity(entity, childEntity, {
         // the toast becomes purely cosmetic. No-op for every window whose fields declare
         // neither `min` nor `integer`. ETP-4542.
         const allFormFields = [...formFieldsRef.current.values()].flat();
-        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        // ETP-4887: silently clamp any field with a declared `max` before it reaches
+        // the save gate/payload — see clampNumericFieldsForSave for the full rationale.
+        const clampedEditing = clampNumericFieldsForSave(editing, allFormFields);
+        if (clampedEditing !== editing) {
+            setEditing(clampedEditing);
+        }
+        const numericViolation = getNumericFieldViolation(allFormFields, clampedEditing);
         if (numericViolation) {
             // Same id as EntityForm's on-blur toast for this field (ETP-4542):
             // when Save is clicked without leaving the input first, blur fires
@@ -1489,25 +1517,25 @@ export function useEntity(entity, childEntity, {
                 contactsViolation.errorParams,
             );
         }
-        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
         }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
         if (invalidWebsites.length > 0) {
             return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
         }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
-        const url = getUrl(isNew, apiBaseUrl, entity, editing);
+        const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
         const method = getMethod(isNew);
         const payload = buildSavePayload({
             isNew,
             selected,
-            editing,
+            editing: clampedEditing,
             entity,
             apiBaseUrl,
             backendDefaultKeysRef,

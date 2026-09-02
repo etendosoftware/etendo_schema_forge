@@ -8153,12 +8153,12 @@
       "description": "Importe a amortizar"
     },
     "Amortizationenddate": {
-      "label": "Fecha fin",
-      "description": "Fecha fin"
+      "label": "Fecha de fin de amortización",
+      "description": "Fecha de fin de amortización"
     },
     "Amortizationstartdate": {
-      "label": "Fecha inicio",
-      "description": "Fecha inicio"
+      "label": "Fecha de inicio de amortización",
+      "description": "Fecha de inicio de amortización"
     },
     "Annualamortizationpercentage": {
       "label": "% anual amortización",
@@ -8909,7 +8909,7 @@
       "description": "Tipo de cálculo"
     },
     "Depreciatedpreviousamt": {
-      "label": "Amortizado anterior",
+      "label": "Valor amortizado previamente",
       "description": ""
     },
     "C_Dp_Management_ID": {
@@ -19329,12 +19329,12 @@
     "assetsCurrencyLabel": "Moneda",
     "assetsPurchaseDateLabel": "Fecha de compra",
     "assetsCancellationDateLabel": "Fecha de cancelación",
-    "assetsDepStartDateLabel": "Fecha inicio de amortización",
-    "assetsDepEndDateLabel": "Fecha fin de amortización",
+    "assetsDepStartDateLabel": "Fecha de inicio de amortización",
+    "assetsDepEndDateLabel": "Fecha de fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
     "assetsDepreciationAmtLabel": "Monto de amortización",
-    "assetsPrevDepreciatedLabel": "Monto ya amortizado",
+    "assetsPrevDepreciatedLabel": "Valor amortizado previamente",
     "poSave": "Guardar",
     "poSaveDraft": "Guardar borrador",
     "poConfirmBtn": "Confirmar",
