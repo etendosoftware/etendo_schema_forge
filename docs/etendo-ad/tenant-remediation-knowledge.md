@@ -1957,14 +1957,32 @@ as the immutability trigger for a data-fix `.sql` file.
   <name> FROM updated` (where `updated` is the `UPDATE ... RETURNING` CTE) instead of feeding a
   second real-table `INSERT` (R31/R18/R28's usual target) — a session-scoped Postgres temp table,
   visible to `@report`'s separate query on the SAME connection before `COMMIT`, and safely undone
-  either by `ROLLBACK` (temp table creation is transactional DDL, fully undone) or by
-  end-of-session cleanup once the pooled connection is later reused for an unrelated fix/tenant
-  (no `ON COMMIT DROP` needed in practice, since nothing in this framework re-runs `@apply` twice
-  on the same still-open connection without an intervening `COMMIT`/`ROLLBACK`). **Apply
-  generally:** before assuming "recompute independently, post-apply" (R31's pattern) is always
-  sufficient for a `@report` section, check whether the report needs a value the `@apply` is about
-  to destroy — if so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a
-  workaround to avoid.
+  by `ROLLBACK` (temp table creation is transactional DDL, fully undone). **Apply generally:**
+  before assuming "recompute independently, post-apply" (R31's pattern) is always sufficient for a
+  `@report` section, check whether the report needs a value the `@apply` is about to destroy — if
+  so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a workaround to
+  avoid.
+- **2026-09-02 — REVIEW FINDING B2, caught before merge: a COMMITted session-scoped temp table
+  does NOT get cleaned up just because the connection is later returned to the pool.** The first
+  draft above assumed "no `ON COMMIT DROP` needed in practice... end-of-session cleanup once the
+  pooled connection is later reused" — that assumption is **wrong**. `client.release()`
+  (node-postgres, see `db.js`'s `createDbPool`) returns the socket to the pool without issuing
+  `DISCARD ALL` or ending the backend session, and this framework's pool is reused across
+  tenants/fixes (`max: 5`). Since R32 runs per-tenant (confirmed live: GOClient + QA Testing both
+  need it), a second tenant reusing the SAME pooled connection after a first tenant's `@apply`
+  committed would hit `relation "etgo_r32_glitem_name_resync" already exists` and abort the whole
+  chain for that tenant (`run.js`'s `applyChain` halts on a failed `@apply`). **Fix:** `@apply` now
+  leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync;` before its
+  data-modifying CTE, making every run self-cleaning regardless of connection reuse — a run whose
+  `@apply` updates 0 rows still (re)creates the (empty) temp table, so `@report` always runs
+  cleanly and simply returns 0 rows. A `ROLLBACK`ed run (including this file's own validation runs)
+  still undoes the `CREATE` along with everything else, since it is fully transactional DDL — the
+  explicit `DROP` only matters for connection reuse AFTER a commit. **Apply generally:** a
+  session-scoped temp table plus a connection pool is a drift trap — "the session ends, so the temp
+  table goes away" is true only if the SAME backend session is what gets torn down; a pooled
+  `release()` keeps the backend session alive for the next borrower. Any `@apply` that creates a
+  temp table for `@report` to read must assume the CREATE can collide with a leftover from an
+  earlier tenant sharing the pool, and lead with its own `DROP TABLE IF EXISTS`.
 - **2026-09-02 — Live sweep on the current (un-migrated) dev DB, R31 itself never committed here.**
   GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000-
   Capital social"`). QA Testing: 3 (the 2 "Petty Cash" GL Items above, plus "Fees" →

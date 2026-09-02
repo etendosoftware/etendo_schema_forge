@@ -1593,10 +1593,15 @@ candidate CTE and again on the `UPDATE` itself (two-layer idempotency), and by `
 :client_id` on every statement. `@report` captures the `UPDATE ... RETURNING`'s old/new names into
 a session-scoped `TEMP TABLE` (populated inside `@apply`, read by the separate `@report` query —
 safe because the runner keeps `@apply`/`@report` on the same DB connection/transaction, and the
-temp table is fully undone by `ROLLBACK` or dropped once the pooled connection is later reused, per
-the file's own header comment) and lists every subaccount whose GL Item name actually changed this
-run, old name → new name — mirrors R19/R31's `@report` intent but needs the pre-image, unlike
-R31's own simpler post-apply recompute.
+temp table is fully undone by `ROLLBACK` when the run doesn't commit). **A COMMITted temp table is
+NOT dropped just because the connection is later returned to the pool** (`client.release()` does
+not issue `DISCARD ALL`/end the backend session, and this framework's pool is reused across
+tenants) — ETP-5101 REVIEW FINDING B2, caught before merge. Since R32 runs per-tenant, a second
+tenant reusing the same pooled connection would otherwise hit `relation ... already exists` and
+abort. `@apply` therefore leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync`
+before its data-modifying CTE, making every run self-cleaning regardless of connection reuse. It
+lists every subaccount whose GL Item name actually changed this run, old name → new name — mirrors
+R19/R31's `@report` intent but needs the pre-image, unlike R31's own simpler post-apply recompute.
 
 **Live-validated in rolled-back transactions (2026-09-02):**
 - **GOClient:** `@check` → 1 row; `@apply` → 1 row updated; `@report` → `10000000 | Capital social
