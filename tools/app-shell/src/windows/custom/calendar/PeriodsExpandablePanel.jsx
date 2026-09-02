@@ -213,7 +213,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
     if (!parentId) return;
     setPeriods(undefined);
     loadPeriods();
-  }, [parentId, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parentId, loadPeriods]);
 
   // "Create Periods" runs in a completely different React subtree — the generated `YearPage`
   // from the `fiscal-calendar` spec (this panel lives on the `open-close-period-control` spec,
