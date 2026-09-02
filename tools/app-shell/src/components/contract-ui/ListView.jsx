@@ -7,11 +7,12 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
+import { ListExportButton } from './ListExportButton.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
@@ -31,6 +32,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
+
+/**
+ * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
+ * compares a CSV header — so two labels this calls equal are also two headers the import
+ * treats as the same column.
+ */
+function sameLabel(a, b) {
+  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return norm(a) === norm(b);
+}
 
 function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
   if (quickFilters?.length) {
@@ -655,19 +666,33 @@ export function ListView({
   // address/city/postal/region are C_Location columns the descriptor writes directly, so they
   // are not entity fields and have no AD label at all.
   //
-  // `headerScope: "contact"` appends a localized qualifier. A Contacts row is split across the
-  // business partner and its contact person, and the AD label for both halves is identical
-  // ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
+  // `headerScope` appends a localized qualifier naming the tab a column belongs to. A Contacts
+  // row is split across THREE records — the business partner, its contact person (AD_User) and
+  // its address (C_BPartner_Location + C_Location) — and the AD label for two of those halves is
+  // identical ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
   // qualifier the template writes the same header twice, which `parseDelimited` rejects
   // outright — the file could not be uploaded at all.
+  //
+  // ETP-4997: the scope used to be a single "contact" value covering everything that is not on
+  // the header entity, so the five address columns were labelled "Dirección (Contacto)" —
+  // naming the wrong tab, and reported as confusing by a user reading an exported file. Address
+  // columns now carry their own scope. An unknown scope falls back to no qualifier rather than
+  // printing a raw key.
+  const importHeaderScopeLabels = useMemo(() => ({
+    contact: ui('importHeaderScopeContact'),
+    address: ui('importHeaderScopeAddress'),
+  }), [ui]);
   const importFieldLabel = useCallback((field) => {
     const base = (field.labelKey ? ui(field.labelKey) : null)
       || (field.column ? t(field.column) : null)
       || field.label || field.target;
-    return field.headerScope === 'contact'
-      ? `${base} (${ui('importHeaderScopeContact')})`
-      : base;
-  }, [t, ui]);
+    const scope = importHeaderScopeLabels[field.headerScope];
+    // The address column's own label IS the scope word, so qualifying it would read
+    // "Dirección (Dirección)". Nothing else in the file carries that name, and
+    // `resolveTemplateHeaders` still disambiguates if a collision ever appears.
+    if (!scope || sameLabel(base, scope)) return base;
+    return `${base} (${scope})`;
+  }, [t, ui, importHeaderScopeLabels]);
 
   // `importExistingKeys` answers "which of these rows already exist?" before the user
   // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
@@ -687,6 +712,7 @@ export function ListView({
       keyTargets.map((target) => [target, record[target]]),
     ));
   }, [apiFetch, importConfig?.entity]);
+
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -698,11 +724,18 @@ export function ListView({
   const importLabels = useMemo(() => ({
     title: ui('importDialogTitle'),
     revalidating: ui('importRevalidating'),
+    // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
+    // when the per-format key is absent); the two per-format captions are what actually render
+    // now that a window can offer more than one template.
     downloadTemplate: ui('importDownloadTemplate'),
+    downloadTemplateCsv: ui('importDownloadTemplateCsv'),
+    downloadTemplateXlsx: ui('importDownloadTemplateXlsx'),
     importButton: (n) => ui('importButtonCount', { n }),
     dropzone: {
       dropHere: ui('importDropHere'),
-      dropHint: ui('importDropHint'),
+      // Carries a {formats} placeholder that ImportDropzone fills from the window's own
+      // `formats` declaration, so the hint can no longer name formats the input does not accept.
+      dropHint: ui('importDropHintFormats'),
     },
     progress: {
       title: ui('importProgressTitle'),
@@ -1171,6 +1204,10 @@ export function ListView({
                   onRefresh={() => hook.refresh()}
                   label={ui('refresh')}
                   data-testid="RefreshButton__620cbc" />
+                {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not
+                    the file: import pulls records into Etendo (Download), export pushes them
+                    out (Upload). The import button used to carry the outward arrow, which read
+                    as an export. */}
                 {importConfig?.enabled && (
                   <Button
                     variant="outline"
@@ -1181,8 +1218,16 @@ export function ListView({
                     title={ui('import')}
                     data-testid="ListView__importButton"
                   >
-                    <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
+                    <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
                   </Button>
+                )}
+                {importConfig?.enabled && (
+                  <ListExportButton
+                    importConfig={importConfig}
+                    importFieldLabel={importFieldLabel}
+                    apiBaseUrl={apiBaseUrl}
+                    buildListQuery={hook.buildListQuery}
+                    data-testid="ListExportButton__620cbc" />
                 )}
                 {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button

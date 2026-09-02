@@ -18,10 +18,10 @@ The current frontend is production-shaped but still backed by local mock data be
 
 ## Route And Layout
 
-- Menu entry: `Tesorería / Configuración contable`
+- Menu entry: `Finanzas / Esquema contable`
 - Slug: `general-ledger-configuration`
 - Window type: `layoutType: custom`
-- Top metadata: breadcrumb `Tesorería / Configuración contable`
+- Top metadata: breadcrumb `Finanzas / Esquema contable` (built from the shared `ui('finance')` key + `ui('glc.title')`, ETP-4945)
 - Right side of the tab row: dirty-state `Guardar cambios` button
 
 ## Tab Behavior

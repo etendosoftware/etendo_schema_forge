@@ -21,6 +21,9 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // useClientSort (wired in for ETP-5083) pulls the active locale from here; without it the
+  // component throws before it ever reaches the date-rendering code this file is testing.
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('../useWarehouseStock', () => ({
