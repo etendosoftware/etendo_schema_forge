@@ -257,16 +257,6 @@ const G3_DEBT = new Set([
   // (see ARTIFACTS above) surfaced these at once; they were never swept because no
   // rule looked at them. Listing them freezes the count -- new per-window code has
   // to use the builders -- and leaves the migration as its own piece of work.
-  'artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx',
-  'artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromGoodsReturnModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx',
-  'artifacts/purchase-invoice/custom/ImportFromSourceInvoiceModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromOrderModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromReturnShipmentModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx',
-  'artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx',
 ]);
 
 const GATE = /!\s*(?:token|authToken|accessToken|bearerToken)\b|\b(?:token|authToken)\s*\?\s*\{/;
