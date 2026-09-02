@@ -8185,12 +8185,12 @@
       "description": "Importe a amortizar"
     },
     "Amortizationenddate": {
-      "label": "Fecha fin",
-      "description": "Fecha fin"
+      "label": "Fecha de fin de amortización",
+      "description": "Fecha de fin de amortización"
     },
     "Amortizationstartdate": {
-      "label": "Fecha inicio",
-      "description": "Fecha inicio"
+      "label": "Fecha de inicio de amortización",
+      "description": "Fecha de inicio de amortización"
     },
     "Annualamortizationpercentage": {
       "label": "% anual amortización",
@@ -8941,7 +8941,7 @@
       "description": "Tipo de cálculo"
     },
     "Depreciatedpreviousamt": {
-      "label": "Amortizado anterior",
+      "label": "Valor amortizado previamente",
       "description": ""
     },
     "C_Dp_Management_ID": {
@@ -14062,8 +14062,8 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Categoría de Activos",
-      "newLabel": "Nueva categoría"
+      "label": "Grupo de activos",
+      "newLabel": "Nuevo grupo"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -16714,10 +16714,11 @@
     "importHeaderCity": "Ciudad",
     "importHeaderCountry": "País",
     "importHeaderPostalCode": "Código Postal",
-    "importHeaderRegion": "Region",
+    "importHeaderRegion": "Región",
     "importHeaderSalesPrice": "Precio de venta",
     "importHeaderPurchasePrice": "Precio de compra",
     "importHeaderScopeContact": "Contacto",
+    "importHeaderScopeAddress": "Dirección",
     "importHeaderType": "Tipo",
     "importErrorInvalidEmail": "El correo electrónico no es válido.",
     "importErrorNotANumber": "El valor \"{value}\" no es un número válido.",
@@ -16747,6 +16748,9 @@
     "Open Close Period": "Abrir/Cerrar período",
     "Fiscal Calendar": "Calendario fiscal",
     "Create Periods": "Crear períodos",
+    "Fiscal Year Range": "Período fiscal",
+    "January - December": "Enero - Diciembre",
+    "July - June": "Julio - Junio",
     "Create Adjustment Period": "Crear período de ajuste",
     "Yes": "Sí",
     "No": "No",
@@ -16754,6 +16758,10 @@
     "goToFiscalCalendarBody": "Los nuevos períodos se crean desde la ventana Calendario fiscal, agregando un año fiscal y ejecutando Crear períodos.",
     "Open Close Document": "Abrir/Cerrar documento",
     "expandPeriod": "Expandir período",
+    "calendarPeriod": "Período",
+    "calendarStatus": "Estado",
+    "calendarActions": "Acciones",
+    "calendarAdjustmentPeriod": "Período de ajuste",
     "openClosePeriod": "Abrir/Cerrar Periodo",
     "openCloseDocument": "Abrir/Cerrar Documento",
     "bulkOpenCloseDocuments": "Abrir/Cerrar Documentos seleccionados",
@@ -16994,6 +17002,8 @@
     "postingFailed": "Error al contabilizar",
     "filterDocumentType": "Tipo de documento",
     "filterAccountingStatus": "Estado contable",
+    "filterFrom": "Desde",
+    "filterTo": "Hasta",
     "accountingDate": "Fecha contable",
     "accountingStatus": "Estado contable",
     "postedStatus": "Contabilizado",
@@ -17042,6 +17052,9 @@
     "clearSort": "Quitar orden",
     "refresh": "Actualizar",
     "import": "Importar",
+    "export": "Exportar",
+    "exportDone": "Exportación completada",
+    "exportError": "La exportación ha fallado",
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
@@ -17511,7 +17524,7 @@
     "sendModalRecipientPlaceholder": "Añade un destinatario y pulsa Enter",
     "sendModalRemoveRecipient": "Quitar {email}",
     "sendModalInvalidEmail": "Introduce un email válido",
-    "websiteInsecureUrl": "La página web debe usar una URL segura (https://)",
+    "websiteInsecureUrl": "Introduce un dominio válido, por ejemplo dominio.com",
     "phoneInvalidChars": "El teléfono solo puede contener números y los caracteres +, (, ), -",
     "sendModalAddCc": "Añadir CC",
     "sendModalCc": "CC",
@@ -18528,6 +18541,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferRateMissing": "No hay tasa de cambio vigente de {from} a {to}. Introdúcela manualmente.",
     "financeAccountTransferReceiveAmount": "La cuenta destino recibirá",
     "financeAccountTransferBankFee": "Aplicar comisión bancaria",
     "financeAccountTransferBankFeeFrom": "Comisión · origen",
@@ -18799,7 +18813,7 @@
     "financeReconcileLeftTitle": "Líneas del extracto",
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
-    "financeReconcileFilterStatusPending": "Pendiente",
+    "financeReconcileFilterStatusPending": "Pendientes",
     "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Con diferencia",
@@ -19143,7 +19157,7 @@
     "financeAccountStatementsManualColContactName": "Nombre del contacto",
     "financeAccountStatementsManualColContact": "Contacto",
     "financeAccountStatementsManualColGlItem": "Cuenta contable",
-    "financeAccountStatementsManualGlItemPlaceholder": "Buscar cuenta contable…",
+    "financeAccountStatementsManualGlItemPlaceholder": "Buscar cuenta…",
     "financeAccountStatementsManualContactPlaceholder": "Buscar contacto…",
     "financeAccountStatementsManualAddLinesCta": "Añadir líneas",
     "financeAccountStatementsManualAddLinesCtaDesc": "Introduce los movimientos del extracto a mano",
@@ -19262,6 +19276,8 @@
     "financeAccountStatementLinesMatchedYes": "Conciliado",
     "financeAccountStatementLinesMatchedNo": "Sin conciliar",
     "dashboardTitle": "Inicio",
+    "dashboardNoWidgetsTitle": "No hay widgets disponibles para tu rol",
+    "dashboardNoWidgetsSubtitle": "Tu rol no tiene acceso a los datos que muestran estos paneles. Contacta con tu administrador si crees que es un error.",
     "dashboardGreetingHello": "Hola, {name}",
     "dashboardGreetingHeadline": "Estas son tus tareas pendientes",
     "dashboardCopilotCta": "¿En qué te puedo ayudar hoy?",
@@ -19291,6 +19307,7 @@
     "pendingSubjectReceptions": "Recepciones",
     "pendingSubjectStock": "Stock",
     "pendingStateOverdue": "Vencidas",
+    "pendingStateOverduePayments": "Vencidos",
     "pendingStatePending": "Pendientes",
     "pendingStateDueToday": "Vencen hoy",
     "pendingStateLowStock": "Bajo stock",
@@ -19893,7 +19910,7 @@
     "selectCountryFirst": "Selecciona un país primero",
     "removeLocation": "Eliminar",
     "addLocation": "+ Agregar Dirección",
-    "addAddress": "+ Agregar dirección",
+    "addAddress": "+ Añadir dirección",
     "none": "Ninguno",
     "soConfirmBtn": "Confirmar",
     "soConfirmTitle": "Confirmar pedido #{number}",
@@ -19987,6 +20004,8 @@
     "invNoLinesError": "La factura no puede confirmarse porque no tiene líneas",
     "fieldMinValueError": "El valor debe ser al menos {min}",
     "fieldIntegerError": "El valor debe ser un número entero",
+    "fieldMaxLengthError": "La longitud máxima es de {maxLength} caracteres",
+    "fieldInvalidCharacters": "Este campo contiene caracteres inválidos",
     "sqOrderConfirmedInvoiceError": "El presupuesto fue procesado pero no se pudo crear la factura. ",
     "rejectQuotation": "Rechazar",
     "rejectQuotationTitle": "Rechazar Presupuesto",
@@ -20122,12 +20141,12 @@
     "assetsCurrencyLabel": "Moneda",
     "assetsPurchaseDateLabel": "Fecha de compra",
     "assetsCancellationDateLabel": "Fecha de cancelación",
-    "assetsDepStartDateLabel": "Fecha inicio de amortización",
-    "assetsDepEndDateLabel": "Fecha fin de amortización",
+    "assetsDepStartDateLabel": "Fecha de inicio de amortización",
+    "assetsDepEndDateLabel": "Fecha de fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
     "assetsDepreciationAmtLabel": "Monto de amortización",
-    "assetsPrevDepreciatedLabel": "Monto ya amortizado",
+    "assetsPrevDepreciatedLabel": "Valor amortizado previamente",
     "poSave": "Guardar",
     "poSaveDraft": "Guardar borrador",
     "poConfirmBtn": "Confirmar",
@@ -20193,7 +20212,7 @@
     "poBulkOrderHasDraftReceipt": "Pedido {documentNo} ya tiene un albarán en borrador.",
     "cloneOrderBtn": "Clonar",
     "quickAction.edit": "Editar",
-    "quickAction.clone": "Duplicar",
+    "quickAction.clone": "Clonar",
     "quickAction.email": "Enviar / Descargar",
     "quickAction.more": "Más acciones",
     "quickAction.delete": "Eliminar",
@@ -20323,8 +20342,13 @@
     "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
     "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
     "backendError.syncFetchFailed": "El banco reportó un error al sincronizar: {detail}.",
+    "backendError.psd2ConnectionWentInactive": "La conexión de la cuenta {account} se encontró inactiva durante la sincronización. Por favor, reconecta la cuenta.",
+    "backendError.psd2ConsentExpired": "El consentimiento bancario de la cuenta {account} ha expirado. Por favor, reconecta la cuenta.",
+    "backendError.psd2ImportDateBeyondMaxInterval": "La fecha de inicio solicitada supera el intervalo máximo de {days} días de este proveedor. Sólo pueden estar disponibles los movimientos de ese período.",
+    "backendError.psd2NoActiveConnection": "No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.",
     "backendError.cannotDeactivateOwnAccount": "No puede desactivar su propia cuenta de usuario.",
     "backendError.cannotDeactivateLastAdmin": "No se puede desactivar al último administrador activo de este cliente.",
+    "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",
@@ -20342,7 +20366,7 @@
     "identifier": "Identificador",
     "contactName": "Nombre",
     "contactLegalName": "Razón social",
-    "taxIDField": "CIF/NIF",
+    "taxIDField": "NIF",
     "bpGroupField": "Grupos de terceros",
     "contactCategoryField": "Categoría de contacto",
     "taxIdTypeField": "Clave NIF país residencia",
@@ -20391,7 +20415,7 @@
     "customerDataSection": "Datos de cliente",
     "vendorDataSection": "Datos de proveedor",
     "fiscal.title": "Configuración Fiscal",
-    "fiscal.monitor.nav": "Monitor de facturas",
+    "fiscal.monitor.nav": "Monitor fiscal",
     "fiscal.wip.badge": "Trabajo en progreso",
     "fiscal.wip.tooltip": "Esta ventana está en desarrollo activo. Los campos, el diseño y el comportamiento pueden cambiar sin previo aviso y no son definitivos.",
     "fiscal.territory.question": "¿En qué territorio fiscal opera esta organización?",
@@ -21034,8 +21058,6 @@
     "sifDataTabs.status.sii.acceptedWithErrors": "Aceptado con errores",
     "sifDataTabs.status.sii.incorrect": "Incorrecto",
     "sifDataTabs.status.sii.sendError": "Error de envío",
-    "sifErrorBanner.errorCode": "Código de error",
-    "sifErrorBanner.errorDetail": "Detalle del error",
     "sifDataTabs.status.sii.pending": "Pendiente",
     "sifDataTabs.status.sii.cancelled": "Anulada",
     "sifDataTabs.status.sii.dropped": "Dada de baja",
@@ -21166,6 +21188,7 @@
     "purchaseOrders": "Órdenes de compra",
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
+    "finance": "Finanzas",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -21287,6 +21310,7 @@
     "fm.kpi.deadline_days": "días",
     "fm.kpi.deadline_blocking": "bloq.",
     "fm.list.title": "Declaraciones",
+    "fm.breadcrumb.section": "Modelos Fiscales",
     "fm.list.count": "declaraciones",
     "fm.filter.all": "Todos",
     "fm.filter.model_prefix": "Modelo",
@@ -21965,8 +21989,7 @@
     "accountTypeRevenue": "Ingreso",
     "newSubAccountSuccess": "Subcuenta creada correctamente",
     "newSubAccountError": "No se pudo crear la subcuenta",
-    "glc.title": "Configuración contable",
-    "glc.breadcrumbRoot": "Tesorería",
+    "glc.title": "Esquema contable",
     "glc.tab.general": "General",
     "glc.tab.defaults": "Valores por defecto",
     "glc.tab.dimensions": "Dimensiones",
@@ -24590,7 +24613,12 @@
     "accountMethodNotFound": "Ese método de acceso no está habilitado en esta cuenta.",
     "accountMethodRemoveFailed": "No se pudo quitar el método de acceso.",
     "accountMethodRemoved": "Método de acceso quitado.",
-    "accountMethodsLoadFailed": "No se pudieron cargar tus métodos de acceso."
+    "accountMethodsLoadFailed": "No se pudieron cargar tus métodos de acceso.",
+    "exportCsv": "Exportar como CSV",
+    "exportXlsx": "Exportar como Excel",
+    "importDownloadTemplateCsv": "Descargar plantilla CSV",
+    "importDownloadTemplateXlsx": "Descargar plantilla Excel",
+    "importDropHintFormats": "o selecciona un archivo. Formatos admitidos: {formats}"
   },
   "menus": {
     "Goods Movement": {
@@ -25467,7 +25495,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
