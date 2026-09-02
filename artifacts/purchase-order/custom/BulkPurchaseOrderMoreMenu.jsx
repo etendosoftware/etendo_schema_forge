@@ -78,7 +78,6 @@ async function hasDraftGoodsReceipt(orderId, apiBaseUrl) {
 }
 
 async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const apiFetch = useApiFetch(apiBaseUrl);
   const isInvoice = action === 'createPurchaseInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -102,7 +101,7 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await apiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
         
         body: JSON.stringify({}),
