@@ -139,10 +139,52 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await expect(input).toBeVisible({ timeout: 5_000 });
     // Close with Escape — press on the focused input so cmdk intercepts it
     await input.press('Escape');
-    await expect(input).not.toBeVisible({ timeout: 5_000 });
+    // The input is the persistent top-bar control; only the dropdown closes.
+    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).not.toBeVisible({ timeout: 5_000 });
     // Reopen
     await page.keyboard.press('Control+k');
-    await expect(page.locator('[cmdk-input]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('top-bar search keeps scope controls synchronized with the dropdown', async ({ page }) => {
+    await page.goto('/product');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const input = page.getByTestId('global-search-input');
+    await input.click();
+    const dialog = page.locator('[cmdk-dialog], [role="dialog"]').first();
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+    // Product is the current window scope and is represented consistently in
+    // both the persistent top-bar pill and the open dropdown.
+    await expect(page.getByTestId('topbar-vector-search-scope')).toContainText('Producto');
+    await expect(page.getByTestId('vector-search-scope')).toContainText('Producto');
+
+    // Clearing the scope updates both surfaces immediately and exposes the
+    // all-windows state in the dropdown.
+    await page.getByTestId('topbar-vector-search-scope-clear').click();
+    await expect(page.getByTestId('topbar-vector-search-scope')).toHaveCount(0);
+    await expect(page.getByTestId('vector-search-scope')).toContainText('Todas las ventanas');
+  });
+
+  test('selecting every window removes the redundant all-windows top-bar pill', async ({ page }) => {
+    await page.goto('/product');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('global-search-input').click();
+    await expect(page.getByTestId('vector-search-target-picker-trigger')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('vector-search-target-picker-trigger').click();
+
+    const options = page.getByTestId('vector-search-target-option');
+    await expect(options.first()).toBeVisible({ timeout: 5_000 });
+    const optionCount = await options.count();
+    for (let index = 0; index < optionCount; index += 1) {
+      const option = options.nth(index);
+      if (!(await option.isChecked())) await option.check();
+    }
+
+    await expect(page.getByTestId('topbar-vector-search-scope')).toHaveCount(0);
+    await page.getByTestId('vector-search-target-picker-trigger').click();
+    await expect(page.getByTestId('vector-search-scope')).toContainText('Todas las ventanas');
   });
 });
 
