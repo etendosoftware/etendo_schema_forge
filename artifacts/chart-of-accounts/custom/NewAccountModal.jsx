@@ -160,11 +160,12 @@ export default function NewAccountModal({
     return parent ? String(parent.searchKey) : '';
   }, [form.parentAccountId, parentOptions]);
 
-  // ETP-5101 — hint the last-used 4-digit suffix under the selected prefix, so the
-  // user isn't guessing which numbers are already taken. `accountRows` only ever
-  // contains leaf (posting) accounts, matching deriveDefaultAccountType's own scope
-  // above. Falls back to AccountCodeField's own default ("0000") when nothing exists
-  // yet under the prefix.
+  // ETP-5101 — hint the next available 4-digit suffix under the selected prefix (highest
+  // existing suffix + 1), so the user isn't guessing which numbers are already taken AND
+  // isn't handed an already-taken code as if it were free. `accountRows` only ever contains
+  // leaf (posting) accounts, matching deriveDefaultAccountType's own scope above. Falls back
+  // to AccountCodeField's own default ("0000") when nothing exists yet under the prefix, and
+  // clamps at "9999" (never rolls over into a 5th digit) if the prefix is already exhausted.
   const lastUsedSuffix = useMemo(() => {
     if (!selectedParentCodePrefix) return undefined;
     let max = -1;
@@ -174,7 +175,8 @@ export default function NewAccountModal({
       const suffix = Number(code.slice(4));
       if (Number.isFinite(suffix) && suffix > max) max = suffix;
     }
-    return max >= 0 ? String(max).padStart(4, '0') : undefined;
+    if (max < 0) return undefined;
+    return String(Math.min(max + 1, 9999)).padStart(4, '0');
   }, [accountRows, selectedParentCodePrefix]);
 
   // Re-initialise once per open/currentRecord cycle. `initDoneRef` resets on

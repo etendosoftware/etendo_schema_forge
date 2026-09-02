@@ -68,11 +68,15 @@ const TOKEN = 'test-token';
 // rows), same pitfall the orphaned copy's own fixture comment calls out. '5000' is an
 // explicit summary row with NO leaf accounts filed under it yet — covers the "prefix
 // selected but nothing exists" fallback branch.
+// '3000' has a single leaf already sitting at the maximum possible suffix ('9999') —
+// covers the clamp branch: the hinted suffix must stay '9999' (never roll over into a
+// 5th digit as '10000', and never wrap back to '0000').
 const ACCOUNTS = [
   { id: 'acc-20000001', searchKey: '20000001', name: 'Loan A', summaryLevel: 'N', parentCode4: '2000', parentCode4Name: 'Liabilities', accountType: 'L' },
   { id: 'acc-20000004', searchKey: '20000004', name: 'Loan B', summaryLevel: 'N', parentCode4: '2000', parentCode4Name: 'Liabilities', accountType: 'L' },
   { id: 'acc-20000002', searchKey: '20000002', name: 'Loan C', summaryLevel: 'N', parentCode4: '2000', parentCode4Name: 'Liabilities', accountType: 'L' },
   { id: 'acc-5000', searchKey: '5000', name: 'Empty Group', summaryLevel: 'Y' },
+  { id: 'acc-30009999', searchKey: '30009999', name: 'Maxed Out', summaryLevel: 'N', parentCode4: '3000', parentCode4Name: 'Maxed Group', accountType: 'A' },
 ];
 
 function baseProps(overrides = {}) {
@@ -108,13 +112,16 @@ describe('NewAccountModal', () => {
   // ── lastUsedSuffix → AccountCodeField placeholder (ETP-5101) ────────────────
 
   describe('lastUsedSuffix placeholder hint', () => {
-    it('hints the highest existing 4-digit suffix under the selected prefix', async () => {
+    it('hints the next available 4-digit suffix (highest existing + 1) under the selected prefix', async () => {
       render(<NewAccountModal {...baseProps()} />);
       await selectParent('Liabilities');
 
-      // Siblings are 0001 / 0004 / 0002 under '2000' — the highest is 0004, not the
-      // last-inserted (0002) or first (0001) fixture entry.
-      expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', '0004');
+      // Siblings are 0001 / 0004 / 0002 under '2000' — the highest is 0004, so the hinted
+      // (next available, not-yet-taken) suffix is 0004 + 1 = 0005. Confirms the fix picks
+      // the true max via comparison rather than coincidentally the last-inserted (0002) or
+      // first (0001) fixture entry, and that it advances past the highest rather than
+      // echoing it back as if it were free.
+      expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', '0005');
     });
 
     it('falls back to AccountCodeField’s own default when no parent is selected yet', () => {
@@ -133,6 +140,16 @@ describe('NewAccountModal', () => {
       // '5000' is a valid, selected prefix but has zero leaf accounts filed under it —
       // lastUsedSuffix must return undefined (not '0000' or any other placeholder value).
       expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', 'codeSuffixPlaceholder');
+    });
+
+    it('clamps the hint at 9999 when the highest existing suffix is already 9999', async () => {
+      render(<NewAccountModal {...baseProps()} />);
+      await selectParent('Maxed Group');
+
+      // '3000' has a single leaf at '30009999' — max + 1 would be 10000, so the clamp
+      // (Math.min(max + 1, 9999)) must keep the hint at '9999' rather than rolling over
+      // into a 5th digit or wrapping back to '0000'.
+      expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', '9999');
     });
   });
 
