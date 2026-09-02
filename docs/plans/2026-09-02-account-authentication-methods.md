@@ -80,7 +80,26 @@ The legacy columns stay in place as the fallback source and are never written ag
 
 ## 3. Phases
 
-### Phase 0 — Data model · prerequisite
+### Phase 0 — Data model · **DONE 2026-09-02**
+
+Delivered in `com.etendoerp.go` on `feature/ETP-5115`: `496dfa44` (table), `4d75f848` (helper and
+wiring), `c3c5e524` (tests). 176 tests green, of which the 150 that already existed pass
+**unmodified** — this phase's acceptance criterion.
+
+Two behaviour changes were caught and reverted rather than shipped. The first was in the helper
+itself: `linkIfCompatible` had been written to ask "is there an identity *for this provider*", which
+would have let an Apple assertion attach itself to an account already using Google. That relaxation
+belongs to explicit linking (Phase 3) and is a much weaker rule than the one it replaces. The second
+was caught by the test gate: giving `updateSsoSession` the provider and subject — correct once
+several identities exist — broke two existing tests, so the signature stayed and the identity is
+resolved from the account through `soleIdentityOf`, whose name is chosen so it stops compiling
+honestly once Phase 3 removes the one-identity rule it depends on.
+
+Known limit of the coverage: the tests prove the code *handles* a lost insert race, not that the
+unique constraint fires. The constraints do exist (verified against the database), but the second
+half needs two real transactions, which is an integration test.
+
+
 
 **There is no backfill, and no data-migration script of any kind.** The deployment model (Docker
 images on ECS, blue/green) makes a `ModuleScript` data migration unusable, and none is needed:
