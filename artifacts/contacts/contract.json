@@ -1,8 +1,7 @@
 {
   "version": "0.52.0",
-  "generatedAt": "2026-08-27T21:15:30.861Z",
-  "updatedAt": "2026-08-31T14:33:49.362Z",
-  "checksum": "6433bedc8fef87d0",
+  "generatedAt": "2026-09-01T10:50:41.136Z",
+  "checksum": "4ac67f13ac89ea0a",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -103,7 +102,8 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto"
+          "C_BP_Group_ID": "Categoría de contacto",
+          "TaxID": "NIF"
         }
       },
       "primaryTabs": [
@@ -296,7 +296,7 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "CIF/NIF",
+            "label": "NIF",
             "required": true,
             "example": "B12345678",
             "column": "TaxID",
@@ -5338,7 +5338,8 @@
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
-          "C_BP_Group_ID": "Categoría de contacto"
+          "C_BP_Group_ID": "Categoría de contacto",
+          "TaxID": "NIF"
         }
       },
       "primaryTabs": [
@@ -5530,7 +5531,7 @@
               "identificacion fiscal",
               "identificación fiscal"
             ],
-            "label": "CIF/NIF",
+            "label": "NIF",
             "required": true,
             "example": "B12345678",
             "column": "TaxID",
@@ -10887,6 +10888,14 @@
             "required": false
           },
           {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "smfswsDefaultWsRole",
             "apiKey": "smfswsDefaultWsRole",
             "column": "EM_Smfsws_Default_Ws_Role_ID",
@@ -10939,14 +10948,6 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
             "visibility": "system",
             "required": true
           }
@@ -12133,7 +12134,8 @@
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
         "EM_Etgo_Lastname": "Apellidos",
-        "C_BP_Group_ID": "Categoría de contacto"
+        "C_BP_Group_ID": "Categoría de contacto",
+        "TaxID": "NIF"
       }
     }
   },

@@ -76,8 +76,9 @@ const DEFAULT_TAX_ID_KEY = '1';
 const TAX_ID_KEY_VALUES = {
   // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
   // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
-  // tax-id column is labelled "CIF/NIF". A QA plan authored independently used 'CIF' here
-  // too, which is evidence enough that rejecting it would just be pedantry.
+  // tax-id column was labelled "CIF/NIF" until ETP-4992 renamed it to "NIF" (CIF no longer
+  // exists in Spain). A QA plan authored independently used 'CIF' here too, which is
+  // evidence enough that rejecting it would just be pedantry.
   1: ['NIF', 'CIF', 'CIF/NIF', 'NIF/CIF'],
   2: ['NOI'],
   3: ['Pasaporte', 'Passport'],

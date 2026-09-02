@@ -20345,7 +20345,7 @@
     "identifier": "Identificador",
     "contactName": "Nombre",
     "contactLegalName": "Razón social",
-    "taxIDField": "CIF/NIF",
+    "taxIDField": "NIF",
     "bpGroupField": "Grupos de terceros",
     "contactCategoryField": "Categoría de contacto",
     "taxIdTypeField": "Clave NIF país residencia",

@@ -139,7 +139,7 @@ describe('contacts import descriptor', () => {
       assert.equal(op.body.oBTIKTaxIDKey, '3');
     });
 
-    it("accepts 'CIF' as the Tax ID Type, since the column is labelled CIF/NIF", async () => {
+    it("accepts 'CIF' as the Tax ID Type, since the column was labelled CIF/NIF before ETP-4992 renamed it to NIF", async () => {
       const [byCif] = await buildOperations({ name: 'Importadora Test SL', oBTIKTaxIDKey: 'CIF' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       const [bySlash] = await buildOperations({ name: 'Otra SL', oBTIKTaxIDKey: 'cif/nif' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       assert.equal(byCif.body.oBTIKTaxIDKey, '1');
