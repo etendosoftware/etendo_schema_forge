@@ -31,13 +31,23 @@ function CountBadge({ count }) {
   );
 }
 
-export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '' }) {
+/**
+ * ETP-5088 — `visibility` gates each half independently: the role matrix gives Sales the collect
+ * side only (sales-invoice) and Purchasing the pay side only (purchase-invoice), while
+ * Finance/Admin see both. When neither half is visible the caller does not render this card at
+ * all, so both flags default to `true` here and every existing caller keeps its behaviour.
+ */
+export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '', visibility }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const numberLocale = localeFromUi(locale);
 
   const { toCollect = { count: 0, amount: 0 }, toPay = { count: 0, amount: 0 } } = pendingAmounts;
-  const hasNoData = toCollect.count === 0 && toPay.count === 0;
+  const showToCollect = visibility?.toCollect ?? true;
+  const showToPay = visibility?.toPay ?? true;
+  // Only the halves this role may actually see count towards the empty state — otherwise a Sales
+  // role with pending collections but hidden payments could still be told there is nothing here.
+  const hasNoData = (!showToCollect || toCollect.count === 0) && (!showToPay || toPay.count === 0);
 
   // ETP-5012: this card shows the TOTAL pending balance (any due date), so it
   // must drill down into 'pending', not the now-stricter 'overdue' filter —
@@ -71,6 +81,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
           flex: 1,
         }}
       >
+        {showToCollect && (
         <Link
           to={toCollectTarget}
           className="hover:opacity-80 transition-opacity"
@@ -166,7 +177,9 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             </div>
           </div>
         </Link>
-        
+        )}
+
+        {showToCollect && showToPay && (
         <div
           style={{
             display: 'flex',
@@ -186,7 +199,9 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             }}
           />
         </div>
+        )}
 
+        {showToPay && (
         <Link
           to={toPayTarget}
           className="hover:opacity-80 transition-opacity"
@@ -282,6 +297,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             </div>
           </div>
         </Link>
+        )}
       </div>
       )}
     </DashboardCard>

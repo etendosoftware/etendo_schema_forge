@@ -10,7 +10,6 @@ import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import ExchangeRatesTable from './ExchangeRatesTable';
 import ExchangeRatesForm from './ExchangeRatesForm';
-import SifErrorBanner from '@/windows/custom/purchase-invoice/SifErrorBanner';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
@@ -969,7 +968,7 @@ export const api = {
   "labelOverrides": {
     "es_ES": {
       "POReference": "Nº documento",
-      "OutstandingAmt": "Pendiente de pago",
+      "OutstandingAmt": "Saldo pendiente",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de recepción",
       "C_DocTypeTarget_ID": "Tipo de documento",
@@ -978,11 +977,14 @@ export const api = {
     },
     "en_US": {
       "POReference": "Document No.",
-      "OutstandingAmt": "Pending Payment",
+      "OutstandingAmt": "Outstanding Amount",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Reception Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount"
+    },
+    "es_AR": {
+      "OutstandingAmt": "Saldo pendiente"
     }
   }
 };
@@ -1022,7 +1024,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => record['processed'] === true || record['posted'] === true || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
-        formFooter={SifErrorBanner}
         hideDeleteWhenComplete
         hidePrintWhen={true}
         noHeaderBorder

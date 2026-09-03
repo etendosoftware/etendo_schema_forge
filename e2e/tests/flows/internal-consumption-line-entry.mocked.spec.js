@@ -114,7 +114,11 @@ test.describe('Internal Consumption — inline line entry (mocked)', () => {
     await expect(page).toHaveURL(new RegExp(`/${SPEC}/${DRAFT_HEADER.id}`));
 
     // 2. Click "+ Add line" to reveal the inline-add row.
-    const addLineBtn = page.getByTestId('action-add-line');
+    //    At this point the document has 0 lines, so the generic empty-state
+    //    (LinesEmptyState, added in ETP-5039) is rendered instead of the
+    //    normal lines toolbar — its button carries a different testid.
+    const addLineBtn = page.getByTestId('action-add-lines-empty-state')
+      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
     await expect(addLineBtn).toBeVisible();
     await addLineBtn.click();
 

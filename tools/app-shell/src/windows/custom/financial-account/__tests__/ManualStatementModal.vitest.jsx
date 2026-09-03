@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -61,10 +62,34 @@ vi.mock('@/hooks/useStatementActions', () => ({
   }),
 }));
 
-// Edit mode loads the draft's lines; default to an empty, settled list.
-const linesRef = { value: [], loading: false };
+// Edit mode loads the draft's lines. The real `useBankStatementLines` (via
+// `useNeoResource`) ALWAYS pulses `loading: true -> false` for every genuine
+// fetch cycle — including the very first one (`loading` starts `true` via
+// `useState(true)`) — and a null statementId never starts a fetch, so it never
+// touches loading/data either: whatever was left over from a previous fetch
+// just stays put. A mock that is permanently `loading: false` never matched
+// that shape; it just happened not to matter until the ManualStatementModal
+// hydration guard (`seenFreshLoadRef`, ETP-4924) started depending on actually
+// observing the `true` pulse. This mock reproduces it with real state/effect so
+// tests exercise the guard instead of only ever seeing an already-settled value.
+// `linesRef.value` remains the per-test control knob the existing tests use.
+const linesRef = { value: [] };
 vi.mock('@/hooks/useBankStatementLines', () => ({
-  useBankStatementLines: () => ({ lines: linesRef.value, loading: linesRef.loading, reload: vi.fn() }),
+  useBankStatementLines: (statementId) => {
+    const [state, setState] = useState(() => ({ loading: true, lines: [] }));
+    useEffect(() => {
+      // Mirrors useNeoResource's early return when `path`/statementId is null:
+      // no fetch starts, so loading/data are left exactly as they were.
+      if (!statementId) return undefined;
+      setState({ loading: true, lines: [] });
+      let cancelled = false;
+      Promise.resolve().then(() => {
+        if (!cancelled) setState({ loading: false, lines: linesRef.value });
+      });
+      return () => { cancelled = true; };
+    }, [statementId]);
+    return { lines: state.lines, loading: state.loading, reload: vi.fn() };
+  },
 }));
 
 // The per-line BP / G/L Item lookups hit the network via useAuth; stub them out.
@@ -117,7 +142,6 @@ describe('ManualStatementModal', () => {
     toastError.mockReset();
     creatingRef.value = false;
     linesRef.value = [];
-    linesRef.loading = false;
   });
 
   it('renders the header fields and one always-editable starter row when open', () => {
@@ -365,8 +389,9 @@ describe('ManualStatementModal', () => {
       const user = userEvent.setup();
       const { props } = renderModal({ statement: STATEMENT });
 
-      // Header is seeded from the statement.
-      expect(screen.getByTestId('manual-statement-name')).toHaveValue('Extracto mayo');
+      // Header is seeded from the statement — hydration is now async (it waits
+      // for the lines fetch's loading pulse to settle, ETP-4924).
+      await waitFor(() => expect(screen.getByTestId('manual-statement-name')).toHaveValue('Extracto mayo'));
       // The draft line is hydrated into an editable row (no read-only display row).
       const row = within(firstEditRow());
       expect(row.getByTestId('manual-line-ref')).toHaveValue('REF9');
@@ -409,12 +434,13 @@ describe('ManualStatementModal', () => {
         glItemId: null, glItemName: '', in: 0, out: 50, matched: false,
       };
 
-      it('renders a matched line as a locked row, not an editable one', () => {
+      it('renders a matched line as a locked row, not an editable one', async () => {
         linesRef.value = [MATCHED_LINE, FREE_LINE];
         renderModal({ statement: STATEMENT });
 
-        // One locked row, one editable row — not two editable ones.
-        expect(screen.getAllByTestId(/^manual-line-matched-/)).toHaveLength(1);
+        // One locked row, one editable row — not two editable ones. Hydration
+        // is async (waits for the loading pulse to settle, ETP-4924).
+        await waitFor(() => expect(screen.getAllByTestId(/^manual-line-matched-/)).toHaveLength(1));
         expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
         // The locked row shows its values as text and offers no delete button.
         const locked = screen.getAllByTestId(/^manual-line-matched-/)[0];
@@ -430,6 +456,10 @@ describe('ManualStatementModal', () => {
         const user = userEvent.setup();
         renderModal({ statement: STATEMENT });
 
+        // Wait for hydration (async, ETP-4924) so `rows` actually carries the
+        // two seeded lines before saving — otherwise the save would run
+        // against the still-empty pre-hydration `rows` state.
+        await waitFor(() => expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1));
         await user.click(screen.getByTestId('manual-statement-save'));
 
         await waitFor(() => expect(updateStatement).toHaveBeenCalledTimes(1));
@@ -447,6 +477,10 @@ describe('ManualStatementModal', () => {
         const user = userEvent.setup();
         renderModal({ statement: STATEMENT });
 
+        // Wait for hydration (async, ETP-4924) so `rows` genuinely carries the
+        // matched line (not just the pre-hydration empty state, which would
+        // trivially also read as 0 editable rows for the wrong reason).
+        await waitFor(() => expect(screen.getAllByTestId(/^manual-line-matched-/)).toHaveLength(1));
         // The seeded starter row is create-mode only; in edit mode nothing editable is hydrated.
         expect(screen.queryAllByTestId('manual-line-editrow')).toHaveLength(0);
 
@@ -464,10 +498,80 @@ describe('ManualStatementModal', () => {
         const user = userEvent.setup();
         renderModal({ statement: STATEMENT });
 
+        // Wait for hydration to settle (async, ETP-4924) before saving — with
+        // no lines the outcome is the same either way, but this keeps the test
+        // honest about the real sequence of events.
+        await waitFor(() => expect(screen.getByTestId('manual-statement-name')).toHaveValue('Extracto mayo'));
         await user.click(screen.getByTestId('manual-statement-save'));
 
         expect(updateStatement).not.toHaveBeenCalled();
         expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorLines');
+      });
+    });
+
+    /**
+     * ETP-4924 — reported bug: edit a line's date, save as draft, close the
+     * modal, then immediately reopen "Editar extracto" on the SAME statement —
+     * the line showed the OLD pre-edit date, not the one just saved. Root
+     * cause: the hydration effect could read a stale `linesLoading === false`
+     * left over from the PREVIOUS open's settled fetch, hydrate from stale
+     * `loadedLines`, and lock the result in via `hydratedRef.current = true`
+     * before the new fetch's `loading: true` (and later its fresh data) had
+     * even been observed. The fix (`seenFreshLoadRef`) refuses to trust a
+     * `loading === false` reading until it has actually SEEN `loading: true`
+     * at least once since this open cycle began.
+     *
+     * This is the one test in the file that reopens an ALREADY-MOUNTED modal
+     * instance (rerender, not unmount) for the SAME statement — the exact
+     * precondition the bug needs. The mocked hook's own `useState`/`useEffect`
+     * pulse (`loading: true` -> `loading: false`) is what makes this
+     * reproducible: on the reopen, the render that recommits first observes
+     * the stale settled state left over from the first open (before the
+     * mock's own effect has re-fired and flipped it back to `true`), exactly
+     * mirroring the real `useNeoResource` race described above.
+     */
+    it('shows the freshly-saved line date on reopen, not the stale value from the previous open', async () => {
+      const ORIGINAL_LINE = {
+        id: 'ln-1', date: '2026-09-05T00:00:00Z', reference: 'REF1', description: '',
+        bpartnerName: '', bpartnerId: null, bpartnerFkName: '',
+        glItemId: null, glItemName: '', in: 100, out: 0,
+      };
+      linesRef.value = [ORIGINAL_LINE];
+
+      const element = (overrides = {}) => (
+        <ManualStatementModal
+          open
+          accountId="acc-1"
+          accountCurrency="EUR"
+          statement={STATEMENT}
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+          {...overrides}
+        />
+      );
+
+      const { rerender } = render(element());
+
+      // First open hydrates the original line.
+      await waitFor(() => {
+        const row = within(firstEditRow());
+        expect(row.getByTestId('manual-line-date')).toHaveValue('2026-09-05');
+      });
+
+      // Close the modal WITHOUT unmounting the component (this is what makes
+      // it a reopen of an already-mounted instance, not a fresh mount).
+      rerender(element({ open: false }));
+
+      // The backend now has the freshly-saved value (simulating a save as
+      // draft that just happened while the modal was open).
+      linesRef.value = [{ ...ORIGINAL_LINE, date: '2026-09-02T00:00:00Z' }];
+
+      // Reopen "Editar extracto" on the SAME statement.
+      rerender(element({ open: true }));
+
+      await waitFor(() => {
+        const row = within(firstEditRow());
+        expect(row.getByTestId('manual-line-date')).toHaveValue('2026-09-02');
       });
     });
   });

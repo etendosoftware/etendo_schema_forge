@@ -425,4 +425,76 @@ describe('ImportStatementModal', () => {
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // ETP-4924: the preview step used to build its date cells with a LOCAL
+  // formatDate(iso) helper — `new Date(iso)` (absolute-instant parse) piped
+  // into an `Intl.DateTimeFormat` with NO explicit `timeZone`. That renders
+  // the calendar day of that instant in whatever timezone the HOST happens
+  // to be running in. The fix replaced it with `formatCalendarDate` from
+  // `@/lib/dateOnly.js`, which extracts the `yyyy-MM-dd` prefix via regex and
+  // builds the `Date` through the local-time constructor — the trailing
+  // "Z"/time-of-day in the payload is deliberately never interpreted as a
+  // UTC instant, so no host timezone can ever shift the displayed day.
+  //
+  // Mechanism used to control "the host's effective timezone" from inside
+  // Vitest: flipping `process.env.TZ` mid-test. Verified empirically first
+  // (`node -e "process.env.TZ = '...'; new Date(...).toLocaleDateString(...)"`)
+  // that Node (v24, this repo's vitest `forks` pool — see vitest.config.js)
+  // re-reads `TZ` lazily on every `Date`/`Intl` construction rather than
+  // caching the zone at process start, so this genuinely changes what a raw
+  // `new Date(iso)` + unforced `Intl.DateTimeFormat` renders, no special
+  // vitest config or fallback needed.
+  //
+  // Polarity note (found during that same empirical check, and confirmed by
+  // reverting the fix — see the "verify not vacuous" step in the PR/task
+  // description): for a UTC-MIDNIGHT payload (exactly what the backend sends
+  // for a date-only value, e.g. "2026-02-08T00:00:00Z"), the OLD bug only
+  // reproduces under a host WEST of UTC (negative offset) — the instant
+  // reads as ~21:00 the PREVIOUS local day, i.e. "one day earlier", matching
+  // the bug report. A host EAST of UTC (positive offset, e.g. Europe/Madrid)
+  // reads the same instant as ~01:00 the SAME local day, so it never
+  // reproduced this particular symptom — a positive offset only overflows
+  // into the NEXT day for a timestamp near 23:xx UTC, not for a midnight one.
+  // Both zones are asserted below: Buenos Aires is the actual red/green
+  // discriminator against the historic bug; Madrid is kept as a same-answer
+  // sanity check for a realistic EU-deployed host (the class of environment
+  // named in the bug report) — it must never regress either, even though it
+  // would already have passed under the old, buggy code for this input.
+  describe('date rendering is timezone-independent (ETP-4924)', () => {
+    const originalTz = process.env.TZ;
+
+    afterEach(() => {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    });
+
+    const TZ_TESTED_LINE = {
+      lineNo: 1,
+      date: '2026-02-08T00:00:00Z',
+      description: 'MOV TZ',
+      cramount: 10,
+      dramount: 0,
+    };
+
+    it.each([
+      ['Europe/Madrid', 'positive UTC offset — sanity check, does not itself shift this UTC-midnight payload'],
+      ['America/Argentina/Buenos_Aires', 'negative UTC offset — the actual discriminator for the historic bug'],
+    ])('renders 08/02/2026 (not 07/02/2026) under host TZ=%s (%s)', async (tz) => {
+      process.env.TZ = tz;
+      previewStatement.mockResolvedValue({
+        ...PREVIEW_DATA,
+        periodFrom: '2026-02-08T00:00:00Z',
+        periodTo: '2026-02-08T00:00:00Z',
+        lines: [TZ_TESTED_LINE],
+      });
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      const user = userEvent.setup();
+      await gotoPreview(user, container);
+
+      // Both the single-day period KPI and the line's own date cell must
+      // render the correct calendar day — never the shifted-back-one day.
+      expect(screen.getAllByText('08/02/2026').length).toBeGreaterThanOrEqual(2);
+      expect(screen.queryByText('07/02/2026')).toBeNull();
+    });
+  });
 });

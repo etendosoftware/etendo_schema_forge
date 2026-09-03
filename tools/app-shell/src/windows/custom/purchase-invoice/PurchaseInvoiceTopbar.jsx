@@ -90,7 +90,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
       )}
       {isCompleted && (() => {
         if (badge.isCredit) {
-          // Mirror the grid's "Pendiente de pago" cell for credit instruments: green
+          // Mirror the grid's "Saldo pendiente" cell for credit instruments: green
           // "Aplicada" once fully consumed, else a clickable "Saldo a favor · remaining"
           // badge that opens the same history modal (listing the payments that consumed it).
           if (badge.kind === 'credit-applied') {

@@ -67,11 +67,41 @@ export function getEmailFieldError(field, value) {
   return isValidEmailAddress(withInputPrefix(field, value)) ? null : 'sendModalInvalidEmail';
 }
 
-// True when the value is a secure URL: starts with the https:// scheme and has a
-// non-empty host after it (a bare "https://" is invalid). Kept intentionally
-// simple — this is a scheme/security check, not full RFC URL parsing.
+// ETP-5031 — requires a domain-SHAPED host after the scheme (at least two
+// dot-separated labels, the last one a 2+ letter TLD, e.g. "acme.com" or
+// "sub.acme.co.uk"), not just any non-whitespace text. Before this,
+// "https://asda" — scheme present, garbage host — passed as a "secure URL"
+// (a real value saved in production on the Contacts window). Still
+// intentionally simple — a scheme+shape check, not full RFC host/URL parsing
+// (no IDN, no bracketed IPv6, no single-label hosts like "https://localhost").
+//
+// Deliberately NOT one `(?:label\.)+tld` regex: even with each label bounded
+// to a real DNS label's 63-char max, SonarQube's ReDoS heuristic (javascript:S5852)
+// flags ANY group repeated with `+`/`*` that itself contains a quantified
+// subpattern, regardless of whether the bound makes it actually safe — and a
+// Security Hotspot needs a human to mark it Safe in the SonarQube UI even
+// when the regex genuinely isn't exploitable, which blocks every push until
+// someone does that by hand. Splitting the host on `.` and checking each
+// label with one small, single-use `?` (not `+`/`*`) regex has no nested
+// repetition for the heuristic to flag in the first place — same match
+// result, no hotspot, no manual review step.
+const SCHEME_HOST_RE = /^https:\/\/(\S+)$/i;
+const DOMAIN_LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i;
+const TLD_RE = /^[a-z]{2,}$/i;
+
+// True when the value is a secure URL: starts with the https:// scheme,
+// immediately followed by a domain-shaped host (a bare "https://", a host
+// with no dot, or anything not starting with https:// is invalid).
 export function isSecureUrl(value) {
-  return /^https:\/\/\S+/i.test(String(value ?? '').trim());
+  const match = SCHEME_HOST_RE.exec(String(value ?? '').trim());
+  if (!match) return false;
+  // Host only — drop an optional path/query/fragment and port before
+  // splitting into labels; none of those affect the domain SHAPE this checks.
+  const host = match[1].split(/[/?#]/)[0].split(':')[0];
+  const labels = host.split('.');
+  if (labels.length < 2) return false;
+  if (!TLD_RE.test(labels[labels.length - 1])) return false;
+  return labels.every(label => DOMAIN_LABEL_RE.test(label));
 }
 
 // A form/grid field is website-format-validated when its type is 'url' or its

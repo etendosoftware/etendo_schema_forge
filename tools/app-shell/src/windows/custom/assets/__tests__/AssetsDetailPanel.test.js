@@ -116,6 +116,13 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.doesNotMatch(src, /key: 'currency'[\s\S]*?readOnly: true/);
   });
 
+  it('caps name and description with maxLength matching the AD column length (ETP-4984)', () => {
+    // Guards against a StringPropertyValidator "Value too long" backend rejection —
+    // AD column lengths are 60 (Name) and 255 (Description).
+    assert.match(src, /key: 'name'[\s\S]*?maxLength: 60/);
+    assert.match(src, /key: 'description'[\s\S]*?maxLength: 255/);
+  });
+
   it('defines Project and Cost Center as dimension field candidates (ETP-4914)', () => {
     // ETP-4914 — corrected matrix: Centro de costo is also "Por config" for Activo
     // (Amortizaciones), not "Nunca" as ETP-4529 originally recorded — its raw AD

@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, LogOut, User, Languages, KeyRound, Rocket } from 'lucide-react';
+import { ChevronRight, LogOut, User, Languages, Rocket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -11,11 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
-import { ChangePasswordDialog } from './ChangePasswordDialog.jsx';
 import { useLogout } from '@/auth/useLogout.js';
-
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
-const PLATFORM_AUTH_METHOD_KEY = 'sf_platform_auth_method';
 
 const LOCALES = [
   { code: 'en_US', flag: '🇺🇸', label: 'English' },
@@ -33,24 +28,10 @@ export function UserAvatarButton({ expanded = false }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale, setLocale } = useLocaleSwitch();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-
-  // Change Password targets the platform account, so it's only offered when a
-  // platform token is present (it provides the credential the endpoint rotates).
-  // SSO sessions have no local password to change — the backend rejects them —
-  // so the option is hidden when the session was obtained via an SSO provider.
-  const canChangePassword =
-    typeof window !== 'undefined' &&
-    !!window.localStorage?.getItem(PLATFORM_TOKEN_KEY) &&
-    window.localStorage?.getItem(PLATFORM_AUTH_METHOD_KEY) !== 'sso';
-
-  // After a password change we log out; flag onboarding to land on Sign In
-  // (not the Create panel) so the user re-authenticates with the new password.
-  const handlePasswordChanged = () => {
-    localStorage.setItem('sf_onboarding_initial_view', 'login');
-    localStorage.setItem('sf_onboarding_notice', 'password-changed');
-    logout();
-  };
+  // ETP-5115: the menu used to decide whether to offer "change password" by reading a value
+  // stashed in localStorage at login, which is why an SSO account saw no such option at all — not
+  // disabled with a reason, simply absent. The account screen asks the server what the account
+  // actually has, so the guess is gone and the entry is unconditional.
 
   const initial = username?.charAt(0).toUpperCase() || '?';
   const roleInitial = selectedRole?.name?.charAt(0).toUpperCase() || '';
@@ -90,8 +71,7 @@ export function UserAvatarButton({ expanded = false }) {
   );
 
   return (
-    <>
-      <DropdownMenu data-testid="DropdownMenu__9f3744">
+    <DropdownMenu data-testid="DropdownMenu__9f3744">
         <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__9f3744">
           {expanded ? (
             <div className="w-full">{trigger}</div>
@@ -155,30 +135,22 @@ export function UserAvatarButton({ expanded = false }) {
               <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
               {ui('upgradeMenuAction')}
             </DropdownMenuItem>
-            {canChangePassword && (
-              <DropdownMenuItem
-                onSelect={() => setChangePasswordOpen(true)}
-                data-testid="menu-change-password"
-              >
-                <KeyRound className="h-3.5 w-3.5 mr-2" data-testid="KeyRound__9f3744" />
-                {ui('onboardingChangePasswordAction')}
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem
+              onSelect={() => navigate('/account')}
+              data-testid="menu-account"
+            >
+              <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
+              {ui('account')}
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={logout}
-              className="text-destructive focus:text-destructive focus:bg-destructive dark:focus:bg-destructive/20"
+              className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
               data-testid="user-menu-logout">
               <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
               {ui('logout')}
             </DropdownMenuItem>
           </div>
         </DropdownMenuContent>
-      </DropdownMenu>
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        onOpenChange={setChangePasswordOpen}
-        onSuccess={handlePasswordChanged}
-        data-testid="ChangePasswordDialog__9f3744" />
-    </>
+    </DropdownMenu>
   );
 }

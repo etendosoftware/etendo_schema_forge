@@ -1,8 +1,8 @@
 {
   "version": "0.90.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-31T14:41:45.062Z",
-  "checksum": "b156bba720b1e3c4",
+  "updatedAt": "2026-09-02T18:18:21.911Z",
+  "checksum": "0489d9858d89efad",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -47,14 +47,11 @@
           "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
@@ -63,11 +60,14 @@
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -5194,14 +5194,11 @@
           "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
@@ -5210,11 +5207,14 @@
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -10557,7 +10557,7 @@
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
@@ -10566,11 +10566,14 @@
       },
       "en_US": {
         "POReference": "Document No.",
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     }
   },

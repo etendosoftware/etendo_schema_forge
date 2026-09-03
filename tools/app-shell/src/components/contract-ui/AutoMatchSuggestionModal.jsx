@@ -189,13 +189,13 @@ function GroupRow({ group, checked, onToggle, currency }) {
           data-testid="SelectBox__a89979" />
       </div>
       {/* Statement line (left half) */}
-      <div className="flex flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
+      <div className="flex min-w-0 flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
         <div className="w-full">
           <StatementContent group={group} currency={currency} data-testid="StatementContent__a89979" />
         </div>
       </div>
       {/* Operations (right half) */}
-      <div className="flex flex-1 flex-col bg-card">
+      <div className="flex min-w-0 flex-1 flex-col bg-card">
         {ops.length === 0 ? (
           <div className="px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
         ) : (

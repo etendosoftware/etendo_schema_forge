@@ -239,6 +239,12 @@ export function computeTriggerLabel(value, placeholder, ui, bcpLocale) {
       last7: ui('dateRangeLast7Days'),
       last30: ui('dateRangeLast30Days'),
       last12m: ui('dateRangeLast12Months'),
+      // "All time" normally reaches here as `value === null` (see
+      // handlePresetSelect), which falls through to the tail return below. This
+      // entry only matters if a consumer ever encodes it as a preset — without
+      // it that would silently fall into the `?? placeholder` branch and show a
+      // stale label, the ETP-4956 failure mode.
+      allTime: ui('dateRangeAllTime'),
     };
     return labels[value.presetId] ?? placeholder ?? ui('dateRangeAnyTime');
   }

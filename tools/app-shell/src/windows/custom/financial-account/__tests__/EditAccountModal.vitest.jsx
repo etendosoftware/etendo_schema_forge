@@ -2072,4 +2072,238 @@ describe('EditAccountModal', () => {
     });
   });
 
+  // ETP-5104 — "Sincronizar ahora" persists the pending form BEFORE it syncs (the bridge reads the
+  // import range from the DB, so an unsaved range was silently ignored and then overwritten by the
+  // post-sync refresh), and an inverted "Importar desde" > "Importar hasta" range is refused up
+  // front instead of failing deep inside the PSD2 module. The whole feature only exists for a
+  // bank-linked account, so every test here runs against CONNECTED_ACCOUNT.
+  describe('ETP-5104 — import date range', () => {
+    // Mirrors the fetchStatus fixture installed by the outer beforeEach; restated here so the
+    // "before" values a test asserts against are visible next to the assertions themselves.
+    const BASE_STATUS = {
+      connected: true,
+      providerName: 'BBVA',
+      importFromDate: '2026-01-01',
+      importToDate: '2026-02-01',
+      statementGrouping: '1BD',
+    };
+
+    // What the two boxes display for the stored fixture, per the locale the modal runs under in
+    // this suite (es_ES -> dd/mm/yyyy, see formatCalendarDate in @/lib/dateOnly.js).
+    const DISPLAYED_FROM = '01/01/2026';
+    const DISPLAYED_TO = '01/02/2026';
+
+    /**
+     * Types a date into one of the two import boxes.
+     *
+     * They are DateFields: a masked TEXT input, not `<input type="date">`. The box shows the
+     * locale format and only emits an ISO `yyyy-mm-dd` through onChange on BLUR, so a date is
+     * entered by typing its 8 digits (the mask inserts the separators itself) and then tabbing out
+     * to commit. `digits` is therefore ddmmyyyy, in locale order — not ISO.
+     */
+    async function typeImportDate(user, testId, digits) {
+      const input = screen.getByTestId(testId);
+      await user.clear(input);
+      await user.type(input, digits);
+      // Blur commits the typed text; without it the parent form never sees the new value.
+      await user.tab();
+      return input;
+    }
+
+    async function openConnectedModal(props = {}) {
+      const result = renderModal({ account: CONNECTED_ACCOUNT, ...props });
+      // The panel (and with it the import boxes) only renders once the status fetch resolves.
+      await screen.findByTestId('bank-connection-edit-sync');
+      return result;
+    }
+
+    // CP-1. The bug: the bridge reads the range from the DB, so syncing with an unsaved "Importar
+    // desde" imported the PREVIOUSLY stored range. Ordering is the point — saving after the sync
+    // would persist the right value but still have run the import against the stale one.
+    it('CP-1: persists the edited "Importar desde" before calling sync, with no explicit save', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledTimes(1);
+      expect(saveImportSettings).toHaveBeenCalledWith({
+        financialAccountId: 'acc-9',
+        // The NEW value, not the '2026-01-01' the status fetch delivered.
+        importFromDate: '2026-01-15',
+        importToDate: '2026-02-01',
+        statementGrouping: '1BD',
+      });
+      // Real ordering, not merely "both ran": vi records a global invocation sequence number per
+      // call, so this fails if the save is moved after the sync.
+      expect(saveImportSettings.mock.invocationCallOrder[0])
+        .toBeLessThan(sync.mock.invocationCallOrder[0]);
+    });
+
+    // CP-2. The second symptom of the same bug: runSync's refresh() rewrites both `form` and
+    // `initial` from the server, so before the save-first fix whatever the user had typed was
+    // overwritten in place ("los campos se restablecen"). With the save landing first the refresh
+    // reads back the user's own values and is a no-op for them.
+    it('CP-2: keeps the user values in both boxes after the sync refresh reads them back', async () => {
+      const user = userEvent.setup();
+      fetchStatus
+        .mockResolvedValueOnce(BASE_STATUS)
+        // What the bridge returns once the edit has actually been persisted.
+        .mockResolvedValueOnce({ ...BASE_STATUS, importFromDate: '2026-01-15' });
+      await openConnectedModal();
+
+      const fromInput = await typeImportDate(
+        user, 'field-date-bank-connection-import-from', '15012026',
+      );
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(fetchStatus).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(fromInput).toHaveValue('15/01/2026'));
+      // The pre-edit value must not have come back.
+      expect(fromInput).not.toHaveValue(DISPLAYED_FROM);
+      // The untouched box is unaffected either way.
+      expect(screen.getByTestId('field-date-bank-connection-import-to')).toHaveValue(DISPLAYED_TO);
+    });
+
+    // CP-3. An inverted range is a form error, exactly like the amount-tolerance one: it is shown
+    // inline and it blocks Save (`saveBlocked` feeds `canSave`), so nothing is ever written.
+    it('CP-3: shows the range error and disables Guardar cambios when desde is later than hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      // Save is enabled for a valid edit — proves the disabled state below comes from the range,
+      // not from the form simply being pristine.
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+
+      // 01/03/2026 is after the stored "hasta" (01/02/2026).
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+
+      expect(await screen.findByTestId('bank-connection-import-range-error')).toHaveTextContent(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      );
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    // CP-4. The guard runs BEFORE the save-then-sync chain: an inverted range must not reach the
+    // bridge (its OBException comes back re-wrapped as an untranslated PSD2 error carrying the
+    // Salt Edge connection id) and must not be persisted on the way there either.
+    it('CP-4: refuses the sync on an inverted range without saving or calling the bridge', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      ));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      // The status is not re-read either — nothing ran.
+      expect(fetchStatus).toHaveBeenCalledTimes(1);
+    });
+
+    // Regression: the save-before-sync step is gated on `dirty`. A pristine form must still sync,
+    // and must not fire a pointless empty write (persistAccountEdits would send nothing, but
+    // saveImportSettings would still be called if the gate were dropped).
+    it('regression: a pristine form still syncs and never fires an empty save', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const onSaved = vi.fn();
+      await openConnectedModal({ onClose, onSaved });
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(toastSuccess).toHaveBeenCalled();
+      // Syncing is not saving: the modal stays open so the user can keep editing.
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Regression: the save leg failing must abort the sync outright — syncing anyway would run the
+    // import against the stale stored range, which is the very bug this feature fixes.
+    it('regression: aborts the sync when the pre-sync save fails, reporting it exactly once', async () => {
+      const user = userEvent.setup();
+      const err = new Error('boom');
+      err.status = 500;
+      saveImportSettings.mockRejectedValueOnce(err);
+      const onClose = vi.fn();
+      await openConnectedModal({ onClose });
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledTimes(1));
+      expect(sync).not.toHaveBeenCalled();
+      // Reported ONCE, in the save path's own wording. The `handled` flag exists precisely to stop
+      // runSync's catch from toasting the same failure a second time as a raw err.message.
+      await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+      expect(toastError).toHaveBeenCalledWith('boom');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The panel-level error is driven by the same predicate as the Save gate, so it must clear as
+    // soon as the range becomes valid again — otherwise the user is stuck looking at a stale error
+    // with Save mysteriously enabled.
+    it('clears the range error once the range is valid again', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      // Push "hasta" past the new "desde" instead of undoing the edit.
+      await typeImportDate(user, 'field-date-bank-connection-import-to', '31032026');
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull());
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    // A half-filled range is legal ("no bound"), so clearing a box must never block Save or the
+    // sync — blocking on a half-typed form would be worse than the bug being guarded.
+    it('treats a single-ended range as valid', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      const toInput = screen.getByTestId('field-date-bank-connection-import-to');
+      await user.clear(toInput);
+      await user.tab();
+
+      await waitFor(() => expect(toInput).toHaveValue(''));
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ importFromDate: '2026-01-01', importToDate: '' }),
+      );
+    });
+
+    // Equal bounds are a one-day range, not an inversion — the check is `>`, not `>=`.
+    it('accepts an identical desde and hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01022026');
+
+      expect(screen.getByTestId('field-date-bank-connection-import-from'))
+        .toHaveValue(DISPLAYED_TO);
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+  });
+
 });

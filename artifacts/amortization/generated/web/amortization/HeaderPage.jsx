@@ -316,6 +316,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{"hideDeleteButton":true}}
+      listSortBy="accountingDate desc"
       {...props} window={effectiveWindow}
     />
   );
