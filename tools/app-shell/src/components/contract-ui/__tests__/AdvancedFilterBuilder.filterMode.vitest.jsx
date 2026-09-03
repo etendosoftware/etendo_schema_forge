@@ -164,10 +164,18 @@ describe('AdvancedFilterBuilder — custom column with explicit filterMode (ETP-
     expect(operatorTrigger).not.toHaveTextContent('advancedFilterSelectOp');
   });
 
-  it('renders a number input for the outstandingAmount value', () => {
+  // The numeric editor is NOT an <input type="number">: the grid renders amounts
+  // with a locale decimal comma ("1.646,49 €") and a number input refuses that
+  // character in most browsers, so the user could only ever type the value back
+  // in a format they never see. It is a text input carrying
+  // `inputMode="decimal"` (numeric keypad on mobile, comma allowed), and the
+  // builder normalizes to canonical dot-decimal at apply time — so `inputMode`,
+  // not `type`, is the attribute that says "numeric" here.
+  it('renders the numeric editor for the outstandingAmount value', () => {
     render(<AdvancedFilterBuilder columns={makeColumns()} value={OVERDUE_FILTER} />);
     const valueInput = within(getRows()[1]).getByTestId('Input__4eedf1');
-    expect(valueInput).toHaveAttribute('type', 'number');
+    expect(valueInput).toHaveAttribute('type', 'text');
+    expect(valueInput).toHaveAttribute('inputMode', 'decimal');
   });
 
   it('keeps the first row on the enum picker (status column is unaffected)', () => {
@@ -233,10 +241,14 @@ describe('AdvancedFilterBuilder — custom column WITHOUT filterMode reproduces 
     expect(operatorTrigger).not.toHaveTextContent('opGreaterThan');
   });
 
-  it('degrades the value editor to a text input', () => {
+  // Both editors are `type="text"`, so that attribute alone cannot tell them
+  // apart — the absence of `inputMode` is what makes this one a PLAIN text box.
+  // Asserted against its numeric counterpart above so the two stay distinct.
+  it('degrades the value editor to a plain text input (no numeric input mode)', () => {
     render(<AdvancedFilterBuilder columns={brokenColumns()} value={OVERDUE_FILTER} />);
     const valueInput = within(getRows()[1]).getByTestId('Input__4eedf1');
     expect(valueInput).toHaveAttribute('type', 'text');
+    expect(valueInput).not.toHaveAttribute('inputMode');
   });
 
   it('offers only text operators, so greaterThan is unreachable', async () => {

@@ -14,7 +14,7 @@ import { useClientSort } from '@/hooks/useClientSort';
 import { useUI } from '@/i18n';
 import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
-import { applyAdvancedFilter } from './movementAdvancedFilter';
+import { applyAdvancedFilter, withDerivedFields } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { useDeleteMovement } from '@/hooks/useCreateMovement';
@@ -157,6 +157,13 @@ export const MovementsTab = forwardRef(function MovementsTab(
     [movements, filters, advancedFilter],
   );
 
+  // Rows handed to the toolbar's advanced-filter builder must carry the SAME
+  // derived fields the filter columns expose. `statusFamily` exists only inside
+  // the evaluator's projection, so the builder's enum picker used to seed its
+  // in-memory option list from a field no row had — leaving the Status dropdown
+  // to fall back to the declared enumLabels alone (ETP-4956).
+  const filterSourceRows = useMemo(() => movements.map(withDerivedFields), [movements]);
+
   // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in the toolbar,
   // which is the table's sibling. Same split as ListView/DataTable. Client-side because this
   // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
@@ -225,7 +232,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         onRefresh={onReload}
-        rows={movements}
+        rows={filterSourceRows}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}

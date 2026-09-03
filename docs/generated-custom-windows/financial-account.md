@@ -1681,7 +1681,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
-      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
+      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree, shared by movements and statements. Three operator tables (`DATE_OPERATORS` / `NUMBER_OPERATORS` / `OPERATORS`) dispatched by the column's declared `type` via `applyConditions`'s `columnsByKey` argument — see "The advanced ("by conditions") filter evaluates by declared column type"
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
@@ -1700,7 +1700,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -2579,6 +2579,58 @@ have no AD backing) and consumes real NEO endpoints directly.
 | Search | `string` | Case-insensitive substring over `documentNo + contact + description` |
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
+
+### The advanced ("by conditions") filter evaluates by declared column type (ETP-4956)
+
+All three tabs — Movimientos, Extractos importados, Conciliación — fetch **unfiltered** and evaluate
+the `AdvancedFilterBuilder` condition tree in memory through `applyConditions`
+(`advancedFilterApply.js`). The backend criteria path (`gridQuery.js` → `ListView`) is **not**
+involved here, so a filter defect in this window is always a client-side one.
+
+`applyConditions(rows, filter, deriveRow, columnsByKey)` takes the filter-column metadata as its
+4th argument and dispatches operators through **three** tables:
+
+| Column `type` | Table | Notes |
+|---|---|---|
+| `date` | `DATE_OPERATORS` | all comparisons via `parseCalendarDate` (`lib/dateOnly.js`) |
+| `number` | `NUMBER_OPERATORS` | `equals`/`notEqual` compare numerically, not as strings |
+| everything else | `OPERATORS` | the historical string/enum predicates |
+
+The metadata maps are `MOVEMENT_FILTER_COLUMNS` and `STATEMENT_FILTER_COLUMNS`, derived from a
+label-free `COLUMN_SPEC` in each `*AdvancedFilter.js` so the types are available without a `ui`
+translator. Both files keep `buildXFilterColumns(ui)` for the builder UI, which decorates the same
+spec with translated labels.
+
+**Why the third table alone was not enough.** Before this change every operator went through
+`OPERATORS`, which meant:
+
+- **Dates never filtered.** `equals` string-compared the stored `"2026-09-01T00:00:00Z"` against the
+  picker's `"2026-09-01"` — never equal. Worse, `lessThan`/`greaterThan` ran both sides through
+  `parseFloat`, and `parseFloat('2026-09-01') === 2026`: **every** date collapsed to its year, so
+  "Antes de" / "Después de" could not discriminate between any two dates in the same year. Only
+  `between` had a date branch, and it guessed the type from the field's NAME (`/date/i`).
+- **`Saldo` "Es" compared strings.** A stored `1646.4867`, displayed as `1.646,49 €`, never matched a
+  typed `1646.49`. `numEquals` now rounds both sides to the precision the user typed (floored at 2
+  decimals, the display scale), so the filter agrees with what the grid shows.
+- **Text values were not trimmed.** `Contacto` → `Contiene` `" Ivan"` returned nothing. `lc()` now
+  trims both sides; the builder additionally trims at apply time (core, see below).
+
+**`emptyWhenZero`** is a per-column opt-in, set on `totalOut` / `totalIn` only. Those amounts arrive
+as `0` when absent, and `StatementsTable.jsx` renders `Number(totalOut) > 0 ? amount : '—'` — so 0
+and null look identical. With the flag, `isNull`/`isNotNull` use `!(Number(raw) > 0)`, matching
+exactly the rows that visibly show "—". Deliberately **not** set on `lineCount`, `amount` or
+`balance`, where 0 is a real value.
+
+`MovementsTab` hands the toolbar `movements.map(withDerivedFields)` rather than the raw array: the
+Estado filter column is the derived `statusFamily`, which no raw row carries, so the builder's enum
+picker had no in-memory values to seed its option list from.
+
+Companion fixes live in the shared builder (`@etendosoftware/app-shell-core`): the enum value picker
+is now multi-select and always offers the column's full declared `enumLabels` catalogue (it used to
+show only the already-selected option when re-editing), the `inSet` ("Es cualquiera de") operator is
+retired for enum columns in favour of that multi-select, and numeric inputs accept a locale decimal
+comma, normalised to dot-decimal on apply.
+
 
 ## Conciliación empty state (ETP-4921)
 
