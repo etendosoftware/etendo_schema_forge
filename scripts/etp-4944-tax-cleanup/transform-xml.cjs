@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 // ETP-4944 — Apply the resolved DELETE/MODIFY scope to the source reference
 // data XML. Writes a sibling .new file; never edits in place.
+//
+// XML vs. SQL scope note (2026-09-03 rework): this file's classification
+// (scope.deleteIds / scope.deactivateIds, 144/103) is a FIXED, one-time,
+// human-reviewed decision baked into the single shipped XML artifact — the
+// same file ships to every environment, so it can't branch at import time.
+// The companion SQL data-fix (gen-delete-sql.cjs) is different: it targets
+// already-provisioned environments whose data can differ from dev's, so it
+// now decides delete-vs-deactivate DYNAMICALLY per environment at runtime
+// (try the delete, catch foreign_key_violation, fall back to deactivate)
+// instead of trusting this file's dev-derived classification. Don't conflate
+// the two — a change to one's candidate set doesn't need to mirror the other.
 const fs = require('fs');
 const path = require('path');
 
@@ -36,6 +47,18 @@ counts.rate = stripEntity('FinancialMgmtTaxRate', null, deleteIds);
 counts.trl = stripEntity('FinancialMgmtTaxTrl', 'tax', deleteIds);
 counts.obtl = stripEntity('OBTL_Tax_Parameter', 'tax', deleteIds);
 counts.zone = stripEntity('FinancialMgmtTaxZone', 'tax', deleteIds);
+
+// Assert the strip actually matched every expected record — every OTHER
+// mutation in this file (deactivate, parentRepoints, MODIFY below) already
+// throws on a no-op; these four counts were the one place that didn't
+// (review finding B2). A mismatch here means the source XML doesn't have
+// the shape resolved-scope.json assumed (e.g. an id vanished, or a name
+// collision produced a phantom match) — fail loudly instead of silently
+// writing a `.new` file that doesn't match what was actually resolved.
+if (counts.rate !== deleteIds.size) throw new Error(`Expected to strip ${deleteIds.size} FinancialMgmtTaxRate records, stripped ${counts.rate}`);
+if (counts.trl !== scope.dependentCounts.trl) throw new Error(`Expected to strip ${scope.dependentCounts.trl} FinancialMgmtTaxTrl records, stripped ${counts.trl}`);
+if (counts.obtl !== scope.dependentCounts.obtl) throw new Error(`Expected to strip ${scope.dependentCounts.obtl} OBTL_Tax_Parameter records, stripped ${counts.obtl}`);
+if (counts.zone !== scope.dependentCounts.zone) throw new Error(`Expected to strip ${scope.dependentCounts.zone} FinancialMgmtTaxZone records, stripped ${counts.zone}`);
 
 // parentTaxRate repoints for surviving children (decided in Task 1 Step 3).
 // IMPORTANT: extract each child's own record block first (bounded by its
