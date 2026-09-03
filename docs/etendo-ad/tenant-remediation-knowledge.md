@@ -2025,3 +2025,127 @@ as the immutability trigger for a data-fix `.sql` file.
   bullets) for the literal old separator, not just the SQL's own composed-name CASE expressions —
   a stale illustration elsewhere will mislead the next person into mirroring the wrong,
   now-superseded character.
+- **2026-09-03 — `StandardAlgorithm.getTransactionCost()`'s dispatch: which `TrxType`s fall to
+  `default:` (need a real Standard-cost anchor) vs. which are self-healing — ETP-5142
+  (R33-standard-cost-anchor-unified, supersedes R28/ETP-4706).** Traced
+  `CostingServer.process()` (`src/org/openbravo/costing/CostingServer.java:99-144`): it calls
+  `costingAlgorithm.getTransactionCost()` UNCONDITIONALLY for every `M_Transaction` row,
+  regardless of source document — there is no type-based gate at that level. Inside
+  `StandardAlgorithm.getTransactionCost()` (`src/org/openbravo/costing/StandardAlgorithm.java:36-47`):
+  ```java
+  switch (trxType) {
+    case InventoryOpening:
+      BigDecimal unitCost = transaction.getPhysicalInventoryLine().getCost();
+      if (unitCost != null && unitCost.signum() != 0) {
+        return getOpeningInventoryCost();
+      }
+    default:
+  }
+  return getOutgoingTransactionCost();
+  ```
+  Only `InventoryOpening` (`M_Inventory.Inventory_Type='O'`) is special-cased, and only when the
+  count line's own `Cost` is non-null/non-zero — `getOpeningInventoryCost()` then ALWAYS inserts
+  its own manual `CostType='STA'` anchor via `insertCost()` (closing any prior anchor at the
+  transaction's `MovementDate` and opening a new one), so it never throws and never needs an
+  external anchor. A `'O'`-type line with a NULL/zero `Cost` falls through the `if` (no `break`)
+  straight into the empty `default:` and then to `getOutgoingTransactionCost()` like everything
+  else — so the self-heal is conditional on a real cost being entered, not on `Inventory_Type='O'`
+  alone. **Every other `TrxType` needs a real Standard cost anchor to post/cost-calculate:**
+  `Shipment`/`ShipmentReturn`/`ShipmentNegative`/`Receipt`/`ReceiptReturn`/`ReceiptNegative` (R28's
+  original scope), `InventoryIncrease`/`InventoryDecrease`/`InventoryClosing` (regular Physical
+  Inventory — NOT the Opening flow), `IntMovementFrom`/`IntMovementTo` (Internal Movement),
+  `InternalCons`/`InternalConsNegative` (Internal Consumption), and
+  `ManufacturingConsumed`/`ManufacturingProduced`/`BOMPart`/`BOMProduct` (Production/BOM). This is
+  why R28 (Shipment/Receipt-only) was superseded by a unified fix sourced from `M_Transaction`
+  directly rather than living alongside 4 new per-doctype siblings — the SAME `m_costing` guard
+  covers all of them at once with one CTE keyed off `M_Transaction`'s own line-FK columns
+  (`m_inoutline_id`/`m_inventoryline_id`/`m_movementline_id`/`m_internal_consumptionline_id`/
+  `m_productionline_id`), rather than five separate LEFT-JOIN-from-the-line-table queries.
+- **2026-09-03 — The REAL lookup date is `TrxProcessDate`, not `MovementDate`, for every
+  `TrxType` except `InventoryOpening`/`InventoryClosing` or a costing rule with
+  `BackdatedTrxsFixed='Y'` — a correctness bug R28 carried silently.**
+  `StandardAlgorithm.getOutgoingTransactionCost()`:
+  ```java
+  Date date;
+  if (costingRule.isBackdatedTransactionsFixed() || trxType == TrxType.InventoryOpening
+      || trxType == TrxType.InventoryClosing) {
+    date = transaction.getMovementDate();
+  } else {
+    date = transaction.getTransactionProcessDate();
+  }
+  ```
+  `M_Costing_Rule.BackdatedTrxsFixed` (Java `CostingRule.PROPERTY_BACKDATEDTRANSACTIONSFIXED`,
+  confirmed against `src-gen/.../CostingRule.java` and `ad_column`) is a PER-TENANT/PER-RULE flag
+  — on this dev DB, ALL 5 Standard-cost tenants have it `'N'`, meaning the REAL query date for
+  Shipment/Receipt/Physical-Inventory-Increase-or-Decrease/Movement/Internal-Consumption/
+  Production is `M_Transaction.TrxProcessDate`, not `MovementDate`. Empirically (2026-09-03, live
+  DB): `TrxProcessDate` is ALWAYS populated (even for currently-stuck, never-yet-cost-calculated
+  transactions — it is stamped at transaction-creation time, not at successful cost-calculation
+  time) and is always `>= MovementDate` by anywhere from sub-second to several seconds, matching
+  "the actual FIFO processing/creation order" rather than the user-entered business date. R28
+  anchored its `datefrom` at `M_InOut.DateAcct` (confirmed empirically `== MovementDate` on every
+  sampled row) — this happened to be SAFE only because `datefrom <= date` in
+  `getStandardCostDefinition`'s lookup still held (`MovementDate <= TrxProcessDate` always), never
+  because it matched the real query date. R33 reproduces the exact formula per-tenant
+  (`M_Costing_Rule.BackdatedTrxsFixed`) and per-transaction (`M_Inventory.Inventory_Type IN
+  ('O','C')`), landing the anchor's `datefrom` exactly where core will actually look, not merely
+  early enough to still work by luck. **Apply generally:** any future `M_Costing`-anchor-seeding
+  fix must use this same `CASE` — a flat `MovementDate` (or a header's own `DateAcct`) is a latent
+  correctness gap disguised as a working fix, not a style choice; it only "worked" for R28's
+  narrow Shipment/Receipt scope by coincidence of the two dates tracking closely together.
+- **2026-09-03 — `M_Inventory`/`M_InventoryLine` schema facts (physical inventory / inventory
+  count-and-adjustment document), gathered while building R33.** `M_Inventory`
+  (`AD_Table_ID=321`) has NO `DocStatus`/`DocumentNo`/`C_DocType_ID` at all — confirmed via
+  `ad_column` for the whole table, not merely "not in this view." It tracks lifecycle purely via
+  `Posted` (domain observed live: `Y`/`N`/`E`/`T` — the fix only ever tests `<> 'Y'`, so the exact
+  non-Y code never mattered), `Processed`, `Processing`. Its accounting date is `MovementDate`
+  (no separate `DateAcct` column exists on this table, unlike `M_InOut`). `Inventory_Type` is a
+  header-level column (`AD_Reference_ID=80D920FE975340EDACC52885BA4C34D7`, "Inventory Types") with
+  observed live values `N` (Normal/regular count — the vast majority, 43/57 on this DB),
+  `O` (Opening — 7/57, the self-healing flow used at Standard-costing-rule activation), and `C`
+  (Closing — 7/57). `M_InventoryLine.Cost` is nullable and is exactly the field
+  `StandardAlgorithm.getOpeningInventoryCost()` reads to decide whether an `'O'`-type line
+  self-heals. `M_Transaction` links to a physical-inventory line via `m_inventoryline_id` (not a
+  header-level FK) — same shape as `m_inoutline_id`/`m_movementline_id`/
+  `m_internal_consumptionline_id`/`m_productionline_id`, all on the SAME `M_Transaction` row,
+  which is what makes sourcing an anchor-seeding fix from `M_Transaction` directly (one CTE,
+  `LEFT JOIN` to whichever line/header table the populated FK points at) simpler than five
+  separate per-doctype queries once more than one document family is in scope.
+- **2026-09-03 — Live gap census across all 5 stock-moving document families, informing the
+  R28→R33 (unified) decision (ETP-5142).** Fleet-wide sweep of `M_Transaction.IsCostCalculated='N'`
+  (the "stuck, needs a Standard cost anchor" state) across every Standard-cost tenant on the local
+  dev DB, grouped by which line-FK is populated: `inout: 28`, `inventory: 8`, `movement: 0`,
+  `internal_consumption: 0`, `production: 0`. Internal Consumption and Production have ZERO header
+  rows on ANY Standard-cost tenant at all (the features are simply unused there yet); Movement has
+  2 header rows on GOClient but both already `IsCostCalculated='Y'` (their doctype has
+  `Posted='D'`, Post Disabled — cost-neutral movements don't post in this fleet, but cost
+  CALCULATION is a separate, prior mechanism from posting and both transactions already cleared
+  it). Confirms Physical Inventory is a live, real, currently-affecting-real-tenants gap
+  (2 tenants, 5 product/org pairs, dated the day of authoring) while Internal
+  Consumption/Movement/Production are architecturally-identical-but-currently-dormant exposure —
+  R33's SQL for those three branches is REASONED THROUGH against source + live schema, not
+  empirically proven against real stuck rows the way the Shipment/Receipt and Physical Inventory
+  branches were (validated end-to-end via `parseFix`/`inlineParams` in rolled-back transactions:
+  `@check` fires, `@apply` inserts the right row(s), re-`@check`/re-`@apply` converge to 0/0).
+  **A useful emergent behavior observed during validation, not a bug:** when a SINGLE product has
+  BOTH a stuck inout transaction AND a stuck inventory transaction for the same cost org (real
+  case found on tenant `E61A24485E2343D988AA422E404FA254`), the unified `needed_products` CTE's
+  `DISTINCT ON (m_product_id, cost_org_id)` collapses them to ONE representative transaction
+  (earliest `needed_date` wins), producing exactly ONE anchor that correctly covers BOTH stuck
+  transactions (since the anchor's `datefrom` is the minimum of the two dates and `dateto` extends
+  to 9999-12-31 or the next real Standard row) — cleaner than two sibling fixes each guarding
+  against the other via `NOT EXISTS`, which also converges correctly but needs 2 sequential runs
+  instead of 1.
+- **2026-09-03 — One intentional scope narrowing vs. R28 when moving to an `M_Transaction`-sourced
+  design (ETP-5142).** R28's original query started from `m_inoutline` `LEFT JOIN m_transaction`,
+  so it ALSO caught lines where NO `M_Transaction` row exists at all (the exact edge case
+  `DocInOut.java`'s own pre-check handles via `line.transaction == null`, throwing
+  `InvalidCostWhichProduct` directly without ever reaching the cost-calculation engine). Sourcing
+  the unified fix FROM `m_transaction` directly means a transaction must exist by construction —
+  that edge case can no longer be represented in the same query. Verified empirically (2026-09-03):
+  zero `m_inoutline` rows on any Standard-cost tenant hit that branch on this DB today, so this is
+  a documented, currently-inert narrowing, not a live regression. If it recurs, it is arguably a
+  DIFFERENT gap (a transaction was never created at all, not merely uncosted) warranting its own
+  investigation rather than folding it back into an anchor-seeding fix. `C_ProjectIssue`-sourced
+  transactions (`M_Transaction.c_projectissue_id`) are also deliberately out of scope for the same
+  reason R28 never covered them — not one of the 5 document families this investigation traced.
