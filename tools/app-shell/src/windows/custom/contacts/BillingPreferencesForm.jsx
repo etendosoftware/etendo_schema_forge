@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { extractApiErrorMessage } from '@/lib/apiError';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
@@ -196,8 +198,17 @@ export default function BillingPreferencesForm(props) {
     try {
       if (!newDiscountId && discountRecord?.id) {
         // Clear: delete existing record
-        await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
-        setDiscountRecord(null);
+        try {
+          const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setDiscountRecord(null);
+            toast.success(ui('discountDeleteSuccess'));
+          } else {
+            toast.error(await extractApiErrorMessage(res));
+          }
+        } catch (err) {
+          toast.error(err.message || ui('discountDeleteError'));
+        }
       } else if (discountRecord?.id) {
         // Update existing record
         const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {

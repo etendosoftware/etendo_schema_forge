@@ -212,6 +212,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       if (!res.ok) {
         toast.error(await extractApiErrorMessage(res));
       } else {
+        toast.success(ui('contactDeleteSuccess'));
         onDataMutated?.();
       }
     } catch (err) {

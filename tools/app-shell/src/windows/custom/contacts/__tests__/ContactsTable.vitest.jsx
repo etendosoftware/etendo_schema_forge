@@ -5,14 +5,38 @@ vi.mock('@/i18n', () => ({
   useLocale: () => ({ genericLabels: {} }),
 }));
 
+// DataTable is a thin stub, but exposes a button that fires `onDeleteRow` so the
+// confirm-delete dialog + toast flow (ETP-5026) can be exercised without a real grid.
 vi.mock('@/components/contract-ui', () => ({
   DataTable: (props) => (
     <div
       data-testid="data-table"
       data-editing-row-id={props.editingRowId ?? ''}
       data-hidden-columns={JSON.stringify(props.hiddenColumns ?? null)}
-    />
+    >
+      <button
+        type="button"
+        data-testid="trigger-delete-row"
+        onClick={() => props.onDeleteRow?.({ id: 'row-1', name: 'Acme' })}
+      >
+        delete row
+      </button>
+    </div>
   ),
+}));
+
+const apiFetch = vi.fn();
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => apiFetch,
+}));
+
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    success: (...a) => toastSuccess(...a),
+    error: (...a) => toastError(...a),
+  },
 }));
 
 vi.mock('@/components/ui/tag', () => ({
@@ -38,7 +62,7 @@ vi.mock('@/lib/apiError', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ContactsTable from '../ContactsTable.jsx';
 
 // --- Tests ---
@@ -53,6 +77,41 @@ const defaultProps = {
 describe('ContactsTable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  // ETP-5026: confirmDelete's success/error toasts, via the confirmation modal path.
+  describe('delete confirmation flow (ETP-5026)', () => {
+    async function triggerDeleteAndConfirm() {
+      fireEvent.click(screen.getByTestId('trigger-delete-row'));
+      expect(screen.getByTestId('dialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('delete'));
+    }
+
+    it('shows a success toast and refreshes data when the delete succeeds', async () => {
+      apiFetch.mockResolvedValueOnce({ ok: true });
+      const onDataMutated = vi.fn();
+      render(<ContactsTable {...defaultProps} onDataMutated={onDataMutated} />);
+
+      await triggerDeleteAndConfirm();
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('contactDeleteSuccess'));
+      expect(toastError).not.toHaveBeenCalled();
+      expect(onDataMutated).toHaveBeenCalled();
+      expect(apiFetch).toHaveBeenCalledWith('/businessPartner/row-1', { method: 'DELETE' });
+    });
+
+    // TC-04: a failed delete must NOT trigger a success toast — only the error toast.
+    it('shows only an error toast and does not mutate data when the delete fails', async () => {
+      apiFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      const onDataMutated = vi.fn();
+      render(<ContactsTable {...defaultProps} onDataMutated={onDataMutated} />);
+
+      await triggerDeleteAndConfirm();
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('mock error'));
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(onDataMutated).not.toHaveBeenCalled();
+    });
   });
 
   it('renders DataTable without crashing', () => {
