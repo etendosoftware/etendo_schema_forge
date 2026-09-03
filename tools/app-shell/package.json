@@ -19,7 +19,7 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.86",
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.40",
+    "@etendosoftware/app-shell-core": "0.3.45",
     "@etendosoftware/etendo-go-core": "0.3.40",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
