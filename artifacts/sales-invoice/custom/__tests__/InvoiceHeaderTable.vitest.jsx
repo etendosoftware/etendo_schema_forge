@@ -236,7 +236,7 @@ describe('InvoiceHeaderTable (sales-invoice)', () => {
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 
-  it('opens the payment modal when the "Pendiente de pago" outstanding badge is clicked', () => {
+  it('opens the payment modal when the "Saldo pendiente" outstanding badge is clicked', () => {
     render(<InvoiceHeaderTable {...BASE_PROPS} />);
     const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
     const btn = outstandingCol.querySelector('button');

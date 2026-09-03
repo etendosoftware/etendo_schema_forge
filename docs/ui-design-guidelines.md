@@ -192,6 +192,51 @@ Callers never need to know these rules — they just pass the ISO 4217 code.
 
 ---
 
+## Typography
+
+**The typeface is declared once and inherited. A component must not declare a `font-family` of its own.**
+
+The design system names its family in exactly one place — the `body` rule in the core's
+`packages/app-shell-core/src/styles.css`:
+
+```css
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+```
+
+There is no `--font-sans` token and no `theme.fontFamily` in the core's `tailwind-preset.js`, so
+**inheritance is the whole mechanism**. Nothing re-establishes Inter further down the tree.
+
+### Rules
+
+- **Declare no `font-family`.** Let the element inherit. This holds inside React portals too: every
+  portal in the app mounts on `document.body`, so a portalled modal or drawer inherits normally.
+- **Never lead a stack with a system family** (`system-ui`, `-apple-system`, `BlinkMacSystemFont`,
+  `'Segoe UI'`, `ui-sans-serif`, `sans-serif`). Naming them as *fallbacks* after `'Inter'` is fine —
+  that is the design system's own stack.
+- **Avoid the `font-sans` Tailwind class.** The preset does not override `theme.fontFamily`, so
+  `font-sans` resolves to Tailwind's default stack — i.e. it takes the element *off* Inter. It is
+  currently unused in the app; keep it that way.
+- **Align digits with `tabular-nums`, not a monospace font.** Same rule the reports follow
+  (ETP-5013) — it keeps the typeface and only changes the numeric variant.
+- Content that renders **outside** the app's `body` — a PDF stylesheet, a `window.open()`
+  document — cannot inherit and must name its own stack, leading with `'Inter'`. See
+  `windows/custom/shared/documentPdf.js` for the reference stack.
+
+### Why it matters
+
+A single inline `fontFamily` silently takes a whole subtree off the design system: no error, no
+clue beyond slightly different letterforms. ETP-5108 was exactly that — both document-confirmation
+modals declared `fontFamily: 'system-ui, -apple-system, sans-serif'` on their shell, so the title,
+the generated-document card and the buttons all rendered in the visitor's OS sans. It was reported
+as mixed typography inside the card, because the document number's digit widths are where a
+non-Inter sans shows itself first.
+
+`tools/app-shell/test/no-system-font-stack.test.js` enforces the second rule across
+`tools/app-shell/src/` and `artifacts/*/custom/`, with a documented exception map for the
+render-outside-body cases.
+
+---
+
 ## Column Alignment in Tables
 
 - **`type: 'amount'`** columns → `text-right` on cells and footer totals, `text-left` on headers.

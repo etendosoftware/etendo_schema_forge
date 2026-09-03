@@ -134,6 +134,12 @@ function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
 // Row-body click → open detail, but not when the click originated in the checkbox or the
 // hover-action icons (they have their own handlers and stopping propagation there keeps the
 // row-click semantic clean).
+//
+// ETP-5029 — the selection checkbox is excluded by the `stopPropagation` on its own cell,
+// NOT by the `closest('input')` clause below. The shared Checkbox renders the real <input>
+// as a visually hidden SIBLING of the box the user actually clicks, so on that first click
+// `e.target` is a <div>/<svg> and `closest('input')` finds nothing; the clause only ever
+// matches the label-activation click the browser then synthesizes at the input itself.
 function makeRowClickHandler(onRowClick, row) {
   if (!onRowClick) return undefined;
   return (e) => {
@@ -1240,8 +1246,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 </button>
               </div>
             )}
-            {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking
+                a row never reaches the row-body handler that opens the record's
+                detail/modal (in Contacts' "Dirección" tab that popped the
+                LocationEditorModal open on every tick). Mirrors the chevron cell
+                above and DataTable's own checkbox cell. */}
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}
