@@ -430,6 +430,121 @@ describe('InlineLinesPanel row highlight vs selection (ETP-5030)', () => {
  * (`hover:z-10`) while the emitted class was `hover:z-20`, so it could not have
  * caught a drift. These assert the classes actually present on the rendered row.
  */
+/**
+ * ETP-5029 — ticking a row's selection checkbox ALSO fired the row-body click
+ * handler, so in Contacts' "Dirección" tab (whose `onRowClick` opens
+ * `LocationEditorModal`) merely selecting a row popped the address editor open.
+ *
+ * `makeRowClickHandler`'s `closest('input')` clause was meant to exclude the
+ * checkbox but structurally cannot: the shared Checkbox renders the real
+ * <input> as a visually hidden SIBLING of the box the user clicks, so on that
+ * first click `e.target` is a <div>/<svg> (or the <label>) and `closest('input')`
+ * finds nothing. The fix is the `stopPropagation` on the checkbox CELL, matching
+ * the chevron cell beside it and DataTable's own checkbox cell.
+ *
+ * These cases pin both halves of the contract — the checkbox must never reach
+ * the row handler, and a click on the record's content must still reach it —
+ * because no InlineLinesPanel suite passed `onRowClick` at all before ETP-5029,
+ * which is exactly why the bug shipped.
+ */
+const ROW_CLICK_CELL_KEY = 'quantity';
+
+function getRowCell(rowId, colKey) {
+  return getRow(rowId).querySelector(`[data-cell-key="${colKey}"]`);
+}
+
+/**
+ * The visible 16x16 box the user actually clicks — a <div> inside the Checkbox
+ * <label>, sibling of the sr-only <input>. Clicking this (rather than the label
+ * or the input) reproduces the exact event target that defeated the guard.
+ */
+function getCheckboxBox(rowId) {
+  return getRowCheckbox(rowId).querySelector('div');
+}
+
+function renderClickablePanel(props = {}) {
+  const onRowClick = vi.fn();
+  const onSelectionChange = vi.fn();
+  const result = renderPanel({ onRowClick, onSelectionChange, ...props });
+  return { ...result, onRowClick, onSelectionChange };
+}
+
+describe('InlineLinesPanel selection checkbox vs row click (ETP-5029)', () => {
+  it('selects the row without opening its detail when the checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel();
+
+    await user.click(getRowCheckbox('L1'));
+
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onSelectionChange).toHaveBeenCalledWith([ROWS[0]]);
+  });
+
+  it('selects the row without opening its detail when the visible box is clicked', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel();
+
+    await user.click(getCheckboxBox('L1'));
+
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onSelectionChange).toHaveBeenCalledWith([ROWS[0]]);
+  });
+
+  it('keeps the detail closed while a selected row is unticked', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel();
+
+    await user.click(getRowCheckbox('L1'));
+    await user.click(getRowCheckbox('L1'));
+
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+  });
+
+  it('keeps the detail closed when the header select-all is ticked', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel();
+
+    await user.click(getHeaderCheckbox());
+
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onSelectionChange).toHaveBeenCalledWith(ROWS);
+  });
+
+  it('still opens the detail when a cell of the record is clicked', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel();
+
+    await user.click(getRowCell('L1', ROW_CLICK_CELL_KEY));
+
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('opens the detail of the row that was clicked, not of a selected one', async () => {
+    const user = userEvent.setup();
+    const { onRowClick } = renderClickablePanel();
+
+    await user.click(getRowCheckbox('L1'));
+    await user.click(getRowCell('L2', ROW_CLICK_CELL_KEY));
+
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[1]);
+  });
+
+  it('neither selects nor opens the detail when the document is read-only', async () => {
+    const user = userEvent.setup();
+    const { onRowClick, onSelectionChange } = renderClickablePanel({ isDocumentReadOnly: true });
+
+    await user.click(getRowCheckbox('L1'));
+    await user.click(getCheckboxBox('L1'));
+
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('InlineLinesPanel row hover elevation', () => {
   it('gives every row the hover lift utilities so the shadow is not clipped by its neighbors', () => {
     renderPanel();

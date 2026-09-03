@@ -142,6 +142,12 @@
           "windowId": "273673D2ED914C399A6C51DB758BE0F9"
         },
         {
+          "name": "matched-purchase-invoices",
+          "label": "Receipt-Invoice Link",
+          "favname": "Receipt-Invoice Link",
+          "windowId": "107"
+        },
+        {
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
