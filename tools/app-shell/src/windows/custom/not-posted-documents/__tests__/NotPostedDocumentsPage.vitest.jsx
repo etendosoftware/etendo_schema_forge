@@ -524,4 +524,56 @@ describe('NotPostedDocumentsPage', () => {
     });
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('postingFailed'));
   });
+
+  // ETP-5075 — the grid badge renders core's raw NoPostedDocumentDS label for a row's
+  // documentType (e.g. "Matched Invoice", singular) with no i18n applied by default. This
+  // window's own name diverged from that label, so it is overridden via a dedicated map —
+  // regression coverage: the override applies ONLY to that one label, every other row keeps
+  // showing the backend's own text untouched.
+  it('overrides the row badge label for Matched Invoice, leaving other rows untouched', async () => {
+    globalThis.fetch = mkFetch([
+      { documentId: 'doc-mi', documentType: 'Matched Invoice', description: 'X', accountingDate: '2024-01-01', organization: 'O', tableId: '472' },
+      { documentId: 'doc-si', documentType: 'Sales Invoice', description: 'Y', accountingDate: '2024-01-02', organization: 'O', tableId: 'tbl-1' },
+    ]);
+    const { container } = render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    await waitFor(() => {
+      // Scoped to the badge class, not a page-wide text query: the mocked filter-options
+      // response also renders "Sales Invoice" as a <select> option, so an unscoped
+      // getByText would collide with that second, unrelated occurrence of the same text.
+      const badges = Array.from(container.querySelectorAll('.npd-doc-type-badge')).map(el => el.textContent);
+      // useUI() is mocked to the identity function, so an applied override renders the raw
+      // i18n key — proof the map fired, not a coincidental string match.
+      expect(badges).toContain('docTypeMatchedInvoices');
+      expect(badges).toContain('Sales Invoice');
+    });
+  });
+
+  // Same override, different keyspace: the FILTER dropdown's options come from the backend's
+  // refListDocumentTypes() response, keyed by the short AD_Ref_List code ("MI"), not the raw
+  // row label — the two maps must not be conflated.
+  it('overrides the filter-dropdown option label for the MI document-type code', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documentTypes: [
+              { value: 'MI', label: 'Facturas cuadradas' },
+              { value: 'SI', label: 'Sales Invoice' },
+            ],
+            accountingStatuses: [],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+    });
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    await waitFor(() => {
+      const select = screen.getByTestId('npd-filter-document-type');
+      expect(within(select).getByText('docTypeMatchedInvoices')).toBeInTheDocument();
+      expect(within(select).getByText('Sales Invoice')).toBeInTheDocument();
+    });
+  });
 });

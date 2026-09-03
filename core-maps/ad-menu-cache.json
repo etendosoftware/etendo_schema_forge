@@ -1,6 +1,6 @@
 {
-  "refreshedAt": "2026-09-01T05:21:08.732Z",
-  "count": 380,
+  "refreshedAt": "2026-09-03T13:09:55.717Z",
+  "count": 476,
   "entries": [
     {
       "id": "120",
@@ -14,6 +14,13 @@
       "name": "Account Combination",
       "type": "window",
       "windowId": "153",
+      "processId": null
+    },
+    {
+      "id": "105",
+      "name": "Account Tree",
+      "type": "window",
+      "windowId": "118",
       "processId": null
     },
     {
@@ -45,13 +52,6 @@
       "processId": null
     },
     {
-      "id": "105",
-      "name": "Account Tree",
-      "type": "window",
-      "windowId": "118",
-      "processId": null
-    },
-    {
       "id": "800159",
       "name": "Activity",
       "type": "window",
@@ -63,6 +63,41 @@
       "name": "AD Implementation Mapping",
       "type": "window",
       "windowId": "08F09D2A7C774585B014C06C0F44F591",
+      "processId": null
+    },
+    {
+      "id": "5F79469CF1C2475BB7CEA895A275A51B",
+      "name": "AEAT347 Document Types",
+      "type": "window",
+      "windowId": "57D6A668F8174C34AA2B7187AC5F16A3",
+      "processId": null
+    },
+    {
+      "id": "84E9FF0453BC4061989BBDF7D39EA82A",
+      "name": "Agent",
+      "type": "window",
+      "windowId": "30F66066197F43368E354DC4630D3378",
+      "processId": null
+    },
+    {
+      "id": "3A0059ABDEB74486910ED3EC1342A496",
+      "name": "Agent Access",
+      "type": "window",
+      "windowId": "6DF9F3F14488429B831412AFD84161B5",
+      "processId": null
+    },
+    {
+      "id": "BE4D03CE9E1042EB894D6AE2760F311B",
+      "name": "Agent Memory",
+      "type": "window",
+      "windowId": "8CF289E2C0854FE6B96CAB8D9BA1EA15",
+      "processId": null
+    },
+    {
+      "id": "C84032B9679E4E2CAA762FB8B58D0FC6",
+      "name": "AI Models",
+      "type": "window",
+      "windowId": "ECCC692A57CC47488E9735DD2A051172",
       "processId": null
     },
     {
@@ -101,21 +136,14 @@
       "processId": null
     },
     {
-      "id": "800079",
+      "id": "F11FC6C518B149AFAB4DAED58751119C",
       "name": "Analysis Tools",
       "type": "folder",
       "windowId": null,
       "processId": null
     },
     {
-      "id": "800078",
-      "name": "Analysis Tools",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800077",
+      "id": "800075",
       "name": "Analysis Tools",
       "type": "folder",
       "windowId": null,
@@ -129,7 +157,21 @@
       "processId": null
     },
     {
-      "id": "800075",
+      "id": "800077",
+      "name": "Analysis Tools",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800078",
+      "name": "Analysis Tools",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800079",
       "name": "Analysis Tools",
       "type": "folder",
       "windowId": null,
@@ -185,6 +227,13 @@
       "processId": "462033447A1548F09BBFB0683FA976CC"
     },
     {
+      "id": "345",
+      "name": "Assets",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "800114",
       "name": "Assets",
       "type": "window",
@@ -192,10 +241,17 @@
       "processId": null
     },
     {
-      "id": "345",
-      "name": "Assets",
-      "type": "folder",
-      "windowId": null,
+      "id": "0629FC5BA38C46EA834DD791621DB6A6",
+      "name": "Async Process Log",
+      "type": "window",
+      "windowId": "37DDB0FC24D34C3D91EF29F1E6F3C0BB",
+      "processId": null
+    },
+    {
+      "id": "037FAE527C4140E49F868669BB7A6665",
+      "name": "Async Process Log",
+      "type": "window",
+      "windowId": "4F02F39384C64915AC3BCB7003178A75",
       "processId": null
     },
     {
@@ -241,6 +297,13 @@
       "processId": null
     },
     {
+      "id": "9C439783EB3C45C8B8114A82CC66AC84",
+      "name": "Available User Algorithm",
+      "type": "window",
+      "windowId": "8C26ADB6AFA34C83B67A85F70C8845D8",
+      "processId": null
+    },
+    {
       "id": "800025",
       "name": "Balance sheet and P&L structure",
       "type": "report",
@@ -266,6 +329,27 @@
       "name": "Bank File Format",
       "type": "window",
       "windowId": "557A0AA1D0D745F9A61557C05483072C",
+      "processId": null
+    },
+    {
+      "id": "D3C8D3653B7142DFBC8B9B85A4DF077E",
+      "name": "Bank Integration",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "D94E650304874F68B30237D86A623283",
+      "name": "Bank Integration Logs",
+      "type": "window",
+      "windowId": "FF4C333DC6024DCF9F9B7C8D392F8314",
+      "processId": null
+    },
+    {
+      "id": "48CD9B15B86340DDAD234EF9F353D6C2",
+      "name": "Bank Provider",
+      "type": "window",
+      "windowId": "62A02BF89678412AA2B5118234FD7048",
       "processId": null
     },
     {
@@ -388,6 +472,27 @@
       "processId": null
     },
     {
+      "id": "A9E0F1B2C3D4E5F6A7B8C9D0E1F2A3B4",
+      "name": "Canales y Endpoints SIF",
+      "type": "window",
+      "windowId": "B31D9E43422C4C18961D06CF42CE9852",
+      "processId": null
+    },
+    {
+      "id": "241",
+      "name": "Cash Journal",
+      "type": "window",
+      "windowId": "198",
+      "processId": null
+    },
+    {
+      "id": "800011",
+      "name": "Cash Report",
+      "type": "report",
+      "windowId": null,
+      "processId": "800191"
+    },
+    {
       "id": "240",
       "name": "Cashbook",
       "type": "window",
@@ -409,24 +514,24 @@
       "processId": null
     },
     {
-      "id": "241",
-      "name": "Cash Journal",
+      "id": "D6B02292A6384E4DAD47878D6AFCE449",
+      "name": "Cause exemption SII",
       "type": "window",
-      "windowId": "198",
+      "windowId": "96DABD97C2AC4D479F6997C6B350B0BE",
       "processId": null
-    },
-    {
-      "id": "800011",
-      "name": "Cash Report",
-      "type": "report",
-      "windowId": null,
-      "processId": "800191"
     },
     {
       "id": "136",
       "name": "Channel",
       "type": "window",
       "windowId": "150",
+      "processId": null
+    },
+    {
+      "id": "60237A5A5B644457B8A9BDF80473A901",
+      "name": "Check Printing",
+      "type": "window",
+      "windowId": "4DF4EB9416CA4C7E8013B39B3AC33236",
       "processId": null
     },
     {
@@ -458,6 +563,13 @@
       "processId": null
     },
     {
+      "id": "E7F3F7CCB0C246B3903FFAB6AEFF126D",
+      "name": "Cluster Service Settings",
+      "type": "window",
+      "windowId": "3F38D98AF2FA4F888E2DAEAC7BCF8724",
+      "processId": null
+    },
+    {
       "id": "DA0544E59BC84E129ACB64EF0D355E54",
       "name": "Cluster Services",
       "type": "window",
@@ -465,10 +577,10 @@
       "processId": null
     },
     {
-      "id": "E7F3F7CCB0C246B3903FFAB6AEFF126D",
-      "name": "Cluster Service Settings",
+      "id": "CFAEC46CE7184D898FC80B0102B20E28",
+      "name": "Código de Actividad",
       "type": "window",
-      "windowId": "3F38D98AF2FA4F888E2DAEAC7BCF8724",
+      "windowId": "568FD0B4FB7A44CCAAEF5FFBA5667A06",
       "processId": null
     },
     {
@@ -493,10 +605,87 @@
       "processId": null
     },
     {
+      "id": "46AB322574E9493AB509B10ACE31E105",
+      "name": "Configuración TBAI",
+      "type": "window",
+      "windowId": "C327DE215AC945F69363905840118177",
+      "processId": null
+    },
+    {
+      "id": "B99FD0D7EA724AE9ABC886B2EE96B1A5",
+      "name": "Configuración Verifactu",
+      "type": "window",
+      "windowId": "27A453FA86974745977672F1A8DCCEFF",
+      "processId": null
+    },
+    {
+      "id": "3981A0B03F444F4F938BED4F485EE1E7",
+      "name": "Connector",
+      "type": "window",
+      "windowId": "6BB0E398351542C98EF446C5B17F2751",
+      "processId": null
+    },
+    {
+      "id": "39BC56D331574938AF79C0BEF4FC13FA",
+      "name": "Connector Suscription",
+      "type": "window",
+      "windowId": "E41E6244047F4EF3AF3EF5CA69915C61",
+      "processId": null
+    },
+    {
+      "id": "9D4C2CDB70DE4A9D88A167D1BC8495E7",
+      "name": "Constant Values",
+      "type": "window",
+      "windowId": "7B2CE0B6F6814DB5820B360A07BECE4C",
+      "processId": null
+    },
+    {
+      "id": "1571B69393174E118B56A3F8AFAC6B12",
+      "name": "Consulta Facturas Verifactu",
+      "type": "other",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "0547CDB572C3461B93C5E58274542E49",
+      "name": "Conversations",
+      "type": "window",
+      "windowId": "ED6F763A2C5F49189AD2760A2509F11D",
+      "processId": null
+    },
+    {
+      "id": "26F293D1F1374C20BA4BEADE311E6856",
+      "name": "Conversion Rate Download Rule",
+      "type": "window",
+      "windowId": "E9F23872C757473EA7310DAD7FBAE782",
+      "processId": null
+    },
+    {
+      "id": "67AB359DD59344CE932FBB97D878B898",
+      "name": "Conversion Rate Downloader Log",
+      "type": "window",
+      "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9",
+      "processId": null
+    },
+    {
       "id": "103",
       "name": "Conversion Rates",
       "type": "window",
       "windowId": "116",
+      "processId": null
+    },
+    {
+      "id": "BD2E5BFEF0AE4D02ADA0902974C2B66D",
+      "name": "Copilot",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "F181D3ABCEB647EBB498AC1A6FD292D1",
+      "name": "Copilot API Tokens",
+      "type": "window",
+      "windowId": "6006F3B3DDF74D618CBEE21BEFD398DC",
       "processId": null
     },
     {
@@ -605,6 +794,13 @@
       "processId": null
     },
     {
+      "id": "47074A705B6943DFA19572AD877AA16F",
+      "name": "Currency Converters",
+      "type": "window",
+      "windowId": "7FCA3B15B7B84B89B01A74D586C08096",
+      "processId": null
+    },
+    {
       "id": "800260",
       "name": "Customer Invoice Report",
       "type": "report",
@@ -651,6 +847,13 @@
       "name": "Data Pool Selection",
       "type": "window",
       "windowId": "48B7215F9BF6458E813E6B280DEDB958",
+      "processId": null
+    },
+    {
+      "id": "A843D295526446D4839BAA1748193273",
+      "name": "Data-Fix History",
+      "type": "window",
+      "windowId": "5F0F3B5D0C374C62A4EC4E3DDBFA7DB9",
       "processId": null
     },
     {
@@ -766,6 +969,13 @@
       "processId": null
     },
     {
+      "id": "13C8DD8011B24C8C8AAE66FF33EDF426",
+      "name": "Dynamic App",
+      "type": "window",
+      "windowId": "ED9C2F74C05A42608838E0F207FB928B",
+      "processId": null
+    },
+    {
       "id": "138",
       "name": "Element",
       "type": "window",
@@ -798,6 +1008,41 @@
       "name": "Enterprise module management",
       "type": "form",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "6068BAF34A6A474AAEE2A54D0B3853F7",
+      "name": "Entity Mapping",
+      "type": "window",
+      "windowId": "7576D6E2903040AFB250106732F9AFFA",
+      "processId": null
+    },
+    {
+      "id": "F49CCC884C2740AFAE1C0AEA6BC58469",
+      "name": "Epígrafes IAE",
+      "type": "window",
+      "windowId": "CE286A50C5084899AEDCBEDCF1BB03A8",
+      "processId": null
+    },
+    {
+      "id": "56A75A71AF5A4CB6AD2C0BB1BBE7EA7C",
+      "name": "Etendo RX",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "5BB14FDDC28445DEA963052CAC087688",
+      "name": "Event Type",
+      "type": "window",
+      "windowId": "A4B45ED5B51F465387FACC7A7BEC4EE1",
+      "processId": null
+    },
+    {
+      "id": "3A3A70CD525F4618B95B50D96FFB2759",
+      "name": "Events",
+      "type": "window",
+      "windowId": "149178F60513452EA665034F72017A0C",
       "processId": null
     },
     {
@@ -843,6 +1088,20 @@
       "processId": null
     },
     {
+      "id": "0DAED7EBCD2A4F27BFB1C85ED1555192",
+      "name": "External ID Mappings",
+      "type": "window",
+      "windowId": "065197A6A36E4D9C856BF6B0831F8916",
+      "processId": null
+    },
+    {
+      "id": "566763B9A33E4EDC8FA445343FE4AB55",
+      "name": "External ID Mappings",
+      "type": "window",
+      "windowId": "065197A6A36E4D9C856BF6B0831F8916",
+      "processId": null
+    },
+    {
       "id": "249",
       "name": "Field Category",
       "type": "window",
@@ -871,6 +1130,13 @@
       "processId": null
     },
     {
+      "id": "B3CD982AE3414702BD58609C710F475F",
+      "name": "Fiscal Declarations NEO Support",
+      "type": "window",
+      "windowId": "64D940BC436346329DD4DED863FFA40B",
+      "processId": null
+    },
+    {
       "id": "216",
       "name": "Form",
       "type": "window",
@@ -890,6 +1156,34 @@
       "type": "process",
       "windowId": null,
       "processId": "800082"
+    },
+    {
+      "id": "117",
+      "name": "G/L Category",
+      "type": "window",
+      "windowId": "131",
+      "processId": null
+    },
+    {
+      "id": "800034",
+      "name": "G/L Item",
+      "type": "window",
+      "windowId": "800007",
+      "processId": null
+    },
+    {
+      "id": "118",
+      "name": "G/L Journal",
+      "type": "window",
+      "windowId": "132",
+      "processId": null
+    },
+    {
+      "id": "407C4A700FF0409E92CF7876361AC48C",
+      "name": "General Chart of Accounts Update",
+      "type": "process",
+      "windowId": null,
+      "processId": "45C8A070983D4F7790DE41B6DCFD18E9"
     },
     {
       "id": "111",
@@ -925,27 +1219,6 @@
       "type": "process",
       "windowId": null,
       "processId": "119"
-    },
-    {
-      "id": "117",
-      "name": "G/L Category",
-      "type": "window",
-      "windowId": "131",
-      "processId": null
-    },
-    {
-      "id": "800034",
-      "name": "G/L Item",
-      "type": "window",
-      "windowId": "800007",
-      "processId": null
-    },
-    {
-      "id": "118",
-      "name": "G/L Journal",
-      "type": "window",
-      "windowId": "132",
-      "processId": null
     },
     {
       "id": "800038",
@@ -1011,6 +1284,13 @@
       "processId": null
     },
     {
+      "id": "ECED4249C522408C8F8086B3E097408F",
+      "name": "IAE Activity Type",
+      "type": "window",
+      "windowId": "3AAD514BDAD34D5BB03D63F0460302C8",
+      "processId": null
+    },
+    {
       "id": "1E5FB50EFD5D43BDA4AB1879707D9003",
       "name": "Import Client",
       "type": "process",
@@ -1046,6 +1326,13 @@
       "processId": null
     },
     {
+      "id": "B4E8B164F882446082F40931A11CC205",
+      "name": "Info.Conta.Impuestos",
+      "type": "process",
+      "windowId": null,
+      "processId": "851C07ABA0D346C7AF87B86524493EE9"
+    },
+    {
       "id": "225",
       "name": "Initial Client Setup",
       "type": "form",
@@ -1074,10 +1361,52 @@
       "processId": null
     },
     {
+      "id": "8AC84D3FD82742C0B064787BCECC412C",
+      "name": "Integrations Configuration",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "800188",
       "name": "Internal Consumption",
       "type": "window",
       "windowId": "800076",
+      "processId": null
+    },
+    {
+      "id": "71E5519B3FFF43AEA187A0A8207DFF90",
+      "name": "Intrastat",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "11C1320B91BF4527A418F09CE98AD45D",
+      "name": "Intrastat Declaration",
+      "type": "window",
+      "windowId": "48ED3B9E5CE84A3C8A7A0BEE55528428",
+      "processId": null
+    },
+    {
+      "id": "F9C8D14E7D1846109FF4E5B56B6B8775",
+      "name": "Intrastat File Configuration",
+      "type": "window",
+      "windowId": "8FD660267E104EDEA9BE5F2B10ACE35B",
+      "processId": null
+    },
+    {
+      "id": "6BB21439445C4B04B451275A38D85273",
+      "name": "Intrastat Launcher",
+      "type": "report",
+      "windowId": null,
+      "processId": "2F0D3CD137204A4F8651C1FE2ED91988"
+    },
+    {
+      "id": "80FAC0C25EBA41899AAC46B208D0B1CE",
+      "name": "Intrastat Supplementary Unit of Measure",
+      "type": "window",
+      "windowId": "507B0C826B154D68B8A54079A75F182E",
       "processId": null
     },
     {
@@ -1095,18 +1424,39 @@
       "processId": null
     },
     {
-      "id": "327",
-      "name": "Invoiceable Expenses",
-      "type": "window",
-      "windowId": "242",
-      "processId": null
-    },
-    {
       "id": "800285",
       "name": "Invoice Detail",
       "type": "report",
       "windowId": null,
       "processId": "800201"
+    },
+    {
+      "id": "ED8D9B496F224035A94D0BAD73C7BF7C",
+      "name": "Invoice Register Book",
+      "type": "window",
+      "windowId": "A3B75DF2642444AA81C4B68A8E99DFEC",
+      "processId": null
+    },
+    {
+      "id": "31A0F4A7EBE24FFA829E24AF0AB9A0DA",
+      "name": "Invoice Register Book Setup",
+      "type": "window",
+      "windowId": "F52BF879A8414C168767A597FA719FD1",
+      "processId": null
+    },
+    {
+      "id": "133",
+      "name": "Invoice Schedule",
+      "type": "window",
+      "windowId": "147",
+      "processId": null
+    },
+    {
+      "id": "327",
+      "name": "Invoiceable Expenses",
+      "type": "window",
+      "windowId": "242",
+      "processId": null
     },
     {
       "id": "800069",
@@ -1116,10 +1466,10 @@
       "processId": "800190"
     },
     {
-      "id": "133",
-      "name": "Invoice Schedule",
+      "id": "7F01FBD322B1422A820FAD25582614F7",
+      "name": "Java Mappings",
       "type": "window",
-      "windowId": "147",
+      "windowId": "161A623FFB6640A98D86FC2F15ACA6B8",
       "processId": null
     },
     {
@@ -1155,6 +1505,13 @@
       "name": "Knowledge",
       "type": "folder",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "792FD36865224D4084E95794F78E13DA",
+      "name": "Knowledge Base File",
+      "type": "window",
+      "windowId": "6B707CBC90254E08B23F221D37E6E4E5",
       "processId": null
     },
     {
@@ -1256,6 +1613,13 @@
       "processId": null
     },
     {
+      "id": "DE77B316DF354CD39CD290B4C926F6E3",
+      "name": "Manual Cash VAT Settlement",
+      "type": "window",
+      "windowId": "F165DAEB498D466FBD50843355F9320F",
+      "processId": null
+    },
+    {
       "id": "800033",
       "name": "Manual Settlement",
       "type": "window",
@@ -1281,6 +1645,13 @@
       "name": "Master Data Management",
       "type": "folder",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "4D95B441E562435F9409AEC0FD7980C0",
+      "name": "Match Rule",
+      "type": "window",
+      "windowId": "24963D64E83B4543A7F6BD248CF944EE",
       "processId": null
     },
     {
@@ -1319,6 +1690,13 @@
       "processId": "800018"
     },
     {
+      "id": "1333B4EC6C2243EF829CEFC2F6AC7E48",
+      "name": "MCP Servers Configuration",
+      "type": "window",
+      "windowId": "E37490C9B9BC4FB5B9051A4DA48E261F",
+      "processId": null
+    },
+    {
       "id": "144",
       "name": "Menu",
       "type": "window",
@@ -1340,6 +1718,13 @@
       "processId": null
     },
     {
+      "id": "67E7164A888D4FB59514E766C61EE56C",
+      "name": "Monitor Verifactu",
+      "type": "window",
+      "windowId": "F4675DAB02134762B66881DAE4672AD0",
+      "processId": null
+    },
+    {
       "id": "800105",
       "name": "Month",
       "type": "window",
@@ -1352,6 +1737,13 @@
       "type": "window",
       "windowId": "800090",
       "processId": null
+    },
+    {
+      "id": "8C1331B9EC06CED7E040007F010119A0",
+      "name": "Multidimensional Tax Report",
+      "type": "report",
+      "windowId": null,
+      "processId": "8C1331B9EC14CED7E040007F010119A0"
     },
     {
       "id": "116",
@@ -1368,11 +1760,32 @@
       "processId": null
     },
     {
+      "id": "3EB0F5F33ECC4FEBABD8F513E9C49521",
+      "name": "Not Posted Documents",
+      "type": "other",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "800225",
       "name": "Not Posted Transaction Report",
       "type": "report",
       "windowId": null,
       "processId": "800168"
+    },
+    {
+      "id": "3CC72318FA8C4DC7ADBA238BEE881AF5",
+      "name": "Number to Word Converter",
+      "type": "window",
+      "windowId": "4FE878BFD2E643D0B83DCFC8B5558A9E",
+      "processId": null
+    },
+    {
+      "id": "7578CF1161454401A5165808F45DB192",
+      "name": "oAuth Provider",
+      "type": "window",
+      "windowId": "20CAA14589294478861AAA766AAF5570",
+      "processId": null
     },
     {
       "id": "800202",
@@ -1386,6 +1799,20 @@
       "name": "Open/Close Period Control",
       "type": "window",
       "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A",
+      "processId": null
+    },
+    {
+      "id": "BCFBE850D42148D1BD1E7003206AC275",
+      "name": "OpenAPI Flows",
+      "type": "window",
+      "windowId": "C88E36B665554A07B8217F066339A33D",
+      "processId": null
+    },
+    {
+      "id": "E02F6F2E986149F2A419A93CD911F062",
+      "name": "OpenAPI Request",
+      "type": "window",
+      "windowId": "83AB0C9082CE4D548625E43989F64311",
       "processId": null
     },
     {
@@ -1487,18 +1914,18 @@
       "processId": null
     },
     {
-      "id": "800029",
-      "name": "Payment Report",
-      "type": "report",
-      "windowId": null,
-      "processId": "800026"
-    },
-    {
       "id": "C662C29A164243C18C71BE164899A71B",
       "name": "Payment Report",
       "type": "report",
       "windowId": null,
       "processId": "6AD04479EC134BD4826077F36B709876"
+    },
+    {
+      "id": "800029",
+      "name": "Payment Report",
+      "type": "report",
+      "windowId": null,
+      "processId": "800026"
     },
     {
       "id": "D0022AAFF0F44BBCA96AA7D007E65C7D",
@@ -1603,6 +2030,13 @@
       "name": "Preference",
       "type": "window",
       "windowId": "129",
+      "processId": null
+    },
+    {
+      "id": "86CEFAFD7135435D9A218AFAA202E178",
+      "name": "Presentaciones AEAT 303",
+      "type": "window",
+      "windowId": "20F5A7A9071543468B27DD80D7767027",
       "processId": null
     },
     {
@@ -1718,6 +2152,27 @@
       "processId": null
     },
     {
+      "id": "183",
+      "name": "Product Management",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800052",
+      "name": "Product Movements Report",
+      "type": "report",
+      "windowId": null,
+      "processId": "800046"
+    },
+    {
+      "id": "800239",
+      "name": "Product Setup",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "800210",
       "name": "Production Cost Report",
       "type": "report",
@@ -1746,27 +2201,6 @@
       "processId": "800173"
     },
     {
-      "id": "183",
-      "name": "Product Management",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800052",
-      "name": "Product Movements Report",
-      "type": "report",
-      "windowId": null,
-      "processId": "800046"
-    },
-    {
-      "id": "800239",
-      "name": "Product Setup",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
       "id": "160",
       "name": "Project and Service Management",
       "type": "folder",
@@ -1792,6 +2226,13 @@
       "name": "Project Type",
       "type": "window",
       "windowId": "265",
+      "processId": null
+    },
+    {
+      "id": "AF62D2F3AC4C46529940D624F20C5D8B",
+      "name": "Projections and Mappings",
+      "type": "window",
+      "windowId": "1EF24B60ADE04916AC80BFAEEA80BCC7",
       "processId": null
     },
     {
@@ -1849,6 +2290,13 @@
       "type": "window",
       "windowId": "800097",
       "processId": null
+    },
+    {
+      "id": "D38F0233E0FB4EC2BFC7130A6199E6D0",
+      "name": "PYMEs Chart of Accounts Update",
+      "type": "process",
+      "windowId": null,
+      "processId": "B8271AE7EB594AF189A5DCED9E1A2158"
     },
     {
       "id": "800168",
@@ -1911,6 +2359,13 @@
       "name": "Reject Reason",
       "type": "window",
       "windowId": "AB30B4B4C94540849D221C4BC31A9816",
+      "processId": null
+    },
+    {
+      "id": "A1A44D093D154ED5B95C31AA5173BBA1",
+      "name": "Rellenar Fechas de Operación",
+      "type": "other",
+      "windowId": null,
       "processId": null
     },
     {
@@ -2016,6 +2471,20 @@
       "name": "Role Access",
       "type": "window",
       "windowId": "268",
+      "processId": null
+    },
+    {
+      "id": "1BD7277A5BF44AC2B8771725F07A981D",
+      "name": "RX Config",
+      "type": "window",
+      "windowId": "A504DEF8C3E0475EA85AE6C84D9AA367",
+      "processId": null
+    },
+    {
+      "id": "536EF2E06B6C40D19E7B72372848C7A6",
+      "name": "Rx Services",
+      "type": "window",
+      "windowId": "58DE285D8E5C413989C3B61F515290C4",
       "processId": null
     },
     {
@@ -2159,14 +2628,21 @@
       "processId": null
     },
     {
-      "id": "800233",
+      "id": "800251",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
       "processId": null
     },
     {
-      "id": "272",
+      "id": "800255",
+      "name": "Setup",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "167",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2187,14 +2663,21 @@
       "processId": null
     },
     {
-      "id": "800255",
+      "id": "C3805F4FAB2E491B8B18D5F6CB4F1737",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
       "processId": null
     },
     {
-      "id": "800251",
+      "id": "800233",
+      "name": "Setup",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "272",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2209,13 +2692,6 @@
     },
     {
       "id": "800248",
-      "name": "Setup",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "167",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2250,10 +2726,80 @@
       "processId": null
     },
     {
+      "id": "AA9BBA1FDB2040A4801266095562687B",
+      "name": "SII Cash Receipts",
+      "type": "window",
+      "windowId": "622A2204CD6844199D8C18F5E5230A3B",
+      "processId": null
+    },
+    {
+      "id": "35D1CD7D915B4E34836D0FBC83906E03",
+      "name": "SII Configuration",
+      "type": "window",
+      "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
+      "processId": null
+    },
+    {
+      "id": "336522AA5CED4A73B2E54786ACE05600",
+      "name": "SII Connections",
+      "type": "window",
+      "windowId": "5A7BDFDF1A9A426DA82C6F4BE6B9FC4A",
+      "processId": null
+    },
+    {
+      "id": "F832798C1BB84EF98C2EFEF2AF5BA8DA",
+      "name": "SII Descriptions",
+      "type": "window",
+      "windowId": "B26E895FF7A04718A0AF1AE8EE7E5D4D",
+      "processId": null
+    },
+    {
+      "id": "EBCD0E93B6C14ECDA009D96EAA0E47E3",
+      "name": "SII Extension points",
+      "type": "window",
+      "windowId": "EA51FDE9994C46C1B1A36C09BDA757AC",
+      "processId": null
+    },
+    {
+      "id": "7EDA5FAED6854F6999A93EE6FE28E242",
+      "name": "SII Invoices Query",
+      "type": "window",
+      "windowId": "0FFAFE82D73C4009A09476A9C4F4CC9A",
+      "processId": null
+    },
+    {
+      "id": "DA8C78E6BE144F0A996C11C522421FA4",
+      "name": "SII Monitor",
+      "type": "window",
+      "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C",
+      "processId": null
+    },
+    {
       "id": "ED7B60C9919F48C096F93B58128DE565",
       "name": "Simple G/L Journal",
       "type": "window",
       "windowId": "B917E8A7B0864ACEA9D941E3B7494E53",
+      "processId": null
+    },
+    {
+      "id": "6EC334E663E4480ABD0D4CB2E601BCFE",
+      "name": "Sistemas de Facturación",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "961F7E85400C44C6B0B60D6332FCBD8F",
+      "name": "Skill/Tool",
+      "type": "window",
+      "windowId": "7ABB2C9233C14F398F7F19842BC12C1B",
+      "processId": null
+    },
+    {
+      "id": "A0DF24AF2F3F49D1AACA55D2F6B7BA40",
+      "name": "Spec",
+      "type": "window",
+      "windowId": "535B91A836040FDDCA825CB931039BC7",
       "processId": null
     },
     {
@@ -2299,6 +2845,27 @@
       "processId": null
     },
     {
+      "id": "5D501B7F2ED84F1ABCA21CF9D0409C4A",
+      "name": "Suministro Inmediato de Información (SII)",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "0473FDC0B68B467982B82201D411514A",
+      "name": "Survey Configuration",
+      "type": "window",
+      "windowId": "05F410A8100E4B17BB6CAE369D69A2F0",
+      "processId": null
+    },
+    {
+      "id": "5D823057D64F43F5A0C677B294E42220",
+      "name": "Synchronize Bank Providers",
+      "type": "other",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "303",
       "name": "Synchronize Terminology",
       "type": "process",
@@ -2327,10 +2894,52 @@
       "processId": null
     },
     {
+      "id": "3B38971874AD40EE8CD8B8606432760F",
+      "name": "Task",
+      "type": "window",
+      "windowId": "172C8727CDB74C948A207A1405CE445B",
+      "processId": null
+    },
+    {
+      "id": "0C134CE757D749E4B8DE8FE9BCD622C1",
+      "name": "Task Management",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "5745E6060D984AD3AF6B41A488A5F4AE",
+      "name": "Task Priority",
+      "type": "window",
+      "windowId": "6B08CB121FFD4D658212D745102E81BA",
+      "processId": null
+    },
+    {
+      "id": "71F86D6B7B59442E84D55A5B1C3212D6",
+      "name": "Task Status",
+      "type": "window",
+      "windowId": "8906F128D818475FACA3F9B6110BCDFA",
+      "processId": null
+    },
+    {
+      "id": "35DFAC292E3C44BFA8EED7A4636160B0",
+      "name": "Task Type",
+      "type": "window",
+      "windowId": "50F50AC3C4A445EB8F122BE9A6FCDED0",
+      "processId": null
+    },
+    {
       "id": "124",
       "name": "Tax Category",
       "type": "window",
       "windowId": "138",
+      "processId": null
+    },
+    {
+      "id": "931A20C866F042B68FB549C1A34D74E1",
+      "name": "Tax key",
+      "type": "window",
+      "windowId": "7CB14C1ADBA34DBA8F29628FF476DB89",
       "processId": null
     },
     {
@@ -2355,10 +2964,31 @@
       "processId": null
     },
     {
+      "id": "F04492673C3B403EBD61740D64C0502E",
+      "name": "Tax Report",
+      "type": "window",
+      "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8",
+      "processId": null
+    },
+    {
+      "id": "6329D45D2FF84A0F8697535ED603A2A8",
+      "name": "Tax Report Launcher",
+      "type": "report",
+      "windowId": null,
+      "processId": "6E77CD48F11647D4BE8E4C8594F6DFB0"
+    },
+    {
       "id": "800226",
       "name": "Tax Report Setup",
       "type": "window",
       "windowId": "800100",
+      "processId": null
+    },
+    {
+      "id": "C175AD1093E7460897FE2164D1AE7706",
+      "name": "TBAI Facturas Enviadas",
+      "type": "window",
+      "windowId": "71F24BF89DE748B483BE87594747D6FB",
       "processId": null
     },
     {
@@ -2373,6 +3003,13 @@
       "name": "Text Interfaces",
       "type": "window",
       "windowId": "800068",
+      "processId": null
+    },
+    {
+      "id": "DCE5A939E3074176B46513820927C4F8",
+      "name": "TicketBAI",
+      "type": "folder",
+      "windowId": null,
       "processId": null
     },
     {
@@ -2397,7 +3034,14 @@
       "processId": "800079"
     },
     {
-      "id": "800247",
+      "id": "B489D091807B401DB63B5D9C0A0E4017",
+      "name": "Transaction code",
+      "type": "window",
+      "windowId": "FD7B2C4EBD6645218736B0B54A9072CD",
+      "processId": null
+    },
+    {
+      "id": "800254",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,
@@ -2411,21 +3055,7 @@
       "processId": null
     },
     {
-      "id": "800253",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800254",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800250",
+      "id": "800244",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,
@@ -2439,7 +3069,7 @@
       "processId": null
     },
     {
-      "id": "800244",
+      "id": "800247",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,
@@ -2447,6 +3077,20 @@
     },
     {
       "id": "800249",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800250",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800253",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,
@@ -2485,6 +3129,13 @@
       "name": "User",
       "type": "window",
       "windowId": "108",
+      "processId": null
+    },
+    {
+      "id": "E636227BA97E45BE93C7BFC5A1ABB42C",
+      "name": "User API Token",
+      "type": "window",
+      "windowId": "1C903512B6884258826EA4F2D31ECD53",
       "processId": null
     },
     {
@@ -2537,6 +3188,13 @@
       "processId": "800180"
     },
     {
+      "id": "7B2A69D3C32742CCBC8FC29C25A266BE",
+      "name": "Verifactu",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
       "id": "B487FABEB36F45C28E22CD309914FD71",
       "name": "View Implementation",
       "type": "window",
@@ -2583,6 +3241,20 @@
       "name": "Web",
       "type": "folder",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "C07200EA3793493C96A07486BE3EDF33",
+      "name": "WebHook Events",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "65DDDADB55FC4D379CBFD57F97BC781A",
+      "name": "Webhooks",
+      "type": "window",
+      "windowId": "CD5ABF0411C74C41BB7AAC040C5375B0",
       "processId": null
     },
     {

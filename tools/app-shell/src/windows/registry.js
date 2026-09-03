@@ -31,6 +31,7 @@ const windowLoaders = {
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
+  'matched-purchase-invoices': () => import('@generated/matched-purchase-invoices/generated/web/matched-purchase-invoices/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
   'internal-consumption': () => import('@generated/internal-consumption/generated/web/internal-consumption/index.jsx'),
