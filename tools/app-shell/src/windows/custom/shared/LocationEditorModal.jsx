@@ -4,6 +4,8 @@ import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
+import RequiredMark from '@/components/ui/required-mark.jsx';
+import {matchOptionByLabel} from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
@@ -19,6 +21,16 @@ const EMPTY_FORM = {
     invoiceToAddress: true
 };
 const SELECTOR_PAGE_SIZE = 120;
+
+// ETP-5103 — Spain is the default country for a NEW address. The NEO selector returns
+// only { id, label } (no ISO code) and pages 120 rows at a time ordered by the BASE
+// name, so Spain sits ~200th and never lands in the first page: it has to be asked for
+// explicitly. `q` filters on C_Country.NAME (core seed data, always "Spain") OR the
+// request-language translation, so this query hits in any locale; the aliases below then
+// match the returned label, which IS translated.
+const DEFAULT_COUNTRY_QUERY = 'Spain';
+const DEFAULT_COUNTRY_LABEL_ALIASES = ['España', 'Spain'];
+const DEFAULT_COUNTRY_LIMIT = 5;
 
 /**
  * Shallow form comparison for the unsaved-changes baseline (ETP-5022). Compares by sorted
@@ -52,6 +64,36 @@ async function fetchSelectorPage(apiFetch, url) {
         items: Array.isArray(items) ? items : [],
         hasMore: Boolean(data?.hasMore),
     };
+}
+
+/**
+ * Normalize one raw selector row into the { id, label } shape the pickers render.
+ * Shared by the country and region option lists and by the default-country lookup,
+ * so all three agree on which server field wins as the display label.
+ */
+function toSelectorOption(item) {
+    return {
+        id: item.id,
+        label: item.label || item.name || item._identifier || item.id,
+    };
+}
+
+/**
+ * Resolve the default-country option (ETP-5103) from a `?q=` selector page.
+ *
+ * Returns null when it cannot be resolved — no alias matched, or the request failed.
+ * The country field then simply stays empty, which is the pre-ETP-5103 behaviour and
+ * lets the user pick manually. Never guess an id: a wrong country the user cannot see
+ * is worse than an empty one.
+ */
+async function fetchDefaultCountryOption(apiFetch, url) {
+    const {items} = await fetchSelectorPage(apiFetch, url);
+    const options = items.map(toSelectorOption);
+    for (const alias of DEFAULT_COUNTRY_LABEL_ALIASES) {
+        const matchedId = matchOptionByLabel(options, alias);
+        if (matchedId) return options.find(option => option.id === matchedId);
+    }
+    return null;
 }
 
 function PickerMessage({text}) {
@@ -233,6 +275,8 @@ export default function LocationEditorModal({
     const regionSearchRef = useRef(null);
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
+    // ETP-5103: one-shot guard so the default country is applied at most once per opening.
+    const countryDefaultedRef = useRef(false);
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -252,10 +296,7 @@ export default function LocationEditorModal({
         return (countries ?? []).reduce((acc, item) => {
             if (!item?.id || seen.has(item.id)) return acc;
             seen.add(item.id);
-            acc.push({
-                id: item.id,
-                label: item.label || item.name || item._identifier || item.id,
-            });
+            acc.push(toSelectorOption(item));
             return acc;
         }, []);
     }, [countries]);
@@ -280,10 +321,7 @@ export default function LocationEditorModal({
         return (regions ?? []).reduce((acc, item) => {
             if (!item?.id || seen.has(item.id)) return acc;
             seen.add(item.id);
-            acc.push({
-                id: item.id,
-                label: item.label || item.name || item._identifier || item.id,
-            });
+            acc.push(toSelectorOption(item));
             return acc;
         }, []);
     }, [regions]);
@@ -298,6 +336,16 @@ export default function LocationEditorModal({
         if (!form.region) return '—';
         return regionOptions.find((region) => region.id === form.region)?.label || form.regionLabel || form.region;
     }, [regionOptions, form.region, form.regionLabel]);
+
+    // ETP-5103: address line 1 and country are the mandatory fields. One derived flag
+    // feeds the button's `disabled`, its opacity and the handleSave guard, so the three
+    // can never disagree. Country was already mandatory — handleSave has always refused
+    // to save without it — so gating on it only surfaces the rule before the click
+    // instead of after, it does not restrict what can be saved.
+    const saveDisabled = saving
+        || initialLoading
+        || form.address.trim() === ''
+        || form.country === '';
 
     // Reset and load data on open
     useEffect(() => {
@@ -329,6 +377,7 @@ export default function LocationEditorModal({
         setCountryQuery('');
         setRegionPickerOpen(false);
         setRegionQuery('');
+        countryDefaultedRef.current = false;
 
         // Load country catalog
         const loadCountries = async () => {
@@ -441,6 +490,46 @@ export default function LocationEditorModal({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, bplLinkId]);
+
+    // ETP-5103 — preselect Spain when CREATING an address. Runs once `loadCountries` has
+    // resolved which of the 8 selector fallbacks answers, and only when `bplLinkId` is
+    // null so an existing record's country is never overwritten. The one-shot ref is the
+    // same guard as AccountFormStep (ETP-4896): without it the default would snap back
+    // over a country the user had already picked while the catalog was still loading.
+    //
+    // Depending on `countrySelectorBase` means no prefill happens when every fallback
+    // came back empty — deliberately: that state means the instance exposes no countries
+    // at all, so there is nothing to preselect, and reusing the already-proven base keeps
+    // this effect from re-walking the 8-URL cascade on its own.
+    useEffect(() => {
+        if (!open || bplLinkId || !countrySelectorBase || countryDefaultedRef.current) return undefined;
+
+        let cancelled = false;
+        const params = buildSelectorParams({
+            q: DEFAULT_COUNTRY_QUERY,
+            limit: String(DEFAULT_COUNTRY_LIMIT),
+            offset: '0',
+        });
+
+        fetchDefaultCountryOption(apiFetch, `${countrySelectorBase}?${params.toString()}`)
+            .then(option => {
+                if (cancelled || !option || countryDefaultedRef.current) return;
+                countryDefaultedRef.current = true;
+                const patch = {country: option.id, countryLabel: option.label};
+                setForm(prev => ({...prev, ...patch}));
+                // A prefill is not a user edit: move the unsaved-changes baseline by the
+                // same delta, or the ETP-5022 guard would warn about a form nobody touched.
+                baselineRef.current = {...(baselineRef.current ?? EMPTY_FORM), ...patch};
+            })
+            .catch(() => {
+                // Best-effort: the field stays empty and the user picks a country manually.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, bplLinkId, countrySelectorBase]);
 
     // Reload region list when country selection changes
     useEffect(() => {
@@ -719,7 +808,11 @@ export default function LocationEditorModal({
     }
 
     async function handleSave() {
-        if (saving || initialLoading) return;
+        if (saveDisabled) return;
+        // Defence in depth: `saveDisabled` already covers an empty country since ETP-5103,
+        // so the Save button can no longer reach this branch. It stays for a programmatic
+        // or keyboard-driven call, and so that a future change re-enabling the button still
+        // tells the user why the save was refused.
         if (!form.country) {
             toast.error(ui('locationCountryRequired'));
             return;
@@ -861,7 +954,7 @@ export default function LocationEditorModal({
 
                             {/* Línea 1 */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('addressLine1')}</div>
+                                <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark /></div>
                                 <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} style={INPUT} />
                             </div>
 
@@ -885,7 +978,7 @@ export default function LocationEditorModal({
 
                             {/* País */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('countryLabel')}</div>
+                                <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark /></div>
                                 <button
                                     type="button"
                                     onClick={() => setCountryPickerOpen(true)}
@@ -955,8 +1048,8 @@ export default function LocationEditorModal({
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={handleSave}
-                            disabled={saving || initialLoading}
-                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (saving || initialLoading) ? 0.5 : 1 }}
+                            disabled={saveDisabled}
+                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: saveDisabled ? 'not-allowed' : 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
                                 size={13}
