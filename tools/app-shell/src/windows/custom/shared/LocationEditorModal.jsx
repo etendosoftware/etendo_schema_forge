@@ -96,6 +96,88 @@ async function fetchDefaultCountryOption(apiFetch, url) {
     return null;
 }
 
+/**
+ * Apply a resolved default country to the form (ETP-5103).
+ *
+ * Module-level on purpose: it writes the unsaved-changes baseline by the SAME delta it
+ * writes to the form, because a prefill is not a user edit — without that, the ETP-5022
+ * guard would warn about a form nobody touched.
+ */
+function applyDefaultCountryOption(option, setForm, baselineRef) {
+    const patch = {country: option.id, countryLabel: option.label};
+    setForm(prev => ({...prev, ...patch}));
+    baselineRef.current = {...(baselineRef.current || EMPTY_FORM), ...patch};
+}
+
+/**
+ * Save gating (ETP-5103): address line 1 and country are the mandatory fields, and a
+ * save in flight or an in-progress initial load blocks too.
+ *
+ * Module-level so the modal body stays flat — a chain of `||` inside the component
+ * counts against its cognitive complexity, which is already at its budget.
+ */
+function isSaveBlocked({saving, initialLoading, address, country}) {
+    if (saving || initialLoading) return true;
+    if (address.trim() === '') return true;
+    return country === '';
+}
+
+/**
+ * ETP-5103 — preselect Spain in the country field while CREATING an address.
+ *
+ * Extracted from the modal body so the prefill can be reasoned about on its own.
+ *
+ * A non-null `rowId` means edit mode: an existing record's country is never overwritten
+ * and the request is not even issued. `selectorBase` is the URL that won the modal's
+ * 8-fallback cascade: depending on it means no prefill happens when every fallback came
+ * back empty — deliberately, since an instance exposing no countries has nothing to
+ * preselect — and saves this hook from re-walking the cascade itself.
+ *
+ * The one-shot ref is the same guard as AccountFormStep (ETP-4896): without it the
+ * default would snap back over a country the user had already picked while the catalog
+ * was still loading. It resets while the modal is closed.
+ *
+ * @param {boolean}       open          modal visibility
+ * @param {string|null}   rowId         existing record id; null means create
+ * @param {string}        selectorBase  resolved country-selector URL, '' while unknown
+ * @param {Function}      apiFetch      authenticated fetch bound to the window's API base
+ * @param {Function}      buildParams   builds the selector query string with window context
+ * @param {Function}      onResolved    receives the resolved { id, label } option
+ */
+function useDefaultCountryPrefill({open, rowId, selectorBase, apiFetch, buildParams, onResolved}) {
+    const appliedRef = useRef(false);
+
+    useEffect(() => {
+        if (!open || rowId) {
+            appliedRef.current = false;
+            return undefined;
+        }
+        if (!selectorBase || appliedRef.current) return undefined;
+
+        let cancelled = false;
+        const params = buildParams({
+            q: DEFAULT_COUNTRY_QUERY,
+            limit: String(DEFAULT_COUNTRY_LIMIT),
+            offset: '0',
+        });
+
+        fetchDefaultCountryOption(apiFetch, `${selectorBase}?${params.toString()}`)
+            .then(option => {
+                if (cancelled || !option || appliedRef.current) return;
+                appliedRef.current = true;
+                onResolved(option);
+            })
+            .catch(() => {
+                // Best-effort: the field stays empty and the user picks a country manually.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, rowId, selectorBase]);
+}
+
 function PickerMessage({text}) {
     return <div className="px-4 py-6 text-center text-sm text-muted-foreground">{text}</div>;
 }
@@ -275,8 +357,6 @@ export default function LocationEditorModal({
     const regionSearchRef = useRef(null);
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
-    // ETP-5103: one-shot guard so the default country is applied at most once per opening.
-    const countryDefaultedRef = useRef(false);
 
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
@@ -337,15 +417,16 @@ export default function LocationEditorModal({
         return regionOptions.find((region) => region.id === form.region)?.label || form.regionLabel || form.region;
     }, [regionOptions, form.region, form.regionLabel]);
 
-    // ETP-5103: address line 1 and country are the mandatory fields. One derived flag
-    // feeds the button's `disabled`, its opacity and the handleSave guard, so the three
-    // can never disagree. Country was already mandatory — handleSave has always refused
-    // to save without it — so gating on it only surfaces the rule before the click
-    // instead of after, it does not restrict what can be saved.
-    const saveDisabled = saving
-        || initialLoading
-        || form.address.trim() === ''
-        || form.country === '';
+    // ETP-5103: one derived flag feeds the Save button's `disabled`, its opacity and the
+    // handleSave guard, so the three can never disagree. Country was already mandatory —
+    // handleSave has always refused to save without it — so gating on it only surfaces
+    // the rule before the click instead of after; it does not restrict what can be saved.
+    const saveDisabled = isSaveBlocked({
+        saving,
+        initialLoading,
+        address: form.address,
+        country: form.country,
+    });
 
     // Reset and load data on open
     useEffect(() => {
@@ -377,7 +458,6 @@ export default function LocationEditorModal({
         setCountryQuery('');
         setRegionPickerOpen(false);
         setRegionQuery('');
-        countryDefaultedRef.current = false;
 
         // Load country catalog
         const loadCountries = async () => {
@@ -491,45 +571,15 @@ export default function LocationEditorModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, bplLinkId]);
 
-    // ETP-5103 — preselect Spain when CREATING an address. Runs once `loadCountries` has
-    // resolved which of the 8 selector fallbacks answers, and only when `bplLinkId` is
-    // null so an existing record's country is never overwritten. The one-shot ref is the
-    // same guard as AccountFormStep (ETP-4896): without it the default would snap back
-    // over a country the user had already picked while the catalog was still loading.
-    //
-    // Depending on `countrySelectorBase` means no prefill happens when every fallback
-    // came back empty — deliberately: that state means the instance exposes no countries
-    // at all, so there is nothing to preselect, and reusing the already-proven base keeps
-    // this effect from re-walking the 8-URL cascade on its own.
-    useEffect(() => {
-        if (!open || bplLinkId || !countrySelectorBase || countryDefaultedRef.current) return undefined;
-
-        let cancelled = false;
-        const params = buildSelectorParams({
-            q: DEFAULT_COUNTRY_QUERY,
-            limit: String(DEFAULT_COUNTRY_LIMIT),
-            offset: '0',
-        });
-
-        fetchDefaultCountryOption(apiFetch, `${countrySelectorBase}?${params.toString()}`)
-            .then(option => {
-                if (cancelled || !option || countryDefaultedRef.current) return;
-                countryDefaultedRef.current = true;
-                const patch = {country: option.id, countryLabel: option.label};
-                setForm(prev => ({...prev, ...patch}));
-                // A prefill is not a user edit: move the unsaved-changes baseline by the
-                // same delta, or the ETP-5022 guard would warn about a form nobody touched.
-                baselineRef.current = {...(baselineRef.current ?? EMPTY_FORM), ...patch};
-            })
-            .catch(() => {
-                // Best-effort: the field stays empty and the user picks a country manually.
-            });
-
-        return () => {
-            cancelled = true;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, bplLinkId, countrySelectorBase]);
+    // ETP-5103 — Spain preselected on create. See useDefaultCountryPrefill above.
+    useDefaultCountryPrefill({
+        open,
+        rowId: bplLinkId,
+        selectorBase: countrySelectorBase,
+        apiFetch,
+        buildParams: buildSelectorParams,
+        onResolved: option => applyDefaultCountryOption(option, setForm, baselineRef),
+    });
 
     // Reload region list when country selection changes
     useEffect(() => {
@@ -1049,7 +1099,7 @@ export default function LocationEditorModal({
                         <button
                             onClick={handleSave}
                             disabled={saveDisabled}
-                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: saveDisabled ? 'not-allowed' : 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
+                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
                                 size={13}
