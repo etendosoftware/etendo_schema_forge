@@ -160,7 +160,7 @@ function traceToolCall(stage, payload) {
   if (!import.meta.env?.DEV) return;
   if (typeof window !== 'undefined' && window.__ETENDO_COPILOT_TRACE__ === false) return;
   // eslint-disable-next-line no-console -- developer-facing trace, DEV only
-  console.log(`%c[copilot:tool] ${stage}`, 'color:#7c3aed;font-weight:bold', payload);
+  console.log(`%c[copilot:tool] ${stage}`, 'color:var(--primary);font-weight:bold', payload);
 }
 
 function messageText(message) {

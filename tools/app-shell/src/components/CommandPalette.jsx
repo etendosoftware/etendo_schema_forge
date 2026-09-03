@@ -349,8 +349,11 @@ export function CommandPalette() {
         onSelect={() => handleVectorSelect(match)}
         data-testid="vector-search-result"
       >
-        <Search className="mr-2 h-4 w-4 shrink-0" strokeWidth={2} />
-        <span><HighlightedQuery text={label} query={query} /></span>
+        <Search
+          className="mr-2 h-4 w-4 shrink-0"
+          strokeWidth={2}
+          data-testid="Search__73263e" />
+        <span><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
         {entityLabel && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{entityLabel}</span>}
         {score && <span className="ml-auto text-xs text-muted-foreground">{score}</span>}
       </CommandItem>
@@ -371,7 +374,7 @@ export function CommandPalette() {
             data-testid="vector-search-scope"
           >
             <span className="truncate">{vectorSearchScopeLabel}</span>
-            <X className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
           <button
             type="button"
@@ -437,7 +440,9 @@ export function CommandPalette() {
                     data-testid="recent-search-item"
                     data-search-kind="recent"
                   >
-                    <Clock3 className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <Clock3
+                      className="mr-2 h-4 w-4 text-muted-foreground"
+                      data-testid="Clock3__73263e" />
                     <span>{item.query}</span>
                     {item.targets?.length === 1 && vectorSearchTargetsByKey.has(item.targets[0]) && (
                       <span className="ml-auto rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
@@ -466,7 +471,9 @@ export function CommandPalette() {
                   }}
                   data-testid="window-filter-suggestion"
                 >
-                  <Sparkles className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <Sparkles
+                    className="mr-2 h-4 w-4 text-muted-foreground"
+                    data-testid="Sparkles__73263e" />
                   <span>{ui(suggestion.label) || tMenu(suggestion.label) || suggestion.label}</span>
                   {targetLabel && (
                     <span className="ml-auto rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
@@ -499,7 +506,10 @@ export function CommandPalette() {
                     onSelect={() => handleSelect(item.name)}
                     data-testid="CommandItem__73263e">
                     <Icon className="mr-2 h-4 w-4" data-testid="Icon__73263e" />
-                    <span><HighlightedQuery text={translatedLabel} query={query} /></span>
+                    <span><HighlightedQuery
+                      text={translatedLabel}
+                      query={query}
+                      data-testid="HighlightedQuery__73263e" /></span>
                   </CommandItem>
                 );
               })}

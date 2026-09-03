@@ -102,7 +102,7 @@ export function ChatView({
                   'bg-destructive/10 text-destructive',
               )}
             >
-              <MarkdownContent>{message.text}</MarkdownContent>
+              <MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>
               {Array.isArray(message.files) && message.files.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {message.files.map((file, index) => (

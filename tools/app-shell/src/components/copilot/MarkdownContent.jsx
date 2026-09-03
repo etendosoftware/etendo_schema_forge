@@ -30,7 +30,10 @@ function renderList(lines, startIndex, expression, Tag) {
     index += 1;
   }
   return {
-    node: <Tag key={`list-${startIndex}`} className="my-1 list-inside space-y-1 pl-2">{items.map((item) => (
+    node: <Tag
+      key={`list-${startIndex}`}
+      className="my-1 list-inside space-y-1 pl-2"
+      data-testid="Tag__e0b411">{items.map((item) => (
       <li key={item}>{renderInline(item)}</li>
     ))}</Tag>,
     nextIndex: index,

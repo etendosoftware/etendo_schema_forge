@@ -256,7 +256,7 @@ export default function TopBar({
                   className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full hover:bg-accent hover:text-foreground"
                   data-testid="topbar-vector-search-scope-clear"
                 >
-                  <X className="h-3 w-3" aria-hidden="true" />
+                  <X className="h-3 w-3" aria-hidden="true" data-testid="X__133e64" />
                 </button>
               </span>
             )}

@@ -12,7 +12,7 @@ const Command = React.forwardRef(({ className, ...props }, ref) => (
       className,
     )}
     {...props}
-  />
+    data-testid="CommandPrimitive__2fc146" />
 ));
 Command.displayName = 'Command';
 
@@ -56,7 +56,7 @@ const CommandDialog = ({ children, onOpenChange, open, ...props }) => {
     >
       <Command
         className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
-      >
+        data-testid="Command__2fc146">
         {children}
         <button
           type="button"
@@ -64,7 +64,7 @@ const CommandDialog = ({ children, onOpenChange, open, ...props }) => {
           aria-label="Close"
           className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          <X className="h-4 w-4" aria-hidden="true" data-testid="X__2fc146" />
         </button>
       </Command>
     </div>
@@ -73,7 +73,7 @@ const CommandDialog = ({ children, onOpenChange, open, ...props }) => {
 
 const CommandInput = React.forwardRef(({ className, ...props }, ref) => (
   <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" data-testid="Search__2fc146" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(

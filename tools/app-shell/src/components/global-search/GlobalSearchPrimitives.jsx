@@ -19,7 +19,7 @@ export function GlobalSearchDialog({ children, onOpenChange, open, ...props }) {
     <div {...props} role="dialog" cmdk-dialog="" data-testid="CommandDropdown__8e5d1a" className="fixed z-50" style={rect ? { left: rect.left, top: rect.bottom + 8, width: rect.width } : { left: 16, top: 72, right: 16 }}>
       <div cmdk-root="" className="relative flex max-h-[min(700px,calc(100vh-120px))] flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border-control))] bg-card text-popover-foreground shadow-lg">
         {children}
-        <button type="button" onClick={() => onOpenChange?.(false)} aria-label="Close" className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={() => onOpenChange?.(false)} aria-label="Close" className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-4 w-4" data-testid="X__884ce1" /></button>
       </div>
     </div>
   );

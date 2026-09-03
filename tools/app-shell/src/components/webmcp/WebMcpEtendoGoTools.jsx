@@ -35,12 +35,17 @@ export function WebMcpEtendoGoTools() {
 
   return (
     <>
-      <WebMcpMcpTools enabled={enabled} endpoint={endpoint} accessToken={token} />
+      <WebMcpMcpTools
+        enabled={enabled}
+        endpoint={endpoint}
+        accessToken={token}
+        data-testid="WebMcpMcpTools__3c602a" />
       <WebMcpAgentTools
         enabled={enabled}
         getContext={getContext}
         navigate={navigate}
-        openChat={openChat} />
+        openChat={openChat}
+        data-testid="WebMcpAgentTools__3c602a" />
     </>
   );
 }
