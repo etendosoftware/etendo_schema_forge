@@ -17930,7 +17930,7 @@
     "statusColumn": "Estado",
     "statusDocColumn": "Estado doc.",
     "impTotal": "Imp. total",
-    "pendingPaymentColumn": "Pendiente de pago",
+    "pendingPaymentColumn": "Saldo pendiente",
     "cobrada": "Cobrada",
     "pagada": "Pagada",
     "invoiceReceipts": "Cobros de la factura",

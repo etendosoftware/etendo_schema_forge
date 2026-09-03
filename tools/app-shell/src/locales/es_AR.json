@@ -17332,6 +17332,7 @@
     "invoicePreviewInvoiceMustBeCompletedToAddPayments": "La factura debe estar completada para añadir pagos",
     "invoicePreviewAddAttachment": "Añadir adjunto",
     "invoicePendingPayment": "Pendiente de pago",
+    "pendingPaymentColumn": "Saldo pendiente",
     "sendModalTitle": "Enviar {documentType} #{documentNo}",
     "sendModalTo": "Para",
     "sendModalNoEmail": "No se encontró email para este contacto",
