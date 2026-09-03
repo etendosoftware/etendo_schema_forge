@@ -225,9 +225,14 @@ export const DEFAULTS_GROUPS = buildDefaultsGroups(
 // accounting dimension and `mapDimensionRows` below drops them regardless of
 // their active state (ETP-4845 bug 4) — filtered by this stable AD code, not
 // by matching the (translatable) display name.
+//
+// Organización (`OO`) and Cuenta (`AC`) are also intentionally absent
+// (ETP-5120): they are Etendo's two built-in mandatory accounting dimensions,
+// always active on every acct schema and not meant to be user-configurable
+// toggles in this window, so `mapDimensionRows` drops any backend row with
+// these types the same way it drops U1/U2 — by omission from this map, not by
+// a special-cased check.
 export const DIMENSION_TYPE_LABEL_KEYS = {
-  OO: 'glc.dim.organization',
-  AC: 'glc.dim.account',
   PR: 'glc.dim.product',
   BP: 'glc.dim.businessPartner',
   PJ: 'glc.dim.project',
