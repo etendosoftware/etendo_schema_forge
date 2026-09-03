@@ -33,3 +33,41 @@ model to inspect the current page after navigation or meaningful UI interaction
 and present a contextual suggestion in a floating callout. Clicking that callout
 opens the existing Copilot conversation with the help context. It is advisory:
 consequential operations remain explicit user actions.
+
+## Navigation tools and the window allow-list
+
+`navigate_to` and `open_form` accept either an internal path (`/sales-order`,
+`/sales-order/new`) or the window name as the user says it, in any UI language
+("Sales Order", "Pedido de Venta", "Albaranes de Venta"). The browser resolves
+names in `app-shell/src/components/copilot/windowRoutes.js` against an index
+built from the **access-filtered menu groups the sidebar renders** — the output
+of `filterMenuGroupsByAccess()` that `AppLayout` already passes to
+`CopilotProvider`. Consequences worth keeping:
+
+- A window the current role cannot reach is not in the index, so the agent
+  cannot route to it. Navigation is not a new authorization path; it can only
+  reach what the sidebar offers.
+- While `useRoleMenu()` is in flight the index is empty and the agent reports
+  navigation as unavailable, matching the sidebar's fail-closed behaviour.
+- Adding a window to `menu.json` makes it navigable with no change here. Never
+  reintroduce a hardcoded alias table: the one this replaced (ETP-5064) knew
+  only Goods Receipt and Goods Shipment, so "llevame a sales order" failed on a
+  perfectly navigable route.
+- Short menu labels are not unique — "Order" belongs to both Sales Order and
+  Purchase Order, "Factura" to both invoices, "Albarán" to both goods documents
+  (11 clashes in today's menu). Such a reference resolves to *nothing*: the
+  agent is told the candidates and must pick or ask, because silently routing
+  to the wrong document is worse than an error.
+
+Three failures that must stay distinct, because the model reacts to the message:
+
+| Failure | Error | Model's move |
+|---|---|---|
+| External or malformed path (`https://…`, `//host`) | `Only internal application paths are allowed` | Give up; this is the security boundary. |
+| Name the index cannot resolve | `UnknownWindowError`, listing every reachable slug | Retry `navigate_to` with one of the listed paths. |
+| Name shared by several windows | `AmbiguousWindowError`, listing the candidates | Pick one candidate path, or ask the user which they mean. |
+
+Reusing the first message for the second is what made the agent tell the user
+navigation was unavailable and to open the menu by hand. `open_form` therefore
+also **requires** `path` — it used to be optional with a Spanish-regex guess
+over the conversation, and a miss surfaced as the security error.

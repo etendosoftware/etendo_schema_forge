@@ -164,7 +164,7 @@ export default function AppLayout({ menuGroups }) {
 
   return (
     <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
-      <CopilotProvider data-testid="CopilotProvider__488148">
+      <CopilotProvider menuGroups={filteredMenuGroups} data-testid="CopilotProvider__488148">
         <SupportChatProvider data-testid="SupportChatProvider__488148">
           <FavoritesProvider data-testid="FavoritesProvider__488148">
             <SidebarProvider data-testid="SidebarProvider__488148">

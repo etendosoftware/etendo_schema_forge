@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useMenuLabel } from '@/i18n';
+import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, normalizeWindowKey } from './windowRoutes.js';
 
+/**
+ * Guard the router against anything that is not an in-app path. This is the
+ * security boundary of the navigation tools (see the ETP-5064 acceptance
+ * criteria) and its message must never be reused for a reference the index
+ * simply could not resolve — see UnknownWindowError in ./windowRoutes.js.
+ */
 export function assertInternalPath(path) {
   if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
     throw new Error('Only internal application paths are allowed');
@@ -10,40 +18,25 @@ export function assertInternalPath(path) {
   return path;
 }
 
-const WINDOW_ROUTE_ALIASES = {
-  'goods receipt': '/goods-receipt',
-  'goods-receipt': '/goods-receipt',
-  'albaran de compra': '/goods-receipt',
-  'albaranes de compra': '/goods-receipt',
-  'goods shipment': '/goods-shipment',
-  'goods-shipment': '/goods-shipment',
-  'albaran de venta': '/goods-shipment',
-  'albaranes de venta': '/goods-shipment',
-};
-
-export function resolveWindowPath(path) {
-  if (typeof path === 'string') {
-    const alias = WINDOW_ROUTE_ALIASES[path.trim().toLowerCase()];
-    if (alias) return alias;
+/**
+ * Resolve whatever the model sent — an explicit path or a window name in any
+ * supported language — into a route the router accepts.
+ *
+ * @param {string} reference
+ * @param {import('./windowRoutes.js').WindowRouteIndex} index — from buildWindowRouteIndex()
+ */
+export function resolveWindowPath(reference, index) {
+  if (typeof reference === 'string' && reference.startsWith('/')) {
+    return assertInternalPath(reference);
   }
-  return assertInternalPath(path);
-}
-
-export function inferWindowPath(messages) {
-  const latestUserMessage = [...messages].reverse().find(message => message.role === 'user');
-  const userText = latestUserMessage ? messageText(latestUserMessage) : '';
-  if (/\b(venta|ventas|shipment|env[ií]o|env[ií]os)\b/i.test(userText)) return '/goods-shipment';
-  if (/\b(compra|compras|receipt|recepci[oó]n|recepciones)\b/i.test(userText)) return '/goods-receipt';
-
-  const latestAssistantMessage = [...messages].reverse().find(message => message.role === 'assistant');
-  const assistantText = latestAssistantMessage ? messageText(latestAssistantMessage) : '';
-  if (/\b(albar[aá]n(?:es)?\s+de\s+venta|goods shipment|shipment)\b/i.test(assistantText)) {
-    return '/goods-shipment';
-  }
-  if (/\b(albar[aá]n(?:es)?\s+de\s+compra|goods receipt|receipt)\b/i.test(assistantText)) {
-    return '/goods-receipt';
-  }
-  return null;
+  const key = normalizeWindowKey(reference);
+  const slug = index?.get(key);
+  if (slug) return `/${slug}`;
+  // A label shared by several windows ("Order", "Factura") must never be
+  // guessed — routing to the wrong document is worse than asking.
+  const candidates = index?.candidatesFor?.(key) ?? [];
+  if (candidates.length) throw new AmbiguousWindowError(reference, candidates);
+  throw new UnknownWindowError(reference, index);
 }
 
 const DOM_INTERACTIVE_SELECTOR = [
@@ -154,8 +147,26 @@ function messageText(message) {
     .join('');
 }
 
-export function useAiCopilotChat({ token, onOpenCopilot }) {
+export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
   const navigate = useNavigate();
+  const menuLabel = useMenuLabel();
+  // filterMenuGroupsByAccess() returns a fresh array on every AppLayout
+  // render, so memoize on what actually changes — which windows are reachable
+  // — or the index (and the tool callback holding it) would be rebuilt each
+  // render.
+  const menuSignature = useMemo(
+    () => (menuGroups ?? []).flatMap(group => (group?.items ?? []).map(item => item.name)).join(','),
+    [menuGroups]
+  );
+  const menuGroupsRef = useRef(menuGroups);
+  menuGroupsRef.current = menuGroups;
+  // Built from the access-filtered sidebar groups, so the agent can only
+  // navigate where this role can — see windowRoutes.js.
+  const windowRouteIndex = useMemo(
+    () => buildWindowRouteIndex(menuGroupsRef.current, menuLabel),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- menuSignature is the stable identity of menuGroupsRef.current
+    [menuSignature, menuLabel]
+  );
   const location = useLocation();
   const addToolOutputRef = useRef(null);
   const pendingToolOutputsRef = useRef([]);
@@ -176,13 +187,13 @@ export function useAiCopilotChat({ token, onOpenCopilot }) {
     try {
       switch (toolCall.toolName) {
         case 'navigate_to': {
-          const path = resolveWindowPath(args.path);
+          const path = resolveWindowPath(args.path, windowRouteIndex);
           navigate(path);
           result = { ok: true, path };
           break;
         }
         case 'open_form': {
-          const path = resolveWindowPath(args.path || inferWindowPath(messagesRef.current));
+          const path = resolveWindowPath(args.path, windowRouteIndex);
           const target = new URL(path, window.location.origin);
           if (args.recordId) target.searchParams.set('recordId', String(args.recordId));
           navigate(`${target.pathname}${target.search}`);
@@ -225,7 +236,7 @@ export function useAiCopilotChat({ token, onOpenCopilot }) {
       ...(errorText ? { state: 'output-error', errorText } : { output: result }),
     });
     pendingRef.current.push(outputPromise);
-  }, [location.hash, location.pathname, location.search, navigate, onOpenCopilot]);
+  }, [location.hash, location.pathname, location.search, navigate, onOpenCopilot, windowRouteIndex]);
 
   const executeTool = useCallback(({ toolCall }) => executeToolCall({
     toolCall,
