@@ -41,6 +41,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // handing out a bearer to store, and purgeLegacyAuthStorage deletes that key on mount —
   // so the accept call was going out with no credential at all.
   const [sessionCredential, setSessionCredential] = useState(null);
+  // ETP-4576 — WHICH credential the one above is. LoginStep collapses both backend
+  // shapes into a single value, so the scheme travels beside it: under `cookie` it is
+  // a CSRF proof that belongs in `X-Go-CSRF` (the `__Host-` cookie carries the session
+  // and rides along on its own), under `bearer` it is a token that belongs in
+  // `Authorization`. Sending one in the other's slot fails, and fails differently on
+  // each side — 401 for a proof read as a bearer, 403 for a bearer with no proof.
+  const [credentialScheme, setCredentialScheme] = useState(null);
 
   const clearTokenFromUrl = () => {
     try {
@@ -103,8 +110,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     };
   }, [token, apiFetch]);
 
-  const handleExistingAuthenticated = async (credential) => {
+  const handleExistingAuthenticated = async (credential, _account, meta) => {
     setSessionCredential(credential || null);
+    setCredentialScheme(meta?.scheme ?? null);
     setActionError(null);
     setExistingAuthenticated(true);
   };
@@ -115,9 +123,15 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     try {
       // ETP-5022's explicit override, now fed by the credential LoginStep handed back
       // rather than by a localStorage key; on401: 'ignore' keeps the domain error handling below.
+      // The credential goes in the slot its scheme names. Under `cookie` apiFetch's
+      // default `credentials: 'include'` is what authenticates the request, and the
+      // proof only has to prove intent; under `bearer` the token is the credential.
+      const credentialOptions = credentialScheme === 'cookie'
+        ? { headers: { 'X-Go-CSRF': sessionCredential } }
+        : { token: sessionCredential };
       const res = await apiFetch('/sws/go/company-invitations/accept', {
         method: 'POST',
-        token: sessionCredential,
+        ...credentialOptions,
         on401: 'ignore',
         body: JSON.stringify({ token: token.trim() }),
       });
@@ -157,6 +171,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       // domain error handling below instead of an automatic logout.
       const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
         method: 'POST',
+        // Anonymous by design: the invitation token in the body IS the authorization.
+        // A leftover session cookie would only make the backend demand a CSRF proof
+        // this pre-login page cannot hold, so keep it off the request.
+        credentials: 'omit',
         on401: 'ignore',
         body: JSON.stringify({
           token: token.trim(),
@@ -199,6 +217,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     // domain error handling below instead of an automatic logout.
     const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
       method: 'POST',
+      // Anonymous by design: the invitation token in the body IS the authorization.
+      // A leftover session cookie would only make the backend demand a CSRF proof
+      // this pre-login page cannot hold, so keep it off the request.
+      credentials: 'omit',
       on401: 'ignore',
       body: JSON.stringify({
         token: token.trim(),
