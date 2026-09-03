@@ -7,7 +7,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -836,6 +836,33 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
+  // ETP-5129 — the bulk-print action had no loading/disabled state: a slow
+  // print (one render per selected document plus a jsreport round-trip) gave
+  // no visible feedback on the first click, so an impatient re-click fired a
+  // second, fully independent `printDocuments()` call — whichever of the two
+  // finished (and wasn't dropped by the browser's popup blocker) is what
+  // looked like "the second click did it". `printing` is a plain boolean,
+  // not row-scoped like the drawer's `currentDocId`: this button prints a
+  // snapshot of the CURRENT selection taken at click time, so "in flight"
+  // means the whole action is locked out — a second click is rejected
+  // outright regardless of whether the selection changed meanwhile.
+  const [printing, setPrinting] = useState(false);
+  const handleBulkPrint = useCallback(async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      await printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl);
+    } catch (err) {
+      // printDocuments() already surfaces failures via toast and never
+      // rejects in practice — this catch exists purely so the loading
+      // state cannot get stuck if that contract is ever violated, without
+      // turning a defensive failure into an unhandled promise rejection.
+      console.error('[ListView] bulk print failed:', err);
+    } finally {
+      setPrinting(false);
+    }
+  }, [printing, selectedRows, windowName, token, ui, apiBaseUrl]);
+
   // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
   // (succeeded, failed) rows, per the standardized delete UX:
   //   - all succeeded  → refetch (deleted rows disappear) + clear selection.
@@ -1048,9 +1075,12 @@ export function ListView({
                     size="icon"
                     title={ui('print')}
                     aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    onClick={handleBulkPrint}
+                    disabled={printing}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {printing
+                      ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+                      : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />}
                   </Button>
                 )}
                 {onCloneRow && (
