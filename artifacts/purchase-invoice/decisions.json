@@ -427,6 +427,11 @@
         "trxOrganization": {
           "visibility": "discarded"
         },
+        "organization": {
+          "name": "adOrgId",
+          "visibility": "readOnly",
+          "form": false
+        },
         "salesCampaign": {
           "visibility": "discarded",
           "reference": null,
@@ -525,7 +530,7 @@
           "visibility": "discarded"
         },
         "tbaiIssent": {
-          "visibility": "discarded",
+          "visibility": "readOnly",
           "form": false
         },
         "etvfacInvoiceStatus": {

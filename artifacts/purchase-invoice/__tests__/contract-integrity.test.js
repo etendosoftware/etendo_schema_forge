@@ -109,23 +109,67 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     }
   });
 
-  it('discards tbaiIssent from the frontend contract now that TbaiConfigSequenceHandler chains TBAI sequencing on the backend (ETP-4401)', () => {
+  // ETP-4401 removed tbaiIssent from the frontend contract entirely (visibility:
+  // "discarded"), because TBAI chaining sequences moved to TbaiConfigSequenceHandler
+  // and the field no longer belonged on the detail form. ETP-5087 needs the value
+  // back in the browser — but only as DATA for the list's Batuz column, never as a
+  // form control: the "Estado Batuz" cell reads `row.tbaiIssent`, and before this it
+  // read a field (`tbaiSyncEstado`) that exists in no purchase-invoice contract at
+  // all, so every row rendered a hardcoded "Pendiente". `visibility: "readOnly"` +
+  // `form: false` is the exact combination that satisfies both constraints, and is
+  // the same shape adOrgId and the etvfac* fields already use on this window.
+  it('exposes tbaiIssent to the frontend contract as readOnly data, kept out of the form (ETP-5087)', () => {
+    const field = headerField('tbaiIssent');
+    assert.ok(
+      field,
+      'tbaiIssent must be present in frontendContract.entities.header so the list Batuz column can read it',
+    );
     assert.equal(
-      headerField('tbaiIssent'),
-      undefined,
-      'tbaiIssent must be absent from frontendContract.entities.header (discarded fields are excluded from the frontend contract)',
+      field.visibility,
+      'readOnly',
+      'tbaiIssent must be readOnly — it is set by the Batuz send process, never by the user',
+    );
+    assert.equal(
+      field.form,
+      false,
+      'tbaiIssent must stay out of the generated header form (ETP-4401: TBAI sequencing is backend-side)',
+    );
+    assert.equal(
+      field.type,
+      'boolean',
+      'the Batuz cell branches on this as a boolean flag (true/"Y" → Enviada)',
     );
 
     const backendHeader = contract.backendContract.entities.header;
-    const backendTbaiIssent = backendHeader.fields.find((field) => field.name === 'tbaiIssent');
+    const backendTbaiIssent = backendHeader.fields.find((f) => f.name === 'tbaiIssent');
     assert.ok(
       backendTbaiIssent,
-      'tbaiIssent must still be present in backendContract.entities.header (discarded fields remain in the backend contract)',
+      'tbaiIssent must still be present in backendContract.entities.header',
     );
     assert.equal(
       backendTbaiIssent.visibility,
-      'discarded',
-      'tbaiIssent must be tagged visibility: "discarded" in the backend contract',
+      'readOnly',
+      'backend and frontend visibility must agree now that the field is exposed',
+    );
+  });
+
+  // Guards the actual ETP-5087 bug: the Batuz column used to render
+  // `row.tbaiSyncEstado ?? 'Pendiente'`. That field is not part of any contract —
+  // it is injected into the GET response at runtime by TbaiSyncStatusInjector,
+  // called from SalesInvoiceHeaderHandler and (since ETP-5087) also from
+  // PurchaseInvoiceHeaderHandler.afterHandle(). Because it only ever exists in
+  // the response payload, it must never appear as a contract field.
+  it('has no tbaiSyncEstado field in either contract (it is a server-side response injection)', () => {
+    assert.equal(
+      headerField('tbaiSyncEstado'),
+      undefined,
+      'tbaiSyncEstado is not a purchase-invoice contract field — nothing may render off it',
+    );
+    const backendHeader = contract.backendContract.entities.header;
+    assert.equal(
+      backendHeader.fields.find((f) => f.name === 'tbaiSyncEstado'),
+      undefined,
+      'tbaiSyncEstado is not a purchase-invoice contract field',
     );
   });
 });
