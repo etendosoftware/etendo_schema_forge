@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createServer, handleChat, hasConfiguredSecret } from './server.js';
+import { browserTools, createServer, handleChat, hasConfiguredSecret } from './server.js';
 
 function request(headers = {}) {
   const req = new EventEmitter();
@@ -53,4 +53,43 @@ test('protects chat requests with model configuration and a user session', async
 
   if (originalKey === undefined) delete process.env.OPENCODE_API_KEY;
   else process.env.OPENCODE_API_KEY = originalKey;
+});
+
+/**
+ * Browser tools are only useful if the model is told what to pass them.
+ * `tool({ parameters })` — the ai@4 field name — is accepted silently by
+ * ai@7 and yields a tool with NO schema, so the model calls it with no
+ * arguments and every navigation fails as "Unknown window reference
+ * undefined". These tests fail instead.
+ */
+test('every browser tool declares an input schema', () => {
+  const tools = browserTools();
+  assert.ok(Object.keys(tools).length > 0);
+  for (const [name, definition] of Object.entries(tools)) {
+    assert.ok(definition.inputSchema, `${name} has no inputSchema`);
+    assert.equal(definition.parameters, undefined, `${name} still uses the retired 'parameters' field`);
+  }
+});
+
+test('the navigation tools require the path the model must resolve', () => {
+  const { navigate_to: navigateTo, open_form: openForm } = browserTools();
+
+  assert.deepEqual(navigateTo.inputSchema.parse({ path: '/sales-order' }), { path: '/sales-order' });
+  assert.throws(() => navigateTo.inputSchema.parse({}));
+  assert.throws(() => navigateTo.inputSchema.parse({ path: '' }));
+
+  assert.deepEqual(openForm.inputSchema.parse({ path: 'Pedido de Venta' }), { path: 'Pedido de Venta' });
+  assert.throws(() => openForm.inputSchema.parse({ recordId: 'abc' }));
+});
+
+test('the argument-free tools accept an empty object', () => {
+  for (const name of ['get_current_context', 'open_copilot', 'inspect_page_dom']) {
+    assert.deepEqual(browserTools()[name].inputSchema.parse({}), {});
+  }
+});
+
+test('page interaction only allows the four supported actions', () => {
+  const { inputSchema } = browserTools().interact_with_page;
+  assert.deepEqual(inputSchema.parse({ elementId: 'dom-1', action: 'click' }), { elementId: 'dom-1', action: 'click' });
+  assert.throws(() => inputSchema.parse({ elementId: 'dom-1', action: 'evaluate' }));
 });
