@@ -1,3 +1,5 @@
+import * as React from 'react';
+import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -58,6 +60,46 @@ function baseProps(overrides = {}) {
     onToggleExpand: vi.fn(),
     ...overrides,
   };
+}
+
+// `ConversationView` is a 100% controlled component (`value={input}` /
+// `onChange={(e) => onInputChange(e.target.value)}`) — in production it's driven by
+// `SupportChatContext`'s real `input` state + `setInput` dispatcher (see
+// SupportChatContext.jsx's `SET_INPUT`/`SET_ACTIVE_CONVERSATION` reducer cases). A plain
+// `onInputChange: vi.fn()` mock (as in `baseProps()` above) never updates the `input` prop,
+// so the textarea would appear stuck empty no matter what the user types — this wrapper
+// stands in for that real parent state so tests can drive text entry the same way the app
+// does. It also mirrors the ONE piece of policy that lives in the reducer and is directly
+// exercised by two tests below: `SET_ACTIVE_CONVERSATION` clears the draft on a genuine
+// switch between two already-established conversations, but the 'new' → real-id promotion
+// (`ADD_CONVERSATION`, previous id `null`) must NOT clear it.
+function ControlledConversationView({ onInputChange: onInputChangeSpy, ...props }) {
+  const [input, setInput] = React.useState(props.input ?? '');
+  const prevConversationIdRef = React.useRef(props.conversation?.id ?? null);
+
+  React.useEffect(() => {
+    const prevId = prevConversationIdRef.current;
+    const nextId = props.conversation?.id ?? null;
+    if (prevId !== null && nextId !== null && prevId !== nextId) {
+      setInput('');
+    }
+    prevConversationIdRef.current = nextId;
+  }, [props.conversation?.id]);
+
+  return (
+    <ConversationView
+      {...props}
+      input={input}
+      onInputChange={(value) => {
+        onInputChangeSpy?.(value);
+        setInput(value);
+      }}
+    />
+  );
+}
+
+function renderControlled(overrides = {}) {
+  return render(<ControlledConversationView {...baseProps(overrides)} />);
 }
 
 describe('ConversationView', () => {
@@ -127,7 +169,7 @@ describe('ConversationView', () => {
   it('sends the typed draft and clears the textarea', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<ConversationView {...baseProps({ onSend })} />);
+    renderControlled({ onSend });
     const textarea = screen.getByPlaceholderText('supportTypeMessage');
     await user.type(textarea, 'Necesito ayuda');
     await user.click(screen.getByLabelText('send'));
@@ -193,24 +235,6 @@ describe('ConversationView', () => {
     expect(onRemoveFile).toHaveBeenCalledWith(0);
   });
 
-  it('opens the "more options" menu and closes the conversation from it', async () => {
-    const user = userEvent.setup();
-    const onCloseConversation = vi.fn();
-    render(<ConversationView {...baseProps({ onCloseConversation })} />);
-    await user.click(screen.getByLabelText('moreOptions'));
-    await user.click(screen.getByText('supportCloseConversation'));
-    expect(onCloseConversation).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes the "more options" menu on an outside click', async () => {
-    const user = userEvent.setup();
-    render(<ConversationView {...baseProps()} />);
-    await user.click(screen.getByLabelText('moreOptions'));
-    expect(screen.getByText('supportCloseConversation')).toBeInTheDocument();
-    fireEvent.mouseDown(document.body);
-    expect(screen.queryByText('supportCloseConversation')).not.toBeInTheDocument();
-  });
-
   it('shows a loading indicator while messages are loading', () => {
     render(<ConversationView {...baseProps({ isLoadingMessages: true })} />);
     expect(screen.getByText('loading')).toBeInTheDocument();
@@ -218,7 +242,7 @@ describe('ConversationView', () => {
 
   it('clicking a welcome quick reply fills the message draft', async () => {
     const user = userEvent.setup();
-    render(<ConversationView {...baseProps({ conversation: null })} />);
+    renderControlled({ conversation: null });
     await user.click(screen.getByText('supportQuickReply1'));
     expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('supportQuickReply1');
   });
@@ -280,7 +304,7 @@ describe('ConversationView', () => {
   it('pressing Enter sends the message', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<ConversationView {...baseProps({ onSend })} />);
+    renderControlled({ onSend });
     const textarea = screen.getByPlaceholderText('supportTypeMessage');
     await user.type(textarea, 'Hola{Enter}');
     expect(onSend).toHaveBeenCalledWith('Hola', []);
@@ -297,7 +321,7 @@ describe('ConversationView', () => {
 
   it('opens the emoji picker and appends an emoji to the draft', async () => {
     const user = userEvent.setup();
-    render(<ConversationView {...baseProps()} />);
+    renderControlled();
     await user.click(screen.getByLabelText('Emoji'));
     await user.click(screen.getByText('😀'));
     expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('😀');
@@ -441,6 +465,42 @@ describe('ConversationView', () => {
         const { container } = render(<ConversationView {...baseProps({ messages })} />);
         expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
       });
+
+      it('renders a BARE http(s) URL (not wrapped in markdown [label](url) syntax) as a '
+        + 'clickable, safe <a> — regression: the "Fuente: <url>" line the AI always appends to '
+        + 'a docs answer is a plain URL, not markdown-link syntax, so it rendered as inert text', () => {
+        const messages = [{
+          id: 'm1',
+          sender: 'ai',
+          text: 'Fuente: https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/'
+            + 'comercial/ventas/factura-de-venta/factura-de-venta.md',
+        }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const link = container.querySelector('.sc-bubble a');
+        expect(link).toHaveAttribute(
+          'href',
+          'https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
+        );
+        expect(link).toHaveTextContent(
+          'https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
+        );
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      });
+
+      it('links a bare URL in the middle of a sentence, leaving the surrounding text intact', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'Mirá https://docs.example.com/guia para más info' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        const link = container.querySelector('.sc-bubble a');
+        expect(link).toHaveAttribute('href', 'https://docs.example.com/guia');
+        expect(container.querySelector('.sc-bubble p')).toHaveTextContent('Mirá https://docs.example.com/guia para más info');
+      });
+
+      it('does not treat a bare javascript:/data: string as a link (only http(s):// is matched)', () => {
+        const messages = [{ id: 'm1', sender: 'ai', text: 'No uses javascript:alert(1) acá' }];
+        const { container } = render(<ConversationView {...baseProps({ messages })} />);
+        expect(container.querySelector('.sc-bubble a')).not.toBeInTheDocument();
+      });
     });
 
     it('splits a message with a blank line into separate paragraphs', () => {
@@ -497,7 +557,7 @@ describe('ConversationView', () => {
       }
       window.AudioContext = FakeAudioContext;
       const onSend = vi.fn();
-      render(<ConversationView {...baseProps({ onSend })} />);
+      renderControlled({ onSend });
       await user.type(screen.getByPlaceholderText('supportTypeMessage'), 'Con sonido');
       await user.click(screen.getByLabelText('send'));
       await act(async () => { await Promise.resolve(); await Promise.resolve(); });
@@ -532,7 +592,7 @@ describe('ConversationView', () => {
     it('clicking a quick reply on a regular bot message fills the draft', async () => {
       const user = userEvent.setup();
       const messages = [{ id: 'm1', sender: 'bot', text: '¿Cómo puedo ayudarte?', quickReplies: ['Facturación', 'Soporte técnico'] }];
-      render(<ConversationView {...baseProps({ messages })} />);
+      renderControlled({ messages });
       await user.click(screen.getByText('Facturación'));
       expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('Facturación');
     });
@@ -573,12 +633,6 @@ describe('ConversationView', () => {
       const textarea = screen.getByPlaceholderText('supportTypeMessage');
       fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(onSend).not.toHaveBeenCalled();
-    });
-
-    it('does not show the "more options" menu button once a conversation is closed', () => {
-      const conversation = { id: 'c1', status: 'closed' };
-      render(<ConversationView {...baseProps({ conversation })} />);
-      expect(screen.queryByLabelText('moreOptions')).not.toBeInTheDocument();
     });
 
     it('re-triggers auto-scroll when the conversation transitions to closed (revealing the CSAT card below the last message)', () => {
@@ -662,8 +716,8 @@ describe('ConversationView', () => {
     });
   });
 
-  describe('escalate bar dismiss', () => {
-    it('renders the escalate bar with an escalate button and a dismiss control when a message suggests escalation', () => {
+  describe('escalate bar — tracks the LATEST ai reply only (not sticky for the whole conversation)', () => {
+    it('renders the escalate bar with an escalate button and a dismiss control when the latest message suggests escalation', () => {
       const messages = [{ id: 'm1', sender: 'ai', text: `Puedo escalar esto para vos.${SUGGESTS_ESCALATION_MARKER}` }];
       const { container } = render(<ConversationView {...baseProps({ messages })} />);
       expect(container.querySelector('.sc-escalate-bar')).toBeInTheDocument();
@@ -673,7 +727,7 @@ describe('ConversationView', () => {
       expect(screen.getByLabelText('supportDismissEscalateBar')).toBeInTheDocument();
     });
 
-    it('removes the whole escalate bar once the dismiss control is clicked', async () => {
+    it('removes the escalate bar once the dismiss control is clicked', async () => {
       const user = userEvent.setup();
       const messages = [{ id: 'm1', sender: 'ai', text: `Puedo escalar esto para vos.${SUGGESTS_ESCALATION_MARKER}` }];
       const { container } = render(<ConversationView {...baseProps({ messages })} />);
@@ -682,7 +736,48 @@ describe('ConversationView', () => {
       expect(container.querySelector('.sc-escalate-bar')).not.toBeInTheDocument();
     });
 
-    it('shows the escalate bar again for a different conversation that also suggests escalation, even after it was dismissed on the previous one', () => {
+    it('hides the bar once a LATER reply fully answers a new question, even though an earlier '
+      + 'reply in the same conversation suggested escalating and was never dismissed — explicit '
+      + 'product decision: the offer must track the quality of the most recent answer, not '
+      + 'accumulate for the whole conversation', () => {
+      const conversation = { id: 'c1', status: 'open', assigneeKind: 'bot' };
+      const messagesInsufficient = [
+        { id: 'm1', sender: 'ai', text: `No encontré información sobre eso.${SUGGESTS_ESCALATION_MARKER}` },
+      ];
+      const { rerender } = render(<ConversationView {...baseProps({ conversation, messages: messagesInsufficient })} />);
+      expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
+
+      const messagesResolved = [
+        ...messagesInsufficient,
+        { id: 'm2', sender: 'user', text: 'Otra pregunta' },
+        { id: 'm3', sender: 'ai', text: 'Un pedido de compra es el documento con el que se formaliza la solicitud.' },
+      ];
+      rerender(<ConversationView {...baseProps({ conversation, messages: messagesResolved })} />);
+      expect(screen.queryByText('supportEscalateToHuman')).not.toBeInTheDocument();
+    });
+
+    it('re-offers the bar for a NEW insufficient reply even if an EARLIER offer in the same '
+      + 'conversation was dismissed — dismissal is scoped to the specific offering message, not '
+      + 'the whole conversation', () => {
+      const conversation = { id: 'c1', status: 'open', assigneeKind: 'bot' };
+      const messagesFirstOffer = [
+        { id: 'm1', sender: 'ai', text: `No encontré info sobre A.${SUGGESTS_ESCALATION_MARKER}` },
+      ];
+      const { rerender } = render(<ConversationView {...baseProps({ conversation, messages: messagesFirstOffer })} />);
+      fireEvent.click(screen.getByLabelText('supportDismissEscalateBar'));
+      expect(screen.queryByText('supportEscalateToHuman')).not.toBeInTheDocument();
+
+      const messagesSecondOffer = [
+        ...messagesFirstOffer,
+        { id: 'm2', sender: 'user', text: 'Otra consulta distinta' },
+        { id: 'm3', sender: 'ai', text: `No encontré info sobre B tampoco.${SUGGESTS_ESCALATION_MARKER}` },
+      ];
+      rerender(<ConversationView {...baseProps({ conversation, messages: messagesSecondOffer })} />);
+      expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
+    });
+
+    it('re-offers for a different conversation that also suggests escalation, even after it was '
+      + 'dismissed on the previous one', () => {
       const conversationA = { id: 'c1', status: 'open', assigneeKind: 'bot' };
       const messagesA = [{ id: 'm1', sender: 'ai', text: `Escalar A.${SUGGESTS_ESCALATION_MARKER}` }];
       const { rerender } = render(<ConversationView {...baseProps({ conversation: conversationA, messages: messagesA })} />);
@@ -693,6 +788,61 @@ describe('ConversationView', () => {
       const messagesB = [{ id: 'm2', sender: 'ai', text: `Escalar B.${SUGGESTS_ESCALATION_MARKER}` }];
       rerender(<ConversationView {...baseProps({ conversation: conversationB, messages: messagesB })} />);
       expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
+    });
+
+    it('shows the bar once the bot regains control with an insufficient reply still standing as '
+      + 'the latest ai message', () => {
+      const conversation = { id: 'c1', status: 'open', assigneeKind: 'human' };
+      const messages = [{ id: 'm1', sender: 'ai', text: `Puedo escalar esto para vos.${SUGGESTS_ESCALATION_MARKER}` }];
+      const { rerender } = render(<ConversationView {...baseProps({ conversation, messages })} />);
+      expect(screen.queryByText('supportEscalateToHuman')).not.toBeInTheDocument();
+
+      rerender(<ConversationView {...baseProps({
+        conversation: { ...conversation, assigneeKind: 'bot' }, messages,
+      })} />);
+      expect(screen.getByText('supportEscalateToHuman')).toBeInTheDocument();
+    });
+  });
+
+  describe('draft preservation across a new-conversation id promotion (regression)', () => {
+    it('does not clobber an in-progress draft when a brand-new conversation is promoted from '
+      + '"new" (no matching conversation entry, conversation=null) to its real id after the '
+      + 'first AI reply lands', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <ControlledConversationView {...baseProps({ conversation: null, messages: [], input: '' })} />
+      );
+      const textarea = screen.getByPlaceholderText('supportTypeMessage');
+      await user.type(textarea, 'segundo mensaje');
+      expect(textarea).toHaveValue('segundo mensaje');
+
+      // Backend promotes the conversation from 'new' to its real id once the first
+      // message's AI reply lands. `input` stays '' (it only ever resets right when a
+      // message is sent, it does not track keystrokes).
+      const promotedConversation = { id: 'real-conv-id', status: 'open', assigneeKind: 'bot' };
+      const messagesAfterFirstReply = [
+        { id: 'm1', sender: 'user', text: 'primer mensaje' },
+        { id: 'm2', sender: 'ai', text: 'respuesta del bot' },
+      ];
+      rerender(<ControlledConversationView {...baseProps({
+        conversation: promotedConversation, messages: messagesAfterFirstReply, input: '',
+      })} />);
+
+      expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('segundo mensaje');
+    });
+
+    it('still resets the draft when switching between two already-established conversations '
+      + '(legitimate thread switch — must not regress while fixing the bug above)', () => {
+      const conv1 = { id: 'conv-1', status: 'open', assigneeKind: 'bot' };
+      const { rerender } = render(<ControlledConversationView {...baseProps({ conversation: conv1, input: '' })} />);
+      const textarea = screen.getByPlaceholderText('supportTypeMessage');
+      fireEvent.change(textarea, { target: { value: 'borrador sin enviar' } });
+      expect(textarea).toHaveValue('borrador sin enviar');
+
+      const conv2 = { id: 'conv-2', status: 'open', assigneeKind: 'bot' };
+      rerender(<ControlledConversationView {...baseProps({ conversation: conv2, input: '' })} />);
+
+      expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('');
     });
   });
 

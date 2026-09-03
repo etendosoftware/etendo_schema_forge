@@ -77,6 +77,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+// The left panel's footer total goes through the shared signed-money formatter. Importing it here
+// (instead of hardcoding '1.191,69 €') keeps the expectation on the same canonical formatting path
+// the component uses, so the instance-wide separators cannot make the assertion lie.
+import { formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -500,21 +504,61 @@ describe('ReconciliationSplitPanel', () => {
     expect(rows[2]).toBe('recon-cand-row-C1');
   });
 
-  // ── Client-side state filter (T7) ─────────────────────────────────────────────
+  // ── Client-side state filter (T7 / ETP-5033) ─────────────────────────────────
+  //
+  // The backend assigns each statement line exactly ONE `state`: pending | suggested | byRule |
+  // difference | reconciled. The filter codes are therefore NOT all mutually exclusive: 'pending'
+  // — which is also the DEFAULT filter — means "everything not reconciled", so suggested, byRule
+  // and difference lines are on screen when the panel opens (ETP-5033: strict equality used to
+  // hide exactly the lines the user has to act on). 'suggested' / 'byRule' / 'difference' /
+  // 'reconciled' stay strict subsets, and the "Todos" entry (null) shows everything.
+  // Membership itself is unit-tested in reconciliationStatusFilter.test.js.
 
-  it('shows only lines matching the active leftStatus filter', () => {
-    // Four lines: two pending, one suggested, one byRule.
+  // One line per engine-computed state, so a single fixture set can drive the whole matrix.
+  const LINE_ST_PENDING = { id: 'SP', date: '2026-05-10T00:00:00Z', description: 'Plain pending line', state: 'pending', status: 'pending', amount: -10 };
+  const LINE_ST_SUGGESTED = { id: 'SS', date: '2026-05-11T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
+  const LINE_ST_BYRULE = { id: 'SB', date: '2026-05-12T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
+  const LINE_ST_DIFFERENCE = { id: 'SD', date: '2026-05-13T00:00:00Z', description: 'Difference line', state: 'difference', status: 'pending', amount: -5 };
+  const LINE_ST_RECONCILED = { id: 'SR', date: '2026-05-14T00:00:00Z', description: 'Reconciled line', state: 'reconciled', status: 'reconciled', amount: 500 };
+  const ALL_STATE_LINES = [
+    LINE_ST_PENDING, LINE_ST_SUGGESTED, LINE_ST_BYRULE, LINE_ST_DIFFERENCE, LINE_ST_RECONCILED,
+  ];
+  const ALL_STATE_COUNTS = { all: 5, pending: 1, suggested: 1, byRule: 1, difference: 1, reconciled: 1 };
+
+  /**
+   * Drives the status dropdown the same way the source-filter tests drive theirs: the
+   * DistinctValuesFilter trigger renders the ACTIVE label, and the open popover renders one
+   * button per code (plus the "Todos" row). Both are matched by their i18n key, which the mock
+   * echoes back verbatim.
+   */
+  function selectStatus(activeLabelKey, nextLabelKey) {
+    fireEvent.click(screen.getByText(new RegExp(activeLabelKey)));
+    fireEvent.click(screen.getByText(new RegExp(nextLabelKey)));
+  }
+
+  /** The ids of every statement row currently rendered in the left panel. */
+  function visibleLineIds() {
+    return screen
+      .queryAllByTestId(/^recon-line-row-/)
+      .map((el) => el.getAttribute('data-testid').replace('recon-line-row-', ''));
+  }
+
+  it('treats the default pending filter as "not reconciled", keeping suggested and by-rule lines visible', () => {
+    // Four lines: two plain pending, one suggested, one byRule — all four are non-reconciled, so
+    // all four must be on screen under the default filter.
     const LINE_SUGGESTED = { id: 'LS', date: '2026-05-10T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
     const LINE_BYRULE = { id: 'LR', date: '2026-05-11T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
     setLines([LINE_A, LINE_B, LINE_SUGGESTED, LINE_BYRULE]);
     linesState.counts = { all: 4, pending: 2, suggested: 1, byRule: 1, difference: 0, reconciled: 0 };
     renderPanel();
 
-    // Default leftStatus is 'pending' — only LINE_A and LINE_B (state: 'pending') visible.
+    // Default leftStatus is 'pending' = "not reconciled" — nothing here is reconciled, so the
+    // list is complete. Before ETP-5033 the last two assertions were the opposite (the suggested
+    // and by-rule rows were filtered out by the DEFAULT filter, which is the bug).
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LS')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LR')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LS')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LR')).toBeInTheDocument();
   });
 
   it('passes counts from the hook to the status filter component', () => {
@@ -525,22 +569,93 @@ describe('ReconciliationSplitPanel', () => {
     // ReconciliationStatusFilter renders labelFor(code) = `${ui(key)} (${countFor(code)})`.
     // With our i18n mock returning the key, the label includes the count.
     // The active label (pending) is visible in the trigger button; the others are in the popover.
+    // The pending count is the SUM of its members — 3 pending + 1 suggested + 0 byRule +
+    // 1 difference = 5 — because the filter itself shows all four (ETP-5033); a chip reading 3
+    // would contradict the 5 rows below it.
     // Use a text-content function matcher to handle elements that split text across children.
-    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('3'))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('5'))).toBeInTheDocument();
   });
 
   it('visibleTotal reflects filtered lines, not all lines', () => {
-    // Three lines: two pending (amounts -8.31 and 1200), one suggested (-100).
-    const LINE_SUGGESTED2 = { id: 'LS2', date: '2026-05-12T00:00:00Z', description: 'S line', state: 'suggested', status: 'pending', amount: -100 };
-    setLines([LINE_A, LINE_B, LINE_SUGGESTED2]);
-    // Default leftStatus is 'pending' — only LINE_A (-8.31) and LINE_B (1200) are visible.
+    // Three lines: two non-reconciled (amounts -8.31 and 1200) and one RECONCILED (500). Under
+    // the default 'pending' filter only the first two are visible, so only they may count toward
+    // the footer total. (A suggested line would no longer work as the excluded one — it is now
+    // visible under the default filter, and its amount legitimately joins the total.)
+    setLines([LINE_A, LINE_B, LINE_ST_RECONCILED]);
+    linesState.counts = { all: 3, pending: 2, suggested: 0, byRule: 0, difference: 0, reconciled: 1 };
     renderPanel();
 
-    // The footer total must show the sum of only visible (pending) lines: -8.31 + 1200 = 1191.69.
-    // The panel renders visibleTotal with MoneyAmount; in our mock MoneyAmount renders the value.
-    // We check the total footer row which renders formatSigned(visibleTotal, currency).
-    // Since formatSigned is internal, we verify the footer does NOT show -100 (the suggested line).
-    expect(screen.queryByText(/-100/)).not.toBeInTheDocument();
+    // The reconciled row is filtered out, so its amount is nowhere in the list.
+    expect(visibleLineIds()).toEqual(['L1', 'L2']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+
+    // The footer renders ui('financeReconcileFooterTotal', { amount: formatSigned(total, cur) }).
+    // The i18n mock has no `{amount}` placeholder in the key itself, so the interpolated string
+    // never reaches the DOM — read it off the captured call instead. Expected: -8.31 + 1200 =
+    // 1191.69, i.e. the visible subset only (1691.69 would mean the reconciled line leaked in).
+    const footerCalls = uiCalls.filter((c) => c.key === 'financeReconcileFooterTotal');
+    expect(footerCalls.length).toBeGreaterThan(0);
+    expect(footerCalls.at(-1).vars.amount).toBe(formatSigned(1191.69, 'EUR'));
+  });
+
+  it('shows the four non-reconciled states and hides the reconciled one under the default filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+  });
+
+  it('narrows to only the suggested line when the filter switches to suggested', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusSuggested');
+
+    expect(visibleLineIds()).toEqual(['SS']);
+  });
+
+  it('narrows to only the difference line when the filter switches to difference', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDifference');
+
+    expect(visibleLineIds()).toEqual(['SD']);
+  });
+
+  it('narrows to only the by-rule line when the filter switches to byRule', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusByRule');
+
+    expect(visibleLineIds()).toEqual(['SB']);
+  });
+
+  it('shows only the reconciled line under the reconciled filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    expect(visibleLineIds()).toEqual(['SR']);
+  });
+
+  it('shows every line under the "Todos" entry', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    // The "Todos" row calls onChange(null) — the only way to clear the status filter.
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD', 'SR']);
   });
 
   // ── Source filter visibility (single "Tipo de transacción" selector) ──────────
@@ -607,6 +722,65 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
     // Open the selector (trigger shows the current 'payments' label) and pick receipts.
     fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('receipts');
+  });
+
+  // ── "Tipo" (source) filter dropdown — no fake "all" row (bug fix regression) ──
+  // The Tipo filter always has a concrete value (SOURCE_CODES has no genuine "all" state,
+  // unlike the sibling status filter). Previously `allLabel={ui('financeReconcileSourceLabel')}`
+  // was passed to DistinctValuesFilter, which made DistinctValuesList render the field's own
+  // header/placeholder text as a clickable — but functionally inert — row. That prop was removed.
+
+  it('does not offer the field label as a selectable "Tipo" option, only the four real source values', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+    // Open the "Tipo" dropdown via its trigger (shows the current source label).
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+
+    const popover = screen.getByTestId('PopoverContent__cd3aa9');
+    // Regression: the field's own label/placeholder key must never render as a selectable
+    // row — it is not a real filter value and selecting it used to do nothing.
+    expect(within(popover).queryByText('financeReconcileSourceLabel')).not.toBeInTheDocument();
+    expect(
+      within(popover).queryByRole('button', { name: /financeReconcileSourceLabel/ }),
+    ).not.toBeInTheDocument();
+
+    // All four real source options are present as selectable rows.
+    expect(within(popover).getByText(/financeReconcileSourceSalesInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePurchaseInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourceReceipts/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+  });
+
+  it('selects each real "Tipo" option and flows the mapped (kind, docType) through to the candidates hook', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+
+    // receipts (default) → payments: (kind null, docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('payments');
+    expect(screen.getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+
+    // payments → salesInvoices: (kind 'invoices', docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('receipts');
+
+    // salesInvoices → purchaseInvoices: (kind 'invoices', docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('payments');
+
+    // purchaseInvoices → receipts: back to (kind null, docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
     fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
     expect(candidateCallArgs.kind).toBeNull();
     expect(candidateCallArgs.docType).toBe('receipts');
@@ -1981,6 +2155,38 @@ describe('ReconciliationSplitPanel', () => {
       renderPanel();
 
       expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
+    });
+  });
+
+  // ETP-4956 — "Todo el tiempo" is encoded as `value === null`, which is indistinguishable
+  // from "nothing has been chosen", so computeTriggerLabel falls through to the placeholder.
+  // The placeholder used to be `financeReconcileFilterDate`, whose literal Spanish value is
+  // "Últimos 12 meses" — so the button kept advertising a 12-month window after the user had
+  // widened the filter to every date. It is now the generic `dateRangeAnyTime`.
+  describe('date range trigger after picking "all time"', () => {
+    it('reads the last-12-months preset on mount (the default period)', () => {
+      setLines([LINE_A]);
+      renderPanel();
+      expect(screen.getAllByText('dateRangeLast12Months').length).toBeGreaterThan(0);
+    });
+
+    it('stops advertising a 12-month window once "all time" is picked', async () => {
+      const user = userEvent.setup();
+      setLines([LINE_A]);
+      renderPanel();
+
+      // Open the picker from its trigger (which currently shows the default preset).
+      await user.click(screen.getAllByText('dateRangeLast12Months')[0]);
+
+      // The popover's "all time" preset emits `null` and closes the popover.
+      await user.click(await screen.findByText('dateRangeAllTime'));
+
+      // The trigger must no longer claim a bounded period…
+      expect(screen.queryByText('dateRangeLast12Months')).not.toBeInTheDocument();
+      // …nor fall back to the window-specific label that reads as one.
+      expect(screen.queryByText('financeReconcileFilterDate')).not.toBeInTheDocument();
+      // …and instead says "any date".
+      expect(screen.getAllByText('dateRangeAnyTime').length).toBeGreaterThan(0);
     });
   });
 

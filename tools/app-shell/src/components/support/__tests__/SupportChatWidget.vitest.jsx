@@ -28,7 +28,6 @@ vi.mock('../ConversationView.jsx', () => ({
       <button onClick={() => props.onBack()}>conv-back</button>
       <button onClick={() => props.onSubmitRating(5, 'ok')}>conv-rate</button>
       <button onClick={() => props.onDismissRating()}>conv-dismiss</button>
-      <button onClick={() => props.onCloseConversation()}>conv-close</button>
       <button onClick={() => props.onReopenConversation()}>conv-reopen</button>
       <button onClick={() => props.onToggleExpand()}>conv-toggle-expand</button>
     </div>
@@ -298,14 +297,6 @@ describe('SupportChatWidget', () => {
     render(<SupportChatWidget />);
     await user.click(screen.getByText('conv-dismiss'));
     expect(actions.dismissRating).toHaveBeenCalledWith('c1');
-  });
-
-  it('closes the active conversation from the conversation view', async () => {
-    const user = userEvent.setup();
-    const actions = mockChat({ isOpen: true, activeConversationId: 'c1' });
-    render(<SupportChatWidget />);
-    await user.click(screen.getByText('conv-close'));
-    expect(actions.closeConversation).toHaveBeenCalledWith('c1');
   });
 
   it('reopening a conversation continues the SAME conversation via actions.reopenConversation (not a new one)', async () => {

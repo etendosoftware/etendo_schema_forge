@@ -140,6 +140,7 @@ const {
   showSaveSuccessToast,
   handleSaveErrorResponse,
   getNumericFieldViolation,
+  getContactsTextFieldViolation,
   reportInvalidFormatField,
   extractErrorMessage,
 } = await import('../useEntity.js');
@@ -744,6 +745,61 @@ describe('getNumericFieldViolation (ETP-4542 — generic min/integer save block)
 
   it('is a no-op on an empty fields array', () => {
     assert.equal(getNumericFieldViolation([], {}), null);
+  });
+});
+
+describe('getContactsTextFieldViolation (ETP-5031 — Contacts-only save-block wiring)', () => {
+  // Mirrors getNumericFieldViolation's fixture shape: a small fields array plus an
+  // `editing` record. This is the exact function useEntity.js's save gate calls —
+  // testing it directly here exercises the WIRING (windowName threaded through,
+  // readOnly/visible gating applied), not just the pure getContactsTextFieldError
+  // helper already covered in contactsFieldValidation.test.js.
+  const FIELDS = [
+    { key: 'name' },
+    { key: 'etgoPhone' },
+    { key: 'email' },
+  ];
+
+  it('blocks save with fieldMaxLengthError when a changed field exceeds its limit, in the contacts window', () => {
+    const editing = { name: 'x'.repeat(61) };
+    assert.deepEqual(getContactsTextFieldViolation('contacts', FIELDS, editing), {
+      key: 'name', errorKey: 'fieldMaxLengthError', errorParams: { maxLength: 60 },
+    });
+  });
+
+  it('blocks save with fieldInvalidCharacters for a <script> value, in the contacts window', () => {
+    const editing = { etgoPhone: '<script>' };
+    assert.deepEqual(getContactsTextFieldViolation('contacts', FIELDS, editing), {
+      key: 'etgoPhone', errorKey: 'fieldInvalidCharacters', errorParams: {},
+    });
+  });
+
+  it('is a no-op for any window other than "contacts" — the critical scoping guarantee', () => {
+    const editing = { name: 'x'.repeat(1000), etgoPhone: '<script>alert(1)</script>' };
+    assert.equal(getContactsTextFieldViolation('sales-order', FIELDS, editing), null);
+    assert.equal(getContactsTextFieldViolation('purchase-order', FIELDS, editing), null);
+    assert.equal(getContactsTextFieldViolation(null, FIELDS, editing), null);
+  });
+
+  it('does NOT block on a field hidden by displayLogic, even in contacts', () => {
+    const fields = [{ key: 'name', displayLogic: () => false }];
+    const editing = { name: 'x'.repeat(1000) };
+    assert.equal(getContactsTextFieldViolation('contacts', fields, editing), null);
+  });
+
+  it('does NOT block on a read-only field, even in contacts', () => {
+    const fields = [{ key: 'name', readOnlyLogic: () => true }];
+    const editing = { name: 'x'.repeat(1000) };
+    assert.equal(getContactsTextFieldViolation('contacts', fields, editing), null);
+  });
+
+  it('allows save when every field is valid', () => {
+    const editing = { name: 'Acme Corp.', etgoPhone: '+54 11 5555-1234', email: 'user@example.com' };
+    assert.equal(getContactsTextFieldViolation('contacts', FIELDS, editing), null);
+  });
+
+  it('is a no-op on an empty fields array (e.g. no field was touched this session)', () => {
+    assert.equal(getContactsTextFieldViolation('contacts', [], {}), null);
   });
 });
 

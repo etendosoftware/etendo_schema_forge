@@ -217,8 +217,64 @@ describe('csat_invoicing / csat_order.isEligible (shared csatDocumentIsEligible 
 });
 
 describe('csat_onboarding.isEligible', () => {
-  it('is always disabled', () => {
-    const survey = surveyById('csat_onboarding');
-    expect(survey.isEligible({ state: baseState(), now: NOW })).toBe(false);
+  const csatOnboarding = surveyById('csat_onboarding');
+
+  it('is eligible for an admin who completed onboarding and has not seen it yet', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(true);
+  });
+
+  it('is not eligible for a non-admin even when onboarding is completed', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: false, now: NOW })).toBe(false);
+  });
+
+  it('is not eligible before onboarding is completed', () => {
+    const state = baseState({ onboardingCompleted: false, onboardingShown: false });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(false);
+  });
+
+  it('is not eligible once already shown (once-per-user frequency)', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: true,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(false);
+  });
+
+  it('is eligible once the 24h delay has just elapsed', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(MS_DAY),
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(true);
+  });
+
+  it('is not eligible before the 24h delay has elapsed', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(60 * 60 * 1000), // 1 hour ago
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(false);
+  });
+
+  it('is eligible immediately for the legacy cohort with no onboardingCompletedAt', () => {
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: null,
+    });
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(true);
   });
 });

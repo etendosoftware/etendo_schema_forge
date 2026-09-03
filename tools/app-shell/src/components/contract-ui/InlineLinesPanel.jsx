@@ -23,7 +23,8 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getContactsTextFieldError } from './contactsFieldValidation.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
 // grid column (DimSummary, no longer used here) to a hover action + the existing
@@ -133,6 +134,12 @@ function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
 // Row-body click → open detail, but not when the click originated in the checkbox or the
 // hover-action icons (they have their own handlers and stopping propagation there keeps the
 // row-click semantic clean).
+//
+// ETP-5029 — the selection checkbox is excluded by the `stopPropagation` on its own cell,
+// NOT by the `closest('input')` clause below. The shared Checkbox renders the real <input>
+// as a visually hidden SIBLING of the box the user actually clicks, so on that first click
+// `e.target` is a <div>/<svg> and `closest('input')` finds nothing; the clause only ever
+// matches the label-activation click the browser then synthesizes at the input itself.
 function makeRowClickHandler(onRowClick, row) {
   if (!onRowClick) return undefined;
   return (e) => {
@@ -734,6 +741,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   columns,
   data,
   entity,
+  specName,
   token,
   apiBaseUrl,
   selectedRowId,
@@ -1001,14 +1009,25 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       toast.error(ui('fieldMinValueError', { min: col.min }));
       return;
     }
-    // Format validation (email + phone) for inline cell edits — mirrors the below-min
-    // guard: flag the cell, toast the specific error, and block the PATCH. Empty is
-    // valid (not required); a later valid re-commit clears the flag via setInvalidCell(null).
-    const formatError = getEmailFieldError(col, value) ?? getPhoneFieldError(col, value);
+    // Format validation (email + phone + website, plus the Contacts-only text-field
+    // checks) for inline cell edits — mirrors the below-min guard: flag the cell,
+    // toast the specific error, and block the PATCH. Empty is valid (not required);
+    // a later valid re-commit clears the flag via setInvalidCell(null). ETP-5031
+    // added the website check (previously missing here) and the Contacts gate.
+    const formatError = getEmailFieldError(col, value)
+      ?? getPhoneFieldError(col, value)
+      ?? getWebsiteFieldError(col, value);
     if (formatError !== null) {
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
       toast.error(ui(formatError));
+      return;
+    }
+    const contactsError = getContactsTextFieldError(specName, col, value);
+    if (contactsError !== null) {
+      hasValidationErrorRef.current = true;
+      setInvalidCell({ rowId: row.id, colKey: col.key });
+      toast.error(ui(contactsError.key, contactsError.params));
       return;
     }
     const effectiveValue = clampToMax(col, value);
@@ -1036,7 +1055,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     } finally {
       pendingEditRef.current = null;
     }
-  }, [isDocumentReadOnly, onUpdateRow, ui]);
+  }, [isDocumentReadOnly, onUpdateRow, ui, specName]);
 
   // Imperative API for parent's global "Guardar". Closing the row implicitly blurs
   // the focused input (if any), which triggers its onBlur autosave. Awaiting any
@@ -1227,8 +1246,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 </button>
               </div>
             )}
-            {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking
+                a row never reaches the row-body handler that opens the record's
+                detail/modal (in Contacts' "Dirección" tab that popped the
+                LocationEditorModal open on every tick). Mirrors the chevron cell
+                above and DataTable's own checkbox cell. */}
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}

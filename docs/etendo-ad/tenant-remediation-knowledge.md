@@ -1769,3 +1769,259 @@ as the immutability trigger for a data-fix `.sql` file.
     join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
     OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
     orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.
+
+## ETP-5101 S2.2 — N1/N2: GL Item backfill for pre-ETP-5020 subaccounts (2026-09-01)
+
+- **2026-09-01 — `ElementValue.searchKey` (Java) stores in `C_ElementValue.Value` (DB), never a
+  separate "search key" column.** Confirmed via `ElementValue.java`'s own javadoc
+  (`"Property searchKey stored in column Value in table C_ElementValue"`). Matters directly for
+  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<searchKey>-<name>"` format
+  (code leading per the 2026-09-02 reorder note below, hyphen-separated per the later 2026-09-02
+  separator note further below) is really `"<value>-<name>"` — the same
+  5/8-digit posting code documented elsewhere in this file
+  (e.g. `40700000`). **Apply:** any corrective `.sql` that needs to mirror `composeGlItemName` must
+  read `ev.value`, not invent a nonexistent `searchkey` column.
+- **2026-09-01 — `AccountingCombination.stDimension`/`ndDimension` (Java) map to
+  `C_ValidCombination.user1_id`/`user2_id` (DB).** Confirmed via `AccountingCombination.java`
+  javadoc. Together with the already-documented 9 other dimension columns (`m_product_id`,
+  `c_bpartner_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`, `c_salesregion_id`,
+  `c_project_id`, `c_campaign_id`, `c_activity_id`), this is the exact 11-column set
+  `GlItemProvisioningSupport#resolveNaturalCombination` filters to `IS NULL` to find a subaccount's
+  "natural" (dimensionless) posting combination for a given schema — the same shape
+  `C_ELEMENTVALUE_TRG` itself auto-creates. **Apply:** any SQL resolving a natural combination must
+  filter all 11, not a partial subset (a missing one of the 11 will over-match a dimensioned
+  combination that happens to share the account+schema).
+- **2026-09-01 — `C_Glitem.Name` is `varchar(60)`; `C_ElementValue.Name` is `varchar(255)` — a real,
+  currently-unguarded mismatch (gap N2 — RESOLVED 2026-09-02, see the dated note below).**
+  `composeGlItemName`'s concatenated format has no length check. Confirmed live: 294 of
+  GOClient's 658 leaf subaccounts needing a new GL Item (45%) produce a composed name over 60
+  chars — Spanish PGC account names are long (e.g. "Reversión del deterioro de participaciones en
+  instrumentos de patrimonio neto a largo plazo otras partes vinculadas 79620000", 124 chars).
+  **This is not merely a backfill-scope problem — it silently affects the LIVE preventive path
+  too**, because `ensureGlItemForSchema`'s per-schema try/catch (the class's documented
+  best-effort contract) swallows the length-validation failure and logs a warning, leaving the
+  subaccount without a GL Item indistinguishably from the pre-ETP-5020 gap. At the time this
+  bullet was first written, the decision was to never truncate and instead skip+report — that
+  decision was REVISED the next day once the coordinator fixed the Java side to truncate
+  correctly; see the 2026-09-02 note below for why truncation turned out to be the right call
+  after all once a byte-for-byte-matching SQL formula was possible.
+- **2026-09-02 — N2 RESOLVED, both fronts, by truncating (not skipping) — the original "never
+  truncate" decision above was correct GIVEN THE CONSTRAINTS AT THE TIME (only the corrective SQL
+  side existed; inventing a truncation convention unilaterally in SQL, with no Java counterpart to
+  match, risked exactly the divergence ETP-5020 exists to prevent), but became WRONG once the
+  preventive Java side also needed fixing anyway (a brand-new tenant hitting a >60-char subaccount
+  today would otherwise stay silently broken) — at that point, truncating on BOTH fronts with the
+  IDENTICAL formula is strictly better than skipping on one front while the other is forced to
+  choose a name convention regardless.** Java: `GlItemProvisioningSupport#composeGlItemName` + new
+  `truncateToFit(value, maxLength)` helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Truncates the NAME
+  portion only via `String#substring(0, n)` (hard cut, no ellipsis) — the CODE always survives
+  intact (always exactly 8 digits per `ChartOfAccountsHandler#isValidAccountCode`; it is what
+  disambiguates two subaccounts sharing a name, the entire point of appending it in the first
+  place; as of the 2026-09-02 reorder note below, the code LEADS the composed name rather than
+  trailing it, but the budget math is unaffected — see that note). Budget when a code is present:
+  `60 - (1 + code.length())` (dynamic, not a hardcoded 51,
+  so it stays correct even if the 8-digit invariant ever changes); `60` flat when no code. SQL
+  (`R31-glitem-subaccount-backfill.sql`) mirrors this EXACT formula: `left(str, n)` is Postgres's
+  `String#substring(0, n)`; `GREATEST(60 - length(code) - 1, 0)` mirrors Java's `Math.max(0,
+  maxLength)` — this GREATEST guard matters because Postgres's own `left()` treats a NEGATIVE `n`
+  completely differently (returns all-but-the-last-`|n|`-chars, a totally different semantic from
+  Java's clamp-to-zero), so omitting it would silently diverge from Java the moment a pathological
+  code (>=59 chars) ever occurred, even though that never happens today. **Verified byte-for-byte,
+  not just "same shape":** ran both formulas (a JS reimplementation of the Java, and the live SQL)
+  against all 294 previously-blocked GOClient rows — 0 mismatches, every truncated name exactly 60
+  chars. **Apply generally:** when a corrective SQL fix's job is to mirror a Java transformation
+  exactly (not just approximate it), and that Java transformation has its own edge-case clamping
+  (`Math.max(0, n)`), check whether the SQL's "equivalent" built-in has a DIFFERENT edge-case
+  behavior for the same input shape (negative length) before assuming a natural-looking one-liner
+  is actually equivalent — `left()`'s negative-`n` behavior is a genuine Postgres/Java semantic
+  trap here, not a hypothetical one.
+- **2026-09-01 — `get_uuid()` inside `SELECT DISTINCT` mints a DIFFERENT id per pre-dedup source
+  row — a real correctness bug found live, not a style nit.** `get_uuid()` is volatile (Postgres
+  evaluates it once per row of the query BEFORE `DISTINCT` collapses duplicates on the output
+  column list). Writing `SELECT DISTINCT subaccount_id, ..., get_uuid() AS new_id FROM
+  missing_pairs` when `missing_pairs` has multiple rows per subaccount (e.g. one per missing
+  accounting schema) does NOT collapse to one row per subaccount — `new_id` differs per source row,
+  so `DISTINCT` sees them as different rows and keeps both. Reproduced live: R31's first draft
+  minted two different `C_Glitem` ids for the same QA Testing subaccount (missing on 2 schemas),
+  which then collided on `c_glitem_acct_glitem_acctsc_un` (`UNIQUE(c_glitem_id,
+  c_acctschema_id)`) once both were joined back to their schema rows. **Fix pattern:** dedup the
+  source rows to their natural key FIRST in one CTE (plain columns, no volatile function calls),
+  THEN mint the id in a SEPARATE CTE that selects from the already-deduplicated set — one row in,
+  one `get_uuid()` call, one row out. **Apply generally:** never mix a volatile ID-generating
+  function into the same `SELECT DISTINCT` that is also doing the deduplication; the two concerns
+  (dedup, then mint) must be two separate CTEs/subqueries in that order.
+- **2026-09-01 — a tenant CAN carry more than one all-dimensions-NULL `C_ValidCombination` row for
+  the same (account, schema) pair — confirmed live on "QA Testing" (a demo/test tenant), 2 such
+  duplicate pairs.** `GlItemProvisioningSupport#resolveNaturalCombination` (Java) already guards
+  against this with `.addOrderBy(PROPERTY_ID, true).setMaxResults(1)` (lowest id wins,
+  deterministic) — a plain `JOIN` in hand-written corrective SQL will silently fan out instead,
+  producing duplicate-looking rows downstream that then collide on unrelated UNIQUE constraints
+  once used to drive an INSERT (see the `get_uuid()` bug above for how this manifested in R31).
+  **Apply:** any SQL resolving "the" natural combination for (account, schema) must use `DISTINCT
+  ON (account, schema) ... ORDER BY account, schema, combination_id` (or equivalent `LIMIT 1`
+  per group) to mirror the Java's own deterministic tie-break — never assume the join is 1:1 just
+  because it "should" be by design intent; verify against the live data for any tenant with more
+  than one accounting schema (multi-schema tenants seem to be where this drift concentrates,
+  possibly from historical demo-data seeding that predates the current triggers).
+- **2026-09-01 — fixing `@apply`'s dedup for the duplicate-combination case above was NOT enough
+  on its own — `@check` needed the IDENTICAL dedup too, or the asymmetry just moves, doesn't
+  disappear.** After adding `DISTINCT ON` to `@apply`'s `natural_combos` CTE (the bullet above),
+  R31 still reported `STILL NEEDS FIX` for QA Testing on every re-check, even immediately after a
+  fully successful `@apply` that inserted every row it legitimately could. Root cause: `@check`
+  was a completely separate, hand-written query that iterated every raw `C_ValidCombination` row
+  matching the natural-dims criteria — including the SECOND, deliberately-never-linked duplicate
+  combo for QA Testing's 2 affected subaccounts, since `@apply` only ever links ONE combo per
+  (account, schema) by design (matching the Java's own `setMaxResults(1)`). This is the EXACT
+  `@check`-promises-more-than-`@apply`-can-deliver asymmetry class Sentinel caught in
+  R22/ETP-4743 (see that ticket's own section above) — a genuinely non-convergent fix under
+  repeated forced `--fix` re-application, the worst kind of idempotency bug because a single
+  successful run looks fine and only a re-check reveals it never stabilizes. **Apply generally:**
+  whenever `@apply` needs a `DISTINCT ON`/dedup step to produce a correct, non-fan-out result set,
+  `@check` MUST use the literal same dedup — not just "an equivalent-looking" `NOT EXISTS`/`JOIN`
+  written independently. The safest pattern (used by R31's fix) is to give `@check` its OWN copy
+  of the exact same `natural_combos` CTE shape (same joins, same `DISTINCT ON`, same `ORDER BY`)
+  rather than trying to approximate the same result with a differently-shaped query — a regression
+  test asserting the two CTE bodies are textually identical (see
+  `cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js`'s "@check/@apply symmetry" describe
+  block) catches this class of drift mechanically, without needing a live DB with duplicate data
+  to reproduce it.
+- **2026-09-01 — a real (committed) write via the actual data-fixes runner CLI is blocked by this
+  Claude Code environment's auto-mode write-approval classifier** (a non-dry-run, non-rolled-back
+  `node cli/src/data-fixes/run.js --fix <id> --client <id>` was denied outright, before any DB
+  round-trip). **Apply:** for end-to-end validation in an auto-mode session, a `BEGIN ... ROLLBACK`
+  transaction driven directly against `pool.query(...)` (parsing the fix via `parseFix`/
+  `inlineParams` exactly as the runner does, just without going through `run.js`'s own CLI/ledger
+  wrapper) is the available substitute — it exercises the real `@check`/`@apply`/`@report` SQL
+  against live data without persisting anything, and the runner CLI's `--dry-run` flag (which only
+  runs `@check`, no writes at all) can still confirm the CLI's own argument/binding path end-to-end.
+  A genuinely committed run then needs either the user's own terminal or explicit interactive
+  approval — flag this rather than attempting to route around the classifier.
+- **2026-09-02 — `composeGlItemName` reordered to lead with the code — every doc mention of the
+  format string that was `"<name> <code>"`/`"<name, truncated> <searchKey>"` is now stale;
+  supersede those illustrations, not the underlying budget math.** Same session, after N2's
+  truncation fix shipped: the coordinator flipped `composeGlItemName` (Java) from `name + " " +
+  code` (name truncated, code trailing and never truncated) to `code + " " + name` (code leading
+  and never truncated, name truncated) — i.e. the CODE is now a fixed-length PREFIX rather than a
+  never-truncated SUFFIX. Rationale per the updated javadoc: the code is the more useful sort/scan
+  key in a flat GL Item list, so it should lead. **The `GL_ITEM_NAME_MAX_LENGTH = 60` budget math
+  is completely unaffected** — `truncateToFit(name, 60 - (code.length() + 1))` is identical either
+  way, only which side of the `" "` separator the code sits on changed. `R31-glitem-subaccount-
+  backfill.sql` was updated in the SAME PR (both the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation) to swap `left(name, budget) || ' '
+  || code` for `code || ' ' || left(name, budget)`, re-validated byte-for-byte against the new
+  Java order on GOClient (658/658) and QA Testing (61/61) in rolled-back transactions — 0
+  mismatches. **Apply generally:** when a corrective SQL fix mirrors a Java string-composition
+  formula byte-for-byte (the whole point of R31's design), a Java-side reorder of the SAME
+  fields — not just a length/threshold change — is an equally load-bearing drift risk; grep for the
+  literal format-string documentation (`<name> <code>`, `<code> <name>`, etc.) across every doc
+  that describes it, not just the `.sql` file itself, since a stale illustration in
+  `onboarding-gaps.md`/`onboarding-and-datafixes-map.md` will mislead the NEXT person who touches
+  this fix into mirroring the wrong (now-superseded) order.
+
+## ETP-5101 — N3: `C_Glitem.Name` resync for already-linked GL Items (2026-09-02)
+
+- **2026-09-02 — R31/N1's "reuse never touches the GL Item's name" is a statement about R31's OWN
+  narrow scope (INSERT-only), not a permanent protection for hand-made GL Items — confirmed by
+  reading the live Java, not assumed.** `GlItemProvisioningSupport#ensureGlItemForSchema`'s
+  existing-link branch (fires whenever `findGlItemAccountsByCombination` already finds a link for
+  the subaccount's natural combination) calls `syncGlItemName` UNCONDITIONALLY — no hand-made/
+  auto-provisioned distinction anywhere in that method. Live evidence: GOClient's own "Capital
+  social" (one of the 2 pre-ETP-5020 manual rows, explicitly called out in R31's own header as
+  "correctly reused, not duplicated") is precisely the row R32's `@check` flags as needing a
+  resync today — its bare pre-ETP-5101 name no longer matches `composeGlItemName`'s current
+  composed output. **Apply generally:** when a sibling fix's header describes what IT deliberately
+  does not do, read that as scoped to that fix's own choice, not as an invariant the wider system
+  upholds — verify against the actual consumer (here, `ensureGlItemForSchema`) before assuming a
+  category of row (hand-made, in this case) is protected somewhere else.
+- **2026-09-02 — A subaccount CAN be linked to two genuinely DIFFERENT `C_Glitem` rows across its
+  own active schemas — a real, pre-existing multi-GL-Item-per-subaccount state, not a duplicate to
+  collapse in SQL.** Confirmed live on QA Testing: subaccount `11100` ("Petty Cash") has 2 active
+  schemas, each linked (via its own natural combination) to a DIFFERENT `C_Glitem` row ("GL Item
+  1" / "GL Item 2") — neither R31 nor the live Java's reuse invariant ever produced this (both
+  always reuse the SAME GL Item across schemas going forward); this predates both. **Apply:** any
+  fix resyncing/deduplicating GL Item state per subaccount must key its dedup on `c_glitem_id`
+  (the actual row being touched), never on `subaccount_id` — deduping by subaccount would either
+  silently drop one of the two legitimately-distinct rows from being resynced, or attempt to merge
+  two independent GL Items into one, neither of which R32 needed to do (both simply get resynced to
+  the same expected name independently, since the composed name depends only on the subaccount).
+- **2026-09-02 — `@report` needing the PRE-image (old value) of a row `@apply` is about to
+  overwrite cannot use R19/R31's "recompute independently, post-apply" pattern — it needs the
+  UPDATE's own `RETURNING` output, captured before the report's separate query runs.** R31's
+  `@report` works by recomputing an expected value from source data that never changes across a
+  run (it's reporting a stable PROPERTY of the row: "was this name truncated", true on every
+  idempotent re-run). R32 needed to report "did THIS run change this value", which requires the
+  value BEFORE this run's own `UPDATE` — already gone by the time `@report`'s separate `SELECT`
+  executes (confirmed via `run.js`: `@apply` and `@report` are two separate `client.query()` calls
+  on the same connection/transaction, `BEGIN` before `@apply`, `COMMIT` after `@report`). **Fix
+  pattern used:** `@apply`'s own data-modifying CTE chain ends in `SELECT ... INTO TEMP TABLE
+  <name> FROM updated` (where `updated` is the `UPDATE ... RETURNING` CTE) instead of feeding a
+  second real-table `INSERT` (R31/R18/R28's usual target) — a session-scoped Postgres temp table,
+  visible to `@report`'s separate query on the SAME connection before `COMMIT`, and safely undone
+  by `ROLLBACK` (temp table creation is transactional DDL, fully undone). **Apply generally:**
+  before assuming "recompute independently, post-apply" (R31's pattern) is always sufficient for a
+  `@report` section, check whether the report needs a value the `@apply` is about to destroy — if
+  so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a workaround to
+  avoid.
+- **2026-09-02 — REVIEW FINDING B2, caught before merge: a COMMITted session-scoped temp table
+  does NOT get cleaned up just because the connection is later returned to the pool.** The first
+  draft above assumed "no `ON COMMIT DROP` needed in practice... end-of-session cleanup once the
+  pooled connection is later reused" — that assumption is **wrong**. `client.release()`
+  (node-postgres, see `db.js`'s `createDbPool`) returns the socket to the pool without issuing
+  `DISCARD ALL` or ending the backend session, and this framework's pool is reused across
+  tenants/fixes (`max: 5`). Since R32 runs per-tenant (confirmed live: GOClient + QA Testing both
+  need it), a second tenant reusing the SAME pooled connection after a first tenant's `@apply`
+  committed would hit `relation "etgo_r32_glitem_name_resync" already exists` and abort the whole
+  chain for that tenant (`run.js`'s `applyChain` halts on a failed `@apply`). **Fix:** `@apply` now
+  leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync;` before its
+  data-modifying CTE, making every run self-cleaning regardless of connection reuse — a run whose
+  `@apply` updates 0 rows still (re)creates the (empty) temp table, so `@report` always runs
+  cleanly and simply returns 0 rows. A `ROLLBACK`ed run (including this file's own validation runs)
+  still undoes the `CREATE` along with everything else, since it is fully transactional DDL — the
+  explicit `DROP` only matters for connection reuse AFTER a commit. **Apply generally:** a
+  session-scoped temp table plus a connection pool is a drift trap — "the session ends, so the temp
+  table goes away" is true only if the SAME backend session is what gets torn down; a pooled
+  `release()` keeps the backend session alive for the next borrower. Any `@apply` that creates a
+  temp table for `@report` to read must assume the CREATE can collide with a leftover from an
+  earlier tenant sharing the pool, and lead with its own `DROP TABLE IF EXISTS`.
+- **2026-09-02 — Live sweep on the current (un-migrated) dev DB, R31 itself never committed here.**
+  GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000-
+  Capital social"`). QA Testing: 3 (the 2 "Petty Cash" GL Items above, plus "Fees" →
+  `"62900-Otros servicios"` on subaccount `62900`). Both fully live-validated in `BEGIN...ROLLBACK`
+  transactions using the real `parseFix`/`inlineParams` templating (not a hand-simplified query):
+  `@check` correctly non-zero pre-apply, `@apply` updates exactly the expected row count, `@report`
+  lists the correct old→new pairs, `@check` re-run in the SAME transaction (post-apply) converges
+  to 0, and `@apply` re-run affects 0 further rows (idempotent). Nothing committed to the shared
+  dev DB by this validation.
+- **2026-09-02 — `ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped for R32, unlike R31.**
+  Not a correctness gap: this data-fix's own author was explicitly scoped to `etendo_schema_forge`
+  only (the preventive Java, `syncGlItemNameAfterUpdate`, was already committed in an EARLIER step
+  of the SAME session by a different scope) — bumping the CUT is optional per the framework's own
+  table ("`.sql`-only, no CUT bump" is always safe, merely redundant for tenants the preventive
+  front already covers) and `@check`'s own convergence-to-0 for any subaccount touched by a live
+  rename since the preventive fix shipped makes the redundancy provably harmless, not just assumed
+  safe.
+- **2026-09-02 — `composeGlItemName` changed its separator from a space to a hyphen — a SEPARATE,
+  later change from the SAME day's code-first reorder (2026-09-01/02 note above), and again a
+  pure-character change with the truncation budget math untouched.** Same session, after the
+  code-first reorder landed: the coordinator flipped `composeGlItemName` (Java) from
+  `code + " " + name` to `code + "-" + name` — the character between code and name is now a
+  hyphen, nothing else about the formula changed (the budget `60 - (code.length() + 1)` is
+  identical either way; a hyphen is 1 char, exactly like the space it replaces). Both
+  `R31-glitem-subaccount-backfill.sql` (the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation — 2 occurrences) and
+  `R32-glitem-name-resync.sql` (`@check`'s CASE expression plus `@apply`'s `resync_candidates`
+  CTE, which itself repeats the formula in both its `SELECT` and its `WHERE ... IS DISTINCT FROM`
+  guard — 3 occurrences) were updated in the SAME PR, swapping every `|| ' ' ||` composed-name
+  literal for `|| '-' ||`; the two `length(ev.name || ' ' || ev.value)` occurrences in R31's
+  `@report` (used only to sum characters for the >60 threshold, not to reproduce the actual
+  composed string) were deliberately left untouched — a hyphen and a space are both 1 byte, so
+  the sum is identical either way. Re-validated byte-for-byte against the new Java separator on
+  GOClient and QA Testing in rolled-back transactions — 0 mismatches. **Apply generally:** the
+  same lesson as the code-first reorder note applies one character at a time too — ANY edit to a
+  Java string-composition formula a corrective SQL fix mirrors byte-for-byte, however small
+  (reordering fields, or here just swapping which literal character sits between them), is an
+  equally load-bearing drift risk; grep every `.sql` file AND every doc illustrating the format
+  string (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file's own earlier N1/N2/N3
+  bullets) for the literal old separator, not just the SQL's own composed-name CASE expressions —
+  a stale illustration elsewhere will mislead the next person into mirroring the wrong,
+  now-superseded character.

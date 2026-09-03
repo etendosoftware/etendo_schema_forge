@@ -230,6 +230,30 @@ describe('MovementsTab — default filters', () => {
     expect(ids).not.toContain('d');
   });
 
+  // ETP-5013 follow-up: the Journal Entries report's "Financial Account
+  // Transaction" drill-down lands here as `?txnAny=<id>`, targeting ONE specific
+  // movement that is very often older than the 30-day default. Keeping the
+  // default would leave that row out of `movements` entirely, so the
+  // highlight/expand silently did nothing and the account looked empty.
+  it('opens the date filter unbounded when arriving via a txnAny deep-link, so the target row is loaded', () => {
+    renderTab({ highlightTxnId: 'd', txnUnbounded: true });
+    // "d" is 40 days old — invisible under the last30 default, visible now.
+    expect(rowIds()).toContain('d');
+  });
+
+  // The four in-app `?txn=` callers (reconciled-txns modal, transfer jump,
+  // conciliado badge, cleared-items) always point at a recent movement, so
+  // highlighting alone must NOT widen their date filter.
+  it('keeps the last30 default for a plain txn deep-link without the unbounded flag', () => {
+    renderTab({ highlightTxnId: 'd' });
+    expect(rowIds()).not.toContain('d');
+  });
+
+  it('keeps the last30 default for normal navigation (no deep-link)', () => {
+    renderTab({ highlightTxnId: null });
+    expect(rowIds()).not.toContain('d');
+  });
+
   it('renders the toolbar, summary strip and table', () => {
     renderTab();
     expect(screen.getByTestId('toolbar')).toBeInTheDocument();

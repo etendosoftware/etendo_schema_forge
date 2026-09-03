@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-
 import { useApiFetch } from '@/auth/useApiFetch.js';
+
 /**
  * The single, canonical "is this year closed" derivation for the whole Calendar window —
  * reused by YearCloseStatusBadge (detail header pill), YearTableWithCloseStatus (list column),
@@ -10,13 +10,12 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * with a year-end closing/regularization type are returned there).
  *
  * @param {string|undefined} yearId
- * @param {string} token
  * @param {string} endYearCloseApiBaseUrl - already rewritten to the `end-year-close` spec base
  *   (e.g. `.../end-year-close`), NOT the year header's own `.../fiscal-calendar` base.
  * @returns {boolean|undefined|null} `undefined` while loading, `null` on error, else the
  *   resolved boolean.
  */
-export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
+export function useYearCloseStatus(yearId, endYearCloseApiBaseUrl) {
   const [closed, setClosed] = useState(undefined);
   const apiFetch = useApiFetch(endYearCloseApiBaseUrl);
 
@@ -27,7 +26,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     }
     let cancelled = false;
     setClosed(undefined);
-    apiFetch(`/accounting?year=${yearId}`, { token })
+    apiFetch(`/accounting?year=${yearId}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();
@@ -41,7 +40,7 @@ export function useYearCloseStatus(yearId, token, endYearCloseApiBaseUrl) {
     return () => {
       cancelled = true;
     };
-  }, [yearId, apiFetch, token]);
+  }, [yearId, apiFetch]);
 
   return closed;
 }

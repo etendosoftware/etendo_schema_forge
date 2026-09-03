@@ -1,6 +1,6 @@
 import ElementValuePage, { api } from './ElementValuePage';
 
-const windowMeta = { category: 'accounting', name: 'Chart of Accounts', id: '118' };
+const windowMeta = { category: 'finance', name: 'Chart of Accounts', id: '118' };
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {

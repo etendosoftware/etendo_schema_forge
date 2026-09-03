@@ -1,0 +1,206 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-09-02T14:40:15.987Z",
+  "updatedAt": "2026-09-02T21:18:24.005Z",
+  "contractChecksum": "7c41ab662d74c8c6",
+  "apiPrediction": {
+    "specName": "matched-purchase-invoices",
+    "baseUrl": "/sws/neo/matched-purchase-invoices",
+    "crud": {
+      "matchedInvoice": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/matched-purchase-invoices/matchedInvoice",
+        "detailUrl": "/sws/neo/matched-purchase-invoices/matchedInvoice/{id}",
+        "supportedFilters": [
+          "invoiceLine",
+          "goodsShipmentLine",
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "matchedInvoice",
+        "field": "invoiceLine",
+        "column": "C_InvoiceLine_ID",
+        "reference": "InvoiceLine",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/invoiceLine"
+      },
+      {
+        "entity": "matchedInvoice",
+        "field": "goodsShipmentLine",
+        "column": "M_InOutLine_ID",
+        "reference": "InOutLine",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/goodsShipmentLine"
+      },
+      {
+        "entity": "matchedInvoice",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/selectors/product"
+      }
+    ],
+    "actions": [
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "matchedInvoice",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/matched-purchase-invoices/matchedInvoice/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "purchases",
+      "readOnly": true
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "C_InvoiceLine_ID": "Línea de factura",
+        "M_InOutLine_ID": "Línea de albarán",
+        "M_Product_ID": "Producto",
+        "Qty": "Cantidad",
+        "DateTrx": "Fecha de transacción",
+        "Processed": "Procesada"
+      },
+      "en_US": {
+        "C_InvoiceLine_ID": "Invoice Line",
+        "M_InOutLine_ID": "Goods Receipt Line",
+        "M_Product_ID": "Product",
+        "Qty": "Quantity",
+        "DateTrx": "Transaction Date",
+        "Processed": "Processed"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "matchedInvoice": {
+        "fields": {
+          "invoiceLine": {
+            "readOnly": true,
+            "required": true
+          },
+          "goodsShipmentLine": {
+            "readOnly": true,
+            "required": true
+          },
+          "product": {
+            "readOnly": true,
+            "required": true
+          },
+          "quantity": {
+            "readOnly": true,
+            "required": true
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Create and manage matched purchase invoices documents.",
+    "whenToUse": [
+      "Use for supplier matched purchase invoices before receipt or invoice."
+    ],
+    "minimumCreate": {},
+    "selectorContexts": [],
+    "actions": [
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "etblkpBulkposting"
+      }
+    ],
+    "warnings": [
+      "This spec appears read-only from generated form metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "f6bd08ffe706bdb0"
+}

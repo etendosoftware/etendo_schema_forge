@@ -85,9 +85,17 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
 
   return (
     <div data-testid="confirm-result-modal" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
+      {/*
+        ETP-5108: no `fontFamily` here on purpose. The design system declares the
+        family in exactly one place — `body` in the core's styles.css — and every
+        component inherits it. This shell used to override it with a system-font
+        stack, which silently took the whole modal (title, subtitle, doc card and
+        buttons) off Inter and onto whatever sans the OS ships. It showed up worst
+        on the document number, whose digit widths differ from Inter's.
+      */}
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 444, borderRadius: 16, background: 'hsl(var(--card))', boxShadow: '0 8px 32px hsl(var(--foreground) / .18), 0 2px 8px hsl(var(--foreground) / .08)', overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif', color: 'hsl(var(--foreground))' }}
+        style={{ width: 444, borderRadius: 16, background: 'hsl(var(--card))', boxShadow: '0 8px 32px hsl(var(--foreground) / .18), 0 2px 8px hsl(var(--foreground) / .08)', overflow: 'hidden', color: 'hsl(var(--foreground))' }}
       >
         {/* Header */}
         <div style={{ padding: '28px 24px 20px', textAlign: 'center' }}>

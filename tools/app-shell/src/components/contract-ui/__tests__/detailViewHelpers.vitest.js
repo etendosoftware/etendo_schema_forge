@@ -43,6 +43,7 @@ import {
   getInlineEditableShrinkClassName,
   sidePanelWrapperCls,
   runAddLineAction,
+  resolveAddLineLabel,
   buildInitialTabs,
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
@@ -450,6 +451,100 @@ describe('secondary tab wiring', () => {
     })).resolves.toBeUndefined();
     expect(err).toHaveBeenCalled();
     err.mockRestore();
+  });
+});
+
+describe('resolveAddLineLabel (ETP-5021)', () => {
+  const ui = (key, vars) => (vars ? `${key}(${vars.label})` : key);
+  const tMenu = (label) => `menu:${label}`;
+
+  it('uses addLineLabelKey verbatim when present, ignoring label/labelKey', () => {
+    const st = { label: 'Location', labelKey: 'someLabelKey', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addAddress');
+  });
+
+  it('falls back to the generic addEntity composition using labelKey when addLineLabelKey is absent', () => {
+    const st = { label: 'Location', labelKey: 'someLabelKey' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addEntity(someLabelKey)');
+  });
+
+  it('falls back to tMenu(label) when neither addLineLabelKey nor labelKey is set', () => {
+    const st = { label: 'Location' };
+    expect(resolveAddLineLabel(st, ui, tMenu)).toBe('addEntity(menu:Location)');
+  });
+
+  it('strips a leading "+ " from the resolved addLineLabelKey text — AddLineButton already renders its own Plus icon', () => {
+    const realUi = (key) => (key === 'addAddress' ? '+ Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir dirección');
+  });
+
+  it('strips a bare leading "+" with no following space too', () => {
+    const realUi = (key) => (key === 'addAddress' ? '+Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir dirección');
+  });
+
+  it('leaves the generic addEntity composition untouched — it never carries a leading "+"', () => {
+    const realUi = (key, vars) => (vars ? `Añadir ${vars.label}` : key);
+    const st = { label: 'Location' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir menu:Location');
+  });
+
+  it('is a no-op on a resolved label that never had a leading "+"', () => {
+    const realUi = (key) => (key === 'addAddress' ? 'Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir dirección');
+  });
+
+  it('does not strip a "+" that is not at the very start of the label', () => {
+    const realUi = (key) => (key === 'addAddress' ? 'Añadir + Dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('Añadir + Dirección');
+  });
+
+  it('a repeated leading "+" ("++") strips only the first one — /^\\+\\s*/ is not global and matches a single "+"', () => {
+    // Regex walkthrough: \+ consumes exactly the FIRST "+"; \s* then tries to
+    // consume whitespace, but the very next character is the SECOND "+", not
+    // whitespace, so \s* matches zero characters. Net effect: only one "+" is
+    // removed and the result still has a leading "+" of its own. This is a
+    // latent gap for a "++" data-entry typo in a locale file — documented here,
+    // not asserted as correct-by-design, since the ticket never specifies
+    // multi-"+" handling.
+    const realUi = (key) => (key === 'addAddress' ? '++ Añadir dirección' : key);
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('+ Añadir dirección');
+  });
+
+  it('does not throw for a key that resolves to an empty string (regex .replace on "" is safe)', () => {
+    const realUi = () => '';
+    const st = { label: 'Location', addLineLabelKey: 'nonExistentKey' };
+    expect(resolveAddLineLabel(st, realUi, tMenu)).toBe('');
+  });
+
+  it('a missing-key lookup that mimics the real useUI() fallback (returns the key itself) never crashes', () => {
+    // useUI() in app-shell-core (src/i18n/useUI.js) resolves an unknown key as
+    // `dictionary?.genericLabels?.[key] ?? key` — i.e. it ALWAYS returns a
+    // string (the raw key) rather than undefined/null when a decisions.json
+    // `addLineLabelKey` typo points at a nonexistent i18n key. Since the
+    // fallback key string ('typoedKey') has no leading "+", the regex is a
+    // no-op and the (wrong-looking but non-crashing) key text is returned.
+    const realUiFallback = (key) => key;
+    const st = { label: 'Location', addLineLabelKey: 'typoedKey' };
+    expect(resolveAddLineLabel(st, realUiFallback, tMenu)).toBe('typoedKey');
+  });
+
+  it('BUG-RISK (ETP-5021 QA): throws a TypeError if ui() ever returns undefined for a key ' +
+    '(resolveAddLineLabel has no defensive check before calling .replace on the result)', () => {
+    const uiReturnsUndefined = () => undefined;
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(() => resolveAddLineLabel(st, uiReturnsUndefined, tMenu)).toThrow(TypeError);
+  });
+
+  it('BUG-RISK (ETP-5021 QA): throws a TypeError if ui() ever returns null for a key', () => {
+    const uiReturnsNull = () => null;
+    const st = { label: 'Location', addLineLabelKey: 'addAddress' };
+    expect(() => resolveAddLineLabel(st, uiReturnsNull, tMenu)).toThrow(TypeError);
   });
 });
 

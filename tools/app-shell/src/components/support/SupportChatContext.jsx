@@ -108,7 +108,13 @@ function reducer(state, action) {
     case 'SET_LOADING_CONVERSATIONS':
       return { ...state, isLoadingConversations: true, error: null };
     case 'SET_ACTIVE_CONVERSATION':
-      return { ...state, activeConversationId: action.id, messages: [] };
+      // Resets the shared draft here, not on widget close — this is the only action that
+      // represents the user actually navigating to a DIFFERENT conversation (from the
+      // Mensajes list, or starting a fresh one). `input` otherwise survives closing/reopening
+      // the widget, so a message the user was mid-typing isn't lost just because they closed
+      // the chat panel; it's the 'new' → real-id promotion after the first AI reply (handled
+      // by ADD_CONVERSATION, not this action) that must NOT clear it.
+      return { ...state, activeConversationId: action.id, messages: [], input: '' };
     case 'SET_MESSAGES':
       return { ...state, messages: action.messages, isLoadingMessages: false };
     case 'SET_LOADING_MESSAGES':

@@ -1315,6 +1315,18 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
   );
 }
 
+// Maps Trial Balance's "Agrupar por" groupByValue key to the matching
+// General Ledger contract param (ETP-5013 follow-up) — both contracts use
+// the SAME groupByValue keys ('bpartner', 'product', 'project', 'costcenter')
+// for their own dimension params, so this is the one place that decides
+// which filter a dimension-row drill-down narrows General Ledger by.
+const TRIAL_BALANCE_DIMENSION_PARAM_NAMES = {
+  bpartner: 'bPartnerId',
+  product: 'productId',
+  project: 'projectId',
+  costcenter: 'costCenterId',
+};
+
 function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, roleOrgIds, categoryFilter }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -1347,7 +1359,18 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       if (e.data?.type === 'aging-drilldown' && e.data.bpId) {
         setDrillDownBp({ id: e.data.bpId, name: e.data.bpName || '' });
       } else if (e.data?.type === 'trial-balance-drilldown' && e.data.accountId) {
-        setDrillDownAccount({ id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '' });
+        // dimensionGroupBy/dimensionId/dimensionValue are only present when the
+        // click came from a dimension row (ETP-5013 follow-up) — the
+        // account-number link (no dimension) omits them, same modal either
+        // way. dimensionGroupBy carries the SAME groupByValue key both this
+        // report's and General Ledger's own contracts use ('bpartner',
+        // 'product', 'project', 'costcenter'), resolved to the target
+        // report's real param name here rather than hardcoding one dimension.
+        setDrillDownAccount({
+          id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '',
+          dimensionParamName: TRIAL_BALANCE_DIMENSION_PARAM_NAMES[e.data.dimensionGroupBy] || '',
+          dimensionId: e.data.dimensionId || '', dimensionValue: e.data.dimensionValue || '',
+        });
       } else if (e.data?.type === 'gl-entry-drilldown' && e.data.factAcctGroupId) {
         // dateDisplay is a plain dd/MM/yyyy string (the shared report helpers'
         // formatDate, fixed 'en-GB' formatting) — display-only, for the modal
@@ -1365,7 +1388,23 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         // hardcoded here, since this handler is shared by every report.
         const docWindow = e.data.docWindow || 'sales-invoice';
         const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
-        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}`, '_blank');
+        // Optional deep-link query the report itself supplies (ETP-5013
+        // follow-up): a financial-account transaction has no window of its
+        // own — it opens its PARENT account and needs `?txn=<id>` for that
+        // window to select/expand the right movement. Data-driven, like
+        // docWindow: this handler is shared by every report and never
+        // hardcodes a window's own param names.
+        //
+        // Key and value travel SEPARATELY, and the '=' is joined here rather
+        // than in the report's SQL on purpose: applyPlaceholders rewrites
+        // `= '...'` into an `IN (...)` list to support multi-select params,
+        // so a literal '=' next to a quote inside the query was swallowed by
+        // that rewrite and corrupted the SQL (ETP-5013 follow-up).
+        const { docQueryKey, docQueryValue } = e.data;
+        const docQuery = docQueryKey && docQueryValue
+          ? `?${encodeURIComponent(docQueryKey)}=${encodeURIComponent(docQueryValue)}`
+          : '';
+        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}${docQuery}`, '_blank');
       }
     };
     window.addEventListener('message', handler);
@@ -1789,6 +1828,17 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
                 // right filter values but an empty-looking "Desde/A la cuenta" field.
                 _display_fromAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
                 _display_toAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+                // Only present when the click came from a dimension row
+                // (ETP-5013 follow-up) — narrows the General Ledger detail to
+                // that specific account AND that specific Contacto/Producto/
+                // Proyecto/Centro de costos value, matching Classic's own
+                // Trial Balance drill-down. dimensionParamName was already
+                // resolved to the right GL param name (bPartnerId/productId/
+                // projectId/costCenterId) when the message came in.
+                ...(drillDownAccount.dimensionParamName ? {
+                  [drillDownAccount.dimensionParamName]: drillDownAccount.dimensionId,
+                  [`_display_${drillDownAccount.dimensionParamName}`]: drillDownAccount.dimensionValue,
+                } : {}),
               }}
               data-testid="DrillDownViewer__3c998a" />
           )}

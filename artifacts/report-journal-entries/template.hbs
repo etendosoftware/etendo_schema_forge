@@ -63,7 +63,7 @@
       {{#each rows}}
         {{#if (isGroupBreak 'fact_acct_group_id' (lookup this 'fact_acct_group_id'))}}
         <tr class="entry-header">
-          <td class="entry-no">{{#if (lookup this 'doc_window')}}<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{lookup this 'record_id'}}',docWindow:'{{lookup this 'doc_window'}}'},'*')">{{lookup this 'entry_no'}}</span>{{else}}{{lookup this 'entry_no'}}{{/if}}</td>
+          <td class="entry-no">{{#if (lookup this 'doc_window')}}<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{lookup this 'doc_record_id'}}',docWindow:'{{lookup this 'doc_window'}}',docQueryKey:'{{lookup this 'doc_query_key'}}',docQueryValue:'{{lookup this 'record_id'}}'},'*')">{{lookup this 'entry_no'}}</span>{{else}}{{lookup this 'entry_no'}}{{/if}}</td>
           <td class="entry-date">{{formatDate (lookup this 'dateacct')}}</td>
           <td class="entry-detail" colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}10{{else}}9{{/ifCond}}{{else}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}6{{else}}5{{/ifCond}}{{/ifCond}}">{{translateDocType (lookup this 'docbasetype') (lookup this 'isreturn') (lookup this 'document_type') @root.meta.locale}}</td>
         </tr>

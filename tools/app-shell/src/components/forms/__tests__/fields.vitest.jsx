@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 
@@ -43,7 +43,7 @@ vi.mock('@/components/ui/popover', () => ({
 }));
 
 import {
-  Field, ReadOnly, TextInput, Select, DateInput, AmountInput, MoneyInput, LookupPicker, Note, SectionLabel,
+  Field, ReadOnly, TextInput, Select, DateInput, AmountInput, MoneyInput, LookupPicker, ChipSelect, Note, SectionLabel,
 } from '../fields.jsx';
 
 describe('Field', () => {
@@ -261,6 +261,143 @@ describe('LookupPicker', () => {
     render(<LookupPicker value={null} onChange={vi.fn()} useLookup={makeHook([], true)} placeholder="Buscar…" />);
     await user.click(screen.getByPlaceholderText('Buscar…'));
     expect(screen.getByText('…')).toBeInTheDocument();
+  });
+});
+
+// ETP-4924 follow-up — ChipSelect had no keyboard handling at all (mouse-only
+// option selection). handleInputKeyDown was ported from CreatableSearchSelect's
+// handleInputKeyDown, so these mirror that reference component's arrow/Home/End/
+// Enter/Escape behavior, including its stricter Enter guard (no fallback to the
+// first result when nothing is highlighted, unlike InlineSearchCombo).
+describe('ChipSelect keyboard navigation', () => {
+  const FAKE_RESULTS = [
+    { id: 'a', name: 'Alpha' },
+    { id: 'b', name: 'Beta' },
+    { id: 'c', name: 'Gamma' },
+  ];
+  // Static lookup that ignores the query arg — real search isn't the point here,
+  // matching LookupPicker's own makeHook convention above.
+  const makeHook = (results, loading = false) => () => ({ results, loading });
+
+  function renderChipSelect(onChange) {
+    render(
+      <ChipSelect
+        value={null}
+        onChange={onChange}
+        useLookup={makeHook(FAKE_RESULTS)}
+        placeholder="Buscar…"
+        testId="test-chip"
+      />,
+    );
+    return screen.getByTestId('test-chip-search');
+  }
+
+  it('ArrowDown twice then Enter selects the second result', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input); // focus opens the popover (onFocus -> setOpen(true))
+    // activeIndex starts at -1. Math.min(i + 1, results.length - 1) with
+    // results.length === 3: press 1 -> min(0, 2) = 0; press 2 -> min(1, 2) = 1.
+    // Index 1 is Beta.
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[1]);
+  });
+
+  it('ArrowDown past the last result clamps the highlight at the last item', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    // 5 ArrowDowns with only 3 results: 0, 1, 2, 2, 2 (clamped by
+    // Math.min(i + 1, results.length - 1) — never wraps, never throws).
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[2]);
+  });
+
+  it('ArrowUp with nothing highlighted clamps at the first result', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    // From activeIndex -1: Math.max(i - 1, 0) = Math.max(-2, 0) = 0 — the first
+    // ArrowUp already lands on the first result, it doesn't go negative.
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[0]);
+  });
+
+  it('Enter with no prior arrow key press does not select anything', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    // activeIndex is still -1 — the `case 'Enter':` guard requires
+    // `activeIndex >= 0 && results[activeIndex]`, so this is a deliberate no-op
+    // (ChipSelect matches CreatableSearchSelect's stricter behavior, not
+    // InlineSearchCombo's fallback-to-first-result).
+    await user.keyboard('{Enter}');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('Escape closes the dropdown without selecting anything', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'true');
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByTestId('test-chip-option-a')).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{Escape}');
+    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'false');
+    expect(onChange).not.toHaveBeenCalled();
+    // close() flips `open`, and the activeIndex-reset effect is keyed on `open`,
+    // so the highlight is gone too — even though the mocked PopoverContent (unlike
+    // the real Radix one) keeps rendering the option list regardless of `open`.
+    expect(screen.getByTestId('test-chip-option-a')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('Home jumps the highlight back to the first result', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    // Two ArrowDowns land on index 1 (Beta, see arithmetic above) — so Home
+    // moving it back to 0 is an observable change, not a no-op.
+    await user.keyboard('{ArrowDown}{ArrowDown}{Home}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[0]);
+  });
+
+  it('End jumps the highlight to the last result', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    await user.click(input);
+    await user.keyboard('{ArrowDown}{End}{Enter}');
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[2]);
+  });
+
+  it('a cold ArrowDown (dropdown not yet open) only opens it, it does not move the highlight', () => {
+    const onChange = vi.fn();
+    const input = renderChipSelect(onChange);
+    // NOTE: ChipSelect's input already calls setOpen(true) on focus, so a real
+    // user.click()/user.keyboard() flow always has `open === true` by the time a
+    // key is pressed — the `if (!open && ...)` early-return branch in
+    // handleInputKeyDown is unreachable through a normal focus-then-type flow.
+    // Dispatch the keydown directly on the un-focused node with fireEvent
+    // (not userEvent, which would focus it first) to exercise that branch.
+    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'false');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'true');
+    expect(onChange).not.toHaveBeenCalled();
+    // Enter right after the opening ArrowDown must not select anything —
+    // activeIndex is still -1, that first press only opened the popover.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).not.toHaveBeenCalled();
+    // A SECOND ArrowDown (now that `open` is already true) is what actually
+    // highlights index 0.
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith(FAKE_RESULTS[0]);
   });
 });
 

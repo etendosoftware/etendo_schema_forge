@@ -62,7 +62,7 @@
       "spec": "product",
       "entity": "product",
       "descriptor": "product",
-      "formats": ["csv", "txt"],
+      "formats": ["csv", "txt", "xlsx"],
       "limit": { "maxRows": 5000, "concurrency": 4 },
       "dedupe": { "scope": "database", "key": ["searchKey"] },
       "fields": [

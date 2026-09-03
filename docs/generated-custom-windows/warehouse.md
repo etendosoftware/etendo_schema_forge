@@ -161,7 +161,14 @@ Registered as secondary tab with key `productTransactions`, label `warehouseTran
 - `etgoDocWindow` — slug of the GO window that handles that document type
 - `etgoDocLabel` — human-readable document identifier (document number, or `name` for physical inventories)
 
-The tab fetches transactions from the `transactions` slice of `useWarehouseStock` (collected from all bins via `productTransactions?parentId=<binId>`), then sorts client-side by `movementDate` descending. Sort is fixed — no sort arrows, no user-accessible sort controls. No search.
+The tab fetches transactions from the `transactions` slice of `useWarehouseStock` (collected from all bins via `productTransactions?parentId=<binId>`), then pre-sorts client-side by `movementDate` descending — this is the default order, shown with no user action (AC1). No search.
+
+**Sortable columns (ETP-5083).** Every column header is clickable and sorts asc/desc, with the active sort indicated by an arrow (▲/▼) exactly like the generic `DataTable` grids. This reuses the SAME shared mechanism as the financial-account detail tabs (Movimientos, Reconciliaciones, Extractos): `useClientSort` (`tools/app-shell/src/hooks/useClientSort.js`) for sort state, `sortRows`/`compareCellValues` (`tools/app-shell/src/lib/clientSort.js`) for the actual comparator, and `SortableHeaderLabel` (`tools/app-shell/src/components/financial-accounts/SortableHeaderLabel.jsx`) for the header affordance. **A future change to `clientSort.js` or `useClientSort.js` must be re-checked against both consumers** — warehouse Transactions and the three financial-account tabs share the exact same code path.
+
+- **Default order + initial indicator:** rows are pre-sorted `movementDate` desc (see above) and fed into `useClientSort` with `initialSort: { key: 'date', direction: 'desc' }`. This seeds the sort-indicator state so the Date header already shows **▼** on first render — the indicator reflects the actual active order, not a prior click.
+- **One-shot first-click override:** because the Date column starts in the "desc" position, a literal none→asc→desc→none cycle would make the FIRST click on Date land on "none" — which is the exact same order the page already shows, so the click would look like it did nothing. To avoid that, the first click ever on the Date header jumps straight to **▲ ascending** (a real, visible reorder) instead of to "no sort". Every click after that first one — on Date or any other column — follows the normal none→asc→desc→none cycle. Clicking a different column first consumes this one-shot grace period without changing that column's own (normal) cycle.
+- **Blank-last in both directions:** the Documento column can have unresolvable/blank values (no source line, no `etgoDocLabel`). `compareCellValues` always sorts a blank last, in BOTH ascending and descending order — this was BUG-1 (`clientSort.js`'s `sortRows` used to multiply the *entire* comparator result by the sort sign, which also flipped the blank-handling branches and floated a blank row to the top on `desc`; fixed by only applying the sign when comparing two non-blank values).
+- Accessors: `date` via `parseCalendarDate(tx.movementDate).getTime()` (timezone-safe, per this repo's date-only convention), `type`/`document`/`product` via their resolved display-label strings (`resolveTypeLabel`, `documentLabel`, `product$_identifier`), `qty` via `Number(tx.movementQuantity)`.
 
 `productTransactions` is declared `"readOnly": true` in `decisions.json`, so the contract grants only `GET` + `GETBYID` (`apiPrediction.crud.productTransactions.methods`). `M_Transaction` rows are written by document processing, never by a user — the entity previously advertised `POST`/`PUT`/`PATCH`/`DELETE` while every one of its fields was read-only, so a write could not carry a single value. Reads are unchanged. The live `ETGO_SF_ENTITY` flags follow on the next `make regen ONLY=warehouse PUSH_TO_NEO=1` + `./gradlew export.database`.
 
@@ -171,7 +178,7 @@ Columns:
 |--------|-----------|-------|
 | Date | left, `font-semibold`, tabular-nums | `DD/MM/YYYY` format |
 | Type | left, `text-muted-foreground` | Resolved from `etgoDocWindow` via `WINDOW_TYPE_KEY_MAP` when present (distinguishes normal document vs. return — see below); falls back to translated `TYPE_KEY_MAP[movementType]`, then raw `movementType$_identifier`, otherwise |
-| Document | left | Navigable `DocumentLink` (underline + ↗ icon) when `etgoDocWindow` and `etgoDocHeaderId` are present; plain text otherwise |
+| Document | left | Navigable `DocumentLink` (underline + ↗ icon) when `etgoDocWindow` and `etgoDocHeaderId` are present; plain text otherwise. Opens in a **new browser tab** (see below) |
 | Product | left | `product$_identifier` |
 | Qty | right, tabular-nums, `font-semibold` | Positive: `emerald-600` with leading `+`. Negative: `text-destructive`. |
 
@@ -189,10 +196,10 @@ a real instance: `MovementType` is identical between a normal document and its r
 | `N` | `Y` (purchase return) | `M_InOutLine → M_InOut ⟕ C_DocType` | `return-to-vendor-shipment` |
 | — | — | `M_MovementLine → M_Movement` | `goods-movements` |
 | — | — | `M_InventoryLine → M_Inventory` | `physical-inventory` (identifier = `name` column, not `documentno`) |
+| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | `internal-consumption` (identifier = `name` column, not `documentno`; ETP-5039) |
 | — | — | `M_ProductionLine → M_Production` | No GO window yet — plain text |
-| — | — | `M_Internal_ConsumptionLine → M_Internal_Consumption` | No GO window yet — plain text |
 
-`documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, or `productionLine$_identifier`.
+`documentLabel()` prefers `etgoDocLabel`, then falls back to `goodsShipmentLine$_identifier`, `movementLine$_identifier`, `physicalInventoryLine$_identifier`, `internalConsumptionLine$_identifier`, or `productionLine$_identifier`.
 
 **Type column resolution:** `M_Transaction.MovementType` is identical between a normal document and
 its return (`C-` for both a customer shipment and its return, `V+` for both a vendor receipt and its
@@ -201,14 +208,22 @@ return), so it cannot be used alone to label the Type column for a return. `reso
 document-window discriminator used for navigation — mapping `return-material-receipt` →
 `movTypeCustomerReturn` and `return-to-vendor-shipment` → `movTypeVendorReturn` (normal
 `goods-shipment`/`goods-receipt` reuse the existing `movTypeCustomerShipment`/`movTypeVendorReceipt`
-keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`, production,
-internal consumption) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
+keys). Rows without a resolvable `etgoDocWindow` (`goods-movements`, `physical-inventory`,
+`internal-consumption`, production) fall back to the translated `TYPE_KEY_MAP[movementType]` label (covers all 9
 real `M_Transaction.MovementType` codes — `V+`, `I+`, `I-`, `M+`, `M-`, `P+`, `P-`, `C-`, `D-` — see
 `artifacts/return-material-receipt/FINDINGS.md`, which confirms no other codes like `V-`/`C+` are
 actually used in stock transactions), and only drop to the raw `movementType$_identifier` /
 `movementType` code as a last resort when the code is unmapped. The raw identifier must never be
 checked before the translated map — doing so silently reintroduces hardcoded English text
 regardless of locale (see ETP-4864).
+
+**Document link opens in a new tab (ETP-5083).** Clicking a `DocumentLink` calls `window.open(...)` (`'_blank'`, `'noopener,noreferrer'`) instead of navigating in the current tab via `useNavigate()` — the warehouse Transactions row and the linked document (goods receipt, shipment, etc.) are both worth keeping open side by side. The target URL is built as:
+
+```js
+`${window.location.origin}${getRouterBase()}/${tx.etgoDocWindow}/${tx.etgoDocHeaderId}`
+```
+
+`getRouterBase()` (`tools/app-shell/src/lib/deploymentBasePath.js`) is required because `window.open` needs an ABSOLUTE URL — it bypasses the app's router entirely, so it must reconstruct the same deployment prefix `App.jsx`'s `detectBasePath()` derives for the router's `basename` (Tomcat context path + `/web/<module>`). Locating the `/web/` marker in `window.location.pathname` makes it deployment-shape-based rather than route-depth-based, so it returns the correct base under both a root deployment (`''`, avoiding a double slash before the leading-slash path) and a non-root one (e.g. `/etendo/web/com.etendoerp.go`) — regardless of how many segments deep the current route is. This is deliberately NOT implemented by stripping N trailing path segments off the current URL (the original, wrong approach in `ReportViewerPage.jsx`'s own `window.open` helper), because that breaks for any route more than one segment past the app root — which `/warehouse/:recordId` already is.
 
 Empty state shows `warehouseNoTransactions` centered message.
 
@@ -304,7 +319,9 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseCustomTable.jsx` — list column definitions and product-count cell.
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseSummary.jsx` — sidebar metrics (valuation, products with stock).
 - `tools/app-shell/src/windows/custom/warehouse/WarehouseProductsTab.jsx` — Products tab table.
-- `tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx` — Transactions tab table, document navigation, movement type mapping.
+- `tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx` — Transactions tab table, document navigation, movement type mapping, sortable columns (ETP-5083).
+- `tools/app-shell/src/lib/deploymentBasePath.js` — `getRouterBase()`, shared helper for building an absolute deployment-shape-safe URL prefix for `window.open`-style links (ETP-5083).
+- `tools/app-shell/src/lib/clientSort.js` / `tools/app-shell/src/hooks/useClientSort.js` — shared client-side sort mechanism (also used by the financial-account Movimientos/Reconciliaciones/Extractos tabs); `initialSort` + the one-shot first-click override added for ETP-5083.
 - `tools/app-shell/src/windows/custom/warehouse/useWarehouseStock.js` — shared data fetch hook (bins → binContents + productTransactions, UOM resolution).
 - `tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js` — `aggregateProducts` helper. Returns all aggregated rows unfiltered; each consumer (`WarehouseProductsTab.jsx`, `WarehouseCustomTable.jsx` with `!= 0`, `WarehouseSummary.jsx` with `> 0`) applies its own qty predicate — see "Stock filtering semantics".
 - `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` + `readOnly: true` for the productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
@@ -315,6 +332,11 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/index.vitest.jsx` — regression guard: `createDefaultStorageBin` sends `inventoryStatus: '2'` (ETP-4761) on the default-bin creation POST.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseCustomTable.test.js` — regression guard: list-view product-count cell uses `!= 0`.
 - `tools/app-shell/src/windows/__tests__/registry.test.js` — proves the `warehouse` slug is registered in the window map.
+- `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseTransactionsTable.vitest.jsx` — regression guard: default date-desc order + initial ▼ indicator, the full sort cycle per column (including the one-shot first-click-on-Date override), blank-Documento-sorts-last in both directions (BUG-1), new-tab `window.open` navigation (root and non-root deployment shapes).
+- `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseTransactionsTable.tz-bug.vitest.jsx` — regression guard for the ETP-4850 date off-by-one bug; unaffected by the ETP-5083 sorting/navigation changes.
+- `tools/app-shell/src/lib/__tests__/clientSort.test.js` — BUG-1 fix coverage (blank values stay last regardless of sort direction).
+- `tools/app-shell/src/lib/__tests__/deploymentBasePath.vitest.js` — `getRouterBase()` coverage: root deployment, non-root deployment, routes multiple segments past the module.
+- `tools/app-shell/src/hooks/__tests__/useClientSort.vitest.jsx` / `.test.js` — `initialSort` seeding and the one-shot override (same-column and different-column-first cases).
 
 ## Manual verification
 
@@ -324,9 +346,11 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 4. In the sidebar, confirm Total Valuation and Products with Stock display (or zero/empty state if no stock).
 5. Open the **Products** tab and confirm rows show Product, UOM, Valuation (currency-formatted), and Stock columns with no sort arrows. Confirm exact-zero-quantity products are absent, but a product with negative stock (e.g. oversold) IS listed with a negative Stock value. Confirm the Products list column count and the Products tab row count match (both use `qty != 0`).
 6. In the sidebar, confirm "Products with Stock" counts only strictly-positive-quantity products — a product with negative stock should be excluded from this KPI even though it appears in the Products tab.
-7. Open the **Transactions** tab and confirm rows are sorted by date descending with no user-accessible sort. Confirm the Date column renders as `DD/MM/YYYY`.
-8. For a goods-receipt transaction, confirm the Document column shows a navigable link (underline + ↗) that navigates to `/goods-receipt/<id>`.
-9. For a production or internal-consumption transaction, confirm the Document column shows plain text (no link).
-10. Confirm positive quantities are green with a leading `+` and negative quantities are red.
-11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
-12. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.
+7. Open the **Transactions** tab and confirm rows default to date descending (most recent first) with no user interaction, and that the Date header already shows the **▼** arrow on first load. Confirm the Date column renders as `DD/MM/YYYY`.
+8. Click the Date header once and confirm it jumps straight to **▲** (ascending, oldest first) — a real, visible reorder, not a no-op. Click it two more times and confirm the normal cycle resumes: ▼ (descending) then no arrow (default order restored). Confirm every other column header (Type, Documento, Producto, Cantidad) is clickable and cycles asc → desc → none, showing the correct arrow at each step.
+9. On the Documento column, with at least one row that has no resolvable document, sort ascending then descending and confirm the blank row stays LAST in both directions (never floats to the top on descending).
+10. For a goods-receipt transaction, confirm the Document column shows a navigable link (underline + ↗) that opens `/goods-receipt/<id>` in a **new browser tab** (not the current one). Repeat under a non-root deployment (Tomcat context path present) and confirm the opened URL includes that context path + `/web/<module>` prefix.
+11. For a production or internal-consumption transaction, confirm the Document column shows plain text (no link).
+12. Confirm positive quantities are green with a leading `+` and negative quantities are red.
+13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
+14. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.
