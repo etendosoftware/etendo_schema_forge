@@ -14,7 +14,7 @@ import { useClientSort } from '@/hooks/useClientSort';
 import { useUI } from '@/i18n';
 import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
-import { applyAdvancedFilter } from './movementAdvancedFilter';
+import { applyAdvancedFilter, withDerivedFields } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { useDeleteMovement } from '@/hooks/useCreateMovement';
@@ -97,11 +97,19 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, autoOpenNewMovement = false },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false },
   ref,
 ) {
   const [filters, setFilters] = useState({
-    dateRange: { presetId: 'last30' },
+    // A `?txnAny=<id>` deep-link (ETP-5013 follow-up — the Journal Entries report's
+    // "Financial Account Transaction" drill-down) targets ONE specific movement,
+    // which is very often older than the 30-day default: the row simply would
+    // not be in `movements` at all, so the highlight/expand below silently did
+    // nothing and the user landed on an empty-looking list. Opening that one
+    // case unbounded guarantees the targeted movement is loaded. Plain `?txn=`
+    // (the four in-app callers) always points at a recent movement and keeps
+    // the 30-day default, so their view is unchanged.
+    dateRange: txnUnbounded ? null : { presetId: 'last30' },
     type: null,
     search: '',
   });
@@ -156,6 +164,13 @@ export const MovementsTab = forwardRef(function MovementsTab(
     () => applyAdvancedFilter(applyFilters(movements, filters), advancedFilter),
     [movements, filters, advancedFilter],
   );
+
+  // Rows handed to the toolbar's advanced-filter builder must carry the SAME
+  // derived fields the filter columns expose. `statusFamily` exists only inside
+  // the evaluator's projection, so the builder's enum picker used to seed its
+  // in-memory option list from a field no row had — leaving the Status dropdown
+  // to fall back to the declared enumLabels alone (ETP-4956).
+  const filterSourceRows = useMemo(() => movements.map(withDerivedFields), [movements]);
 
   // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in the toolbar,
   // which is the table's sibling. Same split as ListView/DataTable. Client-side because this
@@ -225,7 +240,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         onRefresh={onReload}
-        rows={movements}
+        rows={filterSourceRows}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}
@@ -261,6 +276,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onSort={toggleSort}
           onReload={onReload}
           onEdit={setEditMovement}
+          accountCurrencyId={account?.currencyId}
           data-testid="MovementsTable__c1f76a" />
       </div>
       {batchDeleteDialog}

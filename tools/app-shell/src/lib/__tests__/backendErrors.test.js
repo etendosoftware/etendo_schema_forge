@@ -1580,3 +1580,46 @@ describe('translateBackendError — match-rule priority validation (ETP-4950)', 
     });
   });
 });
+
+// ChartOfAccountsHandler.java (com.etendoerp.go — ETP-5101), ERR_DUPLICATE_CODE —
+// "Account %s already exists." Fixed English prefix/suffix around the dynamic 8-digit
+// code, same shape as the "Order not found: <id>" matcher above. Needs the
+// matchAccountAlreadyExists parameterized matcher wired into translateParameterized,
+// re-rendered via backendError.accountAlreadyExists with {code} interpolation.
+describe('"Account <code> already exists." parameterized match', () => {
+  const en = fakeUiTranslator({
+    'backendError.accountAlreadyExists': 'Account {code} already exists.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.accountAlreadyExists': 'La cuenta {code} ya existe.',
+  });
+  const RAW = 'Account 20000005 already exists.';
+
+  it('translates the rendered backend message to es_ES, interpolating the account code', () => {
+    assert.equal(translateBackendError(RAW, es), 'La cuenta 20000005 ya existe.');
+  });
+
+  it('translates the rendered backend message to en_US, interpolating the account code', () => {
+    assert.equal(translateBackendError(RAW, en), 'Account 20000005 already exists.');
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
+    assert.equal(translateBackendError(RAW, missingT), RAW);
+  });
+
+  it('does not match a message missing the trailing period', () => {
+    const malformed = 'Account 20000005 already exists';
+    assert.equal(translateBackendError(malformed, es), malformed);
+  });
+
+  it('does not match a message with no code between prefix and suffix (empty capture guard)', () => {
+    const blank = 'Account  already exists.';
+    assert.equal(translateBackendError(blank, es), blank);
+  });
+
+  it('does not match an unrelated message that merely mentions "already exists"', () => {
+    const unrelated = 'A rule with this priority already exists for the selected scope';
+    assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+});
