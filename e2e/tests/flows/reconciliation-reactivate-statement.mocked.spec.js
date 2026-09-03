@@ -567,8 +567,22 @@ test.describe('ETP-5121 — a reactivated statement keeps its reconciled line (m
     await row.hover();
     await page.getByTestId(`statement-row-edit-${STATEMENT_ID}`).click();
 
-    // Hydration is async (it waits for the lines fetch to settle).
-    const locked = page.getByTestId(`manual-line-matched-${RECONCILED_LINE_ID}`);
+    /*
+     * Hydration is async (it waits for the lines fetch to settle), so the first assertion below is
+     * the one that waits.
+     *
+     * The locator deliberately does NOT key on `RECONCILED_LINE_ID`: `ManualStatementModal`'s
+     * `lineToRow()` drops the backend line id entirely and stamps every grid row with a SYNTHETIC
+     * client-side id (`e1`, `e2`, …) drawn from a module-level counter that keeps incrementing
+     * across modal opens in the same page session. So `manual-line-matched-bsl-reconciled` never
+     * exists, and no literal `e<n>` is deterministic either — a regex is the only stable handle
+     * (the sibling Vitest test matches `/^manual-line-matched-/` for the same reason). The strict
+     * count keeps the regex honest: exactly one matched row, so the assertions that follow can
+     * never be diluted across several rows, and the content assertions are what still tie this row
+     * to the reconciled line specifically.
+     */
+    const locked = page.getByTestId(/^manual-line-matched-/);
+    await expect(locked).toHaveCount(1);
     await expect(locked).toBeVisible();
 
     // Read-only, not hidden: values on screen, no control to change them.
