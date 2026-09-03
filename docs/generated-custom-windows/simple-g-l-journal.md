@@ -4,7 +4,7 @@
 
 Use this window to record simplified manual accounting journals ("Asientos Manuales") in Etendo GO. It ports the Classic `Simple G/L Journal` window (AD id `B917E8A7B0864ACEA9D941E3B7494E53`) as a 2-level master-detail surface: a journal header plus debit/credit lines. The defining domain rule is that an entry must be **balanced** — the sum of the debit column must equal the sum of the credit column — before it can be saved. Completing (confirming) the journal additionally requires the total to be greater than zero.
 
-This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244. It provides full CRUD over journals and lines. **Posting is deferred** to workstream D (see Gap assessment).
+This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244. It provides full CRUD over journals and lines. Posting and completion, originally planned for a later workstream D, have since shipped — see "Posting & completion status correction (ETP-4917)" near the end of this doc.
 
 ## What this window should allow
 
@@ -12,8 +12,9 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - **Single date:** the form exposes only **Accounting Date**. Document Date is hidden (`system`); the backend derives `DateDoc` from the accounting date via its AD default (`to_date(@HeaderDateAcct@)`), so the user never maintains two dates.
 - Add one or more journal lines under a header, each with an account, an optional description, a debit amount, and a credit amount. A new line's `Description` is **pre-filled with the header description**: the line `Description` carries the AD default `@DESCRIPTION1@` (the tab auxiliary input `DESCRIPTION1` = the parent journal's description), NEO Headless resolves it in its defaults pipeline, and the inline add-row fetches the line `/defaults` on open (HandleDefaults) and seeds the empty field. The user can still edit it per line.
 - Optionally flag a line as **Open Items**, which reveals per-line accounting dimensions (Business Partner, Product, Project, Cost Center, Asset) in the line editor.
-- See a live **balance footer** below the lines: total debit, total credit, the difference, and a balanced ✓ / unbalanced ✗ badge.
+- See a live **balance footer** below the lines: total debit and total credit (see ETP-4917 note below — the difference amount and the balanced ✓/✗ badge were trimmed from the display).
 - Be prevented from saving the document while the entry is unbalanced (the Save button is disabled with an explanatory tooltip).
+- See **two independent status chips** in the header: the accounting-posted pill (Sin contabilizar/Contabilizado) and a document lifecycle chip (Borrador/Completado) — see ETP-4917 note below.
 
 ## Interaction model
 
@@ -30,21 +31,22 @@ The header form shows **exactly 6 editable fields**, in this order: Accounting D
 
 | Field (curated) | Column | Visibility | Notes |
 |---|---|---|---|
-| `accountingDate` | DateAcct | editable | `seq: 10`. The only date shown. Defaults to today. |
-| `period` | C_Period_ID | editable | `seq: 20`. Accounting period. |
-| `description` | Description | editable | `seq: 30` — placed after the dates. Required; the only header field also shown in the journal list grid + searchable. |
+| `accountingDate` | DateAcct | editable | `seq: 10`. The only date shown. Defaults to today. Grid column + searchable (ETP-4917). Displays as **Fecha**/**Date** in this window via a `labels` override on the field — see the ETP-4917 note below for why the shared `accountingDate` locale key was left untouched. |
+| `period` | C_Period_ID | editable | `seq: 20`. Accounting period. Grid column + searchable (ETP-4917). |
+| `description` | Description | editable | `seq: 30` — placed after the dates. Required. Grid column + searchable (pre-existing). |
 | `documentDate` | DateDoc | system | **Hidden.** Unified into Accounting Date — not on the form and not sent; the backend resolves `DateDoc` from its AD default (`to_date(@HeaderDateAcct@)`). |
 
 **ETP-4531 note (redefined 2026-07-17 — unified accounting date):** `GL_Journal.DateDoc` and `GL_Journal.DateAcct` both carry `AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_Journal_Period`, whose `execute()` unconditionally copies `DateDoc → DateAcct` when `DateDoc` is the field that changed. Today this is **dormant, not absent**: it never fires because `documentDate` stays hidden (`visibility: system`), so no interactive edit can trigger it, and the create-time cascade is a no-op since both dates already default to `@#Date@`. This window's "single date" design (`documentDate` hidden, `accountingDate` the one visible field) already matches the redefined ETP-4531 goal — a single visible date, with both DB columns kept in sync — so no guard is needed here. If `documentDate` were ever exposed as an editable field alongside `accountingDate`, the two should be explicitly **mirrored** (matching the `AbstractInvoiceHeaderHandler#mirrorAccountingDate` pattern used for the invoice windows), not guarded apart — unification, not independence, is the current intent.
-| `currency` | C_Currency_ID | editable | Journal currency. |
+| `currency` | C_Currency_ID | editable | Journal currency. Grid column + searchable (ETP-4917). |
 | `opening` | IsOpening | editable | Marks an opening-balance journal. |
 | `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. |
 | `documentNo` | DocumentNo | system | Auto-sequenced by NEO on POST; not shown on the form. |
 | `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** |
-| `posted` | Posted | system | Posting status, hidden (posting deferred to workstream D). |
+| `posted` | Posted | readOnly | Accounting-status pill (`statusPills`): **Sin contabilizar** / **Contabilizado**. `form: false` (not on the form), but shown as a badge, plus a grid column + searchable (grid/searchable added ETP-4917). Not a document lifecycle status — see `documentStatus` below for the second, independent chip. |
+| `documentStatus` | DocStatus | readOnly | **ETP-4917.** Second, independent header status chip — document lifecycle: **Borrador** (DR) / **Completado** (CO). `form: false` (not on the form), grid column + searchable. Promoted from `discarded`; the badge label mapping comes from `statusBadge.js`'s built-in DR→`statusDraft`/CO→`statusComplete` default fallback (no window-specific `badgeLabels` override and no new i18n keys needed). Auto-detected as the `statusField` for `draftMode` completion (falls back to `documentStatus` when the window doesn't declare `draftMode.statusField` explicitly). |
 | `rate` | CurrencyRate | system | Derived currency rate, hidden. |
 | header dimensions | C_Bpartner_ID, M_Product_ID, C_Project_ID, C_Costcenter_ID, A_Asset_ID, C_Campaign_ID, User1_ID, User2_ID | discarded | Accounting dimensions removed from the header form / "Others" section. |
-| `documentAction`, `accountingSchema`, `totalDebitAmount`, `totalCreditAmount`, `controlAmount`, `currencyRateType`, `gLCategory`, `postingType`, `documentStatus` | — | discarded | Posting/completion-flow and header-total fields not needed in the simplified UI (totals are replaced by the live balance footer). |
+| `documentAction`, `accountingSchema`, `totalDebitAmount`, `totalCreditAmount`, `controlAmount`, `currencyRateType`, `gLCategory`, `postingType` | — | discarded | Posting/completion-flow and header-total fields not needed in the simplified UI (totals are replaced by the live balance footer). |
 
 ## Line entry
 
@@ -71,16 +73,17 @@ The side-panel line editor additionally exposes the **Open Items** checkbox and,
 
 This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDebit", "creditField": "foreignCurrencyCredit" }`.
 
-- A generic `BalanceFooterPanel` renders below the lines, showing **Total debit**, **Total credit**, **Difference**, and a balanced ✓ / unbalanced ✗ badge.
+- A generic `BalanceFooterPanel` renders below the lines, showing **Total debit** and **Total credit**.
+- **ETP-4917 — display trimmed.** The footer used to also render the **Difference** amount and a balanced ✓ / unbalanced ✗ badge; both were removed from the visible UI. `BalanceFooterPanel` still calls `computeBalance` internally (it just no longer renders `difference`/`isBalanced`/`hasAmounts`), and the save/complete blocking logic below is completely unaffected — it reads `computeBalance` directly in `DetailView.jsx`, not from anything the footer renders. This window is the only consumer of `BalanceFooterPanel`, so the change is scoped to Simple G/L Journal.
 - The footer sums the saved lines plus any in-progress add-row and any sidebar editing snapshot, so it reflects the live state as the user types.
-- **Save gate** (`blockSaveForBalance`): the **Save** button is disabled while `Σ debit ≠ Σ credit` (difference ≠ 0). An all-zero journal (0 = 0) is treated as balanced and is savable.
+- **Save gate** (`blockSaveForBalance`): the **Save** button is disabled while `Σ debit ≠ Σ credit` (difference ≠ 0), even though the difference is no longer displayed. An all-zero journal (0 = 0) is treated as balanced and is savable.
 - **Completion gate** (`blockCompleteForBalance`): the **Complete/Confirm** button additionally requires the total to be greater than zero — an all-zero set cannot be completed.
 - While the save gate is active, the Save button shows the tooltip "El debe y el haber deben ser iguales antes de guardar" / "Debit and credit must be equal before saving".
 - Validator rule **F17** enforces that the `debitField` / `creditField` named here exist on the line entity in the generated contract.
 
 ## Gap assessment
 
-- **Posting is out of scope for this slice.** There is no Post action, no posting integration, and no scheduled auto-posting. `Posted` and `documentType` are kept as hidden **system** fields (defaulted under the hood so a later posting slice can use them); `DocAction` and posting-only fields are discarded. Posting arrives in workstream D (which itself depends on the predefined accounting schema, ETP-4245).
+- **~~Posting is out of scope for this slice~~ — superseded, see "Posting & completion status correction" below.** This bullet described the V1 slice at the time it was written; posting, completion, and both status chips have since shipped for this window. `documentType` is still a hidden **system** field (defaulted under the hood); `DocAction` (`documentAction`) is hidden from the form but wired to the Complete action, not discarded.
 - **Multi-currency document rates** (`C_Conversion_Rate_Document`) and the **posting result view** (`Fact_Acct`) are dropped for V1.
 - **Payment integration** on lines (`FIN_*`, add-payment, payment date/id) is dropped for V1. The **Open Items** checkbox is kept — but in this slice it only gates the visibility of the per-line accounting dimensions; it does not wire up payment creation.
 - The balance footer enforces debit = credit at the UI level; it does not assert that NEO's generic CRUD performs any additional server-side accounting validation beyond persisting the rows.
@@ -95,6 +98,8 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 5. Confirm no Post/Complete action is offered and no posting status field is shown (posting deferred; `Posted` is hidden).
 6. Open a line in the side panel, tick **Open Items**, and confirm the five dimension fields (Business Partner, Product, Project, Cost Center, Asset) appear; untick it and confirm they hide again.
 7. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
+
+**TODO(QA) — ETP-4917 impact on this checklist:** steps 2–4 assert on the balance footer's now-removed **Difference** value and balanced ✓/✗ badge (`data-testid="balance-difference"`/`"balance-status"` no longer render — see "Balance rule" above), and step 5's "no Post/Complete action is offered … `Posted` is hidden" no longer matches current behavior (draftMode/CO completion, Post/Unpost menu actions, and the `posted` status pill all ship today — see "Posting & completion status correction" below). Please rewrite steps 2–5 against current behavior, and add coverage for: (a) the header date field rendering as **Fecha**/**Date**, (b) both status chips (accounting `posted` pill + `documentStatus` lifecycle chip) appearing independently and reflecting Draft/Complete + Posted/Not-posted correctly, and (c) the list/grid being filterable by Fecha, Periodo, Descripción, Moneda, and both status chips.
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -180,3 +185,67 @@ dimensiones" once at least one is set. (The
 `DataTable`-driven classic-grid path this window also uses does not render `dimensionsPanel` at
 all — pre-existing behavior, unrelated to and unchanged by ETP-4610.) See
 `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
+
+## DF Contabilidad §2.1 corrections — ETP-4917
+
+Four decisions.json-level changes, all header-scoped, none touching the balance/save-gate logic:
+
+- **Header date label override.** `accountingDate` now carries a window-scoped `labels` override
+  (`{"en_US": "Date", "es_ES": "Fecha"}`). This is a **field-level label override on this window's
+  `accountingDate` only** — the shared `accountingDate` i18n locale key is untouched and still
+  used, unchanged, by every other window that shows an Accounting Date field. Do not "fix" this by
+  editing the shared locale key; if a future window needs the same relabel, give it its own
+  `labels` override in its own `decisions.json`.
+- **Second, independent status chip.** `documentStatus` (DocStatus) was promoted from `discarded`
+  to `visibility: "readOnly"`, `form: false`, `grid: true`, `searchable: true` — see the header
+  fields table above. The window now shows **two** status chips side by side: the pre-existing
+  accounting `posted` pill (Sin contabilizar/Contabilizado) and this new document lifecycle chip
+  (Borrador/Completado). No `badgeLabels` override was added for `documentStatus` — the DR→
+  `statusDraft`/CO→`statusComplete` mapping comes from `statusBadge.js`'s built-in default
+  fallback, and both i18n keys already existed in `en_US.json`/`es_ES.json` before this change, so
+  no new locale keys were needed. `documentStatus` is also the field `draftMode` completion
+  auto-detects as its `statusField` when the window doesn't declare one explicitly (this window
+  didn't, and still doesn't — `draftMode` has no explicit `statusField` key in `decisions.json`;
+  the runtime falls back to `documentStatus` by name).
+- **Grid/searchable widened.** `grid: true` + `searchable: true` (plus explicit `gridOrder`) were
+  added to `accountingDate`, `period`, `currency`, and `posted`. Before this change only
+  `description` (and, incidentally, `posted`) were grid columns, and only `description` was
+  searchable. The list view is now filterable by Fecha, Periodo, Descripción, Moneda, and both
+  status chips (`posted`, `documentStatus`).
+- **Balance footer trimmed.** See "Balance rule" above — `BalanceFooterPanel` (the shared generic
+  component; this window is its only consumer) no longer renders the Difference amount or the
+  balanced ✓/✗ badge. Display-only change; `computeBalance` and the save/complete blocking gates
+  are unchanged.
+
+### Posting & completion status correction (doc fix, spotted during ETP-4917 documentation pass)
+
+The original "Gap assessment" bullet above ("Posting is out of scope for this slice … no Post
+action, no posting integration … Posted and documentType are kept as hidden system fields …
+Posting arrives in workstream D") described the window's **V1** scope and had gone stale — it
+predates this ticket and is **not** part of the ETP-4917 change set, but it is flatly wrong
+against the `decisions.json` this documentation pass read in full, so it is corrected here rather
+than left standing. Current state, verified directly against `artifacts/simple-g-l-journal/decisions.json`
+and `com.etendoerp.go`'s `DocumentPostingService`:
+
+- **`window.draftMode`** is enabled: `{"processField": "documentAction", "processValue": "CO",
+  "label": "complete", "disableWhenEmpty": true}`. The header exposes a **Complete** action that
+  dispatches `DocAction=CO` through the hidden `documentAction` field — completion is not deferred,
+  it ships today.
+- **`window.menuActions`** declares real **Post** and **Unpost** actions (`action: "post"` /
+  `"unpost"`), gated by `visibleWhenFieldFalse: "posted"` / `visibleWhenFieldTrue: "posted"`
+  respectively, with `unpost` marked `destructive: true`. These route through NEO Headless's
+  generic `DocumentPostingService` (`com.etendoerp.go.schemaforge.handlers.DocumentPostingService`,
+  which dispatches on `"post"`/`"unpost"` and calls the classic `post()`/`unpost()` accounting
+  routines) — this is a real, working posting integration, not a stub reserved for a later
+  workstream.
+- **`posted`** is `visibility: "readOnly"` (not `system`), rendered as a status pill via
+  `window.statusPills` (Sin contabilizar/Contabilizado) plus, as of this ticket, a grid column.
+  `documentType` remains a hidden `system` field, and `documentAction` remains hidden from the
+  form — but `documentAction` is actively wired to the Complete button above, not merely
+  "discarded" or dormant.
+- Net effect: this window already has a functioning document lifecycle (Draft → Complete →
+  Post/Unpost) with two independent, visible status chips. Anyone reading the "Gap assessment"
+  section for the current state of posting/completion should treat this note, not the original
+  bullet, as authoritative. The genuinely-still-open gaps from that section — multi-currency
+  document rates, the `Fact_Acct` posting-result view, and line-level payment integration — remain
+  accurate and unaffected by this correction.

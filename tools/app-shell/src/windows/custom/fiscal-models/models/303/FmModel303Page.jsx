@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import {
@@ -84,14 +85,14 @@ function fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch) {
     .catch(() => {});
 }
 
-function applyGenerateError(result, t, setGenError) {
+function applyGenerateError(result, t) {
   if (result.error === 'iban_required') {
-    setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
+    toast.error(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
   } else {
     const msg = result.serverMessage
       || t('fm.gen303.error.generic')
       || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
-    setGenError(msg);
+    toast.error(msg);
     console.error('generate303File failed:', result.error, result.serverMessage);
   }
 }
@@ -266,9 +267,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState(null);
-  // Distinguishes the missing-default-IAE-activity pre-flight guard (ETP-4975) from every
-  // other `genError` (IBAN required, generic backend failure) so only ITS banner gets the
-  // "Go to Organization" CTA — mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
+  // The missing-default-IAE-activity pre-flight guard (ETP-4975) is now the ONLY path that
+  // still writes `genError` and renders the inline banner: every other generation failure
+  // (IBAN required, generic backend error) was moved to a toast in ETP-5027. This flag stays
+  // because the banner carries a "Go to Organization" CTA that is specific to that guard —
+  // mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
   const [missingIaeGuard, setMissingIaeGuard] = useState(false);
 
   // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
@@ -350,7 +353,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     }
     const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
-    if (!result.ok) applyGenerateError(result, t, setGenError);
+    if (!result.ok) applyGenerateError(result, t);
   }
 
   useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch); }, [token, apiBaseUrl, apiFetch]);
@@ -473,7 +476,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             data-testid="MoreOptionsMenu__4f6c0d" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
-          Tesorería / Modelo 303 - {periodLabel}
+          {ui('finance')} / {ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}
         </div>
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}
@@ -526,7 +529,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
         <button
           className="fm-btn"
-          onClick={() => { setGenError(null); setShowFilegen(true); }}
+          onClick={() => setShowFilegen(true)}
           disabled={generating}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
         >
@@ -620,9 +623,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         }}>
           <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
           {genError}
-          {/* CTA only for the missing-default-IAE-activity guard — every other genError
-              (IBAN required, generic backend failure) has no dedicated settings screen to
-              send the user to. Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. */}
+          {/* CTA for the missing-default-IAE-activity guard, which is the only remaining
+              producer of `genError` (all other generation failures surface as toasts since
+              ETP-5027). Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. */}
           {missingIaeGuard && (
             <button
               type="button"

@@ -6,6 +6,7 @@ const DEFAULTS = Object.freeze({
   lastShownAt: null,
   lastDismissedAt: null,
   onboardingCompleted: false,
+  onboardingCompletedAt: null,
   onboardingShown: false,
   counters: Object.freeze({ invoicing: 0, order: 0 }),
   shownThisMonth: Object.freeze({}),
@@ -60,9 +61,13 @@ export function markFirstLogin(now = Date.now()) {
   });
 }
 
-export function markOnboardingCompleted() {
+export function markOnboardingCompleted(now = Date.now()) {
   const state = readSurveyState();
-  writeSurveyState({ ...state, onboardingCompleted: true });
+  writeSurveyState({
+    ...state,
+    onboardingCompleted: true,
+    onboardingCompletedAt: new Date(now).toISOString(),
+  });
 }
 
 export function markSurveyShown(surveyId, now = Date.now()) {

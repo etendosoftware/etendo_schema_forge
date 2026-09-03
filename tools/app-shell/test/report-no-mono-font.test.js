@@ -249,20 +249,19 @@ describe('report-general-ledger template dropped var(--font-mono) (ETP-5013)', (
     assert.doesNotMatch(body, /font-family\s*:/);
   });
 
-  it('the group-header inline account-code span uses tabular-nums inline', () => {
-    // `<span style="...">{{this.value}}</span>` inside the group-header <td>.
-    assert.match(
-      src,
-      /<span style="font-variant-numeric: tabular-nums;[^"]*">\{\{this\.value\}\}<\/span>/,
-      'the inline account-code span must carry tabular-nums, not a mono font-family'
-    );
-  });
-
-  it('covers BOTH former var(--font-mono) sites (rule + inline span)', () => {
+  // ETP-5013 follow-up: the flat (ungrouped-by-dimension) layout used to
+  // carry its OWN inline-styled `<span style="...">{{this.value}}</span>`
+  // (a second, separate former var(--font-mono) site) — now it renders the
+  // exact same `.acct-card-head` structure (and the same `<span class="code">`)
+  // the dimension-grouped layout already used, so there is only ONE site
+  // left: the shared `.acct-card-head .code` rule tested above, which now
+  // applies to both layouts. No separate "inline span" test remains.
+  it('covers what used to be the second var(--font-mono) site — now the same class-based rule as the grouped layout', () => {
     const occurrences = stripComments(src).match(/tabular-nums/g) || [];
-    assert.ok(
-      occurrences.length >= 2,
-      `expected at least 2 tabular-nums usages (the .code rule and the inline span), got ${occurrences.length}`
+    assert.equal(
+      occurrences.length,
+      1,
+      `expected exactly 1 tabular-nums usage (the shared .acct-card-head .code rule, used by both layouts now), got ${occurrences.length}`
     );
   });
 });
@@ -367,17 +366,16 @@ describe('rendered HTML carries tabular-nums and zero mono font-family (ETP-5013
     },
   });
 
-  it('report-general-ledger flat layout renders the account code in the tabular-nums span', () => {
-    // `groupBy: ''` takes the {{else}} branch — the group-header <td> whose
-    // inline <span style="..."> was one of the two former var(--font-mono) sites.
+  it('report-general-ledger flat layout renders the account code with .acct-card-head .code, no mono font', () => {
+    // `groupBy: ''` takes the {{else}} branch. ETP-5013 follow-up: this used
+    // to have its OWN inline-styled span (a second former var(--font-mono)
+    // site) — it now renders the exact same `.acct-card-head`/`class="code"`
+    // structure as the dimension-grouped layout below, styled by the one
+    // shared `.acct-card-head .code` rule.
     const html = renderTemplate('report-general-ledger', glData(''));
 
     assertNoMonoFontFamily(html, 'report-general-ledger flat (rendered)');
-    assert.match(
-      html,
-      /<span style="font-variant-numeric: tabular-nums;[^"]*">10000<\/span>/,
-      'the rendered account code must be wrapped in the tabular-nums span'
-    );
+    assert.match(html, /<span class="code">10000<\/span>/);
     // And the numeric cells are still the ones base.css styles.
     assert.match(html, /class="cell-amount"/);
     // formatCurrency output confirms the digits themselves are unaffected.
@@ -385,8 +383,8 @@ describe('rendered HTML carries tabular-nums and zero mono font-family (ETP-5013
   });
 
   it('report-general-ledger dimension-card layout renders .acct-card-head .code with no mono font', () => {
-    // A non-empty `groupBy` takes the dim-group card branch — the OTHER former
-    // var(--font-mono) site, styled by the `.acct-card-head .code` rule.
+    // A non-empty `groupBy` takes the dim-group card branch — styled by the
+    // same `.acct-card-head .code` rule as the flat layout above.
     const html = renderTemplate('report-general-ledger', glData('account'));
 
     assertNoMonoFontFamily(html, 'report-general-ledger cards (rendered)');

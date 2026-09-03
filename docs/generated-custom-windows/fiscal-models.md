@@ -26,6 +26,13 @@ debug contracts.
 - Generate and download the submission file (`.txt`) for Modelo 303.
 - Show blocking and warning incident counts inline; a blocking count prevents file generation.
 
+## Interaction model
+
+- Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
+- Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
+- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (`FmModel303Page.jsx`) and `Finanzas / Modelos Fiscales / Modelo 349 - {periodLabel}` (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again.
+
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
 `FmListPage` calls `useFiscalAutoCompute` **four times** — once per (model × draft-vs-other)
@@ -204,6 +211,38 @@ always-true evaluation, wrongly showing these fields for tipo `U` too. `matchesS
 hardened against a malformed non-array `anyOf` (`f322ee41a`), returning `false` rather than
 throwing.
 
+### Identification checkboxes → AEAT params (`applyIdentParams`) — ETP-5027
+
+`applyIdentParams` (`fiscalModelsUtils.js`) is the single shared function that turns
+`identChecks` (the `casillas`/`identificacion` form state) into the HTTP params used by both
+the file-generation path (`generate303File`) and the AEAT online-submission path
+(`AeatSubmitFlow.jsx`) — so a checkbox is either wired here once, or silently ignored by both
+paths. Confirmed wirings, verified against the AEAT303 Java source
+(`org.openbravo.module.aeat303.es`, override chain unbroken through `AEAT303Report2025`):
+
+| `identChecks` field | AEAT param | Notes |
+|---|---|---|
+| `redeme` — "Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA)" | `MonthlyRegister` = `'Y'` | `AEAT303Report.java`'s `MONTHLY_REGISTER` constant; box 65 defaults to "not registered" (`2`) unless this is explicitly `Y`. Before ETP-5027 this checkbox updated only local UI state and was never forwarded — checking it produced no effect on the filed declaration (AEAT rejection `35092`/`E010124` on a Devolución with a negative result). |
+| `concurso` — "Sujeto pasivo declarado en concurso de acreedores…" | `IsConcurso` = `'Y'` | `AEAT303Report2014`'s `"IsConcurso"` constant, read unchanged through the override chain to `AEAT303Report2025`. Was not forwarded before ETP-5027. |
+| `postconcursal` | `ConcursoType` = `'Y'` | `AEAT303Report2014`'s `"ConcursoType"` constant (`preConcursal = !"Y".equals(ConcursoType)`); only meaningful when `concurso` is also checked. Was not forwarded before ETP-5027. |
+
+**Investigated, not wired (ETP-5027):**
+- **`dep_aduanero`** ("derecho a deducir pago a cuenta de entregas de gasolinas, gasóleos y
+  biocarburantes…") — no reference to this concept (`gasolina`/`gasoleo`/`biocarburante`/
+  `deposito`) exists anywhere in the AEAT303 Java source across any year override. No real
+  param name could be confirmed, so this checkbox is left unwired rather than guessed.
+- **`dep_foral`** ("tributa exclusivamente a una Administración tributaria Foral…") — a real
+  param, `IVA_IMPORT_ADUANA_HFORAL`, existed and was read from input params in
+  `AEAT303Report2018`. Starting with `AEAT303Report2019` (and unchanged through
+  `AEAT303Report2021`, with no later override reintroducing it through `AEAT303Report2025`),
+  `generatePage1` hardcodes this position to `"2"` (not foral) unconditionally, ignoring any
+  input param entirely. Wiring `dep_foral` in the frontend would have no effect on the current
+  filed declaration, so it was deliberately left unwired to avoid implying a fix that doesn't
+  work on the current AEAT303 version.
+- `fecha_concurso` (the date field paired with `concurso`) was out of scope for this fix — it is
+  a `date` field, not a checkbox, and this defect class was scoped to the checkbox-forwarding
+  gap.
+
 ### Live data
 
 When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `_precomputed` field passed at navigation. The compute button triggers a fresh `computeBoxes303` call. File generation calls `generate303File(decl, { token, apiBaseUrl })` → `GET /fiscal303/generate?year=&period=&tipo=`.
@@ -229,7 +268,9 @@ resurfaced the stale path-selection screen instead of returning to the main page
 `setShowPresent(false)` alongside `setShowAeatFlow(true)`; a regression-guard test assertion
 (`FmOverlays.test.js`) now checks the sentinel/gating wiring stays in place.
 
-1. **Confirm screen** — shows NIF / business name / fiscal year-period / declaration type / result / IBAN, all read from data already available client-side (`orgIdent` + `identChecks` + the current computed `summary`/`liveBoxes` — no extra API round-trip just to populate this screen). Editable presenter NIF/name (defaulted from `orgIdent`, in case the certificate holder differs from the declarant) and an optional NRC field. **NRC field visibility**: shown only when `declarationType === DECLARATION_TYPE_INGRESO` (`'I'`, exported from `fiscalModelsUtils.js`, mirroring the backend's `Fiscal303BoxesHandler.DECLARATION_TYPE_INGRESO`) — the same tipo-gating pattern as the `datos_bancarios` section above, since AEAT's own Modelo 303 spec only accepts an NRC for tipo Ingreso (backend already discards it for every other tipo, error-free but silently, before this fix — see ETP-4456). Not mandatory even for `I` (no blocking validation).
+1. **Confirm screen** — shows NIF / business name / fiscal year-period / declaration type / result / IBAN, all read from data already available client-side (`orgIdent` + `identChecks` + the current computed `summary`/`liveBoxes` — no extra API round-trip just to populate this screen). Editable presenter NIF/name (defaulted from `orgIdent`, in case the certificate holder differs from the declarant) and an optional NRC field. **NRC field visibility**: shown only when `declarationType === DECLARATION_TYPE_INGRESO` (`'I'`, exported from `fiscalModelsUtils.js`, mirroring the backend's `Fiscal303BoxesHandler.DECLARATION_TYPE_INGRESO`) — the same tipo-gating pattern as the `datos_bancarios` section above, since AEAT's own Modelo 303 spec only accepts an NRC for tipo Ingreso (backend already discards it for every other tipo, error-free but silently, before this fix — see ETP-4456). **Mandatory for `I` since ETP-5027**: the NRC label carries the standard required asterisk (`fm-aeat-required-mark`, the same marker `FmBoxes303.jsx` uses) and `handleSubmit` runs a client-side pre-flight guard immediately after the IBAN guard, keyed on `localData.declarationType` — deliberately the *stricter* expression, the exact one that controls the field's visibility, rather than the looser `tipo` (`localData.declarationType || decl?.result?.kind || 'N'`) that the IBAN guard uses. With `tipo`, an empty `declarationType` alongside `decl.result.kind === 'I'` would fire the guard against a field the user cannot see, blocking submission with no way to satisfy it. The IBAN guard keeps its own looser shape (out of scope here). A blank or whitespace-only NRC sets `connError` — reusing the existing red `Banner__aeatConnError` channel, no new UI plumbing — with `fm.aeat.error.nrcRequired`, and never reaches the backend. Previously an empty NRC round-tripped to the AEAT and failed there with an untranslated error. **The guard is skipped when `testMode` is on**: "Validar sin presentar" only validates the file, nothing is paid, so no NRC exists yet. Frontend-only, matching the IBAN precedent — the Java side is untouched.
+   **Test-mode checkbox wording (ETP-5027)** — the `testMode` checkbox is labelled `fm.aeat.test_mode.label` = "Validar sin presentar" / "Validate without filing" (previously "Modo de prueba (no requiere certificado)", which read as a developer toggle rather than a functional choice). The warning banner still renders only while the box is checked, and its text is `fm.aeat.test_mode.warning` = "Esta opción únicamente valida el fichero en la AEAT. La declaración no se presenta." No separate always-visible help string was added — the functional owner chose to keep a single string, shown in the banner on check. The behaviour is unchanged; only the two locale values and their inline `??` English fallbacks moved. `data-testid="AeatSubmitFlow__testMode"` is deliberately stable, and the tests assert on the i18n key rather than the rendered text.
+
 2. **Submit** — `POST /fiscal303/submit?year=&period=&tipo=&id=` via `useApiFetch`. No separate "check certificate" pre-flight call is made — the endpoint is called directly and `errorCode: NO_CERTIFICATE` in the response is what triggers the "no certificate" message (simpler than a `GET /neo/certificate` probe beforehand, and the backend already has the definitive answer). Full request/response contract, all `errorCode` values, and the backend-side idempotency guard: `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`.
 3. **Result screen**, branching on `response.status`:
    - `SUCCESS` — CSV, presentation date, registry/justificante numbers; a PDF download button decodes `pdfBase64` client-side (`triggerBase64Download`, new export in `fiscalModelsUtils.js`) and triggers a browser download. If `pdfDownloadFailed` is true, a distinct message is shown instead ("submitted OK, PDF fetch failed") — never implying the submission itself failed. Also calls `onSuccess('submitted_ack')`, which flows through the same `handleStatusChange` the 2 manual paths use (one extra, harmless PUT to `/fiscal303/declarations` re-asserting the status the backend already set server-side, kept for consistency with the existing list-sync mechanism).
@@ -447,12 +488,145 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 ### Tabs
 
 - **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes. Each row's "Origen" summary (`FmModel349Page.originByNif`) is keyed by the composite `(nifIva, key)`, not `nifIva` alone — the same counterparty can legitimately appear as two separate operator rows under two different AEAT349 keys (e.g. one row under `E` — Entregas, another under `I` — Servicios recibidos), so each row's origin count now reflects only the invoices that belong to that row's own key (ETP-4755).
-- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by NIF-IVA. Filter state shows `fm.m349.invoices.filtering_by` + count badge. Each invoice row carries a per-invoice AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeys` — this is what the Operadores tab's per-key origin scoping (above) relies on.
+- **Rectificativas en Operadores (ETP-5027)** — `/fiscal349/operators` now also returns *corrective* operator rows inside the same `operators` array (ordered after all regular rows), plus a sibling `rectificativeSummary` object. Every row carries a `rectificative` boolean (`false` on regular rows, never omitted), so badging needs no `undefined` handling; `isRectificativeOp()` in `FmModel349Page.jsx` only normalizes the boolean/string shapes NEO can emit.
+  - **The amounts are signed deltas and are usually NEGATIVE** — a rectification removing 3 units of a 10 EUR product reports `-30`. They are rendered through `formatAmount` (which delegates to the canonical `formatCurrency('EUR', …)`) and are **never** `Math.abs()`'d: a negative subtotal is the expected, valid case, tinted via `.fm-349-amount--negative` for legibility only, not as an error state.
+  - Corrective rows are **excluded** from the regular `TotalsCard` per-key totals and from the "Total operaciones" KPI, so their deltas never net off against the regular base. They are summarized separately by `RectificativeSubtotalCard`, rendered as its own card in the same left column under the totals card.
+  - **`rectificativeSummary` carries per-key totals ONLY (`totalE`/`totalS`/`totalA`/`totalI`) — there is deliberately no grand `total`, and `RectificativeSubtotalCard` renders no "Total rectificativas" row.** `E`/`S` are *entregas* (sales) and `A`/`I` are *adquisiciones* (purchases); the AEAT never nets one against the other, so `E + S + A + I` is not a quantity that means anything. The first pass did emit it and produced figures like `-32,00 + -5,00 = -37,00`, and would have rendered `0,00` for a `-30` sales correction offset by a `+30` purchase correction (ETP-5027, QA F1). `summary` has always omitted a grand total for the same reason, and both objects now go through the single `Fiscal349BoxesHandler#buildKeyTotals(totalsByKey)` shape. Do not reintroduce the row. A legacy cached payload that still carries `total` is ignored by the card.
+  - **No double-counting**: the "Rectificaciones" KPI and tab badge stay fed exclusively by `rectifications`. Corrective *operator* rows describe the same business events and must not bump that count — there is an explicit regression test for this in `FmModel349Page.rectifications.vitest.jsx`.
+  - Row identity moved from `op.id` to `rowKey(op)` (`bpId|key|R|<declared period>`): a regular and a corrective row can describe the same operator *and* key, so `bpId` alone is not unique for React keys or row selection.
+  - **Corrective rows carry `declaredYear`/`declaredPeriod`, and the declared period is part of `rowKey` (ETP-5027, QA F4).** The DAO groups corrective rows by `(BPId, TaxKey, Year, Period)`, so correcting the same partner's 2025/T1 *and* 2025/T2 sales of goods in one declaration — ordinary AEAT 349 usage — legitimately produces two rows sharing `(bpId, key, rectificative)`. `appendOperators` used to drop `Year`/`Period`, so `bpId|key|R` was identical for both: duplicate React keys, and — because `selected` is keyed by that same string — **ticking one row's checkbox ticked the other**. The subtotals were always arithmetically correct; this was presentation and selection only. Regular rows come from `getTaxBaseAmountPerBusinessPartner`, which groups by `(BPId, TaxKey)` alone and carries no `Year`/`Period`, so the two keys are emitted **only when present** and regular rows keep exactly their previous shape. The `RectificativeBadge` also renders the period (`fm.m349.rectificative_period`, "Rectificativa {period}" / "Corrective {period}", e.g. "Rectificativa 1T 2025") so the two rows are distinguishable on screen, falling back to the plain `fm.m349.rectificative` when the backend sent no period.
+  - The existing key filter and name/NIF search need no change — corrective rows flow through the same predicates and are picked up for free (covered by a test).
+  - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
+  - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
+- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries a per-invoice AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeys` — this is what the Operadores tab's per-key origin scoping (above) relies on.
 - **Rectificaciones / Incidencias / Ficheros** — coming soon.
 
 ### KPIs
 
 Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`. Each operator's `vies` value (`'valid'`/`'invalid'`/`'pending'`, driving both the Operadores row badge and the Pendientes VIES count) is derived server-side by `Fiscal349BoxesHandler#mapViesStatus` from the operator's BusinessPartner VIES status (`C_BPartner.EM_OBTIK_VIESStatus`, the same "Estado VIES" field editable on the Contact/BusinessPartner record): `'V'` → `valid`, `'I'` → `invalid`, anything else (null/blank/`'P'`) → `pending` (ETP-4755 — previously this field was never populated, so the badge always defaulted to `pending` regardless of the contact's real verification status).
+
+### VIES banner and the "Validar VIES" action (ETP-5027)
+
+The informational banner above the KPIs renders whenever `viesPending > 0` and the user has
+not dismissed it. Its **"Validar VIES"** button re-runs the validation for the declaration's
+pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at all and did nothing.
+
+- **Endpoint**: `POST /neo/fiscal349/validate-vies?year=YYYY&period=PP` → `200 { validated, valid,
+  invalid, notEligible, failed, stillPending }`. **POST-only** — the call mutates `C_BPartner` and
+  the endpoint answers 405 to a GET. `validated` is every pending operator the call *accounted
+  for*, deduplicated by `bpId` (one partner spans several operator rows — one per AEAT key, plus
+  rectificative rows — and is checked once).
+  `valid + invalid + notEligible + failed + stillPending === validated` **always** holds, and the
+  UI relies on that invariant. Note `validated` is not necessarily the "Pendientes VIES" KPI
+  value: the KPI counts distinct *NIF-IVA* (`viesIdentity`), the endpoint distinct *partners*.
+
+  The five outcome buckets each imply a **different next action**, which is why they are five and
+  not one (ETP-5027, QA F2/F5):
+
+  | Bucket | Meaning | Next action |
+  |---|---|---|
+  | `valid` / `invalid` | VIES answered conclusively **and** the answer was written back to `C_BPartner` | none |
+  | `notEligible` | the partner failed the eligibility gate (`EM_OBTIK_Tax_ID_Key != '2'`, or a blank `taxid`) or no longer exists | **permanent** — fix the partner record; a re-run can never change it |
+  | `failed` | VIES answered conclusively but the write-back did not land | transient — retry |
+  | `stillPending` | genuinely inconclusive: VIES could not answer (timeout, `MS_MAX_CONCURRENT_REQ`), or the partner was deferred past the batch cap of 25 | transient — retry |
+
+  **`valid`/`invalid` are derived from what was actually PERSISTED, never from the in-memory
+  answers.** `persistViesStatuses` returns the ids whose `UPDATE` reported an affected row, and
+  anything conclusive that is missing from that set becomes `failed`. Before this, a failed
+  `UPDATE` was swallowed by a `log.warn` while the response still said `valid: 20`, so the user
+  was told the job was done and then reloaded to 20 still-pending badges. An `UPDATE` matching
+  zero rows counts as failed too — same user-visible consequence as a thrown error.
+
+  **`notEligible` must never be folded back into `stillPending`.** The frontend copy for
+  `stillPending` invites a re-run; a gate failure fails the same gate on every future click, so
+  merging the two produced an unbreakable loop with no explanation. A partner the gate could not
+  even *read* (a row-level DB error) is in **neither** bucket — that is transient and falls
+  through to `stillPending` so the next click retries it. Row-level errors in both the gate and
+  the persist phase are isolated per id: previously the gate's `catch` sat outside its loop, so
+  one unreadable row silently discarded every candidate not yet processed.
+
+  `validate349Vies` in `fiscalModelsUtils.js` reads all six through `num()`, which defaults to 0,
+  so a payload from a backend predating the split still parses.
+  Wrapped by `validate349Vies(decl, { token, apiBaseUrl })` in `fiscalModelsUtils.js`,
+  which returns `{ ok: true, ...counts }` or `{ ok: false, error, serverMessage }` — the same
+  contract as `generate349File`, including `parseServerMessage()`, because a user-initiated
+  button has to say *why* nothing changed (`compute349Operators`'s bare `null` cannot).
+- **No DB connection is held during the network phase (ETP-5027, QA F3).** `DalRequestFilter`
+  binds the Hibernate session — and with it a pooled JDBC connection — to the request thread for
+  the whole request, and `handleValidateVies` runs `computeOperators` (a dozen HQL queries)
+  before the VIES calls. Without an explicit release, `invokeAll(…, 120 s)` would block with a
+  transaction open and a connection pinned (25 partners over 4 threads is typically ~60 s), so a
+  few users clicking the banner at once could exhaust the pool **instance-wide**.
+  `Fiscal349BoxesHandler#releaseDalConnection()` therefore does a `flush()` +
+  `commitAndClose()` between the gate phase and the network phase; the persist phase then
+  re-acquires a fresh session via `OBDal.getInstance().getConnection()`, and
+  `DalRequestFilter`'s own end-of-request commit tolerates an already-closed session. This is
+  safe because everything still needed is already materialized (a `JSONObject` plus plain-JDBC
+  `ViesCandidate` value objects) — no detached entity is touched after the release. Ordering is
+  pinned by `testDalConnectionIsReleasedBeforeTheViesPhase`. **Any new DB work added between the
+  gate and the network phase re-introduces the pinning** — put it before the release.
+- **Double-submission**: the button is `disabled` + `aria-busy` and swaps its label to
+  `fm.m349.banner.vies_validating` while in flight, backed by a synchronous
+  `validatingViesRef` guard for the window before React commits the state. Each run is a bulk
+  of live, rate-limited calls to the member states' services — overlapping runs are what earn a
+  `MS_MAX_CONCURRENT_REQ` rejection.
+- **Refresh**: on success the handler calls `invalidateFiscalComputeCache(decl.id)` and then
+  `handleCompute()`, so the row badges, the "Pendientes VIES" KPI and the banner (all three read
+  the same `operators` array) move together. On failure it returns early — the displayed statuses
+  are left exactly as they were, never blanked.
+- **Why the cache has to be invalidated**: `useFiscalAutoCompute` caches each declaration's
+  compute payload in `sessionStorage` (`fiscal_ac_v3_<declId>`) and, on every run of its mount
+  effect, restores the cached payload whenever `checkModifiedFn` says nothing changed.
+  `checkModified349` only asks whether the period's **invoices** changed, while a VIES
+  revalidation updates **business partners** — so it answers `false`, the pre-validation payload
+  is restored, and the old VIES badges are repainted over the fresh ones, making the button look
+  inert. Bumping the `fiscal_ac_vN_` key version does **not** fix this: a version bump only
+  discards payloads written by a *previous build*, whereas the stale entry here was written
+  seconds ago by the running build under the current version. The entry must be deleted by id,
+  which is what `invalidateFiscalComputeCache` (exported from `useFiscalAutoCompute.js`) does.
+  Regression coverage, including the stale repaint itself, is in
+  `__tests__/useFiscalAutoCompute.invalidate.vitest.js`.
+- **Result feedback** — a `sonner` toast built by `buildViesResultMessage`, **aggregate counts
+  only**. There is deliberately no per-error-code breakdown ("why is this one pending?"): classic
+  collapses every inconclusive VIES answer into "pending" and GO matches it. Outcomes:
+
+  | Outcome | Channel | es_ES |
+  |---|---|---|
+  | nothing attempted | `toast.info` | "No había ningún NIF-IVA pendiente de validar" |
+  | all valid | `toast.success` | "4 NIF-IVA procesados: 4 válidos" |
+  | mixed | `toast.warning` | "4 NIF-IVA procesados: 3 válidos, 1 inválido" |
+  | some/all still pending | `toast.warning` | "4 NIF-IVA procesados: 2 válidos, 2 siguen pendientes; puedes volver a intentarlo" |
+  | write-back failed | `toast.warning` | "2 NIF-IVA procesados: 1 válido, 1 comprobado pero no se pudo guardar; inténtalo de nuevo" |
+  | not eligible for VIES | `toast.warning` | "3 NIF-IVA procesados: 1 válido, 2 no se pueden consultar en VIES (necesitan clave de NIF intracomunitario y NIF-IVA)" |
+  | request failed | `toast.error` | `serverMessage`, else "No se pudo ejecutar la validación VIES. Inténtelo de nuevo." |
+
+  Fragment order is fixed and part of the sentence: **valid, invalid, failed, notEligible,
+  pending** — conclusive first, then the two actionable buckets, then the retryable one, which
+  always closes. Any non-zero bucket other than `valid` keeps the toast off the success channel.
+
+  The headline says "procesados", not "comprobados", because `validated` counts operators the
+  call *accounted for*, including the ones it declined to check.
+
+  **`notEligible` names the cause; `stillPending` still does not.** The ineligible bucket points
+  at the partner record (it needs an intra-community tax-id key and a VAT number) and
+  deliberately offers **no retry**, because retrying can never change it. `stillPending` keeps
+  conflating two *transient* outcomes — VIES answered inconclusively (timeout, or the very common
+  `MS_MAX_CONCURRENT_REQ`, which France returns on essentially every attempt right now) and the
+  partner was deferred past the batch cap of **25 partners per call**. Blaming the VIES service
+  would be false for the deferred case, so the copy attributes no cause and offers a re-run and
+  nothing more. A non-zero `stillPending` is a routine outcome, not an edge case.
+- **Banner sub-copy corrected**: `fm.m349.banner.vies_sub` used to read "Validación VIES
+  asíncrona — informativa, no bloqueante". That was factually wrong — `bptaxidkey`'s
+  `ViesStatusObserver` calls `ViesService.checkVat()` **synchronously inside the
+  business-partner save transaction** (blocking up to the `HttpURLConnection` timeout), and this
+  button is synchronous too. It now reads "Consulta en vivo al servicio VIES — informativa, no
+  bloquea la declaración" (EN: "Live call to the VIES service — informative, does not block the
+  declaration"). What is non-blocking is the *declaration*, not the call.
+- **i18n keys added** (all three locales — `en_US`, `es_ES`, `es_AR`):
+  `fm.m349.banner.vies_validating`, `fm.m349.vies.result.none`, `.processed_one/_many`,
+  `.valid_one/_many`, `.invalid_one/_many`, `.pending_one/_many`, `.failed_one/_many`,
+  `.not_eligible_one/_many`, `.error`. Singular/plural pairs are picked in code because
+  `useUI()` does `{param}` substitution only — it has no plural rules.
 
 ### Action bar and kebab menu
 
@@ -757,10 +931,10 @@ the underlying data (and the read-only grid badge) stays intact.
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |
-| `POST` | `/fiscal303/submit?year=&period=&tipo=&id=` (body: testMode, idi, nrc, presenterNif, presenterName) | `AeatSubmitFlow` — AEAT electronic submission (ETP-4456) |
+| `POST` | `/fiscal303/submit?year=&period=&tipo=&id=` (body: testMode, idi, nrc, presenterNif, presenterName) | `AeatSubmitFlow` — AEAT electronic submission (ETP-4456). **POST-only**: a GET is answered 405 and never reaches a real AEAT filing (ETP-5027, QA F7) |
 | `GET` | `/fiscal303/incidents?id=` | `fetchDeclarationIncidents` — persisted AEAT validation errors for the "Incidencias" tab (ETP-4456) |
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
-| `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators + invoices + orgNif/orgName |
+| `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators (regular + corrective, see ETP-5027 above) + `summary` + `rectificativeSummary` + invoices + rectifications + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
 | `POST` | `/fiscal349/generate` (body: year, period, phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa) | `generate349File` |
 
