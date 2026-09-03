@@ -18666,6 +18666,7 @@
     "financeAccountsBankConnectionImportSection": "Importación de extractos",
     "financeAccountsBankConnectionImportFrom": "Importar desde",
     "financeAccountsBankConnectionImportTo": "Importar hasta",
+    "financeAccountsBankConnectionImportRangeInvalid": "La fecha «Importar desde» no puede ser posterior a «Importar hasta».",
     "financeAccountsBankConnectionGrouping": "Agrupación de extractos",
     "financeAccountsBankConnectionGroupingNone": "Por defecto",
     "financeAccountsBankConnectionGroupingPlaceholder": "Seleccionar agrupación…",

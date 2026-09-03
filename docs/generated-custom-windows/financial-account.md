@@ -184,11 +184,45 @@ Field editability in the top section:
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
   now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
+- **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
+  `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
+  format lexicographic order is chronological order, so the check is exact and timezone-free and
+  deliberately does NOT build a `Date` (the ETP-4850 date-only shift cannot occur here). An empty
+  box means "no bound" and never invalidates. An inverted range renders
+  `bank-connection-import-range-error` under the three fields, disables Save, and makes
+  "Sincronizar ahora" refuse to run. The bridge repeats the check in
+  `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
+  callers that skip the form; it validates the *resulting* pair before touching the entity, since a
+  body may carry only one bound and a managed instance would be flushed at commit even after a
+  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
+  caller of `import-settings` and it refuses the range before the request fires, so the message
+  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
+  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
+  gate. Map it only once a surface exists that can actually surface it.
+
+  Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
+  module validates it only at synchronization time
+  (`SaltEdgeConnectionHelper.validateDateRange`), and the `OBException` it throws is swallowed by
+  `processProviderTransactions` and re-wrapped into
+  `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
+  the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
+  `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
+  calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
+  straight away: the bridge reads the date range from the DB, so an unsaved range was silently
+  ignored, and the `refresh()` that follows a sync rewrites both `form` and `initial` from the
+  server, overwriting whatever the user had typed ("los campos se restablecen"). Wiring note: the
+  save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
+  declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
+  invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
+  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
-  Enabled purely on `dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid &&
-  !recon.amountToleranceInvalid` — **no accounting field can block Save** (ETP-4872 dropped the
+  Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
+  `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
+  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
+  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
