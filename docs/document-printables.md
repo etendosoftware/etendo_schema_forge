@@ -196,6 +196,9 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D9 | Movement documents keep their own template | ETP-4912 | quantities and a receiver signature, no prices. A registry entry therefore carries a renderer, not just a data builder |
 | D10 | `SendDocumentModal` falls back to the registry when no caller supplies a PDF | ETP-4912 | the generic modal in `ListView` has no hook, so it used to preview **and attach** the artifact. One fix covers every present and future consumer |
 | D11 | The PDF hook runs on demand, not on mount | ETP-4912 | `InvoiceTopbarExtra` rendered a full PDF just for opening a completed invoice in edit mode. Now the id is passed only once a consumer opens |
+| D12 | The header's document currency comes from `header['currency$_identifier']` inside each builder, **never** from the `currencyData` argument | ETP-5125 | `currencyData` is `null` on the hook-free print path (`commercial()` in `documentPdfRegistry.js`), so reading it there would print a currency in the preview and none in the print — two PDFs for one record, against criterion 1. The header is fetched by every builder anyway |
+| D13 | An unresolved currency prints **nothing**; there is no fallback to the org currency (`session.currencyCode`) | ETP-5125 | Stating the wrong currency on a customer-facing document is worse than stating none. `resolveDocumentCurrencyCode()` returns `null` and the template guards on it |
+| D14 | The commercial template's tax labels are **generic** ("Impuesto" / "Impuestos" / "Subtotal (sin impuestos)"), not "IVA" | ETP-5125 | The lines-table tax column prints the tax *name* (`tax$_identifier`, e.g. "IVA 21%"), so a `%` header was wrong; and non-IVA taxes exist. The on-screen `DocumentTotalsPanel` already said "Impuesto", so the PDF contradicted the screen |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).
@@ -295,6 +298,30 @@ template engine or a PDF-merging library to the browser bundle.
 builder and a `buildXxxPdfLabels(ui)` / `getXxxPdfLabels(ui)` function, or a `generateXxxPdf` /
 `generateXxxHtml` pair for a movement document), make the hook consume them so the labels are not
 duplicated, add the entry, and verify the five rows of §"Where the printables are used".
+
+## The commercial template's labels are one shared set
+
+Every `{{labels.*}}` in `DOCUMENT_TEMPLATE` comes from **one** builder,
+`buildDocumentPdfLabels(ui, overrides)` in `documentPdf.js`. The four
+`buildXxxPdfLabels()` functions override only `title / documentNo /
+documentSection / date / colQty / validUntil` — everything else is inherited.
+
+Two consequences worth knowing before touching either side:
+
+- **Changing a `genericLabels` value fixes (or breaks) all four documents at
+  once, on all five entry points**, because the hook-free print path reuses the
+  very same builders. That is the whole of ETP-5125's fix: three locale values.
+- **The source of truth is `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`.**
+  `src/locales/generated/core.*.json` is gitignored build output regenerated
+  from them by `vite-plugins/slice-labels.js` — never edit it. Editing a
+  top-level locale while `make dev` runs does take effect (ETP-4830 wired the
+  watcher); if you see a raw key in the PDF, restart the dev server.
+
+The tax wording is deliberately generic. `labels.colTax` heads the column whose
+cell prints `taxName` — the tax's **name**, not a rate — so it reads "Impuesto",
+never "IVA%"; `labels.tax` / `labels.subtotal` read "Impuestos" /
+"Subtotal (sin impuestos)", matching the on-screen `DocumentTotalsPanel`
+(D14). The header's currency row is `labels.currency` + `currencyCode` (D12/D13).
 
 ## Changing a printable
 
