@@ -1556,8 +1556,17 @@ export function useEntity(entity, childEntity, {
                     apiFetch,
                     refetchAfterSave,
                 });
-                setSelected(resolvedSaved);
-                setEditing({ ...resolvedSaved });
+                // ETP-5101: a write response only echoes back the fields the backend actually
+                // wrote (buildSavePayload sends a DIFF, not the full record) plus a handful of
+                // identity/audit columns — it is not guaranteed to carry every field the record
+                // has. A full replace here silently drops any field the response omitted (still
+                // correct in the DB, just missing from this response) from both `selected` and
+                // `editing`, even though nothing about it changed. Merge onto the prior state
+                // instead, so an omitted field keeps its last-known value; any field the response
+                // DOES include (explicit `null` too) still overwrites, so a genuine server-side
+                // change is never masked.
+                setSelected(prev => ({ ...prev, ...resolvedSaved }));
+                setEditing(prev => ({ ...prev, ...resolvedSaved }));
                 setSaveError(null);
                 setFieldErrors({});
                 // Refresh children after every save, not just create: a header field
