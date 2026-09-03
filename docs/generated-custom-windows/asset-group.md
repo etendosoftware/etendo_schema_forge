@@ -139,19 +139,23 @@ All five flags are set in `decisions.json → window`:
 
 ## i18n notes
 
-The dictionary key for this window is `"Asset Group"` — the stable AD window name. It never changes even if the display label is updated.
+The dictionary key for this window is `"Asset Group"` — the stable AD window name (matches `AD_Menu.Name` and `decisions.json`'s `window.name`). It never changes even if the display label is updated.
 
 ```json
-// en_US.json → windows
-"Asset Group": { "label": "Asset Group", "newLabel": "New group" }
+// en_US.json → windows and menus
+"Asset Group": { "label": "Asset Group", "newLabel": "New group" }   // windows
+"Asset Group": { "label": "Asset Group" }                            // menus
 
-// es_ES.json → windows
-"Asset Group": { "label": "Categoría de activo", "newLabel": "Nueva categoría" }
+// es_ES.json → windows and menus
+"Asset Group": { "label": "Categoría de activo", "newLabel": "Nueva categoría" }   // windows
+"Asset Group": { "label": "Categoría de activo" }                                  // menus
 ```
 
-The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so if a `menus["Asset Group"]` entry ever exists it takes precedence over the `windows` entry for the title and breadcrumb.
+Both `windows["Asset Group"]` and `menus["Asset Group"]` carry the key, and both must be kept in sync — `tools/app-shell/src/menu.json`'s own `asset-group` entry (`label`/`favname`) is a third, separate copy that must also stay aligned (ETP-4945 fixed a case where `menu.json` still said `"Asset Category"` while `windows`/`menus` said `"Asset Group"` with the wrong label text — three disagreeing sources for the same window name).
 
-The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows["Asset Group"]`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label` and `windows["Asset Group"].label` both resolve to the same string per locale ("Asset Group" / "Categoría de activo"). Before this fix they showed different, inconsistent text across two rounds of naming ("Categoría de activos" vs "Grupo de activos", then "Grupo de activo" in both — still not the reporter's final term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de activo" string.
+The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so the `menus["Asset Group"]` entry takes precedence over the `windows` entry for the title and breadcrumb.
+
+The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows`/`menus`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label`, `windows["Asset Group"].label` and `menus["Asset Group"].label` all resolve to the same string per locale ("Asset Group" / "Categoría de activo"). Before this fix they showed different, inconsistent text across three rounds of naming ("Categoría de activos" vs "Grupo de activos", then "Grupo de activo" in both, then "Categoría de Activo" — still not the reporter's final, confirmed term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de activo" string.
 
 ## Non-obvious gotchas
 
@@ -254,7 +258,7 @@ and `usableLifeMonths` carry `min: 1, integer: true` with their amortize-based `
 
 ### Manual verification (ETP-4542)
 
-1. Open an Asset Group with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
+1. Open an Asset Group record with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
    **Usable Life - Months** is visible.
 2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a toast
    error appears ("Value must be at least 1" or "Value must be a whole number", or the Spanish

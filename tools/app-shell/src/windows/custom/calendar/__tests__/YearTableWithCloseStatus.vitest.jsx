@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
+}));
 
 // Real Tag renders a plain <span> with no data-testid passthrough — mock it the same way
 // PeriodsExpandablePanel.vitest.jsx / YearCloseStatusBadge.vitest.jsx already do.
@@ -40,18 +45,18 @@ describe('YearTableWithCloseStatus', () => {
   it('rewrites apiBaseUrl to the end-year-close spec for the status check (not the year list\'s own base)', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
     render(
-      <YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />
+      <YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />
     );
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/end-year-close/accounting?year=y1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' }) })
+      {}
     ));
   });
 
   it('shows the "closed" pill (green) for a year with at least one closing-type entry', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: 'f1' }] }) }));
-    render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(<YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     await waitFor(() => {
       const badge = screen.getByTestId('col-yearCloseStatus-y1').querySelector('[data-testid="tag"]');
@@ -61,7 +66,7 @@ describe('YearTableWithCloseStatus', () => {
 
   it('shows the "not closed" pill (neutral) for a year with no closing-type entries', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
-    render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(<YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     await waitFor(() => {
       const badge = screen.getByTestId('col-yearCloseStatus-y1').querySelector('[data-testid="tag"]');
@@ -76,7 +81,7 @@ describe('YearTableWithCloseStatus', () => {
       const closed = url.includes('year=y1');
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: closed ? [{ id: 'f1' }] : [] }) });
     });
-    render(<YearTableWithCloseStatus data={YEARS} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(<YearTableWithCloseStatus data={YEARS} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     // Both requests are fired before either resolves — captured synchronously, not awaited
     // in sequence — proving the per-row fetches run in parallel.
@@ -91,14 +96,14 @@ describe('YearTableWithCloseStatus', () => {
 
   it('renders nothing for the status cell while the check is pending or on error (no misleading placeholder)', async () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
-    render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(<YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     expect(screen.getByTestId('col-yearCloseStatus-y1')).toBeEmptyDOMElement();
   });
 
   it('still renders the standard fiscalYear/description columns', () => {
     global.fetch = vi.fn(() => new Promise(() => {}));
-    render(<YearTableWithCloseStatus data={[YEARS[0]]} token="tok" apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(<YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     expect(screen.getByTestId('col-fiscalYear-y1')).toHaveTextContent('2026');
     expect(screen.getByTestId('col-description-y1')).toHaveTextContent('FY26');
