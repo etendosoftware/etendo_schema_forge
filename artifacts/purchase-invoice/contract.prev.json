@@ -1,8 +1,8 @@
 {
-  "version": "0.90.0",
+  "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-02T18:18:21.911Z",
-  "checksum": "0489d9858d89efad",
+  "updatedAt": "2026-09-03T17:04:41.261Z",
+  "checksum": "3b9aa1261a2a0422",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1297,6 +1297,21 @@
             }
           },
           {
+            "name": "tbaiIssent",
+            "apiKey": "tbaiIssent",
+            "column": "EM_Tbai_Issent",
+            "label": "Enviada a Batuz",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 1
+            }
+          },
+          {
             "name": "processed",
             "apiKey": "processed",
             "column": "Processed",
@@ -1574,6 +1589,49 @@
             "validation": {
               "maxLength": 22
             }
+          },
+          {
+            "name": "adOrgId",
+            "apiKey": "adOrgId",
+            "column": "AD_Org_ID",
+            "label": "Organization",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
+            },
+            "reference": "Org",
+            "inputMode": "selector",
+            "defaultValue": "@#AD_Org_ID@",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "validationRule": {
+              "code": "AD_ORG_ID <> '0'",
+              "contextParams": [],
+              "cascadeParams": []
+            },
+            "callout": {
+              "className": "org.openbravo.module.sii.callouts.SiiInvoiceOrganizationCallout"
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           }
         ],
         "searchableFields": [
@@ -1730,6 +1788,13 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "adOrgId",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
             }
           }
         ],
@@ -5272,14 +5337,6 @@
         "tabName": "Header",
         "fields": [
           {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "transactionDocument",
             "apiKey": "transactionDocument",
             "column": "C_DocTypeTarget_ID",
@@ -5897,7 +5954,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -6587,6 +6644,14 @@
             "type": "string",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "adOrgId",
+            "apiKey": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
           }
         ],
         "javaQualifier": "purchaseInvoiceHeaderHandler",
@@ -9844,6 +9909,11 @@
             {
               "param": "IsSOTrx",
               "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -9952,7 +10022,16 @@
         "column": "SalesRep_ID",
         "reference": "User",
         "inputMode": "search",
-        "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative"
+        "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative",
+        "context": {
+          "required": [
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "header",
@@ -9998,6 +10077,14 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "adOrgId",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/adOrgId"
       },
       {
         "entity": "lines",
@@ -10919,6 +11006,14 @@
         "description": "Default value for 'foreignAmount' in exchangeRates should be a string"
       },
       {
+        "id": "t-default-value-type-header-adOrgId",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Default value for 'adOrgId' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-aeatsiiClaveTipoFc",
         "category": "default-value-type",
         "entity": "header",
@@ -11175,6 +11270,14 @@
         "description": "Default value for 'lineNo' in tax should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-header-adOrgId",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Display logic for 'adOrgId' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiAuthorizationno",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11365,6 +11468,14 @@
         "field": "aEAT349Period",
         "runner": "node",
         "description": "Display logic for 'aEAT349Period' in reversedInvoices should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-header-adOrgId",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Display logic for 'adOrgId' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-aeatsiiAuthorizationno",
@@ -11847,6 +11958,14 @@
         "description": "Field 'toCurrency' should be present in exchangeRates"
       },
       {
+        "id": "t-field-presence-header-adOrgId",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Field 'adOrgId' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiAuthorizationno",
         "category": "field-presence",
         "entity": "header",
@@ -12221,6 +12340,14 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiIssent",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Field 'tbaiIssent' should be present in header"
       },
       {
         "id": "t-field-presence-header-totalPaid",
@@ -13087,6 +13214,14 @@
         "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
       },
       {
+        "id": "t-field-type-header-adOrgId",
+        "category": "field-type",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Field 'adOrgId' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiAuthorizationno",
         "category": "field-type",
         "entity": "header",
@@ -13461,6 +13596,14 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiIssent",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-totalPaid",
@@ -14087,6 +14230,14 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-adOrgId",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Read-only logic for 'adOrgId' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiAuthorizationno",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -14661,6 +14812,14 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-adOrgId",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Read-only logic for 'adOrgId' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiAuthorizationno",
@@ -15526,6 +15685,14 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Selector endpoint for 'toCurrency' in exchangeRates should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-adOrgId",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Selector endpoint for 'adOrgId' in header should exist"
       },
       {
         "id": "t-selector-endpoint-header-aeatsiiCauseExemption",
@@ -17144,14 +17311,6 @@
         "description": "System field 'orderDate' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-organization",
-        "category": "system-field",
-        "entity": "header",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-paidAmountAtInvoicing",
         "category": "system-field",
         "entity": "header",
@@ -17286,14 +17445,6 @@
         "field": "tbaiIsreverseinvoice",
         "runner": "node",
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiIssent",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiIssueDate",
@@ -18516,25 +18667,25 @@
       }
     ],
     "summary": {
-      "total": 998,
+      "total": 1006,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
-        "default-value-type": 37,
-        "displaylogic-evaluable": 24,
-        "displaylogic-valid": 24,
-        "field-presence": 155,
-        "field-type": 155,
-        "readonlylogic-evaluable": 72,
-        "readonlylogic-valid": 72,
+        "default-value-type": 38,
+        "displaylogic-evaluable": 25,
+        "displaylogic-valid": 25,
+        "field-presence": 157,
+        "field-type": 157,
+        "readonlylogic-evaluable": 73,
+        "readonlylogic-valid": 73,
         "rule-declared": 23,
         "searchable-filters": 6,
-        "selector-endpoint": 52,
-        "system-field": 326,
+        "selector-endpoint": 53,
+        "system-field": 324,
         "visibility": 13
       },
       "byRunner": {
-        "node": 998,
+        "node": 1006,
         "junit": 0
       }
     }
