@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuthOptional, notifyAmbientUnauthorized } from '@etendosoftware/app-shell-core/auth';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
+import { reset } from '../lib/observability.js';
 
 /**
  * Returns a logout function that resets session-scoped UI state (the dashboard
@@ -21,6 +22,12 @@ export function useLogout() {
   const logout = auth?.logout;
   return useCallback(() => {
     clearStoredDateRange();
+    // Reset the observability identity before logging out: otherwise the
+    // account_id super-property set during this session stays registered
+    // inside the Mixpanel SDK and can leak into events fired by the NEXT
+    // login in this same browser (see providers/mixpanel.js). Fire-and-forget
+    // so a slow/failed provider never blocks the actual logout.
+    void reset();
     (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

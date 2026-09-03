@@ -124,6 +124,12 @@ export function createObservability(options = {}) {
       );
     },
 
+    async reset() {
+      await Promise.all(
+        providers.map(provider => callProvider(provider, 'reset', [{ context: getContext() }]))
+      );
+    },
+
     async setContext(nextContext = {}) {
       context = { ...context, ...nextContext };
 
