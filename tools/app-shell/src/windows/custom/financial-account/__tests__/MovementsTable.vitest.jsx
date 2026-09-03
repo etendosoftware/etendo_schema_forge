@@ -781,6 +781,7 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
         id: 'm1',
         dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
       })],
+      accountCurrencyId: 'cur-eur',
     });
     fireEvent.click(screen.getByTestId('movement-expand-m1'));
     const panel = screen.getByTestId('movement-moreinfo-m1');
@@ -831,6 +832,54 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
     expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
     expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
     expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+  });
+
+  // Regression test for the bug caught in PR #1318 review: `accountCurrencyId` defaults to
+  // `null` on MovementsTable and can genuinely still be null/undefined during initial load,
+  // before the parent has resolved the account's currency. `saveDimension` always forwards
+  // `ctx.accountCurrencyId` verbatim as `currencyId` in the PATCH payload (buildDimensionUpdatePayload),
+  // so allowing an edit before it resolves would guarantee an avoidable backend rejection. An
+  // otherwise-editable movement (GL transaction, not posted, no linked payment) must still fall
+  // back to the plain disabled Input while the currency has not resolved yet.
+  it('keeps the plain disabled Input when accountCurrencyId has not resolved yet, even though the movement would otherwise be editable', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+      accountCurrencyId: null,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-costcenter-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-product-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+
+    // It must be impossible to trigger a save in this state: there is no pick/clear control
+    // to click, and updateMovement must never be invoked.
+    expect(screen.queryByTestId('movement-dimension-project-pick')).not.toBeInTheDocument();
+    expect(updateMovement).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain disabled Input when accountCurrencyId is undefined (prop simply not passed yet)', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A' },
+      })],
+      accountCurrencyId: undefined,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
   });
 
   // Direct/unit-level check (per the ticket's own note): the allowlist itself never includes
@@ -891,6 +940,7 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
         dimensions: { project: 'Old Proj' },
       })],
       onReload,
+      accountCurrencyId: 'cur-eur',
     });
     fireEvent.click(screen.getByTestId('movement-expand-m1'));
     fireEvent.click(screen.getByTestId('movement-dimension-project-clear'));
@@ -909,6 +959,7 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
       enabledDimensions: ['project'],
       movements: [editableMovement({ id: 'm1' })],
       onReload,
+      accountCurrencyId: 'cur-eur',
     });
     fireEvent.click(screen.getByTestId('movement-expand-m1'));
     fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
@@ -924,6 +975,7 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
       enabledDimensions: ['project'],
       movements: [editableMovement({ id: 'm1' })],
       onReload,
+      accountCurrencyId: 'cur-eur',
     });
     fireEvent.click(screen.getByTestId('movement-expand-m1'));
     fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));

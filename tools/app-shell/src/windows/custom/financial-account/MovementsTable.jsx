@@ -349,7 +349,10 @@ function PanelField({ label, children }) {
  */
 function DimensionsPanel({ movement, ui, visible, ctx }) {
   const dims = movement.dimensions || {};
-  const editable = ctx.canEditDimensions(movement);
+  // `accountCurrencyId` can still be null/undefined during initial load (see its default
+  // param above) — buildDimensionUpdatePayload always sends it verbatim as `currencyId`, so
+  // editing before it resolves would guarantee an avoidable backend rejection.
+  const editable = ctx.canEditDimensions(movement) && Boolean(ctx.accountCurrencyId);
 
   const saveDimension = async (idField, row) => {
     try {
