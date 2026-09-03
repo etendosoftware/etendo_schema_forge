@@ -21,13 +21,24 @@
 // Every client that has ever set up an accounting schema accumulates one
 // c_tax_acct row per system tax rate, so this delete is expected to hit
 // every client, not just client '0'.
+// NOTE (reporter's final scope decision, 2026-09-03): a blanket delete of
+// all 246 CSV ids became a per-id fallback policy — every CSV DELETE id is
+// attempted as a real DELETE UNLESS it has a live-usage FK reference or is
+// referenced by one of the 3 sibling AEAT modules' own reference data (see
+// sibling-overlap.json), in which case it's DEACTIVATED instead (isactive
+// flipped to 'N' + description set to the literal 'Discarded Tax for
+// EtendoGO', no cascade — its obtl_tax_parameter/c_tax_zone/c_tax_trl rows
+// are left alone since the parent row still exists).
 const fs = require('fs');
 const path = require('path');
 const scope = JSON.parse(fs.readFileSync(path.join(__dirname, 'resolved-scope.json'), 'utf8'));
 const ids = scope.deleteIds;
+const deactivateIds = scope.deactivateIds || [];
 const inList = ids.map(id => `'${id}'`).join(',');
+const deactivateInList = deactivateIds.map(id => `'${id}'`).join(',');
 const { id: modId, newName } = scope.modify;
 const esc = s => s.replace(/'/g, "''");
+const DISCARDED_DESCRIPTION = 'Discarded Tax for EtendoGO'; // reporter's exact wording — do not translate/rephrase
 
 const lines = [];
 lines.push('-- ============================================================================');
@@ -55,6 +66,11 @@ lines.push(`-- initialized an account schema, so it must be cleared before c_tax
 lines.push(`DELETE FROM c_tax_acct WHERE c_tax_id IN (${inList});`);
 lines.push(`DELETE FROM c_tax WHERE c_tax_id IN (${inList}) AND ad_client_id = '0';`);
 lines.push('');
+lines.push(`-- DEACTIVATE fallback: live-usage or sibling-AEAT-module overlap ids.`);
+lines.push(`-- No cascade — obtl_tax_parameter/c_tax_zone/c_tax_trl rows for these ids`);
+lines.push(`-- are intentionally left untouched (the parent row still exists).`);
+lines.push(`UPDATE c_tax SET isactive = 'N', description = '${esc(DISCARDED_DESCRIPTION)}' WHERE c_tax_id IN (${deactivateInList}) AND ad_client_id = '0';`);
+lines.push('');
 lines.push(`-- MODIFY: rename ${modId}`);
 lines.push(`UPDATE c_tax SET name = '${esc(newName)}', description = '${esc(newName)}' WHERE c_tax_id = '${modId}' AND ad_client_id = '0';`);
 lines.push(`UPDATE c_tax_trl SET name = '${esc(newName)}' WHERE c_tax_id = '${modId}';`);
@@ -63,6 +79,9 @@ lines.push('SELECT ad_enable_triggers();');
 lines.push("\\echo ''");
 lines.push("\\echo 'Remaining c_tax rows at client 0 matching the delete list (expect 0):'");
 lines.push(`SELECT count(*) FROM c_tax WHERE c_tax_id IN (${inList}) AND ad_client_id = '0';`);
+lines.push("\\echo ''");
+lines.push("\\echo 'Deactivated c_tax rows at client 0 matching the deactivate list (expect " + deactivateIds.length + ", isactive=N):'");
+lines.push(`SELECT count(*) FROM c_tax WHERE c_tax_id IN (${deactivateInList}) AND ad_client_id = '0' AND isactive = 'N';`);
 lines.push('\\if :do_commit');
 lines.push("  \\echo '>>> do_commit=1 : COMMITTING.'");
 lines.push('  COMMIT;');
@@ -73,4 +92,4 @@ lines.push('\\endif');
 
 const out = path.join(__dirname, '01-apply-tax-cleanup.sql');
 fs.writeFileSync(out, lines.join('\n') + '\n');
-console.log('Wrote', out, `(${ids.length} delete ids, 1 rename)`);
+console.log('Wrote', out, `(${ids.length} delete ids, ${deactivateIds.length} deactivate ids, 1 rename)`);
