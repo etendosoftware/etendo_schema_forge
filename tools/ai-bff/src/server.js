@@ -49,6 +49,91 @@ function readBody(req) {
   });
 }
 
+/**
+ * Browser-side tools: the app executes these in the page, not the BFF.
+ *
+ * The schema field is `inputSchema`. In ai@5+ `tool()` renamed it from
+ * `parameters` and does NOT warn on the old name: the tool is still
+ * advertised to the model, just with no schema, so the model calls it with no
+ * arguments at all. That is what made every navigation fail with "Unknown
+ * window reference undefined" — the browser resolved `args.path === undefined`
+ * and the model, seeing the required path rejected, reported it "could not
+ * provide a path". server.test.js fails the build if a schema goes missing
+ * again.
+ */
+export function browserTools() {
+  return {
+    navigate_to: tool({
+      description: [
+        'Navigate the Etendo Go application to an allowed internal route.',
+        'Use this tool whenever the user asks to open or go to a window.',
+        'Accepts either an internal path starting with "/" (e.g. /sales-order, /sales-order/new)',
+        'or the window name as the user says it, in any UI language (e.g. "Sales Order", "Pedido de Venta").',
+        'The browser resolves names against this user\'s own menu, so a window this role cannot access',
+        'is reported as unreachable and lists the windows that are.',
+        'When a name cannot be resolved the error names every reachable window slug: retry with one of them',
+        'instead of telling the user to open the menu manually.',
+      ].join(' '),
+      inputSchema: z.object({ path: z.string().min(1) }),
+    }),
+    open_form: tool({
+      description: [
+        'Open an Etendo Go form or window in the current application.',
+        'This is a browser-side UI tool. Use it for requests to work inside a specific window.',
+        'The path is required and follows the same rules as navigate_to: an internal path or a window name.',
+        'Use /<window>/new only when the user explicitly asks to create a new record.',
+        'Use a recordId only when the user provided or the API returned that record ID.',
+      ].join(' '),
+      inputSchema: z.object({ path: z.string().min(1), recordId: z.string().optional() }),
+    }),
+    get_current_context: tool({
+      description: 'Read the current application route and window context from the browser.',
+      inputSchema: z.object({}),
+    }),
+    open_copilot: tool({
+      description: 'Open the application Copilot panel.',
+      inputSchema: z.object({}),
+    }),
+    inspect_page_dom: tool({
+      description: [
+        'Inspect the current Etendo Go page from the browser.',
+        'Returns a compact accessibility-oriented list of visible interactive elements with temporary elementId values.',
+        'Call this before interacting with a page element. Sensitive field values are not included.',
+      ].join(' '),
+      inputSchema: z.object({}),
+    }),
+    interact_with_page: tool({
+      description: [
+        'Interact with a visible element on the current Etendo Go page using an elementId from inspect_page_dom.',
+        'Supported actions are click, fill, type, and press. Do not invent elementIds and do not use CSS selectors or JavaScript.',
+        'Use fill/type only for non-sensitive visible form fields and ask the user before consequential submissions.',
+      ].join(' '),
+      inputSchema: z.object({
+        elementId: z.string().min(1),
+        action: z.enum(['click', 'fill', 'type', 'press']),
+        value: z.string().optional(),
+      }),
+    }),
+  };
+}
+
+/**
+ * Trace what the model asked for and what came back.
+ *
+ * MCP tools (neo_list, neo_get, ...) run HERE, inside the BFF — the browser
+ * never sees them, so a failed data lookup leaves no trace in the React
+ * console. Only the browser tools (navigate_to, open_form, ...) surface there.
+ * Reading both halves is what tells a "the model never called the tool" bug
+ * apart from a "the tool answered with an error" one.
+ *
+ * On by default because this process is a local development BFF; set
+ * AI_BFF_TRACE=off to silence it.
+ */
+function trace(stage, payload) {
+  if (process.env.AI_BFF_TRACE === 'off') return;
+  console.log(`[ai-bff:${stage}]`, JSON.stringify(payload, null, 2).slice(0, Number(process.env.AI_BFF_TRACE_MAX || 1500)));
+}
+
 export async function handleChat(req, res) {
   if (!hasConfiguredSecret(process.env.OPENCODE_API_KEY)) {
     return json(res, 503, { error: 'OPENCODE_API_KEY is not configured' });
@@ -82,58 +167,9 @@ export async function handleChat(req, res) {
     });
     const tools = isPageHelpRequest ? {} : {
       ...(await mcpClient.tools()),
-      navigate_to: tool({
-        description: [
-          'Navigate the Etendo Go application to an allowed internal route.',
-          'Use this tool whenever the user asks to open or go to a window.',
-          'Accepts either an internal path starting with "/" (e.g. /sales-order, /sales-order/new)',
-          'or the window name as the user says it, in any UI language (e.g. "Sales Order", "Pedido de Venta").',
-          'The browser resolves names against this user\'s own menu, so a window this role cannot access',
-          'is reported as unreachable and lists the windows that are.',
-          'When a name cannot be resolved the error names every reachable window slug: retry with one of them',
-          'instead of telling the user to open the menu manually.',
-        ].join(' '),
-        parameters: z.object({ path: z.string().min(1) }),
-      }),
-      open_form: tool({
-        description: [
-          'Open an Etendo Go form or window in the current application.',
-          'This is a browser-side UI tool. Use it for requests to work inside a specific window.',
-          'The path is required and follows the same rules as navigate_to: an internal path or a window name.',
-          'Use /<window>/new only when the user explicitly asks to create a new record.',
-          'Use a recordId only when the user provided or the API returned that record ID.',
-        ].join(' '),
-        parameters: z.object({ path: z.string().min(1), recordId: z.string().optional() }),
-      }),
-      get_current_context: tool({
-        description: 'Read the current application route and window context from the browser.',
-        parameters: z.object({}),
-      }),
-      open_copilot: tool({
-        description: 'Open the application Copilot panel.',
-        parameters: z.object({}),
-      }),
-      inspect_page_dom: tool({
-        description: [
-          'Inspect the current Etendo Go page from the browser.',
-          'Returns a compact accessibility-oriented list of visible interactive elements with temporary elementId values.',
-          'Call this before interacting with a page element. Sensitive field values are not included.',
-        ].join(' '),
-        parameters: z.object({}),
-      }),
-      interact_with_page: tool({
-        description: [
-          'Interact with a visible element on the current Etendo Go page using an elementId from inspect_page_dom.',
-          'Supported actions are click, fill, type, and press. Do not invent elementIds and do not use CSS selectors or JavaScript.',
-          'Use fill/type only for non-sensitive visible form fields and ask the user before consequential submissions.',
-        ].join(' '),
-        parameters: z.object({
-          elementId: z.string().min(1),
-          action: z.enum(['click', 'fill', 'type', 'press']),
-          value: z.string().optional(),
-        }),
-      }),
+      ...browserTools(),
     };
+    trace('tools', { mode: isPageHelpRequest ? 'page-help' : 'chat', available: Object.keys(tools) });
     const result = streamText({
       model: provider.chatModel(modelId),
       messages: await convertToModelMessages(body.messages || [], { tools }),
@@ -146,6 +182,22 @@ export async function handleChat(req, res) {
       } : {}),
       stopWhen: stepCountIs(8),
       abortSignal: AbortSignal.timeout(modelTimeoutMs),
+      onStepFinish: ({ text, toolCalls, toolResults, finishReason }) => {
+        trace('step', {
+          finishReason,
+          text: text?.slice(0, 400),
+          toolCalls: (toolCalls || []).map(call => ({
+            toolName: call.toolName,
+            toolCallId: call.toolCallId,
+            input: call.input ?? call.args,
+          })),
+          toolResults: (toolResults || []).map(result => ({
+            toolName: result.toolName,
+            toolCallId: result.toolCallId,
+            output: result.output ?? result.result,
+          })),
+        });
+      },
       onError: ({ error }) => {
         console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
       },

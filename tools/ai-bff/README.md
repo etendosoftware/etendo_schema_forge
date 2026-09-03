@@ -71,3 +71,33 @@ Reusing the first message for the second is what made the agent tell the user
 navigation was unavailable and to open the menu by hand. `open_form` therefore
 also **requires** `path` — it used to be optional with a Spanish-regex guess
 over the conversation, and a miss surfaced as the security error.
+
+## Tool schemas: `inputSchema`, never `parameters`
+
+`tool({ ... })` takes the argument schema in **`inputSchema`**. `parameters` was
+its name up to ai@4 and is silently ignored by ai@7: the tool is still
+advertised to the model, just with no schema, so the model calls it with **no
+arguments at all**. The visible symptom is not "invalid arguments" but a browser
+tool failing on `args.path === undefined` while the model reports it "could not
+provide a path" — the exact ETP-5064 dead end. `src/server.test.js` fails if any
+browser tool loses its schema or goes back to `parameters`.
+
+## Tracing a conversation
+
+Both halves of the loop are traced, and both are needed: MCP tools (`neo_list`,
+`neo_get`, ...) execute **inside this process** and never reach the browser,
+while browser tools (`navigate_to`, `open_form`, ...) execute in the page and
+never reach this process.
+
+| Where | Output | Shows |
+|---|---|---|
+| BFF stdout | `[ai-bff:tools]`, `[ai-bff:step]` | which tools were offered, and every tool call + result the model made |
+| Browser console (DEV only) | `[copilot:tool] call/result/error/turn` | the args the browser received, what it answered, and the assistant turn's parts |
+
+Silence them with `AI_BFF_TRACE=off` (server) or
+`window.__ETENDO_COPILOT_TRACE__ = false` (browser). Server payloads are
+truncated to `AI_BFF_TRACE_MAX` characters (default 1500) because a single
+`neo_list` result is far larger than a readable log line.
+
+Note this process has **no hot reload** (`npm run start`, not `--watch`), so a
+change here needs a restart of `make dev` before the model sees it.

@@ -63,6 +63,16 @@ describe('useAiCopilotChat client tool path policy', () => {
     expect(resolveWindowPath('albaran de venta', routeIndex)).toBe('/goods-shipment');
   });
 
+  it('sends a URL or a scheme to the security guard, never to the name lookup', () => {
+    // A path claim must be judged as one. Falling through to the index would
+    // report "https://evil.example" as a mere unknown window and lose the
+    // security signal entirely.
+    for (const hostile of ['https://example.com/phish', '//evil.host', 'javascript:alert(1)']) {
+      expect(() => resolveWindowPath(hostile, routeIndex))
+        .toThrow('Only internal application paths are allowed');
+    }
+  });
+
   it('reports an unresolved name as recoverable, not as a rejected external path', () => {
     // Conflating the two is what made the agent tell the user navigation was
     // unavailable and to use the menu by hand.

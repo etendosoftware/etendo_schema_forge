@@ -3,7 +3,7 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMenuLabel } from '@/i18n';
-import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, normalizeWindowKey } from './windowRoutes.js';
+import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
 /**
  * Guard the router against anything that is not an in-app path. This is the
@@ -26,7 +26,11 @@ export function assertInternalPath(path) {
  * @param {import('./windowRoutes.js').WindowRouteIndex} index — from buildWindowRouteIndex()
  */
 export function resolveWindowPath(reference, index) {
-  if (typeof reference === 'string' && reference.startsWith('/')) {
+  // Anything shaped like a path or a URL is a path claim, and a path claim is
+  // judged by the security guard — never demoted to a name lookup. Without the
+  // URL half, "https://evil.example" fell through to the index, missed, and
+  // came back as a mere "unknown window", losing the security signal.
+  if (typeof reference === 'string' && (reference.startsWith('/') || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(reference))) {
     return assertInternalPath(reference);
   }
   const key = normalizeWindowKey(reference);
@@ -139,6 +143,26 @@ export function interactWithDom(registry, { elementId, action, value }) {
   return { ok: true, elementId, action };
 }
 
+/**
+ * Trace every Copilot tool call in the browser console.
+ *
+ * The agent decides which tool to call server-side, so when it reports
+ * "navigation is not working" the only evidence of WHAT it actually asked for
+ * (and what the browser answered) lives in this hook. Without a trace the
+ * failure is indistinguishable from the model never calling the tool at all —
+ * which is exactly the ambiguity that cost a debugging round in ETP-5064.
+ *
+ * Gated on `import.meta.env.DEV` so it never leaks tool payloads in a
+ * production bundle, and on `window.__ETENDO_COPILOT_TRACE__ !== false` so a
+ * noisy session can be silenced from the console.
+ */
+function traceToolCall(stage, payload) {
+  if (!import.meta.env?.DEV) return;
+  if (typeof window !== 'undefined' && window.__ETENDO_COPILOT_TRACE__ === false) return;
+  // eslint-disable-next-line no-console -- developer-facing trace, DEV only
+  console.log(`%c[copilot:tool] ${stage}`, 'color:#7c3aed;font-weight:bold', payload);
+}
+
 function messageText(message) {
   if (typeof message.content === 'string') return message.content;
   return (message.parts || [])
@@ -183,6 +207,13 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     const args = toolCall.input || toolCall.args || {};
     let result;
     let errorText;
+    traceToolCall('call', {
+      toolName: toolCall.toolName,
+      toolCallId: toolCall.toolCallId,
+      args,
+      argsJson: JSON.stringify(args),
+      reachableWindows: knownWindowSlugs(windowRouteIndex),
+    });
 
     try {
       switch (toolCall.toolName) {
@@ -218,10 +249,26 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
           result = interactWithDom(domRegistryRef.current, args);
           break;
         default:
+          traceToolCall('unsupported', { toolName: toolCall.toolName, args });
           return;
       }
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
+      traceToolCall('error', {
+        toolName: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        args,
+        errorName: error instanceof Error ? error.name : 'Error',
+        errorText,
+      });
+    }
+    if (!errorText) {
+      traceToolCall('result', {
+        toolName: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        args,
+        result,
+      });
     }
 
     // AI SDK processes onToolCall while consuming the response stream. Its
@@ -284,10 +331,27 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     pageHelpPendingRef.current = false;
     setPageHelpActive(false);
   }, []);
+  // What the model actually produced for a turn: text, tool calls, or nothing.
+  // The model half of the loop is invisible from the browser otherwise — if it
+  // never calls navigate_to there is no 'call' trace to read.
+  const handleFinish = useCallback(({ message }) => {
+    traceToolCall('turn', {
+      role: message.role,
+      text: messageText(message).slice(0, 400),
+      parts: (message.parts || []).map(part => ({
+        type: part.type,
+        state: part.state,
+        input: part.input,
+        output: part.output,
+        errorText: part.errorText,
+      })),
+    });
+  }, []);
   const chat = useChat({
     transport,
     onToolCall: executeTool,
     sendAutomaticallyWhen,
+    onFinish: handleFinish,
   });
   addToolOutputRef.current = chat.addToolOutput;
   messagesRef.current = chat.messages;
