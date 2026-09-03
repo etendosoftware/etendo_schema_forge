@@ -4,12 +4,11 @@ import { readFileSync } from 'node:fs';
 
 /**
  * ETP-4986 — unify asset-group naming to a single term across the app:
- * "Grupo de activo" (es) / "Asset Group" (en) — singular.
+ * "Categoría de Activo" (es) / "Asset Group" (en) — singular.
  *
- * Today the term is inconsistently "Categoría de Activos" in some spots and
- * "Grupo de activos"/"Grupo activo" (wrong plural / missing "de") in others.
- * This test encodes the correct FINAL state and is expected to FAIL until the
- * locale files (and the hardcoded fallback in AssetsDetailPanel.jsx) are fixed.
+ * The reporter changed the target term after the initial fix landed: the
+ * earlier unification round settled on "Grupo de activo", but the final,
+ * correct term is "Categoría de Activo". This test encodes that FINAL state.
  *
  * Out of scope: A_Asset_Group_Acct_ID ("Grupo de activo contabilidad") is
  * already correct and must NOT be touched or asserted here.
@@ -31,12 +30,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.fields.A_Asset_Group_ID.label, 'Asset Group');
     });
 
-    it('es_ES — "Grupo de activo"', () => {
-      assert.equal(esES.fields.A_Asset_Group_ID.label, 'Grupo de activo');
+    it('es_ES — "Categoría de Activo"', () => {
+      assert.equal(esES.fields.A_Asset_Group_ID.label, 'Categoría de Activo');
     });
 
-    it('es_AR — "Grupo de activo"', () => {
-      assert.equal(esAR.fields.A_Asset_Group_ID.label, 'Grupo de activo');
+    it('es_AR — "Categoría de Activo"', () => {
+      assert.equal(esAR.fields.A_Asset_Group_ID.label, 'Categoría de Activo');
     });
   });
 
@@ -45,12 +44,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.windows['Asset Group'].label, 'Asset Group');
     });
 
-    it('es_ES — "Grupo de activo"', () => {
-      assert.equal(esES.windows['Asset Group'].label, 'Grupo de activo');
+    it('es_ES — "Categoría de Activo"', () => {
+      assert.equal(esES.windows['Asset Group'].label, 'Categoría de Activo');
     });
 
-    it('es_AR — "Grupo de activo"', () => {
-      assert.equal(esAR.windows['Asset Group'].label, 'Grupo de activo');
+    it('es_AR — "Categoría de Activo"', () => {
+      assert.equal(esAR.windows['Asset Group'].label, 'Categoría de Activo');
     });
   });
 
@@ -59,8 +58,8 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.windows['Asset Group'].newLabel, 'New group');
     });
 
-    it('es_ES — "Nuevo grupo"', () => {
-      assert.equal(esES.windows['Asset Group'].newLabel, 'Nuevo grupo');
+    it('es_ES — "Nueva categoría"', () => {
+      assert.equal(esES.windows['Asset Group'].newLabel, 'Nueva categoría');
     });
 
     // es_AR has no newLabel key today for "Asset Group" — intentionally not asserted.
@@ -71,12 +70,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.tabs['Asset Category'].label, 'Asset Group');
     });
 
-    it('es_ES — "Grupo de activo"', () => {
-      assert.equal(esES.tabs['Asset Category'].label, 'Grupo de activo');
+    it('es_ES — "Categoría de Activo"', () => {
+      assert.equal(esES.tabs['Asset Category'].label, 'Categoría de Activo');
     });
 
-    it('es_AR — "Grupo de activo"', () => {
-      assert.equal(esAR.tabs['Asset Category'].label, 'Grupo de activo');
+    it('es_AR — "Categoría de Activo"', () => {
+      assert.equal(esAR.tabs['Asset Category'].label, 'Categoría de Activo');
     });
   });
 
@@ -85,12 +84,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.menus['Asset Group'].label, 'Asset Group');
     });
 
-    it('es_ES — "Grupo de activo"', () => {
-      assert.equal(esES.menus['Asset Group'].label, 'Grupo de activo');
+    it('es_ES — "Categoría de Activo"', () => {
+      assert.equal(esES.menus['Asset Group'].label, 'Categoría de Activo');
     });
 
-    it('es_AR — "Grupo de activo"', () => {
-      assert.equal(esAR.menus['Asset Group'].label, 'Grupo de activo');
+    it('es_AR — "Categoría de Activo"', () => {
+      assert.equal(esAR.menus['Asset Group'].label, 'Categoría de Activo');
     });
   });
 

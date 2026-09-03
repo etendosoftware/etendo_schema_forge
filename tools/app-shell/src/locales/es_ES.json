@@ -4109,7 +4109,7 @@
       "description": "Dirección destinada a la descripción de un producto, a la que puede accederse via Internet."
     },
     "A_Asset_Group_ID": {
-      "label": "Grupo de activo",
+      "label": "Categoría de Activo",
       "description": "Clasificación de los activos basada en características similares."
     },
     "C_Currency_ID": {
@@ -14062,8 +14062,8 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Grupo de activo",
-      "newLabel": "Nuevo grupo"
+      "label": "Categoría de Activo",
+      "newLabel": "Nueva categoría"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -15326,7 +15326,7 @@
       "label": "Proceso"
     },
     "Asset Category": {
-      "label": "Grupo de activo"
+      "label": "Categoría de Activo"
     },
     "Attribute Set": {
       "label": "Conjunto atributos"
@@ -25448,7 +25448,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Grupo de activo"
+      "label": "Categoría de Activo"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
