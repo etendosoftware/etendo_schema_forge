@@ -55,6 +55,7 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 }));
 
 import { ListView } from '../ListView.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 
 const SUMMARY = {
   totalBalance: 273853.46,
@@ -86,6 +87,7 @@ beforeEach(() => {
   hookState = {};
   headerArgs = null;
   tableProps = null;
+  useSetPageMeta.mockClear();
 });
 
 describe('ListView — headerContent({ meta })', () => {
@@ -168,5 +170,28 @@ describe('ListView — meta and the Table slot', () => {
 
     expect(tableProps.data).toEqual([{ id: 'acc-1' }]);
     expect(typeof tableProps.onDataMutated).toBe('function');
+  });
+});
+
+// ETP-5101 §1.3 — `window.hideRecordCount` hides the record-count badge next to the
+// window title for tree-view windows (e.g. chart-of-accounts) where the flat list
+// item count is meaningless.
+describe('ListView — recordCount (hideRecordCount)', () => {
+  it('passes hook.items.length as recordCount when hideRecordCount is not set (default false)', () => {
+    hookState = { items: [{ id: '1' }, { id: '2' }, { id: '3' }] };
+
+    render(<ListView {...defaultProps} />);
+
+    const lastCall = useSetPageMeta.mock.calls.at(-1);
+    expect(lastCall[0]).toMatchObject({ recordCount: 3 });
+  });
+
+  it('passes recordCount: undefined when hideRecordCount is true, regardless of item count', () => {
+    hookState = { items: [{ id: '1' }, { id: '2' }, { id: '3' }] };
+
+    render(<ListView {...defaultProps} hideRecordCount />);
+
+    const lastCall = useSetPageMeta.mock.calls.at(-1);
+    expect(lastCall[0]).toMatchObject({ recordCount: undefined });
   });
 });

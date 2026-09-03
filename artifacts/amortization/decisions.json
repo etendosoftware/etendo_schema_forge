@@ -9,6 +9,7 @@
     "statusField": "processed",
     "hideDeleteButton": true,
     "hideCreate": true,
+    "listSortBy": "accountingDate desc",
     "summaryFields": [],
     "hidePrint": true,
     "hideLink": true,
