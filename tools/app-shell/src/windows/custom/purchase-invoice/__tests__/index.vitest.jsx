@@ -329,6 +329,46 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     expect(lastListViewProps.initialAdvancedFilter.conditions[2].field).toBe('eTGODueDate');
   });
 
+  // ETP-5017: the dashboard "Payments" card now covers "due date <= today"
+  // (overdue and due-today combined), not just an exact match on today. Since
+  // date-mode filters have no `lessOrEqual` operator, this is expressed as
+  // `lessThan` tomorrow.
+  it('sets initialAdvancedFilter and initialColumns for the paymentsDue filter param', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 25, 12, 0, 0));
+    searchParams = new URLSearchParams('filter=paymentsDue');
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.initialAdvancedFilter).toMatchObject({
+      rowOperator: 'and',
+      conditions: [
+        { field: 'documentStatus', operator: 'equals', value: 'CO' },
+        { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+        { field: 'eTGODueDate', operator: 'lessThan', value: '2026-08-26' },
+      ],
+    });
+    expect(lastListViewProps.initialAdvancedFilter.conditions).toHaveLength(3);
+    expect(lastListViewProps.initialColumns).not.toBeNull();
+  });
+
+  // ETP-5017 regression guard: guards the local-calendar-day helper against the
+  // UTC bug of `new Date().toISOString().slice(0, 10)` — late evening in a
+  // negative-UTC timezone would otherwise resolve "tomorrow" to the wrong day.
+  it('resolves "tomorrow" as a local calendar day for the paymentsDue filter, not the UTC day', () => {
+    vi.useFakeTimers();
+    // 2026-08-25 23:30 local is already 2026-08-26 in UTC; the local calendar
+    // "tomorrow" must still be the 26th, not the 27th.
+    vi.setSystemTime(new Date(2026, 7, 25, 23, 30, 0));
+    searchParams = new URLSearchParams('filter=paymentsDue');
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastListViewProps.initialAdvancedFilter.conditions[2]).toMatchObject({
+      field: 'eTGODueDate',
+      operator: 'lessThan',
+      value: '2026-08-26',
+    });
+  });
+
   it('passes DocStatus from the URL into initialColumnFilters', () => {
     searchParams = new URLSearchParams('DocStatus=CO');
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);

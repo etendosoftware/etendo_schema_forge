@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useUI } from '@/i18n';
-
 import { useApiFetch } from '@/auth/useApiFetch.js';
-export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
+
+export default function AccountingPanel({ parentId, apiBaseUrl }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
@@ -14,14 +14,14 @@ export default function AccountingPanel({ parentId, token, apiBaseUrl }) {
   useEffect(() => {
     if (!parentId) return;
     setRows(undefined);
-    apiFetch(`/accounting?year=${parentId}`, { token })
+    apiFetch(`/accounting?year=${parentId}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         return res.json();
       })
       .then((body) => setRows(body.data ?? []))
       .catch(() => setRows(null));
-  }, [parentId, apiFetch, token]);
+  }, [parentId, apiFetch]);
 
   if (rows === undefined) {
     return <div data-testid="accounting-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;

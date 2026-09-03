@@ -5,13 +5,15 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Upload, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
+import { ListExportButton } from './ListExportButton.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
@@ -31,6 +33,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
+
+/**
+ * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
+ * compares a CSV header — so two labels this calls equal are also two headers the import
+ * treats as the same column.
+ */
+function sameLabel(a, b) {
+  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return norm(a) === norm(b);
+}
 
 function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
   if (quickFilters?.length) {
@@ -280,6 +292,31 @@ function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
 }
 
+// Extracted so the guard/try-finally doesn't add to ListView's own cognitive
+// complexity (S3776) — same rationale as the other top-level helpers above.
+async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
+  if (isPrinting) return;
+  setIsPrinting(true);
+  try {
+    await printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl);
+  } finally {
+    setIsPrinting(false);
+  }
+}
+
+// Same rationale: the ternary itself is what feeds ListView's cognitive
+// complexity, regardless of where its result is used — a plain function call
+// keeps the branch out of the caller's count (mirrors iconSizeClass above).
+function printButtonLabel(isPrinting, ui) {
+  return isPrinting ? ui('generating') : ui('print');
+}
+
+function printButtonIcon(isPrinting, selectionBarSize) {
+  return isPrinting
+    ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+    : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
+}
+
 /**
  * Full-width list view for an entity.
  */
@@ -296,6 +333,11 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // ETP-5101 — hides the record-count badge next to the window title. Use this
+  // when `hook.items.length` doesn't represent a meaningful count for the
+  // window (e.g. AccountTreeView's own self-fetched tree: ListView only ever
+  // hands it one paginated batch of leaves, not the full materialized structure).
+  hideRecordCount = false,
   // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
   // just its individual controls. For windows whose headerTable renders its own
   // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
@@ -585,6 +627,15 @@ export function ListView({
   }, [refreshTrigger]);
 
   const navigate = useNavigate();
+  // ETP-5075 — surface the bulk-action result toast after `BulkDocumentAction`'s
+  // post-run `window.location.reload()`. It used to be wired per window, inside each
+  // hand-written `windows/custom/<w>/index.jsx` (sales-invoice, goods-shipment, …), which
+  // meant a purely pipeline-generated window with a `bulkActions` slot ran the bulk fine
+  // and then reported nothing at all. Hosting it here gives every list the toast with no
+  // per-window wiring. It cannot double-fire for the windows whose wrapper also calls it:
+  // the hook deletes the sessionStorage key before showing the toast, so whichever effect
+  // runs first consumes the result and the other finds nothing.
+  useBulkActionToast();
   // ETP-3914 — when rowQuickActions is enabled but the host did not supply
   // onEdit/onDelete, wire sensible defaults: navigate to detail and reuse the
   // shared delete confirm + DELETE pipeline. Custom overrides that pass their
@@ -655,19 +706,33 @@ export function ListView({
   // address/city/postal/region are C_Location columns the descriptor writes directly, so they
   // are not entity fields and have no AD label at all.
   //
-  // `headerScope: "contact"` appends a localized qualifier. A Contacts row is split across the
-  // business partner and its contact person, and the AD label for both halves is identical
-  // ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
+  // `headerScope` appends a localized qualifier naming the tab a column belongs to. A Contacts
+  // row is split across THREE records — the business partner, its contact person (AD_User) and
+  // its address (C_BPartner_Location + C_Location) — and the AD label for two of those halves is
+  // identical ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
   // qualifier the template writes the same header twice, which `parseDelimited` rejects
   // outright — the file could not be uploaded at all.
+  //
+  // ETP-4997: the scope used to be a single "contact" value covering everything that is not on
+  // the header entity, so the five address columns were labelled "Dirección (Contacto)" —
+  // naming the wrong tab, and reported as confusing by a user reading an exported file. Address
+  // columns now carry their own scope. An unknown scope falls back to no qualifier rather than
+  // printing a raw key.
+  const importHeaderScopeLabels = useMemo(() => ({
+    contact: ui('importHeaderScopeContact'),
+    address: ui('importHeaderScopeAddress'),
+  }), [ui]);
   const importFieldLabel = useCallback((field) => {
     const base = (field.labelKey ? ui(field.labelKey) : null)
       || (field.column ? t(field.column) : null)
       || field.label || field.target;
-    return field.headerScope === 'contact'
-      ? `${base} (${ui('importHeaderScopeContact')})`
-      : base;
-  }, [t, ui]);
+    const scope = importHeaderScopeLabels[field.headerScope];
+    // The address column's own label IS the scope word, so qualifying it would read
+    // "Dirección (Dirección)". Nothing else in the file carries that name, and
+    // `resolveTemplateHeaders` still disambiguates if a collision ever appears.
+    if (!scope || sameLabel(base, scope)) return base;
+    return `${base} (${scope})`;
+  }, [t, ui, importHeaderScopeLabels]);
 
   // `importExistingKeys` answers "which of these rows already exist?" before the user
   // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
@@ -687,6 +752,7 @@ export function ListView({
       keyTargets.map((target) => [target, record[target]]),
     ));
   }, [apiFetch, importConfig?.entity]);
+
   // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
   // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
   // the nested `labels` object ImportDialog forwards to each child (shape documented in
@@ -698,11 +764,18 @@ export function ListView({
   const importLabels = useMemo(() => ({
     title: ui('importDialogTitle'),
     revalidating: ui('importRevalidating'),
+    // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
+    // when the per-format key is absent); the two per-format captions are what actually render
+    // now that a window can offer more than one template.
     downloadTemplate: ui('importDownloadTemplate'),
+    downloadTemplateCsv: ui('importDownloadTemplateCsv'),
+    downloadTemplateXlsx: ui('importDownloadTemplateXlsx'),
     importButton: (n) => ui('importButtonCount', { n }),
     dropzone: {
       dropHere: ui('importDropHere'),
-      dropHint: ui('importDropHint'),
+      // Carries a {formats} placeholder that ImportDropzone fills from the window's own
+      // `formats` declaration, so the hint can no longer name formats the input does not accept.
+      dropHint: ui('importDropHintFormats'),
     },
     progress: {
       title: ui('importProgressTitle'),
@@ -770,10 +843,10 @@ export function ListView({
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hook.items.length,
+    recordCount: hideRecordCount ? undefined : hook.items.length,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
-  }, [favActive, hook.items.length]);
+  }, [favActive, hook.items.length, hideRecordCount]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
@@ -783,7 +856,13 @@ export function ListView({
   const [deselectTrigger, setDeselectTrigger] = useState(0);
   const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
+
+  const handleBulkPrint = useCallback(
+    () => executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }),
+    [isPrinting, windowName, selectedRows, token, ui, apiBaseUrl]
+  );
 
   const handlePreviewClose = useCallback(() => {
     if (previewRow) {
@@ -913,6 +992,10 @@ export function ListView({
     data: hook.items,
     meta: hook.meta,
     onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    // ETP-5075 — lets DataTable turn an FK column in the fkNavigation registry into a
+    // click-through to the referenced document. Distinct from `onNavigate` above, which
+    // always targets THIS window's own record.
+    navigate,
     onSelectionChange: setSelectedRows,
     // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
     // headerTable that has to react to selection (e.g. financial-account swaps its own
@@ -1013,11 +1096,12 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    title={ui('print')}
-                    aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    title={printButtonLabel(isPrinting, ui)}
+                    aria-label={printButtonLabel(isPrinting, ui)}
+                    disabled={isPrinting}
+                    onClick={handleBulkPrint}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
                 {onCloneRow && (
@@ -1164,6 +1248,7 @@ export function ListView({
                   isDefaultSort={isDefaultSort}
                   SortIconComponent={SortIconComponent}
                   iconButtonHover={iconButtonHover}
+                  labelOverrides={labelOverrides}
                   data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
@@ -1171,6 +1256,10 @@ export function ListView({
                   onRefresh={() => hook.refresh()}
                   label={ui('refresh')}
                   data-testid="RefreshButton__620cbc" />
+                {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not
+                    the file: import pulls records into Etendo (Download), export pushes them
+                    out (Upload). The import button used to carry the outward arrow, which read
+                    as an export. */}
                 {importConfig?.enabled && (
                   <Button
                     variant="outline"
@@ -1181,8 +1270,16 @@ export function ListView({
                     title={ui('import')}
                     data-testid="ListView__importButton"
                   >
-                    <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
+                    <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
                   </Button>
+                )}
+                {importConfig?.enabled && (
+                  <ListExportButton
+                    importConfig={importConfig}
+                    importFieldLabel={importFieldLabel}
+                    apiBaseUrl={apiBaseUrl}
+                    buildListQuery={hook.buildListQuery}
+                    data-testid="ListExportButton__620cbc" />
                 )}
                 {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button

@@ -104,4 +104,20 @@ describe('sortRows', () => {
     const rows = [{ k: 'a', g: 1 }, { k: 'b', g: 1 }, { k: 'c', g: 0 }, { k: 'd', g: 1 }];
     assert.deepEqual(keys(sortRows(rows, { key: 'g' })), ['c', 'a', 'b', 'd']);
   });
+
+  // Sentinel/QA (ETP-5083) — BUG-1. `compareCellValues` alone always puts a blank last (see the
+  // "compareCellValues — blanks" describe block above), but `sortRows` builds its comparator as
+  // `sign * compareCellValues(...)` — a single multiplication applied to EVERY branch of
+  // `compareCellValues`, including the blank-handling ones. That flips blank placement too
+  // whenever `direction: 'desc'`, contradicting this file's own module doc comment ("Blank
+  // values ... always sort LAST, in both directions"). Surfaces directly in
+  // WarehouseTransactionsTable's Documento column (ETP-5083): descending-sorting Documento with
+  // an undocumented row present floats that row to the TOP instead of the bottom. Pre-existing
+  // shared code (also consumed by the financial-account detail tabs), not introduced by
+  // ETP-5083's diff — reported, not fixed, per QA's own-bugs-are-reported-not-fixed rule.
+  it('BUG: sign-flipping direction also flips the blank-handling branches, floating a blank to the top when direction is desc', () => {
+    const rows = [{ k: 'a', v: null }, { k: 'b', v: 'X' }, { k: 'c', v: 'Y' }];
+    // Spec (per this module's own doc comment): blank stays last regardless of direction.
+    assert.deepEqual(keys(sortRows(rows, { key: 'v', direction: 'desc' })), ['c', 'b', 'a']);
+  });
 });

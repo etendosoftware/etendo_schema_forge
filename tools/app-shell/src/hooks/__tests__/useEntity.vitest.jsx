@@ -508,6 +508,168 @@ describe('useEntity', () => {
       expect(body.empty).toBeUndefined(); // empty value skipped
       expect(body.name).toBe('Real Name');
     });
+
+    // ETP-5101 regression: buildSavePayload sends only the changed-field DIFF, and at
+    // least one backend entity's PATCH response only echoes back a subset of fields
+    // (whatever it wrote + a few identity/audit columns) — not the full record. Before
+    // the fix, performSave did `setSelected(resolvedSaved); setEditing({ ...resolvedSaved })`,
+    // a full replace that silently dropped any field the response omitted from BOTH
+    // `selected` and `editing`, even though that field never actually changed.
+    it('preserves a field the PATCH response omits, even though it never changed (ETP-5101)', async () => {
+      const existing = { id: 'acc-1', name: 'Original', accountType: 'E', code: '5010' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') {
+          // Response omits accountType and code entirely — only echoes what it wrote (name) + id.
+          return { ok: true, json: async () => ({ response: { data: [{ id: 'acc-1', name: 'Renamed' }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      act(() => {
+        result.current.handleChange('name', 'Renamed');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      // The field the response omitted must keep its last-known value, not be dropped.
+      expect(result.current.selected.accountType).toBe('E');
+      expect(result.current.selected.code).toBe('5010');
+      expect(result.current.editing.accountType).toBe('E');
+      expect(result.current.editing.code).toBe('5010');
+      // The field the response DID include is applied.
+      expect(result.current.selected.name).toBe('Renamed');
+      expect(result.current.editing.name).toBe('Renamed');
+    });
+
+    it('still overwrites a field with an explicit null the PATCH response returns (ETP-5101)', async () => {
+      // The merge must not be over-cautious: a field the response DOES include — even
+      // an explicit `null` — is a real server-side change and must not be masked back
+      // to the prior value.
+      const existing = { id: 'acc-2', name: 'Original', note: 'Some note' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') {
+          return { ok: true, json: async () => ({ response: { data: [{ id: 'acc-2', name: 'Original', note: null }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+
+      // handleSave PATCHes as long as editing.id is set, regardless of an actual diff.
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      expect(result.current.selected.note).toBeNull();
+      expect(result.current.editing.note).toBeNull();
+    });
+
+    // ETP-5101 QA follow-up: the merge fix's own comment says a PATCH response only echoes
+    // "the fields the backend actually wrote ... plus a handful of identity/audit columns" —
+    // prove that MULTIPLE independently-changed fields in the SAME response each merge
+    // correctly (not just a single-field omission/null case), while a field neither sent
+    // nor echoed keeps its last-known value.
+    it('merges several fields from one PATCH response independently and correctly', async () => {
+      const existing = {
+        id: 'acc-3', name: 'Original', accountType: 'E', code: '5010', note: 'keep-me',
+      };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') {
+          // Echoes id + two backend-derived fields (name, accountType) with NEW values,
+          // omits code and note entirely (unrelated, unchanged fields).
+          return {
+            ok: true,
+            json: async () => ({
+              response: { data: [{ id: 'acc-3', name: 'Renamed', accountType: 'L' }] },
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      act(() => {
+        result.current.handleSelect(existing);
+      });
+      act(() => {
+        result.current.handleChange('name', 'Renamed');
+        result.current.handleChange('accountType', 'L');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      // Fields the response DID include are each independently applied...
+      expect(result.current.selected.name).toBe('Renamed');
+      expect(result.current.selected.accountType).toBe('L');
+      expect(result.current.editing.name).toBe('Renamed');
+      expect(result.current.editing.accountType).toBe('L');
+      // ...while fields the response omitted keep their last-known value, untouched.
+      expect(result.current.selected.code).toBe('5010');
+      expect(result.current.selected.note).toBe('keep-me');
+      expect(result.current.editing.code).toBe('5010');
+      expect(result.current.editing.note).toBe('keep-me');
+    });
+
+    // ETP-5101 QA follow-up: on CREATE, `selected` starts the save as `null` (handleNew's own
+    // reset) while `editing` already carries every user-typed field. The merge is
+    // `setSelected(prev => ({...prev, ...resolvedSaved}))` / `setEditing(prev => ({...prev,
+    // ...resolvedSaved}))` — spreading `...null` is a no-op, so `selected` after a create ends
+    // up as EXACTLY `resolvedSaved`, while `editing` merges onto the full pre-save form state.
+    // A create response that (like the PATCH case) only echoes a subset of fields therefore
+    // makes `selected` and `editing` DIVERGE: `editing` keeps the client-typed value for an
+    // unechoed field, `selected` does not have it at all. Before this diff both were full
+    // replaces of the same `resolvedSaved`, so they were always consistent (both missing the
+    // field) — this asymmetry is new. Documenting the actual behavior so a future change to
+    // `selected`'s initial value on create doesn't silently flip it back unnoticed.
+    it('CREATE with a partial-echo response leaves `editing` with the client-typed field but drops it from `selected` (asymmetry introduced by the ETP-5101 merge)', async () => {
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (url.includes('/defaults')) {
+          return { ok: true, json: async () => ({ defaults: {} }) };
+        }
+        if (opts?.method === 'POST') {
+          // Echoes only id + name — omits `code`, which the user typed and which WAS sent
+          // in the POST payload (buildCreatePayload includes every non-empty editing key).
+          return { ok: true, json: async () => ({ response: { data: [{ id: 'new-9', name: 'Created' }] } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+
+      await act(async () => {
+        await result.current.handleNew();
+      });
+      act(() => {
+        result.current.handleChange('name', 'Created');
+        result.current.handleChange('code', '9999');
+      });
+
+      await act(async () => {
+        await result.current.handleSave();
+      });
+
+      // selected = {...null, ...resolvedSaved} → exactly what the backend echoed, no more.
+      expect(result.current.selected).toEqual({ id: 'new-9', name: 'Created' });
+      expect(result.current.selected.code).toBeUndefined();
+      // editing = {...prevEditing, ...resolvedSaved} → the client-typed `code` survives here,
+      // even though the server never confirmed it landed under this exact value.
+      expect(result.current.editing.code).toBe('9999');
+    });
   });
 
   // ---------------------------------------------------------------------------

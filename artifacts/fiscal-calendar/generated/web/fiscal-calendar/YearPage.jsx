@@ -30,7 +30,7 @@ const extraBadges = [
 
 // @sf-generated-start processes:year
 const processes = [
-  { name: 'processNow', label: 'Create Periods', style: 'positive', params: [{"key":"CREATEADJUSTMENT","type":"select","label":"Create Adjustment Period","required":false,"options":[{"value":"N","label":"No"},{"value":"Y","label":"Yes"}]}] },
+  { name: 'processNow', label: 'Create Periods', style: 'positive', params: [{"key":"FISCALYEARSTART","type":"select","label":"Fiscal Year Range","required":true,"options":[{"value":"JANUARY","label":"January - December"},{"value":"JULY","label":"July - June"}]},{"key":"CREATEADJUSTMENT","type":"select","label":"Create Adjustment Period","required":false,"options":[{"value":"N","label":"No"},{"value":"Y","label":"Yes"}]}] },
 ];
 // @sf-generated-end processes:year
 

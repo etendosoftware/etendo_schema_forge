@@ -88,7 +88,7 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'other', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
     // Annual Depreciation % — positive values only, decimals allowed (percentage).
     // Only `min: 1`, no `integer`. See AssetsDetailPanel.jsx for the full rationale. ETP-4542.
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'other', min: 1, max: 100, calloutOn: 'blur', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'other', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
     // min: 1 + integer: true → generic numeric validation (EntityForm blur toast +
     // useEntity save-block gate). Backend "Create Amortization" rejects non-positive

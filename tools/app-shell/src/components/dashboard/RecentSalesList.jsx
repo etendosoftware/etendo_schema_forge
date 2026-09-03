@@ -14,7 +14,13 @@ function resolveDocumentNumber(inv) {
   return inv.documentNo || inv.document_no || inv.docNo || null;
 }
 
-export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
+/**
+ * ETP-5088 — `canCreateSale` gates the empty state's creation CTAs (including "create with Copilot",
+ * whose only purpose here is to create that same record). They are creation actions, so they need
+ * the WRITE tier on the target window, not mere visibility. Defaults to `true` so existing callers
+ * and tests keep their behaviour; `DashboardPage` passes the resolved value.
+ */
+export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSale = true }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -28,10 +34,10 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
           title={ui('recentSalesEmptyTitle')}
           subtitle={ui('recentSalesEmptySubtitle')}
           width="340px"
-          actions={[
+          actions={canCreateSale ? [
             { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
             { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
-          ]}
+          ] : []}
           data-testid="DashboardEmptyState__4af5f2" />
       ) : (
       <div

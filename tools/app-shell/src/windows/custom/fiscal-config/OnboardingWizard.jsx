@@ -434,7 +434,21 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
 
   async function handleSaveDetail() {
     if (system === 'SII+TBAI') {
-      const results = await Promise.allSettled([siiRef.current?.save(), tbaiRef.current?.save()]);
+      // One after the other, NOT `Promise.allSettled([...])` (ETP-5112): each save is a PUT
+      // carrying the record's `updated` token, and core parses it through a non-thread-safe
+      // static `SimpleDateFormat` (`JsonToDataConverter` line 129). Concurrent writes corrupt
+      // each other's parse and one is then refused as a conflict against a record nobody touched.
+      // Both saves are still attempted when the first fails, matching the previous `allSettled`
+      // behaviour that `every(fulfilled)` below relies on.
+      const results = [];
+      for (const ref of [siiRef, tbaiRef]) {
+        try {
+          await ref.current?.save();
+          results.push({ status: 'fulfilled' });
+        } catch {
+          results.push({ status: 'rejected' });
+        }
+      }
       if (results.every(r => r.status === 'fulfilled')) onApplied();
       return;
     }

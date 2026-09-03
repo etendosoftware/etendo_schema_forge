@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { todayCalendarISO, tomorrowCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
@@ -85,13 +85,19 @@ const OVERDUE_INITIAL_COLUMNS = [
 const LABEL_OVERRIDES = {
   es_ES: {
     POReference: 'Nº documento',
-    OutstandingAmt: 'Pendiente de pago',
+    OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de recepción',
   },
   en_US: {
     POReference: 'Document No.',
-    OutstandingAmt: 'Pending Payment',
+    OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Reception Status',
+  },
+  // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
+  // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
+  // other columns keep their current es_AR behaviour on purpose.
+  es_AR: {
+    OutstandingAmt: 'Saldo pendiente',
   },
 };
 
@@ -211,14 +217,21 @@ export default function PurchaseInvoiceWindow(props) {
   const isOverdue = filterParam === 'overdue';
   const isPending = filterParam === 'pending';
   const isPaymentsDueToday = filterParam === 'paymentsDueToday';
-  const isInvoiceFilter = isOverdue || isPending || isPaymentsDueToday;
+  const isPaymentsDue = filterParam === 'paymentsDue';
+  const isInvoiceFilter = isOverdue || isPending || isPaymentsDueToday || isPaymentsDue;
 
   const todayISO = todayCalendarISO();
+  const tomorrowISO = tomorrowCalendarISO();
 
   // ETP-5012: "overdue" must mean due date < today, not just "completed with
   // an outstanding balance" — that broader set (any pending balance,
   // regardless of due date) is now "pending", used by the dashboard's totals
   // card. Otherwise a future-dated invoice was wrongly counted as overdue.
+  //
+  // ETP-5017: "paymentsDue" is the union of both — already overdue plus due
+  // today — backing the dashboard's payments card, which stays visible until
+  // the invoice is paid. It is expressed as `lessThan` tomorrow rather than
+  // `lessOrEqual` today because date mode offers no `lessOrEqual` operator.
   const initialAdvancedFilter = isInvoiceFilter
     ? {
         rowOperator: 'and',
@@ -226,6 +239,9 @@ export default function PurchaseInvoiceWindow(props) {
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
           { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
           ...(isOverdue ? [{ field: 'eTGODueDate', operator: 'lessThan', value: todayISO }] : []),
+          ...(isPaymentsDue
+            ? [{ field: 'eTGODueDate', operator: 'lessThan', value: tomorrowISO }]
+            : []),
           ...(isPaymentsDueToday
             ? [{ field: 'eTGODueDate', operator: 'equals', value: todayISO }]
             : []),

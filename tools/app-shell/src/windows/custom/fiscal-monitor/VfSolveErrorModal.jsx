@@ -65,17 +65,36 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
     if (saving || !canResolve) return;
     setSaving(true);
     try {
-      const results = await Promise.allSettled(
-        rows.map(r => {
-          if (isInvalid) {
+      // One row at a time, NOT `Promise.allSettled(rows.map(...))` (ETP-5112).
+      //
+      // Core parses the `updated` token of a write through a `private final static
+      // SimpleDateFormat` (`JsonToDataConverter` line 129), and `SimpleDateFormat` is not
+      // thread-safe — concurrent writes corrupt each other's parse and the concurrency check then
+      // refuses one of them with "the record has already been changed by another user", against a
+      // record nobody touched. Reproduced on the Organization screen, which fired just two
+      // concurrent PATCHes; this modal fans out one write PER SELECTED ROW, so it had more room to
+      // hit it, not less.
+      //
+      // Note this only became reachable here WITH ETP-5112: before it, these PUTs carried no
+      // `updated` at all, and core skips the parse entirely when the key is absent. Making every
+      // read remember its token is what brought this path into the race.
+      //
+      // `allSettled` semantics are preserved deliberately: each row is settled on its own and one
+      // failure must not skip the rows after it, which is what the per-row result list below and
+      // the partial-failure toast depend on. Sequential means N round trips for N invoices; that
+      // is the price of not corrupting the parse, and this is an operator action on a handful of
+      // rows, not a hot path.
+      const results = [];
+      for (const r of rows) {
+        try {
+          const value = isInvalid
             // Correct_Invoice is a Button-type process — must call the NEO action endpoint,
             // not a regular PUT (the backing table is a VIEW; PUT returns 200 but writes nothing).
-            return apiFetch(
+            ? await apiFetch(
               `/${VF_SPEC}/${encodeURIComponent(VF_INVALIDAS_ENTITY)}/${r.id}/action/Correct_Invoice`,
               { method: 'POST' },
-            );
-          } else {
-            return apiFetch(
+            )
+            : await apiFetch(
               `/${VF_SPEC}/${encodeURIComponent(VF_PARCIAL_ENTITY)}/${r.id}`,
               {
                 method: 'PUT',
@@ -83,9 +102,11 @@ export default function VfSolveErrorModal({ open, onClose, rows, neoApiBase, onR
                 body: JSON.stringify({ isSubsanation: true }),
               },
             );
-          }
-        })
-      );
+          results.push({ status: 'fulfilled', value });
+        } catch (err) {
+          results.push({ status: 'rejected', reason: err });
+        }
+      }
       const failed = results.filter(r => r.status === 'rejected' || (r.value && !r.value.ok));
       if (failed.length === 0) {
         toast.success(ui('vfSolveError.success'));

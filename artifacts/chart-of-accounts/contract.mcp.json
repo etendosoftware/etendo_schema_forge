@@ -1,8 +1,8 @@
 {
   "version": "0.8.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-08-29T15:53:11.114Z",
-  "contractChecksum": "dcf4fb7c67e38a6b",
+  "updatedAt": "2026-09-02T19:12:04.395Z",
+  "contractChecksum": "2c0ec515e76b6107",
   "apiPrediction": {
     "specName": "chart-of-accounts",
     "baseUrl": "/sws/neo/chart-of-accounts",
@@ -35,7 +35,7 @@
       "parentFilter": "parentId={id} for child entities"
     },
     "window": {
-      "category": "accounting"
+      "category": "finance"
     }
   },
   "formState": {
@@ -69,7 +69,7 @@
     "evaluationMode": "runtime"
   },
   "agentProfile": {
-    "purpose": "Manage chart of accounts records.",
+    "purpose": "Manage chart of accounts financial records.",
     "whenToUse": [
       "Use for chart of accounts management."
     ],
@@ -86,8 +86,12 @@
     },
     "selectorContexts": [],
     "actions": [],
-    "workflow": [],
-    "edgeCases": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
     "examples": [
       {
         "operation": "createHeader",
@@ -100,9 +104,11 @@
         ]
       }
     ],
-    "warnings": [],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "7a66ab6146940c2a"
+  "checksum": "b6b30691e73242c2"
 }

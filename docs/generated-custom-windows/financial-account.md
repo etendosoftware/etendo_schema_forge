@@ -184,11 +184,45 @@ Field editability in the top section:
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
   now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
+- **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
+  `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
+  format lexicographic order is chronological order, so the check is exact and timezone-free and
+  deliberately does NOT build a `Date` (the ETP-4850 date-only shift cannot occur here). An empty
+  box means "no bound" and never invalidates. An inverted range renders
+  `bank-connection-import-range-error` under the three fields, disables Save, and makes
+  "Sincronizar ahora" refuse to run. The bridge repeats the check in
+  `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
+  callers that skip the form; it validates the *resulting* pair before touching the entity, since a
+  body may carry only one bound and a managed instance would be flushed at commit even after a
+  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
+  caller of `import-settings` and it refuses the range before the request fires, so the message
+  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
+  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
+  gate. Map it only once a surface exists that can actually surface it.
+
+  Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
+  module validates it only at synchronization time
+  (`SaltEdgeConnectionHelper.validateDateRange`), and the `OBException` it throws is swallowed by
+  `processProviderTransactions` and re-wrapped into
+  `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
+  the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
+  `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
+  calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
+  straight away: the bridge reads the date range from the DB, so an unsaved range was silently
+  ignored, and the `refresh()` that follows a sync rewrites both `form` and `initial` from the
+  server, overwriting whatever the user had typed ("los campos se restablecen"). Wiring note: the
+  save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
+  declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
+  invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
+  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
-  Enabled purely on `dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid &&
-  !recon.amountToleranceInvalid` — **no accounting field can block Save** (ETP-4872 dropped the
+  Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
+  `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
+  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
+  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
@@ -480,6 +514,20 @@ native app-shell UI; only the bank login is an external popup.
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
   "Sincronizar extractos" button that replaces the manual import/create split-button.
+- **Sync result messages are translated in the frontend, not by Core (ETP-4891, ETP-5109).** The
+  bridge returns HTTP 200 with `{status, message}`, where `message` is the raw `AD_MESSAGE` text
+  built by `SaltEdgeAccountLinkHelper.fetchAccountTransactions`. `com.etendoerp.psd2.bank.integration`
+  ships its es_ES text in a separate `.es_es` translation module, so an environment that never
+  imported that pack resolves `AD_MESSAGE_TRL` to the English string with `istranslated = 'N'` — and
+  the toast reads English on a Spanish UI. The SPA therefore maps these strings itself in
+  `tools/app-shell/src/lib/backendErrors.js` (`translateBackendError`), covering
+  `PSD2_TransactionsObtained`, `PSD2_NoNewTransactionsFound`, the bank-error wrapper,
+  `PSD2_ConnectionWentInactive`, `PSD2_ConsentExpiredReconnect`,
+  `PSD2_ImportDateBeyondMaxInterval` and `PSD2_NoActiveConnectionForAccount`. Two consequences worth
+  knowing before touching either side: those English strings are a **de facto wire contract** —
+  rewording one on the Java side silently un-translates the toast — and because the helper can
+  append several messages into one newline-joined buffer, `translateBackendError` resolves the
+  string **line by line**.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
   a sync icon, both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
@@ -536,6 +584,44 @@ Bridge actions: `connect` (optional `financialAccountId` → provider preselect)
 Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+
+### Widget language and the waiting overlay (ETP-5102)
+
+**The Salt Edge widget opens in the language of whoever asked.** It used to always open in
+Spanish: the `attempt.locale` sent when creating the Salt Edge session was the literal `"es"` in
+all three payload builders of the PSD2 module — `BankIntegrationUtils.buildAndConnect` (connect),
+`BankIntegrationUtils.reconnectSaltEdgeConnection` (reconnect) and
+`GenerateBankPayment.processPayment` (PIS). They now call
+`SaltEdgeLocaleResolver.resolve()` (`com.etendoerp.psd2.bank.integration`), which reads
+`OBContext.getOBContext().getLanguage()` and maps the Etendo code onto the widget's own locale
+(`es_ES → es`, `en_US`/`en_GB` → `en`, keeping the region only where Salt Edge distinguishes it:
+`es_MX → es-MX`, `pt_BR → pt-BR`, `zh_CN`, `zh_TW`). An unknown or missing language falls back to
+`es`, the previous behaviour.
+
+No frontend change and no new bridge parameter were needed: the GO locale already reaches the
+`OBContext` on every NEO request, because `NeoAuthenticator.authenticateJwt` applies the SPA's
+`Accept-Language` header to it (`NeoAuthenticator.java:109-111` → `NeoLanguage.applyToContext`).
+Verified live: with GO in Spanish and the Classic user in *English (USA)*,
+`GET /sws/neo/listmenu` carries `Accept-Language: es_ES`. **The fix therefore reaches Etendo
+Classic too** — the PSD2 module is shared and depends only on Core, so it cannot tell which front
+end is calling; in the AD window the widget now follows the user's AD language. Deliberate
+consequence, not a side effect: it is the same bug on both sides.
+
+> Anyone touching `SaltEdgeLocaleResolver` must keep it on Core APIs only. PSD2 declares
+> dependencies on Core and the Openbravo Framework and has zero references to
+> `com.etendoerp.go` — the dependency runs GO → PSD2. Reaching for GO's `NeoLanguage` helper
+> would invert it and break every Classic-only installation.
+
+**The "Conectando con tu banco…" overlay has no close button, on purpose.** `DialogContent`
+(app-shell-core) always renders a Radix close X and offers no prop to suppress it, while
+`BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
+the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
+now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
+`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
+picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
+created or linked and the user can retry without reloading. Wiring the X instead would have
+required an external abort handle that `launchSaltEdgePopup` does not expose.
 
 ### Bank logo (ETP-4764 follow-up)
 
@@ -759,7 +845,9 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - Movements toolbar: back arrow `←`, type filter (BPD/BPW, search-enabled), date range filter (preset list + dual calendar, same picker as grid views), advanced "by conditions" filter (`AdvancedFilterButton`, applied client-side), search input, and a **split button** (`MovementsSplitButton`, same pattern as the Imported-statements `ImportSplitButton`): the primary action is **`Nuevo movimiento`** (opens the accounting-account modal — see "Nuevo movimiento (accounting account)" below), and the ▾ dropdown holds **`Transferir fondos`** (ETP-4272, opens `FundsTransferModal.jsx`). (The older 2-step `NewMovementWizard` is superseded and no longer wired.)
 - Movements table: Expand chevron | Checkbox | Date | Payment | Contact | Description | Status (`MovementStatusBadge` — **two states only**: Conciliado / Sin conciliar) | Type (with `PostingStatusDot` sub-label) | Cuenta contable | Amount | Balance | kebab.
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
-- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+  - **Editable in place, ETP-5101.** Each of the three fields is a live `ChipSelect` picker (same primitive the Editar modal uses, `useDimensionLookup`-backed) whenever `canEditDimensions(movement)` — `!movement.paymentId && movement.posted !== 'Y'` — mirrors `MovementRowKebab.jsx`'s own `canEdit` exactly: a manual G/L transaction that is Draft or Processed-but-not-yet-posted. Picking a value (or clearing one) auto-saves immediately via `action=update`, reusing `buildDimensionUpdatePayload()` (`hooks/useCreateMovement.js`) to reconstruct the full payload the `update` action requires (that action has no partial-patch support — every call resends the movement's own current amount/type/currency unchanged, only the one edited dimension differs; `process` is always sent `false`, matching what the Editar modal's own "Guardar" already does for a Processed movement — proven safe, never reverts processed/posted state). On save failure the row keeps its prior value and a toast shows the backend's own message (translated) or the generic `financeAccountTxRowDimensionUpdateError` fallback.
+  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
 - Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating. **Eliminar carries one further exclusion (ETP-5085): it is hidden for a funds-transfer leg** — `isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF'`. The two legs of a transfer reference each other through RESTRICT self-FKs, so the removal could only ever fail, and it failed as an opaque HTTP 500; the backend now rejects it with a 409 and the action is hidden rather than disabled, like every other inapplicable item in this menu. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
@@ -793,10 +881,55 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 "Transfer funds" moves money between two financial accounts of the organization. Two entry points:
 
-- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source.
+- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source. Both mount sites must pass the modal's **`onSuccess`** callback to refresh their own data: this one passed `onDone` until ETP-5100, and since React silently drops an unknown prop, a transfer launched from here went through correctly but left the grid showing stale balances — which reads as "nothing happened" and invites a duplicate transfer. Guarded by `tools/app-shell/test/funds-transfer-props.test.js`.
 - **Account detail** → the **Transferir fondos** item inside the Movements toolbar split-button (▾ next to "Nuevo movimiento"), with the current account as source.
 
 Both render `windows/custom/financial-account/FundsTransferModal.jsx` — a single-step modal (shared `@/components/ui/dialog`, with inline searchable dropdowns so wheel/touchpad scrolling works inside the modal). Fields: source account (pre-filled, read-only, with available balance), destination account (searchable; other org accounts), **accounting item / GL (required, searchable)**, amount (currency symbol via the shared `formatCurrency`), currency-conversion block (shown only when the destination currency differs — multi-currency; the "Tasa de conversión" rate field with the source→destination currency badges alongside its label, no separate "Conversión de divisa" heading — plus, inline next to the rate input, a compact read-only "≈ {amount}" box, `data-testid="transfer-receive-amount"`, previewing `amount × rate` in the destination currency via `formatCurrency`; shows "—" until both amount and rate are valid positive numbers), Bank Fee checkbox (reveals two fee fields — source and destination — mirroring Classic), description (default "Funds Transfer Transaction"). Client guards: destination + accounting item required, amount > 0, amount ≤ source balance; the backend re-validates and rejects same-account / over-balance / cross-org transfers. On confirm it calls `useFundsTransfer()` → `POST …financial-account-transactions?action=transfer`; the backend delegates to Etendo Classic's `FundsTransferActionHandler.createTransfer(...)`, creating the paired withdrawal (source) + deposit (destination) — plus optional bank-fee expenses on the source and/or destination — left **Pending** (`PWNC` / `RDNC`) until reconciled.
+
+**The conversion rate is prefilled, not typed blind.** When the two accounts hold different currencies the rate field seeds itself from the system rate for the pair, via the shared `useConversionRate` hook (`windows/custom/shared/useConversionRate.js`, written for the Cobros/Pagos modal in ETP-4504) → `GET /sws/neo/validate-exchange-rate`. Three things about that call are load-bearing:
+
+- **The date is today** (`todayCalendarISO()`, not `toISOString()`, per the date-only policy). The transfer payload carries no `transferDate`, so Classic dates the document today — asking for any other day's rate would book a document at a rate that was never in force for it.
+- **`apiBaseUrl` is `${getApiBase()}/sws/neo/financial-account-transactions`.** The hook strips the LAST path segment, and `validate-exchange-rate` hangs off `/sws/neo` with no entity segment — `/sws/neo/<spec>/validate-exchange-rate` is a 404. Passing this modal's own endpoint leaves exactly `/sws/neo`.
+- **The token comes from `useAuthOptional()`, never `useAuth()`.** `useAuth` throws outside an `AuthProvider`, which would take the whole modal down in any context that lacks one (the existing test suite included); without a token the hook simply returns no rate and the field stays manual. See `docs/request-policy.md`.
+
+The seeding effect keys on `[multiCurrency, source.currencyIso, dest.currencyIso, conversion.rate]`, so **a manual edit stands until the currency pair itself changes** (the field is still fully editable — a user who wants a different rate just types it). The clear on a pair change matters as much as the prefill: without it a hand-typed EUR→USD rate would survive a switch of destination to GBP and book one pair at another pair's rate — the ETP-4504 W1 failure, which would otherwise replay here verbatim. Moving to a same-currency destination empties the field and drops `conversionRate` from the payload entirely.
+
+When the pair has **no rate on file** (`hasRate: false`, after loading settles) the field stays empty and a hint renders below it — `data-testid="transfer-rate-missing"`, i18n key `financeAccountTransferRateMissing` with `{from}`/`{to}`. It is deliberately not a blocker: Confirm already requires a positive rate, so the user types it and continues. The point is to explain why it prefilled last time and not this time. Note the endpoint already falls back to the **inverse** direction (`TO→FROM`, returning `1/rate`, `NeoExchangeRateService:107`), so this hint means neither direction is configured. Unlike the Cobros/Pagos modal there is **no `rateIsOne` guard** here — `FinancialAccountTransactionsSupport.resolveConversionRate` passes the user's value straight through to Classic rather than 400-ing on 1.0, so adding one would be a new business rule, not parity.
+
+**The movements list orders by the CALENDAR DAY, not the raw timestamp** (ETP-5100):
+`ORDER BY TO_CHAR(ft.statementdate,'YYYY-MM-DD') DESC, ft.line DESC`, and the running-balance
+window uses the same key so the Saldo column keeps matching the order it is displayed against.
+`statementdate` is declared `Date` in the AD, so a time-of-day in it is noise and must not
+participate in the sort. Sorting on the raw value let any row that happened to carry a wall-clock
+time float above movements created LATER the same day at 00:00 — a transfer stamped 23:11 sat
+above a manual movement created at 23:15, and the newest row was not on top. Truncating in the
+query fixes the rows already stored that way as well, so no data migration was needed. `TO_CHAR`
+rather than a cast: it truncates identically on PostgreSQL and Oracle (an Oracle `DATE` keeps
+seconds), and `'YYYY-MM-DD'` sorts lexicographically the same as chronologically.
+
+**The transfer is dated with a date-only value** (`transferDate: todayCalendarISO()`), so the
+backend stores local midnight. Omitting it let Classic stamp `now()` — a wall-clock time in a
+column the Application Dictionary declares as type **`Date`**, where the time is not a datum.
+Two things broke because of it: (a) the movements list orders by `statementdate DESC, line DESC`,
+so a transfer stamped 23:11 sorted *above* a manual movement created later the same day at 00:00,
+and the newest row was not on top; (b) it was the only flow producing an evening timestamp, which
+is what exposed the UTC-rendering bug below. Every other flow in the app already sends a date-only
+value. It also makes the document date and the date the conversion rate was looked up for the same
+day by contract instead of by coincidence.
+
+**Business dates are rendered through `formatCalendarDate`, never in UTC** (ETP-5100). Three
+helpers here — `MovementsTable.formatDate`, `StatementLinesInline.formatDate` and the shared
+`lib/formatSigned.formatDate` (used by the reconciliation panel, cash close, `ReconciledTxnsModal`,
+`ClearedItemsInline` and `ReconciliationListTable`) — used to do `new Date(iso)` +
+`Intl.DateTimeFormat(..., timeZone: 'UTC')`, on the premise that the backend always sent UTC
+midnight. That premise held only while the backend was ALSO formatting in UTC; the two errors
+cancelled for midnight values and both surfaced for anything else. A movement created at 22:59
+local (UTC-3) displayed as the next day and was filtered out of "Últimos 30 días" entirely — the
+row was in the database and in the balance, but not in the list. `formatCalendarDate`
+(`lib/dateOnly.js`) reads the leading `yyyy-MM-dd` and builds the Date with the local-time
+constructor, so it is correct for either wire shape. The `AutoMatchSuggestionModal` already used
+it; these three were the stragglers. Backend counterpart and the full write-up:
+`com.etendoerp.go/docs/neo-headless.md` §4.3.1.
 
 **A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
 
@@ -1491,6 +1624,7 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no date clause in its HQL, so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
 - **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
+- **"Pendientes" is a superset, not a fifth exclusive bucket (ETP-5033)**: the backend classification stays exclusive (one `state` per line), but the dropdown's `pending` entry maps to the SET `{pending, suggested, byRule, difference}` — everything not `reconciled` — via `matchesStatus`/`STATUS_MEMBERS` in the new `reconciliationStatusFilter.js` (`ReconciliationSplitPanel.jsx`, which used to filter with strict equality, hiding suggested/byRule/difference lines behind their own chips even though `pending` is the panel's default filter). `Con sugerencia`, `Por regla` and `Diferencias` stay strict single-state subsets, so a suggested line shows under both its own chip and Pendientes. The chip's count follows the same mapping (`countForStatus`, summed over the covered states) so the number on "Pendientes" always matches the row count it produces.
 - i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`. `es_AR` was missing 15 of them (the 14 `financeReconcileDiff*` plus `financeReconcileAutomatchToastPartial`), which rendered raw key names for that locale — the resolver does not fall back to English (`useUI.js`: `dictionary?.genericLabels?.[key] ?? key`). Backfilled and covered by a parity test (ETP-4965).
 - Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
 
@@ -1540,7 +1674,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         AdvancedFilterButton       — generic "Filtro por condicionales" (status filter now lives here: 2 options — Conciliado / Sin conciliar)
       AccountSummaryStrip.jsx      — avatar, IBAN (chunked + copy), 3 KPI values
       MovementsTable.jsx           — header + rows / skeleton / empty-state; renderBody helper
-        DimensionsPanel (inline)   — expandable read-only grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto)
+        DimensionsPanel (inline)   — expandable grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto); editable ChipSelect when canEditDimensions (ETP-5101), else read-only
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
@@ -1549,7 +1683,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
-      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
+      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree, shared by movements and statements. Three operator tables (`DATE_OPERATORS` / `NUMBER_OPERATORS` / `OPERATORS`) dispatched by the column's declared `type` via `applyConditions`'s `columnsByKey` argument — see "The advanced ("by conditions") filter evaluates by declared column type"
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
@@ -1557,9 +1691,9 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
       ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved. Contacto and Cuenta contable are `ChipSelect` (ETP-4924 follow-up — see below), matching every other FK picker in the app.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
-      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog and ManualStatementModal.
+      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog, NewMovementWizard and PaymentForm. No longer used by `ManualStatementModal` (ETP-4924 follow-up — switched to `ChipSelect`, see below).
 ```
 
 ## Shared primitives introduced or used
@@ -1568,7 +1702,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -1756,6 +1890,90 @@ arrow stays on the column's outer edge):
 
 Deliberately NOT changed: Estado (a pill), Progreso (a bar, not a figure), and every text column.
 
+**Follow-up (ETP-4924): `ManualStatementModal`'s own editable-lines header had the same gap.** This
+grid is also hand-rolled (it predates and doesn't go through `DataTable`), so it wasn't in scope for
+the original ETP-4921 sweep above — its "Salida"/"Entrada" `ColHead`s sat flush left while the
+amount cells beneath (`EditRow`'s inputs and `MatchedRow`'s read-only spans) were already
+`text-right tabular-nums`. Fixed the same way: `className="text-right"` on those two `ColHead`
+calls in `LinesHeader`.
+
+#### Editable Descripción / Nombre del contacto lack a hover tooltip for long values (ETP-4924)
+
+`MatchedRow` (the read-only rendering for matched lines) already carries `title={row.description}`
+on its description `<span>` — a native browser tooltip so a value wider than the cell can still be
+read on hover — but the equivalent inputs in `EditRow` (the always-editable row every unmatched line
+uses) never had it: a long description or counterparty name typed into those cells just scrolls
+inside the `<input>`, with no way to see the full value without focusing it. Added the same native
+`title={row.description}` / `title={row.contactName}` to `EditRow`'s description and Nombre del
+contacto inputs, matching the existing `MatchedRow` precedent exactly (no new component — Reference
+No wasn't included at first, on the assumption that column stays short, `REF-####`; broadened below).
+
+#### Eighth follow-up: reopening the same edit modal showed the pre-edit line values (ETP-4924)
+
+Reported sequence: edit a line's date, save as draft, close the modal, reopen "Editar extracto" on
+the SAME statement immediately — the line shows the OLD date, not the one just saved. The
+list/accordion view (`StatementLinesInline.jsx`) already shows the new value right after saving (its
+own ETP-4921 `refreshToken` mechanism is correctly wired); only the reopened EDIT MODAL was stale.
+Pressing the toolbar refresh button before reopening "fixed" it — a strong clue this was a client-side
+timing issue, not a backend persistence bug (a real persistence failure wouldn't self-correct via an
+unrelated header refresh).
+
+**Root cause: a stale-closure race between two `useEffect`s in the same passive-effect flush, not
+browser HTTP caching.** `useBankStatementLines(statementId)` → `useNeoResource({path, deps})` only
+sets `loading` to `true` INSIDE the effect that starts a fetch (fired when `path` flips null→url,
+i.e. every time the modal reopens). `ManualStatementModal`'s own hydration effect is a SEPARATE
+`useEffect` in the same component, and both effects fire in the SAME commit's effect flush when
+`open` changes. React batches all effects from one commit before re-rendering, so the hydration
+effect's closure can still read the STALE `linesLoading === false` (left over from the PREVIOUS
+successful fetch, before this reopen) and the STALE `loadedLines` (the old rows) for that one pass —
+it hydrates `rows` from that stale snapshot and immediately sets `hydratedRef.current = true`,
+locking it in. By the time the real fetch's `loading: true` (and eventually the fresh data) actually
+lands, the hydration effect no longer runs again (`hydratedRef.current` is already `true`), so the
+stale rows are never replaced. A ruled-out alternative worth naming: `useNeoResource`'s own
+`fetchNeoPayload`/`apiFetch` call sets no `cache` option on `fetch()` at all, which was the first
+suspect (an uncontrolled browser HTTP cache) — but the list/accordion's OWN refetch (via the same
+`useBankStatementLines`/`useNeoResource`, just with a bumped `refreshToken`) genuinely returns fresh
+data every time, which rules out a caching layer blocking repeat GETs to this exact URL; the bug is
+purely in `ManualStatementModal`'s own hydration-effect timing, not the fetch layer.
+
+This ONLY reproduces on a REOPEN of an already-mounted `ManualStatementModal` instance for the same
+statement — a first-ever open of a fresh instance is never affected, because `useNeoResource`'s
+`loading` starts at `true` via `useState(true)`, so there is no stale `false` to misread on that
+first pass.
+
+**Fix, scoped entirely to `ManualStatementModal.jsx`** (not the shared `useNeoResource` hook — see
+"Considered but not done" below): a new `seenFreshLoadRef` (`useRef(false)`), reset alongside
+`hydratedRef.current = false` whenever the modal closes. In the hydration effect: a `linesLoading ===
+true` reading marks `seenFreshLoadRef.current = true` and returns without hydrating (confirms a
+genuine fetch cycle has started for this open); a `linesLoading === false` reading is only trusted —
+and hydration proceeds — once `seenFreshLoadRef.current` is already `true`, i.e. once a `true` pulse
+has actually been observed first. A `false` reading before that point is ambiguous (stale-old vs.
+genuinely-idle-with-fresh-data) and is treated as "not yet safe to hydrate from" rather than assumed
+correct.
+
+**Considered but not done: fixing this at the source, in `useNeoResource` itself.** The more thorough
+fix would have `useNeoResource` synchronously reset `loading` to `true` (and clear `data`) the moment
+`path` changes to a new non-null value — using the React-documented "adjust state during render when
+a dependency changes" pattern, rather than waiting for an effect to notice. That would close this
+entire CLASS of bug for every consumer that does `path: id ? url : null` and toggles it (a documented,
+widely-used pattern per the hook's own comment — `useFinancialAccount`, `useAccountMovements`, and
+presumably others across the app), not just this one call site. Not done here: `useNeoResource` is a
+foundational, broadly-shared hook, and a change to it needs its own scoping/regression pass across
+every consumer, not a drive-by edit bundled into a single-window bug fix. If the same symptom
+("reopening/toggling a `path: id ? url : null` hook shows stale data for one paint") is ever reported
+somewhere else, this is the place to make that deeper fix.
+
+#### Ninth follow-up: tooltip coverage completed for the remaining truncatable cells (ETP-4924)
+
+The earlier tooltip follow-up (chip label, then Descripción/Nombre del contacto) skipped **Nº de
+referencia, Salida, Entrada** in `EditRow` on the assumption Reference No stays short (`REF-####`)
+and without considering the amount cells at all — both can still overflow in practice, and amounts
+truncate the same way any overflowing `<input>` does (no visible ellipsis, no way to read the rest).
+Added `title={row.reference}` to the reference input and `title={row[field]}` inside `amountCell`
+(the shared helper both Salida and Entrada render through). `MatchedRow` (the read-only counterpart)
+got the matching `title` on its own reference and amount spans, so both variants of the same table
+stay consistent — description was the only field it already had.
+
 #### The expanded row and the header row refresh together (ETP-4921)
 
 A statement's header row and its expanded accordion are fed by **two independent fetches**:
@@ -1900,6 +2118,320 @@ per-variant generic toast. Two new `BACKEND_ERROR_MAP` entries in `backendErrors
 
 Because it is stored, `EM_ETGO_STATUS` must be kept in sync by SOMETHING every time `Processed` or the match counts change — `BankStatementHeaderStatusHandler` (`FIN_BankStatement` NEW/UPDATE observer, same `event.setCurrentState` technique as `BankStatementLinePendingAmountHandler`) does that unconditionally on every header write, whichever code path caused it (ETP-4891 follow-up). Before this handler existed, a statement imported through the PSD2 bank-connection sync (external `com.etendoerp.psd2` module, never touches this module's own handlers) could get stuck reading "Borrador" forever after being marked processed: its lines get counted correctly by the per-line observer at insert time, but `Processed` is still `false` then, so the status computed at THAT instant is correctly `DRAFT` — and nothing re-derives it once the sync flips `Processed` to `true` on the header alone, since no line event fires for that. The SPA's own "Procesar" action then 400s with "Only draft (unprocessed) statements can be modified" — a correct rejection (the real flag already says processed) that reads as a contradiction next to a "Borrador" label. `R25-bankstatement-stale-status` repairs statements already stuck from before the handler existed.
 
+#### The line date picker was unusable inside the modal (ETP-4924)
+
+Clicking a day in a line's `DateField` calendar did nothing — the popover appeared to close
+without applying the date, in manual creation, manual edit and CSV-import edit alike. Only
+typing the date worked. The header's own `DateField`s (`Fecha transacción` / `Fecha importación`)
+were never affected, which is what pointed away from `DateField` itself and at something specific
+to the lines table.
+
+**Root cause: React portals bubble through the React tree, not the DOM, and a DOM-only "did focus
+leave" check gets fooled by that.** `DateField`'s calendar is a Radix Popover portalled to
+`document.body` — a DOM sibling of the row, not a descendant — but its focus/blur/key events still
+propagate up through the row's position in the *React* tree. The editable row wrapper used
+`e.currentTarget.contains(e.relatedTarget)` (a DOM containment check) to decide whether focus had
+left the row, which is always `false` for a portalled node. So opening the calendar read as "the
+row lost focus", which toggled `focusedId` and — because the per-row `LineEditHint` ("Enter o
+clic fuera para guardar") used to mount/unmount *inside* the centered `DialogContent`
+(`top-[50%] translate-y-[-50%]`) — that ~25px height change re-centered the whole dialog by a few
+pixels mid-click, moving the calendar's anchor out from under the cursor between `mousedown` and
+`mouseup` so the day button's `click` never fired. The same DOM-only check made the row's own
+`Enter`/`Escape` handling hijack keys meant for the calendar (`preventDefault()` + `blur()` on a
+day button's `Enter`), so keyboard selection was broken too.
+
+**Fix, two parts, both in `ManualStatementModal.jsx`:**
+
+The row wrapper's `onFocusCapture` / `onBlurCapture` / `onKeyDown` now call
+`isInPortalLayer(target)` (new shared helper, `lib/portalLayers.js`) and no-op when the event
+originates inside a portalled layer: `[data-radix-popper-content-wrapper]` (the `DateField`
+calendar), `[data-lookup-dropdown]` (`LookupPicker`'s results list), or `[role="listbox"]`. This is
+the same class of fix `DataTable.jsx`'s `INLINE_ADD_IGNORED_PORTAL_SELECTORS` already applies to its
+own inline-add row — `portalLayers.js` generalizes that selector list into a reusable helper rather
+than duplicating it, but with two changes that are NOT interchangeable copy-paste from that source,
+both caught only by exercising the real components in a test (not by reading the code):
+
+- **No `[role="dialog"]` in the selector list.** `DataTable`'s row lives on a plain page, so
+  `[role="dialog"]` correctly flags "something else opened a dialog on top of me". Here the row
+  itself lives *inside* `ManualStatementModal`'s own `DialogContent`, which carries `role="dialog"`
+  — so `target.closest('[role="dialog"]')` matched on literally every element in the row (its own
+  ancestor), making `isInPortalLayer` return `true` unconditionally and silently swallowing every
+  `setFocusedId`, including the totally ordinary click on the `DateField`'s own calendar-icon
+  trigger (which isn't portalled at all).
+- **No `document.body.style.pointerEvents === 'none'` fallback.** `DataTable.jsx`'s version adds
+  that check because a *pointer* event's `target` can resolve to an ancestor like `<html>` when
+  Radix disables body pointer events for a click-blocking layer elsewhere on the page. Focus/blur
+  events don't have that problem — their target is always the real node that received focus. And a
+  row inside a modal `Dialog` sits behind `body { pointer-events: none }` for the *entire* time the
+  dialog is open (that's how Radix's modal Dialog always behaves, from the very first render), so
+  reusing the check here made it `true` unconditionally too, for the same reason as above.
+
+Both defaults independently made `isInPortalLayer` return `true` for absolutely everything the
+whole time the modal was open — so the fix looked complete by inspection (no more spurious
+`onBlurCapture`) while actually regressing further: `focusedId` could never be set at all, by
+anything, including a plain click on the trigger. Only running the real Popover/Dialog interaction
+(not the mocked spec) surfaced it.
+
+With both removed, interacting with a cell's calendar or lookup dropdown no longer toggles
+`focusedId`, so `LineEditHint` — hoisted to render **once** below the lines list instead of once
+per row, but still a plain conditional mount (`focusedId != null`) — never unmounts
+mid-interaction either; an earlier version of this fix also made the hint permanently reserve its
+height (mounted at all times, `visible`/`invisible` toggle) as a second line of defense, but that
+left a persistent empty gap between the last line and "Añadir línea" whenever no row was being
+edited, for no remaining benefit once the handlers were portal-aware — reverted in favor of the
+plain conditional mount.
+
+**General rule for any future inline-editable row inside a centered `Dialog`:** a host element's
+"focus/click left me" check must be portal-aware (`isInPortalLayer`) — that alone is what prevents
+a popover/dropdown interaction from being misread as the user leaving the row, which is what was
+shifting the dialog (and the popover's anchor with it) mid-click. Reserving layout height for a
+hint/badge that toggles near an open popover is unnecessary once that check is in place, and costs
+a permanent visual gap — prefer it only if a future case still toggles visibility on a *legitimate,
+frequent* focus change that isn't already covered by a portal exemption. And a "which selectors
+count as a portal layer" list is context-dependent, not a drop-in constant: a selector that
+correctly flags "something else opened on top of me" for a page-level row (`[role="dialog"]`,
+`document.body.style.pointerEvents === 'none'`) can instead match the row's own ancestors once
+that row lives inside a Dialog — re-derive the list for the actual DOM context, don't copy it
+verbatim from a different one, and verify against the real rendered components (a mocked spec
+would not have caught either mistake here).
+`AmortizationLinesTable.jsx` closes its edit mode on an un-exempted `document` `mousedown` and
+carries the same latent bug class; it wasn't touched here (out of scope for this fix) but is a
+candidate for the same treatment.
+
+#### Follow-up: the calendar needed two clicks when the line was at the bottom of the scroll (ETP-4924)
+
+After the fix above, a second, distinct symptom surfaced: clicking a line's date-field calendar
+trigger did nothing on the FIRST click — no calendar, no console error, nothing mounted in the
+DOM — when that row sat at the bottom edge of the scrollable lines list (`max-h-[62vh]
+overflow-y-auto` in `ManualStatementModal.jsx`). A second click, once the list had settled, worked
+normally. Confirmed via manual reproduction (DOM inspection showed `PopoverContent` genuinely never
+mounted after the failing click, ruling out a mispositioned-but-present popover) that this
+correlates specifically with scroll position, not with which line or session-first-focus.
+
+**Root cause:** the browser auto-scrolls a newly-focused element into view when it is only
+partially visible in a scrollable ancestor. That auto-scroll is triggered by the DEFAULT action of
+the `mousedown` that also moves focus to the trigger button — i.e. it can happen BETWEEN
+`mousedown` and `mouseup`. If the scroll shifts the row under the cursor before `mouseup`, the
+resulting native `click` event no longer lands on the trigger, so Radix's Popover never receives
+its open-toggle click — nothing opens, and nothing about it is visible in React state or the
+console, since the click was lost at the browser/DOM level, upstream of any of our code.
+
+**Fix, scoped to this modal only** (the correct general fix belongs in `DateField` itself, in
+`schema_forge_core` — out of scope here by explicit decision, since this instance is contained to
+the statements editor): the row wrapper in `EditableLines` now has an `onMouseDown` that detects a
+mousedown on the date-field's calendar trigger (`e.target.closest('[data-testid=
+"PopoverTrigger__d56af3"]')` — DateField's trigger button's stable test id, not the translated
+`aria-label`, which would be a fragile, locale-dependent selector), calls `e.preventDefault()` to
+suppress the browser's default mousedown-focus (the thing that triggers the auto-scroll), and
+focuses the trigger manually via `trigger.focus({ preventScroll: true })`. This keeps the
+trigger's position — and the whole click gesture — stable through mousedown→mouseup, without
+disabling focus or losing the subsequent `click` (which Radix still receives normally, since
+`preventDefault()` on `mousedown` does not cancel the following `click` event).
+
+**Known limitation:** jsdom does not implement the browser's native scroll-into-view-on-focus
+behavior at all, so the ORIGINAL failure cannot be reproduced by an automated test in this repo —
+only the code path (mousedown is prevented, `focus({preventScroll:true})` is called, and only when
+the target is the date-field trigger, not some other cell in the row) is unit-tested. A real
+reproduction of the browser-level race would need a Playwright/real-browser test.
+
+If this pattern recurs elsewhere (any interactive trigger inside a tall scrollable list, not just
+this modal's date field), the durable fix is in `DateField` itself, not a per-caller workaround.
+
+#### Second follow-up: Contacto / Cuenta contable switched from `LookupPicker` to `ChipSelect` (ETP-4924)
+
+The line-level "Contacto" and "Cuenta contable" fields used a bespoke `LookupPicker`
+(`windows/custom/financial-account/LookupPicker.jsx`): a plain `<input>` with a hand-rolled
+portalled results list and no visible way to clear a selected value — typing over the text was the
+only way to change it, and there was no affordance signaling a value could be cleared at all. Every
+other FK picker in the app (the "Impuesto" column in Sales Invoice/Purchase Invoice lines, "Cuenta
+contable" in Editar cuenta, the accounting-item pickers in Transferencias and Conciliación) shows a
+chip with the selected label and a hover-revealed **X** to clear.
+
+`ManualStatementModal.jsx`'s `EditRow` now uses **`ChipSelect`** (`@/components/forms/fields.jsx`)
+for both fields instead. This was a straight swap, not a new integration: `ChipSelect` already
+accepts a `useLookup(query) => { results, loading }` hook — the exact same shape
+`useBPartnerLookup`/`useGLItemLookup` (`hooks/useMovementLookups.js`) already provide, and that
+`LookupPicker` itself was built around — so no adapter, no new endpoint and no backend work was
+needed. Prop mapping: `LookupPicker`'s `onSelect(item)` + separate `onClear()` collapse into
+`ChipSelect`'s single `onChange(itemOrNull)` (already exactly what `setVal(field)` in `EditRow`
+expects — it just forwards whatever value it receives onto the row). The `search` prop
+(leading magnifier icon) has no `ChipSelect` equivalent — it renders a trailing chevron instead,
+matching the reference/target UI (Editar cuenta's own "Cuenta contable" field, which is itself a
+`ChipSelect`), not a search-box look.
+
+**Explicitly NOT done, by request:** `ChipSelect` renders its own fixed bordered/shadowed box
+(`FIELD_HEIGHT`, `rounded-lg`, `border-input`, `shadow`) — the same box used everywhere else it
+appears. The row's OTHER cells (Referencia, Descripción, amounts) use a borderless-until-focus
+"spreadsheet" look (`cellInput`, transparent border until `:focus`). Reusing `ChipSelect` as-is
+means Contacto/Cuenta contable now look visually distinct from their row neighbors (always-boxed
+vs. borderless-until-focus) — decided to leave it, for consistency with the OTHER modals that use
+`ChipSelect` (Editar cuenta, Transferencias, Conciliación), rather than add a `className` override
+prop to `ChipSelect` (which does not currently accept one) for this one caller.
+
+**Considered but rejected as broader in scope:** `InlineSearchCombo`
+(`components/contract-ui/InlineSearchCombo.jsx`) is the OTHER generic FK-cell component in the app
+— the one actually backing the Sales Invoice "Impuesto" column that prompted this change — but it
+is hard-coupled to the AD-metadata selector-endpoint convention (`GET
+{apiBaseUrl}/{entity}/selectors/{column}`, paginated, `decisions.json`-shaped `field` object) with
+no pluggable-hook escape hatch. Swapping to it would have meant either generalizing a
+widely-shared component (used by Sales Invoice, Purchase Invoice, Amortization, Price List and
+every generic `DataTable`/`InlineLinesPanel` add-row/edit-cell) to accept an arbitrary fetch hook,
+or building a new backend selector endpoint for BPartner/GLItem lookups and modeling bank-statement
+lines as a real AD/contract entity (they are hand-built, not decisions.json-driven, today). `ChipSelect`
+already existed, already used the exact same hook contract, and already delivered the actual thing
+asked for (the chip + clear-X), so it was the correct-scoped choice — `InlineSearchCombo` remains a
+follow-up worth having only if bank-statement lines are ever migrated onto the generic
+contract-ui/AD-metadata pipeline.
+
+**Residual, unverified risk (not addressed here):** `ChipSelect`'s clickable surface for an
+ALREADY-selected value (the chip) opens its Radix Popover via a `<div onClick={startEditing}>`, the
+same click-toggle mechanism that `DateField`'s trigger used before the scroll-edge fix above. If a
+row with a pre-filled Contacto/Cuenta contable sits at the bottom edge of the lines list's scroll,
+the SAME auto-scroll-swallows-the-click mechanism could in principle recur here too — this has not
+been reported or reproduced, and `ChipSelect` is shared by several other modals, so a preventive fix
+was intentionally left out of this change (would need its own scoping conversation, most likely in
+`ChipSelect` itself rather than per-caller, given it's a shared component).
+
+#### Third follow-up: `ChipSelect` gained arrow-key navigation (ETP-4924)
+
+`ChipSelect` had zero keyboard handling before this — its option list (`PopoverContent`) only
+responded to mouse clicks. Every OTHER generic FK selector in the app (e.g. "Método de pago" on the
+Sales Invoice header, rendered via `CreatableSearchSelect`) already lets the user move through
+results with the arrow keys, highlight one, and commit it with Enter. Requested so `ChipSelect`
+(and therefore Contacto/Cuenta contable in this modal, plus its 6 other call sites — Reconciliation
+Split Panel, Reconciliation Difference, New Transaction, Editar cuenta) matches that baseline.
+
+Ported the exact pattern from `CreatableSearchSelect.jsx`'s `handleInputKeyDown` (the reference
+implementation `InlineSearchCombo.jsx` also mirrors, per its own in-line comment) rather than
+inventing a new one — **no shared hook exists for this** (`activeIndex` + arrow/Home/End/Enter/
+Escape + scroll-into-view is duplicated across both existing components by convention/comments, not
+factored out), so `ChipSelect` is now a third hand-copied instance of the same logic. Added to
+`components/forms/fields.jsx`: an `activeIndex` state (reset on `open`/`query` change), a
+`handleInputKeyDown` wired to the search `<input>`'s `onKeyDown`, `data-option-index`/
+`aria-selected` on each option button (reusing the existing selected-value highlight class rather
+than adding a second one), and a `dropdownRef` on `PopoverContent` so the highlighted option can be
+scrolled into view.
+
+**Matches `CreatableSearchSelect`'s stricter Enter behavior, not `InlineSearchCombo`'s more lenient
+one:** Enter only commits when `activeIndex >= 0` — no fallback to the first result when nothing has
+been arrow-key-highlighted yet (typing a query and hitting Enter without ever pressing an arrow key
+does nothing). `InlineSearchCombo` deliberately diverges from `CreatableSearchSelect` on this exact
+point (documented in its own source) because a grid cell's Enter has a competing "commit the cell"
+meaning; `ChipSelect` doesn't share that constraint (it isn't embedded in a keyboard-navigable
+grid), so there was no reason to adopt the lenient variant.
+
+**Not done:** factoring the three now-duplicated implementations (`CreatableSearchSelect`,
+`InlineSearchCombo`, `ChipSelect`) into one shared hook. Out of scope for this change — each one has
+small, deliberate divergences (see above) suited to its own host (header field vs. grid cell vs.
+chip picker), and unifying them is a separate refactor with its own risk profile, not a prerequisite
+for giving `ChipSelect` the missing behavior.
+
+#### Fourth follow-up: the mouse wheel didn't scroll `ChipSelect`'s option list (ETP-4924)
+
+With a real, longer BPartner result list (the swap surfaced this — `LookupPicker` never showed
+enough short-named results at once to notice it was missing), the wheel didn't scroll `ChipSelect`'s
+dropdown at all despite `overflow-auto` and a real `max-h-64` being set. **This is a known,
+already-solved issue in this exact codebase** — `LookupPicker.jsx` and `CreatableSearchSelect.jsx`
+both carry the identical fix with an identical root cause already documented in their own comments:
+Radix Dialog's page-scroll lock (`react-remove-scroll`) intercepts the wheel event at the capture
+phase and blocks the browser's native scroll on ANY body-portalled scrollable content underneath it,
+even though the CSS itself is entirely correct — confirmed live in `CreatableSearchSelect.jsx`'s own
+comment: "`scrollTop` stayed `0` after a wheel event, but a direct `el.scrollTop = x` assignment
+worked fine — only the NATIVE scroll mechanism is blocked." `ChipSelect` simply never had this
+`onWheel` workaround because none of its earlier, shorter-lookup consumers surfaced the gap.
+
+Ported `CreatableSearchSelect`'s more defensive variant, not `LookupPicker`'s simpler one: only
+manually add `e.deltaY` to `scrollTop` when `e.defaultPrevented` is already `true` on the wheel event
+(react-remove-scroll's capture-phase listener runs first, so that flag tells us whether native
+scroll was actually blocked). `LookupPicker` gets away with unconditionally adding `deltaY` because
+it is ONLY ever used inside a Dialog; `ChipSelect` has 8 call sites across 5 files, and while all of
+them happen to be inside a Dialog today too, the conditional check means a future non-Dialog
+`ChipSelect` wouldn't silently double-scroll (native scroll working normally, plus the manual
+adjustment stacked on top) the way an unconditional version would.
+
+**Known related gap, not fixed here:** `components/forms/fields.jsx` also defines its OWN,
+differently-implemented `LookupPicker` (a Radix-Popover-based one, distinct from
+`windows/custom/financial-account/LookupPicker.jsx`) with the identical `PopoverContent` +
+`results.map` shape and no `onWheel` handler either — same latent gap, not reported, not fixed as
+part of this change (out of scope; nobody has hit it there yet).
+
+#### Fifth follow-up: the "Cuenta contable" placeholder was cropping mid-word (ETP-4924)
+
+`financeAccountStatementsManualGlItemPlaceholder` ("Buscar cuenta contable…") is longer than the
+"Cuenta contable" column (`minmax(140px, 1.2fr)` — the same width class as "Contacto", whose own
+placeholder "Buscar contacto…" is noticeably shorter). A plain `<input>` doesn't add an ellipsis
+when its value/placeholder overflows — it just clips mid-character with no visual signal that
+anything is missing, which is what made it read as broken rather than merely narrow.
+
+Two independent fixes, not one:
+
+1. **Shortened the placeholder itself**, in all three locale files that carry this key
+   (`es_ES.json`, `en_US.json`, `es_AR.json` — this key has no other call site, so it was safe to
+   edit directly): `"Buscar cuenta contable…"` → `"Buscar cuenta…"` (es_ES), `"Search accounting
+   account…"` → `"Search account…"` (en_US), `"Buscar concepto contable…"` → `"Buscar concepto…"`
+   (es_AR) — each now matches the `"Buscar contacto…"` / `"Search contact…"` sibling's length, so it
+   fits the same column width without relying on truncation in the common case.
+2. **Added real CSS truncation to `ChipSelect`'s search `<input>`** (`overflow-hidden text-ellipsis
+   whitespace-nowrap`) regardless — so ANY future long placeholder, typed query, or narrower host
+   column crops with a visible "…" instead of an abrupt raw cut, matching `SelectorChip`'s own
+   `truncate` treatment of the selected-value chip label. This is the durable fix; #1 just means the
+   common case no longer needs to rely on it.
+
+Not touched: `locales/generated/core.*.json` — gitignored build artifacts the "slice-labels" Vite
+plugin regenerates from the plain `locales/*.json` files (see `App.jsx`'s `coreLoaders` comment);
+editing them directly would just be overwritten on the next regen.
+
+#### Sixth follow-up: a long BPartner/GL-item name wrapped onto multiple lines in `ChipSelect`'s dropdown (ETP-4924)
+
+`ChipSelect`'s `PopoverContent` was pinned to `width: var(--radix-popover-trigger-width)` — exactly
+the trigger cell's own (narrow, ~140px) width — and its option buttons had no `whitespace-nowrap`,
+so a long result (a BPartner or accounting-account name that doesn't fit) wrapped onto two or three
+lines inside that fixed-width panel instead of the panel widening to show it on one line. The
+"Impuesto" selector on Sales Invoice/Purchase Invoice lines (`InlineSearchCombo`, ETP-4600) already
+solves exactly this for its own dropdown — its own doc comment calls it an "auto-width,
+non-truncating panel": the trigger cell stays its own fixed width, but the dropdown grows to fit its
+longest option.
+
+Ported the same idea to `ChipSelect`, adapted to Radix Popover rather than `InlineSearchCombo`'s
+hand-rolled `createPortal` positioning:
+
+- `PopoverContent`'s `style` changed from a fixed `width` to `minWidth: 'var(--radix-popover-trigger-width)'`
+  (never narrower than the trigger) + `width: 'max-content'` (grows to fit its content) + `maxWidth:
+  'min(420px, 90vw)'` (caps an extreme outlier so it can't blow past the viewport).
+- Each option button gained `overflow-hidden text-ellipsis whitespace-nowrap`, so within that
+  auto-width panel a name renders on one line — and in the rare case a single name still exceeds the
+  420px/90vw cap, it truncates with a visible "…" rather than wrapping or overflowing.
+
+**Why `InlineSearchCombo`'s own hand-rolled horizontal-anchor-flip logic
+(`shouldAnchorDropdownRight`, measuring each option's `scrollWidth`) wasn't needed here:**
+`InlineSearchCombo` has to compute its own collision/anchoring because it portals via a raw
+`createPortal` with manually-computed `position: fixed` coordinates — nothing else is watching for
+"did this dropdown just grow past the right edge of the screen". `ChipSelect` is built on Radix
+`Popover`/`Popper`, which already does collision-aware positioning (`avoidCollisions`, on by default)
+for whatever width the content ends up being — growing the panel via CSS doesn't bypass that, so no
+extra positioning code was needed.
+
+**Already fine at the time, since revisited below:** `SelectorChip`'s own selected-value chip label
+(`<span className="truncate">`) already truncated correctly — this gap was specific to the
+still-searching dropdown LIST, not the committed value shown once something is picked. It was still
+missing a hover tooltip for the truncated case, though — see the next follow-up.
+
+#### Seventh follow-up: the committed chip value had no way to reveal a truncated name (ETP-4924)
+
+Once a long Contacto/Cuenta contable value is actually selected, `SelectorChip` shows it as a pill
+with `truncate` (correct, per the follow-up above) — but truncating alone means a name that doesn't
+fit is just gone with no way to read the rest; there was no hover affordance at all, unlike
+`EditRow`'s Descripción/Nombre del contacto inputs, which already got a native `title` tooltip in an
+earlier follow-up in this same thread.
+
+Added `title={label}` to `SelectorChip`'s label `<span>` — the same native-tooltip pattern, on the
+same shared component the "widen the dropdown" fix above already touched. Being a shared component
+(`components/contract-ui/SelectorChip.jsx`), every consumer gets the hover tooltip for free, not
+just this modal's Contacto/Cuenta contable — confirmed real consumers (not just the component's own
+doc comment): `ChipSelect` (`forms/fields.jsx`), `CreatableSearchSelect`, `InlineSearchCombo` (so the
+"Impuesto" chip itself, once a tax is picked, also gains the tooltip), `EntityForm.jsx`, and
+`FundsTransferModal.jsx`.
+
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)
@@ -1934,6 +2466,70 @@ Two deliberate divergences from Classic, both documented in the tests:
   without failing an otherwise valid import;
 - **negative** amounts are kept. Classic's condition is "not both zero", not "positive", so
   rejecting negatives would be a new business rule rather than a consistency fix.
+
+#### The import preview showed every date one day early — only on a deployed server (ETP-4924)
+
+Reported: uploading a CSV whose first line's `Transaction Date` was `08/02/2026` showed `07/02/2026`
+in step 2 ("Revisar líneas") — every date in the preview, including the "Período" range, one day
+early. Reproduced only on a deployed ("experimental") server; never on local dev, same browser, same
+CSV. Two independent bugs, one per repo, both needed fixing (neither alone fixes the reported symptom).
+
+**Root cause 1 — backend (`modules/com.etendoerp.go`, a separate repo/module):**
+`BankStatementsSupport.formatDate(Timestamp)` (used for every date this handler serves — `datetrx`,
+`periodFrom`/`periodTo`, `importdate`, `statementdate`, both for `?action=preview` and the persisted
+grid/edit views) read the timestamp's raw epoch millis and unconditionally labelled the result as a
+UTC instant (`Instant.ofEpochMilli(ts.getTime())` formatted with `.withZone(ZoneOffset.UTC)`). But
+`datetrx`/`statementdate`/etc. are `timestamp without time zone` columns — `rs.getTimestamp(...)`
+reads that naive literal back via the JVM's default timezone (mirroring how Hibernate wrote it), so
+labelling the result "Z" is only correct when the server's default timezone happens to actually BE
+UTC. On a server whose default timezone has a POSITIVE UTC offset (e.g. `Europe/Madrid`, a plausible
+deployment default), the naive "00:00:00" literal reads back as an epoch instant that falls BEFORE
+UTC midnight of that day, so the UTC-labelled string prints the PREVIOUS calendar day. On a
+NEGATIVE-offset default (`America/Argentina/Buenos_Aires`, matching this task's own description of
+local dev) the same code reads an instant AFTER UTC midnight, so the bug was invisible there — the
+exact "wrong only on the deployed server" symptom, with zero code differences between environments.
+The write side (`BankStatementsSupport.parseIsoDate`, used by the manual create/update JSON path)
+already got this right — it explicitly re-anchors to `ZoneId.systemDefault()` on purpose, per its own
+long-standing comment describing the identical failure mode from the opposite direction. `formatDate`
+was the one place that never got the matching treatment on the READ side.
+
+Fixed by making `formatDate` read the SAME way the value was written — `ts.toLocalDateTime()`
+(which, like the JDBC read that produced `ts` in the first place, resolves via the JVM's default
+timezone) instead of `Instant.ofEpochMilli(ts.getTime())`, and dropping the formatter's
+`.withZone(ZoneOffset.UTC)` (formatting a zoneless `LocalDateTime` needs no zone at all — the quoted
+`'Z'` in the pattern is a literal character, not the offset field). The write-then-read round trip
+through the JVM's default timezone now cancels out algebraically, regardless of what that default
+timezone actually is — covered by `BankStatementsSupportTest` with the exact reported scenario
+(`Europe/Madrid` default, asserting the correct day) plus non-regression checks for the negative-offset
+and UTC cases. `GenericCsvBankStatementImporter`'s CSV-date `SimpleDateFormat` (no explicit
+`TimeZone`, JVM-default by default) did NOT need changing — it was already internally consistent
+with how Hibernate/JDBC round-trips a naive column through the SAME JVM default zone on write; the
+asymmetry was entirely in `formatDate`'s read-side UTC mislabelling.
+
+**Root cause 2 — frontend (`ImportStatementModal.jsx`, this repo), independent of the backend bug:**
+this window had its OWN local `formatDate(iso, bcpLocale)` — `new Date(iso)` (parses the ISO string
+as an absolute instant) followed by `Intl.DateTimeFormat(bcpLocale, {...}).format(d)` with no
+`timeZone` override, so the calendar day shown additionally depends on the BROWSER's own local
+timezone. This is exactly the class of bug this repo's CLAUDE.md documents as mandatory-fixed via
+`parseCalendarDate`/`formatCalendarDate` (`lib/dateOnly.js`) — already used by 10+ other windows, but
+never migrated here. Fixed by deleting the local `formatDate` and routing both the "Fecha" column and
+the "Período" range through `formatCalendarDate`, which extracts the `yyyy-MM-dd` PREFIX from the
+string via regex and builds the `Date` via the LOCAL-time constructor, deliberately ignoring any
+trailing time/zone suffix — immune to the browser's timezone by construction. Fixing backend root
+cause 1 alone would have made the STRING itself correct, but this frontend gap would still have let a
+future timezone-dependent glitch slip back in unnoticed (and stayed inconsistent with the rest of the
+window's date handling); fixing only the frontend, on its own, would NOT have fixed the reported
+symptom, since the backend was already sending the wrong day-prefix in the string.
+
+**Known related gap, not fixed here:** `StatementsTable.jsx` and `StatementLinesTable.jsx` carry the
+identical unsafe pattern (`new Date(iso)` + unforced `Intl.DateTimeFormat`) as the import preview did
+— not yet reported/triggered, likely because `StatementLinesInline.jsx` (the accordion/list view)
+already has an ad-hoc `timeZone: 'UTC'` override that happens to mask the symptom for THAT view (a
+workaround, not a fix — it only works because the backend's UTC-mislabelled string, pre-fix, was at
+least consistently reinterpreted as UTC on the way back out; post-fix, that ad-hoc override is now
+unnecessary but harmless, since the backend-fixed string's date-prefix is now correct regardless of
+the reader's zone assumption). None of these three were migrated to `parseCalendarDate`/
+`formatCalendarDate` as part of this fix — flagged, not fixed, since it wasn't reported.
 
 #### Cuaderno 43 lookup requirements (MANDATORY)
 
@@ -1985,6 +2581,58 @@ have no AD backing) and consumes real NEO endpoints directly.
 | Search | `string` | Case-insensitive substring over `documentNo + contact + description` |
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
+
+### The advanced ("by conditions") filter evaluates by declared column type (ETP-4956)
+
+All three tabs — Movimientos, Extractos importados, Conciliación — fetch **unfiltered** and evaluate
+the `AdvancedFilterBuilder` condition tree in memory through `applyConditions`
+(`advancedFilterApply.js`). The backend criteria path (`gridQuery.js` → `ListView`) is **not**
+involved here, so a filter defect in this window is always a client-side one.
+
+`applyConditions(rows, filter, deriveRow, columnsByKey)` takes the filter-column metadata as its
+4th argument and dispatches operators through **three** tables:
+
+| Column `type` | Table | Notes |
+|---|---|---|
+| `date` | `DATE_OPERATORS` | all comparisons via `parseCalendarDate` (`lib/dateOnly.js`) |
+| `number` | `NUMBER_OPERATORS` | `equals`/`notEqual` compare numerically, not as strings |
+| everything else | `OPERATORS` | the historical string/enum predicates |
+
+The metadata maps are `MOVEMENT_FILTER_COLUMNS` and `STATEMENT_FILTER_COLUMNS`, derived from a
+label-free `COLUMN_SPEC` in each `*AdvancedFilter.js` so the types are available without a `ui`
+translator. Both files keep `buildXFilterColumns(ui)` for the builder UI, which decorates the same
+spec with translated labels.
+
+**Why the third table alone was not enough.** Before this change every operator went through
+`OPERATORS`, which meant:
+
+- **Dates never filtered.** `equals` string-compared the stored `"2026-09-01T00:00:00Z"` against the
+  picker's `"2026-09-01"` — never equal. Worse, `lessThan`/`greaterThan` ran both sides through
+  `parseFloat`, and `parseFloat('2026-09-01') === 2026`: **every** date collapsed to its year, so
+  "Antes de" / "Después de" could not discriminate between any two dates in the same year. Only
+  `between` had a date branch, and it guessed the type from the field's NAME (`/date/i`).
+- **`Saldo` "Es" compared strings.** A stored `1646.4867`, displayed as `1.646,49 €`, never matched a
+  typed `1646.49`. `numEquals` now rounds both sides to the precision the user typed (floored at 2
+  decimals, the display scale), so the filter agrees with what the grid shows.
+- **Text values were not trimmed.** `Contacto` → `Contiene` `" Ivan"` returned nothing. `lc()` now
+  trims both sides; the builder additionally trims at apply time (core, see below).
+
+**`emptyWhenZero`** is a per-column opt-in, set on `totalOut` / `totalIn` only. Those amounts arrive
+as `0` when absent, and `StatementsTable.jsx` renders `Number(totalOut) > 0 ? amount : '—'` — so 0
+and null look identical. With the flag, `isNull`/`isNotNull` use `!(Number(raw) > 0)`, matching
+exactly the rows that visibly show "—". Deliberately **not** set on `lineCount`, `amount` or
+`balance`, where 0 is a real value.
+
+`MovementsTab` hands the toolbar `movements.map(withDerivedFields)` rather than the raw array: the
+Estado filter column is the derived `statusFamily`, which no raw row carries, so the builder's enum
+picker had no in-memory values to seed its option list from.
+
+Companion fixes live in the shared builder (`@etendosoftware/app-shell-core`): the enum value picker
+is now multi-select and always offers the column's full declared `enumLabels` catalogue (it used to
+show only the already-selected option when re-editing), the `inSet` ("Es cualquiera de") operator is
+retired for enum columns in favour of that multi-select, and numeric inputs accept a locale decimal
+comma, normalised to dot-decimal on apply.
+
 
 ## Conciliación empty state (ETP-4921)
 

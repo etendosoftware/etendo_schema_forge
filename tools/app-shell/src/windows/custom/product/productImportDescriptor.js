@@ -6,7 +6,8 @@ import { parseImportNumber } from '@etendosoftware/app-shell-core/lib/import/par
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
-import { resolveCodedCellOrThrow, codedCellError } from '@/lib/codedValue.js';
+import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
+import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -290,6 +291,22 @@ registerImportRowValidator('product', (row, { translate } = {}) => [
     target: 'productType', fieldLabelKey: 'importFieldProductType', fieldLabelFallback: 'Product Type', translate,
   }),
 ].filter(Boolean));
+
+// ETP-4997 — see the twin block in `contactsImportDescriptor.js`. Three of the eight import
+// targets are spelled differently on a product LIST row; `uOM` needs no entry because its
+// `matchEntity` already marks it as a foreign key, and the rest are read straight off the row.
+registerExportHints('product', {
+  sourceKeys: {
+    category: 'productCategory$_identifier',
+    // Prices are read back from the Etendo GO convenience columns the list exposes, not from
+    // the M_ProductPrice rows the import writes through — those are not on a product row.
+    salesPrice: 'eTGOSalePrice',
+    purchasePrice: 'eTGOPurchasePrice',
+  },
+  // A raw 'I'/'S'/'E' is unreadable in a spreadsheet. Inverted from the same synonym table
+  // validated above, so every exported word is one this descriptor accepts back.
+  valueLabels: { productType: codeLabels(PRODUCT_TYPE_VALUES) },
+});
 
 registerImportDescriptor('product', async (row, config) => {
   const productBody = pick(row, PRODUCT_TARGETS);

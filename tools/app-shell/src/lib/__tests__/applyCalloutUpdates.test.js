@@ -107,3 +107,52 @@ describe('applyCalloutUpdates — edge cases', () => {
     assert.deepStrictEqual(result, prev);
   });
 });
+
+describe('applyCalloutUpdates — $_identifier companion inherits base-key rules (ETP-5039)', () => {
+  it('THE BUG: a drawer-picked label survives a parallel callout on the base field', () => {
+    const prev    = { storageBin: 'BIN1', 'storageBin$_identifier': 'Almacén Secundario' };
+    const updates = { storageBin: 'BIN1', 'storageBin$_identifier': 'AS-0-0-0' };
+    const touched = new Set(['product', 'storageBin']);
+    const result  = applyCalloutUpdates(prev, updates, noForce, 'product', touched);
+    assert.equal(
+      result['storageBin$_identifier'],
+      'Almacén Secundario',
+      'the label the user picked in the drawer must not be overwritten by the callout',
+    );
+  });
+
+  it('INVERSE: an untouched base field still lets the callout update both value and label', () => {
+    const prev    = { storageBin: 'BIN1', 'storageBin$_identifier': 'Almacén Secundario' };
+    const updates = { storageBin: 'BIN1', 'storageBin$_identifier': 'AS-0-0-0' };
+    const touched = new Set(['product']); // user never picked the bin
+    const result  = applyCalloutUpdates(prev, updates, noForce, 'product', touched);
+    assert.equal(result.storageBin, 'BIN1');
+    assert.equal(result['storageBin$_identifier'], 'AS-0-0-0');
+  });
+
+  it('a forced base field also forces its $_identifier companion (e.g. tax/uOM)', () => {
+    const prev    = { tax: 'T1', 'tax$_identifier': 'Old Tax' };
+    const updates = { tax: 'T2', 'tax$_identifier': 'New Tax' };
+    const touched = new Set(['tax']);
+    const forced  = new Set(['tax']); // real contracts only declare the base key
+    const result  = applyCalloutUpdates(prev, updates, forced, 'product', touched);
+    assert.equal(result.tax, 'T2');
+    assert.equal(result['tax$_identifier'], 'New Tax');
+  });
+
+  it('does not treat a field whose name merely contains a touched key as its companion', () => {
+    const prev    = { taxAmount: 1 };
+    const updates = { taxAmount: 99 };
+    const touched = new Set(['tax']);
+    const result  = applyCalloutUpdates(prev, updates, noForce, 'product', touched);
+    assert.equal(result.taxAmount, 99, 'taxAmount is not the $_identifier companion of tax');
+  });
+
+  it('sales-order witness: an untouched autocompleted price is still recalculated', () => {
+    const prev    = { unitPrice: 10 };
+    const updates = { unitPrice: 25 };
+    const touched = new Set(['product']);
+    const result  = applyCalloutUpdates(prev, updates, noForce, 'product', touched);
+    assert.equal(result.unitPrice, 25);
+  });
+});

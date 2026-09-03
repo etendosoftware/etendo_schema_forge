@@ -696,6 +696,42 @@ usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
 PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
 contacts/index.jsx`.
 
+#### `BulkDocumentAction`'s `actionMode` — bulk actions that are not DocActions
+
+`BulkDocumentAction.jsx` provides the "Confirmar"/"Procesado masivo" button, its
+modal, the action dropdown, the per-row `Promise.allSettled` loop and the
+ok/failed toast. It used to be **DocAction-only**: the per-row call was always
+`POST …/{id}/action/documentAction` with a `{docAction}` body, so each
+`buildActions` value had to be a DocAction code (`CO`, `RE`, …).
+
+`actionMode` (ETP-5075) opens it to any window whose bulk actions are *generic
+NEO actions* instead:
+
+| Value | Per-row call | Each `buildActions` value is |
+|---|---|---|
+| `'documentAction'` (default) | `POST …/{id}/action/documentAction`, body `{docAction}` | a DocAction code |
+| `'neoAction'` | `POST …/{id}/action/{value}` | an action name (e.g. `post`, `unpost`) |
+
+The default keeps every pre-existing consumer byte-identical. First user:
+`artifacts/matched-purchase-invoices/custom/MatchedInvoiceBulkActions.jsx`, whose
+window has no `documentStatus`/DocAction at all — its bulk actions are the
+accounting `post`/`unpost` served by `DocumentPostingService`, the same endpoint
+its detail kebab uses.
+
+In `'neoAction'` mode the component wraps `useNeoAction.execute` in an adapter
+that **throws** when the result is not successful. This is load-bearing, not
+ceremony: `useNeoAction` *resolves* with `{ success: false }` on failure (unlike
+`useDocumentAction`, which throws — its own javadoc draws the contrast), while
+`handleDone` classifies failures via `Promise.allSettled`'s `'rejected'` status.
+Without the adapter every failed row is silently counted as a success and the
+toast reports "N ok, 0 failed" while nothing happened. If you add a third
+`actionMode`, normalise its error contract the same way.
+
+Pair it with `rowFilter` when a selection can legitimately mix states: returning
+a string from `rowFilter(row, action)` pre-blocks that row with that message
+(shown in the failure list) instead of sending a request the backend will reject
+with an opaque error.
+
 ---
 
 ### 10. `window.dateFilterKey` — date range filter column
@@ -1530,3 +1566,59 @@ artifacts/contacts/generated/web/contacts/
 2. Add the appropriate key to `decisions.json → window.*`
 3. Run `node cli/src/generate-frontend.js {window}` (or full pipeline)
 4. The generated `*Page.jsx` now imports and wires your component automatically
+
+## FK click-through navigation (`fkNavigation.js`)
+
+**Makes a read-only foreign-key value clickable, opening the record it points at — in the
+detail form and the list grid alike.** Added in ETP-5075; first consumer is
+`matched-purchase-invoices`.
+
+This is **not** a `decisions.json` option. It is a registry in the app-shell:
+
+`tools/app-shell/src/components/contract-ui/fkNavigation.js`
+
+```js
+export const FK_NAVIGATION_TARGETS = {
+  C_InvoiceLine_ID: { window: 'purchase-invoice', idField: 'invoiceHeaderId' },
+  M_InOutLine_ID:   { window: 'goods-receipt',    idField: 'receiptHeaderId' },
+};
+```
+
+Keyed by **AD column name**, deliberately — not by `reference`. The generated form
+descriptors carry both `column` and `reference`, but generated *grid* columns carry only
+`column`; keying by column lets one registry drive both surfaces with no change to the
+generators in `schema_forge_core`, i.e. no core release.
+
+Two kinds of entry:
+
+| Entry | When | Target id |
+|---|---|---|
+| `{ window }` | The FK already points at a document header with a window of its own (`C_BPartner_ID` → `business-partner`) | The FK's own value |
+| `{ window, idField }` | The FK points at a **line**, which has no window — navigation only ever reaches a header | `record[idField]`, injected per row by the entity's `NeoHandler` |
+
+For the second kind the parent id is not in the payload (an FK returns the id plus a
+`$_identifier` label and nothing else) and there is no declarative server-side derivation
+to compute one, so the entity needs a `javaQualifier` handler that `put`s it into each GET
+row in `afterHandle`. See `MatchedInvoiceHandler` in `com.etendoerp.go` for the pattern,
+and `docs/generated-custom-windows/matched-purchase-invoices.md` for the worked example.
+
+**Consumed by** (both already wired — nothing to do per window):
+
+- `EntityForm.jsx` → `renderReadOnlyFk()`, the single point every read-only FK passes
+  through (`type: 'selector'` and `type: 'search'` both land there).
+- `DataTable.jsx` → `renderCellValue()`, wrapped at the dispatch point rather than inside
+  each cell renderer, so it works whatever cell type the column resolves to.
+
+**It fails closed, by design.** No registry entry, no resolvable id, or no `navigate`
+handed down ⇒ `resolveFkNavigation()` returns `null` and the field/cell renders exactly as
+before. That is what makes it safe to have in components every window renders. `navigate`
+is passed as a prop (from `DetailView`/`ListView`) rather than pulled from `useNavigate()`,
+so `EntityForm`/`DataTable` stay Router-agnostic and their existing unit tests, which mount
+them without a Router, keep working.
+
+**To make another window's FK navigable:** add one line to the registry. If the FK points
+at a line rather than a header, also add the handler that injects the parent id. Nothing
+else — no `decisions.json` key, no generator change, no regeneration of the window.
+
+> Watch out for `stopPropagation()` in the grid: without it a cell click also triggers the
+> row's own `onNavigate`, which wins and sends the user to *this* window's record instead.
