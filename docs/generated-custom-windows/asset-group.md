@@ -146,12 +146,12 @@ The dictionary key for this window is `"Asset Group"` — the stable AD window n
 "Asset Group": { "label": "Asset Group", "newLabel": "New group" }
 
 // es_ES.json → windows
-"Asset Group": { "label": "Categoría de Activo", "newLabel": "Nueva categoría" }
+"Asset Group": { "label": "Categoría de activo", "newLabel": "Nueva categoría" }
 ```
 
 The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so if a `menus["Asset Group"]` entry ever exists it takes precedence over the `windows` entry for the title and breadcrumb.
 
-The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows["Asset Group"]`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label` and `windows["Asset Group"].label` both resolve to the same string per locale ("Asset Group" / "Categoría de Activo"). Before this fix they showed different, inconsistent text across two rounds of naming ("Categoría de Activos" vs "Grupo de activos", then "Grupo de activo" in both — still not the reporter's final term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de Activo" string.
+The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows["Asset Group"]`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label` and `windows["Asset Group"].label` both resolve to the same string per locale ("Asset Group" / "Categoría de activo"). Before this fix they showed different, inconsistent text across two rounds of naming ("Categoría de activos" vs "Grupo de activos", then "Grupo de activo" in both — still not the reporter's final term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de activo" string.
 
 ## Non-obvious gotchas
 

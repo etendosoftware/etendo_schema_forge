@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs';
 
 /**
  * ETP-4986 — unify asset-group naming to a single term across the app:
- * "Categoría de Activo" (es) / "Asset Group" (en) — singular.
+ * "Categoría de activo" (es) / "Asset Group" (en) — singular.
  *
  * The reporter changed the target term after the initial fix landed: the
  * earlier unification round settled on "Grupo de activo", but the final,
- * correct term is "Categoría de Activo". This test encodes that FINAL state.
+ * correct term is "Categoría de activo". This test encodes that FINAL state.
  *
  * Out of scope: A_Asset_Group_Acct_ID ("Grupo de activo contabilidad") is
  * already correct and must NOT be touched or asserted here.
@@ -30,12 +30,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.fields.A_Asset_Group_ID.label, 'Asset Group');
     });
 
-    it('es_ES — "Categoría de Activo"', () => {
-      assert.equal(esES.fields.A_Asset_Group_ID.label, 'Categoría de Activo');
+    it('es_ES — "Categoría de activo"', () => {
+      assert.equal(esES.fields.A_Asset_Group_ID.label, 'Categoría de activo');
     });
 
-    it('es_AR — "Categoría de Activo"', () => {
-      assert.equal(esAR.fields.A_Asset_Group_ID.label, 'Categoría de Activo');
+    it('es_AR — "Categoría de activo"', () => {
+      assert.equal(esAR.fields.A_Asset_Group_ID.label, 'Categoría de activo');
     });
   });
 
@@ -44,12 +44,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.windows['Asset Group'].label, 'Asset Group');
     });
 
-    it('es_ES — "Categoría de Activo"', () => {
-      assert.equal(esES.windows['Asset Group'].label, 'Categoría de Activo');
+    it('es_ES — "Categoría de activo"', () => {
+      assert.equal(esES.windows['Asset Group'].label, 'Categoría de activo');
     });
 
-    it('es_AR — "Categoría de Activo"', () => {
-      assert.equal(esAR.windows['Asset Group'].label, 'Categoría de Activo');
+    it('es_AR — "Categoría de activo"', () => {
+      assert.equal(esAR.windows['Asset Group'].label, 'Categoría de activo');
     });
   });
 
@@ -70,12 +70,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.tabs['Asset Category'].label, 'Asset Group');
     });
 
-    it('es_ES — "Categoría de Activo"', () => {
-      assert.equal(esES.tabs['Asset Category'].label, 'Categoría de Activo');
+    it('es_ES — "Categoría de activo"', () => {
+      assert.equal(esES.tabs['Asset Category'].label, 'Categoría de activo');
     });
 
-    it('es_AR — "Categoría de Activo"', () => {
-      assert.equal(esAR.tabs['Asset Category'].label, 'Categoría de Activo');
+    it('es_AR — "Categoría de activo"', () => {
+      assert.equal(esAR.tabs['Asset Category'].label, 'Categoría de activo');
     });
   });
 
@@ -84,12 +84,12 @@ describe('ETP-4986 — asset group naming unification', () => {
       assert.equal(enUS.menus['Asset Group'].label, 'Asset Group');
     });
 
-    it('es_ES — "Categoría de Activo"', () => {
-      assert.equal(esES.menus['Asset Group'].label, 'Categoría de Activo');
+    it('es_ES — "Categoría de activo"', () => {
+      assert.equal(esES.menus['Asset Group'].label, 'Categoría de activo');
     });
 
-    it('es_AR — "Categoría de Activo"', () => {
-      assert.equal(esAR.menus['Asset Group'].label, 'Categoría de Activo');
+    it('es_AR — "Categoría de activo"', () => {
+      assert.equal(esAR.menus['Asset Group'].label, 'Categoría de activo');
     });
   });
 

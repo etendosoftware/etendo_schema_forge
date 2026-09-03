@@ -83,7 +83,7 @@ async function openNewAsset(page) {
     .catch(() => {}); // OK if spinner never appeared
 }
 
-/** Pick the real "Genérico" category in the Categoría de Activo selector.
+/** Pick the real "Genérico" category in the Categoría de activo selector.
  *
  * ETP-4600 unified FK fields onto CreatableSearchSelect (chip + combobox model),
  * but `assetCategory` carries an explicit `searchSelect: false` opt-out
@@ -178,10 +178,10 @@ async function saveThenProcess(page, expectRe) {
 }
 
 /**
- * Apply the conditional filter Nombre Es <name> AND Categoría de Activo Es Genérico,
+ * Apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico,
  * and assert the list narrows to exactly the created asset.
  */
-/** Build and apply the conditional filter Nombre Es <name> AND Categoría de Activo Es Genérico. */
+/** Build and apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico. */
 async function applyNameAndCategoryFilter(page, name) {
   await page.getByTestId('filter-advanced').click();
   const panel = page.getByRole('dialog');
@@ -194,10 +194,10 @@ async function applyNameAndCategoryFilter(page, name) {
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('textbox').first().fill(name);
 
-  // Condition 2 — Categoría de Activo Es Genérico (FK value = IdentifierMultiPicker).
+  // Condition 2 — Categoría de activo Es Genérico (FK value = IdentifierMultiPicker).
   await panel.getByRole('button', { name: 'Añadir condición' }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
-  await page.getByRole('option', { name: /^Categoría de Activo$|^Asset Group$/i }).click();
+  await page.getByRole('option', { name: /^Categoría de activo$|^Asset Group$/i }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
@@ -214,7 +214,7 @@ async function findByNameAndCategory(page, name) {
   await expect(page.locator('tbody tr').first()).toContainText(name);
 }
 
-/** After deletion, filter the list by the asset's name + Categoría de Activo and
+/** After deletion, filter the list by the asset's name + Categoría de activo and
  *  assert it no longer appears. */
 async function verifyAssetNotInList(page, name) {
   await page.goto('/assets');
