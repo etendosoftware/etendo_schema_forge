@@ -184,11 +184,45 @@ Field editability in the top section:
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
   now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
+- **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
+  `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
+  format lexicographic order is chronological order, so the check is exact and timezone-free and
+  deliberately does NOT build a `Date` (the ETP-4850 date-only shift cannot occur here). An empty
+  box means "no bound" and never invalidates. An inverted range renders
+  `bank-connection-import-range-error` under the three fields, disables Save, and makes
+  "Sincronizar ahora" refuse to run. The bridge repeats the check in
+  `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
+  callers that skip the form; it validates the *resulting* pair before touching the entity, since a
+  body may carry only one bound and a managed instance would be flushed at commit even after a
+  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
+  caller of `import-settings` and it refuses the range before the request fires, so the message
+  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
+  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
+  gate. Map it only once a surface exists that can actually surface it.
+
+  Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
+  module validates it only at synchronization time
+  (`SaltEdgeConnectionHelper.validateDateRange`), and the `OBException` it throws is swallowed by
+  `processProviderTransactions` and re-wrapped into
+  `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
+  the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
+  `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
+  calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
+  straight away: the bridge reads the date range from the DB, so an unsaved range was silently
+  ignored, and the `refresh()` that follows a sync rewrites both `form` and `initial` from the
+  server, overwriting whatever the user had typed ("los campos se restablecen"). Wiring note: the
+  save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
+  declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
+  invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
+  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
-  Enabled purely on `dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid &&
-  !recon.amountToleranceInvalid` — **no accounting field can block Save** (ETP-4872 dropped the
+  Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
+  `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
+  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
+  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
@@ -551,6 +585,44 @@ Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
 
+### Widget language and the waiting overlay (ETP-5102)
+
+**The Salt Edge widget opens in the language of whoever asked.** It used to always open in
+Spanish: the `attempt.locale` sent when creating the Salt Edge session was the literal `"es"` in
+all three payload builders of the PSD2 module — `BankIntegrationUtils.buildAndConnect` (connect),
+`BankIntegrationUtils.reconnectSaltEdgeConnection` (reconnect) and
+`GenerateBankPayment.processPayment` (PIS). They now call
+`SaltEdgeLocaleResolver.resolve()` (`com.etendoerp.psd2.bank.integration`), which reads
+`OBContext.getOBContext().getLanguage()` and maps the Etendo code onto the widget's own locale
+(`es_ES → es`, `en_US`/`en_GB` → `en`, keeping the region only where Salt Edge distinguishes it:
+`es_MX → es-MX`, `pt_BR → pt-BR`, `zh_CN`, `zh_TW`). An unknown or missing language falls back to
+`es`, the previous behaviour.
+
+No frontend change and no new bridge parameter were needed: the GO locale already reaches the
+`OBContext` on every NEO request, because `NeoAuthenticator.authenticateJwt` applies the SPA's
+`Accept-Language` header to it (`NeoAuthenticator.java:109-111` → `NeoLanguage.applyToContext`).
+Verified live: with GO in Spanish and the Classic user in *English (USA)*,
+`GET /sws/neo/listmenu` carries `Accept-Language: es_ES`. **The fix therefore reaches Etendo
+Classic too** — the PSD2 module is shared and depends only on Core, so it cannot tell which front
+end is calling; in the AD window the widget now follows the user's AD language. Deliberate
+consequence, not a side effect: it is the same bug on both sides.
+
+> Anyone touching `SaltEdgeLocaleResolver` must keep it on Core APIs only. PSD2 declares
+> dependencies on Core and the Openbravo Framework and has zero references to
+> `com.etendoerp.go` — the dependency runs GO → PSD2. Reaching for GO's `NeoLanguage` helper
+> would invert it and break every Classic-only installation.
+
+**The "Conectando con tu banco…" overlay has no close button, on purpose.** `DialogContent`
+(app-shell-core) always renders a Radix close X and offers no prop to suppress it, while
+`BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
+the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
+now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
+`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
+picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
+created or linked and the user can retry without reloading. Wiring the X instead would have
+required an external abort handle that `launchSaltEdgePopup` does not expose.
+
 ### Bank logo (ETP-4764 follow-up)
 
 The connected provider's logo image is persisted rather than fetched live per row. It lives on
@@ -773,7 +845,9 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - Movements toolbar: back arrow `←`, type filter (BPD/BPW, search-enabled), date range filter (preset list + dual calendar, same picker as grid views), advanced "by conditions" filter (`AdvancedFilterButton`, applied client-side), search input, and a **split button** (`MovementsSplitButton`, same pattern as the Imported-statements `ImportSplitButton`): the primary action is **`Nuevo movimiento`** (opens the accounting-account modal — see "Nuevo movimiento (accounting account)" below), and the ▾ dropdown holds **`Transferir fondos`** (ETP-4272, opens `FundsTransferModal.jsx`). (The older 2-step `NewMovementWizard` is superseded and no longer wired.)
 - Movements table: Expand chevron | Checkbox | Date | Payment | Contact | Description | Status (`MovementStatusBadge` — **two states only**: Conciliado / Sin conciliar) | Type (with `PostingStatusDot` sub-label) | Cuenta contable | Amount | Balance | kebab.
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
-- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+  - **Editable in place, ETP-5101.** Each of the three fields is a live `ChipSelect` picker (same primitive the Editar modal uses, `useDimensionLookup`-backed) whenever `canEditDimensions(movement)` — `!movement.paymentId && movement.posted !== 'Y'` — mirrors `MovementRowKebab.jsx`'s own `canEdit` exactly: a manual G/L transaction that is Draft or Processed-but-not-yet-posted. Picking a value (or clearing one) auto-saves immediately via `action=update`, reusing `buildDimensionUpdatePayload()` (`hooks/useCreateMovement.js`) to reconstruct the full payload the `update` action requires (that action has no partial-patch support — every call resends the movement's own current amount/type/currency unchanged, only the one edited dimension differs; `process` is always sent `false`, matching what the Editar modal's own "Guardar" already does for a Processed movement — proven safe, never reverts processed/posted state). On save failure the row keeps its prior value and a toast shows the backend's own message (translated) or the generic `financeAccountTxRowDimensionUpdateError` fallback.
+  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
 - Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating. **Eliminar carries one further exclusion (ETP-5085): it is hidden for a funds-transfer leg** — `isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF'`. The two legs of a transfer reference each other through RESTRICT self-FKs, so the removal could only ever fail, and it failed as an opaque HTTP 500; the backend now rejects it with a 409 and the action is hidden rather than disabled, like every other inapplicable item in this menu. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
@@ -1602,7 +1676,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         AdvancedFilterButton       — generic "Filtro por condicionales" (status filter now lives here: 2 options — Conciliado / Sin conciliar)
       AccountSummaryStrip.jsx      — avatar, IBAN (chunked + copy), 3 KPI values
       MovementsTable.jsx           — header + rows / skeleton / empty-state; renderBody helper
-        DimensionsPanel (inline)   — expandable read-only grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto)
+        DimensionsPanel (inline)   — expandable grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto); editable ChipSelect when canEditDimensions (ETP-5101), else read-only
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
@@ -1611,7 +1685,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
-      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
+      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree, shared by movements and statements. Three operator tables (`DATE_OPERATORS` / `NUMBER_OPERATORS` / `OPERATORS`) dispatched by the column's declared `type` via `applyConditions`'s `columnsByKey` argument — see "The advanced ("by conditions") filter evaluates by declared column type"
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
@@ -1630,7 +1704,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -2509,6 +2583,58 @@ have no AD backing) and consumes real NEO endpoints directly.
 | Search | `string` | Case-insensitive substring over `documentNo + contact + description` |
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
+
+### The advanced ("by conditions") filter evaluates by declared column type (ETP-4956)
+
+All three tabs — Movimientos, Extractos importados, Conciliación — fetch **unfiltered** and evaluate
+the `AdvancedFilterBuilder` condition tree in memory through `applyConditions`
+(`advancedFilterApply.js`). The backend criteria path (`gridQuery.js` → `ListView`) is **not**
+involved here, so a filter defect in this window is always a client-side one.
+
+`applyConditions(rows, filter, deriveRow, columnsByKey)` takes the filter-column metadata as its
+4th argument and dispatches operators through **three** tables:
+
+| Column `type` | Table | Notes |
+|---|---|---|
+| `date` | `DATE_OPERATORS` | all comparisons via `parseCalendarDate` (`lib/dateOnly.js`) |
+| `number` | `NUMBER_OPERATORS` | `equals`/`notEqual` compare numerically, not as strings |
+| everything else | `OPERATORS` | the historical string/enum predicates |
+
+The metadata maps are `MOVEMENT_FILTER_COLUMNS` and `STATEMENT_FILTER_COLUMNS`, derived from a
+label-free `COLUMN_SPEC` in each `*AdvancedFilter.js` so the types are available without a `ui`
+translator. Both files keep `buildXFilterColumns(ui)` for the builder UI, which decorates the same
+spec with translated labels.
+
+**Why the third table alone was not enough.** Before this change every operator went through
+`OPERATORS`, which meant:
+
+- **Dates never filtered.** `equals` string-compared the stored `"2026-09-01T00:00:00Z"` against the
+  picker's `"2026-09-01"` — never equal. Worse, `lessThan`/`greaterThan` ran both sides through
+  `parseFloat`, and `parseFloat('2026-09-01') === 2026`: **every** date collapsed to its year, so
+  "Antes de" / "Después de" could not discriminate between any two dates in the same year. Only
+  `between` had a date branch, and it guessed the type from the field's NAME (`/date/i`).
+- **`Saldo` "Es" compared strings.** A stored `1646.4867`, displayed as `1.646,49 €`, never matched a
+  typed `1646.49`. `numEquals` now rounds both sides to the precision the user typed (floored at 2
+  decimals, the display scale), so the filter agrees with what the grid shows.
+- **Text values were not trimmed.** `Contacto` → `Contiene` `" Ivan"` returned nothing. `lc()` now
+  trims both sides; the builder additionally trims at apply time (core, see below).
+
+**`emptyWhenZero`** is a per-column opt-in, set on `totalOut` / `totalIn` only. Those amounts arrive
+as `0` when absent, and `StatementsTable.jsx` renders `Number(totalOut) > 0 ? amount : '—'` — so 0
+and null look identical. With the flag, `isNull`/`isNotNull` use `!(Number(raw) > 0)`, matching
+exactly the rows that visibly show "—". Deliberately **not** set on `lineCount`, `amount` or
+`balance`, where 0 is a real value.
+
+`MovementsTab` hands the toolbar `movements.map(withDerivedFields)` rather than the raw array: the
+Estado filter column is the derived `statusFamily`, which no raw row carries, so the builder's enum
+picker had no in-memory values to seed its option list from.
+
+Companion fixes live in the shared builder (`@etendosoftware/app-shell-core`): the enum value picker
+is now multi-select and always offers the column's full declared `enumLabels` catalogue (it used to
+show only the already-selected option when re-editing), the `inSet` ("Es cualquiera de") operator is
+retired for enum columns in favour of that multi-select, and numeric inputs accept a locale decimal
+comma, normalised to dot-decimal on apply.
+
 
 ## Conciliación empty state (ETP-4921)
 

@@ -23,7 +23,11 @@ export function BankConnectionFlowUI({ flow }) {
     <>
       <Dialog open={connecting} data-testid="Dialog__bankconnflow">
         <DialogContent
-          className="max-w-sm bg-card"
+          // ETP-5102: the close button DialogContent always renders is hidden here on purpose.
+          // This overlay is informational — the flow is cancelled by closing the Salt Edge popup,
+          // which the popup.closed poll picks up. A visible X that cannot settle waitForConnection
+          // reads as a broken control.
+          className="max-w-sm bg-card [&>button]:hidden"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
           data-testid="bank-connection-connecting-overlay"
