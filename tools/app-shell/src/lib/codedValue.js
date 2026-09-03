@@ -64,6 +64,24 @@ export function describeAcceptedValues(acceptedByCode) {
 }
 
 /**
+ * Invert a `{ code: [synonym, …] }` table into `{ code: label }` for display (ETP-4997).
+ *
+ * The label is the table's FIRST synonym — the same representative `describeAcceptedValues`
+ * already shows a user in the "accepted values" error message, so what the export writes is what
+ * the app tells them is valid. Deriving it from the synonym table rather than from the AD label
+ * is the whole point: a value written by this function is guaranteed to survive
+ * `resolveCodedValue`, so an exported file re-imports by construction. An AD `$_identifier`
+ * would read just as nicely and silently stop matching the day its translation changes.
+ *
+ * A code with no synonyms maps to itself, which round-trips too (the code is always accepted).
+ */
+export function codeLabels(acceptedByCode) {
+  return Object.fromEntries(
+    Object.entries(acceptedByCode).map(([code, synonyms]) => [code, synonyms?.[0] ?? code]),
+  );
+}
+
+/**
  * The message a user sees for a cell the column cannot store. Names the accepted values,
  * because otherwise the user only ever learns that a value was rejected, never which ones
  * would have worked.

@@ -4,23 +4,27 @@
  * these into individual components.
  */
 import { formatCurrency } from './formatCurrency.js';
+import { formatCalendarDate } from './dateOnly.js';
 
 /**
- * Formats an ISO date string in UTC. The backend sends date-only values as UTC
- * midnight, so formatting in UTC avoids a negative-offset timezone shifting the
- * calendar day.
+ * Formats a business date, delegating to the canonical `formatCalendarDate`:
+ * it reads the leading `yyyy-MM-dd` and builds the Date with the LOCAL-time
+ * constructor, so the calendar day survives any host offset and any wire shape
+ * (with or without a zone suffix).
+ *
+ * It used to be `new Date(iso)` + `Intl.DateTimeFormat(..., timeZone: 'UTC')`,
+ * on the premise that the backend always sent UTC midnight. ETP-5100 removed
+ * that premise (NEO now emits the civil `yyyy-MM-dd'T'HH:mm:ss` in the server's
+ * own zone), and the two UTC assumptions then stacked instead of cancelling:
+ * `new Date("2026-09-01T22:59:10")` parses as LOCAL, and rendering that instant
+ * back in UTC pushed it to the next day.
  *
  * @param {string} iso - ISO date/datetime string.
  * @param {string} bcpLocale - BCP-47 locale (e.g. "es-ES").
  * @returns {string} `dd/mm/yyyy` in the given locale, or '—' for falsy/invalid.
  */
 export function formatDate(iso, bcpLocale) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(bcpLocale, {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-  }).format(d);
+  return formatCalendarDate(iso, bcpLocale);
 }
 
 /**

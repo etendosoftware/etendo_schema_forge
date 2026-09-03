@@ -38,6 +38,18 @@ const FIXES_WITH_REPORT = new Set([
   // branch — same "flag, don't guess" pattern as R19. See
   // cli/test/data-fixes-r28-owner-email-backfill.test.js.
   '20260827T120000Z__R28-owner-email-backfill',
+  // R31 backfills C_Glitem/C_Glitem_Acct for pre-ETP-5020 subaccounts; its @report lists every
+  // subaccount whose composed "<code>-<name>" GL Item name was truncated to fit
+  // C_Glitem.Name's 60-char limit (gap N2) — operator visibility into which names got
+  // shortened, same "flag, don't guess" pattern as R19/R28. See
+  // cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js.
+  '20260901T140000Z__R31-glitem-subaccount-backfill',
+  // R32 resyncs C_Glitem.Name for already-linked GL Items whose composed name went stale (gap N3);
+  // its @report lists every row this run actually renamed — subaccount code/name plus old_name ->
+  // new_name — read back from the temp table @apply fills from its own UPDATE ... RETURNING, since
+  // the pre-apply name is gone by the time @report runs. Operator visibility, not a "skipped work"
+  // flag: empty on a clean re-run. See cli/test/data-fixes-r32-glitem-name-resync.test.js.
+  '20260902T090000Z__R32-glitem-name-resync',
 ]);
 
 async function loadCatalogFiles() {
