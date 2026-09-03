@@ -204,6 +204,26 @@ const dependentCounts = {
   zone: countRefsFor('FinancialMgmtTaxZone', finalDeleteSet),
 };
 
+// --- SQL-facing fields (reporter's environment-agnostic correction,
+// 2026-09-03): the fixed delete/deactivate split above (deleteIds/
+// deactivateIds) is right for the XML file — a single shipped artifact,
+// same for every environment, where dev's empirical result is a legitimate
+// one-time human-reviewed decision. It is WRONG for the companion SQL
+// data-fix, which runs against already-provisioned environments whose data
+// can differ from dev's: an id with no live reference here might have one
+// elsewhere, and vice versa. So the SQL generator gets a different, looser
+// pair of sets and decides delete-vs-deactivate at RUNTIME per environment
+// (see gen-delete-sql.cjs) instead of trusting this dev-derived split:
+//   - staticDeactivateIds: the 102 sibling-overlap ids ONLY (no IVA Normal).
+//     These never even get a delete attempt, anywhere — the 3 sibling AEAT
+//     modules' own reference data is fixed and environment-independent, so
+//     this is genuinely static regardless of which environment runs it.
+//   - candidateIds: the 145 delete-ATTEMPT candidates (144 CSV-derived +
+//     IVA Normal, no longer special-cased) — each is tried as a real
+//     delete, with a per-id runtime fallback to deactivate on FK violation.
+const staticDeactivateIds = D.ids.filter(id => siblingOverlapSet.has(id));
+const candidateIds = [...finalDeleteIds, IVA_NORMAL_ID];
+
 const result = {
   generatedAt: new Date().toISOString(),
   sourceXmlRecordCount: rates.length,
@@ -216,6 +236,8 @@ const result = {
   deleteIds: finalDeleteIds,
   deactivateIds,
   parentRepoints,
+  staticDeactivateIds,
+  candidateIds,
   modify: MODIFY,
   dependentCounts,
 };
@@ -228,8 +250,9 @@ if (result.csvCounts.delete !== 246) console.warn(`WARNING: ticket says 246 DELE
 if (result.csvCounts.keep !== 405) console.warn(`WARNING: ticket says 405 KEEP rows, CSV parsed ${result.csvCounts.keep} — re-check DELIM/NAME_COL.`);
 
 const blockers = result.unmatched.length + result.ambiguous.length + result.unaccountedXmlRecords.length + result.parentTaxRateBlockers.length + result.conflictingBucket.length;
-console.log(JSON.stringify({ ...result, deleteIds: `[${result.deleteIds.length} ids]`, deactivateIds: `[${result.deactivateIds.length} ids]` }, null, 2));
-console.log(`\n>>> Split: ${result.deleteIds.length} real deletes, ${result.deactivateIds.length} deactivations, 1 rename.`);
+console.log(JSON.stringify({ ...result, deleteIds: `[${result.deleteIds.length} ids]`, deactivateIds: `[${result.deactivateIds.length} ids]`, staticDeactivateIds: `[${result.staticDeactivateIds.length} ids]`, candidateIds: `[${result.candidateIds.length} ids]` }, null, 2));
+console.log(`\n>>> XML split (fixed): ${result.deleteIds.length} real deletes, ${result.deactivateIds.length} deactivations, 1 rename.`);
+console.log(`>>> SQL split (dynamic): ${result.staticDeactivateIds.length} static deactivate, ${result.candidateIds.length} delete-attempt candidates.`);
 if (blockers > 0) {
   console.error(`\n>>> ${blockers} unresolved item(s) — see resolved-scope.json. DO NOT proceed to Task 3/4 until this is 0.`);
   process.exit(1);
