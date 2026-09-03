@@ -146,11 +146,18 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     expect(byId['mi-001']).toBe('post');
     expect(byId['mi-002']).toBeUndefined();
 
-    // The shared modal counts the pre-blocked row as "failed" (1 ok, 1 failed) and shows
-    // it via the reload-then-toast flow (useBulkActionToast reads sessionStorage on mount).
-    const toastByText = (re) => page.locator('[data-sonner-toast]').filter({ hasText: re });
-    await expect(
-      toastByText(/1 registros procesados correctamente y 1 registros fallidos/i),
-    ).toBeVisible({ timeout: 10_000 });
+    // The shared modal counts the pre-blocked row as "failed" (1 ok, 1 failed) — read
+    // straight from sessionStorage, which handleDone writes synchronously right after the
+    // click, rather than the post-reload toast: that assertion raced the reload + sonner's
+    // default auto-dismiss duration inside the same 10s window and was flaky in CI.
+    const stored = await page
+      .waitForFunction(() => {
+        const raw = sessionStorage.getItem('bulkActionResult');
+        return raw ? JSON.parse(raw) : null;
+      }, null, { timeout: 5_000 })
+      .then((handle) => handle.jsonValue());
+    expect(stored.ok).toBe(1);
+    expect(stored.failed).toHaveLength(1);
+    expect(stored.failed[0].documentNo).toBe('mi-002');
   });
 });
