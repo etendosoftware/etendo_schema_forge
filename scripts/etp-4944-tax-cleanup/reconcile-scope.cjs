@@ -9,14 +9,21 @@ const XML_PATH = path.join(__dirname, '../../../modules/com.etendoerp.go.localiz
 const IN_DIR = path.join(__dirname, 'input');
 const DELIM = ','; // confirmed comma-delimited against the real attachments (2026-09-02)
 
-// Explicit override, NOT a CSV edit — the reporter's CSVs stay the unmodified
+// Explicit overrides, NOT CSV edits — the reporter's CSVs stay the unmodified
 // source of truth. FinancialMgmtTaxRate id="867FFFAC82CC44069FE6497E4C5C6348"
 // (name="IVA Normal") is an already-inactive placeholder (active=false,
 // validFromDate=9999-01-01) that the spreadsheet review never saw. Per the
-// user's explicit 2026-09-02 decision: add it to DELETE and empirically test
-// via the Task 4 dry-run — if nothing breaks, keep deleting it; if the
-// dry-run errors on this id, remove it from this list and re-run.
-const EXTRA_DELETE_IDS = ['867FFFAC82CC44069FE6497E4C5C6348']; // IVA Normal — inactive placeholder, testing deletion per ETP-4944 decision 2026-09-02
+// user's explicit 2026-09-02 decision, it was first added to DELETE and
+// empirically tested via the Task 4 dry-run against the local dev DB.
+//
+// RESULT (2026-09-03): the dry-run FAILED with a `c_invoiceline_c_tax` FK
+// violation naming this exact id — it IS referenced by a real invoice line,
+// despite being inactive/placeholder-looking. Per the decision rule ("if
+// something breaks, we keep it"), this settles KEEP, not DELETE. Moved from
+// EXTRA_DELETE_IDS to EXTRA_KEEP_IDS below so it's still accounted for (not
+// re-flagged as unaccountedXmlRecords) but excluded from deleteIds.
+const EXTRA_DELETE_IDS = [];
+const EXTRA_KEEP_IDS = ['867FFFAC82CC44069FE6497E4C5C6348']; // IVA Normal — kept: live c_invoiceline reference found empirically 2026-09-03
 
 function decodeXml(s) {
   return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
@@ -89,10 +96,13 @@ function resolveBucket(rows, bucket) {
 const D = resolveBucket(del, 'delete');
 const K = resolveBucket(keep, 'keep');
 
-// Merge the explicit override into the DELETE set (post-CSV-resolution, per
-// the documented decision above — the CSV itself stays untouched).
+// Merge the explicit overrides into the resolved buckets (post-CSV-resolution,
+// per the documented decisions above — the CSV itself stays untouched).
 for (const id of EXTRA_DELETE_IDS) {
   if (!D.ids.includes(id)) D.ids.push(id);
+}
+for (const id of EXTRA_KEEP_IDS) {
+  if (!K.ids.includes(id)) K.ids.push(id);
 }
 
 // MODIFY comes from its own csv (different header shape — a before/after
