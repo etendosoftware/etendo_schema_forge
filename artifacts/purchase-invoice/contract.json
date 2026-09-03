@@ -1,8 +1,8 @@
 {
-  "version": "0.90.0",
+  "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-24T15:27:51.866Z",
-  "checksum": "e81504d14bd7d267",
+  "updatedAt": "2026-09-03T23:29:35.812Z",
+  "checksum": "b5d4db43c6a106d0",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -40,32 +40,34 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
           "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -100,6 +102,9 @@
           "placement": "tab"
         }
       ],
+      "attachments": {
+        "saveBeforeAttach": true
+      },
       "sendDocument": {
         "allowEmail": false
       },
@@ -4461,6 +4466,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "noTrailing": true,
             "validation": {
               "required": true,
               "maxLength": 15
@@ -5184,32 +5190,34 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
           "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
         }
       },
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -5244,6 +5252,9 @@
           "placement": "tab"
         }
       ],
+      "attachments": {
+        "saveBeforeAttach": true
+      },
       "sendDocument": {
         "allowEmail": false
       },
@@ -10552,18 +10563,23 @@
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "Foreign_Amount": "Importe en Moneda Objetivo"
       },
       "en_US": {
         "POReference": "Document No.",
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
-        "C_DocTypeTarget_ID": "Document Type"
+        "C_DocTypeTarget_ID": "Document Type",
+        "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     }
   },

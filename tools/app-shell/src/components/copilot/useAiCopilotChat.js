@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { authHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
 import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
@@ -316,7 +317,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/ai/chat',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: authHeaders(token),
   }), [token]);
   const [input, setInput] = useState('');
   const handlePageHelpFinish = useCallback(({ message }) => {
