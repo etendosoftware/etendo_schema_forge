@@ -5,9 +5,10 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -306,6 +307,31 @@ function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
 }
 
+// Extracted so the guard/try-finally doesn't add to ListView's own cognitive
+// complexity (S3776) — same rationale as the other top-level helpers above.
+async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
+  if (isPrinting) return;
+  setIsPrinting(true);
+  try {
+    await printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl);
+  } finally {
+    setIsPrinting(false);
+  }
+}
+
+// Same rationale: the ternary itself is what feeds ListView's cognitive
+// complexity, regardless of where its result is used — a plain function call
+// keeps the branch out of the caller's count (mirrors iconSizeClass above).
+function printButtonLabel(isPrinting, ui) {
+  return isPrinting ? ui('generating') : ui('print');
+}
+
+function printButtonIcon(isPrinting, selectionBarSize) {
+  return isPrinting
+    ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+    : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
+}
+
 /**
  * Full-width list view for an entity.
  */
@@ -322,6 +348,11 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // ETP-5101 — hides the record-count badge next to the window title. Use this
+  // when `hook.items.length` doesn't represent a meaningful count for the
+  // window (e.g. AccountTreeView's own self-fetched tree: ListView only ever
+  // hands it one paginated batch of leaves, not the full materialized structure).
+  hideRecordCount = false,
   // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
   // just its individual controls. For windows whose headerTable renders its own
   // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
@@ -611,6 +642,15 @@ export function ListView({
   }, [refreshTrigger]);
 
   const navigate = useNavigate();
+  // ETP-5075 — surface the bulk-action result toast after `BulkDocumentAction`'s
+  // post-run `window.location.reload()`. It used to be wired per window, inside each
+  // hand-written `windows/custom/<w>/index.jsx` (sales-invoice, goods-shipment, …), which
+  // meant a purely pipeline-generated window with a `bulkActions` slot ran the bulk fine
+  // and then reported nothing at all. Hosting it here gives every list the toast with no
+  // per-window wiring. It cannot double-fire for the windows whose wrapper also calls it:
+  // the hook deletes the sessionStorage key before showing the toast, so whichever effect
+  // runs first consumes the result and the other finds nothing.
+  useBulkActionToast();
   // ETP-3914 — when rowQuickActions is enabled but the host did not supply
   // onEdit/onDelete, wire sensible defaults: navigate to detail and reuse the
   // shared delete confirm + DELETE pipeline. Custom overrides that pass their
@@ -818,10 +858,10 @@ export function ListView({
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hook.items.length,
+    recordCount: hideRecordCount ? undefined : hook.items.length,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
-  }, [favActive, hook.items.length]);
+  }, [favActive, hook.items.length, hideRecordCount]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
@@ -831,7 +871,13 @@ export function ListView({
   const [deselectTrigger, setDeselectTrigger] = useState(0);
   const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
+
+  const handleBulkPrint = useCallback(
+    () => executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }),
+    [isPrinting, windowName, selectedRows, token, ui, apiBaseUrl]
+  );
 
   const handlePreviewClose = useCallback(() => {
     if (previewRow) {
@@ -961,6 +1007,10 @@ export function ListView({
     data: hook.items,
     meta: hook.meta,
     onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    // ETP-5075 — lets DataTable turn an FK column in the fkNavigation registry into a
+    // click-through to the referenced document. Distinct from `onNavigate` above, which
+    // always targets THIS window's own record.
+    navigate,
     onSelectionChange: setSelectedRows,
     // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
     // headerTable that has to react to selection (e.g. financial-account swaps its own
@@ -1061,11 +1111,12 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    title={ui('print')}
-                    aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl)}
+                    title={printButtonLabel(isPrinting, ui)}
+                    aria-label={printButtonLabel(isPrinting, ui)}
+                    disabled={isPrinting}
+                    onClick={handleBulkPrint}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
                 {onCloneRow && (
@@ -1212,6 +1263,7 @@ export function ListView({
                   isDefaultSort={isDefaultSort}
                   SortIconComponent={SortIconComponent}
                   iconButtonHover={iconButtonHover}
+                  labelOverrides={labelOverrides}
                   data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}

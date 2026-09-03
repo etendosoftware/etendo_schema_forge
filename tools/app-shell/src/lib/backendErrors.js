@@ -254,6 +254,18 @@ function matchShipmentNotFound(msg) {
   return { id };
 }
 
+// ChartOfAccountsHandler.java (com.etendoerp.go — ETP-5101), ERR_DUPLICATE_CODE — prefix +
+// dynamic 8-digit account code + suffix, same shape as ORDER_NOT_FOUND_PREFIX above.
+const ACCOUNT_ALREADY_EXISTS_PREFIX = 'Account ';
+const ACCOUNT_ALREADY_EXISTS_SUFFIX = ' already exists.';
+
+function matchAccountAlreadyExists(msg) {
+  if (!msg.startsWith(ACCOUNT_ALREADY_EXISTS_PREFIX) || !msg.endsWith(ACCOUNT_ALREADY_EXISTS_SUFFIX)) return null;
+  const code = msg.slice(ACCOUNT_ALREADY_EXISTS_PREFIX.length, -ACCOUNT_ALREADY_EXISTS_SUFFIX.length);
+  if (!code) return null;
+  return { code };
+}
+
 // CashCloseSupport.java (com.etendoerp.go — ETP-4795), three cash-close rejections that embed a
 // dynamic value. Same plain-string-slicing rationale as the matchers above: no regex, so there is
 // no backtracking surface over the movement identifier (SonarQube javascript:S5852).
@@ -548,6 +560,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
+  [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
   [matchCashCloseNoConcept, 'backendError.cashCloseNoConcept'],
   [matchCashCloseBackdated, 'backendError.cashCloseDateBeforeLastClose'],
   [matchCashCloseLineInClosedPeriod, 'backendError.cashCloseLineInClosedPeriod'],

@@ -13652,7 +13652,7 @@
       "label": "Language"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "User": {
       "label": "Users"
@@ -16631,6 +16631,9 @@
     "reactivate": "Reactivate",
     "reactivateOrder": "Reactivate Order",
     "cannotReactivateLinkedDocs": "Cannot reactivate: order has linked documents",
+    "bulkRowAlreadyPosted": "Already posted",
+    "bulkRowNotPosted": "Not posted",
+    "docTypeMatchedInvoices": "Receipt-Invoice Link",
     "bulkCompletion": "Bulk Completion",
     "confirmBulk": "Confirm",
     "documentAction": "Document Action",
@@ -17707,7 +17710,7 @@
     "statusColumn": "Status",
     "statusDocColumn": "Doc. Status",
     "impTotal": "Total Amount",
-    "pendingPaymentColumn": "Pending Payment",
+    "pendingPaymentColumn": "Outstanding Amount",
     "cobrada": "Collected",
     "pagada": "Paid",
     "invoiceReceipts": "Invoice Receipts",
@@ -18294,6 +18297,7 @@
     "financeAccountTxRowDeleting": "Deleting…",
     "financeAccountTxRowDeleteSuccess": "Movement deleted",
     "financeAccountTxRowDeleteError": "Could not delete the movement",
+    "financeAccountTxRowDimensionUpdateError": "Could not update the dimension",
     "financeAccountTransferTitle": "Transfer funds",
     "financeAccountTransferSubtitle": "Between the organization's financial accounts",
     "financeAccountTransferSourceRole": "From · source",
@@ -18434,6 +18438,7 @@
     "financeAccountsBankConnectionImportSection": "Statement import",
     "financeAccountsBankConnectionImportFrom": "Import from",
     "financeAccountsBankConnectionImportTo": "Import to",
+    "financeAccountsBankConnectionImportRangeInvalid": "The \"Import from\" date cannot be later than the \"Import to\" date.",
     "financeAccountsBankConnectionGrouping": "Statement grouping",
     "financeAccountsBankConnectionGroupingNone": "Default",
     "financeAccountsBankConnectionGroupingPlaceholder": "Select grouping…",
@@ -19525,6 +19530,7 @@
     "onboardingChangePasswordAction": "Change password",
     "onboardingChangePasswordTitle": "Change password",
     "onboardingChangePasswordSubtitle": "Update your local account password.",
+    "createPasswordLogoutNotice": "After creating your password you'll be signed out and will need to sign in again. Your other sign-in methods keep working.",
     "changePasswordLogoutNotice": "After changing your password you'll be signed out and need to log in again.",
     "onboardingPasswordChangedNotice": "Your password has been changed successfully. Sign in with your new password.",
     "onboardingDraftRestoredNotice": "We restored your saved setup progress so you can pick up where you left off.",
@@ -20092,6 +20098,7 @@
     "backendError.shipmentPriceListRequired": "No Price List could be resolved for this invoice. Select a tariff, or configure a default Price List for the Business Partner.",
     "backendError.orderNotFound": "Order not found: {orderId}.",
     "backendError.shipmentNotFound": "Shipment not found: {id}.",
+    "backendError.accountAlreadyExists": "Account {code} already exists.",
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes.",
     "backendError.conversionRateNotDraft": "Cannot modify the document conversion rate when the invoice is not in draft status.",
     "backendError.cashCloseNoConcept": "This account has no accounting account configured for differences. Set one under Edit account before confirming a close that does not balance.",
@@ -24357,6 +24364,28 @@
     "windowTypeObuiappPickAndExecute": "Pick and Execute",
     "windowTypeQ": "Query Only",
     "windowTypeT": "Transaction",
+    "accountSettingsTitle": "Account settings",
+    "accountSettingsSecurity": "Security",
+    "accountSettingsSecurityIntro": "Ways you can sign in to your account. At least one must always remain.",
+    "accountMethodPassword": "Password",
+    "accountMethodPasswordEnabled": "Set",
+    "accountMethodPasswordDisabled": "Not set",
+    "accountMethodLastChanged": "Changed on {0}",
+    "accountMethodLastLogin": "Last sign-in on {0}",
+    "accountMethodChange": "Change",
+    "accountMethodRemove": "Remove",
+    "accountMethodRemoveLastTooltip": "This is your only sign-in method. Add another before removing this one.",
+    "accountMethodRemoveConfirmTitle": "Remove this sign-in method?",
+    "accountMethodRemoveConfirmBody": "Once removed you will not be able to sign in with it. The remaining ones keep working.",
+    "accountMethodCurrentPasswordRequired": "Enter your current password to remove it.",
+    "accountCreatePasswordTitle": "Create a password",
+    "accountCreatePasswordAction": "Create password",
+    "accountMethodCreate": "Create",
+    "accountMethodLastRemaining": "This is the only way you can sign in. Add another method before removing this one.",
+    "accountMethodNotFound": "That sign-in method is not enabled on this account.",
+    "accountMethodRemoveFailed": "The sign-in method could not be removed.",
+    "accountMethodRemoved": "Sign-in method removed.",
+    "accountMethodsLoadFailed": "Your sign-in methods could not be loaded.",
     "exportCsv": "Export as CSV",
     "exportXlsx": "Export as Excel",
     "importDownloadTemplateCsv": "Download CSV template",
@@ -24578,7 +24607,7 @@
       "label": "Price List Schema"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "Matched Purchase Orders": {
       "label": "Matched Purchase Orders"
@@ -25624,6 +25653,9 @@
     },
     "Return Shipment": {
       "label": "Return Shipment"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Receipt-Invoice Link"
     }
   },
   "statuses": {
