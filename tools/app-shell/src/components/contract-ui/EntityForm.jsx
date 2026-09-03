@@ -6,13 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
-import { ChevronDown, Loader2, Search } from 'lucide-react';
+import { ArrowUpRight, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
@@ -545,7 +547,7 @@ function getReadOnlyBgClass(isReadOnly) {
  * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
  * value semantics are identical — only the commit TIMING differs.
  */
-function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled }) {
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlur, placeholder, className, required, disabled, maxLength }) {
   const [buffer, setBuffer] = useState(committedValue);
   const focusedRef = useRef(false);
   // The last value the USER actually committed (or that arrived externally while the field
@@ -592,7 +594,11 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
         // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
         // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
         const raw = e.target.value;
-        const v = (isNumber && raw.trim() === '') ? '0' : raw;
+        let v = (isNumber && raw.trim() === '') ? '0' : raw;
+        // Silently clamp to the field's declared `max` (e.g. Annual Depreciation % ≤ 100).
+        // This is a correction, not a validation — it never blocks the commit or shows a
+        // toast, unlike getNumericFieldError below which only handles `min`/`integer`. ETP-4887.
+        v = clampNumericFieldMax(f, v);
         // Re-sync the displayed buffer to the (possibly coerced) committed value.
         setBuffer(v);
         // Only COMMIT (fires the callout via onChange) when the value differs from the
@@ -612,6 +618,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
       className={className}
       required={required}
       disabled={disabled}
+      maxLength={maxLength}
     />
   );
 }
@@ -633,7 +640,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -731,6 +738,11 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     const displayValue = f.reference === 'DocumentType' && SAVED_VALUE_TRANSLATION_WINDOWS.has(windowName) && rawIdentifier
       ? (translateDocumentTypeName(rawIdentifier) ?? rawIdentifier)
       : rawIdentifier;
+    // ETP-5075 — a read-only FK whose column is in the fkNavigation registry renders as a
+    // click-through to the referenced record instead of an inert disabled input. Fails
+    // closed on every count: no registry entry, no resolvable id, or no `navigate` handed
+    // down (EntityForm is rendered outside a Router in unit tests) all keep the input.
+    const navigateTo = navigate ? resolveFkNavigation(f.column, data) : null;
     return (
       <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
         <Label
@@ -739,12 +751,23 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           data-testid="Label__a8d626">
           {label}
         </Label>
-        <Input
-          id={f.key}
-          name={f.key}
-          value={displayValue}
-          disabled
-          data-testid="Input__a8d626" />
+        {navigateTo ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(navigateTo); }}
+            className={`${FIELD_HEIGHT} inline-flex w-full items-center justify-between gap-1 rounded-md border border-border-subtle bg-card px-3 text-left text-sm text-foreground underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]`}
+            data-testid={`fk-link-${f.key}`}>
+            <span className="truncate">{displayValue}</span>
+            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
+          </button>
+        ) : (
+          <Input
+            id={f.key}
+            name={f.key}
+            value={displayValue}
+            disabled
+            data-testid="Input__a8d626" />
+        )}
       </div>
     );
   };
@@ -1082,6 +1105,16 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       // subsequent successful save must be able to clear it, not just one raised by
       // the save gate itself.
       trackSaveBlockToast(toastId);
+      return;
+    }
+    // ETP-5031: Contacts-only text-field validation (length + unsafe chars). A
+    // no-op for every other window — getContactsTextFieldError gates on
+    // windowName === 'contacts' as its first check.
+    const contactsErr = getContactsTextFieldError(windowName, f, value);
+    if (contactsErr) {
+      const toastId = `contacts-field-${f.key}`;
+      toast.error(ui(contactsErr.key, contactsErr.params), { id: toastId });
+      trackSaveBlockToast(toastId);
     }
   };
 
@@ -1118,6 +1151,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
     ) : (
       <Input
@@ -1126,7 +1160,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         data-testid={`field-${f.key}`}
         type={getInputType(f)}
         value={getFieldValue(isReadOnly, displayValue, data, f)}
-        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+        onChange={(e) => onChange?.(f.key, filterContactsInputValue(windowName, f, e.target.value), f.column)}
         onBlur={(e) => {
           if (!isReadOnly) {
             validateNumericOnBlur(f, e.target.value);
@@ -1137,6 +1171,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required && !isReadOnly}
         disabled={isReadOnly || savingField === f.key}
+        maxLength={f.maxLength}
       />
     );
     return (
@@ -1180,6 +1215,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           onBlur={() => onFieldBlur?.(f.key)}
           placeholder={placeholder}
           disabled={isReadOnly}
+          maxLength={f.maxLength}
           className={[
             'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
