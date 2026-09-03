@@ -14,7 +14,8 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
 
   useEffect(() => {
     if (!forceOpen) return;
-    setShowOrderModal(true);
+    if (forceOpen === 'invoice') setShowInvoiceModal(true);
+    else setShowOrderModal(true);
     onForceOpenHandled?.();
   }, [forceOpen, onForceOpenHandled]);
 
@@ -30,7 +31,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
 
   const handleImportOrderClick = async () => {
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('order');
       if (!shouldOpen) return;
     }
     setShowOrderModal(true);
@@ -38,7 +39,7 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
 
   const handleImportInvoiceClick = async () => {
     if (onSave) {
-      const shouldOpen = await onSave();
+      const shouldOpen = await onSave('invoice');
       if (!shouldOpen) return;
     }
     setShowInvoiceModal(true);
@@ -113,7 +114,6 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
 ) {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const pendingModal = useMemo(() => ({ current: 'order' }), []);
 
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
@@ -123,20 +123,18 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
 
   useEffect(() => {
     if (!forceOpen) return;
-    if (pendingModal.current === 'invoice') setShowInvoiceModal(true);
+    if (forceOpen === 'invoice') setShowInvoiceModal(true);
     else setShowOrderModal(true);
     onForceOpenHandled?.();
   }, [forceOpen, onForceOpenHandled]);
 
   const openOrderModal = async () => {
-    pendingModal.current = 'order';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('order'); if (!ok) return; }
     setShowOrderModal(true);
   };
 
   const openInvoiceModal = async () => {
-    pendingModal.current = 'invoice';
-    if (onSave) { const ok = await onSave(); if (!ok) return; }
+    if (onSave) { const ok = await onSave('invoice'); if (!ok) return; }
     setShowInvoiceModal(true);
   };
 

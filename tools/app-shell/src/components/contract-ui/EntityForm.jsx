@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
-import { ChevronDown, Loader2, Search } from 'lucide-react';
+import { ArrowUpRight, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
@@ -14,6 +14,7 @@ import { getContactsTextFieldError, filterContactsInputValue } from './contactsF
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
@@ -639,7 +640,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -737,6 +738,11 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     const displayValue = f.reference === 'DocumentType' && SAVED_VALUE_TRANSLATION_WINDOWS.has(windowName) && rawIdentifier
       ? (translateDocumentTypeName(rawIdentifier) ?? rawIdentifier)
       : rawIdentifier;
+    // ETP-5075 — a read-only FK whose column is in the fkNavigation registry renders as a
+    // click-through to the referenced record instead of an inert disabled input. Fails
+    // closed on every count: no registry entry, no resolvable id, or no `navigate` handed
+    // down (EntityForm is rendered outside a Router in unit tests) all keep the input.
+    const navigateTo = navigate ? resolveFkNavigation(f.column, data) : null;
     return (
       <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
         <Label
@@ -745,12 +751,23 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           data-testid="Label__a8d626">
           {label}
         </Label>
-        <Input
-          id={f.key}
-          name={f.key}
-          value={displayValue}
-          disabled
-          data-testid="Input__a8d626" />
+        {navigateTo ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(navigateTo); }}
+            className={`${FIELD_HEIGHT} inline-flex w-full items-center justify-between gap-1 rounded-md border border-border-subtle bg-card px-3 text-left text-sm text-foreground underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]`}
+            data-testid={`fk-link-${f.key}`}>
+            <span className="truncate">{displayValue}</span>
+            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
+          </button>
+        ) : (
+          <Input
+            id={f.key}
+            name={f.key}
+            value={displayValue}
+            disabled
+            data-testid="Input__a8d626" />
+        )}
       </div>
     );
   };

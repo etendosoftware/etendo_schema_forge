@@ -48,12 +48,18 @@ const LIST_COLUMNS = [
 // here until the wrapper consumes the spec's labelOverrides at runtime.
 const LABEL_OVERRIDES = {
   es_ES: {
-    OutstandingAmt: 'Pendiente de pago',
+    OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de entrega',
   },
   en_US: {
-    OutstandingAmt: 'Pending Payment',
+    OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Delivery Status',
+  },
+  // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
+  // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
+  // other columns keep their current es_AR behaviour on purpose.
+  es_AR: {
+    OutstandingAmt: 'Saldo pendiente',
   },
 };
 
