@@ -2117,7 +2117,7 @@ export function DataTable({
         className="inline-flex items-center gap-1 text-left underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
         data-testid={`fk-link-${col.key}`}>
         {rendered}
-        <ArrowUpRight className="h-3 w-3 shrink-0" />
+        <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__eb5261" />
       </button>
     );
   };
