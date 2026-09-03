@@ -400,7 +400,11 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
   it('passes LABEL_OVERRIDES and subsetFilters through to ListView', () => {
     render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-    expect(lastListViewProps.labelOverrides.en_US.OutstandingAmt).toBe('Pending Payment');
+    // ETP-5106: renamed from "Pending Payment"; es_AR was added in the same ticket,
+    // so it is asserted here too — it is the locale that had no override at all.
+    expect(lastListViewProps.labelOverrides.en_US.OutstandingAmt).toBe('Outstanding Amount');
+    expect(lastListViewProps.labelOverrides.es_ES.OutstandingAmt).toBe('Saldo pendiente');
+    expect(lastListViewProps.labelOverrides.es_AR.OutstandingAmt).toBe('Saldo pendiente');
     // ETP-4737: the former separate creditNotesTab/returnsTab subset filters
     // are unified into a single rectificativeInvoicesTab filter.
     expect(lastListViewProps.subsetFilters.map((f) => f.label)).toEqual([

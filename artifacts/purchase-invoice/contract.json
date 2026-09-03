@@ -1,8 +1,8 @@
 {
-  "version": "0.92.0",
+  "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-02T18:44:32.991Z",
-  "checksum": "e6e09be5d7e36990",
+  "updatedAt": "2026-09-03T17:04:41.261Z",
+  "checksum": "3b9aa1261a2a0422",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -51,7 +51,7 @@
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
@@ -60,11 +60,14 @@
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -5260,7 +5263,7 @@
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de recepción",
           "C_DocTypeTarget_ID": "Tipo de documento",
@@ -5269,11 +5272,14 @@
         },
         "en_US": {
           "POReference": "Document No.",
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
       },
       "subsetFilters": [
@@ -10638,7 +10644,7 @@
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
@@ -10647,11 +10653,14 @@
       },
       "en_US": {
         "POReference": "Document No.",
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     }
   },
