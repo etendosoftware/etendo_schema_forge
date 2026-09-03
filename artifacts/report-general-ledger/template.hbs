@@ -3,35 +3,71 @@
 <html><head><meta charset="UTF-8">
 <style>
 {{{css}}}
-.group-header td { border: none !important; }
-/* Nested Producto/Contacto/Proyecto → Cuenta cards (ETP-4898 "Propuesta B") — only used
-   when grouping by a dimension; the flat single-level table below is untouched otherwise. */
+/* Nested Producto/Contacto/Proyecto → Cuenta cards (ETP-4898 "Propuesta B") — used
+   when grouping by a dimension; the flat layout below (ETP-5013 follow-up) reuses
+   the same .acct-card structure, just without the outer dimension chip. */
 .dim-group { border: 1px solid #cbd5e1; border-radius: 2mm; margin-bottom: 4mm; overflow: hidden; }
-.dim-group-head { display: flex; align-items: center; gap: 3mm; background: #000000; color: #ffffff; padding: 2.5mm 4mm; }
-.dim-group-head .chip { font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.6); border-radius: 3mm; padding: 0.5mm 2mm; }
+.dim-group-head { display: flex; align-items: center; justify-content: space-between; gap: 3mm; background: var(--color-accent-highlight); color: var(--color-accent-highlight-foreground); padding: 2.5mm 4mm; border-bottom: 2px solid var(--color-primary); }
+.dim-group-head .chip { display: inline-block; line-height: 1; font-size: 8pt; font-weight: 600; color: var(--color-primary); background: var(--color-bg-stripe); border: 1px solid rgba(18,18,23,0.15); border-radius: 3mm; padding: 1mm 3mm; }
 .dim-group-head .value { font-weight: 700; font-size: 10.5pt; }
 .dim-group-body { padding: 3mm; display: flex; flex-direction: column; gap: 3mm; }
+/* Flat (ungrouped-by-dimension) layout's own account-card list — same gap
+   as .dim-group-body, no border/padding wrapper since there's no outer
+   dimension chip here (ETP-5013 follow-up). */
+.acct-cards { display: flex; flex-direction: column; gap: 3mm; }
 .acct-card { border: 1px solid #e2e8f0; border-radius: 1.5mm; overflow: hidden; }
-.acct-card-head { display: flex; align-items: center; gap: 3mm; background: #1a1a2e; color: #f3f5f8; padding: 2mm 4mm; font-size: 9pt; }
-.acct-card-head .code { font-family: var(--font-mono); font-size: 7.5pt; opacity: 0.75; }
+.acct-card-head { display: flex; align-items: center; gap: 3mm; background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; }
+.acct-card-head .code {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  font-size: 7.5pt;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: var(--color-bg-stripe);
+  border-radius: 3mm;
+  padding: 0.5mm 2mm;
+}
 .acct-card-head .name { font-weight: 600; }
-.acct-open td { font-style: italic; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0 !important; }
+.acct-open td { font-style: italic; font-weight: 700; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0 !important; }
 .acct-total td { font-weight: 700; background: #f1f5f9; border-top: 1px solid #cbd5e1 !important; }
 .acct-grand-total td { border-top: 1px solid #1a1a2e !important; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
+{{#if meta.isInteractive}}
+.gl-date-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
+.gl-date-link:hover { opacity: 0.75; text-decoration: none; }
+{{/if}}
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
+@media print {
+  .gl-date-link { color: inherit !important; text-decoration: none !important; cursor: default !important; }
+}
 </style>
 </head>
 <body><div class="report-container">
   <div class="report-header">
-    <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} {{meta.ui.records}}</div></div>
+    <div><div class="report-title">{{meta.title}}</div>
+</div>
+    {{> document-branding}}
   </div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
+  </div>
+  {{/if}}
 
 
   {{#ifCond meta.params.groupBy '!==' ''}}
   <div class="dim-groups">
     {{#each meta.groups}}
     <div class="dim-group">
-      <div class="dim-group-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{this.dimensionValue}}</span></div>
+      <div class="dim-group-head"><span class="value">{{this.dimensionValue}}</span><span class="chip">{{@root.meta.dimensionLabel}}</span></div>
       <div class="dim-group-body">
         {{#each this.accounts}}
         <div class="acct-card">
@@ -50,6 +86,7 @@
               <th style="width: 9%">{{@root.meta.labels.bPartnerId}}</th>
               <th style="width: 9%">{{@root.meta.labels.productId}}</th>
               <th style="width: 8%">{{@root.meta.labels.projectId}}</th>
+              <th style="width: 8%">{{@root.meta.labels.costCenterId}}</th>
               {{/ifCond}}
             </tr></thead>
             <tbody>
@@ -58,11 +95,11 @@
                 <td class="cell-amount">{{formatCurrency this.opening.amtacctdr}}</td>
                 <td class="cell-amount">{{formatCurrency this.opening.amtacctcr}}</td>
                 <td class="cell-amount">{{formatCurrency this.opening.total}}</td>
-                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
               </tr>
               {{#each this.rows}}
               <tr>
-                <td>{{formatDate (lookup this 'dateacct')}}</td>
+                <td><span class="gl-date-link" onclick="window.parent.postMessage({type:'gl-entry-drilldown',factAcctGroupId:'{{lookup this 'fact_acct_group_id'}}',dateDisplay:'{{formatDate (lookup this 'dateacct')}}'},'*')">{{formatDate (lookup this 'dateacct')}}</span></td>
                 <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
                 <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
                 <td class="cell-amount">{{formatCurrency (lookup this 'runningBalance')}}</td>
@@ -71,6 +108,7 @@
                 <td>{{lookup this 'bpname'}}</td>
                 <td>{{lookup this 'productname'}}</td>
                 <td>{{lookup this 'projectname'}}</td>
+                <td>{{lookup this 'costcentername'}}</td>
                 {{/ifCond}}
               </tr>
               {{/each}}
@@ -79,14 +117,14 @@
                 <td class="cell-amount">{{formatCurrency this.subtotal.amtacctdr}}</td>
                 <td class="cell-amount">{{formatCurrency this.subtotal.amtacctcr}}</td>
                 <td class="cell-amount">{{formatCurrency this.subtotal.total}}</td>
-                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
               </tr>
               <tr class="acct-total acct-grand-total">
                 <td>{{@root.meta.ui.total}}</td>
                 <td class="cell-amount">{{formatCurrency this.total.amtacctdr}}</td>
                 <td class="cell-amount">{{formatCurrency this.total.amtacctcr}}</td>
                 <td class="cell-amount">{{formatCurrency this.total.total}}</td>
-                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
+                <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
               </tr>
             </tbody>
           </table>
@@ -97,71 +135,85 @@
     {{/each}}
   </div>
   {{else}}
-  <table class="report-table">
-    <thead><tr>
-      <th style="width: 10%">{{meta.labels.dateacct}}</th>
-      <th class="cell-amount" style="width: 14%">{{meta.labels.amtacctdr}}</th>
-      <th class="cell-amount" style="width: 14%">{{meta.labels.amtacctcr}}</th>
-      <th class="cell-amount" style="width: 14%">{{meta.labels.total}}</th>
-      <th style="width: 22%">{{meta.descriptionLabel}}</th>
-      {{#ifCond meta.params.showDimensions '===' 'true'}}
-      <th style="width: 9%">{{meta.labels.bPartnerId}}</th>
-      <th style="width: 9%">{{meta.labels.productId}}</th>
-      <th style="width: 8%">{{meta.labels.projectId}}</th>
-      {{/ifCond}}
-    </tr></thead>
+  {{!-- Flat (ungrouped-by-dimension) layout (ETP-5013 follow-up) — now the
+        SAME per-account "card" structure as the grouped layout above (a
+        bordered box per account, each with its OWN header row), instead of
+        one shared <thead> over multiple <tbody> sections in a single table.
+        Matches both Classic's own General Ledger report (one bordered
+        "Acct. No." box per account) and this report's own grouped view. The
+        spacer-row hack this used to need (a bare <tbody><tr> between
+        account <tbody>s, since a margin on <tbody> isn't rendered in table
+        layout) is gone — .acct-cards' flex gap gives each card real
+        spacing now that every account is its own <div>, not a shared
+        table's row group. --}}
+  <div class="acct-cards">
     {{#each meta.groups}}
       {{#each this.accounts}}
-      <tbody>
-        <tr class="group-header group-level-0">
-          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}8{{else}}5{{/ifCond}}" style="background: #1a1a2e; color: #f3f5f8; padding: 2mm 4mm; font-size: 9pt;">
-            {{#if this.value}}<span style="font-family: var(--font-mono); font-size: 7.5pt; opacity: 0.75; margin-right: 3mm;">{{this.value}}</span>{{/if}}
-            <strong>{{this.name}}</strong>
-          </td>
-        </tr>
-        <tr class="acct-open">
-          <td>{{@root.meta.ui.initialBalance}}</td>
-          <td class="cell-amount">{{formatCurrency this.opening.amtacctdr}}</td>
-          <td class="cell-amount">{{formatCurrency this.opening.amtacctcr}}</td>
-          <td class="cell-amount">{{formatCurrency this.opening.total}}</td>
-          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
-        </tr>
-        {{#each this.rows}}
-        <tr>
-          <td>{{formatDate (lookup this 'dateacct')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'runningBalance')}}</td>
-          <td>{{lookup this 'groupbyname'}}</td>
-          {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
-          <td>{{lookup this 'bpname'}}</td>
-          <td>{{lookup this 'productname'}}</td>
-          <td>{{lookup this 'projectname'}}</td>
-          {{/ifCond}}
-        </tr>
-        {{/each}}
-        <tr class="acct-total">
-          <td>{{@root.meta.ui.subtotal}}</td>
-          <td class="cell-amount">{{formatCurrency this.subtotal.amtacctdr}}</td>
-          <td class="cell-amount">{{formatCurrency this.subtotal.amtacctcr}}</td>
-          <td class="cell-amount">{{formatCurrency this.subtotal.total}}</td>
-          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
-        </tr>
-        <tr class="acct-total acct-grand-total">
-          <td>{{@root.meta.ui.total}}</td>
-          <td class="cell-amount">{{formatCurrency this.total.amtacctdr}}</td>
-          <td class="cell-amount">{{formatCurrency this.total.amtacctcr}}</td>
-          <td class="cell-amount">{{formatCurrency this.total.total}}</td>
-          <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}4{{else}}1{{/ifCond}}"></td>
-        </tr>
-      </tbody>
+      <div class="acct-card">
+        <div class="acct-card-head">
+          {{#if this.value}}<span class="code">{{this.value}}</span>{{/if}}
+          <span class="name">{{this.name}}</span>
+        </div>
+        <table class="report-table">
+          <thead><tr>
+            <th style="width: 10%">{{@root.meta.labels.dateacct}}</th>
+            <th class="cell-amount" style="width: 14%">{{@root.meta.labels.amtacctdr}}</th>
+            <th class="cell-amount" style="width: 14%">{{@root.meta.labels.amtacctcr}}</th>
+            <th class="cell-amount" style="width: 14%">{{@root.meta.labels.total}}</th>
+            <th style="width: 22%">{{@root.meta.descriptionLabel}}</th>
+            {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+            <th style="width: 9%">{{@root.meta.labels.bPartnerId}}</th>
+            <th style="width: 9%">{{@root.meta.labels.productId}}</th>
+            <th style="width: 8%">{{@root.meta.labels.projectId}}</th>
+            <th style="width: 8%">{{@root.meta.labels.costCenterId}}</th>
+            {{/ifCond}}
+          </tr></thead>
+          <tbody>
+            <tr class="acct-open">
+              <td>{{@root.meta.ui.initialBalance}}</td>
+              <td class="cell-amount">{{formatCurrency this.opening.amtacctdr}}</td>
+              <td class="cell-amount">{{formatCurrency this.opening.amtacctcr}}</td>
+              <td class="cell-amount">{{formatCurrency this.opening.total}}</td>
+              <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
+            </tr>
+            {{#each this.rows}}
+            <tr>
+              <td><span class="gl-date-link" onclick="window.parent.postMessage({type:'gl-entry-drilldown',factAcctGroupId:'{{lookup this 'fact_acct_group_id'}}',dateDisplay:'{{formatDate (lookup this 'dateacct')}}'},'*')">{{formatDate (lookup this 'dateacct')}}</span></td>
+              <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
+              <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
+              <td class="cell-amount">{{formatCurrency (lookup this 'runningBalance')}}</td>
+              <td>{{lookup this 'groupbyname'}}</td>
+              {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+              <td>{{lookup this 'bpname'}}</td>
+              <td>{{lookup this 'productname'}}</td>
+              <td>{{lookup this 'projectname'}}</td>
+              <td>{{lookup this 'costcentername'}}</td>
+              {{/ifCond}}
+            </tr>
+            {{/each}}
+            <tr class="acct-total">
+              <td>{{@root.meta.ui.subtotal}}</td>
+              <td class="cell-amount">{{formatCurrency this.subtotal.amtacctdr}}</td>
+              <td class="cell-amount">{{formatCurrency this.subtotal.amtacctcr}}</td>
+              <td class="cell-amount">{{formatCurrency this.subtotal.total}}</td>
+              <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
+            </tr>
+            <tr class="acct-total acct-grand-total">
+              <td>{{@root.meta.ui.total}}</td>
+              <td class="cell-amount">{{formatCurrency this.total.amtacctdr}}</td>
+              <td class="cell-amount">{{formatCurrency this.total.amtacctcr}}</td>
+              <td class="cell-amount">{{formatCurrency this.total.total}}</td>
+              <td colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}5{{else}}1{{/ifCond}}"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       {{/each}}
     {{/each}}
-  </table>
+  </div>
   {{/ifCond}}
 
-  <div class="report-footer">
-    <div class="report-summary">{{meta.ui.total}}: {{meta.recordCount}} {{meta.ui.records}}</div>
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div></body></html>

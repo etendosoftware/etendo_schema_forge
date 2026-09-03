@@ -17,6 +17,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
 | A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
+| A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -26,7 +27,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
-| L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill data-fix NOT yet written — Remedy's domain, heuristic not yet human-confirmed | ETP-4830 |
+| L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -159,6 +160,16 @@ WHERE  ad_client_id = :client_id
 
 **Why this is dataset-only (no `Onboarding*Service` needed):** both tables are already in `INCLUDED_TABLES`, and neither `OnboardingAccountingWiringService` nor any other onboarding code references specific `elementtype` values or `c_acctschema` flags — they flow straight from the imported XML with zero code involvement. This mirrors the ETP-4341 "dataset-only provisioning" pattern (payment methods/terms) documented in `onboarding-and-datafixes-map.md` §1. **Decision:** no new Java service; only edit the sampledata XML + bump the CUT.
 
+> **⚠️ SUPERSEDED IN PART (2026-08-28, ETP-4947) — the `AllowNegative=Y` claim below is REVERSED.**
+> TC-38 (the Confluence Test Plan case that justified `AllowNegative=Y`) is itself being
+> retired/superseded in Confluence by the ticket owner. ETP-4947 is now the accepted requirement:
+> `C_ACCTSCHEMA.AllowNegative` must default to `N` (unchecked), remaining user-editable. This does
+> **NOT** touch `IsCentrallyMaintained` or the `CC`/`User1`/`User2` dimension rows below — those
+> stay exactly as this A3 fix left them. See gap **A3c** (further down this file) for the reversal's
+> own two-fronts closure, and `docs/etendo-ad/tenant-remediation-knowledge.md` (ETP-4947 section)
+> for the full investigation trail. The table below is left as historical record of what A3
+> originally shipped — do not rewrite it.
+
 **Both fronts closed (2026-07-06):**
 
 | Front | Deliverable |
@@ -219,6 +230,52 @@ WHERE s.ad_client_id = :client_id
 | **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
 
 See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
+
+### A3c — `AllowNegative` reverted back to N — TC-38 superseded (ETP-4947, 2026-08-28)
+
+**Symptom (Jira ETP-4947, "Corregir valor por defecto y visibilidad de campos en ventana Esquema
+Contable"):** the "Allow negative" checkbox (`C_AcctSchema.AllowNegative`) on the Esquema Contable /
+General Ledger Configuration window (`/general-ledger-configuration`, AD window 125, table
+`C_AcctSchema`) appears CHECKED by default when it should default to unchecked (`N`), while
+remaining editable.
+
+**Root cause — this is a direct reversal of A3, not a fresh gap.** A3/ETP-4245 (2026-07-06)
+deliberately flipped `AllowNegative` from `N`→`Y` on both fronts (preventive `C_ACCTSCHEMA.xml` +
+corrective `R10`), justified by Confluence Test Plan case **TC-38**. TC-38 is now itself being
+retired/superseded in Confluence by the ticket owner (Santiago Gremiger) — ETP-4947 is the accepted
+replacement requirement. Ruled out first: this is NOT a Schema Forge / frontend generator bug
+(`artifacts/general-ledger-configuration/schema-raw.json`'s AD column default is `N`, and the
+generator correctly omits `defaultValue` for a false-default checkbox) and NOT a Neo Headless
+handler bug (`GeneralLedgerConfigurationHandler.buildGeneral`/`applyGeneralChanges`,
+`src/com/etendoerp/go/schemaforge/GeneralLedgerConfigurationHandler.java:341,458`, is a pure
+passthrough with no default-injection logic — it faithfully mirrors whatever the DB row holds).
+Confirmed via `git log` that the sampledata XML's `<ALLOWNEGATIVE>` line was touched by exactly one
+commit ever (`47ff5aa8 Feature ETP-4245`), and via a live DB sweep (2026-08-28) that every
+GO-onboarded tenant on the dev DB (GOClient, DSAFSAD, 4× E2E test clients, QA Testing ×2 schemas,
+SantoEmpresa — 12/12) already carries `Y`, matching the frozen dataset default with zero variance.
+
+**Scope decision (explicit product call, not a data-driven guess):** revert **unconditionally**,
+for ALL tenants, no "was this manually set" guard. R10 itself force-set every tenant to `Y` only
+~7 weeks before this fix (2026-07-06) — there is no population of tenants who could have genuinely
+opted into `Y` independent of R10, so a blanket revert simply undoes an unwanted onboarding default.
+`IsCentrallyMaintained` (also touched by A3/R10) is explicitly **OUT of scope** — ETP-4947 concerns
+`AllowNegative` only; the CC/User1/User2 accounting-dimension rows A3 also introduced are untouched
+and remain correct.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260828T140000Z__R29-acctschema-allownegative-revert.sql` — single guarded `UPDATE c_acctschema SET allownegative = 'N' ... WHERE ad_client_id = :client_id AND allownegative = 'Y'`; does not touch `iscentrallymaintained` or `c_acctschema_element`. R10 itself is NOT retired (its other two effects stay in force). Labeled `R29` (not `R28`): two sibling in-flight branches, `feature/ETP-4706` and `feature/ETP-5019`, already claim `R28` with timestamps `20260828T120000Z` and `20260827T120000Z` respectively (neither merged yet) — confirmed via `git ls-tree` across all local branches before picking this label; `R29`'s timestamp (`20260828T140000Z`) sorts after both regardless of merge order. Static/parse tests: `cli/test/data-fixes-r29-acctschema-allownegative-revert.test.js` (16 assertions — header metadata, tenant isolation, two-layer idempotency, unconditional-scope guard). Live-validated: `--dry-run --fix 20260828T140000Z__R29-acctschema-allownegative-revert --client 802509E12436405C86BA1FD5B1DF508C` → `WOULD_APPLY — @check matched (1 row(s))` against GOClient. |
+| **Preventive** | `modules/com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` — `ALLOWNEGATIVE` reverted `Y`→`N` (the only line touched; `ISCENTRALLYMAINTAINED` stays `Y`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-08-28T14:00:00Z` in `OnboardingBaselineService.java`, with a new javadoc paragraph documenting the reversal and its rationale, plus the "Current watermark" comment updated to `R29 acctschema-allownegative-revert (2026-08-28)`. GOClient's own live `C_AcctSchema` row (`C06B100312FA48159DB36B9A4B461019`, "Esquema GO") is also reverted to `N` (confirmed via the real R29 run below), kept in sync with the dataset per the same convention A3 itself established. Regression test: A3's own `testNormalizerAccountingSchemaIsPredefinedForPosting` (`OnboardingDatasetNormalizerTest.java`) is updated in place and renamed to `testNormalizerAccountingSchemaAllowNegativeDefaultsToNo` — asserts `<allownegative>N</allownegative>` and still asserts `<iscentrallymaintained>Y</iscentrallymaintained>` (out of scope, unchanged). **Not verified by compilation** — this environment's `./gradlew test` is known-broken for `com.etendoerp.go` (`NO-SOURCE` on `compileTestJava`, see `tenant-remediation-knowledge.md`); flagged for QA to compile-check. |
+
+**Environment note (resolved):** the `com.etendoerp.go` edits (XML revert, CUT bump, watermark
+comment, and the updated JUnit test) were initially blocked by this session's tooling permission
+boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
+writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
+allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
+working tree was clean) — all deliverables above were then completed on that branch. All changes in
+both repos remain **unstaged/uncommitted**, pending REVIEW.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 
@@ -683,6 +740,88 @@ remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no
 
 ---
 
+### A7 — A single new named ledger account missing from an already-provisioned chart (ETP-4872, 2026-08-30)
+
+**Symptom:** ETP-4872 introduces accounting defaults for a new Tarjeta/Card `FIN_FinancialAccount`
+type. Those defaults need a brand-new ledger account, `57210` ("Tarjetas de crédito, euros"), as a
+sibling of the existing `57200` bank account under the `572` group. Tenants onboarded before this
+account existed in the chart have no such row — not a wiring gap on an existing account (A2's
+shape), and not the whole chart missing (A1's shape); the account definition itself is simply
+absent. This is a reusable gap SHAPE (a new account/document-type rollout needing a specific new
+`C_ELEMENTVALUE` added retroactively to already-provisioned tenants), of which `57210` is the first
+instance filed under this letter — ETP-4402's `417`/`4170`/`41700000` chain (`R9-bp-category-seed`,
+filed under `@gap: ETP-4402` before this letter existed) is the same shape in hindsight.
+
+> **Label note (2026-08-30):** this gap was originally filed as `A6`, which collided with the
+> pre-existing `A6` (Asset group "Genérico" consolidation, ETP-4539, §A above — see
+> `tenant-remediation-knowledge.md`) — a completely unrelated table (`A_Asset_Group`). Caught in
+> review before merge; relabeled `A7` across this doc, `tenant-remediation-knowledge.md`,
+> `onboarding-and-datafixes-map.md`, and the `.sql` header. No functional impact — `@gap` is a
+> documentation/categorization tag only, never stored in `ETGO_DATA_FIX_HISTORY` or read by the
+> runner (same class of drift as the `H1`→`H3` relabel documented above).
+
+**Root cause:** not a bug — a new account genuinely did not exist at the time earlier tenants were
+onboarded. Structural facts confirmed live against the shared dev/Experimental DB (2026-08-30, 20
+real+demo tenants with a wired `AC` accounting-schema element):
+
+- The tree is 3 levels: `572` (group) → `5720` (subgroup) → `57200` leaf — not 2. A new sibling
+  leaf needs its own new sibling subgroup (`5721`), not a leaf hung directly off `572`.
+- `C_ELEMENTVALUE.VALUE` width for the existing `57200` leaf is NOT uniform: 18/20 tenants (R8's
+  8-digit padding, ETP-4247) carry `57200000`; 2 (F&B International Group, QA Testing) never got
+  R8 applied and still carry the plain 5-digit `57200`. A fix that hardcodes either width silently
+  corrupts the other half of the fleet — the new leaf's width must be derived per-tenant from its
+  own `57200` sibling.
+- `C_VALIDCOMBINATION.ALIAS`/`COMBINATION` do NOT track `C_ELEMENTVALUE.VALUE`'s width even on
+  8-digit tenants (GOClient's own `57200000` leaf has `ALIAS=COMBINATION='57200'`, 5-digit) — an
+  artifact of R8 apparently having run with triggers disabled, so it never widened the
+  already-existing combinations. The standard `C_ElementValue_trg()` (fires reliably on an INSERT
+  made through the data-fix runner's plain-SQL transaction, per the ETP-4402/R9 precedent)
+  auto-creates the new leaf's combination with `ALIAS=COMBINATION=<full value>` — which must be
+  explicitly truncated to `LEFT(value, 5)` afterward to match the tenant's own established
+  convention, or the new account reads inconsistently next to its own sibling on the same chart.
+
+**Fix:** `cli/src/data-fixes/sql/20260830T120000Z__R30-financial-account-card-ledger-account.sql` —
+resolves the target element ONLY via `C_AcctSchema_Element.elementtype='AC'` (never a bare
+`value='572'` match, so GOClient's orphan second `C_Element` chain, see the ETP-4402/R9 precedent,
+is never touched); inserts `5721` (fixed 4-digit) and the new leaf (`57210` or `57210000`, derived
+from the tenant's own `57200` sibling); re-parents both auto-created-at-root `AD_TREENODE` rows;
+normalizes the auto-created `C_VALIDCOMBINATION`'s alias/combination width. Live-validated
+end-to-end (real run, not just a rolled-back tx) across all 19 real+demo tenants with a wired `AC`
+element on the shared dev DB: GOClient/SantoEmpresa/16 others → `APPLIED (5 rows)` (8-digit branch,
+including the combination-normalize step); F&B International Group/QA Testing → `APPLIED (4 rows)`
+(5-digit branch, where the normalize step correctly no-ops since the trigger's own output already
+matches); full re-run → 19/19 `SKIPPED_NOT_NEEDED`, confirming idempotency in both width branches.
+
+> **Caveat (2026-08-31, QA rejection follow-up — see `tenant-remediation-knowledge.md`'s "R30 QA
+> rejection" entry for the full investigation):** the "ONLY via `C_AcctSchema_Element`" claim above
+> is accurate for `@check` and Steps A/B, but NOT literally true for Steps C/D/E (the two
+> `AD_TREENODE` reparents and the `C_VALIDCOMBINATION` normalize) — those resolve their target rows
+> by plain `value` equality (`5721`/`57210`/`57210000`), paired to the row this SAME apply just
+> inserted via `c_element_id` equality between the joined aliases, never via
+> `C_AcctSchema_Element` itself. Live-verified this is harmless in practice (GOClient's own orphan
+> chain, and every other tenant's, never carries a `5721`/`57210`/`57210000` value on more than one
+> element), but that's an unstated invariant the SQL relies on, not something the joins enforce.
+> R30 is already `APPLIED` fleet-wide, so left as-is (immutable migration) rather than edited —
+> flagging here so the next reader doesn't take the "ONLY via" claim as a hard guarantee for a
+> future fix copying this pattern.
+
+**Preventive:** already shipped — ETP-4872 Task 5, `com.etendoerp.go` branch
+`feat/ledger-account-57210` (unmerged at the time this corrective fix was authored), extending
+`referencedata/sampledata/GOClient/{C_ELEMENTVALUE,C_ELEMENTVALUE_TRL,C_VALIDCOMBINATION,
+AD_TREENODE}.xml`. **`ONBOARDING_PROVISIONED_THROUGH` was deliberately NOT bumped by this
+corrective fix** — bumping it requires both the preventive dataset branch and this SQL to be merged
+first (the CUT is read by the LIVE onboarding path in `com.etendoerp.go`, a different repo/branch
+than this fix), and the current CUT (`2026-08-26T12:00:00Z` at authoring time) already sits behind
+several other unbumped, individually-unverified intervening fixes (R27/R28/R26-acct-rpt-definitions/
+the sibling R29) — bumping past all of them on this fix's say-so risks silently skipping one of
+theirs for a brand-new tenant, mirroring the ETP-5019/R28 precedent exactly. **Follow-up for
+whoever merges both the preventive dataset branch and this corrective `.sql`:** bump
+`ONBOARDING_PROVISIONED_THROUGH` to this fix's own timestamp (`2026-08-30T12:00:00Z`) ONLY once
+both are confirmed merged, or defer to whoever next legitimately re-verifies the whole unbumped
+chain.
+
+---
+
 ## B — Organization Hierarchy
 
 ### B1 — Empty `AD_ORG_TREE` (organization hierarchy)
@@ -1041,6 +1180,19 @@ GOClient's original Average rule (`isvalidated='Y'`, no `M_Costing_Rule_Init` ro
 
 **Open question, not blocking (per the ticket's own allowance):** whether `iscostcalculated='N'` on a tenant with no rule at all blocks document posting was not conclusively confirmed this session — worth a follow-up check, but every symptom observed (transactions exist and post; only the cost-calculation flag stays `'N'`) suggests it is a background/async concern rather than a synchronous posting blocker.
 
+### J2 — Standard-cost tenants missing initial product costs (ETP-4706 QA follow-up, 2026-08-28)
+
+**Symptom:** Goods Receipt posting can surface core `InvalidCostWhichProduct` as the raw English text `There is no cost defined for the product: @Product@ on @Date@`. In Etendo Go this is treated as a transient cost-not-ready condition for the user, not as a request to understand or configure costing rules.
+
+**Root cause:** R18 only seeded Average-cost anchors (`M_Costing.CostType='AVA'`). After the Standard-cost direction landed, core posting looks for Standard cost definitions through `CostingUtils.getStandardCostDefinition`, which accepts `CostType='STA'` and then legacy `CostType='ST'`; an AVA row is invisible to that lookup.
+
+**Both fronts closed (2026-08-28):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/retired.json` retires `R18-stuck-average-cost-anchor` so new runs do not seed obsolete Average-cost anchors. `cli/src/data-fixes/sql/20260828T120000Z__R28-standard-cost-anchor.sql` inserts one manual `M_Costing` row with `CostType='STA'` for each product/cost organization found on unposted Goods Receipt / Goods Shipment lines under an active validated Standard rule, when no active Standard/legacy Standard cost covers the first needed accounting date. The row is open-ended unless a later Standard/legacy Standard cost definition already exists, in which case it is bounded to that next start date. Unit cost is resolved from purchase price, then sales price, then a non-zero placeholder `1`; that placeholder is only an unblocker and requires follow-up finance review/correction where used. |
+| **UX** | `tools/app-shell/src/lib/backendErrors.js` maps core `InvalidCostWhichProduct`'s unresolved-placeholder literal to the existing `backendError.costNotCalculated` copy, so Spanish sessions show "El costo del producto aún no ha sido calculado..." rather than raw English/costing-rule details. |
+
 ---
 
 ## K — Accounting Dimension Display Configuration
@@ -1121,11 +1273,19 @@ same convention as `AD_Role.EM_ETGO_Show_Acct_Fields`) that flags the ONE user w
 self-service registration for a client, that client's "owner" — used to lock down PUT/PATCH and
 role-reassignment on that user's own `AD_User` record to the owner alone. Because the column
 defaults `'N'`, every tenant provisioned BEFORE this column shipped reads back with **zero**
-owner-flagged users, so both enforcement checks
-(`UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`,
-`UserRoleCompositionService#enforceOwnerProtection`) are silent no-ops for them — not a security
-hole (nothing is left more permissive than before this ticket), just a feature that has not yet
-reached tenants that already existed.
+owner-flagged users, so `UserRoleAssignmentHandler#rejectNonOwnerEditingOwner`'s PUT/PATCH guard is
+a silent no-op for them — not a security hole (nothing is left more permissive than before this
+ticket), just a feature that has not yet reached tenants that already existed.
+
+**`UserRoleCompositionService#enforceOwnerProtection` is only a PARTIAL no-op for these tenants
+(ETP-5019 update):** it now also rejects role composition for any user who CURRENTLY holds the
+client-admin role — a signal read live off `AD_Role.is_client_admin`, entirely independent of the
+`EM_ETGO_Is_Owner` backfill. Because a tenant's owner IS, by construction, its client-admin role
+holder, a pre-existing tenant's real admin user is already protected against the self-overwrite
+bug ETP-5019 fixed (composing a template role onto the admin silently replacing their Admin role
+with a fresh personal role), even with zero owner-flagged rows. Only an unflagged non-admin edge
+case would still fall through unprotected until the backfill lands. Full mechanism:
+`com.etendoerp.go`'s `docs/neo-headless.md` §8d.
 
 **Root cause:** the column is only auto-set going forward, once, right after
 `EtendoGoJwtServlet#createClient` provisions a BRAND NEW client
@@ -1144,10 +1304,25 @@ the pre-existing, auto-granted `is_client_admin='Y'` "Company Admin" role, not a
 composition role). ETP-4877's Jira description was rewritten to own owner-detection and
 personal-role backfill as mutually-exclusive steps of the same script, resolving the owner FIRST
 and excluding them from the personal-role pass. This is still a one-time backfill data-fix
-(Remedy's domain, `cli/src/data-fixes/`), **NOT yet written as of this writing** — ETP-4877 remains
-in **Defined** status, ticket text only. Candidate owner-detection heuristic — **NOT yet
-human-confirmed; do not run against real tenant data before it is sanity-checked** — the
-earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED` ascending.
+(Remedy's domain, `cli/src/data-fixes/`) — **shipped 2026-08-26** as
+`20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit.sql`. The candidate owner-detection
+heuristic (earliest-created `is_client_admin`-holding `AD_User` per client, ordered by `CREATED`
+ascending) is now confirmed and implemented: R26 Step 0 mirrors `OwnerSupport
+#markAsOwnerIfNoneExists`'s own atomic "UPDATE ... WHERE NOT EXISTS (already has an owner)" shape,
+just with the target resolved by this heuristic. Live-validated (2026-08-26, rolled-back
+transactions) across all 41 real tenants on the local dev DB: idempotent convergence confirmed for
+every tenant, including the one edge case found (`QA Testing` has ZERO `is_client_admin` holders —
+Step 0 is correctly a safe no-op there, surfaced via R26's own `@report` as `no_owner_candidate`
+rather than silently skipped). R26 also closes ETP-4877 items 1/3/4/5 (personal-role backfill from
+current access, org-access/defaults backfill for pre-existing personal-role holders, and
+`AD_User_Roles` single-active-row cleanup) in the same file, plus a mid-delivery scope addition
+(`AD_Role.EM_ETGO_Show_Acct_Fields` derived-flag sync, retroactive half in R26 Step 8, "going
+forward" half in `UserRoleCompositionService#syncShowAccountingFieldsFlag`, Java). The sibling
+`20260826T121500Z__R27-deactivate-r16-duplicate-roles.sql` closes item 6 (deactivates confirmed-
+unused R16-era per-client role clones); `R16` itself is retired permanently via the new
+`cli/src/data-fixes/retired.json` mechanism (item 7) — see `run.js`'s `loadRetiredList`/
+`verifyRetiredList`/`loadCatalogWithRetirement`. Full detail: `onboarding-and-datafixes-map.md`'s
+L1 row and `tenant-remediation-knowledge.md`'s ETP-4877 section.
 
 The full mechanism (assignment point, both enforcement paths, rollout/no-op-until-backfilled
 behavior) is documented in `com.etendoerp.go`'s `docs/neo-headless.md` §7 item 10 — deliberately
@@ -1156,9 +1331,294 @@ the still-open corrective half through the same catalog every other two-front ga
 uses, per this repo's own root `CLAUDE.md` convention ("Etendo AD findings go in
 `docs/etendo-ad/`, NOT in per-window artifacts").
 
-**Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **NOT YET
-IMPLEMENTED**, scope consolidated into and now tracked entirely under **ETP-4877** (Defined,
-2026-08-24) — flagged here per this document's own "flag, don't silently skip" convention.
+**Status:** preventive front shipped (2026-08-20, ETP-4830); corrective backfill **SHIPPED**
+2026-08-26 under **ETP-4877** (`R26-tenant-owner-and-personal-role-retrofit.sql` +
+`R27-deactivate-r16-duplicate-roles.sql`, plus the R16 retirement mechanism and the
+`EM_ETGO_Show_Acct_Fields` derived-flag sync). Both fronts now closed.
+
+### L2 — `AD_User.Email` NULL for pre-existing tenant owners (ETP-5019)
+
+**Symptom:** every `EM_ETGO_Is_Owner='Y'` `AD_User` row has `Email IS NULL` — the owner's "Correo
+electrónico" field renders empty in the Users window. Confirmed by direct query: 69/69 owners on
+this DB, 2026-08-27. Distinct from L1 (which is about the owner FLAG being unset) — this is about
+a genuinely different column on the SAME row, and can occur even for a tenant whose owner flag
+was already correctly backfilled by L1's fix (the flag and the email are two unrelated writes).
+
+**Root cause:** core Etendo's `InitialSetupUtility#insertUser` (the primitive
+`InitialClientSetup` calls to provision a brand-new client's admin `AD_User`) sets
+`Name`/`Description`/`Username` but never `Email` — so the column is genuinely `NULL` in the DB
+after onboarding, not a frontend display bug. Same root-cause shape as L1: a column onboarding
+never wrote, only auto-set going forward once the preventive fix ships.
+
+**Email source (the crux — do not use `Username` blindly):** `AD_User.Username` is NOT reliably
+the owner's real account email. Onboarding names the FIRST environment a founder creates after
+their plain account email, and every LATER environment
+`<accountEmail>+<clientName>` (`EtendoGoJwtSupport#buildClientUsername`) to dodge the
+`AD_User.Username` uniqueness constraint — so an owner who is the founder of a second (or later)
+tenant under the same account has a suffixed username that is NOT their email as-is. The
+canonical, already-proven-in-production inverse of that naming is
+`GoAccountResolver#findAccountByUsername` (`com.etendoerp.go/.../common/GoAccountResolver.java`)
+— used by `EtendoGoJwtDalHelper#findAccountForEnvironmentUser` to resolve a RETURNING owner's
+identity on every login: try an exact `username = account.email` match first; if that misses,
+split the username on the LAST `'+'` (never the first — the client-name suffix alphabet is
+`[a-z0-9]` only, so it can never itself contain `'+'`, which keeps a legitimately plus-addressed
+account email like `user+tag@example.com` intact) and retry the exact match on the prefix. The
+corrective fix mirrors this exact two-step resolution in SQL rather than inventing a new
+heuristic, so it can never disagree with the runtime login path about whose email a given owner
+really has.
+
+**Preventive front (shipped same session, ETP-5019, commit `986b543a`):**
+`EtendoGoJwtSupport#applyClientAdminEmail(username, email)`, called from
+`EtendoGoJwtServlet#resolveOrCreateClient` right after the existing `applyClientAdminDisplayName`
+call, backfills `Email` at client-creation time from `accountEmail` (the verified
+login/registration email held on the founder's `ETGO_Account` — NOT `clientUser`/`username`,
+which may carry the client-name suffix above). New tenants onboarded from this deploy onward are
+born with `Email` already set.
+
+**Corrective fix:** `20260827T120000Z__R28-owner-email-backfill.sql` — resolves each
+`EM_ETGO_Is_Owner='Y'` row with `Email IS NULL` against `ETGO_Account` using the exact same
+exact-then-suffix resolution as `GoAccountResolver#findAccountByUsername`, then backfills
+`Email`. Live sweep (2026-08-27): 69/69 owners resolved via the exact branch alone (no owner on
+this DB currently has a suffixed username) — 0 ambiguous, 0 left unresolved; verified end-to-end
+in a rolled-back transaction against `acreedortest` (`@check` 1 row → `@apply` 1 row → `@report`
+empty → re-`@check` 0 rows) before running for real. **Run for real against the shared dev DB
+(2026-08-27T14:18:28Z), full tenant universe:** 69 `APPLIED` / 26 `SKIPPED_NOT_NEEDED` (owner
+already had an email) / 0 `FAILED` — matching the earlier dry-run exactly. A subsequent re-run
+confirmed convergence: 0 rows left needing the fix (all tenants `SKIPPED_NOT_NEEDED`), proving
+idempotency in production, not just in a rolled-back transaction.
+
+**`ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped.** The current CUT
+(`2026-08-11T12:00:00Z`, R23) predates four intervening fixes (`R24`×2, `R25`×2, and the L1
+`R26`/`R27` pair above) that this session did not individually re-verify each have their own
+preventive front shipped. Bumping the single shared CUT constant past all of them to match R28's
+timestamp would risk silently skipping one of THEIR corrective fixes for a brand-new tenant if
+any turns out to be corrective-only — exactly the mistake the framework's own "never bump CUT
+without confirming every intervening fix's preventive parity" rule exists to prevent. Per the
+framework's documented trade-off table, shipping the `.sql` + preventive without a CUT bump is
+always safe (a new tenant's `@check` is a cheap no-op skip, since `Email` is already set by the
+preventive fix above) — merely redundant, never incorrect.
+
+**Status:** preventive front shipped (2026-08-27, ETP-5019); corrective `.sql` written,
+live-validated in a rolled-back transaction, then **run for real against the shared dev DB**
+(2026-08-27T14:18:28Z) — 69 owners backfilled, 26 already had an email, 0 failures; a re-run
+confirmed 0 rows remaining (idempotent).
+
+---
+
+## N — GL Item Provisioning
+
+### N1 — Pre-ETP-5020 subaccounts have no `C_Glitem`/`C_Glitem_Acct` pair (ETP-5101 S2.2, 2026-09-01)
+
+**Symptom:** posting through a leaf chart-of-accounts subaccount ("Cuenta contable") relies on an
+invisible `C_Glitem`/`C_Glitem_Acct` pair behind it (Etendo Classic's posting engine routes journal
+entries through GL Items, not the subaccount directly). ETP-5020 made subaccount creation
+auto-provision that pair, but only forward-looking — a subaccount created BEFORE ETP-5020 shipped
+(2026-08-30), and never PUT/re-saved since, has none, and nothing retroactively creates one.
+Confirmed live on this DB (2026-09-01): every real+demo tenant is missing the vast majority of its
+GL Items — GOClient itself (only 2 pre-existing hand-made rows, "Capital social"/"Sueldos y
+salarios") is missing all 658 of its ~658 postable leaves.
+
+**Root cause:** `GlItemProvisioningSupport#ensureGlItemForSubaccount`
+(`com.etendoerp.go/.../schemaforge/handlers/GlItemProvisioningSupport.java`) is called from exactly
+two live entry points — `ChartOfAccountsHandler#afterHandle` (a live POST/PATCH through the NEO
+"chart-of-accounts" window) and `OnboardingAccountingWiringService#provisionGlItemsForImportedChart`
+(a new tenant's bulk chart-of-accounts import). Neither fires retroactively for a pre-existing,
+untouched subaccount.
+
+**Preventive front: ALREADY CLOSED, in a separate, earlier ticket (ETP-5020, merged 2026-08-30).**
+No new preventive Java in this ticket — `GlItemProvisioningSupport`/`ChartOfAccountsHandler` were
+explicitly out of scope. This is a deliberately corrective-only gap per the framework's own
+boundary rule (`onboarding-and-datafixes-map.md` §0): "a gap that is purely about existing-tenant
+state with no onboarding-process cause... may be corrective-only". A tenant onboarded (or
+subaccount created) after 2026-08-30 already gets its GL Items minted live; this fix's own `@check`
+naturally converges to 0 rows for such a subaccount regardless of the
+`ONBOARDING_PROVISIONED_THROUGH` watermark.
+
+**`ONBOARDING_PROVISIONED_THROUGH` bumped anyway**, to `2026-09-01T14:00:00Z` (R31's own
+timestamp) — mirrors the A2c/ETP-4743 precedent: ETP-5020's preventive fix shipped without ever
+bumping the CUT for it (deferred exactly until its corrective twin existed in the repo, per "never
+bump CUT without matching `.sql` already in the repo"). This bump is a pure optimization (skip even
+running `@check` for tenants onboarded after the bump), not a correctness dependency.
+
+**Corrective fix:** `20260901T140000Z__R31-glitem-subaccount-backfill.sql` — one coupled,
+single-statement `@apply` (data-modifying CTEs, the same "coupled 1:1... via a data-modifying CTE"
+technique R18/R28 established for this framework): resolves each leaf subaccount's natural
+all-dimensions-NULL `C_ValidCombination` per active `C_AcctSchema` (mirroring
+`resolveNaturalCombination`'s exact 11-dimension shape), reuses an existing GL Item when the
+subaccount already has one on ANY schema (mirrors `findGlItemLinkedToAnyCombinationOf` — verified
+against this DB's own hand-made GL Items, e.g. "Capital social"/"Sueldos y salarios", which were
+correctly reused, not duplicated), and otherwise mints exactly one new `C_Glitem` row per
+subaccount (`composeGlItemName`'s ETP-5101 `"<code>-<name>"` format, code leading) shared across every schema
+that needs one. Idempotency key is the natural combination itself (`glitem_debit_acct`), never the
+GL Item name, matching the Java's own documented key choice.
+
+Live-validated in rolled-back transactions (2026-09-01/02, before and after the N2 truncation fix
+below):
+- **GOClient** (1 active schema, 658 missing pairs): `@apply` inserted all 658 rows (0 skipped —
+  N2 fixed means nothing is length-blocked anymore); `@check` after converges to 0 rows; re-run
+  inserted 0 (idempotent); the 2 pre-existing manual GL Items stayed at exactly 1 row each
+  (reused). All 294 previously-blocked rows (composed name > 60 chars) checked byte-for-byte
+  against a reference reimplementation of `truncateToFit`: 0 mismatches.
+- **QA Testing** (2 active schemas, 61 distinct subaccounts needing a new item): `@apply` inserted
+  61 rows; 3 GL Items ended up linked to BOTH schemas (multi-schema reuse); `@check` after
+  converges to 0; re-run inserted 0.
+
+Three real bugs were found and fixed DURING this fix's own live validation (see
+`tenant-remediation-knowledge.md` for the durable write-ups):
+1. `get_uuid()` called inside a `SELECT DISTINCT` (before dedup) minted a different id per schema
+   for the same subaccount, violating `c_glitem_acct_glitem_acctsc_un` — fixed by deduplicating
+   subaccounts into their own CTE before minting any id.
+2. QA Testing carries two genuine duplicate all-dimensions-NULL `C_ValidCombination` rows for the
+   same (subaccount, schema) pair — fixed with `DISTINCT ON` (lowest combination id wins), mirroring
+   `resolveNaturalCombination`'s own `ORDER BY id ASC / setMaxResults(1)`.
+3. `@check` originally iterated every raw combination row (not deduplicated), so for those same 2
+   QA Testing subaccounts it kept reporting NEEDS FIX forever even AFTER a fully successful
+   `@apply` had closed everything it legitimately could — the exact
+   `@check`-promises-more-than-`@apply`-can-deliver asymmetry Sentinel caught in R22/ETP-4743.
+   Fixed by rewriting `@check` to use the identical `DISTINCT ON` dedup as `@apply`'s own
+   `natural_combos` CTE, so the two are symmetric by construction.
+
+A real, committed (non-rolled-back) run through the actual runner CLI against a disposable E2E test
+tenant was attempted and blocked by this environment's write-approval gate; its dry-run leg
+confirmed `WOULD_APPLY — @check matched (1 row(s))` through the real runner path.
+
+**Status:** preventive front closed by ETP-5020 (separate, earlier ticket); corrective `.sql`
+written and live-validated in rolled-back transactions on GOClient and QA Testing (full
+convergence, both before N2 was found and after it was fixed); CUT bumped.
+
+---
+
+### N2 — `C_Glitem.Name` (varchar(60)) is too short for `composeGlItemName`'s composed format (discovered 2026-09-01, FIXED 2026-09-02)
+
+**Symptom:** `composeGlItemName`'s concatenated format (ETP-5101 §2.1) originally had no length
+guard, but `C_Glitem.Name` is `varchar(60)` while `C_ElementValue.Name` is `varchar(255)`.
+Spanish PGC account names routinely exceed that once the 8-digit code is appended — e.g. "Reversión
+del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo otras partes
+vinculadas 79620000" (124 chars). Confirmed live: **294 of GOClient's 658 leaf subaccounts (45%)**
+needing a brand-new GL Item exceeded the limit.
+
+**This affected BOTH fronts, silently — not just the backfill.**
+`GlItemProvisioningSupport#ensureGlItemForSchema` wraps each schema's provisioning in its own
+try/catch that logs a warning and continues (the class's documented best-effort contract: a GL
+Item defect must never block the subaccount save). A save that hit this length limit failed OBDal's
+length validation, was silently swallowed, and left that subaccount without a GL Item forever —
+indistinguishable from the N1 gap. In other words: a NEW tenant onboarded, or an existing tenant
+creating a new long-named subaccount, could STILL end up with a missing GL Item on the live
+preventive path, purely because of this length limit.
+
+**Fixed, same session, on BOTH fronts:**
+- **Preventive (Java, `GlItemProvisioningSupport`):** `composeGlItemName` + a new `truncateToFit`
+  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Format is `"<searchKey>-<name, truncated to fit>"` — the
+  code leads (it is the more useful sort/scan key in a flat GL Item list) and always survives
+  intact; the NAME portion is truncated, hard cut (`String#substring(0, n)`, no ellipsis). Budget
+  when a code is present: `60 - (1 + code.length())`; `60` flat otherwise.
+- **Corrective (`R31-glitem-subaccount-backfill.sql`):** mirrors the EXACT same formula in SQL
+  (`left(str, n)` is Postgres's `String#substring(0, n)`; `GREATEST(..., 0)` mirrors Java's
+  `Math.max(0, maxLength)`), so both fronts converge on byte-identical GL Item names — not merely
+  "no longer diverges going forward". Verified with 0 mismatches across all 294 previously-blocked
+  GOClient rows against a reference reimplementation of the Java formula. The length guard that
+  used to skip a subaccount entirely is gone — nothing is skipped anymore, every composed name fits
+  by construction. `@report` now lists which subaccounts actually got a truncated (not verbatim)
+  name, matched by exact equality against the deterministic truncation formula (so a pre-existing,
+  reused, differently-named manual GL Item is correctly excluded, never mislabeled as truncated).
+
+**Status:** FIXED on both fronts (2026-09-02). No follow-up ticket needed for the length limit
+itself; widening `C_Glitem.Name` to 255 remains a possible FUTURE cosmetic improvement (truncated
+names are still functional and disambiguated by their code) but is no longer a correctness gap.
+
+---
+
+### N3 — `C_Glitem.Name` goes stale after an already-linked GL Item's subaccount is renamed (ETP-5101, 2026-09-02)
+
+**Symptom:** a leaf subaccount ("Cuenta contable") whose GL Item is ALREADY linked (i.e. it is not
+the N1 "no GL Item at all" gap) can still carry a `C_Glitem.Name` that no longer matches what
+`composeGlItemName` would produce from the subaccount's CURRENT name/code — nothing retroactively
+resyncs it. Confirmed live on this DB (2026-09-02, rolled-back transaction, current un-migrated
+state — R31 itself has only ever been dry-run/rolled-back here, never committed): GOClient has
+exactly ONE stale-named linked GL Item — the hand-made "Capital social" row, still its
+pre-ETP-5101 bare name (`"Capital social"`) instead of the expected `"10000000-Capital social"`.
+QA Testing has THREE: two DIFFERENT GL Items (`"GL Item 1"`/`"GL Item 2"`) both linked to the SAME
+subaccount (`"11100-Petty Cash"`, one per active schema) — a genuine pre-existing
+multi-GL-Item-per-subaccount state, not a duplicate to collapse away — plus one (`"Fees"`,
+subaccount `"62900-Otros servicios"`).
+
+**Root cause:** `GlItemProvisioningSupport#ensureGlItemForSchema`'s existing-link branch (the
+branch that fires when `findGlItemAccountsByCombination` already finds a link for the subaccount's
+natural combination on a given schema) DOES already call `syncGlItemName` unconditionally — but
+only when that Java code path actually runs, i.e. on a live POST/PATCH/PUT through
+`ChartOfAccountsHandler`. A subaccount whose GL Item was linked BEFORE the current naming
+convention existed — name-only (pre-ETP-5101), name-then-code (`composeGlItemName`'s original
+order, flipped code-first the same session), or a hand-authored row predating ETP-5020
+auto-provisioning entirely — and never PUT/re-saved since that convention changed, keeps its stale
+name forever. This is the SAME "born correct once, drifts, nothing heals it" shape as N1/N2, given
+its own label per this file's own precedent (a fresh N-suffix per distinct symptom under one gap
+letter, same series as N1/N2).
+
+**Preventive front: ALREADY CLOSED, same session, no new Java in this ticket.**
+`ChartOfAccountsHandler#afterHandle`'s PATCH/PUT branch now calls a new private method,
+`syncGlItemNameAfterUpdate(context)`, whenever the request body touches `name` or `searchKey` — it
+re-invokes `GlItemProvisioningSupport#ensureGlItemForSubaccount`, whose existing-link branch
+already unconditionally resyncs the linked GL Item's name via `syncGlItemName`. So a live rename
+now self-heals going forward; this data-fix is corrective-only, closing the gap for tenants whose
+GL Items are ALREADY linked with a stale name and have not been touched by a rename since that fix
+shipped. `ONBOARDING_PROVISIONED_THROUGH` is deliberately NOT bumped for this fix — out of scope
+for this ticket (`com.etendoerp.go` untouched by this data-fix's own author) and safe per the
+framework's own table ("only the `.sql`, no CUT bump" is always safe, merely redundant for
+tenants the preventive front already covers): a subaccount touched by a live PUT since the
+preventive fix shipped already has a correct name, so this fix's own `@check` naturally converges
+to 0 for it regardless of the CUT watermark, exactly like N1's own reasoning.
+
+**Deliberately NOT excluding hand-made GL Items — a design decision, not an oversight.** R31's own
+header says its reuse path "never touches the GL Item's name" — that describes R31's OWN
+deliberately narrow choice (it only INSERTs missing links, never UPDATEs an existing row), not a
+statement that a hand-made row is permanently protected from renaming. The live Java's
+`ensureGlItemForSchema` existing-link branch unconditionally resyncs the name for ANY
+already-linked GL Item, hand-made or not — confirmed live: GOClient's own "Capital social" (one of
+the 2 pre-ETP-5020 manual rows) is precisely the ONE row this fix's `@check` flags today. The
+moment that subaccount is next renamed via a live PUT, `ChartOfAccountsHandler` already overwrites
+its GL Item name with the composed format too — this fix simply does the same thing
+proactively/in bulk instead of waiting for that PUT.
+
+**Corrective fix:** `cli/src/data-fixes/sql/20260902T090000Z__R32-glitem-name-resync.sql` — a
+single guarded `UPDATE c_glitem`, keyed by the same natural-combination lookup R31 established
+(11-dimension all-NULL `C_ValidCombination`, `DISTINCT ON` dedup, textually identical between
+`@check` and `@apply` per the R22/N1 symmetry lesson), joined to `c_glitem_acct` via
+`glitem_debit_acct` to find each subaccount's ALREADY-linked GL Item. A `DISTINCT ON
+(gi.c_glitem_id)` dedup in `resync_candidates` collapses the "same GL Item reused across 2+
+schemas" case to one candidate row (update it once, not once per schema link) while correctly
+leaving QA Testing's genuinely-distinct-per-schema "Petty Cash" GL Items as two separate candidate
+rows (both resolve to the same expected name, since the composed name depends only on the
+subaccount). Guarded by `WHERE gi.name IS DISTINCT FROM <composed expected name>` both in the
+candidate CTE and again on the `UPDATE` itself (two-layer idempotency), and by `ad_client_id =
+:client_id` on every statement. `@report` captures the `UPDATE ... RETURNING`'s old/new names into
+a session-scoped `TEMP TABLE` (populated inside `@apply`, read by the separate `@report` query —
+safe because the runner keeps `@apply`/`@report` on the same DB connection/transaction, and the
+temp table is fully undone by `ROLLBACK` when the run doesn't commit). **A COMMITted temp table is
+NOT dropped just because the connection is later returned to the pool** (`client.release()` does
+not issue `DISCARD ALL`/end the backend session, and this framework's pool is reused across
+tenants) — ETP-5101 REVIEW FINDING B2, caught before merge. Since R32 runs per-tenant, a second
+tenant reusing the same pooled connection would otherwise hit `relation ... already exists` and
+abort. `@apply` therefore leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync`
+before its data-modifying CTE, making every run self-cleaning regardless of connection reuse. It
+lists every subaccount whose GL Item name actually changed this run, old name → new name — mirrors
+R19/R31's `@report` intent but needs the pre-image, unlike R31's own simpler post-apply recompute.
+
+**Live-validated in rolled-back transactions (2026-09-02):**
+- **GOClient:** `@check` → 1 row; `@apply` → 1 row updated; `@report` → `10000000 | Capital social
+  | Capital social -> 10000000-Capital social`; `@check` re-run in the SAME transaction (post-apply)
+  → 0 rows; `@apply` re-run → 0 rows (idempotent).
+- **QA Testing:** `@check` → 1 row (its `LIMIT 1`, correctly non-zero); `@apply` → 3 rows updated;
+  `@report` → `11100 | Petty Cash | GL Item 2 -> 11100-Petty Cash`, `11100 | Petty Cash | GL Item 1
+  -> 11100-Petty Cash`, `62900 | Otros servicios | Fees -> 62900-Otros servicios`; `@check` re-run
+  → 0 rows; `@apply` re-run → 0 rows (idempotent).
+
+Both runs were executed against the live DB inside `BEGIN ... ROLLBACK` (nothing committed) using
+the exact `parseFix`/`inlineParams` templating the real runner uses, so the validated path matches
+the actual runner execution model end-to-end short of the ledger write itself.
+
+**Status:** preventive front closed (same session, `com.etendoerp.go`, out of scope for this data
+fix); corrective `.sql` written and live-validated in rolled-back transactions on GOClient and QA
+Testing (full convergence, idempotent re-run); CUT deliberately not bumped (see reasoning above).
 
 ---
 

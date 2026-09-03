@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, FileText, Layers, Lock, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
+import { isInPortalLayer } from '@/lib/portalLayers';
 import { useCreateStatement } from '@/hooks/useCreateStatement';
 import { useStatementActions } from '@/hooks/useStatementActions';
 import { useBankStatementLines } from '@/hooks/useBankStatementLines';
 import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
-import { LookupPicker } from './LookupPicker';
+import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,11 +60,19 @@ function isoToLocal(iso) {
  * Maps a backend statement line (from `?action=lines`) into the editable row
  * shape used by the grid. The committed FK pickers need a `{ id, name }`; the
  * line carries both the id and the joined name (bpartnerFkName / glItemName).
+ *
+ * `matched` (ETP-4921) is the one field that is NOT editable state: it says the line is already
+ * linked to a financial-account transaction, which core's own `APRM_FIN_BNKSTM_LINE_CHECK_TRG`
+ * trigger protects from any update or delete — by any caller, and regardless of whether the
+ * parent statement has been reactivated back to draft. Such a row renders read-only and is left
+ * out of the save payload entirely (the backend keeps it as-is; see `deleteUnmatchedLines` in
+ * BankStatementsHandler.java).
  */
 function lineToRow(l) {
   lineSeq += 1;
   return {
     id: `e${lineSeq}`,
+    matched: !!l.matched,
     date: isoToLocal(l.date) || toLocalIso(new Date()),
     reference: l.reference && l.reference !== '**' ? l.reference : '',
     description: l.description || '',
@@ -239,12 +248,58 @@ function LinesHeader({ ui }) {
       <ColHead
         label={ui('financeAccountStatementsManualColOut')}
         required
+        className="text-right"
         data-testid="ColHead__6b4086" />
       <ColHead
         label={ui('financeAccountStatementsManualColIn')}
         required
+        className="text-right"
         data-testid="ColHead__6b4086" />
       <span />
+    </div>
+  );
+}
+
+/**
+ * A MATCHED statement line (ETP-4921): rendered as plain read-only text in the same grid tracks,
+ * with a lock affordance and no delete button.
+ *
+ * This is not a styling choice — the line is genuinely immutable. Core's
+ * `APRM_FIN_BNKSTM_LINE_CHECK_TRG` raises on any update or delete of a line whose
+ * `FIN_FinAcc_Transaction_ID` is set, for every caller, and independently of whether the parent
+ * statement has been reactivated back to draft. That is exactly what Classic shows too: it lets
+ * you reactivate a partially reconciled statement, then refuses to save an edit to a matched line
+ * ("Bank Statement Line is already matched. It can not be modified nor deleted."). Offering the
+ * inputs here would be offering an edit the database will reject.
+ */
+function MatchedRow({ row, ui, money }) {
+  const cell = 'truncate px-2 text-sm text-[hsl(var(--muted-foreground))]';
+  const amount = cn(cell, 'text-right tabular-nums');
+  return (
+    <div
+      className={cn(LINES_GRID, 'items-center bg-[hsl(var(--muted))]/40 px-6 py-1.5')}
+      data-testid={`manual-line-matched-${row.id}`}
+    >
+      <span className={cell}>{row.date}</span>
+      <span className={cell} title={row.reference}>{row.reference}</span>
+      <span className={cell} title={row.description}>{row.description}</span>
+      <span className={cell}>{row.contactName}</span>
+      <span className={cell}>{row.contact?.name ?? ''}</span>
+      <span className={cell}>{row.glItem?.name ?? ''}</span>
+      <span className={amount} title={parseAmount(row.out) ? money(parseAmount(row.out)) : undefined}>{parseAmount(row.out) ? money(parseAmount(row.out)) : ''}</span>
+      <span className={amount} title={parseAmount(row.in) ? money(parseAmount(row.in)) : undefined}>{parseAmount(row.in) ? money(parseAmount(row.in)) : ''}</span>
+      <span className="flex items-center justify-end">
+        {/* The lock replaces the delete button in the same track, so the grid stays aligned and
+            the row visibly explains why it offers no actions. */}
+        <span
+          className="flex h-8 w-8 items-center justify-center text-[hsl(var(--text-disabled))]"
+          title={ui('financeAccountStatementsManualLineMatchedTooltip')}
+          aria-label={ui('financeAccountStatementsManualLineMatchedTooltip')}
+          data-testid="manual-line-lock"
+        >
+          <Lock className="h-4 w-4" data-testid="Lock__6b4086" />
+        </span>
+      </span>
     </div>
   );
 }
@@ -258,6 +313,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
       <input
         type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
         placeholder={ui('financeAccountAmountPlaceholder')}
+        title={row[field]}
         className={cn(cellAmount, currencySymRightSide ? 'pr-7' : 'pl-7')} data-testid={testId} />
       <span
         className={`pointer-events-none absolute ${currencySymRightSide ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]`}>
@@ -268,33 +324,29 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   return (
     <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[hsl(var(--muted))]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
-      <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
+      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
         placeholder={ui('financeAccountStatementsManualDescPlaceholder')}
+        title={row.description}
         className={cellInput} data-testid="manual-line-description" />
       <input type="text" value={row.contactName} onChange={set('contactName')}
         placeholder={ui('financeAccountStatementsManualCounterpartyPlaceholder')}
+        title={row.contactName}
         className={cellInput} data-testid="manual-line-contactname" />
-      <LookupPicker
+      <ChipSelect
         value={row.contact}
-        onSelect={(it) => setVal('contact')(it)}
-        onClear={() => setVal('contact')(null)}
+        onChange={setVal('contact')}
         placeholder={ui('financeAccountStatementsManualContactPlaceholder')}
         useLookup={useBPartnerLookup}
-        dataTestId="manual-line-contact"
-        className={cellInput}
-        search
-        data-testid="LookupPicker__6b4086" />
-      <LookupPicker
+        testId="manual-line-contact"
+        data-testid="ChipSelect__6b4086" />
+      <ChipSelect
         value={row.glItem}
-        onSelect={(it) => setVal('glItem')(it)}
-        onClear={() => setVal('glItem')(null)}
+        onChange={setVal('glItem')}
         placeholder={ui('financeAccountStatementsManualGlItemPlaceholder')}
         useLookup={useGLItemLookup}
-        dataTestId="manual-line-glitem"
-        className={cellInput}
-        search
-        data-testid="LookupPicker__6b4086" />
+        testId="manual-line-glitem"
+        data-testid="ChipSelect__6b4086" />
       {amountCell('out', 'manual-line-out')}
       {amountCell('in', 'manual-line-in')}
       <span className="flex items-center justify-end">
@@ -308,8 +360,15 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   );
 }
 
-// Inline hint shown under the row whose cell is being edited.
-function LineEditHint({ ui }) {
+// Hint shown below the lines list while a row's cell has focus. Rendered once
+// (not per row) and only mounted while `active`: with the row wrapper's
+// handlers now portal-aware (ETP-4924), interacting with a cell's calendar or
+// lookup dropdown no longer toggles `focusedId`, so mounting/unmounting this
+// on real focus changes no longer shifts the dialog mid-interaction — an
+// always-reserved height here would just leave a permanent empty gap below
+// the lines list whenever no row is being edited.
+function LineEditHint({ ui, active }) {
+  if (!active) return null;
   return (
     <div className="flex items-center justify-center gap-4 px-6 pb-2 text-xs text-[hsl(var(--muted-foreground))]">
       <span className="inline-flex items-center gap-1.5">
@@ -326,7 +385,7 @@ function LineEditHint({ ui }) {
   );
 }
 
-function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide }) {
+function EditableLines({ rows, setRows, ui, money, currencySym, currencySymRightSide }) {
   // The row whose cell currently has focus — drives the inline keyboard hint.
   const [focusedId, setFocusedId] = useState(null);
 
@@ -337,21 +396,64 @@ function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide })
 
   // Full-bleed table (extends to the modal padding edges so the header / row
   // separators span the full width, per the design). Rows are always editable
-  // cell by cell — no edit/display toggle.
+  // cell by cell — no edit/display toggle, EXCEPT matched lines (ETP-4921), which the database
+  // refuses to modify at all and so render as read-only text.
   return (
     <div className="-mx-6">
       <LinesHeader ui={ui} data-testid="LinesHeader__6b4086" />
       <div className="divide-y divide-[hsl(var(--border-subtle))]">
-        {rows.map((r) => (
+        {rows.map((r) => (r.matched ? (
+          <MatchedRow key={r.id} row={r} ui={ui} money={money} data-testid="MatchedRow__6b4086" />
+        ) : (
           <div
             key={r.id}
-            onFocusCapture={() => setFocusedId(r.id)}
+            onMouseDown={(e) => {
+              // ETP-4924 follow-up: when this row sits at the bottom edge of
+              // the scrollable lines list, clicking the date-field's calendar
+              // trigger can fail silently — the browser auto-scrolls a
+              // partially-visible element into view the moment it receives
+              // focus (the default action of this same mousedown), and if
+              // that scroll shifts the content under the cursor before
+              // mouseup, the resulting `click` never lands back on the
+              // trigger, so Radix's open-toggle never fires (no error, the
+              // popover never mounts). A second click works because the
+              // scroll has already settled by then. Suppressing the
+              // default mousedown-focus (which is what triggers the
+              // auto-scroll) and focusing manually with `preventScroll:
+              // true` keeps the trigger's position — and the click gesture
+              // — stable. Scoped to the date-field trigger specifically via
+              // its stable `data-testid` (not the translated aria-label,
+              // which would be a fragile, locale-dependent selector).
+              const trigger = e.target.closest('[data-testid="PopoverTrigger__d56af3"]');
+              if (trigger) {
+                e.preventDefault();
+                trigger.focus({ preventScroll: true });
+              }
+            }}
+            onFocusCapture={(e) => {
+              // A focus landing inside a portalled popover/dropdown (calendar,
+              // lookup list) still bubbles here as a React event even though
+              // it isn't a DOM descendant of this row — it belongs to this
+              // row's editing session, so it must not be ignored, but it also
+              // must not steal focusedId from whichever row actually owns it.
+              if (isInPortalLayer(e.target)) return;
+              setFocusedId(r.id);
+            }}
             onBlurCapture={(e) => {
+              // Same portal caveat applies to the relatedTarget the focus is
+              // moving to: `currentTarget.contains(relatedTarget)` is a DOM
+              // check and is always false for a portalled node, so without
+              // this exemption opening the calendar reads as "left the row".
+              if (e.relatedTarget && isInPortalLayer(e.relatedTarget)) return;
               if (!e.currentTarget.contains(e.relatedTarget)) {
                 setFocusedId((cur) => (cur === r.id ? null : cur));
               }
             }}
             onKeyDown={(e) => {
+              // Keys originating inside a portalled popover (e.g. Enter/Escape
+              // on a calendar day) belong to that popover — let Radix and
+              // react-day-picker handle them instead of hijacking focus here.
+              if (isInPortalLayer(e.target)) return;
               // Enter commits the cell (blur / move focus) — it must NOT bubble
               // up and trigger "Guardar y procesar". Escape just exits the cell.
               if (e.key === 'Enter') {
@@ -371,10 +473,10 @@ function EditableLines({ rows, setRows, ui, currencySym, currencySymRightSide })
               currencySym={currencySym}
               currencySymRightSide={currencySymRightSide}
               data-testid="EditRow__6b4086" />
-            {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
           </div>
-        ))}
+        )))}
       </div>
+      <LineEditHint ui={ui} active={focusedId != null} data-testid="LineEditHint__6b4086" />
       <div className="border-t border-[hsl(var(--border-subtle))] px-6 py-2">
         <AddLineButton
           onClick={add}
@@ -577,7 +679,6 @@ export function ManualStatementModal({
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
   const { updateStatement, busy } = useStatementActions();
-  // Only fetch lines while editing an open draft.
   const { lines: loadedLines, loading: linesLoading } =
     useBankStatementLines(editing && open ? statement.id : null);
   const saving = creating || busy;
@@ -591,6 +692,21 @@ export function ManualStatementModal({
   const [confirmClose, setConfirmClose] = useState(false);
   // Guards single hydration per open so user edits aren't clobbered on re-render.
   const hydratedRef = useRef(false);
+  // ETP-4924: re-editing the SAME already-saved statement a second time (close, edit
+  // again, without a full page reload in between) showed the PRE-edit line values. Root
+  // cause: `useBankStatementLines`'s underlying `useNeoResource` only flips `loading` to
+  // `true` INSIDE the effect that starts the new fetch (after `path` goes null → url
+  // again) — but that effect and this component's own hydration effect below both fire
+  // in the SAME passive-effect flush, so this effect's closure can still read the STALE,
+  // pre-fetch `linesLoading === false` (left over from the previous successful load) and
+  // `loadedLines` (still the old rows) for one pass, hydrate from them, and lock the
+  // result in via `hydratedRef.current = true` — before the fresh fetch's `loading: true`
+  // has even been observed, let alone its result. A first-ever mount never hits this:
+  // `useState(true)` starts `loading` genuinely `true`, so there's nothing stale to read.
+  // Fix: don't trust a `linesLoading === false` reading until we've actually SEEN it flip
+  // to `true` at least once since this open cycle began — that's the signal a real fetch
+  // for the current statement has genuinely started (and, later, finished).
+  const seenFreshLoadRef = useRef(false);
 
   // setForm/setRows variants that flag the form as dirty. Hydration/reset use the
   // raw setters so seeding the modal never counts as a user edit.
@@ -603,6 +719,7 @@ export function ManualStatementModal({
   useEffect(() => {
     if (open) return;
     hydratedRef.current = false;
+    seenFreshLoadRef.current = false;
     setForm(initialForm(today));
     setRows([]);
     setDirty(false);
@@ -615,7 +732,14 @@ export function ManualStatementModal({
   useEffect(() => {
     if (!open || hydratedRef.current) return;
     if (editing) {
-      if (linesLoading) return;
+      if (linesLoading) {
+        seenFreshLoadRef.current = true;
+        return;
+      }
+      // A `false` reading is ambiguous on its own — see the comment on
+      // `seenFreshLoadRef` above — so only trust it once we've actually observed
+      // this open's fetch pass through `loading: true` first.
+      if (!seenFreshLoadRef.current) return;
       setForm({
         name: statement.name || '',
         transactionDate: isoToLocal(statement.transactionDate) || today,
@@ -636,8 +760,17 @@ export function ManualStatementModal({
       toast.error(ui('financeAccountStatementsManualErrorName'));
       return;
     }
-    const usable = rows.filter((r) => !isBlankLine(r));
-    if (usable.length === 0) {
+    // ETP-4921 — matched lines are excluded from the payload entirely: they are immutable at the
+    // DB level, and `?action=update` keeps them in place rather than deleting-and-recreating (see
+    // deleteUnmatchedLines in BankStatementsHandler.java). Sending them would be asking the
+    // backend to rewrite a row core's trigger forbids touching.
+    const editable = rows.filter((r) => !r.matched);
+    const matchedCount = rows.length - editable.length;
+    const usable = editable.filter((r) => !isBlankLine(r));
+    // A statement whose every line is matched has nothing left to send, and that is fine: the
+    // header edit still applies and the matched lines keep the statement non-empty. Only reject
+    // when there is genuinely nothing at all.
+    if (usable.length === 0 && matchedCount === 0) {
       toast.error(ui('financeAccountStatementsManualErrorLines'));
       return;
     }
@@ -735,6 +868,7 @@ export function ManualStatementModal({
               rows={rows}
               setRows={setRowsDirty}
               ui={ui}
+              money={money}
               currencySym={currencySym}
               currencySymRightSide={currencySymRightSide}
               data-testid="EditableLines__6b4086" />

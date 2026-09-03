@@ -341,6 +341,13 @@
 
 ## ETP-4503 — Payment-method multicurrency defaults (G1 / R14, 2026-07-16)
 
+> **Superseded in part by ETP-5084 (2026-08-31, R29).** The bank-transfer exception recorded below —
+> multicurrency forced OFF on the transfer link of a PSD2-connected Bank account — was **removed**.
+> The findings about the two columns, the two tables and the `em_psd2_is_bank_transfer` seed-vs-live
+> divergence all still hold and are still load-bearing for R15/R24. See the ETP-5084 entry at the end
+> of this section for what changed and why.
+
+
 - **2026-07-16 — "Multicurrency" is TWO independent columns, not one.** `payin_ismulticurrency` AND
   `payout_ismulticurrency` on BOTH `fin_paymentmethod` (the method template) and
   `fin_finacc_paymentmethod` (the per-account link). Both are `character(1)` with column default
@@ -370,7 +377,9 @@
   Corporate", both signals true), and its transfer link was already `N/N`. Non-transfer links on the
   same bank-connected account (Cheque, Tarjeta) are NOT excepted — they go to `Y/Y`.
 - **2026-07-16 — Runtime placement: put the exception in the shared `linkAccount(...)` choke point,
-  not in each handler.** `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
+  not in each handler.** *(The exception itself was removed by ETP-5084 — see the 2026-08-31 entry
+  below. The choke-point reasoning is kept because it still governs
+  `disableAutomaticWithdrawnForTransferMethod` and anything else added to a connect path.)* `FinancialAccountBankConnectionHandler.handleCreateAndLink` and `handleLink` both
   call the private `linkAccount(...)` helper (which is where `linkAccountToFinancialAccount` persists
   `em_psd2_connection_status='CO'` and where `disableAutomaticWithdrawnForTransferMethod` already
   lives). Adding `FinancialAccountSupport.disableMulticurrencyForBankTransfer(finAcc)` there covers
@@ -426,6 +435,24 @@
   — the failure mode inverts from "missing nicety" to "blocked user".
 
 ---
+
+- **2026-08-31 (ETP-5084) — the bank-transfer exception was WRONG, and it is now gone.** The premise
+  was "a PSD2 transfer executes in the account's own currency, so multicurrency on that link would be
+  misleading". The first half is true and the conclusion does not follow: because the transfer is
+  instructed in the account currency, a foreign invoice is settled by **converting** the amount first
+  (invoice → account, with the invoice's own rate — the ETP-4502 contract), which is exactly what a
+  multi-currency link means. The exception blocked two real operations: cross-currency PIS payment of
+  an invoice, and cross-currency bank reconciliation through the transfer method (refused by
+  `ReconciliationPaymentService.assertMethodMultiCurrency`). **Removed:**
+  `FinancialAccountSupport.disableMulticurrencyForBankTransfer` (deleted) and its call from
+  `FinancialAccountBankConnectionHandler.linkAccount`. **Repaired:** `R29-transfer-link-multicurrency`
+  enables both columns on every template and every link, with no predicate and no exception — so it
+  needs none of the fragile transfer-method identification R14/R15/R24 depend on. **R14 is retired**
+  (`retired.json`), because its effect 2 would keep re-applying the exception and fight R29 on every
+  run. **Apply:** when a corrective fix's premise is an *inference* about a business rule rather than
+  an observed DB fact, record the inference explicitly — this one survived three tickets before
+  anyone questioned whether "executes in the account currency" implies "cannot settle a foreign
+  invoice".
 
 ## Imported Bank Statement "Estado" stuck at Borrador after PSD2 sync — R25 (L1)
 
@@ -575,6 +602,8 @@
 
 ## ETP-4736 — Stuck Average-Cost queue: outbound-first product with zero cost history (H3, R18, 2026-08-03)
 
+> **Superseded / historical:** R18 is retired as of ETP-4706's 2026-08-28 QA follow-up. It remains documented here as historical Average-cost analysis, but it is no longer the current remediation path for Etendo Go tenants because Standard costing is now the intended model. Current Standard-cost missing-initial-cost remediation is `R28-standard-cost-anchor` (J2), which seeds `CostType='STA'` rows instead of Average `AVA` anchors.
+
 - **2026-08-03 — `CostingBackground.getTransactionsBatch()` (core `org.openbravo.costing`) orders its whole pending-work queue by `trx.transactionProcessDate` (column `TRXPROCESSDATE`), then `trxtype.sequenceNumber`, `movementQuantity desc`, `id` — CONFIRMED via direct source read, never `MovementDate`.** The query also spans EVERY org that has an applicable validated `CostingRule` (via `AD_ISORGINCLUDED`) and EVERY eligible product (`producttype='I' AND isstocked=true`, movement type in `ad_ref_list` reference `189`) — it is one global FIFO, not per-product. **Apply:** any costing-queue diagnosis or fix must resolve "the next transaction to be costed" via `trxprocessdate`, never `movementdate` — they can and do diverge (a transaction's `MovementDate` can be set to any user-chosen date, but `TrxProcessDate` reflects when it was actually recorded/completed).
 - **2026-08-03 — `CostingBackground.doExecute()` commits each transaction individually but a thrown `OBException` is only caught by the OUTER try/catch, which `rollbackAndClose()`s and RETURNS — it does NOT skip the bad transaction and continue.** So ONE uncostable transaction anywhere in the global FIFO halts EVERY transaction queued after it, for EVERY product, not just the one that failed. Empirically confirmed live (reporter's investigation): an unrelated, previously-healthy product stalled at the exact same date as the real blocker purely because it was queued later. **Apply:** a costing gap's blast radius is fleet-wide-by-date, not product-scoped — but the ROOT-CAUSE fix only needs to target the actual blocking product(s) (zero cost history + outbound-first); every downstream "victim" self-resolves once the blocker is removed and the background job runs again.
 - **2026-08-03 — `AverageAlgorithm.getOutgoingTransactionCost()` throws `@NoAvgCostDefined@` exactly when `getProductCost()` finds no matching `M_Costing` row.** `getProductCost()` filters `product = X AND startingDate <= trxprocessdate AND endingDate > trxprocessdate AND costType='AVA' AND cost IS NOT NULL AND organization = <cost org>` (`AND warehouse = <trx warehouse>` only if the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, else `warehouse IS NULL`). Zero `M_Costing` rows for a product ⇒ this always returns null ⇒ always throws for the FIRST outbound movement (there's no cost basis yet). **Apply:** the fix is to seed exactly this table/shape — an `M_Costing` row with `costType='AVA'`, dated at/before the blocking transaction's `TrxProcessDate`, `dateto` far in the future (core's own convention: `CostingUtils.getLastDate()` = `31-12-9999`) — this is the SAME mechanism the M_Costing window's "Manual" checkbox uses for a human-entered opening cost; `ISMANUAL='Y'` marks it as such.
@@ -596,8 +625,16 @@
 - **2026-08-03 — The live webapp context on this sandbox is `etendogoclean` (matches `gradle.properties`' `bbdd.sid`), NOT `etendo`.** `scripts/neo-token-sysadmin.sh` / `neo-token-groupadmin.sh` default `BASE_URL` to `.../etendo`, which 404s here — override with `ETENDO_URL=http://localhost:8080/etendogoclean` (or hit `/sws/login` directly). Tomcat is reachable at `localhost:8080` (via OrbStack; `ps aux` shows no local `java` process, the JVM runs inside the OrbStack VM, not on the host) — check `volumes/tomcat/webapps/` for which contexts are actually deployed before assuming a login URL.
 - **2026-08-03 — Posting a document (`AcctServer#post` via the ETP-4298 `DocumentPostingService`) synchronously triggers `CostingServer` for ALL of that product's pending transactions it touches, not just the one being posted — the separate `CostingBackground` scheduled process is NOT the only way to make average-cost seeding "take effect."** Observed live: posting only the Goods Shipment (R18's actual target) also cost-processed the LATER Goods Receipt transaction for the same product as a side effect (the seeded manual `M_Costing` row's `dateto` auto-narrowed to the Receipt's `TrxProcessDate`, and a new engine-computed `ismanual='N'` row appeared for it, `cumstock`/`cumcost` correctly reflecting 233-10 units at cost 23). **Apply:** when validating a costing-anchor data-fix end-to-end without access to trigger the scheduled background job, posting any ONE downstream document for the affected product is sufficient proof — no need to hunt for how to run `CostingBackground` manually.
 - **2026-08-03 — GAP CROSS-REFERENCE: a Goods Receipt's OWN posting can still fail with `"Account could not be found."` even after H3/R18 is fully applied — this is a SEPARATE, already-tracked gap, not a new one and not R18's scope.** Root cause: `C_BP_Group_Acct.NotInvoicedReceipts_Acct` NULL for the receipt's business-partner group (core resolves this account purely by BP group, `AcctServer#getAccount` `ACCTTYPE_NotInvoicedReceipts`/`selectNotInvoicedReceiptsAcct` — never by product/product-category). **Already diagnosed and already fixed on a different, unmerged branch:** `.worktrees/ETP-4706/cli/src/data-fixes/sql/20260729T120000Z__R17-bp-group-acct-notinvoiced-receipts.sql` (gap A2b, ETP-4706) — same GOClient tenant, same BP group (`DBBD00C9E0B9442188FCDDA3F601DAEA`), same NULL column, backfilling from `C_AcctSchema_Default.NotInvoicedReceipts_Acct`. **Apply:** if a Goods Receipt post fails with a generic "Account could not be found" AFTER confirming the transaction itself is costed (`m_transaction.isprocessed='Y'`), check `C_BP_Group_Acct` for the receipt's BP group before assuming it's a costing/H3 regression — it's most likely gap A2b, and R17 (ETP-4706) is the existing remedy; don't re-diagnose or re-fix from scratch, just sequence that branch's merge.
-- **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed — R18's `blocking_products` candidate query is missing core's own `costingStatus <> 'S'` filter.** Read `src/org/openbravo/costing/CostingBackground.java` (`getTransactionsBatch()`/`getTransactionsBatchCount()`, this local Etendo core checkout) directly to confirm: the real HQL candidate-selection predicate is `trx.isProcessed = false AND trx.costingStatus <> 'S' AND p.productType = 'I' AND p.stocked = true AND trxtype.reference.id = :refid AND trxtype.searchKey = trx.movementType AND trx.transactionProcessDate <= now() AND trx.organization.id in (:orgs)`. R18's `blocking_products` CTE (both `@check` and `@apply`) reproduces every other predicate (`isactive='Y'`, `isprocessed='N'`, `producttype='I'`, `isstocked='Y'`, the `ad_ref_list`/reference-189 movement-type join) but never filters `costing_status <> 'S'` (column `M_TRANSACTION.COSTING_STATUS`, default `'NC'`, VARCHAR(60), set to `'CC'` by `CostingRuleProcess`/`CostingServer` once a transaction is cost-cleared/adjusted — no `'S'`-setter found in this checkout, so its origin/meaning is not yet pinned down here). **Consequence:** a transaction sitting in `costing_status='S'` would be miscounted as "blocking" by R18's `@check`/`@apply` even though core's own background job would skip it outright — a real, structural drift from the query R18's header claims to mirror. **Unexercised on every tenant checked this session** (no transaction anywhere in the local sandbox has `costing_status='S'`), so it has not caused an observed incorrect apply — flagged as a follow-up, not blocking. **Apply:** any future revision of R18 (or a sibling costing fix) should add `AND t.costing_status <> 'S'` to `blocking_products` in both `@check` and `@apply` to fully match core's candidate-selection semantics.
-- **2026-08-03 — KNOWN LIMITATION (review-flagged, verified against core source, NOT fixed) — R18's seeded `m_warehouse_id` ignores `AverageAlgorithm.getProductCost()`'s production override, independent of `M_Costing_Rule.WAREHOUSE_DIMENSION`.** Read `src/org/openbravo/costing/AverageAlgorithm.java`'s `getProductCost(...)` directly: the warehouse filter is gated by `if (costDimensions.get(CostDimension.Warehouse) != null && !product.isProduction())` — i.e. even when the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, a lookup for a **production-flagged** product (`M_Product.Production='Y'`) ALWAYS falls to the `warehouse is null` branch, never `warehouse.id = :warehouse`. R18's `uses_warehouse_dimension` flag (feeding `CASE WHEN uses_warehouse_dimension THEN trx_warehouse_id ELSE NULL END`) is derived purely from the `M_Costing_Rule.WAREHOUSE_DIMENSION`/`ISVALIDATED` check and never consults `is_production` (a column R18 already resolves, for the SEPARATE `cost_org_id` decision) — so a production-flagged blocking product under a warehouse-dimensioned rule would get a seeded row with a non-NULL `m_warehouse_id` that `getProductCost()` would never actually match against for that product (it always searches `warehouse IS NULL` for production items), silently defeating the anchor for that one product/warehouse-rule combination. **Unexercised on every tenant checked this session** (every `M_Costing_Rule` row found had `WAREHOUSE_DIMENSION='N'`, so the interaction never triggers here). **Apply:** any future revision should extend `uses_warehouse_dimension` (or the final `m_warehouse_id` `CASE`) with `AND NOT f2.is_production`/`f.is_production='N'`, mirroring the same override `cost_org_id` already applies for production products.
+- **2026-08-03 — KNOWN LIMITATION (historical only, not to be fixed in R18 now that it is retired) — R18's `blocking_products` candidate query is missing core's own `costingStatus <> 'S'` filter.** Read `src/org/openbravo/costing/CostingBackground.java` (`getTransactionsBatch()`/`getTransactionsBatchCount()`, this local Etendo core checkout) directly to confirm: the real HQL candidate-selection predicate is `trx.isProcessed = false AND trx.costingStatus <> 'S' AND p.productType = 'I' AND p.stocked = true AND trxtype.reference.id = :refid AND trxtype.searchKey = trx.movementType AND trx.transactionProcessDate <= now() AND trx.organization.id in (:orgs)`. R18's `blocking_products` CTE (both `@check` and `@apply`) reproduces every other predicate (`isactive='Y'`, `isprocessed='N'`, `producttype='I'`, `isstocked='Y'`, the `ad_ref_list`/reference-189 movement-type join) but never filters `costing_status <> 'S'` (column `M_TRANSACTION.COSTING_STATUS`, default `'NC'`, VARCHAR(60), set to `'CC'` by `CostingRuleProcess`/`CostingServer` once a transaction is cost-cleared/adjusted — no `'S'`-setter found in this checkout, so its origin/meaning is not yet pinned down here). **Consequence:** a transaction sitting in `costing_status='S'` would be miscounted as "blocking" by R18's `@check`/`@apply` even though core's own background job would skip it outright — a real, structural drift from the query R18's header claims to mirror. **Unexercised on every tenant checked this session** (no transaction anywhere in the local sandbox has `costing_status='S'`), so it has not caused an observed incorrect apply.
+- **2026-08-03 — KNOWN LIMITATION (historical only, not to be fixed in R18 now that it is retired) — R18's seeded `m_warehouse_id` ignores `AverageAlgorithm.getProductCost()`'s production override, independent of `M_Costing_Rule.WAREHOUSE_DIMENSION`.** Read `src/org/openbravo/costing/AverageAlgorithm.java`'s `getProductCost(...)` directly: the warehouse filter is gated by `if (costDimensions.get(CostDimension.Warehouse) != null && !product.isProduction())` — i.e. even when the applicable `M_Costing_Rule.WAREHOUSE_DIMENSION='Y'`, a lookup for a **production-flagged** product (`M_Product.Production='Y'`) ALWAYS falls to the `warehouse is null` branch, never `warehouse.id = :warehouse`. R18's `uses_warehouse_dimension` flag (feeding `CASE WHEN uses_warehouse_dimension THEN trx_warehouse_id ELSE NULL END`) is derived purely from the `M_Costing_Rule.WAREHOUSE_DIMENSION`/`ISVALIDATED` check and never consults `is_production` (a column R18 already resolves, for the SEPARATE `cost_org_id` decision) — so a production-flagged blocking product under a warehouse-dimensioned rule would get a seeded row with a non-NULL `m_warehouse_id` that `getProductCost()` would never actually match against for that product (it always searches `warehouse IS NULL` for production items), silently defeating the anchor for that one product/warehouse-rule combination. **Unexercised on every tenant checked this session** (every `M_Costing_Rule` row found had `WAREHOUSE_DIMENSION='N'`, so the interaction never triggers here).
+
+## ETP-4706 — Standard-cost initial anchor after R18 retirement (J2, R28, 2026-08-28)
+
+- **2026-08-28 — R18's Average anchor is obsolete under the current Standard-cost direction.** R18 wrote `M_Costing.CostType='AVA'`, but `CostingUtils.getStandardCostDefinition` only accepts `STA` first and legacy `ST` second. An AVA row does not satisfy the Standard-cost lookup, so R18 is retired through `cli/src/data-fixes/retired.json` instead of being edited or deleted.
+- **2026-08-28 — `InvalidCostWhichProduct` is the Standard-cost missing-input symptom.** In `DocInOut`, an unposted Goods Receipt / Goods Shipment line with no material transaction falls through to `CostingUtils.hasStandardCostDefinition(product, legalEntity, dateAcct, costDimensions)`. If no active `STA`/`ST` cost covers that accounting date, core sets `STATUS_InvalidCost`; `AcctServer.determineTitleByStatus` returns `@InvalidCostWhichProduct@`, whose English text is `There is no cost defined for the product: @Product@ on @Date@`.
+- **2026-08-28 — R28 seeds Standard rows, not Average rows.** `R28-standard-cost-anchor` inserts manual `M_Costing` rows with `CostType='STA'`, `IsManual='Y'`, `IsPermanent='Y'`, `M_Warehouse_ID=NULL`, and `DateFrom` equal to the earliest unposted document accounting date that lacks an active Standard/legacy Standard cost. `DateTo` is open-ended only when no later active `STA`/`ST` cost exists; otherwise it is bounded to that later row's `DateFrom`.
+- **2026-08-28 — The fallback cost remains an accounting unblocker, not a confirmed business cost.** R28 uses purchase price first, then sales price, then literal `1` when no product price exists. Any row that falls to `1` must be reviewed/corrected by finance after the posting blocker is cleared.
+- **2026-08-28 — User-facing messaging stays non-technical.** Etendo Go maps the unresolved core literal to `backendError.costNotCalculated`, so users see a retry-later message because the cost may still be calculated by the background process; they are not asked to understand `M_Costing`, cost types, or costing rules.
 ## ETP-4761 — Locator inventory status defaults to Available, negative-stock guard (I1, R19, 2026-08-03)
 
 - **2026-08-03 — `M_INVENTORYSTATUS` fixed system ids (confirmed live, `ad_client_id='0'`):**
@@ -1318,3 +1355,673 @@
   incident. Root fix would be to strip comments before the `.includes()` (or scan executable SQL
   only) in `cli/src/data-fixes/run.js`, with its own test — deliberately left out of ETP-4893's
   scope as shared-runner surface.
+
+## ETP-4877 — Existing-tenant system-role-templates retrofit (2026-08-26)
+
+Closes L1 (Tenant Ownership, `onboarding-gaps.md`) on the corrective front. Ships
+`R26-tenant-owner-and-personal-role-retrofit.sql` (owner detection + personal-role backfill +
+org-access/defaults backfill for pre-existing personal-role holders + `AD_User_Roles` cleanup +
+`EM_ETGO_Show_Acct_Fields` derived-flag sync) and `R27-deactivate-r16-duplicate-roles.sql`
+(deactivates confirmed-unused R16-era per-client role clones), plus the `retired.json` mechanism
+that permanently retires R16 at the runner level. Full field-verified findings below.
+
+- **2026-08-26 — `AD_User.C_BPartner_ID IS NULL` is the load-bearing distinction between a real
+  staff/login user and a BP-contact row that happens to live in `AD_User`.** Confirmed live: every
+  BP-contact-linked row (the F1-gap "Default Customer Contact" seeded per org, plus a large
+  population of orphaned BP-contact test users left over on several E2E tenants — names like
+  "Andres1787679884486 Name", "Julia... Legacy", "Lucia... Code") has `C_BPartner_ID` SET and holds
+  ZERO `AD_User_Roles` rows; every genuine staff/login user (the ones with a `username`, the ones
+  an admin actually manages via "Usuarios") has `C_BPartner_ID` NULL. Live count on this DB: 127
+  active `AD_User` rows across 41 real tenants, only 47 with `C_BPartner_ID IS NULL`. **Apply:** any
+  fix that needs to enumerate "real users" of a tenant (not BP contacts) must filter
+  `C_BPartner_ID IS NULL` — minting a personal role, granting access, or counting "how many users"
+  without this filter massively over-counts and touches rows that are never login principals.
+- **2026-08-26 — `UserRoleCompositionService#isReusablePersonalRole`'s definition does NOT check
+  a role's NAME.** A role named anything (e.g. GOClient's "Classic Role") counts as a genuine,
+  reusable "personal role" for a user as long as it is active, non-template, non-client-admin, same
+  client, not itself an `AD_Role_Inheritance` `InheritFrom` target, and has 0 or exactly 1 active
+  `AD_User_Roles` row (and if 1, it's this user's). **Apply generally:** never assume the
+  `"Personal – "` name prefix is how the Java code recognizes a personal role — it's a display
+  convention `buildPersonalRoleName` applies when CREATING one, not a check anything reads back.
+- **2026-08-26 — Corrupting-bug found+fixed while building R26: TWO DIFFERENT users legitimately
+  sharing ONE non-personal role via `Default_Ad_Role_ID` (zero `AD_User_Roles` rows for either) is
+  real, live data on this DB** — GOClient's "11111" and "test" both point `Default_Ad_Role_ID` at
+  the SAME "Classic Role". Per the identity check above, EITHER user individually sees that role as
+  "reusable" (0 assignments = "never assigned yet, safe to reuse"). A first draft of R26 scoped its
+  org-access/defaults/`AD_User_Roles`-cleanup steps to "any non-template, non-admin default role" —
+  broke immediately: the `AD_User_Roles` enforcement step would insert ONE row per user pointing at
+  the SAME shared role, instantly breaking that role's own exclusivity for both (2 active rows, not
+  0 or 1) and manufacturing real login access neither user previously had via `AD_User_Roles` — well
+  outside what a "cleanup extra rows" step should ever do. **Fix:** those three steps only ever
+  touch a user's default role when it is EITHER the fix's own deterministic personal-role id OR
+  already named `"Personal – %"` (the established convention) — never an arbitrary reusable-but-
+  unnamed default role. Caught by full-fleet idempotency testing (`@check` after `@apply` returned
+  1 row instead of 0) — proves why "re-run the check after apply, inside the same transaction" is
+  worth doing for every non-trivial fix, not just the ones that look risky on paper.
+- **2026-08-26 — Deterministic (hashed) role ids, not `get_uuid()`, for a multi-step `@apply` that
+  needs to reference a row it just inserted.** `get_uuid()` (Postgres-side, used everywhere else in
+  this catalog) can't be "read back" by a LATER separate top-level statement in the same `@apply`
+  without a data-modifying CTE with `RETURNING` — and CTEs don't span multiple statements. R26 needs
+  the SAME personal-role id in ~6 separate statements (role INSERT, inheritance INSERT, window-access
+  INSERT, `Default_Ad_Role_ID` UPDATE, org-access INSERT, defaults UPDATE, `AD_User_Roles`
+  INSERT/DELETE). Solution: `UPPER(MD5(u.ad_user_id || ':ETP4877-personal-role'))` — a stable,
+  32-hex-uppercase (matches the Etendo id format exactly), collision-safe-enough (128-bit hash
+  space) id every step can independently RE-DERIVE from `u.ad_user_id` alone, with no read-back
+  needed. Bonus: a retried run after a mid-chain failure recomputes the IDENTICAL id instead of
+  minting a second orphaned role. **Apply generally:** this pattern generalizes to any future fix
+  that needs a fresh row's id available to several later statements in the same `@apply` — prefer a
+  deterministic hash of a stable natural key over `get_uuid()` when that's the case.
+- **2026-08-26 — `AD_Role_Inheritance` alone grants NOTHING; the window/tab/field/process-access
+  rows must be separately materialized.** Confirmed by reading `UserRoleCompositionService`'s own
+  javadoc: core's `RoleInheritanceEventHandler`/`WindowAccessInjector` do this via a Hibernate event
+  observer, not a DB trigger. But R16 (2026-07-27) already proved a plain SQL
+  `INSERT INTO ad_window_access ... SELECT ... FROM <source role's own ad_window_access>` reaches
+  the identical end state without Hibernate — R26 Step 2b reuses that exact pattern (source = the
+  resolved system template, not a fixed GOClient row), reading the template's CURRENT grants so a
+  future widening (ETP-4878) is picked up automatically on the next run, not hardcoded. This is WHY
+  R26 could stay `@type: sql` instead of escalating to `@type: webhook` despite needing to replicate
+  `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
+- **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
+  never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
+  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
+  currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
+  responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
+  ETP-4877. **Confirmed live, real bug (not hypothetical):** the system Finance template itself read
+  `'N'` (should always be `'Y'`), and 24 active, non-template, non-client-admin roles fleet-wide
+  already inherited from Finance via `AD_Role_Inheritance` yet still read `'N'` — including
+  GOClient's "RoleFinanzas" (the BUG-1 role from the ETP-4906 QA finding — see the header note in
+  R26 for why BUG-1's window-access-ownership corruption does NOT affect this fix; it's a completely
+  separate column) and "Classic Role". Fixed both directions (R26 Step 8b: `'Y'` iff a matching
+  active inheritance row exists, `'N'` otherwise) and added
+  `UserRoleCompositionService#syncShowAccountingFieldsFlag`, called unconditionally at the end of
+  every `reconcileInheritances`, so `AssignTemplateRolesControl`'s live save path self-heals this
+  going forward. **Apply generally:** a "derived" column with no read-time join is a classic drift
+  trap — whenever a column looks like it SHOULD be computed from another table but a native-SQL read
+  shows it's just stored, audit every WRITE path that could invalidate it, not just the one you're
+  currently touching.
+- **2026-08-26 — This DB is a SHARED, actively-mutated dev/QA environment, not a static fixture —
+  re-running the SAME read-only diagnostic query minutes apart can return DIFFERENT results.**
+  F&B International Group showed 1 active `is_client_admin` holder in an early diagnostic pass and
+  0 in a later one, with no write from this session in between. Root cause not chased (plausible:
+  background E2E suites continuously creating/mutating "E2E User ..." tenants, or a scheduled data
+  refresh) — not a bug in any fix here. **Apply generally:** on this DB specifically, do not treat
+  an early count as still-true evidence later in the same session; a fix's OWN `@check`/`@report`
+  re-evaluating live state at apply time is what actually matters, not a diagnostic snapshot taken
+  earlier. This is exactly why the ticket's own instruction ("re-run your own audit queries against
+  the actual DB... do not size off assumed counts") matters in practice, not just in principle.
+- **2026-08-26 — `schema_forge_core`'s mirrored `cli/src/data-fixes/` copy is confirmed still stale
+  (tops out at R8) and on an unrelated branch (`mergeblock/ETP-4962`)** — same finding as the R23
+  entry above, reconfirmed for ETP-4877. No `retired.json` exists there at all. Per this repo's own
+  documented drift-handling convention (`CLAUDE.md` repo-topology section: "treat this repo's copy
+  as authoritative for functional-tenant remediation and flag the drift") and the established R23
+  precedent, NOT reconciled here — flagged in the PR/final report only, reconciling the two catalogs
+  is a separate task.
+- **2026-08-26 — `retired.json` (ETP-4877) is new shared-runner infrastructure, the first fix ever
+  to actually need `@type: webhook`-adjacent framework work despite staying `@type: sql` itself.**
+  Item 7's ask ("skip retired fixes entirely, BEFORE parsing/evaluating any fix... checksum
+  double-check... fails loudly on mismatch") is implemented as `loadRetiredList()` (reads
+  `retired.json`, tolerant of a missing file) → `verifyRetiredList(catalog, retired)` (throws
+  immediately on a retired fixId missing from the catalog, or a live sha256 checksum mismatch) →
+  `loadCatalogWithRetirement()` (the one function every CLI entry point — full run, `--fix`,
+  `--list-clients` — now calls instead of the bare `loadCatalog()`, so `fix.retired` is always set
+  before `applyChain`/`cmdTargetedFix` ever see a fix). The full general `CHECKSUM_MISMATCH` ledger
+  status (deferred per the runner's own Phase-0 docs) was deliberately NOT built — only the narrow
+  checksum verification `retired.json` itself needs, computed on-demand for retired fixIds only, not
+  stored anywhere or computed for the whole catalog on every run.
+
+## ETP-4947 — C_AcctSchema.AllowNegative defaults checked, investigation (2026-08-28)
+
+- **2026-08-28 — Gap A3 (ETP-4245) is the root cause, and it is a direct REVERSAL, not a fresh
+  gap.** ETP-4245 (`onboarding-gaps.md` A3, 2026-07-06) deliberately flipped
+  `C_ACCTSCHEMA.ALLOWNEGATIVE` from N to Y on BOTH fronts -- preventive:
+  `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` (`<ALLOWNEGATIVE><![CDATA[Y]]>`, commit
+  `47ff5aa8 Feature ETP-4245`, the only commit ever touching that line since the file's creation);
+  corrective: `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql`
+  (`UPDATE c_acctschema SET allownegative='Y', iscentrallymaintained='Y' ...`). The stated reason at
+  the time was a Confluence Test Plan case (TC-38) that expected "Allow Negatives=Yes". ETP-4947 now
+  reports the opposite requirement (should default unchecked/N). Apply: before scoping any
+  corrective/preventive work for ETP-4947, get product/QA to confirm TC-38 is superseded -- otherwise
+  the fix would just flip the same field back and forth across tickets.
+- **2026-08-28 -- Confirmed empirically: NOT a live "copy GOClient's row at onboarding time" bug --
+  it's the frozen onboarding dataset XML being imported verbatim, exactly per the documented
+  dataset-only mechanism.** `OnboardingDatasetImportService`/`OnboardingDatasetNormalizer` import
+  `C_ACCTSCHEMA.xml` as bundled classpath data; grepped the whole `com.etendoerp.go` module -- zero
+  Java references to allownegative/AllowNegative outside `GeneralLedgerConfigurationHandler`
+  (the Neo Headless read/write passthrough for the window itself, which has no default-injection
+  logic -- `buildGeneral`/`applyGeneralChanges` just mirror the DB column both ways). So GOClient's
+  live DB row happening to also show Y is a side-effect of the same ETP-4245 change having been
+  applied to GOClient's own row too (to keep XML and live GOClient in sync, per the project's own
+  convention), not a runtime dependency of onboarding on GOClient's live state.
+- **2026-08-28 -- Live DB sweep (dev DB, 2026-08-28): 12/12 GO-onboarded C_AcctSchema rows show Y,
+  the one N is irrelevant.** All of: GOClient (`802509E12436405C86BA1FD5B1DF508C`,
+  `C06B100312FA48159DB36B9A4B461019`, "Esquema GO"), DSAFSAD, 4x "E2E User 1/2 *" (E2E test
+  automation clients), QA Testing (2 schemas: Main + USA), SantoEmpresa -- all allownegative='Y'.
+  The only N is F&B International Group (`23C59575B9CF467C9620760EB255B389`, both its schemas) --
+  but that client's `ad_client.created = 2013-07-04`, i.e. it's stock Openbravo/Etendo-core demo
+  data bundled with the base product, never onboarded through the GO flow at all -- not a
+  counter-example, just an unrelated control case. Caveat: every sampled tenant on this dev DB is a
+  QA/E2E/test artifact, not a real paying customer -- this sample says nothing about whether any
+  real production tenant has ever manually re-toggled the field after onboarding (see next entry).
+- **2026-08-28 -- No field-level audit trail exists to distinguish "still the untouched onboarding
+  default" from "a user explicitly checked it after the fact."** `ad_changelog` does not exist on
+  this DB/version (`relation "ad_changelog" does not exist`) and `ad_table` has no isaudited-style
+  column either. A blanket corrective `UPDATE ... SET allownegative='N'` cannot distinguish the two
+  cases -- the 100%-uniform Y across every sampled tenant (zero variance) is circumstantial evidence
+  they're all still on the frozen default, but it is NOT proof for any given production tenant.
+  Apply: any corrective data-fix for this gap either accepts this residual risk explicitly
+  (documented, product-approved) or needs a different signal entirely (e.g. cross-checking against
+  `updated`/`updatedby` on the c_acctschema row, which is weak -- it reflects the whole row, not just
+  this one column, so any other field edit would also bump it and produce a false "possibly touched"
+  flag).
+
+## ETP-5019 — L2: owner `AD_User.Email` backfill (2026-08-27)
+
+- **2026-08-27 — The canonical source for an existing tenant owner's "real" email is the
+  `ETGO_ACCOUNT` table, resolved from `AD_User.Username` via the SAME two-step algorithm the
+  runtime login path already uses — never guess or invent a new heuristic when one is already
+  shipped and load-bearing.** `AD_User.Username` is NOT reliably the owner's email: onboarding
+  names the FIRST environment a founder creates after their plain account email, and every LATER
+  environment `<accountEmail>+<clientName>` (`EtendoGoJwtSupport#buildClientUsername`, dodges the
+  `Username` uniqueness constraint). `GoAccountResolver#findAccountByUsername`
+  (`com.etendoerp.go/.../common/GoAccountResolver.java`) is the already-tested, already-live
+  inverse — used by `EtendoGoJwtDalHelper#findAccountForEnvironmentUser` to resolve a RETURNING
+  owner's identity on every login: try exact `lower(username) = lower(account.email)` first; on a
+  miss, split on the LAST `'+'` (never the first — the suffix alphabet is `[a-z0-9]` only, so a
+  legitimately plus-addressed email like `user+tag@example.com` survives) and retry exact match
+  on the prefix. **Apply:** a corrective backfill that needs "the real identity behind an
+  AD_User" should always check for an existing runtime resolver first (grep the module for
+  `findAccountBy*`/`resolveAccount*` before writing new join logic) and mirror it exactly in SQL
+  — divergence between the corrective SQL and the runtime path is a bug waiting to happen even if
+  today's data doesn't yet exercise the divergent case.
+- **2026-08-27 — `etgo_account` column is `isactive` (`Y`/`N`), NOT `active` — do not confuse
+  with the Java DAL property name.** `EtendoGoJwtDalHelper.ACTIVE_ACCOUNT_FILTER` reads
+  `account.active = true` in HQL/DAL-property space, which maps to the DB column `isactive`. A
+  raw SQL query against `etgo_account` must use `isactive = 'Y'`, not `active = true` — the
+  column literally does not exist under that name (`ERROR: column "active" does not exist`,
+  hint: "Perhaps you meant... isactive"). `etgo_account` also has a separate `status` column
+  (`'active'`/`'pending'`, ETP-4829 — distinguishes "already has a usable local password" from
+  "admin-created, awaiting invite") that is UNRELATED to `isactive` and is NOT checked by
+  `ACTIVE_ACCOUNT_FILTER` — a backfill mirroring the runtime resolver should likewise gate on
+  `isactive='Y'` only, not additionally require `status='active'` (a pending/SSO-only account is
+  still the correct identity to resolve to, matching what the live path itself would do).
+  `email_verified` is a third, also-unrelated nullable timestamp column — many real owner
+  accounts on this DB have it NULL (never gated by `findActiveAccountByEmail` either).
+- **2026-08-27 — Live-DB sweep: 69/69 pre-existing `EM_ETGO_Is_Owner='Y'` owners resolve
+  cleanly, all via the exact branch (0 currently need the suffix-split branch).** Every owner on
+  this DB is still the sole/first environment their account owns, so no owner username currently
+  carries a `+<clientName>` suffix. Also confirmed: exactly one owner per client (0 clients with
+  >1), zero owners already had a non-NULL email, and every matched `etgo_account` row has
+  `isactive='Y'`/`status='active'` uniformly. The suffix-split branch was still implemented (not
+  skipped as "unneeded YAGNI") because an owner CAN legitimately found a second tenant under the
+  same account, which DOES suffix their username — kept for correctness even though it is
+  provably a no-op on today's data, not merely "future-proofing" speculation.
+- **2026-08-27 — R28 run for real against the shared dev DB, not just validated in a
+  rolled-back tx.** `node cli/src/data-fixes/run.js` (no `--dry-run`, no `--client` — full
+  tenant universe) at 2026-08-27T14:18:28Z: 69 `APPLIED`, 26 `SKIPPED_NOT_NEEDED` (owner already
+  had an email), 0 `FAILED` — matching the earlier dry-run and rolled-back-tx validation exactly.
+  A subsequent re-run confirmed convergence — 0 rows left needing the fix, every tenant
+  `SKIPPED_NOT_NEEDED` — proving idempotency in production. **Apply generally:** once a fix like
+  this has actually been run for real, any earlier "verified in a rolled-back tx, not yet run"
+  language elsewhere (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file) must be
+  corrected in the same PR — a stale "not yet run" claim sitting next to a live-applied ledger
+  row is exactly the doc-drift class REVIEW must catch.
+- **2026-08-27 — In-flight branch discovered R26 (×2) and R27 already claimed on the unmerged
+  `feature/ETP-4877` branch (both repos) — same recurring trap as ETP-4245's R9 discovery.**
+  `git rev-list --all | xargs git ls-tree` (schema_forge side) surfaced
+  `20260826T120000Z__R26-tenant-owner-and-personal-role-retrofit.sql`,
+  `20260826T120000Z__R26-admin-identity-real-org.sql`, and
+  `20260826T121500Z__R27-deactivate-r16-duplicate-roles.sql` — none present in this branch's
+  `cli/src/data-fixes/sql/` directory, all three confirmed via `git branch -a` to live only on
+  `feature/ETP-4877`/`origin/feature/ETP-4877`, NOT yet merged into `epic/ETP-3504`. Crucially,
+  **R26's owner-retrofit fix is already `APPLIED` in the LIVE `ETGO_DATA_FIX_HISTORY` ledger on
+  the shared dev DB** even though its `.sql` file is absent from every branch I have checked out
+  — i.e. a fix can be live-applied against the shared DB from a branch that never touched mine.
+  Read the file's content (`git show <branch>:<path>`) before assuming a collision is even
+  relevant to the current task: confirmed R26 does not touch `AD_User.Email` (it is
+  `EM_ETGO_Is_Owner` + personal-role composition only), so it does not conflict with this
+  session's L2 fix. **Apply generally:** before picking a new `Rn`/timestamp, check
+  `git branch -a` for ANY branch (not just local history) touching
+  `cli/src/data-fixes/sql/`, and cross-check the live ledger's `fix_id` column too — a fix can be
+  `APPLIED` on the shared DB before its file ever reaches your branch.
+- **2026-08-27 — Corrective-only-for-the-CUT, preventive-shipped-elsewhere is a real,
+  recurring, VALID shape — do not reflexively bump `ONBOARDING_PROVISIONED_THROUGH` to match a
+  new fix's own timestamp just because its OWN preventive front shipped in the same PR.** R28's
+  preventive front (`applyClientAdminEmail`) is real and already merged into this branch, but the
+  CUT sat at R23 (`2026-08-11T12:00:00Z`) with FOUR later fixes (R24×2, R25×2 — the L1
+  owner-flag/R26/R27 pair is a 5th, all unmerged) never individually re-verified this session to
+  each have their own confirmed preventive parity. Bumping the single shared CUT past all of them
+  to match R28's timestamp would risk silently skipping any ONE of theirs for a brand-new tenant
+  if it turns out to be corrective-only — the exact failure mode the framework's "never bump CUT
+  without confirming every intervening fix's parity" rule exists to prevent. Decision: ship the
+  `.sql` + preventive together, leave the CUT untouched. Per the framework's own trade-off table
+  this is always safe (new tenant's `@check` is a cheap no-op skip) — merely redundant, never
+  incorrect. Mirrors the ETP-4743/R22 precedent exactly, just with preventive/corrective ordering
+  swapped (there: corrective + CUT bump, preventive shipped earlier separately; here: preventive
+  shipped in-branch, corrective ships without a CUT bump because of UNRELATED intervening fixes,
+  not because R28 itself lacks one).
+- **2026-08-27 — Doc-drift found: `onboarding-and-datafixes-map.md`'s own gap-pairing table
+  already has an `L1` (bank-statement stale status, ETP-4891, `R25`) that collides with
+  `onboarding-gaps.md`'s EARLIER, independent `L1` ("Tenant Ownership", ETP-4830/ETP-4877) — two
+  unrelated gaps sharing one label because neither doc's author cross-checked the other's
+  `L`-series before assigning it.** Not renamed (would break existing shipped `.sql` `@gap:`
+  header references) — flagged inline in both docs instead. **Apply:** when adding any new gap
+  letter/number, grep BOTH `onboarding-gaps.md` (`^### [A-Z][0-9]`) AND
+  `onboarding-and-datafixes-map.md` (`\*\*[A-Z][0-9]+\*\*`) for the next free label, not just the
+  doc you happen to be editing.
+
+## ETP-4872 — A7 (new): `57210` "Tarjetas de crédito, euros" ledger account backfill (2026-08-30)
+
+- **2026-08-30 (review correction) — Originally filed as `A6`; caught in review as a collision
+  with the pre-existing `A6` (ETP-4539 "Asset group Genérico consolidation", documented above in
+  this same file) — a completely unrelated table (`A_Asset_Group`). Relabeled `A7` here, in
+  `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and the `.sql` header's `@gap:` line.**
+  Root cause: the letter was assigned without cross-checking the SQL headers directly (`grep
+  "@gap:" cli/src/data-fixes/sql/*.sql`), only against this doc's own prose — the exact check
+  `onboarding-and-datafixes-map.md`'s own `L1` collision note (2026-08-27, above) already flagged
+  as mandatory. **Apply generally:** grep the actual `.sql` `@gap:` headers, not just the docs,
+  before assigning any new letter/number — a doc can drift from the SQL it describes.
+
+- **2026-08-30 — `R29` was already claimed AND already `APPLIED` live on the shared DB by an
+  unmerged sibling branch (`feature/ETP-4947`) before this session started — confirmed via
+  `git branch -a` + `git ls-tree` (found `20260828T140000Z__R29-acctschema-allownegative-revert.sql`
+  on `feature/ETP-4947`/`origin/feature/ETP-4947`, absent from this branch) AND independently via
+  a direct `SELECT DISTINCT fix_id FROM etgo_data_fix_history WHERE fix_id LIKE '%R29%'`, which
+  returned that exact fix_id already `APPLIED`. **Apply generally:** the ledger check alone would
+  have been sufficient here (it directly proves the id is live-taken, no branch archaeology
+  needed) — when both checks are available, the ledger query is the faster/more authoritative
+  one; `git branch -a` is still worth running too since a claimed-but-not-yet-applied id (still
+  only on a branch, no ledger row yet) wouldn't show up in the ledger at all. Used `R30` +
+  timestamp `2026-08-30T12:00:00Z` (after both R29's `20260828T140000Z` and the newest same-day
+  file `R26-acct-rpt-definitions` at `20260828T120000Z`).
+- **2026-08-30 — The account code width for the "572" bank-account family is genuinely NOT
+  uniform fleet-wide, confirmed by direct query across all 20 real+demo tenants with a wired `AC`
+  element, not assumed from any single source file.** 18/20 tenants (incl. GOClient,
+  SantoEmpresa) carry the R8-padded 8-digit leaf (`57200000`); exactly 2 (F&B International
+  Group, QA Testing) never got R8 applied and still carry the plain 5-digit PGC form (`57200`).
+  `GROUP BY length(value)` across every `572%` `issummary='N'` row on the whole DB confirms only
+  these two widths exist — no third. A fix that hardcodes either width (as R9's own
+  `41700000` did, reasonably, since it happened to only ever run against GOClient-family tenants)
+  would have silently corrupted the other family here. **Apply generally:** for any future
+  new-account gap, verify the sibling account's width per-tenant via direct query before writing
+  `@apply` — do not assume R9's single-width precedent generalizes.
+- **2026-08-30 — Confirmed live: `C_ELEMENTVALUE_TRL`, `C_VALIDCOMBINATION`, and one
+  `AD_TREENODE` row per new `C_ELEMENTVALUE` are ALL auto-created by the standard
+  `c_elementvalue_trg()` trigger firing reliably inside the data-fix runner's plain-SQL
+  transaction — do not manually INSERT any of the three (would violate their UNIQUE
+  constraints against the trigger's own rows).** This reconfirms the ETP-4402/R9 finding
+  (2026-07-02, same file, `c_elementvalue code structure` section) on a second, independent gap.
+  New corollary this session: the trigger's auto-created `C_VALIDCOMBINATION` sets
+  `ALIAS=COMBINATION=new.VALUE` **verbatim** — the FULL, possibly-8-digit value, never truncated.
+  On an 8-digit tenant this produces `'57210000'`, inconsistent with the sibling `57200`
+  account's own actual `ALIAS='57200'` (5-digit) shape on the SAME chart — itself an artifact of
+  R8 apparently having disabled triggers during its bulk 8-digit-padding UPDATE, so the
+  pre-existing combinations were never widened to match. **Apply generally:** any future fix that
+  inserts a NEW postable leaf onto an R8-padded (8-digit) chart must add an explicit follow-up
+  `UPDATE c_validcombination SET alias = LEFT(value,5), combination = LEFT(value,5) ...` after the
+  INSERT — the trigger's own output will NOT match the tenant's established convention on its own.
+  Verified empirically: on the 2 non-R8 (5-digit) tenants, `LEFT(value,5)` trivially equals
+  `value`, so this normalize step correctly no-ops there (`APPLIED (4 rows)` vs. `(5 rows)` on the
+  8-digit branch — the row-count difference is itself a clean signal the branch logic is correct).
+- **2026-08-30 — Self-caught authoring bug: typed the Spanish account name without its accent
+  ("Tarjetas de credito, euros" instead of "Tarjetas de crédito, euros") when transcribing it into
+  the `.sql` file by hand, diverging from both the preventive-side XML and the live DB's own
+  existing `572`-family names.** Caught only by re-querying the just-applied live row and diffing
+  its `name` against the preventive fix's committed XML — the SQL file itself doesn't fail any
+  syntax/idempotency check for a plain string content difference. Fixed the `.sql` file, then
+  cleaned up (manually deleted) the wrongly-accented test rows already committed to the shared DB
+  (`c_validcombination` → `ad_treenode` → `c_elementvalue_trl` → `c_elementvalue` → the
+  `etgo_data_fix_history` ledger row, in that FK-safe order) before re-running the corrected fix.
+  **Apply generally:** when a fix's `.sql` file hand-transcribes a name/description string that
+  must byte-match another artifact (a preventive XML, a sibling account's existing name), diff the
+  actual applied row's content against that source AFTER a real test run, not just eyeball the
+  `.sql` source — accented/non-ASCII characters are exactly the class of error that survives a
+  visual review of the file but not a live data diff.
+- **2026-08-30 — CUT (`ONBOARDING_PROVISIONED_THROUGH`) intentionally left unbumped for a
+  different reason than the ETP-5019/R28 precedent: the preventive front for THIS gap lives on an
+  UNMERGED sibling branch in a DIFFERENT repo (`com.etendoerp.go` `feat/ledger-account-57210`),
+  which this session could not safely edit (out of scope, explicitly read-only per the task
+  brief) even if the CUT-chain-verification concern didn't also apply.** Both reasons compound:
+  even setting aside the intervening-unbumped-fixes risk (R27/R28/R26-acct-rpt-definitions/the
+  sibling R29, none individually re-verified this session), bumping a Java constant that lives on
+  an unmerged branch this session has no write access to is a structurally separate blocker.
+  Flagged explicitly as a follow-up for whoever merges both the preventive dataset branch and this
+  corrective `.sql` — do not silently skip noting this, and do not bump it from a worktree that
+  cannot see the preventive branch's actual merged state.
+
+## ETP-4872 — R30 QA rejection (Sentinel): multi-chain hazard, live-verified, zero exposure (2026-08-31)
+
+QA filed two findings against R30 (BUG-2 medium, BUG-3 low), both backed by new **passing**
+pinning tests (`cli/test/data-fixes-r30-financial-account-card-ledger-account.test.js`, describing
+current behavior, not failing it). Investigated both against the SAME shared dev DB R30 was
+originally validated against. R30 is already `APPLIED` for 19/19 real+demo tenants in that DB
+(confirmed via `SELECT ... FROM etgo_data_fix_history WHERE fix_id =
+'20260830T120000Z__R30-financial-account-card-ledger-account'`) — per this agent's own
+`what_i_never_do` rule ("never rename or edit an already-applied migration"), **the `.sql` file
+itself was left untouched for both findings.** Root cause of confusion the first time around: it's
+tempting to think "not yet in production" means a corrective data-fix `.sql` is still free-form
+editable during a QA cycle — it is NOT, once it has a real `APPLIED` ledger row anywhere, even a
+shared dev/experimental DB. **Apply generally:** treat the ledger row, not the git/PR merge state,
+as the immutability trigger for a data-fix `.sql` file.
+
+- **BUG-2 (multi-chain: >1 qualifying element chain per tenant, only the lowest-`c_element_id` one
+  gets fixed per `@apply` since both INSERTs share one `@uuid_<KEY>@` token) — confirmed ZERO live
+  exposure, fleet-wide, not just within the original 20-tenant sample.** Queried
+  `c_acctschema_element` (`elementtype='AC'`, `isactive='Y'`) grouped by `ad_client_id`, counting
+  `DISTINCT c_element_id`: only **2 clients in the ENTIRE fleet** are wired to more than one
+  distinct `AC` element — `F&B International Group` (`23C59575B9CF467C9620760EB255B389`, elements
+  `56E65CF592BD4DAF8A8A879810646266` + `FB577CDB95A54375AD95AE5F3B9D8458`) and `QA Testing`
+  (`4028E6C72959682B01295A070852010D`, elements `3DE10A7188234EB2898C0500B97CB495` +
+  `A0DA7C90447A412EAB5E1E4D16D1A9CA`). For BOTH, only ONE of the two wired elements carries ANY
+  `572%` row at all — the second `C_AcctSchema` on each (a US-Dollar-denominated schema) uses a
+  completely different chart with zero `572` family. So the BUG-2 precondition — two INDEPENDENTLY
+  qualifying chains (each with its own `57200`/`57200000` sibling but missing `57210`/`57210000`)
+  on the SAME tenant — cannot occur for either client, and both are already correctly `APPLIED`
+  (their one real chain's `57210`/`57210000` row exists). **Decision: accept as a known, documented
+  limitation, not worth a proactive hardening fix at this priority.** Rationale beyond
+  "zero exposure today": a second `C_AcctSchema` on an Etendo tenant is, structurally, almost
+  always there FOR a different chart of accounts (different currency/jurisdiction/reporting need)
+  — the exact reason a tenant adds a second schema in the first place tends to be the same reason
+  its element rarely shares the same `572` PGC family as the first. Not a proof of impossibility,
+  but a real reason this class of gap is unlikely to materialize, distinct from "we just haven't
+  seen it yet."
+  - **Separate, more durable observation (framework-level, not R30-specific):** `run.js` marks a
+    fix `APPLIED` unconditionally on `@apply` success — no rows-affected gate — and
+    `APPLIED`/`MANUALLY_FIXED`/`SKIPPED_NOT_NEEDED` are all in the `PROCESSED` set that a re-run
+    never revisits (see `run.js` `STATUS`/`PROCESSED` around L58-71, L408-410). So ANY future
+    single-token-per-apply fix (not just R30) that intentionally picks one of several qualifying
+    rows via `ORDER BY ... LIMIT 1` has the SAME latent gap: a tenant with N qualifying rows only
+    ever gets 1 fixed, with no ledger signal that N-1 remain and no retry path short of a brand-new
+    fix. Worth remembering as a pattern to watch for in future `ORDER BY ... LIMIT 1`-shaped fixes,
+    not something to retrofit onto R30 today.
+
+- **BUG-3 (Steps C/D/E lack a `c_acctschema_element` join, contradicting the SQL file's Background
+  point 4 claim that "every statement... resolves ONLY via `C_AcctSchema_Element`") — confirmed
+  the SAME zero-exposure result live.** Directly checked GOClient's own documented orphan chain
+  (element `91D04C02EF8F4975B9E4F5E07543B6EA`, the "GOOrg Account Tree" element, not wired to any
+  `C_AcctSchema` — see the ETP-4402 two-`C_Element`-hazard precedent above): it carries `572`,
+  `5720`, `57200000` but **NOT** `5721`/`57210`/`57210000` — the exact values Steps C/D/E actually
+  match on. A fleet-wide sweep (`SELECT ad_client_id, value, COUNT(DISTINCT c_element_id) ... value
+  IN ('572','5721','57210','57210000') ... HAVING COUNT(DISTINCT c_element_id) > 1`) found exactly
+  ONE collision anywhere: GOClient's bare `572` node (shared by both its wired and orphan
+  elements) — and Steps C/D/E never match on `572` alone, only on `5721`/`57210`/`57210000`, none
+  of which collide anywhere in the fleet. So Steps C/D/E's plain value-equality joins, while not
+  literally scoped via `C_AcctSchema_Element`, have never actually been ambiguous in practice: they
+  work because `5721`/`57210`/`57210000` happen to be unique-per-tenant values today (each row was
+  freshly minted by this fix's own Step A/B on the ONE wired element), not because of an explicit
+  guard. **Decision: since R30 is an already-applied, immutable migration (see above), do NOT edit
+  the `.sql` file — not even the Background comment — to correct the imprecise claim.** Recording
+  the correction here instead: Background point 4's blanket "every statement... ONLY via
+  `C_AcctSchema_Element`" is accurate for `@check` and Steps A/B (which DO join
+  `c_acctschema_element`) but NOT for Steps C/D/E, which resolve their target rows by
+  `ad_client_id` + plain `value` equality, paired to the SAME apply's own newly-inserted `5721`/leaf
+  row via `c_element_id` equality between the two joined `c_elementvalue` aliases — never via
+  `c_acctschema_element` itself. Correctness in practice rests on an unstated invariant (no tenant
+  has two elements sharing a `5721`/`57210`/`57210000` value), verified true fleet-wide today, not
+  on the AC-element join the comment claims. `docs/etendo-ad/onboarding-gaps.md`'s A7 entry repeats
+  the same overstated claim in its own "Fix" paragraph — annotated with a caveat there rather than
+  rewritten, for the same immutable-migration-adjacent reason (keep the historical record intact,
+  correct via annotation).
+  - **Apply generally:** a future fix using the same "insert new leaf → reparent via
+    value-matched-sibling UPDATE" pattern (Steps C/D here) should scope the sibling match
+    explicitly to the newly-inserted row's own `c_element_id` from the START (e.g. carry the
+    `@uuid_<KEY>@` token's element through, or re-derive it via the same `c_acctschema_element`
+    join used in Steps A/B) rather than relying on incidental value-uniqueness across the tenant's
+    OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
+    orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.
+
+## ETP-5101 S2.2 — N1/N2: GL Item backfill for pre-ETP-5020 subaccounts (2026-09-01)
+
+- **2026-09-01 — `ElementValue.searchKey` (Java) stores in `C_ElementValue.Value` (DB), never a
+  separate "search key" column.** Confirmed via `ElementValue.java`'s own javadoc
+  (`"Property searchKey stored in column Value in table C_ElementValue"`). Matters directly for
+  `GlItemProvisioningSupport#composeGlItemName` (ETP-5101 §2.1): the `"<searchKey>-<name>"` format
+  (code leading per the 2026-09-02 reorder note below, hyphen-separated per the later 2026-09-02
+  separator note further below) is really `"<value>-<name>"` — the same
+  5/8-digit posting code documented elsewhere in this file
+  (e.g. `40700000`). **Apply:** any corrective `.sql` that needs to mirror `composeGlItemName` must
+  read `ev.value`, not invent a nonexistent `searchkey` column.
+- **2026-09-01 — `AccountingCombination.stDimension`/`ndDimension` (Java) map to
+  `C_ValidCombination.user1_id`/`user2_id` (DB).** Confirmed via `AccountingCombination.java`
+  javadoc. Together with the already-documented 9 other dimension columns (`m_product_id`,
+  `c_bpartner_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`, `c_salesregion_id`,
+  `c_project_id`, `c_campaign_id`, `c_activity_id`), this is the exact 11-column set
+  `GlItemProvisioningSupport#resolveNaturalCombination` filters to `IS NULL` to find a subaccount's
+  "natural" (dimensionless) posting combination for a given schema — the same shape
+  `C_ELEMENTVALUE_TRG` itself auto-creates. **Apply:** any SQL resolving a natural combination must
+  filter all 11, not a partial subset (a missing one of the 11 will over-match a dimensioned
+  combination that happens to share the account+schema).
+- **2026-09-01 — `C_Glitem.Name` is `varchar(60)`; `C_ElementValue.Name` is `varchar(255)` — a real,
+  currently-unguarded mismatch (gap N2 — RESOLVED 2026-09-02, see the dated note below).**
+  `composeGlItemName`'s concatenated format has no length check. Confirmed live: 294 of
+  GOClient's 658 leaf subaccounts needing a new GL Item (45%) produce a composed name over 60
+  chars — Spanish PGC account names are long (e.g. "Reversión del deterioro de participaciones en
+  instrumentos de patrimonio neto a largo plazo otras partes vinculadas 79620000", 124 chars).
+  **This is not merely a backfill-scope problem — it silently affects the LIVE preventive path
+  too**, because `ensureGlItemForSchema`'s per-schema try/catch (the class's documented
+  best-effort contract) swallows the length-validation failure and logs a warning, leaving the
+  subaccount without a GL Item indistinguishably from the pre-ETP-5020 gap. At the time this
+  bullet was first written, the decision was to never truncate and instead skip+report — that
+  decision was REVISED the next day once the coordinator fixed the Java side to truncate
+  correctly; see the 2026-09-02 note below for why truncation turned out to be the right call
+  after all once a byte-for-byte-matching SQL formula was possible.
+- **2026-09-02 — N2 RESOLVED, both fronts, by truncating (not skipping) — the original "never
+  truncate" decision above was correct GIVEN THE CONSTRAINTS AT THE TIME (only the corrective SQL
+  side existed; inventing a truncation convention unilaterally in SQL, with no Java counterpart to
+  match, risked exactly the divergence ETP-5020 exists to prevent), but became WRONG once the
+  preventive Java side also needed fixing anyway (a brand-new tenant hitting a >60-char subaccount
+  today would otherwise stay silently broken) — at that point, truncating on BOTH fronts with the
+  IDENTICAL formula is strictly better than skipping on one front while the other is forced to
+  choose a name convention regardless.** Java: `GlItemProvisioningSupport#composeGlItemName` + new
+  `truncateToFit(value, maxLength)` helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Truncates the NAME
+  portion only via `String#substring(0, n)` (hard cut, no ellipsis) — the CODE always survives
+  intact (always exactly 8 digits per `ChartOfAccountsHandler#isValidAccountCode`; it is what
+  disambiguates two subaccounts sharing a name, the entire point of appending it in the first
+  place; as of the 2026-09-02 reorder note below, the code LEADS the composed name rather than
+  trailing it, but the budget math is unaffected — see that note). Budget when a code is present:
+  `60 - (1 + code.length())` (dynamic, not a hardcoded 51,
+  so it stays correct even if the 8-digit invariant ever changes); `60` flat when no code. SQL
+  (`R31-glitem-subaccount-backfill.sql`) mirrors this EXACT formula: `left(str, n)` is Postgres's
+  `String#substring(0, n)`; `GREATEST(60 - length(code) - 1, 0)` mirrors Java's `Math.max(0,
+  maxLength)` — this GREATEST guard matters because Postgres's own `left()` treats a NEGATIVE `n`
+  completely differently (returns all-but-the-last-`|n|`-chars, a totally different semantic from
+  Java's clamp-to-zero), so omitting it would silently diverge from Java the moment a pathological
+  code (>=59 chars) ever occurred, even though that never happens today. **Verified byte-for-byte,
+  not just "same shape":** ran both formulas (a JS reimplementation of the Java, and the live SQL)
+  against all 294 previously-blocked GOClient rows — 0 mismatches, every truncated name exactly 60
+  chars. **Apply generally:** when a corrective SQL fix's job is to mirror a Java transformation
+  exactly (not just approximate it), and that Java transformation has its own edge-case clamping
+  (`Math.max(0, n)`), check whether the SQL's "equivalent" built-in has a DIFFERENT edge-case
+  behavior for the same input shape (negative length) before assuming a natural-looking one-liner
+  is actually equivalent — `left()`'s negative-`n` behavior is a genuine Postgres/Java semantic
+  trap here, not a hypothetical one.
+- **2026-09-01 — `get_uuid()` inside `SELECT DISTINCT` mints a DIFFERENT id per pre-dedup source
+  row — a real correctness bug found live, not a style nit.** `get_uuid()` is volatile (Postgres
+  evaluates it once per row of the query BEFORE `DISTINCT` collapses duplicates on the output
+  column list). Writing `SELECT DISTINCT subaccount_id, ..., get_uuid() AS new_id FROM
+  missing_pairs` when `missing_pairs` has multiple rows per subaccount (e.g. one per missing
+  accounting schema) does NOT collapse to one row per subaccount — `new_id` differs per source row,
+  so `DISTINCT` sees them as different rows and keeps both. Reproduced live: R31's first draft
+  minted two different `C_Glitem` ids for the same QA Testing subaccount (missing on 2 schemas),
+  which then collided on `c_glitem_acct_glitem_acctsc_un` (`UNIQUE(c_glitem_id,
+  c_acctschema_id)`) once both were joined back to their schema rows. **Fix pattern:** dedup the
+  source rows to their natural key FIRST in one CTE (plain columns, no volatile function calls),
+  THEN mint the id in a SEPARATE CTE that selects from the already-deduplicated set — one row in,
+  one `get_uuid()` call, one row out. **Apply generally:** never mix a volatile ID-generating
+  function into the same `SELECT DISTINCT` that is also doing the deduplication; the two concerns
+  (dedup, then mint) must be two separate CTEs/subqueries in that order.
+- **2026-09-01 — a tenant CAN carry more than one all-dimensions-NULL `C_ValidCombination` row for
+  the same (account, schema) pair — confirmed live on "QA Testing" (a demo/test tenant), 2 such
+  duplicate pairs.** `GlItemProvisioningSupport#resolveNaturalCombination` (Java) already guards
+  against this with `.addOrderBy(PROPERTY_ID, true).setMaxResults(1)` (lowest id wins,
+  deterministic) — a plain `JOIN` in hand-written corrective SQL will silently fan out instead,
+  producing duplicate-looking rows downstream that then collide on unrelated UNIQUE constraints
+  once used to drive an INSERT (see the `get_uuid()` bug above for how this manifested in R31).
+  **Apply:** any SQL resolving "the" natural combination for (account, schema) must use `DISTINCT
+  ON (account, schema) ... ORDER BY account, schema, combination_id` (or equivalent `LIMIT 1`
+  per group) to mirror the Java's own deterministic tie-break — never assume the join is 1:1 just
+  because it "should" be by design intent; verify against the live data for any tenant with more
+  than one accounting schema (multi-schema tenants seem to be where this drift concentrates,
+  possibly from historical demo-data seeding that predates the current triggers).
+- **2026-09-01 — fixing `@apply`'s dedup for the duplicate-combination case above was NOT enough
+  on its own — `@check` needed the IDENTICAL dedup too, or the asymmetry just moves, doesn't
+  disappear.** After adding `DISTINCT ON` to `@apply`'s `natural_combos` CTE (the bullet above),
+  R31 still reported `STILL NEEDS FIX` for QA Testing on every re-check, even immediately after a
+  fully successful `@apply` that inserted every row it legitimately could. Root cause: `@check`
+  was a completely separate, hand-written query that iterated every raw `C_ValidCombination` row
+  matching the natural-dims criteria — including the SECOND, deliberately-never-linked duplicate
+  combo for QA Testing's 2 affected subaccounts, since `@apply` only ever links ONE combo per
+  (account, schema) by design (matching the Java's own `setMaxResults(1)`). This is the EXACT
+  `@check`-promises-more-than-`@apply`-can-deliver asymmetry class Sentinel caught in
+  R22/ETP-4743 (see that ticket's own section above) — a genuinely non-convergent fix under
+  repeated forced `--fix` re-application, the worst kind of idempotency bug because a single
+  successful run looks fine and only a re-check reveals it never stabilizes. **Apply generally:**
+  whenever `@apply` needs a `DISTINCT ON`/dedup step to produce a correct, non-fan-out result set,
+  `@check` MUST use the literal same dedup — not just "an equivalent-looking" `NOT EXISTS`/`JOIN`
+  written independently. The safest pattern (used by R31's fix) is to give `@check` its OWN copy
+  of the exact same `natural_combos` CTE shape (same joins, same `DISTINCT ON`, same `ORDER BY`)
+  rather than trying to approximate the same result with a differently-shaped query — a regression
+  test asserting the two CTE bodies are textually identical (see
+  `cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js`'s "@check/@apply symmetry" describe
+  block) catches this class of drift mechanically, without needing a live DB with duplicate data
+  to reproduce it.
+- **2026-09-01 — a real (committed) write via the actual data-fixes runner CLI is blocked by this
+  Claude Code environment's auto-mode write-approval classifier** (a non-dry-run, non-rolled-back
+  `node cli/src/data-fixes/run.js --fix <id> --client <id>` was denied outright, before any DB
+  round-trip). **Apply:** for end-to-end validation in an auto-mode session, a `BEGIN ... ROLLBACK`
+  transaction driven directly against `pool.query(...)` (parsing the fix via `parseFix`/
+  `inlineParams` exactly as the runner does, just without going through `run.js`'s own CLI/ledger
+  wrapper) is the available substitute — it exercises the real `@check`/`@apply`/`@report` SQL
+  against live data without persisting anything, and the runner CLI's `--dry-run` flag (which only
+  runs `@check`, no writes at all) can still confirm the CLI's own argument/binding path end-to-end.
+  A genuinely committed run then needs either the user's own terminal or explicit interactive
+  approval — flag this rather than attempting to route around the classifier.
+- **2026-09-02 — `composeGlItemName` reordered to lead with the code — every doc mention of the
+  format string that was `"<name> <code>"`/`"<name, truncated> <searchKey>"` is now stale;
+  supersede those illustrations, not the underlying budget math.** Same session, after N2's
+  truncation fix shipped: the coordinator flipped `composeGlItemName` (Java) from `name + " " +
+  code` (name truncated, code trailing and never truncated) to `code + " " + name` (code leading
+  and never truncated, name truncated) — i.e. the CODE is now a fixed-length PREFIX rather than a
+  never-truncated SUFFIX. Rationale per the updated javadoc: the code is the more useful sort/scan
+  key in a flat GL Item list, so it should lead. **The `GL_ITEM_NAME_MAX_LENGTH = 60` budget math
+  is completely unaffected** — `truncateToFit(name, 60 - (code.length() + 1))` is identical either
+  way, only which side of the `" "` separator the code sits on changed. `R31-glitem-subaccount-
+  backfill.sql` was updated in the SAME PR (both the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation) to swap `left(name, budget) || ' '
+  || code` for `code || ' ' || left(name, budget)`, re-validated byte-for-byte against the new
+  Java order on GOClient (658/658) and QA Testing (61/61) in rolled-back transactions — 0
+  mismatches. **Apply generally:** when a corrective SQL fix mirrors a Java string-composition
+  formula byte-for-byte (the whole point of R31's design), a Java-side reorder of the SAME
+  fields — not just a length/threshold change — is an equally load-bearing drift risk; grep for the
+  literal format-string documentation (`<name> <code>`, `<code> <name>`, etc.) across every doc
+  that describes it, not just the `.sql` file itself, since a stale illustration in
+  `onboarding-gaps.md`/`onboarding-and-datafixes-map.md` will mislead the NEXT person who touches
+  this fix into mirroring the wrong (now-superseded) order.
+
+## ETP-5101 — N3: `C_Glitem.Name` resync for already-linked GL Items (2026-09-02)
+
+- **2026-09-02 — R31/N1's "reuse never touches the GL Item's name" is a statement about R31's OWN
+  narrow scope (INSERT-only), not a permanent protection for hand-made GL Items — confirmed by
+  reading the live Java, not assumed.** `GlItemProvisioningSupport#ensureGlItemForSchema`'s
+  existing-link branch (fires whenever `findGlItemAccountsByCombination` already finds a link for
+  the subaccount's natural combination) calls `syncGlItemName` UNCONDITIONALLY — no hand-made/
+  auto-provisioned distinction anywhere in that method. Live evidence: GOClient's own "Capital
+  social" (one of the 2 pre-ETP-5020 manual rows, explicitly called out in R31's own header as
+  "correctly reused, not duplicated") is precisely the row R32's `@check` flags as needing a
+  resync today — its bare pre-ETP-5101 name no longer matches `composeGlItemName`'s current
+  composed output. **Apply generally:** when a sibling fix's header describes what IT deliberately
+  does not do, read that as scoped to that fix's own choice, not as an invariant the wider system
+  upholds — verify against the actual consumer (here, `ensureGlItemForSchema`) before assuming a
+  category of row (hand-made, in this case) is protected somewhere else.
+- **2026-09-02 — A subaccount CAN be linked to two genuinely DIFFERENT `C_Glitem` rows across its
+  own active schemas — a real, pre-existing multi-GL-Item-per-subaccount state, not a duplicate to
+  collapse in SQL.** Confirmed live on QA Testing: subaccount `11100` ("Petty Cash") has 2 active
+  schemas, each linked (via its own natural combination) to a DIFFERENT `C_Glitem` row ("GL Item
+  1" / "GL Item 2") — neither R31 nor the live Java's reuse invariant ever produced this (both
+  always reuse the SAME GL Item across schemas going forward); this predates both. **Apply:** any
+  fix resyncing/deduplicating GL Item state per subaccount must key its dedup on `c_glitem_id`
+  (the actual row being touched), never on `subaccount_id` — deduping by subaccount would either
+  silently drop one of the two legitimately-distinct rows from being resynced, or attempt to merge
+  two independent GL Items into one, neither of which R32 needed to do (both simply get resynced to
+  the same expected name independently, since the composed name depends only on the subaccount).
+- **2026-09-02 — `@report` needing the PRE-image (old value) of a row `@apply` is about to
+  overwrite cannot use R19/R31's "recompute independently, post-apply" pattern — it needs the
+  UPDATE's own `RETURNING` output, captured before the report's separate query runs.** R31's
+  `@report` works by recomputing an expected value from source data that never changes across a
+  run (it's reporting a stable PROPERTY of the row: "was this name truncated", true on every
+  idempotent re-run). R32 needed to report "did THIS run change this value", which requires the
+  value BEFORE this run's own `UPDATE` — already gone by the time `@report`'s separate `SELECT`
+  executes (confirmed via `run.js`: `@apply` and `@report` are two separate `client.query()` calls
+  on the same connection/transaction, `BEGIN` before `@apply`, `COMMIT` after `@report`). **Fix
+  pattern used:** `@apply`'s own data-modifying CTE chain ends in `SELECT ... INTO TEMP TABLE
+  <name> FROM updated` (where `updated` is the `UPDATE ... RETURNING` CTE) instead of feeding a
+  second real-table `INSERT` (R31/R18/R28's usual target) — a session-scoped Postgres temp table,
+  visible to `@report`'s separate query on the SAME connection before `COMMIT`, and safely undone
+  by `ROLLBACK` (temp table creation is transactional DDL, fully undone). **Apply generally:**
+  before assuming "recompute independently, post-apply" (R31's pattern) is always sufficient for a
+  `@report` section, check whether the report needs a value the `@apply` is about to destroy — if
+  so, the `RETURNING`-into-temp-table pattern is the correct escape hatch, not a workaround to
+  avoid.
+- **2026-09-02 — REVIEW FINDING B2, caught before merge: a COMMITted session-scoped temp table
+  does NOT get cleaned up just because the connection is later returned to the pool.** The first
+  draft above assumed "no `ON COMMIT DROP` needed in practice... end-of-session cleanup once the
+  pooled connection is later reused" — that assumption is **wrong**. `client.release()`
+  (node-postgres, see `db.js`'s `createDbPool`) returns the socket to the pool without issuing
+  `DISCARD ALL` or ending the backend session, and this framework's pool is reused across
+  tenants/fixes (`max: 5`). Since R32 runs per-tenant (confirmed live: GOClient + QA Testing both
+  need it), a second tenant reusing the SAME pooled connection after a first tenant's `@apply`
+  committed would hit `relation "etgo_r32_glitem_name_resync" already exists` and abort the whole
+  chain for that tenant (`run.js`'s `applyChain` halts on a failed `@apply`). **Fix:** `@apply` now
+  leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync;` before its
+  data-modifying CTE, making every run self-cleaning regardless of connection reuse — a run whose
+  `@apply` updates 0 rows still (re)creates the (empty) temp table, so `@report` always runs
+  cleanly and simply returns 0 rows. A `ROLLBACK`ed run (including this file's own validation runs)
+  still undoes the `CREATE` along with everything else, since it is fully transactional DDL — the
+  explicit `DROP` only matters for connection reuse AFTER a commit. **Apply generally:** a
+  session-scoped temp table plus a connection pool is a drift trap — "the session ends, so the temp
+  table goes away" is true only if the SAME backend session is what gets torn down; a pooled
+  `release()` keeps the backend session alive for the next borrower. Any `@apply` that creates a
+  temp table for `@report` to read must assume the CREATE can collide with a leftover from an
+  earlier tenant sharing the pool, and lead with its own `DROP TABLE IF EXISTS`.
+- **2026-09-02 — Live sweep on the current (un-migrated) dev DB, R31 itself never committed here.**
+  GOClient: 1 stale-named linked GL Item ("Capital social", bare name → expected `"10000000-
+  Capital social"`). QA Testing: 3 (the 2 "Petty Cash" GL Items above, plus "Fees" →
+  `"62900-Otros servicios"` on subaccount `62900`). Both fully live-validated in `BEGIN...ROLLBACK`
+  transactions using the real `parseFix`/`inlineParams` templating (not a hand-simplified query):
+  `@check` correctly non-zero pre-apply, `@apply` updates exactly the expected row count, `@report`
+  lists the correct old→new pairs, `@check` re-run in the SAME transaction (post-apply) converges
+  to 0, and `@apply` re-run affects 0 further rows (idempotent). Nothing committed to the shared
+  dev DB by this validation.
+- **2026-09-02 — `ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped for R32, unlike R31.**
+  Not a correctness gap: this data-fix's own author was explicitly scoped to `etendo_schema_forge`
+  only (the preventive Java, `syncGlItemNameAfterUpdate`, was already committed in an EARLIER step
+  of the SAME session by a different scope) — bumping the CUT is optional per the framework's own
+  table ("`.sql`-only, no CUT bump" is always safe, merely redundant for tenants the preventive
+  front already covers) and `@check`'s own convergence-to-0 for any subaccount touched by a live
+  rename since the preventive fix shipped makes the redundancy provably harmless, not just assumed
+  safe.
+- **2026-09-02 — `composeGlItemName` changed its separator from a space to a hyphen — a SEPARATE,
+  later change from the SAME day's code-first reorder (2026-09-01/02 note above), and again a
+  pure-character change with the truncation budget math untouched.** Same session, after the
+  code-first reorder landed: the coordinator flipped `composeGlItemName` (Java) from
+  `code + " " + name` to `code + "-" + name` — the character between code and name is now a
+  hyphen, nothing else about the formula changed (the budget `60 - (code.length() + 1)` is
+  identical either way; a hyphen is 1 char, exactly like the space it replaces). Both
+  `R31-glitem-subaccount-backfill.sql` (the `created_items` CTE's CASE expression and the
+  `@report` section's `expected_truncated_name` recomputation — 2 occurrences) and
+  `R32-glitem-name-resync.sql` (`@check`'s CASE expression plus `@apply`'s `resync_candidates`
+  CTE, which itself repeats the formula in both its `SELECT` and its `WHERE ... IS DISTINCT FROM`
+  guard — 3 occurrences) were updated in the SAME PR, swapping every `|| ' ' ||` composed-name
+  literal for `|| '-' ||`; the two `length(ev.name || ' ' || ev.value)` occurrences in R31's
+  `@report` (used only to sum characters for the >60 threshold, not to reproduce the actual
+  composed string) were deliberately left untouched — a hyphen and a space are both 1 byte, so
+  the sum is identical either way. Re-validated byte-for-byte against the new Java separator on
+  GOClient and QA Testing in rolled-back transactions — 0 mismatches. **Apply generally:** the
+  same lesson as the code-first reorder note applies one character at a time too — ANY edit to a
+  Java string-composition formula a corrective SQL fix mirrors byte-for-byte, however small
+  (reordering fields, or here just swapping which literal character sits between them), is an
+  equally load-bearing drift risk; grep every `.sql` file AND every doc illustrating the format
+  string (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this file's own earlier N1/N2/N3
+  bullets) for the literal old separator, not just the SQL's own composed-name CASE expressions —
+  a stale illustration elsewhere will mislead the next person into mirroring the wrong,
+  now-superseded character.

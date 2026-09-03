@@ -61,7 +61,16 @@ vi.mock('@/components/ui/date-field', () => ({
   DateField: () => <input type="date" data-testid="date-field" />,
 }));
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children, open }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  // The close button carries no text content on purpose — the existing suites
+  // query dialog contents by visible text, so an extra labelled control would
+  // change their results. It exists solely so a test can drive the real
+  // onOpenChange(false) path that the production Dialog owns.
+  Dialog: ({ children, open, onOpenChange }) => (open ? (
+    <div data-testid="dialog">
+      <button type="button" data-testid="dialog-close" onClick={() => onOpenChange?.(false)} />
+      {children}
+    </div>
+  ) : null),
   DialogContent: ({ children }) => <div>{children}</div>,
   DialogHeader: ({ children }) => <div>{children}</div>,
   DialogTitle: ({ children }) => <h2>{children}</h2>,
@@ -250,8 +259,14 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     });
     const user = userEvent.setup();
     render(<ReportViewerPage />);
-    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
-    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
+    // The sidebar's own "Generate Report" button is now disabled while a
+    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
+    // longer be used to trigger validateRequired() here. The top-bar PDF
+    // button still calls validateRequired() unconditionally (only gated by
+    // `loading`), so it remains a reachable path to the same error state.
+    expect(screen.getByText('runReport')).toBeDisabled();
+    await user.click(screen.getByText('PDF'));
     await waitFor(() => {
       expect(screen.getByText('required')).toBeInTheDocument();
     });
@@ -779,6 +794,71 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     window.open = originalOpen;
   });
 
+  // ETP-5013 follow-up: a Financial Account Transaction has no window of its
+  // own — the report sends the PARENT account as invoiceId plus a docQuery
+  // (`txnAny=<transaction id>`) so the financial-account window can deep-link to
+  // the exact movement. The handler stays data-driven: it appends whatever
+  // query the report supplies, never a window-specific param name.
+  it('appends the report-supplied deep-link key/value to the opened URL', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice',
+        invoiceId: 'acct-1',
+        docWindow: 'financial-account',
+        docQueryKey: 'txnAny',
+        docQueryValue: 'txn-7',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/financial-account\/acct-1\?txnAny=txn-7$/);
+
+    window.open = originalOpen;
+  });
+
+  it('opens a clean URL with no trailing "?" when the report supplies no deep-link', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // An empty string is what Handlebars renders for a null doc_query_key — it
+    // must be treated as "no query", not as a bare "?".
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice', invoiceId: 'inv-77', docWindow: 'sales-invoice',
+        docQueryKey: '', docQueryValue: 'REC1',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/sales-invoice\/inv-77$/);
+    expect(url).not.toContain('?');
+
+    window.open = originalOpen;
+  });
+
   it('ignores unrelated postMessage payloads', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
@@ -1266,5 +1346,302 @@ describe('ReportViewerPage — PopupMultiSelector chip seeding from value/displa
     // `confirmed` seeded to `[]` — the pre-existing empty-state behavior.
     expect(screen.queryByText('editSelection')).not.toBeInTheDocument();
     expect(screen.queryByText('clearAll')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5013 — General Ledger "navigable link" on the date cell. Clicking a GL
+// line's date posts `gl-entry-drilldown` up to the shell, which opens a third
+// drill-down dialog rendering the Journal Entries report filtered to that exact
+// accounting entry (fact_acct_group_id). Mirrors the trial-balance-drilldown
+// block above; the extra rigor here is the *cleared* dimension keys — the entry
+// must render complete and balanced, so every GL sidebar filter that could cut
+// it down to a subset of its own lines is explicitly blanked, not just left
+// unset (DrillDownViewer spreads baseParams first, so unset keys leak through).
+describe('ReportViewerPage — gl-entry-drilldown dialog (ETP-5013)', () => {
+  beforeEach(() => {
+    mockSearchParams = new URLSearchParams({ report: 'report-1' });
+    mockSetSearchParams.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Stands in for report-general-ledger's sidebar: every dimension filter the
+  // GL report exposes, pre-filled with a non-empty contract default so the
+  // "cleared, not merely unset" assertion below can actually fail if the
+  // implementation stops blanking them.
+  const GL_REPORT = {
+    ...BASE_REPORT,
+    id: 'report-general-ledger',
+    parameters: [
+      { name: 'dateFrom', type: 'text', default: '2026-01-01', label: { en_US: 'Date From' } },
+      { name: 'dateTo', type: 'text', default: '2026-12-31', label: { en_US: 'Date To' } },
+      { name: 'fromAccountId', type: 'text', default: 'acct-from', label: { en_US: 'From Account' } },
+      { name: 'toAccountId', type: 'text', default: 'acct-to', label: { en_US: 'To Account' } },
+      { name: 'bPartnerId', type: 'text', default: 'bp-1', label: { en_US: 'Partner' } },
+      { name: 'productId', type: 'text', default: 'prod-1', label: { en_US: 'Product' } },
+      { name: 'projectId', type: 'text', default: 'proj-1', label: { en_US: 'Project' } },
+      { name: 'costCenterId', type: 'text', default: 'cc-1', label: { en_US: 'Cost Center' } },
+      { name: 'groupBy', type: 'text', default: 'bpartner', label: { en_US: 'Group By' } },
+    ],
+  };
+
+  function mockGlFetch(report = GL_REPORT) {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(report));
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>entry</body></html>') });
+      }
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+  }
+
+  // The template sends `dateDisplay` — an ALREADY-FORMATTED dd/MM/yyyy string
+  // produced by the shared report `formatDate` helper — not the raw column.
+  // `pg` hands back fact_acct.dateacct as a native JS Date, so interpolating it
+  // unformatted made Handlebars emit Date.toString() ("Wed Aug 26 2026 ...")
+  // into the postMessage literal, which then broke the JE date filter and made
+  // the modal title show a bogus year (ETP-5013).
+  function postGlEntryDrilldown(data = { factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' }) {
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'gl-entry-drilldown', ...data },
+      }));
+    });
+  }
+
+  async function openEntryDrilldown(data) {
+    mockSearchParams = new URLSearchParams({ report: 'report-general-ledger' });
+    mockGlFetch();
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+    postGlEntryDrilldown(data);
+    let dialog;
+    await waitFor(() => {
+      dialog = screen.getByTestId('dialog');
+      expect(within(dialog).getByText('openFullReport')).toBeInTheDocument();
+    });
+    return dialog;
+  }
+
+  // Reads the params object out of the last POST made to the given render URL.
+  function lastRenderParams(reportId) {
+    const call = globalThis.fetch.mock.calls
+      .filter(([u]) => typeof u === 'string' && u.includes(`/api/reports/${reportId}/render`))
+      .at(-1);
+    expect(call).toBeTruthy();
+    return JSON.parse(call[1].body).params;
+  }
+
+  // The entry drill-down's `isolateParams`: params blanked out of the RENDER
+  // request only. factAcctGroupId alone identifies the accounting entry, so no
+  // date range is derived from the clicked row either — dateFrom/dateTo are
+  // isolated like the rest. These same keys must still reach "Open in new tab"
+  // untouched (see the drillParams vs renderParams split in DrillDownViewer).
+  const ISOLATED_PARAM_KEYS = [
+    'dateFrom', 'dateTo',
+    'fromAccountId', 'toAccountId',
+    '_display_fromAccountId', '_display_toAccountId',
+    'bPartnerId', 'productId', 'projectId', 'costCenterId',
+    '_display_bPartnerId', '_display_productId', '_display_projectId', '_display_costCenterId',
+    'groupBy',
+  ];
+
+  it('opens the drill-down dialog on a gl-entry-drilldown postMessage', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-general-ledger' });
+    mockGlFetch();
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // No dialog before the message — proves the assertion below is caused by
+    // the postMessage, not by something the page opens on mount.
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    postGlEntryDrilldown();
+
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+  });
+
+  it('renders DrillDownViewer inside the dialog with its format actions and iframe', async () => {
+    const dialog = await openEntryDrilldown();
+
+    expect(within(dialog).getByText('PDF')).toBeInTheDocument();
+    expect(within(dialog).getByText('Excel')).toBeInTheDocument();
+    expect(within(dialog).getByText('CSV')).toBeInTheDocument();
+    expect(within(dialog).getByTitle('detailReport')).toBeInTheDocument();
+  });
+
+  it('titles the dialog with the pre-formatted entry date plus the shared details suffix', async () => {
+    const dialog = await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' });
+
+    // Same `<value><detailsSuffix>` shape as the aging drill-down's title
+    // ({drillDownBp?.name}{ui('detailsSuffix')}) — one i18n key, no per-dialog
+    // literal. ui() is mocked to echo the key, so a hardcoded English string in
+    // the source would surface here as real prose instead of "detailsSuffix".
+    const title = within(dialog).getByRole('heading');
+    // Rendered verbatim: the string was already formatted upstream by the
+    // template helper, so no Date parsing (and no timezone day-shift) happens
+    // in the shell. A regression that re-parsed it would surface here.
+    expect(title.textContent).toBe('26/08/2026detailsSuffix');
+    expect(title.textContent).not.toMatch(/GMT|Invalid Date|NaN/);
+  });
+
+  it('never renders a raw Date.toString() in the title when the template regresses', async () => {
+    // Defensive: even if a bad payload arrives, the shell must pass it straight
+    // through as a string rather than reformatting/re-parsing it into a wrong year.
+    const dialog = await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '' });
+
+    const title = within(dialog).getByRole('heading');
+    expect(title.textContent).toBe('detailsSuffix');
+    expect(title.textContent).not.toMatch(/2001/);
+  });
+
+  it('targets report-journal-entries for the render request, not the GL report', async () => {
+    await openEntryDrilldown();
+
+    await waitFor(() => {
+      expect(globalThis.fetch.mock.calls.some(
+        ([u]) => typeof u === 'string' && u.includes('/api/reports/report-journal-entries/render')
+      )).toBe(true);
+    });
+  });
+
+  it('sends factAcctGroupId as the only entry-identifying filter', async () => {
+    await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' });
+
+    await waitFor(() => {
+      const sent = lastRenderParams('report-journal-entries');
+      expect(sent.factAcctGroupId).toBe('fag-77');
+    });
+  });
+
+  it('never leaks the display date into the JE date filter params', async () => {
+    // The regression this guards: a dd/MM/yyyy display string (or worse, a raw
+    // Date.toString()) reaching dateFrom/dateTo makes the JE query blow up with
+    // "invalid input syntax for type date".
+    await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' });
+
+    await waitFor(() => {
+      const sent = lastRenderParams('report-journal-entries');
+      expect(sent.dateFrom).toBe('');
+      expect(sent.dateTo).toBe('');
+    });
+  });
+
+  it('isolates every inherited dimension filter so the entry renders complete and balanced', async () => {
+    await openEntryDrilldown();
+
+    await waitFor(() => {
+      const sent = lastRenderParams('report-journal-entries');
+      // Each of these has a NON-EMPTY default in GL_REPORT, so leaving any of
+      // them merely unset would leak the GL value through baseParams and cut
+      // the entry down to a subset of its own lines (unbalanced).
+      for (const key of ISOLATED_PARAM_KEYS) {
+        expect(sent[key]).toBe('');
+      }
+    });
+  });
+
+  it('tolerates a missing dateDisplay without opening a broken dialog', async () => {
+    const dialog = await openEntryDrilldown({ factAcctGroupId: 'fag-99' });
+
+    // Still opens (factAcctGroupId is the only required field) and does not throw.
+    expect(within(dialog).getByTitle('detailReport')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(lastRenderParams('report-journal-entries').factAcctGroupId).toBe('fag-99');
+    });
+  });
+
+  it('ignores a gl-entry-drilldown message without a factAcctGroupId', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-general-ledger' });
+    mockGlFetch();
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    postGlEntryDrilldown({ dateDisplay: '26/08/2026' });
+
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the dialog when onOpenChange(false) fires', async () => {
+    const dialog = await openEntryDrilldown();
+    const user = userEvent.setup();
+
+    await user.click(within(dialog).getByTestId('dialog-close'));
+
+    await waitFor(() => expect(screen.queryByTestId('dialog')).not.toBeInTheDocument());
+  });
+
+  // The isolate/forward split (ETP-5013 follow-up, found in live testing): the
+  // render request must be isolated, but "Open in new tab" must keep the user's
+  // own GL filters (period, contact, ...) for context. Both behaviors derive
+  // from the SAME extraParams object, so an implementation that blanks the
+  // fields inside extraParams satisfies the render side while silently breaking
+  // the new-tab side. These two tests only pass together.
+  it('carries the parent report filters through to the "Open in new tab" URL', async () => {
+    const dialog = await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' });
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByText('openFullReport'));
+
+    const [url, target] = openSpy.mock.calls[0];
+    expect(target).toBe('_blank');
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('report')).toBe('report-journal-entries');
+    expect(parsed.searchParams.get('factAcctGroupId')).toBe('fag-77');
+    // Every isolated key still has its GL_REPORT default here — isolation is a
+    // render-time concern only, it must NOT reach the forwarded query string.
+    expect(parsed.searchParams.get('dateFrom')).toBe('2026-01-01');
+    expect(parsed.searchParams.get('dateTo')).toBe('2026-12-31');
+    expect(parsed.searchParams.get('bPartnerId')).toBe('bp-1');
+    expect(parsed.searchParams.get('productId')).toBe('prod-1');
+    expect(parsed.searchParams.get('projectId')).toBe('proj-1');
+    expect(parsed.searchParams.get('costCenterId')).toBe('cc-1');
+    expect(parsed.searchParams.get('groupBy')).toBe('bpartner');
+    expect(parsed.searchParams.get('fromAccountId')).toBe('acct-from');
+    expect(parsed.searchParams.get('toAccountId')).toBe('acct-to');
+  });
+
+  it('keeps the render request isolated even after "Open in new tab" was used', async () => {
+    const dialog = await openEntryDrilldown({ factAcctGroupId: 'fag-77', dateDisplay: '26/08/2026' });
+    const user = userEvent.setup();
+
+    vi.spyOn(window, 'open').mockImplementation(() => {});
+    await user.click(within(dialog).getByText('openFullReport'));
+    await user.click(within(dialog).getByText('PDF'));
+
+    await waitFor(() => {
+      const sent = lastRenderParams('report-journal-entries');
+      expect(sent.factAcctGroupId).toBe('fag-77');
+      for (const key of ISOLATED_PARAM_KEYS) {
+        expect(sent[key]).toBe('');
+      }
+    });
+  });
+
+  it('leaves the other drill-downs unisolated (no isolateParams regression)', async () => {
+    // The account drill-down has no isolateParams, so renderParams must fall
+    // straight back to drillParams — its inherited filters keep working.
+    mockSearchParams = new URLSearchParams({ report: 'report-general-ledger' });
+    mockGlFetch();
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'trial-balance-drilldown', accountId: 'acc-1', accountName: 'Cash', accountValue: '43000000' },
+      }));
+    });
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+
+    await waitFor(() => {
+      const sent = lastRenderParams('report-general-ledger');
+      expect(sent.bPartnerId).toBe('bp-1');
+      expect(sent.dateFrom).toBe('2026-01-01');
+      // extraParams still win for the account being drilled into.
+      expect(sent.fromAccountId).toBe('43000000');
+    });
   });
 });

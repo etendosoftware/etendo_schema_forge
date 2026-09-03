@@ -132,5 +132,90 @@ describe('AttachmentsTab', () => {
     expect(hookState.upload).toHaveBeenCalledTimes(1);
     expect(hookState.upload).toHaveBeenCalledWith(small);
   });
+
+  // ETP-4315 QA follow-up: a brand-new record has no persisted id yet
+  // (recordId is the literal string "new"), so a plain upload() 404s and
+  // the file is silently lost. saveBeforeAttach forces the header to save
+  // first, then uploads against the id it returns.
+  describe('saveBeforeAttach (ETP-4315 QA follow-up)', () => {
+    const small = () => {
+      const file = new File(['hi'], 'small.txt', { type: 'text/plain' });
+      Object.defineProperty(file, 'size', { value: 10 });
+      return file;
+    };
+
+    const drop = (file) => {
+      const dropzone = screen.getByText('attachmentsDropHere').parentElement.parentElement;
+      fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    };
+
+    it('force-saves the header, then uploads against the saved id, then navigates', async () => {
+      const saved = { id: 'REC-NEW-1' };
+      const onSaveHeader = vi.fn().mockResolvedValue(saved);
+      const onGoToSavedRecord = vi.fn();
+
+      render(
+        <AttachmentsTab
+          {...baseProps}
+          recordId="new"
+          isNew
+          config={{ ...baseProps.config, saveBeforeAttach: true }}
+          onSaveHeader={onSaveHeader}
+          onGoToSavedRecord={onGoToSavedRecord}
+        />
+      );
+
+      const file = small();
+      drop(file);
+
+      await vi.waitFor(() => expect(hookState.upload).toHaveBeenCalled());
+
+      expect(onSaveHeader).toHaveBeenCalledWith({ navigateAfter: false });
+      expect(hookState.upload).toHaveBeenCalledWith(file, { recordId: 'REC-NEW-1' });
+      expect(onGoToSavedRecord).toHaveBeenCalledWith(saved);
+    });
+
+    it('does not upload when the forced save fails validation', async () => {
+      const onSaveHeader = vi.fn().mockResolvedValue(null);
+      const onGoToSavedRecord = vi.fn();
+
+      render(
+        <AttachmentsTab
+          {...baseProps}
+          recordId="new"
+          isNew
+          config={{ ...baseProps.config, saveBeforeAttach: true }}
+          onSaveHeader={onSaveHeader}
+          onGoToSavedRecord={onGoToSavedRecord}
+        />
+      );
+
+      drop(small());
+
+      await vi.waitFor(() => expect(onSaveHeader).toHaveBeenCalled());
+
+      expect(hookState.upload).not.toHaveBeenCalled();
+      expect(onGoToSavedRecord).not.toHaveBeenCalled();
+    });
+
+    it('uploads directly, without forcing a save, when saveBeforeAttach is not set', () => {
+      const onSaveHeader = vi.fn();
+
+      render(
+        <AttachmentsTab
+          {...baseProps}
+          recordId="new"
+          isNew
+          onSaveHeader={onSaveHeader}
+        />
+      );
+
+      const file = small();
+      drop(file);
+
+      expect(onSaveHeader).not.toHaveBeenCalled();
+      expect(hookState.upload).toHaveBeenCalledWith(file);
+    });
+  });
 });
 

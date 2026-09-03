@@ -77,6 +77,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+// The left panel's footer total goes through the shared signed-money formatter. Importing it here
+// (instead of hardcoding '1.191,69 €') keeps the expectation on the same canonical formatting path
+// the component uses, so the instance-wide separators cannot make the assertion lie.
+import { formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -201,6 +205,49 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
     expect(screen.getByText('Transfer ACME')).toBeInTheDocument();
+  });
+
+  // ETP-4921 — this panel never goes through ListView, so it never inherited ListView's
+  // refresh progress bar. It renders the extracted ListProgressBar above the split, under the
+  // same gate ListView uses: only once lines are already on screen, because on the true first
+  // fetch the panel's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over lines already on screen', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the lines mounted underneath the bar (smooth refresh, not a remount)', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
+    });
+
+    it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+      setLines([]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = false;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid, not the default ListView one', () => {
+      setLines([LINE_A]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    });
   });
 
   it('shows the empty state on the right until a line is selected', () => {
@@ -457,21 +504,61 @@ describe('ReconciliationSplitPanel', () => {
     expect(rows[2]).toBe('recon-cand-row-C1');
   });
 
-  // ── Client-side state filter (T7) ─────────────────────────────────────────────
+  // ── Client-side state filter (T7 / ETP-5033) ─────────────────────────────────
+  //
+  // The backend assigns each statement line exactly ONE `state`: pending | suggested | byRule |
+  // difference | reconciled. The filter codes are therefore NOT all mutually exclusive: 'pending'
+  // — which is also the DEFAULT filter — means "everything not reconciled", so suggested, byRule
+  // and difference lines are on screen when the panel opens (ETP-5033: strict equality used to
+  // hide exactly the lines the user has to act on). 'suggested' / 'byRule' / 'difference' /
+  // 'reconciled' stay strict subsets, and the "Todos" entry (null) shows everything.
+  // Membership itself is unit-tested in reconciliationStatusFilter.test.js.
 
-  it('shows only lines matching the active leftStatus filter', () => {
-    // Four lines: two pending, one suggested, one byRule.
+  // One line per engine-computed state, so a single fixture set can drive the whole matrix.
+  const LINE_ST_PENDING = { id: 'SP', date: '2026-05-10T00:00:00Z', description: 'Plain pending line', state: 'pending', status: 'pending', amount: -10 };
+  const LINE_ST_SUGGESTED = { id: 'SS', date: '2026-05-11T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
+  const LINE_ST_BYRULE = { id: 'SB', date: '2026-05-12T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
+  const LINE_ST_DIFFERENCE = { id: 'SD', date: '2026-05-13T00:00:00Z', description: 'Difference line', state: 'difference', status: 'pending', amount: -5 };
+  const LINE_ST_RECONCILED = { id: 'SR', date: '2026-05-14T00:00:00Z', description: 'Reconciled line', state: 'reconciled', status: 'reconciled', amount: 500 };
+  const ALL_STATE_LINES = [
+    LINE_ST_PENDING, LINE_ST_SUGGESTED, LINE_ST_BYRULE, LINE_ST_DIFFERENCE, LINE_ST_RECONCILED,
+  ];
+  const ALL_STATE_COUNTS = { all: 5, pending: 1, suggested: 1, byRule: 1, difference: 1, reconciled: 1 };
+
+  /**
+   * Drives the status dropdown the same way the source-filter tests drive theirs: the
+   * DistinctValuesFilter trigger renders the ACTIVE label, and the open popover renders one
+   * button per code (plus the "Todos" row). Both are matched by their i18n key, which the mock
+   * echoes back verbatim.
+   */
+  function selectStatus(activeLabelKey, nextLabelKey) {
+    fireEvent.click(screen.getByText(new RegExp(activeLabelKey)));
+    fireEvent.click(screen.getByText(new RegExp(nextLabelKey)));
+  }
+
+  /** The ids of every statement row currently rendered in the left panel. */
+  function visibleLineIds() {
+    return screen
+      .queryAllByTestId(/^recon-line-row-/)
+      .map((el) => el.getAttribute('data-testid').replace('recon-line-row-', ''));
+  }
+
+  it('treats the default pending filter as "not reconciled", keeping suggested and by-rule lines visible', () => {
+    // Four lines: two plain pending, one suggested, one byRule — all four are non-reconciled, so
+    // all four must be on screen under the default filter.
     const LINE_SUGGESTED = { id: 'LS', date: '2026-05-10T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
     const LINE_BYRULE = { id: 'LR', date: '2026-05-11T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
     setLines([LINE_A, LINE_B, LINE_SUGGESTED, LINE_BYRULE]);
     linesState.counts = { all: 4, pending: 2, suggested: 1, byRule: 1, difference: 0, reconciled: 0 };
     renderPanel();
 
-    // Default leftStatus is 'pending' — only LINE_A and LINE_B (state: 'pending') visible.
+    // Default leftStatus is 'pending' = "not reconciled" — nothing here is reconciled, so the
+    // list is complete. Before ETP-5033 the last two assertions were the opposite (the suggested
+    // and by-rule rows were filtered out by the DEFAULT filter, which is the bug).
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LS')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LR')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LS')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LR')).toBeInTheDocument();
   });
 
   it('passes counts from the hook to the status filter component', () => {
@@ -482,22 +569,93 @@ describe('ReconciliationSplitPanel', () => {
     // ReconciliationStatusFilter renders labelFor(code) = `${ui(key)} (${countFor(code)})`.
     // With our i18n mock returning the key, the label includes the count.
     // The active label (pending) is visible in the trigger button; the others are in the popover.
+    // The pending count is the SUM of its members — 3 pending + 1 suggested + 0 byRule +
+    // 1 difference = 5 — because the filter itself shows all four (ETP-5033); a chip reading 3
+    // would contradict the 5 rows below it.
     // Use a text-content function matcher to handle elements that split text across children.
-    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('3'))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('5'))).toBeInTheDocument();
   });
 
   it('visibleTotal reflects filtered lines, not all lines', () => {
-    // Three lines: two pending (amounts -8.31 and 1200), one suggested (-100).
-    const LINE_SUGGESTED2 = { id: 'LS2', date: '2026-05-12T00:00:00Z', description: 'S line', state: 'suggested', status: 'pending', amount: -100 };
-    setLines([LINE_A, LINE_B, LINE_SUGGESTED2]);
-    // Default leftStatus is 'pending' — only LINE_A (-8.31) and LINE_B (1200) are visible.
+    // Three lines: two non-reconciled (amounts -8.31 and 1200) and one RECONCILED (500). Under
+    // the default 'pending' filter only the first two are visible, so only they may count toward
+    // the footer total. (A suggested line would no longer work as the excluded one — it is now
+    // visible under the default filter, and its amount legitimately joins the total.)
+    setLines([LINE_A, LINE_B, LINE_ST_RECONCILED]);
+    linesState.counts = { all: 3, pending: 2, suggested: 0, byRule: 0, difference: 0, reconciled: 1 };
     renderPanel();
 
-    // The footer total must show the sum of only visible (pending) lines: -8.31 + 1200 = 1191.69.
-    // The panel renders visibleTotal with MoneyAmount; in our mock MoneyAmount renders the value.
-    // We check the total footer row which renders formatSigned(visibleTotal, currency).
-    // Since formatSigned is internal, we verify the footer does NOT show -100 (the suggested line).
-    expect(screen.queryByText(/-100/)).not.toBeInTheDocument();
+    // The reconciled row is filtered out, so its amount is nowhere in the list.
+    expect(visibleLineIds()).toEqual(['L1', 'L2']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+
+    // The footer renders ui('financeReconcileFooterTotal', { amount: formatSigned(total, cur) }).
+    // The i18n mock has no `{amount}` placeholder in the key itself, so the interpolated string
+    // never reaches the DOM — read it off the captured call instead. Expected: -8.31 + 1200 =
+    // 1191.69, i.e. the visible subset only (1691.69 would mean the reconciled line leaked in).
+    const footerCalls = uiCalls.filter((c) => c.key === 'financeReconcileFooterTotal');
+    expect(footerCalls.length).toBeGreaterThan(0);
+    expect(footerCalls.at(-1).vars.amount).toBe(formatSigned(1191.69, 'EUR'));
+  });
+
+  it('shows the four non-reconciled states and hides the reconciled one under the default filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+  });
+
+  it('narrows to only the suggested line when the filter switches to suggested', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusSuggested');
+
+    expect(visibleLineIds()).toEqual(['SS']);
+  });
+
+  it('narrows to only the difference line when the filter switches to difference', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDifference');
+
+    expect(visibleLineIds()).toEqual(['SD']);
+  });
+
+  it('narrows to only the by-rule line when the filter switches to byRule', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusByRule');
+
+    expect(visibleLineIds()).toEqual(['SB']);
+  });
+
+  it('shows only the reconciled line under the reconciled filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    expect(visibleLineIds()).toEqual(['SR']);
+  });
+
+  it('shows every line under the "Todos" entry', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    // The "Todos" row calls onChange(null) — the only way to clear the status filter.
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD', 'SR']);
   });
 
   // ── Source filter visibility (single "Tipo de transacción" selector) ──────────
@@ -564,6 +722,65 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
     // Open the selector (trigger shows the current 'payments' label) and pick receipts.
     fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('receipts');
+  });
+
+  // ── "Tipo" (source) filter dropdown — no fake "all" row (bug fix regression) ──
+  // The Tipo filter always has a concrete value (SOURCE_CODES has no genuine "all" state,
+  // unlike the sibling status filter). Previously `allLabel={ui('financeReconcileSourceLabel')}`
+  // was passed to DistinctValuesFilter, which made DistinctValuesList render the field's own
+  // header/placeholder text as a clickable — but functionally inert — row. That prop was removed.
+
+  it('does not offer the field label as a selectable "Tipo" option, only the four real source values', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+    // Open the "Tipo" dropdown via its trigger (shows the current source label).
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+
+    const popover = screen.getByTestId('PopoverContent__cd3aa9');
+    // Regression: the field's own label/placeholder key must never render as a selectable
+    // row — it is not a real filter value and selecting it used to do nothing.
+    expect(within(popover).queryByText('financeReconcileSourceLabel')).not.toBeInTheDocument();
+    expect(
+      within(popover).queryByRole('button', { name: /financeReconcileSourceLabel/ }),
+    ).not.toBeInTheDocument();
+
+    // All four real source options are present as selectable rows.
+    expect(within(popover).getByText(/financeReconcileSourceSalesInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePurchaseInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourceReceipts/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+  });
+
+  it('selects each real "Tipo" option and flows the mapped (kind, docType) through to the candidates hook', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+
+    // receipts (default) → payments: (kind null, docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('payments');
+    expect(screen.getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+
+    // payments → salesInvoices: (kind 'invoices', docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('receipts');
+
+    // salesInvoices → purchaseInvoices: (kind 'invoices', docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('payments');
+
+    // purchaseInvoices → receipts: back to (kind null, docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
     fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
     expect(candidateCallArgs.kind).toBeNull();
     expect(candidateCallArgs.docType).toBe('receipts');
@@ -1141,8 +1358,10 @@ describe('ReconciliationSplitPanel', () => {
       });
       setUpPartialLineWithCandidate();
 
+      // No `failureReason` in this response, so the toast carries no description at all
+      // (`undefined`, never an empty options object that would render a blank description row).
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
       // Verify the EXACT interpolation values the component computed from the resolved result.
@@ -1154,19 +1373,85 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
     });
 
-    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+    it('total failure (successful HTTP, everything failed): the UN-RECONCILE error copy, reload/selection-clear STILL run', async () => {
       removeState.removeOperation = vi.fn().mockResolvedValue({
         transactionIds: [], failedTransactionIds: ['A', 'B'],
       });
       setUpPartialLineWithCandidate();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      // The action-specific key. This branch used to fall back to `financeReconcileToastError`,
+      // whose copy reads "Error al conciliar" — the wrong action entirely for an un-reconcile.
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoveError', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.warning).not.toHaveBeenCalled();
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
       await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    // ── the backend-supplied CAUSE ────────────────────────────────────────────
+    // The un-reconcile helpers swallow their exceptions so one failure does not abort the batch, so
+    // the response has always been able to say WHICH ids failed. What it could not say is WHY — the
+    // reason stayed in the server log. It now travels as `failureReason` on the same 200, and the
+    // panel shows it verbatim as the sonner description under the action-specific title.
+    const CLOSED_PERIOD = 'The accounting period is closed and the document cannot be unposted';
+
+    it('total failure: shows the backend failureReason as the toast description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: CLOSED_PERIOD }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure: never falls back to the generic "Error al conciliar" key', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // Regression guard: the generic reconcile-error copy is not merely un-toasted, it is never
+      // even requested from i18n on this (resolved-response) path. It stays reserved for the catch
+      // branch, where the request itself failed and no action can be named.
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError');
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError', undefined);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+    });
+
+    it('partial failure: keeps the partial key and adds the reason as the description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        'financeReconcileToastOperationPartiallyRemoved', { description: CLOSED_PERIOD }));
+      expect(toast.error).not.toHaveBeenCalled();
+      // The counts are unchanged by the added description.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+    });
+
+    it('full success: never attaches a description, even if the backend echoes a reason', async () => {
+      // Defensive: `failureReason` is only meaningful alongside failed ids. With none, the success
+      // branch runs and the toast keeps its single-argument shape.
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1347,11 +1632,62 @@ describe('ReconciliationSplitPanel', () => {
       await user.click(screen.getByTestId('recon-remove-accept'));
 
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
       expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
       // Always reload, even on a partial outcome.
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    // ── total failure on the REACTIVATE path ──────────────────────────────────
+    // Same accumulator and same 200 envelope as the un-reconcile path, but the title must name the
+    // action the user actually chose: `...ReactivateError`, not `...RemoveError` — and least of all
+    // the old generic `financeReconcileToastError` ("Reconciliation error").
+    const REACTIVATE_BLOCKED = 'The accounting period is closed and cannot be reactivated';
+
+    /** Selects the 2-doc reconciled line and confirms the Reactivar cartel. */
+    async function confirmReactivate() {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      const user = await openMoreMenu();
+      await user.click(screen.getByTestId('recon-action-reactivate'));
+      await user.click(screen.getByTestId('recon-remove-accept'));
+    }
+
+    it('total failure: the REACTIVATE error copy with the backend reason as description', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+        failureReason: REACTIVATE_BLOCKED,
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', { description: REACTIVATE_BLOCKED }));
+      // Not the un-reconcile copy, and not the generic reconcile copy either.
+      expect(toast.error).not.toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: REACTIVATE_BLOCKED });
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastOperationRemoveError')).toBe(false);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure with no failureReason: same key, and NO description object at all', async () => {
+      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['T3', 'T4'],
+      });
+      await confirmReactivate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationReactivateError', undefined));
+      // Explicitly `undefined`, not `{}` / `{ description: undefined }` — sonner renders an empty
+      // description row for the latter, which reads as a truncated message.
+      const [, options] = toast.error.mock.calls[0];
+      expect(options).toBeUndefined();
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
     });
 
@@ -1719,6 +2055,138 @@ describe('ReconciliationSplitPanel', () => {
       const btn = screen.getByTestId('recon-action-reconcile');
       expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
       expect(btn).not.toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+  });
+
+
+  // ETP-4921 QA — "la vista de conciliación se ve cortada; si cambio el zoom se ve bien".
+  // A long statement description stretched the auto-layout table past the panel, so Progreso and
+  // Importe ended up behind a horizontal scrollbar. The fix is structural (fixed table layout +
+  // an ellipsised description), which is why these assert on the layout contract rather than on
+  // pixels: jsdom does no layout, so nothing here can measure the overflow itself.
+  describe('column layout — Progreso and Importe stay in view', () => {
+    const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE Galder Romo CONCEPTO Factura Nº : 10001754 1000896';
+
+    it('lays both tables out with fixed columns, so the free column absorbs the overflow', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const tables = screen.getAllByTestId('Table__d0f4d5');
+      expect(tables.length).toBeGreaterThan(0);
+      for (const table of tables) {
+        expect(table.className).toContain('table-fixed');
+      }
+    });
+
+    // Every column but the description declares a width; under `table-fixed` those widths are
+    // what the browser honours, so Progreso (90px) and Importe (139px) can no longer be pushed out.
+    it('keeps a declared width on the Progreso and Importe columns', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const classes = heads.map((h) => h.className);
+      expect(classes.some((c) => c.includes('w-[90px]'))).toBe(true);
+      expect(classes.some((c) => c.includes('w-[139px]'))).toBe(true);
+    });
+
+    it('ellipsises the statement description instead of widening the row', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      expect(desc).toHaveTextContent(LONG_DESC);
+      expect(desc.className).toContain('truncate');
+    });
+
+    // The full text is not lost — it comes back on hover, which is the whole point of clipping it.
+    it('offers the full description in a tooltip once it is clipped', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      // jsdom reports 0 for both metrics, so the overflow has to be stated explicitly.
+      Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+      Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 300 });
+
+      fireEvent.focus(desc);
+
+      expect(screen.getByTestId('recon-line-desc-L1-tooltip')).toHaveTextContent(LONG_DESC);
+    });
+
+    // The row still falls back through partnerName / referenceNo when there is no description.
+    /**
+     * ETP-4921 — the money headers carried an explicit `text-left` while every MoneyCell under
+     * them is `text-right`, so "Importe" / "Saldo pendiente" labelled the opposite edge of their
+     * own column. The generic DataTable right-aligns a numeric column's header; these two
+     * hand-rolled panels never inherited that.
+     */
+    it('right-aligns the money headers over their own figures', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const moneyHeads = heads.filter((h) => /financeReconcileCol(Amount|PendingBalance)/
+        .test(h.textContent));
+      // Left panel Importe + right panel Saldo pendiente & Importe.
+      expect(moneyHeads.length).toBeGreaterThan(0);
+      for (const h of moneyHeads) {
+        expect(h.className, h.textContent).toContain('text-right');
+        expect(h.className, h.textContent).not.toContain('text-left');
+      }
+    });
+
+    // Fecha / Descripción / Progreso name text or a bar, not a figure — they stay left.
+    it('leaves the non-money headers alone', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const textHeads = heads.filter((h) => /financeReconcileCol(Date|Description|Progress)/
+        .test(h.textContent));
+      expect(textHeads.length).toBeGreaterThan(0);
+      for (const h of textHeads) {
+        expect(h.className, h.textContent).not.toContain('text-right');
+      }
+    });
+
+    it('keeps the description fallback chain', () => {
+      setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
+      renderPanel();
+
+      expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
+    });
+  });
+
+  // ETP-4956 — "Todo el tiempo" is encoded as `value === null`, which is indistinguishable
+  // from "nothing has been chosen", so computeTriggerLabel falls through to the placeholder.
+  // The placeholder used to be `financeReconcileFilterDate`, whose literal Spanish value is
+  // "Últimos 12 meses" — so the button kept advertising a 12-month window after the user had
+  // widened the filter to every date. It is now the generic `dateRangeAnyTime`.
+  describe('date range trigger after picking "all time"', () => {
+    it('reads the last-12-months preset on mount (the default period)', () => {
+      setLines([LINE_A]);
+      renderPanel();
+      expect(screen.getAllByText('dateRangeLast12Months').length).toBeGreaterThan(0);
+    });
+
+    it('stops advertising a 12-month window once "all time" is picked', async () => {
+      const user = userEvent.setup();
+      setLines([LINE_A]);
+      renderPanel();
+
+      // Open the picker from its trigger (which currently shows the default preset).
+      await user.click(screen.getAllByText('dateRangeLast12Months')[0]);
+
+      // The popover's "all time" preset emits `null` and closes the popover.
+      await user.click(await screen.findByText('dateRangeAllTime'));
+
+      // The trigger must no longer claim a bounded period…
+      expect(screen.queryByText('dateRangeLast12Months')).not.toBeInTheDocument();
+      // …nor fall back to the window-specific label that reads as one.
+      expect(screen.queryByText('financeReconcileFilterDate')).not.toBeInTheDocument();
+      // …and instead says "any date".
+      expect(screen.getAllByText('dateRangeAnyTime').length).toBeGreaterThan(0);
     });
   });
 

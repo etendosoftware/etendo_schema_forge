@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { buildHeaders } from '@/auth/api';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
@@ -31,6 +31,7 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  */
 export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [pendingRows, setPendingRows] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -54,9 +55,8 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
       // extracted once Financial Accounts / Movements / Statements needed the
       // same "select → confirm → batch delete → 3-outcome toast" pattern).
       const { succeeded, failed } = await runBatchDelete(pendingRows, (row) =>
-        fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
+        apiFetch(`/${entity}/${row.id}`, {
           method: 'DELETE',
-          headers: buildHeaders(token),
         }).then(async (res) => {
           if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
           return row;
@@ -70,7 +70,7 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
     } finally {
       setDeleting(false);
     }
-  }, [pendingRows, apiBaseUrl, entity, token, ui, onSuccess]);
+  }, [pendingRows, apiBaseUrl, entity, apiFetch, ui, onSuccess]);
 
   const count = pendingRows?.length ?? 0;
 

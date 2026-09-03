@@ -1,4 +1,9 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // i18n translator returns the key itself, so we assert on key strings.
 vi.mock('@/i18n', () => ({
@@ -23,6 +28,49 @@ vi.mock('../MovementRowKebab', () => ({
 }));
 vi.mock('@/components/ui/money-amount', () => ({
   MoneyAmount: ({ value }) => <span data-testid="money">{String(value)}</span>,
+}));
+
+// ETP-5101 — the "más información" panel now renders a live ChipSelect (via
+// useDimensionLookup, which calls useAuth()) for editable dimensions. Mocked the same way
+// NewTransactionModal.vitest.jsx already does for the identical hook, so the panel can mount
+// without an AuthProvider in the tree. ChipSelect resolves a deterministic { id, name } keyed
+// off its `testId` (movement-dimension-<key>), so payload assertions can tell which dimension
+// was picked/cleared.
+const toastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: { error: (...a) => toastError(...a), success: vi.fn() },
+}));
+
+vi.mock('@/hooks/useMovementLookups', () => ({
+  useDimensionLookup: () => ({ results: [], loading: false }),
+}));
+
+const updateMovement = vi.fn();
+vi.mock('@/hooks/useCreateMovement', async (importOriginal) => {
+  // Keep the REAL buildDimensionUpdatePayload — Part 2's payload-shape assertions need the
+  // actual field mapping, not a re-implemented stand-in.
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useUpdateMovement: () => ({ updateMovement, updating: false }),
+  };
+});
+
+vi.mock('@/components/forms/fields', () => ({
+  ChipSelect: ({ value, onChange, testId }) => (
+    <div>
+      <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
+      <button
+        type="button"
+        data-testid={`${testId}-pick`}
+        onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
+        pick
+      </button>
+      <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>
+        clear
+      </button>
+    </div>
+  ),
 }));
 
 // Inject an extra contract column with NO renderer in MOVEMENT_CELL_RENDERERS so
@@ -53,6 +101,7 @@ import {
   buildMovementSortCtx,
   buildMovementSortAccessors,
 } from '../MovementsTable.jsx';
+import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
@@ -90,6 +139,8 @@ function Harness(props) {
       selectedIds={props.selectedIds ?? new Set()}
       onSelectionChange={props.onSelectionChange ?? vi.fn()}
       highlightTxnId={props.highlightTxnId}
+      onReload={props.onReload}
+      accountCurrencyId={props.accountCurrencyId ?? null}
       sortKey={sortKey}
       sortDirection={sortDirection}
       onSort={toggleSort}
@@ -151,10 +202,14 @@ describe('MovementsTable — expandable dimensions panel', () => {
   });
 
   it('shows only project, cost center and product as read-only fields (never organization)', () => {
+    // ETP-5101 — posted: 'Y' keeps this movement OUT of the new editable-dimensions gate, so the
+    // panel still renders the original plain disabled <Input> this test is about (which fields are
+    // shown/hidden), independent of the new editability feature covered separately below.
     renderTable({
       enabledDimensions: ['organization', 'project', 'costcenter', 'product', 'campaign', 'bpartner'],
       movements: [
         baseMovement({
+          posted: 'Y',
           dimensions: {
             organization: 'Org Y',  // must NOT show — organization is excluded from the panel
             project: 'Proj A',
@@ -377,13 +432,33 @@ describe('MovementsTable — contract cell fallback', () => {
 });
 
 describe('MovementsTable — loading and empty states', () => {
-  it('renders skeleton placeholder rows while loading', () => {
-    renderTable({ loading: true });
-    // No data rows are rendered while loading.
+  const skeletons = () => document.querySelectorAll('tbody .animate-pulse');
+
+  it('renders skeleton placeholder rows on the TRUE initial load (no rows yet)', () => {
+    renderTable({ loading: true, movements: [] });
+    // No data rows are rendered on the first fetch.
     expect(screen.queryByText('DOC-001')).not.toBeInTheDocument();
-    // Skeleton rows expose the stubbed money/badge cells of real rows for none of them.
     const rows = document.querySelectorAll('tbody tr');
     expect(rows.length).toBe(5); // SKELETON_ROWS
+    expect(skeletons().length).toBeGreaterThan(0);
+  });
+
+  // Smooth refresh: reloading with rows already on screen must NOT wipe the body into
+  // skeletons (the jarring flash this replaced) — the rows stay and are only dimmed.
+  it('keeps the existing rows while refreshing instead of flashing skeletons', () => {
+    renderTable({ loading: true, movements: [baseMovement({ id: 'm1' })] });
+    expect(screen.getByText('DOC-001')).toBeInTheDocument();
+    expect(screen.getByTestId('movement-row-m1')).toBeInTheDocument();
+    expect(skeletons().length).toBe(0);
+  });
+
+  it('dims the table only while refreshing over existing rows', () => {
+    const { unmount } = renderTable({ loading: true, movements: [baseMovement({ id: 'm1' })] });
+    expect(document.querySelector('table').className).toContain('opacity-70');
+    unmount();
+
+    renderTable({ loading: false, movements: [baseMovement({ id: 'm1' })] });
+    expect(document.querySelector('table').className).not.toContain('opacity-70');
   });
 
   it('renders the empty-state message when there are no movements', () => {
@@ -554,5 +629,358 @@ describe('MovementsTable — Tipo header segments (ETP-4921)', () => {
     expect(screen.getByTestId('column-header-sort-posted').textContent).toContain('\u25B2');
     expect(screen.getByTestId('column-header-sort-transactionType').textContent)
       .not.toContain('\u25B2');
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP A (Tailwind utility on the row element). MovementsTable resolves the
+// row class through `computeMovementRowClassName`, which is module-private, so
+// every assertion below goes through the rendered <tr>'s real class list.
+//
+// The row is a `TableRow`, whose own base class is `hover:bg-muted/50` and which
+// merges through `cn` (tailwind-merge). That merge is load-bearing: without the
+// `hover:bg-primary/5` half of the fix the base hover survives and repaints over
+// the tint at exactly the moment the pointer is on the row — i.e. while the user
+// is clicking the checkbox. That is the reported bug, so the hover assertions
+// here are the ones that actually lock it.
+describe('MovementsTable — ETP-5030 selected-row shading', () => {
+  // The file-level `Harness` holds `selectedIds` as a fixed prop; these tests
+  // need the real tick → re-render loop, so selection lives in state here.
+  function SelectableMovements({ movements, highlightTxnId = null, enabledDimensions = [] }) {
+    const [selectedIds, setSelectedIds] = React.useState(() => new Set());
+    const toggle = (id) => setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    return (
+      <MovementsTable
+        movements={movements}
+        loading={false}
+        enabledDimensions={enabledDimensions}
+        selectedIds={selectedIds}
+        onSelectionChange={toggle}
+        highlightTxnId={highlightTxnId}
+        sortKey={null}
+        sortDirection="asc"
+        onSort={() => {}}
+      />
+    );
+  }
+
+  const TWO_ROWS = [
+    baseMovement({ id: 'm1', documentNo: 'DOC-001' }),
+    baseMovement({ id: 'm2', documentNo: 'DOC-002' }),
+  ];
+
+  /** Row checkboxes in DOM order; index 0 is the header select-all. */
+  const rowCheckbox = (index) => screen.getAllByRole('checkbox')[index + 1];
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('tints ONLY the ticked row and leaves the others on the default background', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    const row2 = screen.getByTestId('movement-row-m2');
+    expect(backgroundUtilities(row1)).toEqual(['bg-primary/5']);
+    // Negative half: the untouched row must NOT have picked up the tint, and it
+    // must still carry its own default background (so this cannot pass just
+    // because the class list came back empty).
+    expect(backgroundUtilities(row2)).toEqual(['bg-card']);
+  });
+
+  it('removes the tint when the row is unticked', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+    expect(backgroundUtilities(screen.getByTestId('movement-row-m1'))).toEqual(['bg-primary/5']);
+
+    fireEvent.click(rowCheckbox(0));
+    expect(backgroundUtilities(screen.getByTestId('movement-row-m1'))).toEqual(['bg-card']);
+  });
+
+  it('keeps the tint under the pointer: the selected row carries hover:bg-primary/5 and no competing hover background', () => {
+    render(<SelectableMovements movements={TWO_ROWS} />);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    // Exactly one hover background, and it is the tint — not `hover:bg-card`
+    // (the old hardcoded value) and not TableRow's own `hover:bg-muted/50`,
+    // which tailwind-merge must have dropped.
+    expect(hoverBackgroundUtilities(row1)).toEqual(['hover:bg-primary/5']);
+    expect(row1.className).not.toContain('hover:bg-muted/50');
+    expect(row1.className).not.toContain('hover:bg-card');
+    // The unselected sibling keeps the original hover background.
+    expect(hoverBackgroundUtilities(screen.getByTestId('movement-row-m2'))).toEqual(['hover:bg-card']);
+  });
+
+  it('collision — selected + deep-link highlighted: selection wins the background, the highlight keeps its ring, and exactly one background is emitted', () => {
+    render(<SelectableMovements movements={TWO_ROWS} highlightTxnId="m1" />);
+
+    const beforeTick = screen.getByTestId('movement-row-m1');
+    // Sanity: highlighted-but-unselected still uses the highlight background,
+    // so the assertion after the tick is a real change of state.
+    expect(backgroundUtilities(beforeTick)).toEqual(['bg-[hsl(var(--muted))]']);
+
+    fireEvent.click(rowCheckbox(0));
+
+    const row1 = screen.getByTestId('movement-row-m1');
+    // The trap this whole ticket is about: two background utilities on one
+    // element do NOT let the last one win (Tailwind resolves them by stylesheet
+    // order), so the row could carry `bg-primary/5` and still render grey.
+    expect(countBackgroundUtilities(row1)).toBe(1);
+    expect(backgroundUtilities(row1)).toEqual(['bg-primary/5']);
+    expect(hoverBackgroundUtilities(row1)).toEqual(['hover:bg-primary/5']);
+    // The highlight cue survives as a ring (box-shadow, no layout cost).
+    expect(row1.className).toContain('ring-1');
+    expect(row1.className).toContain('ring-focus-ring');
+  });
+});
+
+// ── ETP-5101 — editable Project/Cost center/Product in the "más información" panel ─────────
+// A dimension only ever becomes a live ChipSelect when BOTH: (a) it is one of the three
+// EDITABLE_DIMENSION_KEYS, and (b) ctx.canEditDimensions(movement) is true — i.e. the movement
+// is a GL transaction (no paymentId) and not posted. Every other combination keeps the original
+// plain disabled <Input>.
+describe('MovementsTable — editable dimensions (ETP-5101)', () => {
+  beforeEach(() => {
+    updateMovement.mockReset();
+    toastError.mockClear();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  // Real shape captured from GET /sws/neo/financial-account-transactions, trimmed to what
+  // buildDimensionUpdatePayload and the panel actually read.
+  const editableMovement = (over = {}) => baseMovement({
+    posted: 'N',
+    paymentId: undefined,
+    trxType: 'BPD',
+    date: '2026-08-28T00:00:00Z',
+    depositAmount: 14.52,
+    withdrawalAmount: 0,
+    description: 'Factura Nº : 10000016.',
+    glItemId: '',
+    bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+    projectId: '',
+    costcenterId: '',
+    productId: '',
+    dimensions: { project: '', costcenter: '', product: '' },
+    ...over,
+  });
+
+  it('renders a live ChipSelect (not a disabled Input) for project/costCenter/product on a not-posted, non-payment-linked movement', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).getByTestId('movement-dimension-project-value')).toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-dimension-costcenter-value')).toBeInTheDocument();
+    expect(within(panel).getByTestId('movement-dimension-product-value')).toBeInTheDocument();
+    // No disabled Input rendered for any of the three.
+    expect(within(panel).queryByDisplayValue('Proj A')).not.toBeInTheDocument();
+    expect(within(panel).queryByDisplayValue('CC 1')).not.toBeInTheDocument();
+    expect(within(panel).queryByDisplayValue('Prod X')).not.toBeInTheDocument();
+  });
+
+  it('keeps the plain disabled Input for a POSTED movement, even though it would otherwise be editable', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        posted: 'Y',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-costcenter-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-product-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+  });
+
+  it('keeps the plain disabled Input for a payment-linked movement, even when NOT posted', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        posted: 'N',
+        paymentId: 'pay-1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+  });
+
+  // Regression test for the bug caught in PR #1318 review: `accountCurrencyId` defaults to
+  // `null` on MovementsTable and can genuinely still be null/undefined during initial load,
+  // before the parent has resolved the account's currency. `saveDimension` always forwards
+  // `ctx.accountCurrencyId` verbatim as `currencyId` in the PATCH payload (buildDimensionUpdatePayload),
+  // so allowing an edit before it resolves would guarantee an avoidable backend rejection. An
+  // otherwise-editable movement (GL transaction, not posted, no linked payment) must still fall
+  // back to the plain disabled Input while the currency has not resolved yet.
+  it('keeps the plain disabled Input when accountCurrencyId has not resolved yet, even though the movement would otherwise be editable', () => {
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A', costcenter: 'CC 1', product: 'Prod X' },
+      })],
+      accountCurrencyId: null,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-costcenter-value')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-dimension-product-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('CC 1')).toBeDisabled();
+    expect(within(panel).getByDisplayValue('Prod X')).toBeDisabled();
+
+    // It must be impossible to trigger a save in this state: there is no pick/clear control
+    // to click, and updateMovement must never be invoked.
+    expect(screen.queryByTestId('movement-dimension-project-pick')).not.toBeInTheDocument();
+    expect(updateMovement).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain disabled Input when accountCurrencyId is undefined (prop simply not passed yet)', () => {
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({
+        id: 'm1',
+        dimensions: { project: 'Proj A' },
+      })],
+      accountCurrencyId: undefined,
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+
+    expect(within(panel).queryByTestId('movement-dimension-project-value')).not.toBeInTheDocument();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeDisabled();
+  });
+
+  // Direct/unit-level check (per the ticket's own note): the allowlist itself never includes
+  // the dimensions the backend has no write path for, regardless of canEditDimensions — this
+  // window's contract mock above only ever surfaces project/costCenter/product in the panel, so
+  // there is no way to get e.g. organization to actually render here to assert on.
+  it('EDITABLE_DIMENSION_KEYS only ever contains project/costcenter/product — never organization, activity, campaign, salesregion, user1 or user2', () => {
+    const src = readFileSync(join(__dirname, '..', 'MovementsTable.jsx'), 'utf8');
+    const match = src.match(/EDITABLE_DIMENSION_KEYS\s*=\s*new Set\(\[([^\]]*)\]\)/);
+    expect(match).not.toBeNull();
+    const keys = match[1].split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean);
+    expect(keys.sort()).toEqual(['costcenter', 'product', 'project']);
+    for (const excluded of ['organization', 'activity', 'campaign', 'salesregion', 'user1', 'user2']) {
+      expect(keys).not.toContain(excluded);
+    }
+  });
+
+  it('saves a picked dimension via updateMovement (payload matches buildDimensionUpdatePayload) and reloads on success', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockResolvedValue({ id: 'm1' });
+    renderTable({
+      enabledDimensions: ['project', 'costcenter', 'product'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(updateMovement).toHaveBeenCalledOnce());
+    expect(updateMovement.mock.calls[0][0]).toMatchObject({
+      id: 'm1',
+      trxType: 'BPD',
+      transactionDate: '2026-08-28T00:00:00Z',
+      accountingDate: '2026-08-28T00:00:00Z',
+      depositAmount: 14.52,
+      paymentAmount: 0,
+      currencyId: 'cur-eur',
+      description: 'Factura Nº : 10000016.',
+      glItemId: null,
+      bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+      costcenterId: null,
+      productId: null,
+      projectId: 'movement-dimension-project-id',
+      process: false,
+    });
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+  });
+
+  it('clears a dimension by sending null for its id field, not undefined or an omitted key', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockResolvedValue({ id: 'm1' });
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({
+        id: 'm1',
+        projectId: 'proj-old',
+        dimensions: { project: 'Old Proj' },
+      })],
+      onReload,
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-clear'));
+
+    await waitFor(() => expect(updateMovement).toHaveBeenCalledOnce());
+    const payload = updateMovement.mock.calls[0][0];
+    expect(payload).toHaveProperty('projectId', null);
+    expect(payload.projectId).not.toBeUndefined();
+    await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+  });
+
+  it('shows the translated/raw backend error on a failed save and does NOT reload', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockRejectedValueOnce(new Error('Backend says no'));
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Backend says no'));
+    expect(onReload).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic dimension-update error key when the backend gives no message, and does NOT reload', async () => {
+    const onReload = vi.fn();
+    updateMovement.mockRejectedValueOnce(new Error(''));
+    renderTable({
+      enabledDimensions: ['project'],
+      movements: [editableMovement({ id: 'm1' })],
+      onReload,
+      accountCurrencyId: 'cur-eur',
+    });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    fireEvent.click(screen.getByTestId('movement-dimension-project-pick'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountTxRowDimensionUpdateError'));
+    expect(onReload).not.toHaveBeenCalled();
   });
 });

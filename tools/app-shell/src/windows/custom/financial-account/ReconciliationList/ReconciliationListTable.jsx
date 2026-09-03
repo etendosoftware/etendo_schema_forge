@@ -166,10 +166,17 @@ export function ReconciliationListTable({
   };
 
 
+  // Only the true initial fetch (no rows yet) wipes the body into skeleton rows below. A later
+  // refresh already has rows to show, so it stays smooth via this opacity dim instead — same
+  // reasoning as MovementsTable / StatementsTable / ListView's own ownScroll gate.
+  const dimWhileRefreshing = loading && reconciliations.length > 0
+    ? 'opacity-70 transition-opacity duration-200'
+    : 'transition-opacity duration-200';
+
   return (
     // Full-bleed like the Imported Statements grid: no card border/radius, the rows' own bottom
     // borders carry the structure.
-    <div role="table" className="w-full" data-testid="reconciliation-list-table">
+    <div role="table" className={cn('w-full', dimWhileRefreshing)} data-testid="reconciliation-list-table">
       {/* Header styled like the Movements table: sentence case, semibold, foreground colour —
           not the uppercase muted small-caps used elsewhere. */}
       <div
@@ -202,7 +209,7 @@ export function ReconciliationListTable({
 
 /** Extracted so the loading / empty / rows branching isn't a nested ternary (Sonar). */
 function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle }) {
-  if (loading) {
+  if (loading && reconciliations.length === 0) {
     return SKELETON_ROWS.map((n) => (
       <div
         key={n}

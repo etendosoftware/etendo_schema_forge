@@ -26,6 +26,7 @@ import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
 import { SyncStatusInline } from '@/components/financial-accounts/SyncStatusInline';
+import { RefreshButton } from '@/components/financial-accounts';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 
 /** Tabs whose content `handleExport` knows how to stream as CSV. */
@@ -39,6 +40,12 @@ const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
 // are pre-derived server-side on the transaction rows, so the generic exporter
 // stays a dumb serializer. `foreignAmount`/`foreignCurrency` are not exposed yet
 // → those keys are absent on the row and render as empty cells (as in Classic).
+// ETP-5020: this whole column list is a hardcoded, unlocalized mirror of
+// Classic's own CSV export headers (by design — every label here, not just
+// "G/L Item", stays in Classic's English regardless of active UI locale).
+// Classic itself is out of scope for the "Cuenta contable"/"Accounting
+// account" rename, so `glItem:G/L Item` is deliberately left unrenamed to
+// keep byte-for-byte parity with what a Classic export produces.
 const MOVEMENT_CSV_COLUMNS = [
   'transactionTypeLabel:Transaction Type',
   'paymentLabel:Payment',
@@ -72,6 +79,8 @@ const HEADER_CSV_COLUMNS = [
   'status:Status',
 ].join('|');
 
+// ETP-5020: same Classic-parity rationale as MOVEMENT_CSV_COLUMNS above —
+// `glItemName:G/L Item` is deliberately left unrenamed.
 const LINE_CSV_COLUMNS = [
   'description:Description',
   'lineNo:Line No.',
@@ -117,7 +126,14 @@ export function FinancialAccountDetail({ recordId }) {
   );
   const [autoMatchOpen, setAutoMatchOpen] = useState(false);
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
-  const [highlightTxnId, setHighlightTxnId] = useState(() => searchParams.get('txn') || null);
+  // `txnAny` is the same deep-link with one extra promise: the target may be OLDER than the
+  // Movements tab's 30-day default, so that tab must open its date filter unbounded or the row
+  // would not be loaded at all. Kept as a separate param (ETP-5013 follow-up) so the four
+  // in-app `?txn=` callers, which always point at a recent movement, keep their default view.
+  const [highlightTxnId, setHighlightTxnId] = useState(
+    () => searchParams.get('txn') || searchParams.get('txnAny') || null,
+  );
+  const [txnUnbounded, setTxnUnbounded] = useState(() => Boolean(searchParams.get('txnAny')));
   // Auto-open the New-movement modal (deep-link from the accounts-grid row kebab).
   const [autoOpenNewMovement, setAutoOpenNewMovement] = useState(
     () => searchParams.get('newMovement') === 'true',
@@ -128,21 +144,24 @@ export function FinancialAccountDetail({ recordId }) {
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     setHighlightTxnId(null);
+    setTxnUnbounded(false);
     setAutoMatchArmed(tab === 'reconciliation');
   }, []);
 
-  // Apply deep-link params (tab / autoMatch / txn / newMovement / edit) and clear them. Reacts to searchParams changes
+  // Apply deep-link params (tab / autoMatch / txn / txnAny / newMovement / edit) and clear them. Reacts to searchParams changes
   // — not just mount — because navigating within the SAME account (e.g. from the reconciled-txns
   // modal to the Movements tab) updates the URL without remounting this window.
   useEffect(() => {
     const tab = searchParams.get('tab');
     const txn = searchParams.get('txn');
+    const txnAny = searchParams.get('txnAny');
     const autoMatch = searchParams.get('autoMatch');
     const newMovement = searchParams.get('newMovement');
     const edit = searchParams.get('edit');
-    if (!tab && !txn && !autoMatch && !newMovement && !edit) return;
+    if (!tab && !txn && !txnAny && !autoMatch && !newMovement && !edit) return;
     if (tab) setActiveTab(tab);
-    if (txn) setHighlightTxnId(txn);
+    if (txn || txnAny) setHighlightTxnId(txn || txnAny);
+    if (txnAny) setTxnUnbounded(true);
     if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchArmed(true);
     if (newMovement === 'true') setAutoOpenNewMovement(true);
     if (edit === 'true') setEditOpen(true);
@@ -217,6 +236,19 @@ export function FinancialAccountDetail({ recordId }) {
   const {
     reconciliations, loading: reconciliationsLoading, reload: reloadReconciliations,
   } = useReconciliations(isCashAccount ? recordId : null);
+  // The header's refresh button while the Reconciliation tab is open. Deliberately the SAME
+  // full reload `handleAutoMatchSuccess` performs, plus the cash side: whichever of the two
+  // screens is mounted (bank split panel / cash close) re-runs its matching from scratch via the
+  // remount key, and the surrounding account + movements + tab badges come back fresh with it.
+  // `reloadAutoMatch` is idle on a cash account and `reloadReconciliations` on a bank one (both
+  // hooks are passed `null` there), so calling all of them is safe on either type.
+  const handleReconciliationRefresh = useCallback(() => {
+    reloadAccount();
+    reloadAutoMatch();
+    reloadMovements();
+    reloadReconciliations();
+    setReconciliationRefreshKey((k) => k + 1);
+  }, [reloadAccount, reloadAutoMatch, reloadMovements, reloadReconciliations]);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
   const runCsvExport = useCsvExport();
@@ -341,6 +373,17 @@ export function FinancialAccountDetail({ recordId }) {
             }}
             data-testid="DetailTabs__f7dbb3" />
           <div className="flex items-center gap-2">
+            {/* Reconciliation is the one tab whose toolbar gets no refresh button of its own:
+                the bank split panel's toolbar belongs to its LEFT column, so a button there
+                would reload only the statement lines, and the cash-close screen has no toolbar
+                at all. Sitting here it reloads the whole tab — account, movements, and whichever
+                of the two screens is mounted (via the remount key). */}
+            {activeTab === 'reconciliation' ? (
+              <RefreshButton
+                onRefresh={handleReconciliationRefresh}
+                label={ui('refresh')}
+                data-testid="RefreshButton__f7dbb3" />
+            ) : null}
             <button
               type="button"
               data-testid="financial-account-edit"
@@ -397,6 +440,7 @@ export function FinancialAccountDetail({ recordId }) {
               loading={movementsLoading}
               onReload={reloadMovements}
               highlightTxnId={highlightTxnId}
+              txnUnbounded={txnUnbounded}
               autoOpenNewMovement={autoOpenNewMovement}
               data-testid="MovementsTab__f7dbb3" />
           )}
@@ -430,6 +474,7 @@ export function FinancialAccountDetail({ recordId }) {
               account={account}
               reconciliations={reconciliations}
               loading={reconciliationsLoading}
+              onRefresh={reloadReconciliations}
               data-testid="ReconciliationListTab__f7dbb3" />
           )}
         </div>
@@ -443,6 +488,7 @@ export function FinancialAccountDetail({ recordId }) {
         open={autoMatchOpen && !isCashAccount}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
+        onEditAccount={() => setEditOpen(true)}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
         open={editOpen}

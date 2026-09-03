@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-07-31T19:26:59.908Z",
-  "contractChecksum": "f6d274f65844ac8e",
+  "updatedAt": "2026-08-27T15:11:37.217Z",
+  "contractChecksum": "7c8084d663b32794",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -618,7 +618,8 @@
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
-        "ProductType": "Tipo"
+        "ProductType": "Tipo",
+        "Value": "Código"
       }
     }
   },
@@ -1086,5 +1087,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "376161ffad8a1699"
+  "checksum": "8c7c572283033fee"
 }

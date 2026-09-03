@@ -132,9 +132,16 @@
   flex-direction: column;
   overflow: hidden;
   pointer-events: auto;
+  transition: right .22s cubic-bezier(.2,.8,.2,1), width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
   animation: sc-chat-in .22s cubic-bezier(.2,.8,.2,1);
   transform-origin: bottom right;
-  transition: width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
+}
+
+/* Copilot's own panel docks to the same bottom-right corner (right:24px, up to 448px wide) —
+   shift ours clear of it while both are open, instead of the two floating windows stacking on
+   top of each other. 448 (Copilot's max-w-md) + 24 (its right offset) + 20 (gap) = 492px. */
+.sc-panel.sc-panel--copilot-open {
+  right: 492px;
 }
 
 @keyframes sc-chat-in {
@@ -324,7 +331,6 @@
   color: var(--sc-fg-2);
 }
 .sc-avatars .sc-av:first-child { margin-left: 0; }
-.sc-avatars .sc-av.bot { background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary))); }
 
 .sc-inicio-search-card {
   background: hsl(var(--card));
@@ -425,7 +431,6 @@
   width: 36px;
   height: 36px;
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -448,6 +453,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.sc-t-key { color: var(--sc-fg-3); font-weight: 400; }
 .sc-t-time { font: 400 12px/16px 'Inter', sans-serif; color: var(--sc-fg-3); flex-shrink: 0; }
 .sc-t-preview {
   font: 400 13px/18px 'Inter', sans-serif;
@@ -619,18 +625,24 @@
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  position: relative;
   overflow: hidden;
 }
 .sc-conv-av.human {
   background: var(--sc-purple-100);
   color: var(--sc-purple-700);
   font: 600 12px/1 'Inter', sans-serif;
+}
+/* Wraps .sc-conv-av (which clips its content into a circle via overflow:hidden) so the status
+   dot below can sit in the corner and NOT get clipped along with it — the dot is a sibling
+   here, not a child of the clipped element. */
+.sc-conv-av-wrap {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
 }
 .sc-status-dot {
   position: absolute;
@@ -724,7 +736,6 @@
   justify-content: center;
   overflow: hidden;
   align-self: flex-end;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
 }
 .sc-bub-av.human { background: var(--sc-purple-100); color: var(--sc-purple-700); font: 600 11px/1 'Inter', sans-serif; }
 .sc-msg.user .sc-bub-av { display: none; }
@@ -851,23 +862,20 @@
   position: relative;
   display: inline-flex;
 }
-/* Escalate CTA: a deliberate brand-navy color matching a specific reference design — checked
-   the --primary/--foreground token families, neither covers this exact navy (--primary in
-   light mode collapses to near-black, not this blue). Same "no existing semantic precedent"
-   situation as the AEAT-349 purple case in semanticThemeUsage.test.js — kept as a literal via
-   its DATA_COLOR_LITERALS entry rather than inventing an unvetted token. */
+/* Escalate CTA: Etendo brand yellow — same --accent-highlight token the "Inicio" nav item
+   uses when active, so this reuses an existing semantic precedent instead of a literal. */
 .sc-escalate-btn {
   font: 600 12px/18px 'Inter', sans-serif;
-  color: hsl(var(--background));
-  background: #202452;
+  color: hsl(var(--accent-highlight-foreground));
+  background: hsl(var(--accent-highlight));
   border: 0;
   padding: 6px 14px;
   border-radius: 999px;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(32,36,82,.32), 0 1px 2px rgba(32,36,82,.2);
+  box-shadow: 0 4px 14px hsl(var(--accent-highlight) / .32), 0 1px 2px hsl(var(--accent-highlight) / .2);
 }
-.sc-escalate-btn:hover { background: #2c3168; }
+.sc-escalate-btn:hover { background: hsl(var(--accent-highlight) / .85); }
 /* Dismiss ("x"): same discoverable-on-hover pattern as the FAB's own dismiss — hidden until
    the bar is hovered/focused, so the user who doesn't mind it sees a clean pill button. */
 .sc-escalate-dismiss {

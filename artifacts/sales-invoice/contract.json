@@ -1,8 +1,8 @@
 {
   "version": "0.85.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-08-25T12:01:18.598Z",
-  "checksum": "a72bd6c60871cfb0",
+  "updatedAt": "2026-09-02T18:18:22.467Z",
+  "checksum": "c15df152b7b44e72",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -45,7 +45,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -53,27 +53,26 @@
         }
       },
       "salesTheme": true,
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -2758,6 +2757,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "noTrailing": true,
             "validation": {
               "required": true,
               "maxLength": 15
@@ -2828,7 +2828,7 @@
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
-          "label": "Exchange Rates",
+          "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
           "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -2836,27 +2836,26 @@
         }
       },
       "salesTheme": true,
-      "headerExtra": {
-        "customForm": "SifErrorBanner"
-      },
       "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
-          "OutstandingAmt": "Pendiente de pago",
+          "OutstandingAmt": "Saldo pendiente",
           "EM_Etgo_Due_Date": "Vencimiento",
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "Foreign_Amount": "Importe en Moneda Objetivo"
         },
         "en_US": {
-          "OutstandingAmt": "Pending Payment",
+          "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
-          "C_DocTypeTarget_ID": "Document Type"
+          "C_DocTypeTarget_ID": "Document Type",
+          "Foreign_Amount": "Target Currency Amount"
+        },
+        "es_AR": {
+          "OutstandingAmt": "Saldo pendiente"
         }
-      },
-      "listViewOptions": {
-        "hidePrint": true
       },
       "subsetFilters": [
         {
@@ -5935,17 +5934,22 @@
     },
     "labelOverrides": {
       "es_ES": {
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "Foreign_Amount": "Importe en Moneda Objetivo"
       },
       "en_US": {
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
-        "C_DocTypeTarget_ID": "Document Type"
+        "C_DocTypeTarget_ID": "Document Type",
+        "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     }
   },

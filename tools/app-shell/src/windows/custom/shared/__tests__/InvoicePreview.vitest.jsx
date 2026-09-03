@@ -356,10 +356,20 @@ describe('InvoicePreview', () => {
       expect(lastCall.exchangeRate).toBeCloseTo(2.5);
     });
 
-    it('falls back to the system exchange rate when eTGOCurrencyRate is 1', () => {
+    // ETP-4836 — a genuinely different (deliberately 1:1-pegged) document
+    // currency with eTGOCurrencyRate === 1 must use that real rate, not the
+    // system rate. `1` is not a sentinel for "no override": that's already
+    // handled by the `!isSameCurrency` guard in resolveDualCurrencyDisplay,
+    // which zeroes out etgoRate entirely when the document currency equals
+    // the org currency (covered separately above, "no dual-currency display
+    // when currencies match"). Before this fix, eTGOCurrencyRate === 1 was
+    // wrongly treated the same as "not set" and silently substituted the
+    // system rate, showing an incorrect converted total for any 1:1-pegged
+    // foreign currency (live-verified on both sales-invoice and sales-order).
+    it('uses the per-document eTGOCurrencyRate override when it is exactly 1 for a genuinely different currency', () => {
       useDocumentCurrency.mockReturnValue({
         orgCurrencyCode: 'EUR',
-        exchangeRate: 2.5,
+        exchangeRate: 2.5, // system rate — must NOT be used here
         isSameCurrency: false,
         loading: false,
         convertAmount: () => null,
@@ -376,7 +386,10 @@ describe('InvoicePreview', () => {
       renderInvoicePreview({ invoice: invoiceWithUnitOverride });
 
       const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
-      expect(lastCall.exchangeRate).toBeCloseTo(2.5);
+      expect(lastCall.exchangeRate).toBeCloseTo(1);
+      expect(lastCall.exchangeRate).not.toBeCloseTo(2.5);
+      // orgGrandTotal = 1000 / 1 = 1000
+      expect(lastCall.orgGrandTotal).toBeCloseTo(1000, 2);
     });
   });
 

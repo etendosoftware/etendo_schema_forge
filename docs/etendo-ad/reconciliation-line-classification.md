@@ -1,12 +1,20 @@
 # Reconciliation line classification — how a statement line lands in each filter
 
-How a pending `FIN_BankStatementLine` is classified into the left-panel filters of the
-Conciliación tab (**Pendiente**, **Sugerido**, **Por regla**, **Diferencias**, **Conciliadas**),
-what the standard matching algorithm's three flags actually change, and why **Diferencias** is
-unreachable under the configuration currently shipped to every client.
+How a pending `FIN_BankStatementLine` is classified into one of five **states** (`pending`,
+`suggested`, `byRule`, `difference`, `reconciled` — the five rows of the table below), what the
+standard matching algorithm's three flags actually change, and why **Diferencias** is unreachable
+under the configuration currently shipped to every client.
 
 This is general Etendo behaviour (Core's `StandardMatchingAlgorithm` plus our classifier), not
 specific to any one window or feature.
+
+**A state is not the same thing as a filter (ETP-5033).** The classification below still puts
+exactly one state on a line, but the left-panel **Pendientes** filter is a *superset*: it shows
+every line whose state is not `reconciled` (i.e. `pending` + `suggested` + `byRule` + `difference`).
+**Con sugerencia**, **Por regla** and **Diferencias** are strict subsets of it — a suggested line
+appears both under Pendientes and under Con sugerencia. See `reconciliationStatusFilter.js`
+(`STATUS_MEMBERS`) for the filter→states mapping, and the "Left-panel state filter" bullet in
+`docs/generated-custom-windows/financial-account.md` for the UI-facing summary.
 
 ## 1. The classification chain
 
@@ -150,4 +158,34 @@ the Diferencias filter is *theoretically* reachable today, not a case worth rely
 | The queries behind each pass | `modules_core/org.openbravo.advpaymentmngt/.../dao/MatchTransactionDao.java` |
 | Flag storage | `FIN_MATCHING_ALGORITHM` table, per financial account |
 | Our classifier + date window | `AutoMatchSupport.classifyPendingLine` / `standardMatchLevel` (com.etendoerp.go) |
-| Filter chips and badges | `ReconciliationSplitPanel.jsx` — `STATUS_CODES`, `STATUS_LABEL_KEYS` |
+| Filter membership (which states each filter code shows) | `reconciliationStatusFilter.js` — `STATUS_CODES`, `STATUS_MEMBERS`, `matchesStatus` |
+| Filter chips and row badges | `ReconciliationSplitPanel.jsx` — `STATUS_LABEL_KEY` |
+
+## 6. Consuming candidates across a batch (ETP-4971)
+
+Every query behind the standard algorithm's two passes filters on an **exact** amount match with
+no ordering (`MatchTransactionDao`, no `ORDER BY`), so with several pending lines of the identical
+amount, `transactions.get(0)` would return the *same* candidate transaction for every one of them —
+unless the caller excludes what earlier lines already claimed. Core's own auto-match driver
+(`MatchStatementOnLoadActionHandler.runAutoMatchingAlgorithm`) does this via a single `excluded`
+list that grows with every accepted match across the whole batch, in `bsl.transactionDate,
+bsl.lineNo` order (first pending line wins the transaction).
+
+`AutoMatchSupport.classifyPendingLine` and `ReconciliationHandler.suggestedTransactionIds` now have
+overloads that accept the same kind of shared accumulator (`Set<String> usedTxnIds,
+List<FIN_FinaccTransaction> excludedTxns`) and feed it into `AutoMatchSupport.standardMatch`
+(the single place that calls `FIN_MatchingTransaction.match(line, excluded)`). Two call sites share
+one accumulator each, in the same `datetrx, line` order the underlying SQL already returns:
+
+- `ReconciliationHandler.buildAutoMatch` — the actual Automatch preview. Before ETP-4971 this
+  called the standard algorithm with an always-empty `excluded` list, so N pending lines of the
+  same amount only ever produced ONE suggestion per run (accepting it and re-running Automatch
+  revealed the next one, one at a time).
+- `ReconciliationHandlerSupport.summarizePendingLines` — the left-panel `pendingLines` classifier.
+  Without the same accumulator its `suggested` count would over-report: a same-amount line whose
+  only candidate was already claimed by an earlier line would still be counted `suggested`, even
+  though an actual Automatch run would leave it `pending`.
+
+The no-accumulator overloads of both methods still exist for single-line lookups (e.g.
+`buildCandidates`'s right-panel preselection, which only ever classifies the one selected line) —
+they just create a fresh, empty accumulator per call, so their behavior is unchanged.

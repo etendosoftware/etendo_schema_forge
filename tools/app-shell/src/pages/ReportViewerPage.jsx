@@ -8,9 +8,11 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { ViewToggle } from '@/components/contract-ui/ListView.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -20,6 +22,22 @@ function getEtendoBase() {
   return import.meta.env.VITE_API_BASE || '';
 }
 const ETENDO_BASE = getEtendoBase();
+
+// Downloaded file name stamp (ETP-5013) — "<report-id>-DD-MM-YYYY.<ext>",
+// mirroring Classic's own export naming (e.g. "Trial Balance-26-08-2026
+// ...pdf") so a report downloaded twice in the same day no longer silently
+// overwrites the earlier file. Local wall-clock time on purpose — this is a
+// download-moment stamp for the person clicking the button, not a
+// business/calendar date, so it deliberately does NOT go through
+// parseCalendarDate/formatCalendarDate (dateOnly.js) — those are for
+// timezone-safe business dates, a different problem.
+function buildReportFilename(reportId, format, suffix = '') {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  return `${reportId}${suffix}-${dd}-${mm}-${yyyy}.${format}`;
+}
 
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
@@ -44,7 +62,32 @@ const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
 // literals in application UI outside its documented exceptions. Proportions
 // otherwise match the Figma "Card With Image Tags" component's Imagen layer
 // (313:180 aspect). It never reflects a report's real columns/content.
-function ReportCardPreview() {
+// Static preview illustrations for the report catalog cards (ETP-5013) —
+// dropped in public/report-previews/<reportId>.png and served at that same
+// path by Vite's static-public handling. Keyed by the CONTRACT's reportId
+// (e.g. 'report-general-ledger'), never the display title. A report with no
+// entry here still gets the generic skeleton below — never a broken <img>.
+const REPORT_PREVIEW_IMAGES = {
+  'aging-payable': '/report-previews/aging-payable.png',
+  'aging-receivable': '/report-previews/aging-receivable.png',
+  'balance-sheet': '/report-previews/balance-sheet.png',
+  'inventory-stock-report': '/report-previews/inventory-stock-report.png',
+  'profit-loss': '/report-previews/profit-loss.png',
+  'report-general-ledger': '/report-previews/report-general-ledger.png',
+  'report-journal-entries': '/report-previews/report-journal-entries.png',
+  'report-trial-balance': '/report-previews/report-trial-balance.png',
+  'tax-report': '/report-previews/tax-report.png',
+};
+
+function ReportCardPreview({ reportId }) {
+  const imageSrc = REPORT_PREVIEW_IMAGES[reportId];
+  if (imageSrc) {
+    return (
+      <div className="relative w-full aspect-[313/180] rounded-lg bg-muted overflow-hidden">
+        <img src={imageSrc} alt="" className="w-full h-full object-cover" draggable="false" />
+      </div>
+    );
+  }
   return (
     <div
       className="relative w-full aspect-[313/180] rounded-lg bg-muted overflow-hidden pointer-events-none select-none"
@@ -85,7 +128,6 @@ function ReportCardPreview() {
 // foreground/muted-foreground text, all resolved from the current theme
 // instead of Figma's light-mode-only colors.
 function ReportCard({ report, onRun }) {
-  const ui = useUI();
   const { locale } = useLocaleSwitch();
   const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   return (
@@ -93,20 +135,17 @@ function ReportCard({ report, onRun }) {
       onClick={() => onRun(report)}
       className="flex flex-col items-stretch w-full p-1 rounded-xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md transition-all text-left overflow-hidden"
     >
-      <ReportCardPreview data-testid="ReportCardPreview__3c998a" />
+      <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
       <div className="flex flex-col items-stretch gap-1 p-3">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-8 w-8 shrink-0 rounded-lg bg-card border border-input shadow-sm">
-            <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__3c998a" />
-          </div>
           <h3 className="text-base font-medium text-foreground min-w-0 truncate">{reportTitle}</h3>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {report.type === 'grouped-listing' ? ui('Grouped Report') : ui('Listing Report')}
-          {report.orientation === 'landscape' ? ` — ${ui('Landscape')}` : ''}
-        </p>
         <div className="flex gap-2 flex-wrap pt-1">
-          {(report.outputs || []).map(o => (
+          {/* 'html' is filtered out here only — it's still a real entry in
+              report.outputs (the preview render uses it), just not something
+              the catalog card should advertise as a downloadable format
+              alongside PDF/XLSX/CSV (ETP-5013). */}
+          {(report.outputs || []).filter(o => o !== 'html').map(o => (
             <span key={o} className="inline-flex items-center px-2 py-1 rounded-lg bg-muted text-xs font-normal text-muted-foreground uppercase">{o}</span>
           ))}
         </div>
@@ -130,6 +169,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const sentinelRef = useRef(null);
+  const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (open) { setQuery(''); setOptions([]); setOffset(0); setHasMore(false); setFocusIdx(-1); setTimeout(() => inputRef.current?.focus(), 50); }
@@ -138,7 +178,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   const fetchPage = useCallback((q, off, append) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const params = `q=${encodeURIComponent(q)}&limit=${SELECTOR_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
-    return fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    return apiFetch(`/sws/report-selectors/${selector}?${params}`)
       .then(r => r.json())
       .then(data => {
         const items = Array.isArray(data) ? data : (data?.items ?? []);
@@ -152,7 +192,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
         setOffset(off + items.length);
         setFocusIdx(-1);
       });
-  }, [selector, extraParams]);
+  }, [selector, extraParams, apiFetch]);
 
   useEffect(() => {
     if (!open) return;
@@ -287,6 +327,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
   const ref = useRef(null);
   const touched = useRef(false); // prevent auto-fetch on mount
   const extraParamsRef = useRef(extraParams);
+  const apiFetch = useApiFetch(ETENDO_BASE);
   useEffect(() => { extraParamsRef.current = extraParams; });
 
   const buildUrl = useCallback((q) => {
@@ -313,11 +354,11 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
       if (selectedOrgId) params.set('selectedOrgId', selectedOrgId);
       if (roleOrgIds && roleOrgIds.length > 0) params.set('roleOrgIds', roleOrgIds.join(','));
     }
-    fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?${params.toString()}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+    apiFetch(`/sws/report-selectors/${selector}?${params.toString()}`)
       .then(r => r.json())
       .then(data => { setOptions(normalizeOptions(data)); setOpen(true); })
       .catch(() => setOptions([]));
-  }, [selector, selectedOrgId, roleOrgIds]);
+  }, [selector, selectedOrgId, roleOrgIds, apiFetch]);
 
   useEffect(() => {
     if (!touched.current) return;
@@ -525,17 +566,18 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
   const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
   const inputRef = useRef(null);
+  const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
-      fetch(`${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+      apiFetch(`/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`)
         .then(r => r.json())
         .then(data => setOptions(Array.isArray(data) ? data : (data?.items ?? [])))
         .catch(() => setOptions([]));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
-  }, [query, open, selector]);
+  }, [query, open, selector, apiFetch]);
 
   const openModal = () => {
     setPending([...confirmed]);
@@ -672,6 +714,7 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
   const [options, setOptions] = useState([]);
   const inputRef = useRef(null);
   const extraParamsRef = useRef(extraParams);
+  const apiFetch = useApiFetch(ETENDO_BASE);
   useEffect(() => { extraParamsRef.current = extraParams; });
 
   useEffect(() => {
@@ -680,12 +723,13 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
       .filter(([, v]) => v)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
-    const url = `${ETENDO_BASE}/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
+    const path = `/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
     const t = setTimeout(() => {
-      fetch(url).then(r => r.json()).then(setOptions).catch(() => setOptions([]));
+      apiFetch(path)
+        .then(r => r.json()).then(setOptions).catch(() => setOptions([]));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
-  }, [query, open, selector]);
+  }, [query, open, selector, apiFetch]);
 
   const openModal = () => {
     setQuery('');
@@ -799,6 +843,20 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   // Independent open/closed state per section — several can be expanded at once,
   // unlike a classic single-open accordion.
   const [openSections, setOpenSections] = useState(() => ({ [report.sections?.[0]?.id]: true }));
+
+  // "Generar informe" is disabled if and only if a required (non-hidden)
+  // param is still empty (ETP-5013) — mirrors the parent's own
+  // `validateRequired()` exactly (same `isParamRequired`/`hidden` check), so
+  // a report the button lets you submit is a report validateRequired would
+  // also accept, and vice versa. Previously the button was only ever
+  // disabled by `loading`, so clicking it on an incomplete form did nothing
+  // visible until the errors appeared — this way the button itself signals
+  // "not ready yet" before the click.
+  const hasAllRequiredFilled = (report.parameters || []).every(p => {
+    if (p.hidden) return true;
+    if (!isParamRequired(p, params)) return true;
+    return !!params[p.name];
+  });
 
   useEffect(() => {
     setOpenSections({ [report.sections?.[0]?.id]: true });
@@ -1130,7 +1188,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
         </button>
         <button
           onClick={onSubmit}
-          disabled={loading}
+          disabled={loading || !hasAllRequiredFilled}
           className="flex-1 h-10 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? ui('running') : ui('runReport')}
@@ -1140,15 +1198,36 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   );
 }
 
-function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extraParams = {} }) {
+function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReportId, extraParams = {}, isolateParams = [] }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { locale } = useLocaleSwitch();
   const ui = useUI();
+  const apiFetch = useApiFetch('');
 
   const reportId = targetReportId || report.id;
-  const drillParams = { ...baseParams, ...(bpId ? { bPartnerId: bpId, showDetails: 'true' } : {}), ...extraParams };
+  // _display_bPartnerId matters for the same reason the account drill-down below
+  // sets _display_fromAccountId/_display_toAccountId: without it, "Open in new
+  // tab" and the target report's own sidebar chip both fall back to showing the
+  // raw UUID (ETP-5013) instead of the contact's name.
+  const drillParams = {
+    ...baseParams,
+    ...(bpId ? { bPartnerId: bpId, _display_bPartnerId: bpName || '', showDetails: 'true' } : {}),
+    ...extraParams,
+  };
+
+  // Params sent to the render request (preview + PDF/Excel/CSV downloads) —
+  // same as drillParams, but with `isolateParams` forced blank. Used by the GL
+  // entry drill-down: the parent report's own dimension filters (contact,
+  // product, date range...) still live in `baseParams` and must NOT narrow the
+  // render, or a filtered accounting entry would show incomplete/unbalanced
+  // (some of its lines dropped). Deliberately NOT applied to "Open in new tab"
+  // (drillParams, unmodified) — that link is meant to carry the user's own
+  // filters over for context/continuity, same as every other drill-down (ETP-5013).
+  const renderParams = isolateParams.length
+    ? { ...drillParams, ...Object.fromEntries(isolateParams.map((k) => [k, ''])) }
+    : drillParams;
 
   const writeToIframe = (html) => {
     const iframe = iframeRef.current;
@@ -1164,10 +1243,9 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ format, params: drillParams, locale }),
+        body: JSON.stringify({ format, params: renderParams, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1175,17 +1253,17 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
       }
       if (format === 'html' || format === 'preview') {
         writeToIframe(await res.text());
-      } else if (format === 'pdf') {
-        iframeRef.current.src = URL.createObjectURL(await res.blob());
       } else {
+        // Same as the main viewer: PDF downloads like Excel/CSV instead of
+        // taking over the preview iframe (ETP-5013).
         const url = URL.createObjectURL(await res.blob());
-        const a = document.createElement('a'); a.href = url; a.download = `${report.id}-detail.${format}`; a.click();
+        const a = document.createElement('a'); a.href = url; a.download = buildReportFilename(report.id, format, '-detail'); a.click();
         URL.revokeObjectURL(url);
       }
     } catch (err) { setError(err.message); }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report.id, token, bpId, locale]);
+  }, [report.id, apiFetch, bpId, locale]);
 
   useEffect(() => { fetchFormat('preview'); }, [fetchFormat]);
 
@@ -1237,7 +1315,19 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   );
 }
 
-function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, categoryFilter }) {
+// Maps Trial Balance's "Agrupar por" groupByValue key to the matching
+// General Ledger contract param (ETP-5013 follow-up) — both contracts use
+// the SAME groupByValue keys ('bpartner', 'product', 'project', 'costcenter')
+// for their own dimension params, so this is the one place that decides
+// which filter a dimension-row drill-down narrows General Ledger by.
+const TRIAL_BALANCE_DIMENSION_PARAM_NAMES = {
+  bpartner: 'bPartnerId',
+  product: 'productId',
+  project: 'projectId',
+  costcenter: 'costCenterId',
+};
+
+function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, roleOrgIds, categoryFilter }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1253,9 +1343,11 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const [resetKey, setResetKey] = useState(0);
   const [drillDownBp, setDrillDownBp] = useState(null);
   const [drillDownAccount, setDrillDownAccount] = useState(null);
+  const [drillDownEntry, setDrillDownEntry] = useState(null);
   const { locale } = useLocaleSwitch();
   const tMenu = useMenuLabel();
   const ui = useUI();
+  const apiFetch = useApiFetch(ETENDO_BASE);
   // Same URL state ReportViewerPage already reads for `report`/`category` — a
   // second useSearchParams() call is fine (React Router just re-reads the
   // current URL), used here to let a deep-link pre-fill the sidebar's filter
@@ -1267,7 +1359,28 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       if (e.data?.type === 'aging-drilldown' && e.data.bpId) {
         setDrillDownBp({ id: e.data.bpId, name: e.data.bpName || '' });
       } else if (e.data?.type === 'trial-balance-drilldown' && e.data.accountId) {
-        setDrillDownAccount({ id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '' });
+        // dimensionGroupBy/dimensionId/dimensionValue are only present when the
+        // click came from a dimension row (ETP-5013 follow-up) — the
+        // account-number link (no dimension) omits them, same modal either
+        // way. dimensionGroupBy carries the SAME groupByValue key both this
+        // report's and General Ledger's own contracts use ('bpartner',
+        // 'product', 'project', 'costcenter'), resolved to the target
+        // report's real param name here rather than hardcoding one dimension.
+        setDrillDownAccount({
+          id: e.data.accountId, name: e.data.accountName || '', value: e.data.accountValue || '',
+          dimensionParamName: TRIAL_BALANCE_DIMENSION_PARAM_NAMES[e.data.dimensionGroupBy] || '',
+          dimensionId: e.data.dimensionId || '', dimensionValue: e.data.dimensionValue || '',
+        });
+      } else if (e.data?.type === 'gl-entry-drilldown' && e.data.factAcctGroupId) {
+        // dateDisplay is a plain dd/MM/yyyy string (the shared report helpers'
+        // formatDate, fixed 'en-GB' formatting) — display-only, for the modal
+        // title. factAcctGroupId alone uniquely identifies the accounting entry,
+        // so it is never turned into a dateFrom/dateTo filter value: `pg` returns
+        // fact_acct.dateacct as a native JS Date, and an earlier version embedded
+        // it unformatted in the postMessage — Handlebars then emitted its
+        // Date.toString() ("Wed Aug 26 2026 ...") verbatim, which the JE query
+        // rejected as an invalid date literal after truncation (ETP-5013).
+        setDrillDownEntry({ id: e.data.factAcctGroupId, dateDisplay: e.data.dateDisplay || '' });
       } else if (e.data?.type === 'navigate-invoice' && e.data.invoiceId) {
         // Opens the invoice in a real new tab instead of an embedded modal —
         // the document window (sales-invoice/purchase-invoice) is decided by
@@ -1275,7 +1388,23 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         // hardcoded here, since this handler is shared by every report.
         const docWindow = e.data.docWindow || 'sales-invoice';
         const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
-        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}`, '_blank');
+        // Optional deep-link query the report itself supplies (ETP-5013
+        // follow-up): a financial-account transaction has no window of its
+        // own — it opens its PARENT account and needs `?txn=<id>` for that
+        // window to select/expand the right movement. Data-driven, like
+        // docWindow: this handler is shared by every report and never
+        // hardcodes a window's own param names.
+        //
+        // Key and value travel SEPARATELY, and the '=' is joined here rather
+        // than in the report's SQL on purpose: applyPlaceholders rewrites
+        // `= '...'` into an `IN (...)` list to support multi-select params,
+        // so a literal '=' next to a quote inside the query was swallowed by
+        // that rewrite and corrupted the SQL (ETP-5013 follow-up).
+        const { docQueryKey, docQueryValue } = e.data;
+        const docQuery = docQueryKey && docQueryValue
+          ? `?${encodeURIComponent(docQueryKey)}=${encodeURIComponent(docQueryValue)}`
+          : '';
+        window.open(`${window.location.origin}${basePath}/${docWindow}/${e.data.invoiceId}${docQuery}`, '_blank');
       }
     };
     window.addEventListener('message', handler);
@@ -1316,9 +1445,16 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     }
     if ('orgId' in defaults) {
       defaults.orgId = searchParams.get('orgId') || selectedOrgId || '';
+      // Real org name for the always-visible "Organización" filter summary
+      // entry (ETP-5013) — a deep-link URL that already carries its own
+      // `_display_orgId` (handled generically above) wins; otherwise seed it
+      // from the session's current org so the summary never shows a raw UUID.
+      if (!searchParams.has('_display_orgId')) {
+        defaults._display_orgId = selectedOrgName || '';
+      }
     }
     return defaults;
-  }, [report, selectedOrgId, searchParams]);
+  }, [report, selectedOrgId, selectedOrgName, searchParams]);
 
   const [params, setParams] = useState(getDefaultParams);
   // Lifted from ReportSidebar (ETP-4899): the top bar's PDF/Excel/CSV buttons call
@@ -1343,9 +1479,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     setParams(prev => {
       const nextOrgId = selectedOrgId || '';
       if ((prev.orgId || '') === nextOrgId) return prev;
-      return { ...prev, orgId: nextOrgId, _display_orgId: '' };
+      // Real org name, not blank (ETP-5013) — orgId is always shown in the
+      // filters summary now, so switching orgs mid-session must update the
+      // display name too, not just the hidden id.
+      return { ...prev, orgId: nextOrgId, _display_orgId: selectedOrgName || '' };
     });
-  }, [report, selectedOrgId]);
+  }, [report, selectedOrgId, selectedOrgName]);
 
   // Auto-load defaults for params marked with autoDefault: true.
   // Params with dependsOn are loaded in a second pass, after their dependency is resolved.
@@ -1366,7 +1505,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         const orgParam = (p.selector === 'currency' && selectedOrgId)
           ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
           : '';
-        return fetch(`${ETENDO_BASE}/sws/report-selectors/${p.selector}?q=${orgParam}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sf_auth_token') || ''}` } })
+        return apiFetch(`/sws/report-selectors/${p.selector}?q=${orgParam}`)
           .then(r => r.json())
           .then(data => { const rows = Array.isArray(data) ? data : (data.items || []); return rows[0] ? { name: p.name, id: rows[0].id, display: rows[0].name } : null; })
           .catch(() => null);
@@ -1380,7 +1519,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       }
       if (Object.keys(updates).length) setParams(prev => ({ ...prev, ...updates }));
     });
-  }, [report, selectedOrgId]);
+  }, [report, selectedOrgId, apiFetch]);
 
   useEffect(() => { loadAutoDefaults(); }, [loadAutoDefaults]);
 
@@ -1394,13 +1533,25 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
     };
   };
 
+  // Resets to the "ready to go" empty state — used by BOTH the auto-invalidate
+  // (filter change) and the explicit "Clear Result" button (ETP-5013). Blanking
+  // the iframe itself matters, not just `hasGenerated`: the empty-state overlay
+  // below is a blurred/translucent skeleton meant to sit over a truly blank
+  // iframe (the very first load) — over a PREVIOUSLY rendered real report it
+  // let the actual data bleed through the blur instead of looking empty.
+  const clearGeneratedResult = () => {
+    setHasGenerated(false);
+    previewHtmlRef.current = '';
+    if (iframeRef.current) iframeRef.current.src = 'about:blank';
+  };
+
   const renderReport = useCallback(async (format) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${report.id}/render`, {
+      const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format, params, locale }),
       });
       if (!res.ok) {
@@ -1412,18 +1563,17 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
         previewHtmlRef.current = html;
         writeToIframe(html);
         setHasGenerated(true);
-      } else if (format === 'pdf') {
-        const blob = await res.blob();
-        iframeRef.current.src = URL.createObjectURL(blob);
-        setHasGenerated(true);
       } else {
-        // Excel/CSV are pure downloads — they never touch the iframe, so the
-        // "ready to go" hint stays exactly as informative as before.
+        // PDF/Excel/CSV are all pure downloads — they never touch the iframe,
+        // so the on-screen preview survives the click. PDF used to be the odd
+        // one out: it replaced the preview iframe with the rendered PDF instead
+        // of downloading (ETP-5013), which meant the only way to actually save
+        // it was the browser's own PDF-viewer toolbar.
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${report.id}.${format}`;
+        a.download = buildReportFilename(report.id, format);
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -1431,7 +1581,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, token, params, locale]);
+  }, [report.id, apiFetch, params, locale]);
 
   // No auto-render on mount — wait for user to click Run Report... UNLESS the
   // page was opened via a deep-link that carries real filter values (e.g. the
@@ -1486,6 +1636,21 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   const favLabels = report.title && typeof report.title === 'object' ? report.title : undefined;
   useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
+  // document.title (ETP-5013) — this page never set one, so the browser's
+  // OWN native print (Cmd/Ctrl+P on the live preview — a different path
+  // entirely from our "PDF" button/jsreport export, which already has its
+  // own controlled footer) showed a generic app title instead of the report
+  // name in its header. Only a partial fix: the date/URL/page-count in that
+  // same browser print footer is the browser's own print chrome (the
+  // "Headers and footers" checkbox in its print dialog) — no page can
+  // override that, on purpose, for any website. Restores the previous title
+  // on unmount so navigating away doesn't leave the report name behind.
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = title;
+    return () => { document.title = previousTitle; };
+  }, [title]);
+
   const DOWNLOAD_FORMATS = [
     { id: 'pdf', labelKey: 'PDF', icon: FileDown },
     { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet },
@@ -1506,6 +1671,20 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             {ui('cancel')}
           </Button>
           <div className="flex items-center gap-1">
+            {/* Explicit reset for the OTHER case the auto-invalidate above
+                doesn't cover (ETP-5013): the user didn't change any filter,
+                just wants to go back to the empty "ready to go" state without
+                losing the values they already picked — e.g. to re-read the
+                filters before generating again, or to hand the screen to
+                someone else clean. Only shown once there's something to
+                clear. */}
+            {hasGenerated && (
+              <button onClick={clearGeneratedResult} disabled={loading}
+                data-testid="action-clear-result"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
+                <X className="h-3.5 w-3.5" data-testid="ClearResultIcon__3c998a" />{ui('clearResult')}
+              </button>
+            )}
             {DOWNLOAD_FORMATS.map(fmt => {
               const Icon = fmt.icon;
               return (
@@ -1530,7 +1709,18 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             <ReportSidebar
               report={report}
               params={params}
-              onChange={(name, value) => setParams(prev => ({ ...prev, [name]: value }))}
+              onChange={(name, value) => {
+                // Auto-invalidate the generated result (ETP-5013): what's on
+                // screen was generated FOR the previous filter values, so the
+                // instant the user changes one it's stale — showing it as
+                // current is misleading. Deliberately tied to THIS handler
+                // (the user's own edit), not a generic effect watching
+                // `params` — autoDefault/org-sync also write to `params`
+                // internally and must never invalidate a report the user
+                // didn't touch (e.g. right after a deep-link auto-render).
+                clearGeneratedResult();
+                setParams(prev => ({ ...prev, [name]: value }));
+              }}
               onSubmit={() => { if (validateRequired()) renderReport('html'); }}
               onReset={handleReset}
               loading={loading}
@@ -1608,6 +1798,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               token={token}
               baseParams={params}
               bpId={drillDownBp.id}
+              bpName={drillDownBp.name}
               data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>
@@ -1637,7 +1828,55 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                 // right filter values but an empty-looking "Desde/A la cuenta" field.
                 _display_fromAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
                 _display_toAccountId: `${drillDownAccount.value} - ${drillDownAccount.name}`,
+                // Only present when the click came from a dimension row
+                // (ETP-5013 follow-up) — narrows the General Ledger detail to
+                // that specific account AND that specific Contacto/Producto/
+                // Proyecto/Centro de costos value, matching Classic's own
+                // Trial Balance drill-down. dimensionParamName was already
+                // resolved to the right GL param name (bPartnerId/productId/
+                // projectId/costCenterId) when the message came in.
+                ...(drillDownAccount.dimensionParamName ? {
+                  [drillDownAccount.dimensionParamName]: drillDownAccount.dimensionId,
+                  [`_display_${drillDownAccount.dimensionParamName}`]: drillDownAccount.dimensionValue,
+                } : {}),
               }}
+              data-testid="DrillDownViewer__3c998a" />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!drillDownEntry}
+        onOpenChange={(o) => !o && setDrillDownEntry(null)}
+        data-testid="Dialog__3c998a">
+        <DialogContent
+          className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4"
+          data-testid="DialogContent__3c998a">
+          <DialogHeader className="shrink-0" data-testid="DialogHeader__3c998a">
+            <DialogTitle data-testid="DialogTitle__3c998a">{drillDownEntry?.dateDisplay}{ui('detailsSuffix')}</DialogTitle>
+          </DialogHeader>
+          {drillDownEntry && (
+            <DrillDownViewer
+              report={report}
+              token={token}
+              baseParams={params}
+              targetReportId="report-journal-entries"
+              // factAcctGroupId alone uniquely identifies the entry — no dateFrom/
+              // dateTo needed, and none passed: the GL row's date arrives as a
+              // native JS Date from `pg`, so a raw value would round-trip badly
+              // (see the postMessage handler above for the exact failure).
+              extraParams={{ factAcctGroupId: drillDownEntry.id }}
+              // The PREVIEW (and its PDF/Excel/CSV downloads) must render the entry
+              // COMPLETE and balanced (every account line, debit === credit) — any
+              // dimension filter inherited from the GL sidebar (account range,
+              // contact, product, project, cost center, groupBy) would cut it down
+              // to a subset of its own lines. Isolated here — NOT in extraParams —
+              // so "Open in new tab" keeps carrying the GL's own filters over, same
+              // as every other drill-down (ETP-5013).
+              isolateParams={['dateFrom', 'dateTo', 'fromAccountId', 'toAccountId',
+                '_display_fromAccountId', '_display_toAccountId',
+                'bPartnerId', 'productId', 'projectId', 'costCenterId',
+                '_display_bPartnerId', '_display_productId', '_display_projectId', '_display_costCenterId',
+                'groupBy']}
               data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>
@@ -1654,12 +1893,45 @@ const CATEGORY_LABELS = {
   other: { en: 'Other', es: 'Otros' },
 };
 
+// One row of the "list" view (ETP-5013) — the table equivalent of ReportCard.
+// Deliberately just Reporte + Formato: unlike a real AD window's list, a
+// report has no secondary identifiers (SKU, category, stock...) worth a
+// column, so the mockup this was built from drops "Tipo" too.
+function ReportListRow({ report, onRun, locale }) {
+  const reportTitle = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
+  return (
+    <button
+      onClick={() => onRun(report)}
+      className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-border-subtle hover:bg-muted/40 transition-colors text-left"
+    >
+      <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{reportTitle}</span>
+      <div className="flex gap-2 flex-wrap shrink-0">
+        {/* Same 'html' exclusion as ReportCard's badge row (ETP-5013) — a real,
+            still-rendered output, just not advertised as downloadable here. */}
+        {(report.outputs || []).filter(o => o !== 'html').map(o => (
+          <span key={o} className="inline-flex items-center px-2 py-1 rounded-lg bg-muted text-xs font-normal text-muted-foreground uppercase">{o}</span>
+        ))}
+      </div>
+    </button>
+  );
+}
+
 function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFilter, selectReport, locale, localeLangKey }) {
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
+  // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
+  // reused here via `forceShow` — ETP-5013), persisted the same way
+  // (`viewMode:<entity>` in localStorage). Gallery (the existing card grid)
+  // stays the default — this only ADDS the list option, never changes what a
+  // returning user without a stored preference sees.
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode:report-catalog') || 'gallery');
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('viewMode:report-catalog', mode);
+  };
 
   const categoryBreadcrumb = categoryFilter && CATEGORY_LABELS[categoryFilter]
     ? tMenu(CATEGORY_LABELS[categoryFilter].en)
@@ -1705,6 +1977,34 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
         <p>{ui('noResults')}</p>
       </div>
     );
+  } else if (viewMode === 'list') {
+    reportListContent = (
+      <div className="space-y-6">
+        {Object.entries(grouped).map(([cat, catReports]) => (
+          <div key={cat}>
+            {!categoryFilter && Object.keys(grouped).length > 1 && (
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
+              </h2>
+            )}
+            <div>
+              <div className="flex items-center gap-3 px-3 py-2 border-b border-border-subtle">
+                <span className="flex-1 min-w-0 text-sm font-bold text-foreground">{ui('report')}</span>
+                <span className="shrink-0 text-sm font-bold text-foreground">{ui('format')}</span>
+              </div>
+              {catReports.map(r => (
+                <ReportListRow
+                  key={r.id}
+                  report={r}
+                  onRun={selectReport}
+                  locale={locale}
+                  data-testid="ReportListRow__3c998a" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   } else {
     reportListContent = (
       <div className="space-y-6">
@@ -1731,7 +2031,17 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto px-6 py-6">
+    <div className="flex-1 min-h-0 overflow-auto px-2 py-2">
+      {!loading && filtered.length > 0 && (
+        <div className="flex justify-start pb-2">
+          <ViewToggle
+            forceShow
+            viewMode={viewMode}
+            onSelectList={() => handleViewMode('list')}
+            onSelectGallery={() => handleViewMode('gallery')}
+            data-testid="ViewToggle__3c998a" />
+        </div>
+      )}
       {reportListContent}
     </div>
   );
@@ -1749,6 +2059,7 @@ export default function ReportViewerPage() {
   const reportId = searchParams.get('report');
 
   useEffect(() => {
+    // raw-fetch-ok: dev-server report catalogue (vite-plugins/report-api.js), no token expected
     fetch('/api/reports')
       .then(r => r.json())
       .then(setReports)
@@ -1777,6 +2088,7 @@ export default function ReportViewerPage() {
         onBack={clearReport}
         token={token}
         selectedOrgId={selectedOrg?.id || null}
+        selectedOrgName={selectedOrg?.name || ''}
         roleOrgIds={(selectedRole?.orgList || []).map(o => o.id).filter(Boolean)}
         categoryFilter={categoryFilter}
         data-testid="ReportViewer__3c998a" />

@@ -34,6 +34,54 @@ export function formatCalendarDate(
   return date ? date.toLocaleDateString(normalizeLocale(locales), options) : '—';
 }
 
+/**
+ * Today's date as a `yyyy-MM-dd` string, built from LOCAL calendar getters.
+ *
+ * `new Date().toISOString().slice(0, 10)` is UTC-based: west of UTC (e.g.
+ * America/Argentina/Buenos_Aires, UTC-3) it returns *yesterday* from ~21:00
+ * local onward, and east of UTC it can return *tomorrow* late in the day.
+ * Use this instead whenever "today" is compared against a date-only field.
+ */
+export function todayCalendarISO(reference = new Date()) {
+  const year = reference.getFullYear();
+  const month = String(reference.getMonth() + 1).padStart(2, '0');
+  const day = String(reference.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Tomorrow's date as a `yyyy-MM-dd` string, in the LOCAL calendar.
+ *
+ * Built with the local-time `Date` constructor, which rolls the month and year
+ * over correctly and is immune to DST shifts — unlike adding 86400000 ms, which
+ * lands on the same calendar day when the clock falls back an hour.
+ *
+ * Useful for expressing "on or before today" against a date-only field where
+ * only a strict `lessThan` operator is available: `< tomorrow` is `<= today`.
+ */
+export function tomorrowCalendarISO(reference = new Date()) {
+  return todayCalendarISO(
+    new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() + 1),
+  );
+}
+
+/**
+ * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
+ * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".
+ */
+export function formatCalendarMonthYear(raw, locales = 'en-GB') {
+  const date = parseCalendarDate(raw);
+  if (!date) return '—';
+  const formatter = new Intl.DateTimeFormat(normalizeLocale(locales), {
+    month: 'long', year: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const year = parts.find((part) => part.type === 'year')?.value;
+  if (!month || !year) return formatter.format(date);
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year}`;
+}
+
 export function getCalendarDateRelation(raw, reference = new Date()) {
   const date = parseCalendarDate(raw);
   if (!date) return null;

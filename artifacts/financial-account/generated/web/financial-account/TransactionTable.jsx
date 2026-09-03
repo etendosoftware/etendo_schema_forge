@@ -9,7 +9,7 @@ const columns = [
   { key: 'description', column: 'Description', type: 'string', label: 'Description' },
   { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' }, required: true },
   { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'trxtypeBpd', 'BPW': 'trxtypeBpw', 'BF': 'trxtypeBf' }, required: true },
-  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'G/L Item' },
+  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'Accounting account' },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
   { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [
     { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', reference: 'Product', inputMode: 'selector' },

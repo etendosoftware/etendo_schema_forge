@@ -54,10 +54,20 @@ vi.mock('@/hooks/useBankConnectionActions', () => ({
 
 // ETP-4530: Tab Contabilidad — mocked so existing suites (which don't exercise this tab) don't
 // need a real AuthProvider/network round-trip just to mount the modal.
+// ETP-4872 — the row shape now carries all 9 account-type-dependent fields (the old 2-field
+// fINAssetAcct/fINTransitoryAcct set is retired); the neutral default resolves every field to
+// null/empty so any suite that never opens the Accounting tab is unaffected.
 const fetchAccountingConfiguration = vi.fn().mockResolvedValue({
   id: null,
-  fINAssetAcct: null,
-  fINTransitoryAcct: null,
+  fINBankrevaluationgainAcct: null,
+  fINBankrevaluationlossAcct: null,
+  fINBankfeeAcct: null,
+  inTransitPaymentAccountIN: null,
+  depositAccount: null,
+  clearedPaymentAccount: null,
+  fINOutIntransitAcct: null,
+  withdrawalAccount: null,
+  clearedPaymentAccountOUT: null,
   ledgerConfigured: true,
   catalogs: { accounts: [] },
 });
@@ -172,8 +182,15 @@ describe('EditAccountModal', () => {
     fetchAccountingConfiguration.mockReset();
     fetchAccountingConfiguration.mockResolvedValue({
       id: null,
-      fINAssetAcct: null,
-      fINTransitoryAcct: null,
+      fINBankrevaluationgainAcct: null,
+      fINBankrevaluationlossAcct: null,
+      fINBankfeeAcct: null,
+      inTransitPaymentAccountIN: null,
+      depositAccount: null,
+      clearedPaymentAccount: null,
+      fINOutIntransitAcct: null,
+      withdrawalAccount: null,
+      clearedPaymentAccountOUT: null,
       ledgerConfigured: true,
       catalogs: { accounts: [] },
     });
@@ -1082,48 +1099,261 @@ describe('EditAccountModal', () => {
     );
   });
 
-  // ── ETP-4530: assetAcctMissing gating ─────────────────────────────────────
-  // assetAcctMissing = dirty && !assetAcct — required-field validation that only activates
-  // once the user has actually touched (made dirty) the Contabilidad tab, so an unrelated
-  // edit (name, bank connection, reconciliation) on an account that never configured accounting is not
-  // silently blocked by a mandatory field belonging to a tab the user never opened.
-  describe('assetAcctMissing gating (ETP-4530)', () => {
-    it('does not block Save for an unrelated change when Cuenta bancaria was never touched', async () => {
+  // ── ETP-4872: AccountingConfigurationSection field layout ─────────────────
+  // The old 2-field fINAssetAcct/fINTransitoryAcct set is replaced by 9 account-type-dependent
+  // fields grouped into up to 3 sub-sections. Banco gets all 3 (General, Payment IN, Payment
+  // OUT — 9 fields); Caja/Tarjeta omit "General" ENTIRELY (not just hide it) — 6 fields, 2
+  // sub-sections. No field is required (Global Constraints, ETP-4872 plan).
+  describe('AccountingConfigurationSection field layout (ETP-4872)', () => {
+    const GENERAL_FIELDS = ['fINBankrevaluationgainAcct', 'fINBankrevaluationlossAcct', 'fINBankfeeAcct'];
+    const PAYMENT_IN_FIELDS = ['inTransitPaymentAccountIN', 'depositAccount', 'clearedPaymentAccount'];
+    const PAYMENT_OUT_FIELDS = ['fINOutIntransitAcct', 'withdrawalAccount', 'clearedPaymentAccountOUT'];
+    const ALL_9_FIELDS = [...GENERAL_FIELDS, ...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS];
+
+    async function openAccountingTab(user) {
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      return screen.findByTestId('accounting-configuration-section');
+    }
+
+    it('renders 9 fields in 3 sub-sections for a Bank account', async () => {
       const user = userEvent.setup();
-      // Default mock already resolves fINAssetAcct: null — the account never configured
-      // accounting, and the Contabilidad tab is never opened in this test.
-      renderModal();
+      renderModal({ account: BANK_ACCOUNT });
+      const section = await openAccountingTab(user);
 
-      const nameInput = screen.getByTestId('edit-account-name');
-      await user.clear(nameInput);
-      await user.type(nameInput, 'BBVA Renamed');
+      // Every field's search-select input is present (all start empty — see default mock).
+      ALL_9_FIELDS.forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(9);
 
-      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+      // All 3 sub-section headings render, "General" included.
+      expect(within(section).getByText('financeAccountsEditTabGeneral')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
     });
 
-    it('blocks Save once Cuenta bancaria is cleared after visiting the Contabilidad tab', async () => {
+    it('renders 6 fields in 2 sub-sections for a Cash account, omitting General entirely', async () => {
+      const user = userEvent.setup();
+      renderModal({
+        account: { id: 'acc-cash-acct', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
+      });
+      const section = await openAccountingTab(user);
+
+      [...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS].forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      GENERAL_FIELDS.forEach((key) => {
+        expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+
+      // "General" is omitted, not merely hidden — the heading itself is absent.
+      expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
+    });
+
+    it('renders 6 fields in 2 sub-sections for a Card account, omitting General entirely', async () => {
+      const user = userEvent.setup();
+      renderModal({
+        account: { id: 'acc-card-acct', name: 'Tarjeta', type: 'CA', currencyId: '102', bankConnected: false },
+      });
+      const section = await openAccountingTab(user);
+
+      [...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS].forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      GENERAL_FIELDS.forEach((key) => {
+        expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+      expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-4872: dirty-check / snapshot over the 9-field state map ───────────
+  // Mirrors the old single-field `assetAcct !== snapshot.assetAcct` pattern, now over a map
+  // keyed by all 9 field names — each key must be tracked independently against its own
+  // snapshot slice, not collapsed into one shared dirty flag.
+  describe('Accounting dirty-check tracks the 9-field state map (ETP-4872)', () => {
+    it('tracks dirty state independently per field and clears only once every changed field is reverted', async () => {
       const user = userEvent.setup();
       fetchAccountingConfiguration.mockResolvedValueOnce({
         id: 'row-1',
-        fINAssetAcct: 'AST1',
-        'fINAssetAcct$_identifier': 'Bank Asset 1',
-        fINTransitoryAcct: null,
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: 'FEE1',
+        'fINBankfeeAcct$_identifier': 'Fee 1',
+        inTransitPaymentAccountIN: null,
+        depositAccount: 'DEP1',
+        'depositAccount$_identifier': 'Deposit 1',
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
         ledgerConfigured: true,
-        catalogs: { accounts: [{ id: 'AST1', name: 'Bank Asset 1' }] },
+        catalogs: {
+          accounts: [
+            { id: 'FEE1', name: 'Fee 1' },
+            { id: 'FEE2', name: 'Fee 2' },
+            { id: 'DEP1', name: 'Deposit 1' },
+            { id: 'DEP2', name: 'Deposit 2' },
+          ],
+        },
       });
       renderModal();
 
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      expect(screen.getByTestId('field-fINAssetAcct-chip')).toBeInTheDocument();
 
-      // Clear the required selection via the chip's X (clear) control.
-      await user.click(screen.getByLabelText('clear'));
-
-      await waitFor(() =>
-        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
-      );
+      // Nothing changed yet — Save is disabled (nothing dirty anywhere in the form).
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      // Change depositAccount away from its snapshot value. Clearing via the chip's X
+      // reopens the dropdown immediately (CreatableSearchSelect's handleClear), so the
+      // desired option can be picked straight away.
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Also change fINBankfeeAcct — a second, independent key in the same map.
+      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert depositAccount back to its original snapshot value — the OTHER field
+      // (fINBankfeeAcct) is still dirty, so Save must stay enabled: the two keys are not
+      // collapsed into one shared dirty flag.
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert fINBankfeeAcct too — every key in the map now matches its snapshot again,
+      // so Save disables.
+      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
+    });
+  });
+
+  // ── ETP-4872 QA regression: accounting field state across a mid-edit Type switch ──
+  // AccountingConfigurationSection renders only the subset of ACCOUNTING_FIELDS that applies to
+  // `accountType`, but `accounting.values` (the state map in useAccountingConfiguration) is keyed
+  // on ALL 9 fields regardless of type, and nothing resets/filters it when `fields.type` changes —
+  // the hook's fetch effect is keyed on `[open, accountId]` only (EditAccountModal.jsx ~L840-876).
+  // persistAccountEdits then builds its save payload by iterating the FULL ACCOUNTING_FIELDS list
+  // unconditionally (~L223-229), reading straight from that unfiltered map.
+  describe('Accounting field state across a mid-edit Type switch (ETP-4872 regression)', () => {
+    const SWITCHABLE_BANK_ACCOUNT = {
+      id: 'acc-switchable',
+      name: 'Switchable',
+      type: 'B',
+      currencyId: '102',
+      bankConnected: false,
+      hasTransactions: false, // Type stays editable (ETP-4581) — no bank link/transactions.
+    };
+
+    it('BUG-1: still sends the now-hidden Banco-only field value after switching Type to Cash pre-Save', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: { accounts: [{ id: 'FEE1', name: 'Fee 1' }] },
+      });
+      saveAccountingConfiguration.mockResolvedValue({ id: 'row-switch' });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      // Fill the Banco-only "General" field while the account is still type Banco.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(screen.getByTestId('field-fINBankfeeAcct'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Switch back to General and change Type to Cash BEFORE saving. The Accounting tab's
+      // "General" sub-section (and fINBankfeeAcct with it) is now unmounted — Cash renders only
+      // 6 fields across 2 sub-sections, no "General" group at all.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(saveAccountingConfiguration).toHaveBeenCalledTimes(1));
+      const [, payload] = saveAccountingConfiguration.mock.calls[0];
+      // Expected (correct) behavior: a value that belongs only to the account type the user is
+      // no longer saving as must not be silently carried over onto the Cash row. Current
+      // implementation FAILS this assertion — payload.fINBankfeeAcct still comes back 'FEE1'
+      // because persistAccountEdits reads straight from the unfiltered `accounting.values` map,
+      // with no re-derivation keyed on the (possibly just-changed) account type.
+      expect(payload.fINBankfeeAcct).toBeNull();
+    });
+
+    it('keeps the accounting dirty-check accurate across a round-trip Type switch', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch-2',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: 'DEP1',
+        'depositAccount$_identifier': 'Deposit 1',
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'DEP1', name: 'Deposit 1' },
+            { id: 'DEP2', name: 'Deposit 2' },
+          ],
+        },
+      });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      // Flip Type to Cash (depositAccount is common to both Banco and Cash's "Payment IN" group,
+      // so it stays rendered either way) with no accounting change yet.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      // Change depositAccount while the account is (momentarily) type Cash.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+
+      // Revert Type back to Banco — typeDirty clears, isolating accounting.dirty as the only
+      // remaining source of Save being enabled.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeBank' }));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert depositAccount to its snapshot too — every key in the 9-field map matches its
+      // snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
+      // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
 
@@ -1228,8 +1458,10 @@ describe('EditAccountModal', () => {
       // Cash used to land on Contabilidad. ETP-4795 gave General real content for cash (the GL
       // Item Difference selector), and landing on Contabilidad put the required, empty "Cuenta
       // bancaria" field in the user's face with Save disabled — which reads as an error the modal
-      // is reporting rather than a starting point. The missing-asset-account summary already
-      // surfaces that on General without hijacking the tab (ETP-4530 / BUG-1, below).
+      // is reporting rather than a starting point. ETP-4872 has since retired that requiredness
+      // entirely (no accounting field is required anymore — see "Save is never blocked by the
+      // Contabilidad tab regardless of tab", below), so this concern no longer applies to any
+      // account type, but General remains the sensible landing tab regardless.
       const { rerender } = renderModal();
       expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
 
@@ -1249,55 +1481,70 @@ describe('EditAccountModal', () => {
     });
   });
 
-  // ── ETP-4530 / BUG-1 regression ───────────────────────────────────────────
-  // The Cuenta bancaria requirement is validated on the Contabilidad tab, but Save is
-  // disabled regardless of the active tab. Before this fix the reason was invisible while
-  // looking at General; a summary line now surfaces it there (and only there, to avoid a
-  // duplicate message with the field-level error on the Contabilidad tab itself).
-  describe('BUG-1 regression — accounting error summary across tabs (ETP-4530)', () => {
-    it('shows the summary on General, hides it on Contabilidad, and clears once filled in', async () => {
+  // ── ETP-4872 — Save is never blocked by the Contabilidad tab ──────────────
+  // Replaces the old "BUG-1 regression — accounting error summary across tabs (ETP-4530)"
+  // block: that regression tested the cross-tab `edit-account-accounting-error-summary`
+  // banner driven by the now-retired required `fINAssetAcct` field. Neither the banner nor
+  // any per-field required error exists anymore (Global Constraints, ETP-4872 plan — no field
+  // in the new 9-field set is required), so this block instead pins the broader guarantee the
+  // old one was protecting: an accounting field, however filled or cleared, must never be able
+  // to disable Save — on the Contabilidad tab itself, or after switching away from it.
+  describe('Save is never blocked by the Contabilidad tab regardless of tab (ETP-4872)', () => {
+    it('shows neither a field-level nor a summary accounting error, on either tab', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+    });
+
+    it('never disables Save no matter which accounting fields are filled or cleared, on any tab', async () => {
       const user = userEvent.setup();
       fetchAccountingConfiguration.mockResolvedValueOnce({
         id: 'row-1',
-        fINAssetAcct: 'AST1',
-        'fINAssetAcct$_identifier': 'Bank Asset 1',
-        fINTransitoryAcct: null,
+        fINBankrevaluationgainAcct: 'GAIN1',
+        'fINBankrevaluationgainAcct$_identifier': 'Gain 1',
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
         ledgerConfigured: true,
-        catalogs: {
-          accounts: [
-            { id: 'AST1', name: 'Bank Asset 1' },
-            { id: 'AST2', name: 'Bank Asset 2' },
-          ],
-        },
+        catalogs: { accounts: [{ id: 'GAIN1', name: 'Gain 1' }] },
       });
       renderModal();
 
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
 
-      // Clear the required field — assetAcctMissing becomes true.
-      await user.click(screen.getByLabelText('clear'));
+      // Clear the only pre-filled field — under the old (retired) required-fINAssetAcct
+      // behavior this exact action would have disabled Save. It must not anymore, for ANY
+      // field, since none is required.
+      await user.click(within(screen.getByTestId('field-fINBankrevaluationgainAcct-chip')).getByLabelText('clear'));
+
       await waitFor(() =>
-        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
+        expect(screen.getByTestId('field-fINBankrevaluationgainAcct')).toBeInTheDocument(),
       );
-      // (b) No duplicate summary line while still on the Contabilidad tab itself.
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+      // Clearing the field made the tab dirty — Save enables purely on dirtiness, never on
+      // a required-field check.
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
-      // (a) Switching to General surfaces the summary line instead.
+      // Switching tabs away from Contabilidad must not surface a hidden summary/error either.
       await user.click(getTab('financeAccountsEditTabGeneral'));
-      expect(screen.getByTestId('edit-account-accounting-error-summary')).toHaveTextContent(
-        'financeAccountsAccountingBankAssetRequiredSummary',
-      );
-
-      // (c) Filling the field back in makes the summary disappear.
-      await user.click(getTab('financeAccountsEditTabAccounting'));
-      await user.click(screen.getByTestId('field-fINAssetAcct'));
-      await user.click(await screen.findByTestId('option-fINAssetAcct-AST2'));
-
-      await user.click(getTab('financeAccountsEditTabGeneral'));
-      await waitFor(() =>
-        expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument(),
-      );
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
     });
   });
 
@@ -1822,6 +2069,240 @@ describe('EditAccountModal', () => {
       await user.type(bic, 'bbvaesmm');
 
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+  });
+
+  // ETP-5104 — "Sincronizar ahora" persists the pending form BEFORE it syncs (the bridge reads the
+  // import range from the DB, so an unsaved range was silently ignored and then overwritten by the
+  // post-sync refresh), and an inverted "Importar desde" > "Importar hasta" range is refused up
+  // front instead of failing deep inside the PSD2 module. The whole feature only exists for a
+  // bank-linked account, so every test here runs against CONNECTED_ACCOUNT.
+  describe('ETP-5104 — import date range', () => {
+    // Mirrors the fetchStatus fixture installed by the outer beforeEach; restated here so the
+    // "before" values a test asserts against are visible next to the assertions themselves.
+    const BASE_STATUS = {
+      connected: true,
+      providerName: 'BBVA',
+      importFromDate: '2026-01-01',
+      importToDate: '2026-02-01',
+      statementGrouping: '1BD',
+    };
+
+    // What the two boxes display for the stored fixture, per the locale the modal runs under in
+    // this suite (es_ES -> dd/mm/yyyy, see formatCalendarDate in @/lib/dateOnly.js).
+    const DISPLAYED_FROM = '01/01/2026';
+    const DISPLAYED_TO = '01/02/2026';
+
+    /**
+     * Types a date into one of the two import boxes.
+     *
+     * They are DateFields: a masked TEXT input, not `<input type="date">`. The box shows the
+     * locale format and only emits an ISO `yyyy-mm-dd` through onChange on BLUR, so a date is
+     * entered by typing its 8 digits (the mask inserts the separators itself) and then tabbing out
+     * to commit. `digits` is therefore ddmmyyyy, in locale order — not ISO.
+     */
+    async function typeImportDate(user, testId, digits) {
+      const input = screen.getByTestId(testId);
+      await user.clear(input);
+      await user.type(input, digits);
+      // Blur commits the typed text; without it the parent form never sees the new value.
+      await user.tab();
+      return input;
+    }
+
+    async function openConnectedModal(props = {}) {
+      const result = renderModal({ account: CONNECTED_ACCOUNT, ...props });
+      // The panel (and with it the import boxes) only renders once the status fetch resolves.
+      await screen.findByTestId('bank-connection-edit-sync');
+      return result;
+    }
+
+    // CP-1. The bug: the bridge reads the range from the DB, so syncing with an unsaved "Importar
+    // desde" imported the PREVIOUSLY stored range. Ordering is the point — saving after the sync
+    // would persist the right value but still have run the import against the stale one.
+    it('CP-1: persists the edited "Importar desde" before calling sync, with no explicit save', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledTimes(1);
+      expect(saveImportSettings).toHaveBeenCalledWith({
+        financialAccountId: 'acc-9',
+        // The NEW value, not the '2026-01-01' the status fetch delivered.
+        importFromDate: '2026-01-15',
+        importToDate: '2026-02-01',
+        statementGrouping: '1BD',
+      });
+      // Real ordering, not merely "both ran": vi records a global invocation sequence number per
+      // call, so this fails if the save is moved after the sync.
+      expect(saveImportSettings.mock.invocationCallOrder[0])
+        .toBeLessThan(sync.mock.invocationCallOrder[0]);
+    });
+
+    // CP-2. The second symptom of the same bug: runSync's refresh() rewrites both `form` and
+    // `initial` from the server, so before the save-first fix whatever the user had typed was
+    // overwritten in place ("los campos se restablecen"). With the save landing first the refresh
+    // reads back the user's own values and is a no-op for them.
+    it('CP-2: keeps the user values in both boxes after the sync refresh reads them back', async () => {
+      const user = userEvent.setup();
+      fetchStatus
+        .mockResolvedValueOnce(BASE_STATUS)
+        // What the bridge returns once the edit has actually been persisted.
+        .mockResolvedValueOnce({ ...BASE_STATUS, importFromDate: '2026-01-15' });
+      await openConnectedModal();
+
+      const fromInput = await typeImportDate(
+        user, 'field-date-bank-connection-import-from', '15012026',
+      );
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(fetchStatus).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(fromInput).toHaveValue('15/01/2026'));
+      // The pre-edit value must not have come back.
+      expect(fromInput).not.toHaveValue(DISPLAYED_FROM);
+      // The untouched box is unaffected either way.
+      expect(screen.getByTestId('field-date-bank-connection-import-to')).toHaveValue(DISPLAYED_TO);
+    });
+
+    // CP-3. An inverted range is a form error, exactly like the amount-tolerance one: it is shown
+    // inline and it blocks Save (`saveBlocked` feeds `canSave`), so nothing is ever written.
+    it('CP-3: shows the range error and disables Guardar cambios when desde is later than hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      // Save is enabled for a valid edit — proves the disabled state below comes from the range,
+      // not from the form simply being pristine.
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+
+      // 01/03/2026 is after the stored "hasta" (01/02/2026).
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+
+      expect(await screen.findByTestId('bank-connection-import-range-error')).toHaveTextContent(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      );
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    // CP-4. The guard runs BEFORE the save-then-sync chain: an inverted range must not reach the
+    // bridge (its OBException comes back re-wrapped as an untranslated PSD2 error carrying the
+    // Salt Edge connection id) and must not be persisted on the way there either.
+    it('CP-4: refuses the sync on an inverted range without saving or calling the bridge', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      ));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      // The status is not re-read either — nothing ran.
+      expect(fetchStatus).toHaveBeenCalledTimes(1);
+    });
+
+    // Regression: the save-before-sync step is gated on `dirty`. A pristine form must still sync,
+    // and must not fire a pointless empty write (persistAccountEdits would send nothing, but
+    // saveImportSettings would still be called if the gate were dropped).
+    it('regression: a pristine form still syncs and never fires an empty save', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const onSaved = vi.fn();
+      await openConnectedModal({ onClose, onSaved });
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(toastSuccess).toHaveBeenCalled();
+      // Syncing is not saving: the modal stays open so the user can keep editing.
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Regression: the save leg failing must abort the sync outright — syncing anyway would run the
+    // import against the stale stored range, which is the very bug this feature fixes.
+    it('regression: aborts the sync when the pre-sync save fails, reporting it exactly once', async () => {
+      const user = userEvent.setup();
+      const err = new Error('boom');
+      err.status = 500;
+      saveImportSettings.mockRejectedValueOnce(err);
+      const onClose = vi.fn();
+      await openConnectedModal({ onClose });
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledTimes(1));
+      expect(sync).not.toHaveBeenCalled();
+      // Reported ONCE, in the save path's own wording. The `handled` flag exists precisely to stop
+      // runSync's catch from toasting the same failure a second time as a raw err.message.
+      await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+      expect(toastError).toHaveBeenCalledWith('boom');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The panel-level error is driven by the same predicate as the Save gate, so it must clear as
+    // soon as the range becomes valid again — otherwise the user is stuck looking at a stale error
+    // with Save mysteriously enabled.
+    it('clears the range error once the range is valid again', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      // Push "hasta" past the new "desde" instead of undoing the edit.
+      await typeImportDate(user, 'field-date-bank-connection-import-to', '31032026');
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull());
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    // A half-filled range is legal ("no bound"), so clearing a box must never block Save or the
+    // sync — blocking on a half-typed form would be worse than the bug being guarded.
+    it('treats a single-ended range as valid', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      const toInput = screen.getByTestId('field-date-bank-connection-import-to');
+      await user.clear(toInput);
+      await user.tab();
+
+      await waitFor(() => expect(toInput).toHaveValue(''));
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ importFromDate: '2026-01-01', importToDate: '' }),
+      );
+    });
+
+    // Equal bounds are a one-day range, not an inversion — the check is `>`, not `>=`.
+    it('accepts an identical desde and hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01022026');
+
+      expect(screen.getByTestId('field-date-bank-connection-import-from'))
+        .toHaveValue(DISPLAYED_TO);
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
     });
   });
 

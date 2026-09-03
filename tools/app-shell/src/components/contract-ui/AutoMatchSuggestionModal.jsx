@@ -189,13 +189,13 @@ function GroupRow({ group, checked, onToggle, currency }) {
           data-testid="SelectBox__a89979" />
       </div>
       {/* Statement line (left half) */}
-      <div className="flex flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
+      <div className="flex min-w-0 flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
         <div className="w-full">
           <StatementContent group={group} currency={currency} data-testid="StatementContent__a89979" />
         </div>
       </div>
       {/* Operations (right half) */}
-      <div className="flex flex-1 flex-col bg-card">
+      <div className="flex min-w-0 flex-1 flex-col bg-card">
         {ops.length === 0 ? (
           <div className="px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
         ) : (
@@ -221,7 +221,10 @@ function GroupRow({ group, checked, onToggle, currency }) {
  * Automatch suggestion modal — two-column layout matching the Figma design:
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
- * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess? }} props
+ * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess?,
+ *   onEditAccount? }} props `onEditAccount` opens the account editor; offered only once a group has
+ *   actually failed for a missing accounting concept (ETP-4965), since that is the only thing the
+ *   user can do about it from here.
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -232,9 +235,14 @@ export function AutoMatchSuggestionModal({
   open,
   onClose,
   onSuccess,
+  onEditAccount,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
+  // True once an apply came back with at least one group rejected for a missing GL Item Difference.
+  // A mass run cannot ask for a concept line by line, so the only way forward is configuring one on
+  // the account — surfaced as a direct link instead of leaving the user to find the setting.
+  const [needsGlItem, setNeedsGlItem] = useState(false);
 
   const allKeys = useMemo(() => new Set(groups.map((g) => g.groupKey)), [groups]);
   const [checked, setChecked] = useState(allKeys);
@@ -279,8 +287,24 @@ export function AutoMatchSuggestionModal({
           ...(g.createPayment ? { createPayment: g.createPayment } : {}),
         })),
       };
-      await apply(payload);
-      toast.success(ui('financeReconcileAutomatchToastSuccess', { count: checkedGroups.length }));
+      const response = await apply(payload);
+      const results = response?.results ?? [];
+      const failedCount = results.filter((r) => r?.error).length;
+      const successCount = results.length - failedCount;
+      if (failedCount === 0) {
+        toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
+      } else if (successCount > 0) {
+        toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
+      } else {
+        toast.error(ui('financeReconcileAutomatchToastError'));
+      }
+      // Keep the modal open when the ONLY thing standing in the way is the account's missing
+      // accounting concept: closing it would hide both the failure and its remedy.
+      if (results.some((r) => r?.code === 'GL_ITEM_REQUIRED')) {
+        setNeedsGlItem(true);
+        onSuccess?.();
+        return;
+      }
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -410,6 +434,19 @@ export function AutoMatchSuggestionModal({
             >
               {ui('cancel')}
             </button>
+
+            {/* Configure the account's accounting concept — only once a group actually failed for
+                the lack of one. */}
+            {needsGlItem && onEditAccount && (
+              <button
+                type="button"
+                onClick={() => { onEditAccount(); onClose(); }}
+                data-testid="automatch-modal-edit-account"
+                className="flex h-10 items-center gap-1 rounded-full border border-[var(--status-destructive-bg)] bg-card px-3 text-sm font-medium text-[hsl(var(--destructive))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)]"
+              >
+                <span>{ui('financeReconcileAutomatchEditAccount')}</span>
+              </button>
+            )}
 
             {/* Open reconciliation */}
             <button

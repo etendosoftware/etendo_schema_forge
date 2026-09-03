@@ -3093,7 +3093,7 @@
       "description": "Debt/Payment Balancing"
     },
     "C_Glitem_ID": {
-      "label": "G/L Item",
+      "label": "Accounting account",
       "description": "An alias for the Account Combination which can be commonly used in daily operations."
     },
     "Glitem_Debit_Acct": {
@@ -3389,12 +3389,12 @@
       "description": "Cancellation date"
     },
     "Amortizationstartdate": {
-      "label": "Depreciation Start Date",
-      "description": "Depreciation Start Date"
+      "label": "Amortization Start Date",
+      "description": "Amortization Start Date"
     },
     "Amortizationenddate": {
-      "label": "Depreciation End Date",
-      "description": "Depreciation end date"
+      "label": "Amortization End Date",
+      "description": "Amortization end date"
     },
     "Annualamortizationpercentage": {
       "label": "Annual Depreciation %",
@@ -4209,7 +4209,7 @@
       "description": "Calculate type"
     },
     "Depreciatedpreviousamt": {
-      "label": "Previously Depreciated Amt.",
+      "label": "Previously Depreciated Value",
       "description": ""
     },
     "Exportexcel": {
@@ -7173,7 +7173,7 @@
       "description": ""
     },
     "C_Glitem_Acct_ID": {
-      "label": "GL Item Accounting",
+      "label": "Accounting Account Configuration",
       "description": ""
     },
     "AD_Form_Trl_ID": {
@@ -8429,7 +8429,7 @@
       "description": "INE Number."
     },
     "Glitemname": {
-      "label": "GL Item",
+      "label": "Accounting account",
       "description": ""
     },
     "Routingno": {
@@ -10485,8 +10485,8 @@
       "description": "The Write Off Amount indicates the amount to be written off as uncollectible."
     },
     "gLItem": {
-      "label": "GL Item",
-      "description": "G/L Items  added as part of a given payment"
+      "label": "Accounting account",
+      "description": "Accounting accounts added as part of a given payment"
     },
     "EM_APRM_AddPayment": {
       "label": "Add Payment",
@@ -10673,7 +10673,7 @@
       "description": ""
     },
     "c_glitem_id": {
-      "label": "G/L Item",
+      "label": "Accounting account",
       "description": "An alias for the Account Combination which can be commonly used in daily operations."
     },
     "EM_APRM_Process_Reconciliation": {
@@ -10689,8 +10689,8 @@
       "description": ""
     },
     "EM_Aprm_Glitem_Diff": {
-      "label": "GL Item Difference",
-      "description": "GL Item Difference"
+      "label": "Accounting Account Difference",
+      "description": "Accounting Account Difference"
     },
     "invoiceNo": {
       "label": "Invoice No.",
@@ -10865,8 +10865,8 @@
       "description": ""
     },
     "EM_APRM_Glitem_ID": {
-      "label": "Default G/L Item for Funds Transfer",
-      "description": "Default G/L Item used for Funds Transfer Process"
+      "label": "Default accounting account for Funds Transfer",
+      "description": "Default accounting account used for the Funds Transfer process"
     },
     "EM_Aprm_Isfundstrans_Enabled": {
       "label": "Funds Transfer Enabled",
@@ -10909,7 +10909,7 @@
       "description": ""
     },
     "glitemName": {
-      "label": "GL Item",
+      "label": "Accounting account",
       "description": ""
     },
     "EM_APRM_PrintDetailed": {
@@ -10957,7 +10957,7 @@
       "description": ""
     },
     "transactionGLItemName": {
-      "label": "Transaction GL Item",
+      "label": "Transaction Accounting Account",
       "description": ""
     },
     "referenceNo": {
@@ -13652,7 +13652,7 @@
       "label": "Language"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "User": {
       "label": "Users"
@@ -13843,8 +13843,8 @@
       "label": "Invoiceable Expenses"
     },
     "Asset Group": {
-      "label": "Asset Category",
-      "newLabel": "New category"
+      "label": "Asset Group",
+      "newLabel": "New group"
     },
     "Employee Expenses": {
       "label": "Employee Expenses"
@@ -13892,7 +13892,7 @@
       "label": "Volume Discount"
     },
     "G/L Item": {
-      "label": "G/L Item"
+      "label": "Accounting account"
     },
     "Project Proposal Tracker": {
       "label": "Project Proposal Tracker"
@@ -14335,7 +14335,7 @@
       "label": "Filter"
     },
     "APRM GL Item": {
-      "label": "APRM GL Item"
+      "label": "APRM Accounting account"
     },
     "Data Pool Selection": {
       "label": "Data Pool Selection"
@@ -15048,7 +15048,7 @@
       "label": "Balance Payment"
     },
     "G/L Item": {
-      "label": "G/L Item"
+      "label": "Accounting account"
     },
     "Proposal List": {
       "label": "Proposal List"
@@ -15828,7 +15828,7 @@
       "label": "Accounting History"
     },
     "GL Item": {
-      "label": "GL Item"
+      "label": "Accounting account"
     },
     "Doubtful Debt": {
       "label": "Doubtful Debt"
@@ -16467,7 +16467,7 @@
     "importSystemErrorRequestSent": "Request sent",
     "importSystemErrorServerResponse": "Server response",
     "importErrorRequiredField": "The field \"{field}\" is required.",
-    "importErrorRequiredGeneric": "A required field is missing.",
+    "importErrorRequiredGeneric": "Required field is missing.",
     "importErrorDuplicate": "A record with the same value already exists.",
     "importErrorDuplicateIdentifier": "A record with this identifier already exists.",
     "importErrorDuplicateUser": "A user with this name already exists for the contact. Try a different name.",
@@ -16482,6 +16482,21 @@
     "importErrorInvalidPrice": "The price \"{value}\" is not a valid number.",
     "importErrorNoPriceList": "No sales price list is configured, so the price could not be imported. Import the product without a price, or set up a sales price list first.",
     "importErrorInvalidCodedValue": "The value \"{value}\" is not valid for \"{field}\". Accepted values: {accepted}.",
+    "importHeaderAddress": "Address",
+    "importHeaderCity": "City",
+    "importHeaderCountry": "Country",
+    "importHeaderPostalCode": "Postal Code",
+    "importHeaderRegion": "Region",
+    "importHeaderSalesPrice": "Sales Price",
+    "importHeaderPurchasePrice": "Purchase Price",
+    "importHeaderScopeContact": "Contact",
+    "importHeaderScopeAddress": "Address",
+    "importHeaderType": "Type",
+    "importErrorInvalidEmail": "Not a valid email address.",
+    "importErrorNotANumber": "The value \"{value}\" is not a valid number.",
+    "importErrorFkUnmatched": "The value \"{value}\" could not be matched to an existing record.",
+    "importSkipDuplicateInFile": "Duplicate row: this value is repeated earlier in the file.",
+    "importSkipAlreadyExists": "This record already exists and will not be imported again.",
     "importErrorMissingContactName": "This row has no commercial name and no first/last name, so the contact cannot be created.",
     "importErrorUomUnresolved": "The unit of measure \"{uom}\" could not be matched to an existing record.",
     "importErrorNoPurchasePriceList": "No purchase price list is configured in this environment, so the purchase price could not be imported. Import the product without a purchase price or configure a purchase price list first.",
@@ -16505,6 +16520,9 @@
     "Open Close Period": "Open Close Period",
     "Fiscal Calendar": "Fiscal Calendar",
     "Create Periods": "Create Periods",
+    "Fiscal Year Range": "Fiscal Year Range",
+    "January - December": "January - December",
+    "July - June": "July - June",
     "Create Adjustment Period": "Create Adjustment Period",
     "Yes": "Yes",
     "No": "No",
@@ -16512,6 +16530,10 @@
     "goToFiscalCalendarBody": "New periods are created from the Fiscal Calendar window by adding a fiscal year and running Create Periods.",
     "Open Close Document": "Open Close Document",
     "expandPeriod": "Expand period",
+    "calendarPeriod": "Period",
+    "calendarStatus": "Status",
+    "calendarActions": "Actions",
+    "calendarAdjustmentPeriod": "Adjustment Period",
     "openClosePeriod": "Open/Close Period",
     "openCloseDocument": "Open/Close Document",
     "bulkOpenCloseDocuments": "Open/Close selected documents",
@@ -16609,6 +16631,9 @@
     "reactivate": "Reactivate",
     "reactivateOrder": "Reactivate Order",
     "cannotReactivateLinkedDocs": "Cannot reactivate: order has linked documents",
+    "bulkRowAlreadyPosted": "Already posted",
+    "bulkRowNotPosted": "Not posted",
+    "docTypeMatchedInvoices": "Receipt-Invoice Link",
     "bulkCompletion": "Bulk Completion",
     "confirmBulk": "Confirm",
     "documentAction": "Document Action",
@@ -16731,12 +16756,14 @@
     "editLine": "Edit line",
     "noLines": "No lines",
     "backendError.amortizationCurrencyRequired": "Currency field cannot be empty",
+    "backendError.staleRecord": "Someone else changed this record while you were editing it, so your changes were not saved. Reload the record to see the current values.",
     "backendError.amortizationAnnualDepreciationRequired": "Annual Depreciation field cannot be empty, zero or negative.",
     "backendError.amortizationUsableLifeYearsRequired": "Usable Life - Years field cannot be empty, zero or negative.",
     "backendError.amortizationUsableLifeMonthsRequired": "Usable Life - Months field cannot be empty, zero or negative.",
     "backendError.amortizationDepreciationAmountRequired": "Depreciation Amount field cannot be empty, zero or negative.",
     "backendError.amortizationStartDateRequired": "The start date field is mandatory",
     "backendError.assetGroupNameDuplicate": "There is already an asset category with this name.",
+    "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
     "processAssetCompleted": "Create Amortization completed",
     "reactivated": "Document reactivated",
@@ -16751,6 +16778,8 @@
     "postingFailed": "Posting failed",
     "filterDocumentType": "Document type",
     "filterAccountingStatus": "Accounting status",
+    "filterFrom": "From",
+    "filterTo": "To",
     "accountingDate": "Accounting date",
     "accountingStatus": "Accounting status",
     "postedStatus": "Posted",
@@ -16784,6 +16813,8 @@
     "bulkDeleteAllSucceeded": "{count} record(s) deleted successfully.",
     "bulkDeletePartialFailure": "{succeeded} of {total} record(s) deleted. {failed} could not be deleted.",
     "bulkDeleteAllFailed": "None of the {count} selected record(s) could be deleted.",
+    "bulkDeleteAllFailedWithReason": "None of the {count} selected record(s) could be deleted: {reason}",
+    "bulkDeletePartialFailureWithReason": "{succeeded} of {total} record(s) deleted. {failed} could not be deleted: {reason}",
     "bulkDeleteBlockedTooltip": "{count} selected record(s) cannot be deleted.",
     "edit": "Edit",
     "print": "Print",
@@ -16796,6 +16827,9 @@
     "clearSort": "Clear sort",
     "refresh": "Refresh",
     "import": "Import",
+    "export": "Export",
+    "exportDone": "Export completed",
+    "exportError": "Export failed",
     "forceAppRefresh": "Force app refresh",
     "newPayment": "New payment",
     "paymentRecordedLocally": "Payment recorded locally — it will sync when the endpoint is available",
@@ -16812,7 +16846,7 @@
     "paid": "Paid",
     "pending": "Pending",
     "paymentLineExpectedAmount": "Expected Amount",
-        "paymentLineReceivedAmount": "Received Amount",
+    "paymentLineReceivedAmount": "Received Amount",
     "invoiced": "Invoiced",
     "partiallyInvoiced": "Partially Invoiced",
     "you": "You",
@@ -17004,7 +17038,7 @@
     "addLines": "Add Lines",
     "importFromShipment": "Import from Shipment",
     "importFromSalesOrder": "Add from order",
-    "importFromSourceInvoice": "Import from Source Invoice",
+    "importFromSourceInvoice": "Import from source invoice",
     "noLinesYet": "No lines yet",
     "addLinesManuallyOrImportFromShipment": "Add lines manually or import from a shipment",
     "linesImportOnlyFromShipment": "Import the lines from the shipment to return",
@@ -17100,11 +17134,8 @@
     "noPendingGoodsReturnsForSupplier": "No pending goods returns for this supplier.",
     "noGoodsReturnsMatchYourSearch": "No goods returns match your search.",
     "linesImportedFromGoodsReturn": "Lines imported from goods return",
-    "importFromSourceInvoice": "Import from source invoice",
-    "searchSourceInvoice": "Search invoice...",
     "noFacSourceInvoicesForSupplier": "No standard invoices for this supplier.",
     "noSourceInvoicesMatchYourSearch": "No invoices match your search.",
-    "linesImportedFromSourceInvoice": "Lines imported from source invoice",
     "noCompletedShipmentsForThisCustomer": "No completed shipments found for this customer.",
     "noRelatedDocuments": "No related documents",
     "Complete": "Complete",
@@ -17250,6 +17281,8 @@
     "sendModalNoEmail": "No email found for this contact",
     "sendModalSubject": "Subject",
     "sendModalMessage": "Message",
+    "sendModalDefaultGreeting": "Hello **{bpName}**,",
+    "sendModalDefaultMessage": "Please find your {documentType} **{documentNo}** below.",
     "sendModalMessagePlaceholder": "Add a personal message...",
     "sendModalSend": "Send",
     "sendModalSending": "Sending...",
@@ -17266,7 +17299,7 @@
     "sendModalRecipientPlaceholder": "Add recipient and press Enter",
     "sendModalRemoveRecipient": "Remove {email}",
     "sendModalInvalidEmail": "Enter a valid email address",
-    "websiteInsecureUrl": "Website must use a secure https URL",
+    "websiteInsecureUrl": "Enter a valid domain, e.g. example.com",
     "phoneInvalidChars": "Phone can only contain numbers and +, (, ), - characters",
     "sendModalAddCc": "Add CC",
     "sendModalCc": "CC",
@@ -17300,6 +17333,7 @@
     "assignedRolesLabel": "Assigned roles",
     "noRolesAssigned": "No roles assigned",
     "saveUserFirstForRoles": "Save the user first to assign roles",
+    "adminRoleNoCompositionMessage": "This user already has the Admin role, which grants full access. Additional roles can't be composed for it.",
     "roleAssignmentSaveFailed": "Couldn't save the assigned roles",
     "roleAssignmentSaveFailedAfterUserSaved": "The user was saved, but the roles couldn't be updated: {detail}",
     "removeRoleAria": "Remove role",
@@ -17315,6 +17349,12 @@
     "resendInvitationAction": "Resend invitation",
     "resendInvitationSuccessToast": "Invitation resent",
     "resendInvitationErrorFallback": "Couldn't resend the invitation",
+    "promoteToAdminAction": "Make administrator",
+    "demoteFromAdminAction": "Remove administrator role",
+    "promoteToAdminSuccessToast": "User promoted to Administrator.",
+    "promoteToAdminErrorFallback": "Could not promote user to Administrator.",
+    "demoteFromAdminSuccessToast": "Administrator role removed.",
+    "demoteFromAdminErrorFallback": "Could not remove the Administrator role.",
     "userCreatedInvitationSentToast": "User created. Invitation sent by email.",
     "configureRolesAction": "Configure roles",
     "userDebug.title": "⚙ Debug · Users",
@@ -17587,6 +17627,7 @@
     "reportServiceUnavailable": "The reporting service is unavailable. Please try again in a moment.",
     "pdfGenerationFailed": "Could not generate the PDF. Please try again.",
     "report": "Report",
+    "format": "Format",
     "records": "records",
     "loadingAllRecords": "Loading all records...",
     "fetchingAllRecords": "Fetching all records...",
@@ -17611,6 +17652,7 @@
     "displayOptions": "Display Options",
     "runReport": "Generate Report",
     "running": "Running...",
+    "clearResult": "Clear Result",
     "taxReportPurchases": "Purchases / Payments",
     "taxReportSales": "Sales / Receipts",
     "taxReportDetail": "Detail",
@@ -17624,7 +17666,7 @@
     "selectParentFirst": "Select parent field first",
     "recordsFound": "{count} records found",
     "reportReadyTitle": "Your report is ready to go",
-    "reportReadyHint": "Choose your filters and hit Run Report",
+    "reportReadyHint": "Choose your filters and hit Generate Report",
     "resetToDefaults": "Reset to defaults",
     "filter": "Filter...",
     "filterHelpText": "Type to filter. Enter or Tab to apply.",
@@ -17667,7 +17709,7 @@
     "statusColumn": "Status",
     "statusDocColumn": "Doc. Status",
     "impTotal": "Total Amount",
-    "pendingPaymentColumn": "Pending Payment",
+    "pendingPaymentColumn": "Outstanding Amount",
     "cobrada": "Collected",
     "pagada": "Paid",
     "invoiceReceipts": "Invoice Receipts",
@@ -17910,6 +17952,12 @@
     "ocrRetryingLines": "Retrying line creation...",
     "recordCreated": "Record created",
     "recordSaved": "Record saved",
+    "saveConflictRecordChanged": "Someone else edited this record while you were working on it, so nothing was saved. You can keep your changes and try again later, or discard them and load the current version.",
+    "saveConflictDiscardAndReload": "Discard my changes and refresh",
+    "saveConflictKeepEditing": "Cancel save",
+    "saveConflictTitle": "Cannot save this record",
+    "saveConflictReloaded": "Record refreshed with the values currently stored.",
+    "saveConflictReloadFailed": "Could not refresh the record. Check your connection and try again.",
     "requiredFieldsMissing": "Please complete all required fields",
     "fieldRequired": "Required",
     "invoicePdfGenerating": "Generating invoice...",
@@ -18064,6 +18112,7 @@
     "cpPisSortCodeLabel": "Creditor sort code",
     "cpPisSortCodePlaceholder": "Sort code (6 digits)",
     "cpPisAlertTransfer": "{dinero} will be transferred from {cuenta} {maskedPan} to {proveedor}.",
+    "cpPisAlertConverted": "The invoice is for {importeFactura}; it is converted at a rate of {tasa} and the transfer is instructed in {monedaBanco}.",
     "cpPisAlertCredit": "The remaining {credito} will be applied as credit upon confirmation.",
     "cpPisAlertSca": "Your bank will request authorization via SCA.",
     "cpPisHint": "Your bank may request verification via mobile app, SMS, or a security device.",
@@ -18213,8 +18262,8 @@
     "financeAccountTxNewTypeIn": "Incoming",
     "financeAccountTxNewTypeOut": "Outgoing",
     "financeAccountTxNewDate": "Date",
-    "financeAccountTxNewGlItem": "G/L Item",
-    "financeAccountTxNewGlDescPrefix": "GL Item",
+    "financeAccountTxNewGlItem": "Accounting account",
+    "financeAccountTxNewGlDescPrefix": "Accounting account",
     "financeAccountTxNewGlItemPlaceholder": "Select an account…",
     "financeAccountTxNewAmount": "Amount",
     "financeAccountTxNewAmountPlaceholder": "0.00",
@@ -18247,6 +18296,7 @@
     "financeAccountTxRowDeleting": "Deleting…",
     "financeAccountTxRowDeleteSuccess": "Movement deleted",
     "financeAccountTxRowDeleteError": "Could not delete the movement",
+    "financeAccountTxRowDimensionUpdateError": "Could not update the dimension",
     "financeAccountTransferTitle": "Transfer funds",
     "financeAccountTransferSubtitle": "Between the organization's financial accounts",
     "financeAccountTransferSourceRole": "From · source",
@@ -18254,14 +18304,15 @@
     "financeAccountTransferDestination": "To · destination account",
     "financeAccountTransferDestinationPlaceholder": "Select an account…",
     "financeAccountTransferAccountSearch": "Search account…",
-    "financeAccountTransferGlItem": "Accounting item",
+    "financeAccountTransferGlItem": "Accounting account",
     "financeAccountTransferGlNone": "No allocation",
-    "financeAccountTransferGlItemPlaceholder": "Search item…",
+    "financeAccountTransferGlItemPlaceholder": "Search accounting account…",
     "financeAccountTransferAmount": "Amount",
     "financeAccountTransferAmountPlaceholder": "0.00",
     "financeAccountTransferFx": "Currency conversion",
     "financeAccountTransferRate": "Conversion rate",
     "financeAccountTransferRatePlaceholder": "1.00",
+    "financeAccountTransferRateMissing": "No current exchange rate from {from} to {to}. Enter it manually.",
     "financeAccountTransferReceiveAmount": "Destination account will receive",
     "financeAccountTransferBankFee": "Apply bank fee",
     "financeAccountTransferBankFeeFrom": "Fee · source",
@@ -18386,6 +18437,7 @@
     "financeAccountsBankConnectionImportSection": "Statement import",
     "financeAccountsBankConnectionImportFrom": "Import from",
     "financeAccountsBankConnectionImportTo": "Import to",
+    "financeAccountsBankConnectionImportRangeInvalid": "The \"Import from\" date cannot be later than the \"Import to\" date.",
     "financeAccountsBankConnectionGrouping": "Statement grouping",
     "financeAccountsBankConnectionGroupingNone": "Default",
     "financeAccountsBankConnectionGroupingPlaceholder": "Select grouping…",
@@ -18408,6 +18460,17 @@
     "financeAccountsAccountingNone": "None",
     "financeAccountsAccountingLoading": "Loading accounting configuration…",
     "financeAccountsAccountingNoLedger": "This account's organization has no general ledger configured, so accounting accounts cannot be set here.",
+    "financeAccountsAccountingSectionPaymentIn": "Payment IN",
+    "financeAccountsAccountingSectionPaymentOut": "Payment OUT",
+    "financeAccountsAccountingBankRevaluationGain": "Bank revaluation gain account",
+    "financeAccountsAccountingBankRevaluationLoss": "Bank revaluation loss account",
+    "financeAccountsAccountingBankFee": "Bank fee account",
+    "financeAccountsAccountingInTransitIn": "In transit payment IN account",
+    "financeAccountsAccountingDeposit": "Deposit account",
+    "financeAccountsAccountingClearedIn": "Cleared payment account (IN)",
+    "financeAccountsAccountingInTransitOut": "In transit payment OUT account",
+    "financeAccountsAccountingWithdrawal": "Withdrawal account",
+    "financeAccountsAccountingClearedOut": "Cleared payment account (OUT)",
     "financeAccountsArchiveConfirmTitle": "Archive account",
     "financeAccountsArchiveConfirmBody": "Are you sure you want to archive this account? It will no longer appear in the list.",
     "financeAccountsArchiveConfirm": "Archive",
@@ -18435,8 +18498,8 @@
     "financeAccountsReconciliationAmountTolerance": "Amount Tolerance (%)",
     "financeAccountsReconciliationAmountToleranceInvalid": "Must be a percentage between 0 and 100.",
     "financeAccountsGlItemDifferenceSection": "Difference settings",
-    "financeAccountsGlItemDifferenceLabel": "Accounting concept",
-    "financeAccountsGlItemDifferencePlaceholder": "Search accounting concept…",
+    "financeAccountsGlItemDifferenceLabel": "Accounting account",
+    "financeAccountsGlItemDifferencePlaceholder": "Search accounting account…",
     "financeAccountCashCloseHideCleared": "Hide ticked",
     "financeAccountCashCloseHideAfter": "Hide movements after the date",
     "financeAccountCashCloseSearchPlaceholder": "Search movement…",
@@ -18470,7 +18533,7 @@
     "financeAccountCashCloseConfirmDifference": "There is a difference of",
     "financeAccountCashCloseConfirmBody": "An adjustment movement will be posted for that amount.",
     "financeAccountCashCloseConfirmAccept": "Confirm",
-    "financeAccountCashCloseNoConceptError": "This account has no accounting concept for differences. Set one under Edit account, in the General section, before confirming a close that does not balance.",
+    "financeAccountCashCloseNoConceptError": "This account has no accounting account configured for differences. Set one under Edit account, in the General section, before confirming a close that does not balance.",
     "financeAccountCashCloseDraftSaved": "Draft saved",
     "financeAccountCashCloseConfirmed": "Cash close confirmed",
     "financeAccountCashCloseError": "The cash close could not be completed",
@@ -18514,7 +18577,7 @@
     "financeAccountClearedItemsColCurrency": "Currency",
     "financeAccountClearedItemsColAmount": "Amount",
     "financeAccountClearedItemsColType": "Transaction type",
-    "financeAccountClearedItemsColGlItem": "G/L item",
+    "financeAccountClearedItemsColGlItem": "Accounting account",
     "financeAccountClearedItemsTrxType_BPD": "BP Deposit",
     "financeAccountClearedItemsTrxType_BPW": "BP Withdrawal",
     "financeAccountClearedItemsTrxType_BF": "Bank fee",
@@ -18525,7 +18588,7 @@
     "financeReconcileFilterStatusPending": "Pending",
     "financeReconcileFilterStatusSuggested": "With suggestion",
     "financeReconcileFilterStatusByRule": "By rule",
-    "financeReconcileFilterStatusDifference": "Differences",
+    "financeReconcileFilterStatusDifference": "With difference",
     "financeReconcileFilterStatusReconciled": "Reconciled",
     "financeReconcileFilterStatusAll": "All",
     "financeReconcileFilterStatusSearchPlaceholder": "Search status...",
@@ -18546,7 +18609,7 @@
     "financeReconcileColSelect": "Select",
     "financeReconcileBadgeSuggested": "With suggestion",
     "financeReconcileBadgeByRule": "By rule",
-    "financeReconcileBadgeDifference": "Difference",
+    "financeReconcileBadgeDifference": "With difference",
     "financeReconcileBadgePending": "Pending",
     "financeReconcileBadgeReconciled": "Reconciled",
     "financeReconcileBadgeInvoice": "Invoice",
@@ -18559,6 +18622,8 @@
     "financeReconcileFooterTotal": "Total: {amount}",
     "financeReconcileBarSelected": "Documents selected",
     "financeReconcileBarRemaining": "Remaining to reconcile",
+    "financeReconcileBarDifferenceNotice": "The {amount} difference will be posted to {concept}",
+    "financeReconcileBarDifferenceNoticeNoConcept": "The {amount} difference will be posted to an accounting account you pick on reconciling",
     "financeReconcileActionCancel": "Cancel selection",
     "writeoffAdjustTitle": "Write off the {amount} difference",
     "writeoffAdjustOffReceipt": "The invoice will keep {amount} outstanding.",
@@ -18583,14 +18648,14 @@
     "financeReconcileToastError": "Reconciliation error",
     "financeReconcileDiffBannerTitle": "{amount} left unreconciled on this statement line",
     "financeReconcileDiffLeavePending": "Leave pending",
-    "financeReconcileDiffAction": "Post to accounting concept",
-    "financeReconcileDiffModalTitle": "Post the difference to an accounting concept",
+    "financeReconcileDiffAction": "Post to accounting account",
+    "financeReconcileDiffModalTitle": "Post the difference to an accounting account",
     "financeReconcileDiffModalBody": "The remaining {amount} of the statement line will be recorded as an accounting adjustment and the line will be reconciled.",
     "financeReconcileDiffRowStatement": "Statement line amount",
     "financeReconcileDiffRowMatched": "Reconciled with movements",
     "financeReconcileDiffRowDifference": "Difference to adjust",
-    "financeReconcileDiffConceptLabel": "Accounting concept",
-    "financeReconcileDiffConceptPlaceholder": "Search accounting concept…",
+    "financeReconcileDiffConceptLabel": "Accounting account",
+    "financeReconcileDiffConceptPlaceholder": "Search accounting account…",
     "financeReconcileDiffDescriptionLabel": "Description (optional)",
     "financeReconcileDiffDescriptionPlaceholder": "Transfer rounding",
     "financeReconcileDiffConfirm": "Confirm and reconcile",
@@ -18606,21 +18671,23 @@
     "financeReconcileConfirmRemoveOneBody": "This document will be unlinked from the statement line and its amount returned to the pending balance.",
     "financeReconcileConfirmRemoveManyBody": "These {count} documents will be unlinked from the statement line and their amounts returned to the pending balance.",
     "financeReconcileToastOperationRemoved": "Document unlinked",
+    "financeReconcileToastOperationRemoveError": "The document could not be unlinked",
+    "financeReconcileToastOperationReactivateError": "The reconciliation could not be reactivated",
     "financeReconcileToastOperationPartiallyRemoved": "{removed} of {total} unlinked — {failed} could not be processed and are still reconciled.",
     "financeReconcileActionReactivateSelected": "Reactivate",
     "financeReconcileConfirmReactivateTitle": "Reactivate reconciliation?",
-    "financeReconcileConfirmReactivateOneBody": "The reconciliation goes back to draft and the statement line returns to pending. The document stays linked, so it will come back pre-selected on that line and reconciling again just confirms it.",
-    "financeReconcileConfirmReactivateManyBody": "The reconciliation goes back to draft and its {count} statement lines return to pending. The documents stay linked, so they will come back pre-selected and reconciling again just confirms them.",
+    "financeReconcileConfirmReactivateOneBody": "The document is unlinked from the statement line and the reconciliation is confirmed again right away, so it can be matched to something else.",
+    "financeReconcileConfirmReactivateManyBody": "These {count} documents are unlinked from their statement lines and the reconciliation is confirmed again right away, so they can be matched to something else.",
     "financeReconcileToastOperationReactivated": "Reconciliation reactivated",
     "financeReconcileReactivateOtherDraftWarning": "Another reconciliation is already in draft and only one can be edited at a time per account, so that one will be confirmed automatically.",
     "financeReconcileConfirmItemRemoveDesc": "The link to the statement line is broken and the amount returns to the pending balance",
-    "financeReconcileConfirmItemReactivateDesc": "Goes back to draft and the line back to pending, with the document pre-selected",
+    "financeReconcileConfirmItemReactivateDesc": "Unlinked from the statement line and available again for reconciling",
     "financeReconcileConfirmItemPaymentTitle": "Created payment",
     "financeReconcileConfirmItemPaymentDesc": "The generated payment is deleted and the invoice returns to unpaid",
     "financeReconcileConfirmItemOtherDraftTitle": "Another reconciliation in draft",
     "financeReconcileConfirmItemOtherDraftDesc": "It will be confirmed automatically to free up editing",
     "financeReconcileConfirmRemoveWarning": "This action will undo the document's reconciliation.",
-    "financeReconcileConfirmReactivateWarning": "The line returns to pending until you reconcile it again.",
+    "financeReconcileConfirmReactivateWarning": "The statement line returns to pending until you reconcile it again.",
     "financeReconcileDocTypeSalesInvoice": "Sales invoices",
     "financeReconcileDocTypeCollections": "Collections",
     "financeReconcileDocTypePayments": "Payments",
@@ -18633,6 +18700,7 @@
     "financeReconcileAutomatchColStatement": "Bank statement line",
     "financeReconcileAutomatchColOps": "System operations",
     "financeReconcileAutomatchActionOpen": "Open reconciliation",
+    "financeReconcileAutomatchEditAccount": "Edit account",
     "financeReconcileAutomatchEmpty": "No suggestions found for this account.",
     "financeReconcileAutomatchBadgeByRule": "By rule:",
     "financeReconcileAutomatchBadgeNew": "New",
@@ -18642,7 +18710,8 @@
     "financeReconcileAutomatchFooterCreate": "Will create {count} movement(s).",
     "financeReconcileAutomatchFooterNone": "No groups selected.",
     "financeReconcileAutomatchActionApply": "Reconcile {count} group(s)",
-    "financeReconcileAutomatchToastSuccess": "Reconciled {count} group(s) successfully.",
+    "financeReconcileAutomatchToastSuccess": "Reconciled {count} statement line(s).",
+    "financeReconcileAutomatchToastPartial": "Reconciled {success} statement line(s) — {failed} could not be applied.",
     "financeReconcileAutomatchToastError": "Error applying reconciliation",
     "financeAccountDetailTabStatementsComingSoon": "Imported statements coming soon",
     "financeAccountDetailKpiBalance": "Total balance",
@@ -18682,8 +18751,8 @@
     "financeAccountMovementsNewAcctDate": "Accounting date",
     "financeAccountMovementsNewBpartner": "Business partner",
     "financeAccountMovementsNewBpartnerPlaceholder": "Search partner…",
-    "financeAccountMovementsNewGlItem": "G/L item",
-    "financeAccountMovementsNewGlItemPlaceholder": "Search G/L item…",
+    "financeAccountMovementsNewGlItem": "Accounting account",
+    "financeAccountMovementsNewGlItemPlaceholder": "Search accounting account…",
     "financeAccountMovementsNewDescription": "Description",
     "financeAccountMovementsNewCurrency": "Currency",
     "financeAccountMovementsNewDepositAmount": "Deposit amount",
@@ -18701,17 +18770,17 @@
     "financeAccountMovementsWizardDescriptionPlaceholder": "Movement description…",
     "financeAccountMovementsWizardAmounts": "Amounts",
     "financeAccountMovementsWizardDimensions": "Dimensions",
-    "financeAccountMovementsWizardGlItemLabel": "G/L item",
+    "financeAccountMovementsWizardGlItemLabel": "Accounting account",
     "financeAccountMovementsWizardChoicePayTitle": "Register payment",
     "financeAccountMovementsWizardChoicePayHint": "Link invoices and register an incoming or outgoing payment. A payment is created alongside the movement.",
-    "financeAccountMovementsWizardChoiceGlTitle": "G/L item",
+    "financeAccountMovementsWizardChoiceGlTitle": "Accounting account",
     "financeAccountMovementsWizardChoiceGlHint": "Assign the movement to a G/L account. No payment or invoices — ideal for fees and interest.",
     "financeAccountMovementsWizardStep1": "Movement",
     "financeAccountMovementsWizardStep2": "Payment or item",
     "financeAccountMovementsWizardReconcileQuestion": "How is this movement reconciled?",
     "financeAccountMovementsWizardReconcileHintA": "You can only register a payment",
     "financeAccountMovementsWizardReconcileOr": "or",
-    "financeAccountMovementsWizardReconcileHintB": "assign a G/L item, not both.",
+    "financeAccountMovementsWizardReconcileHintB": "assign an accounting account, not both.",
     "financeAccountMovementsWizardAssocType": "Association type",
     "financeAccountMovementsWizardChange": "Change",
     "financeAccountMovementsWizardSubtitle": "Bank Account · {iso}",
@@ -18721,7 +18790,7 @@
     "financeAccountMovementsWizardWillCreate": "The movement will be created",
     "financeAccountMovementsWizardWith": "with",
     "financeAccountMovementsWizardWithoutAssoc": "and its association",
-    "financeAccountMovementsWizardAssocGl": "G/L item",
+    "financeAccountMovementsWizardAssocGl": "accounting account",
     "financeAccountMovementsWizardAssocPay": "payment",
     "financeAccountMovementsWizardPaymentSuccess": "Payment registered",
     "financeAccountMovementsWizardPaymentError": "Could not register the payment",
@@ -18764,7 +18833,7 @@
     "financeAccountMovementsStatusCompleted": "Completed",
     "financeAccountMovementsStatusReconciled": "Reconciled",
     "financeAccountMovementsStatusUnreconciled": "Unreconciled",
-    "financeAccountMovementsColGlItem": "G/L item",
+    "financeAccountMovementsColGlItem": "Accounting account",
     "financeAccountMovementsRowViewDetail": "View detail",
     "financeAccountMovementsRowViewDetailToast": "Movement detail coming soon",
     "financeAccountMovementsRowUnreconcile": "Unreconcile",
@@ -18795,6 +18864,7 @@
     "financeAccountStatementsRowDelete": "Delete",
     "financeAccountStatementsRowProcessedTooltip": "Processed statements can't be modified",
     "financeAccountStatementsRowReactivateTooltip": "Only processed statements can be reactivated",
+    "financeAccountStatementsRowBankSyncedTooltip": "Statements of a bank-connected account cannot be edited or deleted",
     "financeAccountStatementsReactivateTitle": "Reactivate statement",
     "financeAccountStatementsReactivateBody": "Statement “{name}” will return to draft so you can edit or delete it. Continue?",
     "financeAccountStatementsReactivateConfirm": "Reactivate",
@@ -18828,6 +18898,7 @@
     "financeAccountStatementsManualLineHintCancel": "to cancel",
     "financeAccountStatementsManualKeyEsc": "ESC",
     "financeAccountStatementsManualRemoveLine": "Remove line",
+    "financeAccountStatementsManualLineMatchedTooltip": "Reconciled line: it cannot be modified or deleted",
     "financeAccountStatementsManualEditLine": "Edit line",
     "financeAccountStatementsManualTotalLines": "Lines",
     "financeAccountStatementsManualTotalIn": "In",
@@ -18857,8 +18928,8 @@
     "financeAccountStatementsManualColReference": "Reference No.",
     "financeAccountStatementsManualColContactName": "Contact name",
     "financeAccountStatementsManualColContact": "Contact",
-    "financeAccountStatementsManualColGlItem": "Accounting concept",
-    "financeAccountStatementsManualGlItemPlaceholder": "Search accounting concept…",
+    "financeAccountStatementsManualColGlItem": "Accounting account",
+    "financeAccountStatementsManualGlItemPlaceholder": "Search account…",
     "financeAccountStatementsManualContactPlaceholder": "Search contact…",
     "financeAccountStatementsManualAddLinesCta": "Add lines",
     "financeAccountStatementsManualAddLinesCtaDesc": "Enter the statement movements by hand",
@@ -18954,7 +19025,7 @@
     "financeAccountStatementLinesColReference": "Reference No.",
     "financeAccountStatementLinesColBpartner": "Contact name",
     "financeAccountStatementLinesColContact": "Contact",
-    "financeAccountStatementLinesColGlItem": "G/L item",
+    "financeAccountStatementLinesColGlItem": "Accounting account",
     "financeAccountStatementLinesColAmount": "Amount",
     "financeAccountStatementLinesColDramount": "Out",
     "financeAccountStatementLinesColCramount": "In",
@@ -18977,6 +19048,8 @@
     "financeAccountStatementLinesMatchedYes": "Matched",
     "financeAccountStatementLinesMatchedNo": "Not matched",
     "dashboardTitle": "Home",
+    "dashboardNoWidgetsTitle": "No widgets available for your role",
+    "dashboardNoWidgetsSubtitle": "Your role has no access to the data these panels show. Contact your administrator if you think this is a mistake.",
     "dashboardGreetingHello": "Hello, {name}",
     "dashboardGreetingHeadline": "These are your pending tasks",
     "dashboardCopilotCta": "How can I help you today?",
@@ -19006,6 +19079,7 @@
     "pendingSubjectReceptions": "Receptions",
     "pendingSubjectStock": "Stock",
     "pendingStateOverdue": "Overdue",
+    "pendingStateOverduePayments": "Overdue",
     "pendingStatePending": "Pending",
     "pendingStateDueToday": "Due today",
     "pendingStateLowStock": "Low stock",
@@ -19014,6 +19088,7 @@
     "financialSummaryEmptySubtitle": "Register sales and purchases to see income, expenses and profit",
     "newInvoice": "New invoice",
     "financialSummaryPositive": "Your revenues beat your expenses this year",
+    "financialSummaryNegative": "Your expenses beat your revenues this year",
     "financialSummaryIncome": "Income",
     "financialSummaryExpenses": "Expenses",
     "financialSummaryProfit": "Profit",
@@ -19438,7 +19513,7 @@
     "onboardingResetEmailSentTitle": "Check your email",
     "onboardingResetEmailSentSubtitle": "If an account exists for this email, we sent a link to: {email}",
     "onboardingResetLinkValidity": "The link is valid for {duration}.",
-    "onboardingResetLinkDuration": "15 minutes",
+    "onboardingResetLinkDuration": "30 minutes",
     "onboardingResendPrompt": "Didn't receive it?",
     "onboardingResendLinkAction": "Resend link",
     "onboardingResetPasswordTitle": "Create new password",
@@ -19454,6 +19529,7 @@
     "onboardingChangePasswordAction": "Change password",
     "onboardingChangePasswordTitle": "Change password",
     "onboardingChangePasswordSubtitle": "Update your local account password.",
+    "createPasswordLogoutNotice": "After creating your password you'll be signed out and will need to sign in again. Your other sign-in methods keep working.",
     "changePasswordLogoutNotice": "After changing your password you'll be signed out and need to log in again.",
     "onboardingPasswordChangedNotice": "Your password has been changed successfully. Sign in with your new password.",
     "onboardingDraftRestoredNotice": "We restored your saved setup progress so you can pick up where you left off.",
@@ -19461,6 +19537,16 @@
     "onboardingCurrentPasswordLabel": "Current password",
     "onboardingCredentialChangeSuccess": "Password updated.",
     "onboardingCredentialChangeFailed": "Could not change the password.",
+    "localeChangeConfirmTitle": "Change language",
+    "unsavedNavigationTitle": "You have unsaved changes",
+    "unsavedNavigationBody": "If you leave now, the changes you have not saved will be lost.",
+    "unsavedNavigationDiscardAction": "Discard and leave",
+    "unsavedNavigationSaveAction": "Save and leave",
+    "localeChangeConfirmBody": "You have unsaved changes in this form. Changing the language reloads the page and those changes will be lost.",
+    "localeChangeDiscardAction": "Discard and change",
+    "onboardingChangePasswordMissingCredentials": "The current and new password are both required.",
+    "onboardingNoLocalPassword": "This account signs in through an external provider, so it has no password to change.",
+    "onboardingInvalidCurrentPassword": "The current password is not correct.",
     "onboardingNameLabel": "Name",
     "onboardingNamePlaceholder": "Your name",
     "onboardingEmailLabel": "Email",
@@ -19690,6 +19776,8 @@
     "invNoLinesError": "The invoice cannot be confirmed because it has no lines",
     "fieldMinValueError": "Value must be at least {min}",
     "fieldIntegerError": "Value must be a whole number",
+    "fieldMaxLengthError": "Maximum length is {maxLength} characters",
+    "fieldInvalidCharacters": "This field contains invalid characters",
     "sqOrderConfirmedInvoiceError": "Quotation confirmed, but invoice could not be created. ",
     "rejectQuotation": "Reject",
     "rejectQuotationTitle": "Reject quotation",
@@ -19825,12 +19913,12 @@
     "assetsCurrencyLabel": "Currency",
     "assetsPurchaseDateLabel": "Purchase Date",
     "assetsCancellationDateLabel": "Cancellation Date",
-    "assetsDepStartDateLabel": "Depreciation Start Date",
-    "assetsDepEndDateLabel": "Depreciation End Date",
+    "assetsDepStartDateLabel": "Amortization Start Date",
+    "assetsDepEndDateLabel": "Amortization End Date",
     "assetsAssetValueLabel": "Asset Value",
     "assetsResidualValueLabel": "Residual Asset Value",
     "assetsDepreciationAmtLabel": "Depreciation Amount",
-    "assetsPrevDepreciatedLabel": "Previously Depreciated Amount",
+    "assetsPrevDepreciatedLabel": "Previously Depreciated Value",
     "poSave": "Save",
     "poSaveDraft": "Save draft",
     "poConfirmBtn": "Confirm",
@@ -19896,7 +19984,7 @@
     "poBulkOrderHasDraftReceipt": "Order {documentNo} already has a draft goods receipt.",
     "cloneOrderBtn": "Clone",
     "quickAction.edit": "Edit",
-    "quickAction.clone": "Duplicate",
+    "quickAction.clone": "Clone",
     "quickAction.email": "Send / Download",
     "quickAction.more": "More actions",
     "quickAction.delete": "Delete",
@@ -19925,6 +20013,7 @@
     "cloneConfirmSubtitleOne": "A draft copy will be created",
     "cloneConfirmSubtitleMany": "{count} draft copies will be created",
     "cloneInfoBanner": "Cloned documents will keep all the original data.",
+    "cloneBlockedUnsavedChanges": "Save or discard your pending changes before cloning. Cloning now would copy the last saved version, not what you see on screen.",
     "cloneDoneTitleOne": "Document cloned",
     "cloneDoneTitleMany": "{count} documents cloned",
     "cloneDoneSubtitle": "Click one to open it",
@@ -19988,6 +20077,13 @@
     "backendError.matchRuleRegexComplex": "The regular expression is too complex (possible catastrophic backtracking)",
     "backendError.matchRuleRegexInvalid": "Invalid regular expression",
     "backendError.matchRulePriorityConflict": "A rule with this priority already exists for the selected scope",
+    "backendError.transferMovementNotDeletable": "Movements generated by a funds transfer cannot be deleted.",
+    "backendError.matchRulePriorityRequired": "Priority is required",
+    "backendError.matchRulePriorityNotInteger": "Priority must be a whole number",
+    "backendError.matchRulePriorityTooLow": "Priority must be 1 or greater",
+    "backendError.matchRulePriorityTooLarge": "Priority is too large",
+    "backendError.statementNotDraft": "Processed statements can't be modified",
+    "backendError.statementNotProcessed": "Only processed statements can be reactivated",
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
     "backendError.noLinesToInvoice": "There are no lines to invoice for this order.",
@@ -20001,20 +20097,31 @@
     "backendError.shipmentPriceListRequired": "No Price List could be resolved for this invoice. Select a tariff, or configure a default Price List for the Business Partner.",
     "backendError.orderNotFound": "Order not found: {orderId}.",
     "backendError.shipmentNotFound": "Shipment not found: {id}.",
+    "backendError.accountAlreadyExists": "Account {code} already exists.",
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes.",
     "backendError.conversionRateNotDraft": "Cannot modify the document conversion rate when the invoice is not in draft status.",
-    "backendError.cashCloseNoConcept": "This account has no accounting concept configured for differences. Set one under Edit account before confirming a close that does not balance.",
+    "backendError.cashCloseNoConcept": "This account has no accounting account configured for differences. Set one under Edit account before confirming a close that does not balance.",
     "backendError.cashCloseDateInFuture": "The close date cannot be in the future.",
     "backendError.cashCloseDateBeforeLastClose": "The close date cannot be earlier than the last confirmed close ({date}).",
     "backendError.cashCloseLineInClosedPeriod": "The movement “{movement}” has an accounting date in a closed period. Reopen that period or unmark the movement before confirming the close.",
     "backendError.cashCloseHasBankStatementLines": "This reconciliation already has bank-statement lines linked to it. A cash close and a bank reconciliation cannot share the same document.",
     "backendError.cashCloseOnlyForCashAccount": "Cash close is only available for cash-type financial accounts.",
     "backendError.ibanAutoFillFailed": "IBAN could not be set automatically ({iban}). Enter it manually in the Financial Account.",
+    "backendError.pisTemplateNotSupportedByProvider": "The selected payment template is not supported by this bank. Choose a different template.",
+    "backendError.conversionRateRequired": "A conversion rate is required when the invoice and the account are in different currencies.",
+    "backendError.conversionRateMustDifferFromOne": "The conversion rate must be other than 1 when the invoice and the account are in different currencies.",
+    "backendError.conversionRateInvalidFormat": "The conversion rate format is not valid.",
+    "backendError.conversionRateNotPositive": "The conversion rate must be greater than zero.",
     "backendError.transactionsObtainedForAccount": "Transactions obtained for the account: {account}.",
     "backendError.noNewTransactionsForAccount": "No new transactions found for the account: {account}.",
     "backendError.syncFetchFailed": "The bank reported an error while synchronizing: {detail}.",
+    "backendError.psd2ConnectionWentInactive": "The connection for account {account} was found inactive during synchronization. Please reconnect the account.",
+    "backendError.psd2ConsentExpired": "The bank consent for account {account} has expired. Please reconnect the account.",
+    "backendError.psd2ImportDateBeyondMaxInterval": "The requested start date exceeds the maximum fetch interval of {days} days for this provider. Only transactions from that period may be available.",
+    "backendError.psd2NoActiveConnection": "No active bank connection was found for this account. Connect the account first.",
     "backendError.cannotDeactivateOwnAccount": "You cannot deactivate your own user account.",
     "backendError.cannotDeactivateLastAdmin": "Cannot deactivate the last active administrator for this client.",
+    "backendError.fieldTooLong": "This value is too long. It must not exceed {maxLength} characters.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
     "uomTypeTime": "Time",
@@ -20081,7 +20188,7 @@
     "customerDataSection": "Customer data",
     "vendorDataSection": "Vendor data",
     "fiscal.title": "Fiscal Configuration",
-    "fiscal.monitor.nav": "Invoice Monitor",
+    "fiscal.monitor.nav": "Fiscal Monitor",
     "fiscal.wip.badge": "Work in Progress",
     "fiscal.wip.tooltip": "This window is still under active development. Fields, design, and behaviour may change without notice and are not final.",
     "fiscal.territory.question": "What fiscal territory does this organization operate in?",
@@ -20264,6 +20371,7 @@
     "fiscal.onboarding.applied.row.env": "Environment",
     "fiscal.onboarding.applied.row.activated": "Activated",
     "fiscal.onboarding.applied.env.sandbox": "Sandbox · testing",
+    "fiscal.onboarding.applied.env.production": "Production",
     "fiscal.onboarding.applied.volume.high": "> 6,010,121 €",
     "fiscal.onboarding.applied.volume.low": "≤ 6,010,121 €",
     "fiscal.onboarding.applied.national.active": "Active",
@@ -20723,8 +20831,6 @@
     "sifDataTabs.status.sii.acceptedWithErrors": "Accepted with errors",
     "sifDataTabs.status.sii.incorrect": "Incorrect",
     "sifDataTabs.status.sii.sendError": "Send error",
-    "sifErrorBanner.errorCode": "Error code",
-    "sifErrorBanner.errorDetail": "Error detail",
     "sifDataTabs.status.sii.pending": "Pending",
     "sifDataTabs.status.sii.cancelled": "Cancelled",
     "sifDataTabs.status.sii.dropped": "Dropped",
@@ -20811,8 +20917,8 @@
     "invitePageInvalidDescription": "This invitation link is invalid, expired, or has already been used.",
     "invitePageExistingTitle": "Accept company invitation",
     "invitePageExistingDescription": "You have been invited to join {companyName}.",
-      "invitePageExistingAccountNotice": "You already have an Etendo Go account ({email}). Sign in first, then accept the invitation.",
-      "invitePageAuthenticatedNotice": "You are signed in with the invited Etendo Go account. Continue to join this company.",
+    "invitePageExistingAccountNotice": "You already have an Etendo Go account ({email}). Sign in first, then accept the invitation.",
+    "invitePageAuthenticatedNotice": "You are signed in with the invited Etendo Go account. Continue to join this company.",
     "invitePageAcceptButton": "Accept invitation",
     "invitePageAccepting": "Accepting...",
     "invitePageNewAccountTitle": "Join {companyName}",
@@ -20855,6 +20961,7 @@
     "purchaseOrders": "Purchase Orders",
     "docNo": "Doc No",
     "documentNo": "Document No",
+    "finance": "Finance",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -20976,6 +21083,7 @@
     "fm.kpi.deadline_days": "days",
     "fm.kpi.deadline_blocking": "blocking",
     "fm.list.title": "Declarations",
+    "fm.breadcrumb.section": "Fiscal Models",
     "fm.list.count": "declarations",
     "fm.filter.all": "All",
     "fm.filter.model_prefix": "Form",
@@ -21044,8 +21152,8 @@
     "fm.aeat.presenter.name": "Presenter name",
     "fm.aeat.nrc.label": "NRC",
     "fm.aeat.nrc.placeholder": "Complete Reference Number",
-    "fm.aeat.test_mode.label": "Test mode (no certificate required)",
-    "fm.aeat.test_mode.warning": "In test mode the declaration is validated by AEAT but NOT submitted. No document will be filed.",
+    "fm.aeat.test_mode.label": "Validate without filing",
+    "fm.aeat.test_mode.warning": "This option only validates the file with the AEAT. The declaration is not filed.",
     "fm.aeat.action.submit": "Submit to AEAT",
     "fm.aeat.action.submitting": "Submitting to AEAT…",
     "fm.aeat.action.download_pdf": "Download receipt (PDF)",
@@ -21065,6 +21173,7 @@
     "fm.aeat.error.connection": "Connection error while submitting to the AEAT. Please try again.",
     "fm.aeat.error.generic": "Unknown error. Please try again.",
     "fm.aeat.error.ibanRequired": "IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.",
+    "fm.aeat.error.nrcRequired": "The NRC is required to file a declaration with an amount due.",
     "fm.aeat.error.missingDefaultIae": "This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period's declaration.",
     "fm.aeat.action.go_to_organization": "Go to Organization",
     "fm.aeat.warnings.title": "Warnings",
@@ -21384,6 +21493,9 @@
     "fm.m349.vies.pending": "Pending",
     "fm.m349.vies.invalid": "Invalid",
     "fm.m349.totals.title": "Totals by key",
+    "fm.m349.rectificative": "Corrective",
+    "fm.m349.rectificative_period": "Corrective {period}",
+    "fm.m349.rectif_subtotal.title": "Corrective subtotal",
     "fm.m349.totals.info": "Calculated from operators. Not editable. Modify operators to adjust totals.",
     "fm.m349.totals.readonly": "read only",
     "fm.m349.totals.sub": "Calculated from operators. Not editable — modify operators to adjust totals.",
@@ -21391,14 +21503,33 @@
     "fm.m349.tab.rectif": "Rectifications",
     "fm.m349.tab.invoices": "Source invoices",
     "fm.m349.tab.incidents": "Incidents",
+    "fm.m349.origin_filter.operator": "Operator {nif}",
+    "fm.m349.origin_filter.clear": "Clear operator filter",
+    "fm.m349.invoices.filter.empty": "No source invoices for operator {nif}",
+    "fm.m349.rectif.filter.empty": "No rectifications for operator {nif}",
     "fm.m349.tab.files": "Files",
     "fm.m349.tab.history": "History",
     "fm.m349.banner.blocking_title": "{count} blocking incidents prevent file generation",
     "fm.m349.banner.blocking_sub": "Resolve the blocking incidents to generate the AEAT file.",
     "fm.m349.banner.blocking_action": "Resolve",
     "fm.m349.banner.vies_title": "{count} VAT IDs with pending VIES validation",
-    "fm.m349.banner.vies_sub": "Async VIES validation — informative, non-blocking",
+    "fm.m349.banner.vies_sub": "Live call to the VIES service — informative, does not block the declaration",
     "fm.m349.banner.vies_action": "Validate VIES",
+    "fm.m349.banner.vies_validating": "Validating…",
+    "fm.m349.vies.result.none": "No VAT IDs were pending validation",
+    "fm.m349.vies.result.processed_one": "1 VAT ID processed",
+    "fm.m349.vies.result.processed_many": "{count} VAT IDs processed",
+    "fm.m349.vies.result.valid_one": "1 valid",
+    "fm.m349.vies.result.valid_many": "{count} valid",
+    "fm.m349.vies.result.invalid_one": "1 invalid",
+    "fm.m349.vies.result.invalid_many": "{count} invalid",
+    "fm.m349.vies.result.pending_one": "1 still pending; you can run it again",
+    "fm.m349.vies.result.pending_many": "{count} still pending; you can run it again",
+    "fm.m349.vies.result.failed_one": "1 checked but could not be saved; try again",
+    "fm.m349.vies.result.failed_many": "{count} checked but could not be saved; try again",
+    "fm.m349.vies.result.not_eligible_one": "1 cannot be checked against VIES (it needs an intra-community tax ID key and a VAT number)",
+    "fm.m349.vies.result.not_eligible_many": "{count} cannot be checked against VIES (they need an intra-community tax ID key and a VAT number)",
+    "fm.m349.vies.result.error": "VIES validation could not be run. Please try again.",
     "fm.m349.banner.ready_title": "349 file generated successfully",
     "fm.m349.banner.ready_sub": "{ops} operators · key totals reconcilable row by row",
     "fm.m349.banner.download": "Download",
@@ -21451,7 +21582,6 @@
     "returnReceipt.createRectificativeInvoiceDescription": "Created as draft, pre-filled with returned products and prices from the source invoice.",
     "fm.m349.invoices.empty": "Recalculate to see the source invoices.",
     "fm.m349.invoices.none": "No intra-EU invoices found for this period.",
-    "fm.m349.invoices.filtering_by": "Filtering by:",
     "fm.m349.invoices.filtered": "{visible} of {total}",
     "amortization": "Amortization",
     "totalAmortization": "Total Amortization",
@@ -21519,7 +21649,7 @@
     "matchRuleColName": "Name",
     "matchRuleColCondition": "Condition",
     "matchRuleColType": "Transaction type",
-    "matchRuleColConcept": "Accounting concept",
+    "matchRuleColConcept": "Accounting account",
     "matchRuleColReconciliations": "Reconciliations",
     "matchRuleColActive": "Active",
     "matchRuleSectionDimensions": "Dimensions",
@@ -21631,7 +21761,6 @@
     "newSubAccountSuccess": "Sub-account created successfully",
     "newSubAccountError": "Could not create sub-account",
     "glc.title": "General Ledger Configuration",
-    "glc.breadcrumbRoot": "Treasury",
     "glc.tab.general": "General",
     "glc.tab.defaults": "Defaults",
     "glc.tab.dimensions": "Dimensions",
@@ -22052,7 +22181,7 @@
     "cashTypeA": "Pay In Advance",
     "cashTypeD": "Difference",
     "cashTypeE": "General Expense",
-    "cashTypeG": "G/L Item",
+    "cashTypeG": "Accounting account",
     "cashTypeP": "Debt-Payment",
     "cashTypeR": "General Receipts",
     "categoryTypeD": "Document",
@@ -23771,7 +23900,7 @@
     "serviceTypePs": "Pentaho solution",
     "settlementtypeB": "Charge (Cash/Bank)",
     "settlementtypeC": "Cancel/Generate",
-    "settlementtypeI": "GL Item",
+    "settlementtypeI": "Accounting account",
     "shiftM": "Morning shift",
     "shiftT": "Swing shift",
     "showValueCondA": "Algebraic",
@@ -24233,7 +24362,34 @@
     "windowTypeM": "Maintain",
     "windowTypeObuiappPickAndExecute": "Pick and Execute",
     "windowTypeQ": "Query Only",
-    "windowTypeT": "Transaction"
+    "windowTypeT": "Transaction",
+    "accountSettingsTitle": "Account settings",
+    "accountSettingsSecurity": "Security",
+    "accountSettingsSecurityIntro": "Ways you can sign in to your account. At least one must always remain.",
+    "accountMethodPassword": "Password",
+    "accountMethodPasswordEnabled": "Set",
+    "accountMethodPasswordDisabled": "Not set",
+    "accountMethodLastChanged": "Changed on {0}",
+    "accountMethodLastLogin": "Last sign-in on {0}",
+    "accountMethodChange": "Change",
+    "accountMethodRemove": "Remove",
+    "accountMethodRemoveLastTooltip": "This is your only sign-in method. Add another before removing this one.",
+    "accountMethodRemoveConfirmTitle": "Remove this sign-in method?",
+    "accountMethodRemoveConfirmBody": "Once removed you will not be able to sign in with it. The remaining ones keep working.",
+    "accountMethodCurrentPasswordRequired": "Enter your current password to remove it.",
+    "accountCreatePasswordTitle": "Create a password",
+    "accountCreatePasswordAction": "Create password",
+    "accountMethodCreate": "Create",
+    "accountMethodLastRemaining": "This is the only way you can sign in. Add another method before removing this one.",
+    "accountMethodNotFound": "That sign-in method is not enabled on this account.",
+    "accountMethodRemoveFailed": "The sign-in method could not be removed.",
+    "accountMethodRemoved": "Sign-in method removed.",
+    "accountMethodsLoadFailed": "Your sign-in methods could not be loaded.",
+    "exportCsv": "Export as CSV",
+    "exportXlsx": "Export as Excel",
+    "importDownloadTemplateCsv": "Download CSV template",
+    "importDownloadTemplateXlsx": "Download Excel template",
+    "importDropHintFormats": "or select a file. Supported formats: {formats}"
   },
   "menus": {
     "Currency": {
@@ -24450,7 +24606,7 @@
       "label": "Price List Schema"
     },
     "Matched Purchase Invoices": {
-      "label": "Matched Purchase Invoices"
+      "label": "Receipt-Invoice Link"
     },
     "Matched Purchase Orders": {
       "label": "Matched Purchase Orders"
@@ -24471,7 +24627,7 @@
       "label": "Create AP Expense Invoices"
     },
     "Asset Group": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Create Shipments from Orders": {
       "label": "Create Shipments from Orders"
@@ -24558,7 +24714,7 @@
       "label": "Manual Journals"
     },
     "G/L Item": {
-      "label": "G/L Item"
+      "label": "Accounting account"
     },
     "GL Posting by DB Tables": {
       "label": "GL Posting by DB Tables"
@@ -25496,6 +25652,9 @@
     },
     "Return Shipment": {
       "label": "Return Shipment"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Receipt-Invoice Link"
     }
   },
   "statuses": {

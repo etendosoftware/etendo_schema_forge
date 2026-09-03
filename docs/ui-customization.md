@@ -448,11 +448,16 @@ never renders rows that can be picked — so it never sees a selection bar eithe
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
 
-Note that a window doing this swaps two bars, not stacks them: `ListView` renders
-its selection bar as a **sibling above** the slot and cannot reach inside it, so
-the slot must hide its own toolbar while a selection exists. To let it, `ListView`
-now forwards its authoritative **`selectedRows`** in the Table-slot props
-(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+Note that a window doing this swaps two toolbars, not stacks them — but since
+ETP-4972 (see §9e) the selection bar itself (`SelectionToolbar`) is a
+viewport-fixed portal to `document.body`, not a DOM sibling of the slot at
+all, so "swap" here means the **slot's own toolbar unmounts** while a
+selection exists, not that the selection bar takes its place in the slot's
+layout flow — the floating pill appears elsewhere in the viewport regardless
+of where the slot sits on the page. To let the slot know when to unmount its
+own toolbar, `ListView` forwards its authoritative **`selectedRows`** in the
+Table-slot props (read-only for the slot; `DataTable` has no such prop, so the
+spread is inert):
 
 ```jsx
 function MyHeaderTable({ data, meta, selectedRows, ...props }) {
@@ -502,6 +507,32 @@ row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
 | Partial failure | single warning — "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse." | `bulkDeletePartialFailure` |
 | All rows fail | error — "No se pudo eliminar ninguno de los {count} registros seleccionados." | `bulkDeleteAllFailed` |
 
+**The toast names the reason when every failure shares one (ETP-5085).** Counting failures without
+saying why leaves the user with nothing to act on — selecting a single undeletable row and reading
+"No se pudo eliminar ninguno de los 1 registros seleccionados" is the worst case of it. So
+`runBatchDelete` now also returns `errors` (the rejection reason per failed item, aligned with
+`failed`), and `toastBatchDeleteOutcome` appends the reason through
+`bulkDeleteAllFailedWithReason` / `bulkDeletePartialFailureWithReason`. For a **single** selected
+row the reason **replaces** the message entirely — the backend already wrote a full sentence.
+
+Three guards keep that from leaking noise, and they are the point of the design:
+
+- **Only a 4xx counts as a reason.** `Promise.allSettled` catches every rejection alike — a dropped
+  connection, a `TypeError` from a bug in `deleteOneFn`, a 500 whose message is by design a log
+  pointer ("Please check logs for details"). A 4xx is the one case where the server answered "no,
+  because …" on purpose. So `deleteOneFn` must reject with an error carrying `status` (as
+  `useCreateMovement.postAction` does) for its message to be shown at all.
+- **A message that is just a status code** (`HTTP 409`, `409 Conflict`) is discarded — the counter
+  message is better than a code.
+- **Several distinct reasons → no reason.** One sentence cannot summarise them, and picking one
+  failure would imply it explains all of them.
+
+The reason is run through `translateBackendError`, so a backend literal shows in Spanish only if it
+has a `BACKEND_ERROR_MAP` entry + `backendError.*` key — the same contract as every per-row surface.
+Callers that build the toast themselves (`DetailView`, `contacts`, `AmortizationLinesTable`) still
+pass no `errors` and keep the counter-only wording; `useBatchDeleteDialog` (Financial Accounts,
+Movements, Statements) passes it.
+
 On a partial failure, `ListView` keeps only the failed rows selected: `DataTable`
 gained a paired `deselectTrigger`/`deselectRowIds` prop (alongside the existing
 all-or-nothing `clearSelectionTrigger`) so only the succeeded row ids drop out
@@ -516,7 +547,8 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 **New i18n keys** (all under `genericLabels`, both `en_US.json`/`es_ES.json`):
 `deleteBlockedByReferences`, `bulkDeleteConfirmTitle`, `bulkDeleteConfirmMessage`,
 `bulkDeleteSelected`, `bulkDeleteAllSucceeded`, `bulkDeletePartialFailure`,
-`bulkDeleteAllFailed`.
+`bulkDeleteAllFailed`, plus (ETP-5085) `bulkDeleteAllFailedWithReason` and
+`bulkDeletePartialFailureWithReason`.
 
 **Real examples:** the generic mechanism applies to every window using the
 standard `ListView` (nothing to declare). `contacts` is the one window that
@@ -543,8 +575,9 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   passed straight to `ListView` (through a generated page's `{...props}` spread, same as
   `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
 - When present, `ListView` recomputes on every selection change how many of the
-  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
-  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
+  **currently selected** rows fail the predicate. If any do, the generic delete button
+  (icon-only `Trash2`, no visible text label since ETP-4972 — see §9e) disables
+  (`bulkDeleting || blockedDeleteCount > 0`) and its `title`/`aria-label` tooltip switches to
   `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
   batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
   exists as a defense-in-depth backstop for a row that changed state between selection and
@@ -558,6 +591,146 @@ stay bulk-deletable in general while blocking the specific action on a bad selec
   only concerns `ListView`'s own generic bulk-delete button.
 - **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
   the only current consumer.
+
+### 9e. `SelectionToolbar` — the floating bulk-selection toolbar (ETP-4972)
+
+Every checkbox-selectable list/tab (grid multi-select in `ListView`, and every
+lines table that supports row selection — Sales Order, Physical Inventory,
+Amortization, Assets' Amortization Plan tab, Financial Accounts' Movimientos/
+Extractos tabs, the Periods panel's document bulk-open/close bar, contacts'
+secondary tabs) shares one component for the bar that appears once ≥1 row is
+checked: `tools/app-shell/src/components/contract-ui/SelectionToolbar.jsx`.
+It replaces the pre-ETP-4972 `LinesSelectionBar` (kept only as a one-line
+re-export shim, `LinesSelectionBar.jsx → SelectionToolbar.jsx`, for stragglers
+importing the old filename — do not add new imports of it).
+
+**Architecture — a true viewport-fixed portal, not an anchored one.** The old
+`LinesSelectionBar` was portaled to `document.body` with `position: fixed`,
+but its `top`/`left` came from `getBoundingClientRect()` on a sentinel
+`<div>` placed at the end of the scrollable list (some callers additionally
+tracked it via a `ResizeObserver` on a `barAnchorRef`). On a long list, once
+that sentinel scrolled out of view, the "fixed" bar scrolled out of view with
+it — a "floating" bar that wasn't actually anchored to the viewport.
+`SelectionToolbar` has no ref/rect-measuring code at all: it portals to
+`document.body` and hardcodes real viewport coordinates —
+`position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%)` —
+so it is bottom-center of the screen unconditionally, regardless of list
+length, scroll position, or which container it's logically nested under.
+That bug class cannot recur because there is no measured rect left to go
+stale.
+
+**Additive, not a swap, at the `ListView` idle-bar level.** Before ETP-4972,
+`ListView` rendered the selection bar and the idle filter bar (Filtros,
+ViewToggle, Nuevo, …) as either branch of one ternary occupying the same DOM
+slot — selecting a row replaced the idle bar outright. Since the selection
+bar is now a portal that floats independently of everything else on the
+page, `ListView` renders both as independent siblings: the idle bar **stays
+visible** while rows are selected, and the floating pill appears additively
+on top. (This is unrelated to the slot-level "swap" described in §9c above —
+a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
+selection is active, because that toolbar and the grid live in the same
+slot; see the corrected note there.)
+
+**Composition — children, not a data-driven `actions[]` prop.**
+`SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
+the portal, the true fixed placement, the dark-pill visual chrome (radius,
+shadow, enter/exit slide animation), a 1px divider rendered after every
+top-level child, and a trailing close (`X`) button that calls `onClose`. It
+does **not** impose a generic `actions[]` shape on callers — the selection
+counter, action buttons, and any destructive "Eliminar" affordance are all
+passed as plain `children`, one top-level element per segment (a divider is
+auto-inserted after each):
+
+```jsx
+<SelectionToolbar
+  visible={selectedRows.length > 0}
+  onClose={clearSelection}
+  closeTitle={ui('close')}
+>
+  <span className="text-sm font-medium">
+    {ui('selected').replace('{count}', selectedRows.length)}
+  </span>
+  <div className="flex items-center gap-2 h-10">
+    {/* action buttons */}
+  </div>
+</SelectionToolbar>
+```
+
+Because the shell no longer provides its own cancel/X affordance for callers
+to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
+hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
+button** — `SelectionToolbar` always renders one as the trailing segment.
+
+**Gotcha — use a plain `<button>`, not the shared shadcn `<Button
+size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
+in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
+selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
+regardless of Tailwind/twMerge class order. Two text-bearing action buttons
+in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
+rendered at visibly different icon/text sizes until both were rewritten as
+plain hand-rolled `<button>` elements with the same explicit classes,
+matching Figma's "Size: md" spec (padding `7px 12px`, gap `4px`) instead of
+inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
+with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
+any new bulk-toolbar action button, rather than `<Button size="sm">`.
+
+**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
+The Figma spec for the two text-bearing buttons above sources its icons
+(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
+draw the plus/check as a badge overlapping the file's corner with a heavier
+stroke — visually different from this app's lucide-react set (`FilePlus`/
+`FileCheck`), which draws the same glyphs contained inside the file body
+with a thinner stroke. This is a **confirmed, deliberate decision, not a
+drift from Figma to fix**: lucide-react's versions were kept for visual
+consistency with every other icon already in this toolbar (`Trash2`, `X`,
+`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
+Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
+shape without re-confirming with design first.
+
+**Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
+usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
+`tools/app-shell/src/components/financial-accounts/BulkDeleteSelectionBar.jsx`
+(Financial Accounts' Movimientos/Extractos tabs), `windows/custom/calendar/
+PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
+contacts/index.jsx`.
+
+#### `BulkDocumentAction`'s `actionMode` — bulk actions that are not DocActions
+
+`BulkDocumentAction.jsx` provides the "Confirmar"/"Procesado masivo" button, its
+modal, the action dropdown, the per-row `Promise.allSettled` loop and the
+ok/failed toast. It used to be **DocAction-only**: the per-row call was always
+`POST …/{id}/action/documentAction` with a `{docAction}` body, so each
+`buildActions` value had to be a DocAction code (`CO`, `RE`, …).
+
+`actionMode` (ETP-5075) opens it to any window whose bulk actions are *generic
+NEO actions* instead:
+
+| Value | Per-row call | Each `buildActions` value is |
+|---|---|---|
+| `'documentAction'` (default) | `POST …/{id}/action/documentAction`, body `{docAction}` | a DocAction code |
+| `'neoAction'` | `POST …/{id}/action/{value}` | an action name (e.g. `post`, `unpost`) |
+
+The default keeps every pre-existing consumer byte-identical. First user:
+`artifacts/matched-purchase-invoices/custom/MatchedInvoiceBulkActions.jsx`, whose
+window has no `documentStatus`/DocAction at all — its bulk actions are the
+accounting `post`/`unpost` served by `DocumentPostingService`, the same endpoint
+its detail kebab uses.
+
+In `'neoAction'` mode the component wraps `useNeoAction.execute` in an adapter
+that **throws** when the result is not successful. This is load-bearing, not
+ceremony: `useNeoAction` *resolves* with `{ success: false }` on failure (unlike
+`useDocumentAction`, which throws — its own javadoc draws the contrast), while
+`handleDone` classifies failures via `Promise.allSettled`'s `'rejected'` status.
+Without the adapter every failed row is silently counted as a success and the
+toast reports "N ok, 0 failed" while nothing happened. If you add a third
+`actionMode`, normalise its error contract the same way.
+
+Pair it with `rowFilter` when a selection can legitimately mix states: returning
+a string from `rowFilter(row, action)` pre-blocks that row with that message
+(shown in the failure list) instead of sending a request the backend will reject
+with an opaque error.
 
 ---
 
@@ -1393,3 +1566,59 @@ artifacts/contacts/generated/web/contacts/
 2. Add the appropriate key to `decisions.json → window.*`
 3. Run `node cli/src/generate-frontend.js {window}` (or full pipeline)
 4. The generated `*Page.jsx` now imports and wires your component automatically
+
+## FK click-through navigation (`fkNavigation.js`)
+
+**Makes a read-only foreign-key value clickable, opening the record it points at — in the
+detail form and the list grid alike.** Added in ETP-5075; first consumer is
+`matched-purchase-invoices`.
+
+This is **not** a `decisions.json` option. It is a registry in the app-shell:
+
+`tools/app-shell/src/components/contract-ui/fkNavigation.js`
+
+```js
+export const FK_NAVIGATION_TARGETS = {
+  C_InvoiceLine_ID: { window: 'purchase-invoice', idField: 'invoiceHeaderId' },
+  M_InOutLine_ID:   { window: 'goods-receipt',    idField: 'receiptHeaderId' },
+};
+```
+
+Keyed by **AD column name**, deliberately — not by `reference`. The generated form
+descriptors carry both `column` and `reference`, but generated *grid* columns carry only
+`column`; keying by column lets one registry drive both surfaces with no change to the
+generators in `schema_forge_core`, i.e. no core release.
+
+Two kinds of entry:
+
+| Entry | When | Target id |
+|---|---|---|
+| `{ window }` | The FK already points at a document header with a window of its own (`C_BPartner_ID` → `business-partner`) | The FK's own value |
+| `{ window, idField }` | The FK points at a **line**, which has no window — navigation only ever reaches a header | `record[idField]`, injected per row by the entity's `NeoHandler` |
+
+For the second kind the parent id is not in the payload (an FK returns the id plus a
+`$_identifier` label and nothing else) and there is no declarative server-side derivation
+to compute one, so the entity needs a `javaQualifier` handler that `put`s it into each GET
+row in `afterHandle`. See `MatchedInvoiceHandler` in `com.etendoerp.go` for the pattern,
+and `docs/generated-custom-windows/matched-purchase-invoices.md` for the worked example.
+
+**Consumed by** (both already wired — nothing to do per window):
+
+- `EntityForm.jsx` → `renderReadOnlyFk()`, the single point every read-only FK passes
+  through (`type: 'selector'` and `type: 'search'` both land there).
+- `DataTable.jsx` → `renderCellValue()`, wrapped at the dispatch point rather than inside
+  each cell renderer, so it works whatever cell type the column resolves to.
+
+**It fails closed, by design.** No registry entry, no resolvable id, or no `navigate`
+handed down ⇒ `resolveFkNavigation()` returns `null` and the field/cell renders exactly as
+before. That is what makes it safe to have in components every window renders. `navigate`
+is passed as a prop (from `DetailView`/`ListView`) rather than pulled from `useNavigate()`,
+so `EntityForm`/`DataTable` stay Router-agnostic and their existing unit tests, which mount
+them without a Router, keep working.
+
+**To make another window's FK navigable:** add one line to the registry. If the FK points
+at a line rather than a header, also add the handler that injects the parent id. Nothing
+else — no `decisions.json` key, no generator change, no regeneration of the window.
+
+> Watch out for `stopPropagation()` in the grid: without it a cell click also triggers the
+> row's own `onNavigate`, which wins and sends the user to *this* window's record instead.

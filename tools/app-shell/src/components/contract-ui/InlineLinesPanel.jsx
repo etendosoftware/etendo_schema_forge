@@ -23,7 +23,8 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getContactsTextFieldError } from './contactsFieldValidation.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
 // grid column (DimSummary, no longer used here) to a hover action + the existing
@@ -133,6 +134,12 @@ function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
 // Row-body click → open detail, but not when the click originated in the checkbox or the
 // hover-action icons (they have their own handlers and stopping propagation there keeps the
 // row-click semantic clean).
+//
+// ETP-5029 — the selection checkbox is excluded by the `stopPropagation` on its own cell,
+// NOT by the `closest('input')` clause below. The shared Checkbox renders the real <input>
+// as a visually hidden SIBLING of the box the user actually clicks, so on that first click
+// `e.target` is a <div>/<svg> and `closest('input')` finds nothing; the clause only ever
+// matches the label-activation click the browser then synthesizes at the input itself.
 function makeRowClickHandler(onRowClick, row) {
   if (!onRowClick) return undefined;
   return (e) => {
@@ -141,16 +148,60 @@ function makeRowClickHandler(onRowClick, row) {
   };
 }
 
-function computeRowClassName(isHighlighted, isEditing, hasRowClick) {
+/**
+ * ETP-5030 — background and highlight cues for a body row.
+ *
+ * `backgroundClass` resolves to exactly ONE class. That is not cosmetic: every
+ * candidate paints the same CSS property (`background-color`) and Tailwind
+ * resolves competing utilities by stylesheet order, not by class order, so
+ * emitting two would make the winner unpredictable. The if/else chain makes that
+ * structurally impossible:
+ *   - `isSelected` (checkbox ticked) → `bg-primary/5`, the same checked-row shade
+ *     `selectedRowBg` uses in DataTable, so a tab grid and the main list grid
+ *     shade a selected row identically.
+ *   - else `isHighlighted` (`selectedRowId` — the line whose detail form is
+ *     currently open) → `bg-muted/40`.
+ *   - else `bg-card`, the opaque base that keeps the row shadow readable.
+ *
+ * The highlight ALSO emits `ring-1 ring-focus-ring`, independently of that chain
+ * — a ring paints no background, so it never competes for the winning utility.
+ * This mirrors the `isSelectedLine` branch of `getRowClassName` in DataTable,
+ * which pairs its tint with the same ring. Keeping the ring outside the chain is
+ * what keeps the two states independent: a row that is both selected and
+ * highlighted shows the selection tint AND the ring, so ticking a checkbox never
+ * erases the "this line's form is open" cue. (DataTable's own
+ * "Selection always wins over hover" rule is about the hover axis only — it does
+ * not suppress its highlight either.)
+ *
+ * `isEditing` only adds a shadow and a z-index, so it stacks on top of whichever
+ * background the chain resolved to.
+ *
+ * Ancestor coupling: `bg-primary/5` and `bg-muted/40` are translucent, so those
+ * rows are not self-opaque and show through to whatever the ancestor paints.
+ * Today that ancestor is the detail content area, which is `bg-card` (the
+ * `contentBg` default in DetailView, not overridden by any window), so the tint
+ * composites over the same base an unselected row paints itself. A future
+ * `contentBg` override would retint selected/highlighted tab-grid rows.
+ */
+function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected }) {
+  let backgroundClass;
+  if (isSelected) {
+    backgroundClass = 'bg-primary/5';
+  } else if (isHighlighted) {
+    backgroundClass = 'bg-muted/40';
+  } else {
+    backgroundClass = 'bg-card';
+  }
   return [
-    // `hover:relative hover:z-10` lifts the row above its neighbors so the
+    // `hover:relative hover:z-20` lifts the row above its neighbors so the
     // shadow can spill onto the rows below without being clipped by them.
-    'group/row flex items-stretch border-b bg-card transition-shadow',
+    'group/row flex items-stretch border-b transition-shadow',
+    backgroundClass,
     'hover:relative hover:z-20 hover:shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)]',
-    isHighlighted ? 'bg-muted/40' : '',
+    isHighlighted ? 'ring-1 ring-focus-ring' : '',
     isEditing ? 'shadow-[0_4px_12px_hsl(var(--foreground) / 0.08)] relative z-20' : '',
     hasRowClick ? 'cursor-pointer' : '',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 /**
@@ -326,6 +377,8 @@ function renderLineCell({
       isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
       onCommit={(val, extras) => onCommit(row, col, val, extras)}
       ui={ui}
+      locale={locale}
+      t={t}
       data-testid="EditCell__3b7ec2" />
   ) : (
     <ReadCell
@@ -521,10 +574,13 @@ function clampToMax(col, value) {
  * The `excludeId` is derived here from `col.excludeValueOf` so the derivation + render stay
  * co-located and EditCell does not carry the extra decision point.
  */
-function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit, locale, t }) {
   // Exclude the option whose id equals the current value of a sibling field on this
   // row (e.g. newStorageBin can't be the same bin as storageBin).
   const excludeId = col.excludeValueOf ? (row?.[col.excludeValueOf] ?? null) : null;
+  // ETP-5023 — translated placeholder. Mirrors the column HEADER's own label
+  // resolution (resolveColumnLabel(col, locale, t), see the header render below)
+  // instead of the raw, always-English col.label emitted by the generator.
   return (
     <InlineSearchCombo
       field={col}
@@ -532,7 +588,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
       displayLabel={displayLabel || ''}
       options={[]}
       onChange={(id, label) => onCommit(id, { identifier: label || '' })}
-      placeholder={col.label}
+      placeholder={resolveColumnLabel(col, locale, t)}
       selectorUrl={selectorUrl}
       selectorContext={selectorContext}
       excludeId={excludeId}
@@ -545,7 +601,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui, locale, t }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -584,7 +640,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
           data-testid="LookupTrigger__3b7ec2" />
       );
     }
-    return renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit });
+    return renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit, locale, t });
   }
 
   // Enum / list field — native <select> populated from the column's enumLabels
@@ -685,6 +741,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   columns,
   data,
   entity,
+  specName,
   token,
   apiBaseUrl,
   selectedRowId,
@@ -952,14 +1009,25 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       toast.error(ui('fieldMinValueError', { min: col.min }));
       return;
     }
-    // Format validation (email + phone) for inline cell edits — mirrors the below-min
-    // guard: flag the cell, toast the specific error, and block the PATCH. Empty is
-    // valid (not required); a later valid re-commit clears the flag via setInvalidCell(null).
-    const formatError = getEmailFieldError(col, value) ?? getPhoneFieldError(col, value);
+    // Format validation (email + phone + website, plus the Contacts-only text-field
+    // checks) for inline cell edits — mirrors the below-min guard: flag the cell,
+    // toast the specific error, and block the PATCH. Empty is valid (not required);
+    // a later valid re-commit clears the flag via setInvalidCell(null). ETP-5031
+    // added the website check (previously missing here) and the Contacts gate.
+    const formatError = getEmailFieldError(col, value)
+      ?? getPhoneFieldError(col, value)
+      ?? getWebsiteFieldError(col, value);
     if (formatError !== null) {
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
       toast.error(ui(formatError));
+      return;
+    }
+    const contactsError = getContactsTextFieldError(specName, col, value);
+    if (contactsError !== null) {
+      hasValidationErrorRef.current = true;
+      setInvalidCell({ rowId: row.id, colKey: col.key });
+      toast.error(ui(contactsError.key, contactsError.params));
       return;
     }
     const effectiveValue = clampToMax(col, value);
@@ -980,11 +1048,14 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       // when an id repeats, instead of stacking a fresh toast for every blur.
       toast.success(ui('recordSaved'), { id: `inline-save-${row.id}` });
     } catch (err) {
-      toast.error(err?.message || ui('networkError'));
+      // `userNotified` means the save handler already told the user (its own toast, or the
+      // concurrency-conflict dialog). Toasting again would stack a duplicate on top of the toast,
+      // or a redundant one behind the dialog. Errors from anywhere else still land here.
+      if (!err?.userNotified) toast.error(err?.message || ui('networkError'));
     } finally {
       pendingEditRef.current = null;
     }
-  }, [isDocumentReadOnly, onUpdateRow, ui]);
+  }, [isDocumentReadOnly, onUpdateRow, ui, specName]);
 
   // Imperative API for parent's global "Guardar". Closing the row implicitly blurs
   // the focused input (if any), which triggers its onBlur autosave. Awaiting any
@@ -1151,7 +1222,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <React.Fragment key={row.id}>
           <div
             data-testid={`line-row-${row.id}`}
-            className={computeRowClassName(isHighlighted, isEditing, Boolean(onRowClick))}
+            className={computeRowClassName({ isHighlighted, isEditing, hasRowClick: Boolean(onRowClick), isSelected })}
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
@@ -1175,8 +1246,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 </button>
               </div>
             )}
-            {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking
+                a row never reaches the row-body handler that opens the record's
+                detail/modal (in Contacts' "Dirección" tab that popped the
+                LocationEditorModal open on every tick). Mirrors the chevron cell
+                above and DataTable's own checkbox cell. */}
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}

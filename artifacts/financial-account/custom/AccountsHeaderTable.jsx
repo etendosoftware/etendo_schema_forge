@@ -399,6 +399,7 @@ export default function AccountsHeaderTable({
             onSearchChange={setSearch}
             onNewAccount={() => setWizardOpen(true)}
             onMatchingRules={() => navigate('/match-rule')}
+            onRefresh={reload}
             // The "Ordenar por" control every other list gets from ListView's idle bar. This
             // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
             // here the clickable headers would be the only sort affordance. Same component
@@ -510,12 +511,15 @@ export default function AccountsHeaderTable({
           onClose={() => setDeleteConnectionTarget(null)}
           data-testid="BankConnectionDeleteConfirmModal__accthdr" />
       ) : null}
+      {/* onSuccess, not onDone: the modal only ever calls onSuccess, so the misnamed prop
+          meant a transfer launched from this grid's row kebab left the balances on screen
+          stale — the transfer itself was fine, which is what made it look like nothing had
+          happened. (The modal mounts as open; it takes no `open`.) */}
       {transferSource && (
         <FundsTransferModal
-          open
           sourceAccountId={transferSource.id}
           onClose={() => setTransferSource(null)}
-          onDone={reload}
+          onSuccess={reload}
           data-testid="FundsTransferModal__accthdr" />
       )}
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__accthdr" />

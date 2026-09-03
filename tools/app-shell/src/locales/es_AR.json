@@ -8153,12 +8153,12 @@
       "description": "Importe a amortizar"
     },
     "Amortizationenddate": {
-      "label": "Fecha fin",
-      "description": "Fecha fin"
+      "label": "Fecha de fin de amortización",
+      "description": "Fecha de fin de amortización"
     },
     "Amortizationstartdate": {
-      "label": "Fecha inicio",
-      "description": "Fecha inicio"
+      "label": "Fecha de inicio de amortización",
+      "description": "Fecha de inicio de amortización"
     },
     "Annualamortizationpercentage": {
       "label": "% anual amortización",
@@ -8909,7 +8909,7 @@
       "description": "Tipo de cálculo"
     },
     "Depreciatedpreviousamt": {
-      "label": "Amortizado anterior",
+      "label": "Valor amortizado previamente",
       "description": ""
     },
     "C_Dp_Management_ID": {
@@ -13809,7 +13809,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -14024,7 +14024,7 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -16211,6 +16211,9 @@
     "Return Shipment": {
       "label": "Albarán de devolución"
     },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
+    },
     "Purchase Invoice": {
       "label": "Factura de Compra"
     },
@@ -16679,6 +16682,21 @@
     "importErrorInvalidPrice": "El precio \"{value}\" no es un número válido.",
     "importErrorNoPriceList": "No hay ninguna lista de precios de venta configurada, así que no se pudo importar el precio. Importa el producto sin precio o configura primero una lista de precios de venta.",
     "importErrorInvalidCodedValue": "El valor \"{value}\" no es válido para \"{field}\". Valores aceptados: {accepted}.",
+    "importHeaderAddress": "Dirección",
+    "importHeaderCity": "Ciudad",
+    "importHeaderCountry": "País",
+    "importHeaderPostalCode": "Código Postal",
+    "importHeaderRegion": "Region",
+    "importHeaderSalesPrice": "Precio de venta",
+    "importHeaderPurchasePrice": "Precio de compra",
+    "importHeaderScopeContact": "Contacto",
+    "importHeaderType": "Tipo",
+    "importErrorRequiredGeneric": "Falta un campo obligatorio.",
+    "importErrorInvalidEmail": "El correo electrónico no es válido.",
+    "importErrorNotANumber": "El valor \"{value}\" no es un número válido.",
+    "importErrorFkUnmatched": "El valor \"{value}\" no coincide con ningún registro existente.",
+    "importSkipDuplicateInFile": "Fila duplicada: este valor ya aparece antes en el archivo.",
+    "importSkipAlreadyExists": "Este registro ya existe y no se volverá a importar.",
     "importErrorMissingContactName": "Esta fila no tiene razón social ni nombre y apellido, así que no se puede crear el contacto.",
     "importErrorUomUnresolved": "No se pudo asociar la unidad de medida \"{uom}\" con un registro existente.",
     "importErrorNoPurchasePriceList": "No hay ninguna lista de precios de compra configurada, así que no se pudo importar el precio de compra. Importa el producto sin precio de compra o configura primero una lista de precios de compra.",
@@ -16710,6 +16728,9 @@
     "reactivate": "Reactivar",
     "reactivateOrder": "Reactivar pedido",
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
+    "bulkRowAlreadyPosted": "Ya está contabilizado",
+    "bulkRowNotPosted": "No está contabilizado",
+    "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "confirmBulk": "Confirmar",
     "documentAction": "Acción de documento",
@@ -16829,12 +16850,14 @@
     "editLine": "Editar línea",
     "noLines": "Sin líneas",
     "backendError.amortizationCurrencyRequired": "El campo Moneda no puede estar vacío.",
+    "backendError.staleRecord": "Otra persona modificó este registro mientras lo editabas, así que tus cambios no se guardaron. Recargá el registro para ver los valores actuales.",
     "backendError.amortizationAnnualDepreciationRequired": "El campo Amortización Anual no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationUsableLifeYearsRequired": "El campo Vida útil - Años no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationUsableLifeMonthsRequired": "El campo Vida útil - Meses no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationDepreciationAmountRequired": "El campo Valor a amortizar no puede estar vacío, ser cero o negativo.",
     "backendError.amortizationStartDateRequired": "El campo fecha inicio es obligatorio.",
     "backendError.assetGroupNameDuplicate": "Ya existe una categoría de activo con este nombre.",
+    "backendError.assetSearchKeyDuplicate": "Ya existe un activo con este identificador en esta organización.",
     "processAssetCompleted": "Amortización creada",
     "reactivated": "Documento reactivado",
     "post": "Contabilizar",
@@ -16848,6 +16871,8 @@
     "postingFailed": "Error al contabilizar",
     "filterDocumentType": "Tipo de documento",
     "filterAccountingStatus": "Estado contable",
+    "filterFrom": "Desde",
+    "filterTo": "Hasta",
     "accountingDate": "Fecha contable",
     "accountingStatus": "Estado contable",
     "postedStatus": "Contabilizado",
@@ -17014,7 +17039,7 @@
     "commercialDescription": "Configuración comercial secundaria del producto.",
     "availability": "Disponibilidad",
     "stockManagement": "Gestión de stock",
-    "productStocked": "Almacenado",
+    "productStocked": "Almacenable",
     "productReturnable": "Retornable",
     "categoryConfiguration": "Configuración",
     "categoryDefault": "Valor por defecto",
@@ -17313,11 +17338,13 @@
     "invoicePreviewInvoiceMustBeCompletedToAddPayments": "La factura debe estar completada para añadir pagos",
     "invoicePreviewAddAttachment": "Añadir adjunto",
     "invoicePendingPayment": "Pendiente de pago",
+    "pendingPaymentColumn": "Saldo pendiente",
     "sendModalTitle": "Enviar {documentType} #{documentNo}",
     "sendModalTo": "Para",
     "sendModalNoEmail": "No se encontró email para este contacto",
     "sendModalSubject": "Asunto",
     "sendModalMessage": "Mensaje",
+    "sendModalDefaultMessage": "Le enviamos su {documentType} {documentNo}.",
     "sendModalMessagePlaceholder": "Añade un mensaje personal...",
     "sendModalSend": "Enviar",
     "sendModalSending": "Enviando...",
@@ -17608,6 +17635,12 @@
     "ocrRetryingLines": "Reintentando la creación de líneas...",
     "recordCreated": "Registro creado",
     "recordSaved": "Registro guardado",
+    "saveConflictRecordChanged": "Otra persona editó este registro mientras trabajabas en él, así que no se guardó nada. Podés conservar tus cambios e intentarlo más tarde, o descartarlos y cargar la versión actual.",
+    "saveConflictDiscardAndReload": "Descartar mis cambios y refrescar",
+    "saveConflictKeepEditing": "Cancelar guardado",
+    "saveConflictTitle": "No se puede guardar este registro",
+    "saveConflictReloaded": "Registro refrescado con los valores almacenados actualmente.",
+    "saveConflictReloadFailed": "No se pudo refrescar el registro. Verificá tu conexión e intentá de nuevo.",
     "requiredFieldsMissing": "Completá todos los campos requeridos",
     "fieldRequired": "Requerido",
     "invoicePdfGenerating": "Generando factura...",
@@ -17948,6 +17981,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferRateMissing": "No hay tasa de cambio vigente de {from} a {to}. Ingresala manualmente.",
     "cpPendingPrefix": "Pendiente",
     "cpLeaveCredit": "Dejar a crédito",
     "cpLeaveCreditHint": "{amount} a favor del tercero",
@@ -18054,10 +18088,10 @@
     "financeReconcileLeftTitle": "Líneas del extracto",
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
-    "financeReconcileFilterStatusPending": "Pendiente",
+    "financeReconcileFilterStatusPending": "Pendientes",
     "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
-    "financeReconcileFilterStatusDifference": "Diferencias",
+    "financeReconcileFilterStatusDifference": "Con diferencia",
     "financeReconcileFilterStatusReconciled": "Conciliadas",
     "financeReconcileFilterStatusAll": "Todos",
     "financeReconcileFilterStatusSearchPlaceholder": "Buscar estado...",
@@ -18078,7 +18112,7 @@
     "financeReconcileColSelect": "Seleccionar",
     "financeReconcileBadgeSuggested": "Con sugerencia",
     "financeReconcileBadgeByRule": "Por regla",
-    "financeReconcileBadgeDifference": "Diferencia",
+    "financeReconcileBadgeDifference": "Con diferencia",
     "financeReconcileBadgePending": "Pendiente",
     "financeReconcileBadgeReconciled": "Conciliado",
     "financeReconcileBadgeInvoice": "Factura",
@@ -18091,6 +18125,8 @@
     "financeReconcileFooterTotal": "Total: {amount}",
     "financeReconcileBarSelected": "Documentos seleccionados",
     "financeReconcileBarRemaining": "Restante por conciliar",
+    "financeReconcileBarDifferenceNotice": "La diferencia de {amount} se contabilizará en {concept}",
+    "financeReconcileBarDifferenceNoticeNoConcept": "La diferencia de {amount} se contabilizará en una cuenta contable que elijas al conciliar",
     "financeReconcileActionCancel": "Cancelar selección",
     "writeoffAdjustTitle": "Ajustar diferencia de {amount}",
     "writeoffAdjustOffReceipt": "La factura va a quedar con {amount} pendientes de cobro.",
@@ -18113,6 +18149,20 @@
     "financeReconcileActionAutomatch": "Automatch",
     "financeReconcileToastSuccess": "Conciliación realizada",
     "financeReconcileToastError": "Error al conciliar",
+    "financeReconcileDiffBannerTitle": "Quedan {amount} sin conciliar en este extracto",
+    "financeReconcileDiffLeavePending": "Dejar pendiente",
+    "financeReconcileDiffAction": "Llevar a cuenta contable",
+    "financeReconcileDiffModalTitle": "Llevar diferencia a una cuenta contable",
+    "financeReconcileDiffModalBody": "Los {amount} que quedan del extracto se registrarán como un ajuste contable y el extracto quedará conciliado.",
+    "financeReconcileDiffRowStatement": "Importe del extracto",
+    "financeReconcileDiffRowMatched": "Conciliado con movimientos",
+    "financeReconcileDiffRowDifference": "Diferencia a ajustar",
+    "financeReconcileDiffConceptLabel": "Cuenta contable",
+    "financeReconcileDiffConceptPlaceholder": "Buscar cuenta contable…",
+    "financeReconcileDiffDescriptionLabel": "Descripción (opcional)",
+    "financeReconcileDiffDescriptionPlaceholder": "Redondeo transferencia",
+    "financeReconcileDiffConfirm": "Confirmar y conciliar",
+    "financeReconcileDiffToastSuccess": "Diferencia ajustada y extracto conciliado",
     "financeReconcileToastComingSoon": "Próximamente",
     "financeReconcileToastReactivated": "Conciliación reactivada",
     "financeReconcileColProgress": "Progreso",
@@ -18124,6 +18174,8 @@
     "financeReconcileConfirmRemoveOneBody": "El documento se desconciliará de la línea de extracto y su importe volverá al saldo por conciliar.",
     "financeReconcileConfirmRemoveManyBody": "Se desconciliarán {count} documentos de la línea de extracto y sus importes volverán al saldo por conciliar.",
     "financeReconcileToastOperationRemoved": "Documento desconciliado",
+    "financeReconcileToastOperationRemoveError": "No se pudo desconciliar el documento",
+    "financeReconcileToastOperationReactivateError": "No se pudo reactivar la conciliación",
     "financeReconcileToastOperationPartiallyRemoved": "Se desconciliaron {removed} de {total} — {failed} no se pudieron procesar y siguen conciliados.",
     "financeReconcileActionReactivateSelected": "Reactivar",
     "financeReconcileConfirmReactivateTitle": "¿Reactivar la conciliación?",
@@ -18151,6 +18203,7 @@
     "financeReconcileAutomatchColStatement": "Línea del extracto bancario",
     "financeReconcileAutomatchColOps": "Operaciones del sistema",
     "financeReconcileAutomatchActionOpen": "Abrir conciliación",
+    "financeReconcileAutomatchEditAccount": "Editar cuenta",
     "financeReconcileAutomatchEmpty": "No se encontraron sugerencias para esta cuenta.",
     "financeReconcileAutomatchBadgeByRule": "Por regla:",
     "financeReconcileAutomatchBadgeNew": "Nueva",
@@ -18161,6 +18214,7 @@
     "financeReconcileAutomatchFooterNone": "No hay grupos seleccionados.",
     "financeReconcileAutomatchActionApply": "Conciliar {count} grupo(s)",
     "financeReconcileAutomatchToastSuccess": "{count} grupo(s) conciliados correctamente.",
+    "financeReconcileAutomatchToastPartial": "Se conciliaron {success} línea(s) de extracto — {failed} no se pudieron aplicar.",
     "financeReconcileAutomatchToastError": "Error al aplicar la conciliación",
     "financeAccountDetailTabStatementsComingSoon": "Extractos importados próximamente",
     "financeAccountDetailKpiBalance": "Saldo total",
@@ -18306,6 +18360,7 @@
     "financeAccountStatementsRowDelete": "Eliminar",
     "financeAccountStatementsRowProcessedTooltip": "Los extractos procesados no se pueden modificar",
     "financeAccountStatementsRowReactivateTooltip": "Solo los extractos procesados se pueden reactivar",
+    "financeAccountStatementsRowBankSyncedTooltip": "Los extractos de una cuenta conectada al banco no se pueden editar ni eliminar",
     "financeAccountStatementsReactivateTitle": "Reactivar extracto",
     "financeAccountStatementsReactivateBody": "El extracto «{name}» volverá a borrador y podrás editarlo o eliminarlo. ¿Continuar?",
     "financeAccountStatementsReactivateConfirm": "Reactivar",
@@ -18336,6 +18391,7 @@
     "financeAccountStatementsManualCounterpartyPlaceholder": "Nombre…",
     "financeAccountStatementsManualAddLine": "Añadir línea",
     "financeAccountStatementsManualRemoveLine": "Eliminar línea",
+    "financeAccountStatementsManualLineMatchedTooltip": "Línea conciliada: no se puede modificar ni eliminar",
     "financeAccountStatementsManualEditLine": "Editar línea",
     "financeAccountStatementsManualTotalLines": "Líneas",
     "financeAccountStatementsManualTotalIn": "Entradas",
@@ -18366,7 +18422,7 @@
     "financeAccountStatementsManualColContactName": "Nombre del contacto",
     "financeAccountStatementsManualColContact": "Contacto",
     "financeAccountStatementsManualColGlItem": "Concepto contable",
-    "financeAccountStatementsManualGlItemPlaceholder": "Buscar concepto contable…",
+    "financeAccountStatementsManualGlItemPlaceholder": "Buscar concepto…",
     "financeAccountStatementsManualContactPlaceholder": "Buscar contacto…",
     "financeAccountStatementsManualAddLinesCta": "Añadir líneas",
     "financeAccountStatementsManualAddLinesCtaDesc": "Introduce los movimientos del extracto a mano",
@@ -18476,6 +18532,8 @@
     "financeAccountStatementLinesMatchedYes": "Conciliado",
     "financeAccountStatementLinesMatchedNo": "Sin conciliar",
     "dashboardTitle": "Inicio",
+    "dashboardNoWidgetsTitle": "No hay widgets disponibles para tu rol",
+    "dashboardNoWidgetsSubtitle": "Tu rol no tiene acceso a los datos que muestran estos paneles. Contactá a tu administrador si creés que es un error.",
     "dashboardGreetingHello": "Hola, {name}",
     "dashboardGreetingHeadline": "Estas son tus tareas pendientes",
     "dashboardCopilotCta": "¿En qué te puedo ayudar hoy?",
@@ -18513,6 +18571,7 @@
     "financialSummaryEmptySubtitle": "Registra ventas y compras para ver ingresos, gastos y beneficio",
     "newInvoice": "Nueva factura",
     "financialSummaryPositive": "Tus ingresos superaron a los gastos este año",
+    "financialSummaryNegative": "Tus gastos superaron a los ingresos este año",
     "financialSummaryIncome": "Ingresos",
     "financialSummaryExpenses": "Gastos",
     "financialSummaryProfit": "Beneficio",
@@ -18929,7 +18988,7 @@
     "onboardingResetEmailSentTitle": "Revisa tu correo",
     "onboardingResetEmailSentSubtitle": "Si existe una cuenta asociada a este email, enviamos un enlace a: {email}",
     "onboardingResetLinkValidity": "El enlace es válido por {duration}.",
-    "onboardingResetLinkDuration": "15 minutos",
+    "onboardingResetLinkDuration": "30 minutos",
     "onboardingResendPrompt": "¿No lo recibiste?",
     "onboardingResendLinkAction": "Reenviar enlace",
     "onboardingResetPasswordTitle": "Crear nueva contraseña",
@@ -18952,6 +19011,16 @@
     "onboardingCurrentPasswordLabel": "Contraseña actual",
     "onboardingCredentialChangeSuccess": "Contraseña actualizada.",
     "onboardingCredentialChangeFailed": "No se pudo cambiar la contraseña.",
+    "localeChangeConfirmTitle": "Cambiar idioma",
+    "unsavedNavigationTitle": "Tenés cambios sin guardar",
+    "unsavedNavigationBody": "Si salís ahora, se van a perder los cambios que no hayas guardado.",
+    "unsavedNavigationDiscardAction": "Descartar y salir",
+    "unsavedNavigationSaveAction": "Guardar y salir",
+    "localeChangeConfirmBody": "Tenés cambios sin guardar en este formulario. Cambiar el idioma recarga la página y se van a perder.",
+    "localeChangeDiscardAction": "Descartar y cambiar",
+    "onboardingChangePasswordMissingCredentials": "Debes indicar la contraseña actual y la nueva.",
+    "onboardingNoLocalPassword": "Esta cuenta inicia sesión con un proveedor externo, por lo que no tiene contraseña que cambiar.",
+    "onboardingInvalidCurrentPassword": "La contraseña actual no es correcta.",
     "onboardingNameLabel": "Nombre",
     "onboardingNamePlaceholder": "Tu nombre",
     "onboardingEmailLabel": "Correo electrónico",
@@ -19086,7 +19155,7 @@
     "selectCountryFirst": "Selecciona un país primero",
     "removeLocation": "Eliminar",
     "addLocation": "+ Agregar Dirección",
-    "addAddress": "+ Agregar dirección",
+    "addAddress": "+ Añadir dirección",
     "none": "Ninguno",
     "soConfirmBtn": "Confirmar",
     "soConfirmTitle": "Confirmar pedido #{number}",
@@ -19270,12 +19339,12 @@
     "assetsCurrencyLabel": "Moneda",
     "assetsPurchaseDateLabel": "Fecha de compra",
     "assetsCancellationDateLabel": "Fecha de cancelación",
-    "assetsDepStartDateLabel": "Fecha inicio de amortización",
-    "assetsDepEndDateLabel": "Fecha fin de amortización",
+    "assetsDepStartDateLabel": "Fecha de inicio de amortización",
+    "assetsDepEndDateLabel": "Fecha de fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
     "assetsDepreciationAmtLabel": "Monto de amortización",
-    "assetsPrevDepreciatedLabel": "Monto ya amortizado",
+    "assetsPrevDepreciatedLabel": "Valor amortizado previamente",
     "poSave": "Guardar",
     "poSaveDraft": "Guardar borrador",
     "poConfirmBtn": "Confirmar",
@@ -19340,7 +19409,7 @@
     "poBulkOrderHasDraftReceipt": "Pedido {documentNo} ya tiene un albarán en borrador.",
     "cloneOrderBtn": "Clonar",
     "quickAction.edit": "Editar",
-    "quickAction.clone": "Duplicar",
+    "quickAction.clone": "Clonar",
     "quickAction.email": "Enviar / Descargar",
     "quickAction.more": "Más acciones",
     "quickAction.delete": "Eliminar",
@@ -19369,6 +19438,7 @@
     "cloneConfirmSubtitleOne": "Se creará una copia en estado borrador",
     "cloneConfirmSubtitleMany": "Se crearán {count} copias en estado borrador",
     "cloneInfoBanner": "Los documentos clonados conservarán todos los datos del original.",
+    "cloneBlockedUnsavedChanges": "Guardá o descartá tus cambios pendientes antes de clonar. Clonar ahora copiaría la última versión guardada, no lo que ves en pantalla.",
     "cloneDoneTitleOne": "Documento clonado",
     "cloneDoneTitleMany": "{count} documentos clonados",
     "cloneDoneSubtitle": "Hacé clic en uno para abrirlo",
@@ -19422,6 +19492,9 @@
     "backendError.matchRuleRegexComplex": "La expresión regular es demasiado compleja (posible backtracking catastrófico)",
     "backendError.matchRuleRegexInvalid": "Expresión regular no válida",
     "backendError.matchRulePriorityConflict": "Ya existe una regla con esta prioridad para el ámbito seleccionado",
+    "backendError.transferMovementNotDeletable": "No es posible eliminar movimientos generados por transferencias.",
+    "backendError.statementNotDraft": "Los extractos procesados no se pueden modificar",
+    "backendError.statementNotProcessed": "Solo los extractos procesados se pueden reactivar",
     "backendError.ibanAutoFillFailed": "No se pudo establecer el IBAN automáticamente ({iban}). Ingresalo manualmente en la cuenta financiera.",
     "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
     "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
@@ -19491,7 +19564,7 @@
     "customerDataSection": "Datos de cliente",
     "vendorDataSection": "Datos de proveedor",
     "fiscal.title": "Configuración Fiscal",
-    "fiscal.monitor.nav": "Monitor de facturas",
+    "fiscal.monitor.nav": "Monitor fiscal",
     "fiscal.wip.badge": "Trabajo en progreso",
     "fiscal.wip.tooltip": "Esta ventana está en desarrollo activo. Los campos, el diseño y el comportamiento pueden cambiar sin previo aviso y no son definitivos.",
     "fiscal.territory.question": "¿En qué territorio fiscal opera esta organización?",
@@ -19653,6 +19726,7 @@
     "fiscal.onboarding.applied.row.env": "Entorno",
     "fiscal.onboarding.applied.row.activated": "Activado",
     "fiscal.onboarding.applied.env.sandbox": "Sandbox · pruebas",
+    "fiscal.onboarding.applied.env.production": "Producción",
     "fiscal.onboarding.applied.volume.high": "> 6.010.121 €",
     "fiscal.onboarding.applied.volume.low": "≤ 6.010.121 €",
     "fiscal.onboarding.applied.national.active": "Activa",
@@ -20202,6 +20276,7 @@
     "purchaseOrders": "Órdenes de compra",
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
+    "finance": "Finanzas",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -20322,6 +20397,7 @@
     "fm.kpi.deadline_days": "días",
     "fm.kpi.deadline_blocking": "bloq.",
     "fm.list.title": "Declaraciones",
+    "fm.breadcrumb.section": "Modelos Fiscales",
     "fm.list.count": "declaraciones",
     "fm.filter.all": "Todos",
     "fm.filter.model_prefix": "Modelo",
@@ -20659,8 +20735,24 @@
     "fm.m349.banner.blocking_sub": "Resuelve las incidencias bloqueantes para poder generar el fichero AEAT.",
     "fm.m349.banner.blocking_action": "Resolver",
     "fm.m349.banner.vies_title": "{count} NIF-IVA con validación VIES pendiente",
-    "fm.m349.banner.vies_sub": "Validación VIES asíncrona — informativa, no bloqueante",
+    "fm.m349.banner.vies_sub": "Consulta en vivo al servicio VIES — informativa, no bloquea la declaración",
     "fm.m349.banner.vies_action": "Validar VIES",
+    "fm.m349.banner.vies_validating": "Validando…",
+    "fm.m349.vies.result.none": "No había ningún NIF-IVA pendiente de validar",
+    "fm.m349.vies.result.processed_one": "1 NIF-IVA procesado",
+    "fm.m349.vies.result.processed_many": "{count} NIF-IVA procesados",
+    "fm.m349.vies.result.valid_one": "1 válido",
+    "fm.m349.vies.result.valid_many": "{count} válidos",
+    "fm.m349.vies.result.invalid_one": "1 inválido",
+    "fm.m349.vies.result.invalid_many": "{count} inválidos",
+    "fm.m349.vies.result.pending_one": "1 sigue pendiente; puedes volver a intentarlo",
+    "fm.m349.vies.result.pending_many": "{count} siguen pendientes; puedes volver a intentarlo",
+    "fm.m349.vies.result.failed_one": "1 comprobado pero no se pudo guardar; intentalo de nuevo",
+    "fm.m349.vies.result.failed_many": "{count} comprobados pero no se pudieron guardar; intentalo de nuevo",
+    "fm.m349.vies.result.not_eligible_one": "1 no se puede consultar en VIES (necesita clave de NIF intracomunitario y NIF-IVA)",
+    "fm.m349.vies.result.not_eligible_many": "{count} no se pueden consultar en VIES (necesitan clave de NIF intracomunitario y NIF-IVA)",
+    "fm.m349.vies.result.error": "No se pudo ejecutar la validación VIES. Inténtelo de nuevo.",
+    "fm.m349.rectificative_period": "Rectificativa {period}",
     "fm.m349.banner.ready_title": "Fichero 349 generado correctamente",
     "fm.m349.banner.ready_sub": "{ops} operadores · totales por clave reconciliables fila a fila",
     "fm.m349.banner.download": "Descargar",
@@ -20713,7 +20805,6 @@
     "returnReceipt.createRectificativeInvoiceDescription": "Se crea en borrador, prellenada con los productos devueltos y los precios de la factura origen.",
     "fm.m349.invoices.empty": "Recalcula para ver las facturas origen.",
     "fm.m349.invoices.none": "No hay facturas intracomunitarias en este período.",
-    "fm.m349.invoices.filtering_by": "Filtrando por:",
     "fm.m349.invoices.filtered": "{visible} de {total}",
     "amortization": "Amortización",
     "totalAmortization": "Amortización total",
@@ -21517,7 +21608,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -21715,7 +21806,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -22157,6 +22248,9 @@
     },
     "Return Shipment": {
       "label": "Albarán de Devolución"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
     },
     "Account": {
       "label": "Plan de cuentas"

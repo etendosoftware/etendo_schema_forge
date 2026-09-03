@@ -42,7 +42,7 @@ describe('onboarding readiness helpers', () => {
     expect(result.failures).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(4);
     expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining('/etendo/sws/neo/session'), {
-      headers: { Authorization: 'Bearer env-token' },
+      headers: { Authorization: 'Bearer env-token', 'Accept-Language': 'es_ES' },
     });
   });
 

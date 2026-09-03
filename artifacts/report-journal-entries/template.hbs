@@ -8,13 +8,36 @@
 .entry-date { font-weight: 700; color: #0f172a; font-size: 9pt; }
 .entry-detail { color: #475569; font-size: 8.5pt; }
 .entry-line td { border-top: none; border-bottom: 1px solid #f1f5f9 !important; }
+/* ETP-5013 follow-up (re-added): the grayscale unification made screen and
+   PDF colors match everywhere ELSE, but a drill-down link is a genuine
+   exception — it's real-clickable in the interactive preview (isInteractive)
+   and dead text in the exported PDF, so the PDF specifically renders it
+   black, not blue. */
+{{#if meta.isInteractive}}
+.entry-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
+.entry-link:hover { opacity: 0.75; text-decoration: none; }
+{{/if}}
+/* Belt-and-suspenders: a browser's own Cmd/Ctrl+P on the live preview
+   bypasses meta.isInteractive entirely, so @media print is what actually
+   catches it — plus our own jsreport PDF export, uniformly. */
+@media print {
+  .entry-link { color: inherit !important; text-decoration: none !important; cursor: default !important; }
+}
 </style>
 </head>
 <body><div class="report-container">
   <div class="report-header">
-    <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} {{meta.ui.records}}</div></div>
+    <div><div class="report-title">{{meta.title}}</div>
+</div>
+    {{> document-branding}}
   </div>
+  {{#if meta.filters.length}}
+  <div class="report-filters-grid">
+    {{#each meta.filters}}
+    <div><span>{{this.label}}: </span><strong>{{this.value}}</strong></div>
+    {{/each}}
+  </div>
+  {{/if}}
 
 
   <table class="report-table">
@@ -24,12 +47,13 @@
       <th style="width: 20%">{{meta.labels.document_type}}</th>
       <th style="width: 9%">{{meta.labels.account_no}}</th>
       <th style="width: 29%">{{meta.labels.account_name}}</th>
-      <th style="width: 13%">{{meta.labels.amtacctdr}}</th>
-      <th style="width: 13%">{{meta.labels.amtacctcr}}</th>
+      <th class="cell-amount" style="width: 13%">{{meta.labels.amtacctdr}}</th>
+      <th class="cell-amount" style="width: 13%">{{meta.labels.amtacctcr}}</th>
       {{#ifCond meta.params.showDimensions '===' 'true'}}
       <th style="width: 9%">{{meta.labels.bPartnerId}}</th>
       <th style="width: 9%">{{meta.labels.productId}}</th>
       <th style="width: 8%">{{meta.labels.projectId}}</th>
+      <th style="width: 8%">{{meta.labels.costCenterId}}</th>
       {{/ifCond}}
       {{#ifCond meta.params.showEntryDescription '===' 'true'}}
       <th style="width: 13%">{{meta.labels.entry_description}}</th>
@@ -39,9 +63,9 @@
       {{#each rows}}
         {{#if (isGroupBreak 'fact_acct_group_id' (lookup this 'fact_acct_group_id'))}}
         <tr class="entry-header">
-          <td class="entry-no">{{lookup this 'entry_no'}}</td>
+          <td class="entry-no">{{#if (lookup this 'doc_window')}}<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{lookup this 'doc_record_id'}}',docWindow:'{{lookup this 'doc_window'}}',docQueryKey:'{{lookup this 'doc_query_key'}}',docQueryValue:'{{lookup this 'record_id'}}'},'*')">{{lookup this 'entry_no'}}</span>{{else}}{{lookup this 'entry_no'}}{{/if}}</td>
           <td class="entry-date">{{formatDate (lookup this 'dateacct')}}</td>
-          <td class="entry-detail" colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}9{{else}}8{{/ifCond}}{{else}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}6{{else}}5{{/ifCond}}{{/ifCond}}">{{lookup this 'document_type'}}</td>
+          <td class="entry-detail" colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}10{{else}}9{{/ifCond}}{{else}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}6{{else}}5{{/ifCond}}{{/ifCond}}">{{translateDocType (lookup this 'docbasetype') (lookup this 'isreturn') (lookup this 'document_type') @root.meta.locale}}</td>
         </tr>
         {{/if}}
         <tr class="entry-line">
@@ -50,12 +74,13 @@
           <td></td>
           <td>{{lookup this 'account_no'}}</td>
           <td>{{lookup this 'account_name'}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'amtacctdr')}}</td>
-          <td class="cell-amount">{{formatCurrency (lookup this 'amtacctcr')}}</td>
+          <td class="cell-amount">{{#ifCond (formatCurrency (lookup this 'amtacctdr')) '!==' (formatCurrency 0)}}{{formatCurrency (lookup this 'amtacctdr')}}{{/ifCond}}</td>
+          <td class="cell-amount">{{#ifCond (formatCurrency (lookup this 'amtacctcr')) '!==' (formatCurrency 0)}}{{formatCurrency (lookup this 'amtacctcr')}}{{/ifCond}}</td>
           {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
           <td>{{lookup this 'bpname'}}</td>
           <td>{{lookup this 'productname'}}</td>
           <td>{{lookup this 'projectname'}}</td>
+          <td>{{lookup this 'costcentername'}}</td>
           {{/ifCond}}
           {{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}
           <td>{{lookup this 'entry_description'}}</td>
@@ -65,8 +90,7 @@
     </tbody>
   </table>
 
-  <div class="report-footer">
-    <div class="report-summary">{{meta.ui.total}}: {{meta.recordCount}} {{meta.ui.records}}</div>
-    <div>{{meta.ui.generatedBy}}</div>
-  </div>
+  {{#if meta.isInteractive}}
+  <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>
+  {{/if}}
 </div></body></html>

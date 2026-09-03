@@ -14,29 +14,27 @@ import {
 } from '@/lib/productUsageTelemetry.js';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
-import { useLogout } from '@/auth/useLogout.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 
+// ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
+// through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
+import { useApiFetch } from '@/auth/useApiFetch.js';
+// ETP-5073 / DOC-04: the optimistic-locking token is remembered here (the one place every
+// record and every list row is parsed) and injected by apiFetch on the way out, so no call
+// site has to thread `updated` through by hand.
+import { rememberRecordVersion, forgetRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+// ETP-5073 / DOC-04: the conflict prompt is a dialog, not a toast — it is a blocking decision
+// with a destructive option. See lib/saveConflict.js for why the toast was abandoned.
+import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
 // Re-exported for back-compat: isEmailField lives in recipientEdits.js (the
 // dependency-light email util) so the grid components can reuse it without
 // importing this heavy hook module.
 export { isEmailField };
-
-function buildHeaders(token) {
-    let locale = 'es_ES';
-    try { locale = localStorage.getItem('schema-forge-locale') || 'es_ES'; } catch { /* SSR/test */ }
-    return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        // Propagate the UI locale so backend AD_Message translations match the
-        // language the user selected in the frontend.
-        'Accept-Language': locale,
-    };
-}
 
 export function pickMessageFromObject(node) {
     if (typeof node === 'object') {
@@ -325,8 +323,12 @@ function deriveRecordId(record, entityName) {
 function normalizeRecord(record, entityName) {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
     const id = deriveRecordId(record, entityName);
-    if (id == null || record.id === id) return record;
-    return { ...record, id };
+    const normalized = (id == null || record.id === id) ? record : { ...record, id };
+    // ETP-5073 / DOC-04: remembered under the DERIVED id, which is the one the update URL and
+    // the update body will carry — keying it under whatever the backend happened to name the
+    // primary key would make every injection lookup miss.
+    rememberRecordVersion(normalized);
+    return normalized;
 }
 
 function normalizeRows(rows, entityName) {
@@ -576,12 +578,53 @@ export function getInvalidPhoneFields(fields, editing) {
 // Returns { key, errorKey, errorParams } for the first violating field, or null
 // when clean. `errorParams` carries the i18n interpolation values (e.g. { min })
 // so the toast can render "Value must be at least 1" rather than a generic text.
+// Silent safety-net clamp for numeric fields with a declared `max` (e.g. Annual
+// Depreciation % <= 100). EntityForm's onBlur already clamps this on the input, but
+// that only fires if the user left the field before saving — clicking Save directly
+// (e.g. right after typing, or a programmatic save) reaches performSave with the raw,
+// unclamped value still in `editing`. Clamp it here, on the object used to build the
+// payload, so an over-limit value is never persisted. Silent: never blocks save, no
+// toast, no field error — unlike getNumericFieldViolation below (min/integer). ETP-4887.
+// Returns `editing` unchanged (same reference) when nothing needed clamping, so
+// callers can cheaply detect "did anything change" via a reference check.
+export function clampNumericFieldsForSave(editing, fields) {
+    let clamped = editing;
+    for (const f of fields) {
+        if (f?.max == null) continue;
+        const clampedValue = clampNumericFieldMax(f, editing?.[f.key]);
+        if (clampedValue !== editing?.[f.key]) {
+            if (clamped === editing) clamped = { ...editing };
+            clamped[f.key] = clampedValue;
+        }
+    }
+    return clamped;
+}
+
 export function getNumericFieldViolation(fields, editing) {
     const isReadOnly = getReadOnly(editing);
     const isVisible = getVisible(editing);
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-5031 — Contacts-only text-field hard save-block (length + unsafe chars),
+// mirroring getNumericFieldViolation's shape/contract. A no-op for every window
+// other than 'contacts' — getContactsTextFieldError gates on `windowName` as its
+// first check, so this never affects any other window's save path. Unlike the
+// numeric check, the caller passes only the fields the user changed THIS
+// session (same scoping as the email/website/phone checks) — a pre-existing
+// over-limit value on an untouched legacy field must never block an unrelated
+// edit.
+export function getContactsTextFieldViolation(windowName, fields, editing) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTextFieldError(windowName, f, editing?.[f.key]);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -670,11 +713,23 @@ export function buildSavePayload({
     return payload;
 }
 
-export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError) {
+/**
+ * Stable id for the concurrency-conflict notice (ETP-5073).
+ *
+ * Without it every failed save adds ANOTHER toast, and because this one is deliberately
+ * non-dismissing (`duration: Infinity`) they accumulate forever — sonner stacks collapsed by
+ * default, so the second attempt buries the first behind it and the buttons become unreachable.
+ * A stable id makes sonner update the existing toast in place instead, which is the same trick
+ * the numeric-validation toasts use.
+ */
+const SAVE_CONFLICT_TOAST_ID = 'etgo-save-conflict';
+
+export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
     let backendFieldErrors = null;
+    let staleConflict = false;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
@@ -684,8 +739,38 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
             backendFieldErrors = {};
             for (const k of errFields) backendFieldErrors[k] = ui('fieldRequired');
         }
+        // ETP-5073 / DOC-04: somebody else saved this record between our read and this write.
+        // Keyed off the machine-readable discriminator, never the status alone — a duplicate-key
+        // rejection is also a 409 and its remedy is the opposite (change your data, not your
+        // baseline).
+        staleConflict = body?.error === 'stale_record';
     } catch {
         // ignore — fall through to the legacy extractor
+    }
+    if (staleConflict) {
+        // The save did NOT happen, so the user has to decide: keep editing, or discard and
+        // refresh. Two explicit choices and no third clever one — we deliberately do NOT offer to
+        // merge, see discardChangesAndReload for why.
+        const msg = ui('saveConflictRecordChanged');
+        setSaveError(msg);
+        // A dialog, because this blocks the user's work and one of the options destroys it. The
+        // toast this replaced also rendered badly: sonner puts action buttons inline with the
+        // message, and two labels this long squeezed the text into a one-character-wide column.
+        if (openSaveConflict({ onRefresh: onStaleRecord })) {
+            return;
+        }
+        // No dialog host mounted (a test, an embedded view): fall back to a toast rather than say
+        // nothing. Silence is the single outcome this ticket exists to remove. The stable id keeps
+        // repeated attempts from stacking non-expiring notices.
+        toast.error(msg, {
+            id: SAVE_CONFLICT_TOAST_ID,
+            duration: Infinity,
+            cancel: { label: ui('saveConflictKeepEditing'), onClick: () => {} },
+            ...(onStaleRecord
+                ? { action: { label: ui('saveConflictDiscardAndReload'), onClick: () => onStaleRecord() } }
+                : {}),
+        });
+        return;
     }
     if (backendFieldErrors) {
         setFieldErrors(backendFieldErrors);
@@ -727,16 +812,15 @@ export function shouldRefetchAfterSave(saved, refetchAfterSave) {
 }
 
 export async function resolveSavedRecordAfterSave(saved, {
-    apiBaseUrl,
     entity,
-    headers,
+    apiFetch,
     refetchAfterSave,
 }) {
     if (!shouldRefetchAfterSave(saved, refetchAfterSave)) {
         return saved;
     }
     try {
-        const refetchRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { headers });
+        const refetchRes = await apiFetch(`/${entity}/${saved.id}`);
         const refetchData = refetchRes.ok ? await refetchRes.json() : null;
         return normalizeRecord(refetchData?.response?.data?.[0] ?? refetchData ?? saved, entity);
     } catch {
@@ -816,8 +900,8 @@ export function useEntity(entity, childEntity, {
     // whose form predates the static fall back to the registry (see below).
     contractFields = null,
 }) {
-    const logout = useLogout();
     const ui = useUI();
+    const apiFetch = useApiFetch(apiBaseUrl);
     const [items, setItems] = useState([]);
     // The list response envelope minus the rows — i.e. any sibling of `response.data`
     // the backend chose to send (`totalRows`, `hasMore`, and notably aggregates like
@@ -905,7 +989,23 @@ export function useEntity(entity, childEntity, {
         );
     }, [editing, selected]);
 
-    const headers = buildHeaders(token);
+    /**
+     * The list query minus its row window: the sort plus every filter layer, composed exactly
+     * as `refresh` composes it.
+     *
+     * Exposed (ETP-4997) so a feature that must re-run the SAME server-side query the grid is
+     * showing — the CSV export — reuses this composition instead of re-deriving it. The grid
+     * is filtered and paginated server-side, so exporting `items` would silently export only
+     * the pages the user happened to scroll; and `applyFilterParams` is module-private, so
+     * without this there is no way to reproduce the criteria from outside.
+     */
+    const buildListQuery = useCallback(() => {
+        const colDef = columnDefs[sortColumn] || { key: sortColumn };
+        const queryParams = new URLSearchParams();
+        queryParams.append('_sortBy', resolveBackendSort(colDef, sortDirection));
+        applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
+        return queryParams;
+    }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;
@@ -922,12 +1022,8 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        apiFetch(`/${entity}?${queryParams.toString()}`)
             .then(res => {
-                if (res.status === 401) {
-                    logout();
-                    throw new Error('401');
-                }
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
@@ -946,7 +1042,7 @@ export function useEntity(entity, childEntity, {
                 setHasMore(false);
                 setLoading(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [entity, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, apiFetch]);
 
     const loadMore = useCallback(() => {
         if (!hasMore || loadingMore || loading) return;
@@ -963,12 +1059,8 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        fetch(`${apiBaseUrl}/${entity}?${queryParams.toString()}`, { headers })
+        apiFetch(`/${entity}?${queryParams.toString()}`)
             .then(res => {
-                if (res.status === 401) {
-                    logout();
-                    throw new Error('401');
-                }
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
@@ -988,7 +1080,7 @@ export function useEntity(entity, childEntity, {
                 setLoadingMore(false);
                 setHasMore(false);
             });
-    }, [apiBaseUrl, entity, token, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, logout]);
+    }, [entity, sortColumn, sortDirection, hasMore, loadingMore, loading, baseFilter, columnFilters, columnDefs, trailingFilter, apiFetch]);
 
     // List fetch is a mount-time decision. Flipping skipListFetch after mount
     // (e.g. a detail view whose recordId goes 'new' → ':id') must NOT retroactively
@@ -1019,7 +1111,8 @@ export function useEntity(entity, childEntity, {
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
-        fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers })
+        const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
+        apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1032,7 +1125,7 @@ export function useEntity(entity, childEntity, {
             // at just because one background request failed transiently.
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [apiBaseUrl, childEntity, token, childSortBy]);
+    }, [childEntity, childSortBy, apiFetch]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1044,7 +1137,7 @@ export function useEntity(entity, childEntity, {
             return {};
         }
         try {
-            const res = await fetch(`${apiBaseUrl}/${childEntity}/defaults?parentId=${parentId}`, { headers });
+            const res = await apiFetch(`/${childEntity}/defaults?parentId=${parentId}`);
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
             // Copy the resolved defaults and drop the backend id (never seeded into
@@ -1060,12 +1153,7 @@ export function useEntity(entity, childEntity, {
             setChildDefaults({});
             return {};
         }
-        // NOTE: `headers` is intentionally omitted — buildHeaders(token) returns a
-        // fresh object every render, so depending on it would make this callback
-        // unstable and re-fire DetailView's fetch effect every render (infinite
-        // loop / network never idles). token covers the only header that changes.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiBaseUrl, childEntity, token]);
+    }, [childEntity, apiFetch]);
 
     // ETP-4741 (QA BUG-1) — loading an EXISTING record while a /new defaults
     // request is still in flight must kill that request the same way a newer
@@ -1088,7 +1176,7 @@ export function useEntity(entity, childEntity, {
         if (!id) return;
         neutralizePendingDefaults();
         setLoading(true);
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        apiFetch(`/${entity}/${id}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1101,7 +1189,7 @@ export function useEntity(entity, childEntity, {
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [apiBaseUrl, entity, token, fetchChildren, neutralizePendingDefaults]);
+    }, [entity, fetchChildren, neutralizePendingDefaults, apiFetch]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1109,7 +1197,7 @@ export function useEntity(entity, childEntity, {
     // Only server-computed fields (totals, sequence numbers) get updated in editing.
     const refreshHeaderTotals = useCallback((id) => {
         if (!id) return;
-        fetch(`${apiBaseUrl}/${entity}/${id}`, { headers })
+        apiFetch(`/${entity}/${id}`)
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
@@ -1143,7 +1231,7 @@ export function useEntity(entity, childEntity, {
             })
             .catch(() => {
             });
-    }, [apiBaseUrl, entity, headers]);
+    }, [entity, apiFetch]);
 
     // ETP-4751 — surface the invoice-line handler's transient exemption-cause signals
     // (exemptionCauseAutoFilled / exemptionCauseWarning) to the header state so the SIF
@@ -1245,7 +1333,7 @@ export function useEntity(entity, childEntity, {
         // ETP-5002: deliberately NOT cleared by timeoutId above — see the state decl.
         setDefaultsPending(true);
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/defaults`, { headers, signal: controller.signal });
+            const res = await apiFetch(`/${entity}/defaults`, { signal: controller.signal });
             if (!isCurrent()) return;
             if (res.ok) {
                 const data = await res.json();
@@ -1280,7 +1368,7 @@ export function useEntity(entity, childEntity, {
                 setDefaultsPending(false);
             }
         }
-    }, [apiBaseUrl, entity, token, headers]);
+    }, [apiBaseUrl, entity, apiFetch]);
 
     const handleChange = useCallback((field, value) => {
         userChangedKeysRef.current.add(field);
@@ -1309,7 +1397,59 @@ export function useEntity(entity, childEntity, {
         syncRegisteredFields();
     }, [syncRegisteredFields]);
 
-    const handleSave = useCallback(async ({ silent = false } = {}) => {
+    /**
+     * ETP-5073 / DOC-04: re-read the record after a concurrency conflict, discarding the pending
+     * edits.
+     *
+     * Deliberately NOT a merge. An earlier version layered the user's changed keys back over the
+     * freshly-read record, and that was wrong twice over:
+     *
+     *  - it silently overwrote the other person's value on any field BOTH had edited, which is the
+     *    very data loss this ticket exists to remove, moved one step later;
+     *  - it injected values through `setEditing`, which does not run callouts. On a document whose
+     *    fields are interdependent (a business-partner change recomputes price list, payment terms
+     *    and taxes) the merged form showed a combination no callout had ever derived.
+     *
+     * So the record is reloaded as the system holds it and the pending edits are dropped. The user
+     * re-enters what still makes sense, and because each re-entry goes through the normal edit
+     * path, its callouts fire in the NEW context — which a merge could never guarantee. Safety over
+     * convenience: this is a rare path, and guessing intent on a document with chained derivations
+     * is not a guess we are entitled to make.
+     *
+     * The caller only reaches this after the user explicitly chose it over cancelling the save.
+     */
+    const discardChangesAndReload = useCallback(async () => {
+        if (!selected?.id) return;
+        try {
+            const res = await apiFetch(`/${entity}/${selected.id}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const data = await res.json();
+            // normalizeRecord also refreshes the remembered `updated`, so the next save carries
+            // the token this read just produced instead of the one the conflict rejected.
+            const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+            setSelected(fresh);
+            setEditing({ ...fresh });
+            // Both sides now hold the same values, so isDirtyHeader is false and every unsaved-
+            // changes consumer (the navigation guard, the clone gate) sees a clean form again.
+            // The changed-key set is dropped too: those keys are no longer the user's edits, and
+            // leaving them would keep scoping format validation to fields nobody touched.
+            userChangedKeysRef.current.clear();
+            setSaveError(null);
+            setFieldErrors({});
+            // Belt and braces: sonner already dismisses a toast when its action is clicked, but
+            // this one never expires on its own, so a stuck copy would sit on screen forever if
+            // that ever changed or if the reload was triggered from anywhere else.
+            // Close both surfaces: the dialog resolves itself when its button is clicked, but a
+            // refresh triggered from anywhere else must not leave either one behind.
+            dismissSaveConflict();
+            toast.dismiss(SAVE_CONFLICT_TOAST_ID);
+            toast.info(ui('saveConflictReloaded'));
+        } catch {
+            toast.error(ui('saveConflictReloadFailed'));
+        }
+    }, [selected, entity, apiFetch, ui]);
+
+    const performSave = useCallback(async ({ silent = false } = {}) => {
         if (!editing) return;
         setIsSaving(true);
         setSaveError(null);
@@ -1332,7 +1472,13 @@ export function useEntity(entity, childEntity, {
         // the toast becomes purely cosmetic. No-op for every window whose fields declare
         // neither `min` nor `integer`. ETP-4542.
         const allFormFields = [...formFieldsRef.current.values()].flat();
-        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        // ETP-4887: silently clamp any field with a declared `max` before it reaches
+        // the save gate/payload — see clampNumericFieldsForSave for the full rationale.
+        const clampedEditing = clampNumericFieldsForSave(editing, allFormFields);
+        if (clampedEditing !== editing) {
+            setEditing(clampedEditing);
+        }
+        const numericViolation = getNumericFieldViolation(allFormFields, clampedEditing);
         if (numericViolation) {
             // Same id as EntityForm's on-blur toast for this field (ETP-4542):
             // when Save is clicked without leaving the input first, blur fires
@@ -1355,25 +1501,41 @@ export function useEntity(entity, childEntity, {
         const changedFormFields = [...formFieldsRef.current.values()]
             .flat()
             .filter(f => userChangedKeysRef.current.has(f.key));
-        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        // ETP-5031: Contacts-only text-field hard save-block (length + unsafe
+        // chars). No-op for every other window — see getContactsTextFieldViolation.
+        // Scoped to `changedFormFields`, same as the email/website/phone checks
+        // below — never untouched legacy values on an existing record, so a
+        // pre-existing over-limit value never blocks an unrelated edit.
+        const contactsViolation = getContactsTextFieldViolation(specName, changedFormFields, editing);
+        if (contactsViolation) {
+            return reportInvalidFormatField(
+                contactsViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsViolation.key}`,
+                contactsViolation.errorParams,
+            );
+        }
+        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
         }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
         if (invalidWebsites.length > 0) {
             return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
         }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
-        const url = getUrl(isNew, apiBaseUrl, entity, editing);
+        const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
         const method = getMethod(isNew);
         const payload = buildSavePayload({
             isNew,
             selected,
-            editing,
+            editing: clampedEditing,
             entity,
             apiBaseUrl,
             backendDefaultKeysRef,
@@ -1383,18 +1545,28 @@ export function useEntity(entity, childEntity, {
         // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
         const body = JSON.stringify(payload);
         try {
-            const res = await fetch(url, { method, headers, body });
+            // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
+            // keeps it from being prefixed a second time.
+            const res = await apiFetch(url, { method, body, baseUrl: '' });
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
                 const resolvedSaved = await resolveSavedRecordAfterSave(saved, {
-                    apiBaseUrl,
                     entity,
-                    headers,
+                    apiFetch,
                     refetchAfterSave,
                 });
-                setSelected(resolvedSaved);
-                setEditing({ ...resolvedSaved });
+                // ETP-5101: a write response only echoes back the fields the backend actually
+                // wrote (buildSavePayload sends a DIFF, not the full record) plus a handful of
+                // identity/audit columns — it is not guaranteed to carry every field the record
+                // has. A full replace here silently drops any field the response omitted (still
+                // correct in the DB, just missing from this response) from both `selected` and
+                // `editing`, even though nothing about it changed. Merge onto the prior state
+                // instead, so an omitted field keeps its last-known value; any field the response
+                // DOES include (explicit `null` too) still overwrites, so a genuine server-side
+                // change is never masked.
+                setSelected(prev => ({ ...prev, ...resolvedSaved }));
+                setEditing(prev => ({ ...prev, ...resolvedSaved }));
                 setSaveError(null);
                 setFieldErrors({});
                 // Refresh children after every save, not just create: a header field
@@ -1411,7 +1583,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload);
                 return null;
             }
         } catch (err) {
@@ -1422,7 +1594,66 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, token, ui, fetchChildren]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload]);
+
+    /**
+     * ETP-5081: one create in flight at a time.
+     *
+     * `performSave` has no re-entrancy guard, so two concurrent calls issue two POSTs — two
+     * documents. Nothing prevented that: the Save button, "Add lines" and "Import lines" each
+     * call it, none of them disables the others, and on a slow backend (NEO took ~16 s per
+     * create) the second click lands long before the first returns. Observed leaving THREE empty
+     * purchase orders behind in one flow. Concurrent callers now share the SAME in-flight
+     * promise, so they all get the record the first call created and the follow-up navigation
+     * still works — which also makes "Save, then immediately Add lines" behave the way the user
+     * reads it.
+     *
+     * An UPDATE cannot be coalesced the same way — the second caller may legitimately be saving
+     * newer edits, and dropping it would lose them silently. But it cannot run in PARALLEL
+     * either, which is what this used to do on the assumption that updates are idempotent. Since
+     * ETP-5073 they are not: every update carries the `updated` token the client last read, and
+     * two overlapping saves of one record necessarily carry the SAME token — the second one is
+     * built before the first one's response can refresh it. The server commits the first, bumps
+     * `updated`, and refuses the second with 409 `stale_record`, which surfaces as the
+     * "No se puede guardar este registro" conflict dialog — a modal blaming another user for a
+     * collision the app caused with itself, and one that then blocks every later click.
+     * Reproduced end to end in the amortization E2E flow: "Guardar" followed by "Crear
+     * amortización" (which saves before it processes) sent two byte-identical PATCHes 510 ms
+     * apart, 200 then 409, and the dialog swallowed the process click.
+     *
+     * So updates are SERIALIZED instead: each one waits for the previous save of this record to
+     * settle, and `apiFetch` then injects the freshly harvested `updated`. Nothing is dropped and
+     * nothing overlaps.
+     */
+    const saveInFlightRef = useRef(null);
+    const updateChainRef = useRef(null);
+    const handleSave = useCallback((opts) => {
+        const creating = !editing?.id;
+        if (creating) {
+            if (saveInFlightRef.current) return saveInFlightRef.current;
+            const promise = performSave(opts);
+            saveInFlightRef.current = promise;
+            promise.finally(() => {
+                if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+            });
+            return promise;
+        }
+        const previous = updateChainRef.current;
+        // No save in flight: run immediately, so the common single-save case keeps issuing its
+        // request in the same tick it always did.
+        const next = previous ? previous.then(() => performSave(opts)) : performSave(opts);
+        // The tail must never reject or the chain would stay poisoned for every later save;
+        // `performSave` already reports its own failures and resolves to null.
+        const tail = next.catch(() => null);
+        updateChainRef.current = tail;
+        // Once nothing is queued behind this save, drop the tail so the next one runs
+        // immediately again instead of inheriting a microtask hop forever.
+        tail.finally(() => {
+            if (updateChainRef.current === tail) updateChainRef.current = null;
+        });
+        return next;
+    }, [performSave, editing?.id]);
+
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -1430,8 +1661,12 @@ export function useEntity(entity, childEntity, {
     const handleDelete = useCallback(async () => {
         if (!selected?.id) return false;
         try {
-            const res = await fetch(`${apiBaseUrl}/${entity}/${selected.id}`, { method: 'DELETE', headers });
+            const res = await apiFetch(`/${entity}/${selected.id}`, { method: 'DELETE' });
             if (res.ok) {
+                // ETP-5073: drop the remembered version, so an id reused by a later create
+                // (an import replaying a fixed key, a fixture) cannot inherit a token that
+                // was read for a different record.
+                forgetRecordVersion(selected.id);
                 setSelected(null);
                 setEditing(null);
                 setChildren([]);
@@ -1447,7 +1682,7 @@ export function useEntity(entity, childEntity, {
             toast.error(err?.message || 'Network error');
             return false;
         }
-    }, [selected, apiBaseUrl, entity, token, refresh, ui]);
+    }, [selected, entity, refresh, ui, apiFetch]);
 
     const handleAddChild = useCallback(async (childData) => {
         if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
@@ -1469,9 +1704,8 @@ export function useEntity(entity, childEntity, {
             // Include parentId in the body — the backend resolves it to the correct FK field name
             // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).
             body.parentId = selected.id;
-            const res = await fetch(`${apiBaseUrl}/${childEntity}`, {
+            const res = await apiFetch(`/${childEntity}`, {
                 method: 'POST',
-                headers,
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -1502,7 +1736,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals]);
+    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
@@ -1541,23 +1775,48 @@ export function useEntity(entity, childEntity, {
         if (selected?.id) refreshHeaderTotals(selected.id);
     }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
 
+    /**
+     * ETP-5073 follow-up: refresh ONLY the remembered `updated` token of a record, without
+     * touching `selected`/`editing`.
+     *
+     * A process action the backend REFUSES can still have written to the record before it
+     * validated (observed on `assets/action/processAsset`: it answered 400 "El campo fecha de
+     * inicio es obligatorio" and left `updated` bumped). The remembered token was then stale, so
+     * the user's very next save came back 500 "already been changed by another user or process"
+     * and their correction was silently lost. Re-reading the row runs it through normalizeRecord,
+     * which re-remembers the version — and deliberately does NOT touch the form, because the user
+     * still has the fix they just typed in it.
+     */
+    const refreshRecordVersion = useCallback(async (id) => {
+        if (!id) return;
+        try {
+            const res = await apiFetch(`/${entity}/${id}`, { method: 'GET' });
+            if (!res.ok) return;
+            const data = await res.json();
+            const row = data?.response?.data?.[0] ?? data;
+            if (row) normalizeRecord(row, entity);
+        } catch {
+            // Best-effort: without it the next write still fails loudly rather than silently.
+        }
+    }, [entity, apiFetch]);
+
     const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
         const saved = await handleSave({ silent: true });
         if (!saved?.id) return null;
 
         const { processField, processValue, extraParams } = draftModeConfig;
-        const url = `${apiBaseUrl}/${entity}/${saved.id}/action/${processField}`;
         // `extraParams` are merged at the top level of the body (not inside fieldValues)
         // so processes whose AD parameters are validated against the request root —
         // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
-        const res = await fetch(url, {
+        const res = await apiFetch(`/${entity}/${saved.id}/action/${processField}`, {
             method: 'POST',
-            headers,
             body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
         });
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
             toast.error(msg);
+            // A refused process may still have bumped `updated` — see refreshRecordVersion.
+            await refreshRecordVersion(saved.id);
             return null;
         }
         toast.success(ui('recordProcessed'));
@@ -1578,7 +1837,7 @@ export function useEntity(entity, childEntity, {
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {
-            const updatedRes = await fetch(`${apiBaseUrl}/${entity}/${saved.id}`, { method: 'GET', headers });
+            const updatedRes = await apiFetch(`/${entity}/${saved.id}`, { method: 'GET' });
             if (updatedRes.ok) {
                 const data = await updatedRes.json();
                 const updated = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -1588,7 +1847,7 @@ export function useEntity(entity, childEntity, {
         } catch { /* ignore, fall back to saved */
         }
         return saved;
-    }, [handleSave, apiBaseUrl, entity, specName, token, refresh, ui]);
+    }, [handleSave, entity, specName, refresh, ui, apiFetch]);
 
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
@@ -1604,11 +1863,9 @@ export function useEntity(entity, childEntity, {
             if (p.hidden) fieldValues[p.key] = p.value;
         }
         Object.assign(fieldValues, paramValues);
-        const url = `${apiBaseUrl}/${entity}/${selected.id}/action/${process.columnName ?? process.name}`;
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(`/${entity}/${selected.id}/action/${process.columnName ?? process.name}`, {
                 method: 'POST',
-                headers,
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
@@ -1636,13 +1893,15 @@ export function useEntity(entity, childEntity, {
             } else {
                 const msg = await extractErrorMessage(res, ui);
                 toast.error(msg);
+                // A refused process may still have bumped `updated` — see refreshRecordVersion.
+                await refreshRecordVersion(selected.id);
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, apiBaseUrl, token, refresh, fetchById, ui]);
+    }, [selected, entity, specName, refresh, fetchById, ui, apiFetch]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST
@@ -1705,6 +1964,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }

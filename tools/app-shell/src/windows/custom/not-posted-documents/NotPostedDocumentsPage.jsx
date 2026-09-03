@@ -1,17 +1,78 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import './not-posted-documents.css';
 
-function buildHeaders(token) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
+// ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function formatDate(raw) {
   if (!raw) return '';
   const s = typeof raw === 'string' ? raw : String(raw);
   return s.slice(0, 10);
+}
+
+/**
+ * ETP-5075 — document-type codes whose Etendo GO window was renamed, mapped to our own
+ * i18n key so the filter reads the same name the user sees in the menu.
+ *
+ * The backend (`NotPostedDocumentsHandler#refListDocumentTypes`) labels each option from
+ * core's own `AD_REF_LIST_TRL` translation, which is shared with Etendo Classic — `MI`
+ * translates to "Facturas cuadradas" there, while this window ships as "Relación
+ * albarán-factura". Overriding here keeps the fix in the presentation layer: no core AD
+ * data is touched, so Classic is unaffected, and the strings stay in the locale files
+ * where every other user-visible string lives (`docs/i18n-guide.md`).
+ *
+ * Same pattern `windows/custom/calendar/PeriodsExpandablePanel.jsx` already uses for
+ * document *categories* (its `MXI: 'calendarDocCategoryMatchInvoice'` entry).
+ *
+ * Add an entry only when a GO window's name genuinely diverges from core's translation —
+ * anything absent here keeps the backend's label untouched (see `docTypeLabel`).
+ */
+const DOC_TYPE_LABEL_KEYS = {
+  MI: 'docTypeMatchedInvoices',
+};
+
+/** Backend label unless we deliberately renamed that document type's window. */
+function docTypeLabel(option, ui) {
+  const key = DOC_TYPE_LABEL_KEYS[option.value];
+  return key ? ui(key) : option.label;
+}
+
+/**
+ * Same override, different keyspace: each GRID ROW's `documentType` is core's raw
+ * `NoPostedDocumentDS` label string (e.g. `"Matched Invoice"`, singular — confirmed live,
+ * it is what both the row badge and the `postRow` "unknown tableId" error literally render
+ * verbatim), NOT the `MI` code the filter dropdown uses. Kept as its own map rather than
+ * merged into `DOC_TYPE_LABEL_KEYS` — the two are keyed on genuinely different strings, and
+ * conflating them would make either lookup silently miss.
+ */
+const ROW_DOC_TYPE_LABEL_KEYS = {
+  'Matched Invoice': 'docTypeMatchedInvoices',
+};
+
+/**
+ * Resolves the grid badge label, in precedence order:
+ *
+ * 1. **Our deliberate rename** (`ROW_DOC_TYPE_LABEL_KEYS`) — a product decision that the
+ *    Etendo Go window's own name wins over core's AD translation, so it must outrank the
+ *    backend-provided label rather than be a fallback to it.
+ * 2. **`documentTypeLabels`** (ETP-4945, from develop) — the already-translated
+ *    `{value,label}` pairs of the filter-options response, keyed by AD_Ref_List **code**.
+ *    Kept because it is the generic mechanism that covers every document type at once.
+ *    Note it resolves nothing with today's backend: `NotPostedDocumentsHandler#buildRow`
+ *    passes through `NoPostedDocumentDS`'s raw LABEL (`"Matched Invoice"`), not the code
+ *    ETP-4945's own comment assumes — verified against `origin/develop` of
+ *    `com.etendoerp.go`, which still reads `row.get("documentType")` as that raw label. So
+ *    this lookup is latent today and starts working for free if the backend ever switches
+ *    rows to codes; it is deliberately NOT deleted for that reason.
+ * 3. The raw value, unchanged — same final fallback both sides always had.
+ */
+function rowDocTypeLabel(row, ui, documentTypeLabels) {
+  const key = ROW_DOC_TYPE_LABEL_KEYS[row.documentType];
+  if (key) return ui(key);
+  return documentTypeLabels?.get(row.documentType) ?? row.documentType;
 }
 
 function MultiSelect({ options, selected, onToggle, 'data-testid': dataTestId }) {
@@ -56,16 +117,22 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const neoUrl = apiBaseUrl;
+  const apiFetch = useApiFetch(neoUrl);
 
   // ── Filter options (fetched once) ────────────────────────────────────────────
   const [filterOptions, setFilterOptions] = useState({ documentTypes: [], accountingStatuses: [] });
 
+  // row.documentType is the raw AD_Ref_List code (e.g. "GLJ", "PI") that backs
+  // filterOptions.documentTypes — reuse those already-translated {value,label}
+  // pairs to render the badge instead of the raw code (ETP-4945).
+  const documentTypeLabels = useMemo(
+    () => new Map(filterOptions.documentTypes.map(o => [o.value, o.label])),
+    [filterOptions.documentTypes]
+  );
+
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch(`${neoUrl}/header?_mode=filter-options`, {
-      headers: buildHeaders(token),
-      signal: ctrl.signal,
-    })
+    apiFetch('/header?_mode=filter-options', { token, signal: ctrl.signal })
       .then(r => r.ok ? r.json() : null)
       .then(j => {
         if (j) {
@@ -77,7 +144,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       })
       .catch(() => {});
     return () => ctrl.abort();
-  }, [neoUrl, token]);
+  }, [apiFetch, token]);
 
   // ── Filter state ─────────────────────────────────────────────────────────────
   const [document, setDocument] = useState('');
@@ -114,10 +181,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.set('dateTo', filters.dateTo);
 
-      const res = await fetch(`${neoUrl}/header?${params}`, {
-        headers: buildHeaders(token),
-        signal: ctrl.signal,
-      });
+      const res = await apiFetch(`/header?${params}`, { token, signal: ctrl.signal });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         if (fetchAbortRef.current === ctrl) setLoadError(json?.message || res.statusText);
@@ -130,7 +194,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     } finally {
       if (fetchAbortRef.current === ctrl) setLoading(false);
     }
-  }, [neoUrl, token]);
+  }, [apiFetch, token]);
 
   // ── Initial load ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -170,11 +234,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
     setPosting(p => new Set(p).add(row.documentId));
     try {
-      const res = await fetch(
-        `${neoUrl}/header/${encodeURIComponent(row.documentId)}/action/post`,
+      const res = await apiFetch(
+        `/header/${encodeURIComponent(row.documentId)}/action/post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          token,
           body: JSON.stringify({ tableId: row.tableId, recordId: row.documentId }),
         }
       );
@@ -202,11 +266,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `${neoUrl}/header/0/action/bulk-post`,
+      const res = await apiFetch(
+        `/header/0/action/bulk-post`,
         {
           method: 'POST',
-          headers: buildHeaders(token),
+          token,
           body: JSON.stringify({
             rows: rowsToPost.map(r => ({ tableId: r.tableId, recordId: r.documentId, label: r.description })),
           }),
@@ -231,7 +295,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
   }
 
-  useSetPageMeta({ title: ui('notPostedDocuments'), recordCount: rows.length });
+  useSetPageMeta({
+    title: ui('notPostedDocuments'),
+    breadcrumb: `${ui('finance')} / ${ui('notPostedDocuments')}`,
+    recordCount: rows.length,
+  });
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
@@ -286,7 +354,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
                     />
                   </td>
                   <td>
-                    <span className="npd-doc-type-badge">{row.documentType}</span>
+                    <span className="npd-doc-type-badge">
+                      {rowDocTypeLabel(row, ui, documentTypeLabels)}
+                    </span>
                   </td>
                   <td>{row.description}</td>
                   <td className="npd-date">{formatDate(row.accountingDate)}</td>
@@ -319,7 +389,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           <select data-testid="npd-filter-document-type" value={document} onChange={e => setDocument(e.target.value)}>
             <option value="">—</option>
             {filterOptions.documentTypes.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>{docTypeLabel(o, ui)}</option>
             ))}
           </select>
         </div>
@@ -334,12 +404,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         </div>
 
         <div className="npd-filter-field">
-          <label>From</label>
+          <label>{ui('filterFrom')}</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </div>
 
         <div className="npd-filter-field">
-          <label>To</label>
+          <label>{ui('filterTo')}</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
         </div>
 

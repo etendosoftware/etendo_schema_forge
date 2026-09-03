@@ -7,6 +7,9 @@
     "sendDocument": {
       "allowEmail": false
     },
+    "attachments": {
+      "saveBeforeAttach": true
+    },
     "hideDeleteWhenComplete": true,
     "hidePrintWhen": true,
     "relatedDocuments": true,
@@ -58,9 +61,6 @@
       }
     ],
     "lineEntityConfig": "invoice",
-    "headerExtra": {
-      "customForm": "SifErrorBanner"
-    },
     "linesLayout": "inlineEditable",
     "lineTaxSifTrigger": {
       "enabled": true,
@@ -85,23 +85,28 @@
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "Foreign_Amount": "Importe en Moneda Objetivo"
       },
       "en_US": {
         "POReference": "Document No.",
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
-        "C_DocTypeTarget_ID": "Document Type"
+        "C_DocTypeTarget_ID": "Document Type",
+        "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     },
     "secondaryTabs": {
       "exchangeRates": {
-        "label": "Exchange Rates",
+        "label": "Exchange rates",
         "tabOrder": 50,
         "requireSavedRecord": true,
         "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
@@ -1069,7 +1074,8 @@
           "grid": true
         },
         "foreignAmount": {
-          "grid": true
+          "grid": true,
+          "noTrailing": true
         }
       },
       "javaQualifier": "invoiceExchangeRateHandler"

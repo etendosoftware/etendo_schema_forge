@@ -5,12 +5,23 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 
+import { authHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Generic "Create Invoice" confirmation modal — used by both goods-shipment and
  * goods-receipt. Shows a summary card and a checkbox before executing the action.
  *
  * Props:
  *   data             — header record data (documentNo, businessPartner$_identifier, etc.)
+ *                      ETP-4942: also reads `resolvedPriceListId` when present (currently
+ *                      populated only for goods-shipment, see
+ *                      GoodsShipmentHeaderHandler#enrichResolvedPriceList) to preselect the
+ *                      correct tariff in the picker below. This field is always mandatory
+ *                      here (there is no "linked order makes it optional" variant like in
+ *                      ConfirmInOutModal), so the generic system-default/first-entry
+ *                      fallback is disabled (`allowGenericFallback: false`): with no
+ *                      resolved default, the picker starts empty and the user must choose
+ *                      a tariff explicitly instead of one being silently autofilled.
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
@@ -39,16 +50,26 @@ export default function CreateInvoiceConfirmModal({
   token,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch();
   const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const priceListHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const priceListHeaders = useMemo(() => (authHeaders(token)), [token]);
   const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
     enabled: showPriceListPicker,
     isSOTrx,
     base,
     headers: priceListHeaders,
+    // ETP-4942 — preselect the price list the backend already resolved (linked order,
+    // else the Business Partner's own tariff) instead of always falling back to the
+    // system-default price list. Same fix as the pre-completion popup (ConfirmInOutModal),
+    // applied here to the post-completion "Crear factura" button, which shares this hook.
+    defaultPriceListId: data?.resolvedPriceListId,
+    // ETP-4942 — this selector is always mandatory in this modal (no optional/prefilled
+    // variant), so the generic fallback (system `default` flag / first list entry) is
+    // disabled: an arbitrary tariff must never silently satisfy a required field.
+    allowGenericFallback: false,
   });
 
   const documentNo  = data?.documentNo || '';
@@ -65,14 +86,14 @@ export default function CreateInvoiceConfirmModal({
     v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
 
   const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
-  const displayAmount = grandTotal > 0 ? formattedTotal : documentNo;
+  const displayAmount = grandTotal !== 0 ? formattedTotal : documentNo;
 
   useEffect(() => {
     if (!pendingQtyUrl) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(pendingQtyUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiFetch(pendingQtyUrl, { baseUrl: '', token });
         if (!res.ok || cancelled) return;
         const lines = (await res.json())?.response?.data || [];
         const total = lines.reduce((sum, l) => sum + Number(l.pendingQty || 0), 0);
@@ -80,7 +101,7 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl, token]);
+  }, [pendingQtyUrl, token, apiFetch]);
 
   const subtitle = pendingQty != null
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })

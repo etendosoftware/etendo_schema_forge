@@ -221,9 +221,14 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
       act(() => { capturedBulkDeleteOptions.onSuccess(succeeded, failed); });
 
       expect(refreshMock).toHaveBeenCalled();
-      // Only the failed row remains selected -> selection count reflects 1, not 2.
+      // Only the failed row remains selected -> the selection toolbar (and its
+      // bulk-delete button, which is icon-only since ETP-4972 and carries no
+      // count in its own text) is still shown. The remaining selection is
+      // verified directly via the DataTable deselect wiring below, which is
+      // the actual mechanism ListView uses to communicate "keep only the
+      // failed rows selected" to the grid.
       expect(screen.getByTestId('selection-count')).toBeInTheDocument();
-      expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(1)');
+      expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
       // DataTable's deselect mechanism is told to drop the succeeded id.
       expect(capturedDeselect.trigger).toBe(1);
       expect(capturedDeselect.ids).toEqual(['r1']);
@@ -237,11 +242,69 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
       act(() => { capturedBulkDeleteOptions.onSuccess([], allRows); });
 
       expect(refreshMock).not.toHaveBeenCalled();
-      // Selection still shows both rows.
-      expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(2)');
+      // Selection still shows both rows — the toolbar remains mounted.
+      expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
       // No deselect bump — deselectTrigger stays at its initial value.
       expect(capturedDeselect.trigger).toBe(0);
     });
+  });
+});
+
+// Regression — the idle top-right toolbar's "Print" button (opens the
+// whole-list report via setShowReport) used to stay visible even while rows
+// were selected, duplicating the SelectionToolbar's own separate Print icon
+// (which bulk-prints only the selected rows via printDocuments). Fixed by
+// gating the idle button on `selectedRows.length === 0`. Both buttons share
+// the same `data-testid="Button__620cbc"` (pre-existing, unrelated to this
+// fix), so the two are distinguished structurally: the idle button renders a
+// visible "print" text node and no `title` attribute, while the
+// SelectionToolbar's button renders only an icon behind a `title`/aria-label.
+describe('ListView — idle-toolbar Print button visibility vs. row selection', () => {
+  const defaultProps = {
+    entity: 'testEntity',
+    Table: SelectableCapturingTable,
+    entityLabel: 'Test Entity',
+    windowName: 'test-entity',
+    token: 'fake-token',
+    apiBaseUrl: 'http://localhost/api',
+  };
+
+  function selectRows() {
+    fireEvent.click(screen.getByTestId('trigger-select'));
+  }
+
+  function idlePrintButton() {
+    return screen.queryAllByTestId('Button__620cbc').find(
+      (btn) => !btn.hasAttribute('title') && btn.textContent.includes('print')
+    );
+  }
+  function selectionPrintButton() {
+    return screen.queryByTitle('print');
+  }
+
+  it('shows the idle-toolbar Print button when no rows are selected', () => {
+    render(<ListView {...defaultProps} />);
+    expect(idlePrintButton()).toBeTruthy();
+    expect(selectionPrintButton()).not.toBeInTheDocument();
+  });
+
+  it('hides the idle-toolbar Print button once rows are selected, while the SelectionToolbar keeps its own Print icon', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    expect(idlePrintButton()).toBeFalsy();
+    expect(selectionPrintButton()).toBeInTheDocument();
+  });
+
+  it('re-shows the idle-toolbar Print button after clearing the selection', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(idlePrintButton()).toBeFalsy();
+
+    fireEvent.click(screen.getByTitle('close'));
+
+    expect(idlePrintButton()).toBeTruthy();
+    expect(selectionPrintButton()).not.toBeInTheDocument();
   });
 });
 
@@ -279,9 +342,13 @@ describe('ListView — selectionBarRightActions.reselectFailed (ETP-4656)', () =
     act(() => { capturedArgs.reselectFailed(succeeded, failed); });
 
     expect(refreshMock).toHaveBeenCalled();
-    // Only the failed row remains selected -> selection count reflects 1, not 2.
+    // Only the failed row remains selected -> the selection toolbar stays
+    // mounted; the remaining selection itself is verified via the DataTable
+    // deselect wiring below (see note in the "onSuccess outcome handling"
+    // block above re: the icon-only bulk-delete button no longer carrying a
+    // count in its own text since ETP-4972).
     expect(screen.getByTestId('selection-count')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-delete-selected').textContent).toContain('(1)');
+    expect(screen.getByTestId('bulk-delete-selected')).toBeInTheDocument();
     // DataTable's deselect mechanism is told to drop the succeeded id.
     expect(capturedDeselect.trigger).toBe(1);
     expect(capturedDeselect.ids).toEqual(['r1']);

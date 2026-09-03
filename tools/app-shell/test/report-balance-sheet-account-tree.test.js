@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
 // account-report tree as profit-loss. In Etendo Classic both are literally one
@@ -472,7 +473,7 @@ const ROWS = [
 function renderHtml({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
-  const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8'));
+  const template = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')));
   const meta = {
     ...META_BASE,
     labels: LABELS[locale],

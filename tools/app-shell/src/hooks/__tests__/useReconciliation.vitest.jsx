@@ -1,9 +1,16 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 
+// The GET hooks below (usePendingStatementLines, useCandidateOperations, useAutoMatch) still
+// go through useNeoResource.js, which reads its token via the aliased `useAuth` — this mock
+// covers those. The POST hooks (useNeoPost) were migrated to `useApiFetch` (ETP-5022), which
+// reads auth via the core package's OWN relative import of AuthContext — this alias mock never
+// crosses that boundary — so those describe blocks instead wrap with a real `AuthProvider`
+// (imported directly from the core package below, bypassing this alias mock).
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
 
+import { AuthProvider } from '@etendosoftware/app-shell-core/auth';
 import {
   usePendingStatementLines,
   useCandidateOperations,
@@ -15,6 +22,10 @@ import {
 } from '../useReconciliation.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
+
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function getResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
@@ -56,7 +67,10 @@ describe('usePendingStatementLines (GET)', () => {
   it('fetches the pendingLines action with accountId in the query string', async () => {
     globalThis.fetch.mockResolvedValue(getResponse({ lines: [], total: 0, counts: {} }));
 
-    renderHook(() => usePendingStatementLines('acc-1'));
+    // usePendingStatementLines goes through useNeoResource, which is itself on useApiFetch —
+    // same reasoning as the POST-hook `wrapper` above: a real AuthProvider is required for the
+    // Authorization header assertion below to see a token.
+    renderHook(() => usePendingStatementLines('acc-1'), { wrapper });
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const [url, init] = globalThis.fetch.mock.calls[0];
@@ -244,7 +258,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   it('posts the reconcileGroup action with the payload and returns response.data', async () => {
     globalThis.fetch.mockResolvedValue(postResponse({ reconciledId: 'rec-1' }));
 
-    const { result } = renderHook(() => useReconcileGroup());
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
     expect(result.current.loading).toBe(false);
 
     let returned;
@@ -265,7 +279,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   it('returns {} when response.data is absent', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const { result } = renderHook(() => useReconcileGroup());
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
     let returned;
     await act(async () => {
       returned = await result.current.reconcile({});
@@ -280,7 +294,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
       json: async () => ({ error: { message: 'Already reconciled', status: 'CONFLICT' } }),
     });
 
-    const { result } = renderHook(() => useReconcileGroup());
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reconcile({})).rejects.toThrow('Already reconciled');
@@ -297,7 +311,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
       json: async () => { throw new Error('not json'); },
     });
 
-    const { result } = renderHook(() => useReconcileGroup());
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reconcile({})).rejects.toThrow('HTTP 500');
@@ -308,7 +322,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   it('throws and sets error when the network rejects', async () => {
     globalThis.fetch.mockRejectedValue(new Error('Network down'));
 
-    const { result } = renderHook(() => useReconcileGroup());
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reconcile({})).rejects.toThrow('Network down');
@@ -331,7 +345,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   it('posts the removeOperation action with the payload and returns response.data', async () => {
     globalThis.fetch.mockResolvedValue(postResponse({ transactionIds: ['t1'] }));
 
-    const { result } = renderHook(() => useRemoveOperation());
+    const { result } = renderHook(() => useRemoveOperation(), { wrapper });
     expect(result.current.loading).toBe(false);
 
     let returned;
@@ -352,7 +366,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   it('returns {} when response.data is absent', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const { result } = renderHook(() => useRemoveOperation());
+    const { result } = renderHook(() => useRemoveOperation(), { wrapper });
     let returned;
     await act(async () => {
       returned = await result.current.removeOperation({});
@@ -367,7 +381,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
       json: async () => ({ error: { message: 'Transaction not linked', status: 'CONFLICT' } }),
     });
 
-    const { result } = renderHook(() => useRemoveOperation());
+    const { result } = renderHook(() => useRemoveOperation(), { wrapper });
 
     await act(async () => {
       await expect(result.current.removeOperation({})).rejects.toThrow('Transaction not linked');
@@ -384,7 +398,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
       json: async () => { throw new Error('not json'); },
     });
 
-    const { result } = renderHook(() => useRemoveOperation());
+    const { result } = renderHook(() => useRemoveOperation(), { wrapper });
 
     await act(async () => {
       await expect(result.current.removeOperation({})).rejects.toThrow('HTTP 500');
@@ -395,7 +409,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   it('throws and sets error when the network rejects', async () => {
     globalThis.fetch.mockRejectedValue(new Error('Network down'));
 
-    const { result } = renderHook(() => useRemoveOperation());
+    const { result } = renderHook(() => useRemoveOperation(), { wrapper });
 
     await act(async () => {
       await expect(result.current.removeOperation({})).rejects.toThrow('Network down');
@@ -409,7 +423,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   it('posts the reactivateSelected action with the payload and returns response.data', async () => {
     globalThis.fetch.mockResolvedValue(postResponse({ reactivated: true }));
 
-    const { result } = renderHook(() => useReactivateSelected());
+    const { result } = renderHook(() => useReactivateSelected(), { wrapper });
     expect(result.current.loading).toBe(false);
 
     let returned;
@@ -430,7 +444,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   it('returns {} when response.data is absent', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const { result } = renderHook(() => useReactivateSelected());
+    const { result } = renderHook(() => useReactivateSelected(), { wrapper });
     let returned;
     await act(async () => {
       returned = await result.current.reactivateSelected({});
@@ -445,7 +459,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
       json: async () => ({ error: { message: 'Already in draft', status: 'CONFLICT' } }),
     });
 
-    const { result } = renderHook(() => useReactivateSelected());
+    const { result } = renderHook(() => useReactivateSelected(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reactivateSelected({})).rejects.toThrow('Already in draft');
@@ -462,7 +476,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
       json: async () => { throw new Error('not json'); },
     });
 
-    const { result } = renderHook(() => useReactivateSelected());
+    const { result } = renderHook(() => useReactivateSelected(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reactivateSelected({})).rejects.toThrow('HTTP 500');
@@ -473,7 +487,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   it('throws and sets error when the network rejects', async () => {
     globalThis.fetch.mockRejectedValue(new Error('Network down'));
 
-    const { result } = renderHook(() => useReactivateSelected());
+    const { result } = renderHook(() => useReactivateSelected(), { wrapper });
 
     await act(async () => {
       await expect(result.current.reactivateSelected({})).rejects.toThrow('Network down');
@@ -487,7 +501,7 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
   it('posts the applySuggestions action and returns parsed data', async () => {
     globalThis.fetch.mockResolvedValue(postResponse({ applied: 2 }));
 
-    const { result } = renderHook(() => useApplySuggestions());
+    const { result } = renderHook(() => useApplySuggestions(), { wrapper });
     let returned;
     await act(async () => {
       returned = await result.current.apply({ groups: ['g1', 'g2'] });
@@ -507,10 +521,92 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
       json: async () => ({ error: { message: 'Bad groups' } }),
     });
 
-    const { result } = renderHook(() => useApplySuggestions());
+    const { result } = renderHook(() => useApplySuggestions(), { wrapper });
     await act(async () => {
       await expect(result.current.apply({})).rejects.toThrow('Bad groups');
     });
     expect(result.current.error).toBeInstanceOf(Error);
+  });
+});
+
+// ETP-4965 — useNeoPost used to build the thrown Error out of `error.message` + status only, and
+// DISCARD the rest of the parsed body. That made every machine-readable field the backend already
+// sends invisible to callers: the 400's `code` (which tells the panel to open the accounting-concept
+// picker and retry instead of just red-toasting an English sentence) and the 409's
+// `remainderLineId` (which tells it to retarget the pending sub-line). Attaching the parsed JSON to
+// `err.body` is the prerequisite for both flows.
+describe('useNeoPost error body (ETP-4965)', () => {
+  it('attaches the parsed error body to the thrown error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: { message: 'An accounting concept is required', status: 400 },
+        code: 'GL_ITEM_REQUIRED',
+        differenceAmount: '0.38',
+      }),
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    // The message/status contract is unchanged...
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toBe('An accounting concept is required');
+    expect(caught.status).toBe(400);
+    // ...and the rest of the body is now reachable, which is the whole point.
+    expect(caught.body).toEqual({
+      error: { message: 'An accounting concept is required', status: 400 },
+      code: 'GL_ITEM_REQUIRED',
+      differenceAmount: '0.38',
+    });
+    expect(caught.body.code).toBe('GL_ITEM_REQUIRED');
+    // The same error instance is what `error` exposes, so a component reading either sees the body.
+    expect(result.current.error.body.code).toBe('GL_ITEM_REQUIRED');
+  });
+
+  it('exposes the 409 remainderLineId so the caller can retarget the pending sub-line', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error: { message: 'Statement line is already reconciled', status: 409 },
+        remainderLineId: 'LP1-rem',
+      }),
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    expect(caught.status).toBe(409);
+    expect(caught.body.remainderLineId).toBe('LP1-rem');
+  });
+
+  it('leaves body undefined (never throws) when the error payload is not JSON', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => { throw new Error('not json'); },
+    });
+
+    const { result } = renderHook(() => useReconcileGroup(), { wrapper });
+
+    let caught;
+    await act(async () => {
+      caught = await result.current.reconcile({}).catch((e) => e);
+    });
+
+    expect(caught.message).toBe('HTTP 500');
+    expect(caught.status).toBe(500);
+    // `json` parsed to null — reading `.code` off the body must not blow up in the caller.
+    expect(caught.body ?? null).toBeNull();
   });
 });

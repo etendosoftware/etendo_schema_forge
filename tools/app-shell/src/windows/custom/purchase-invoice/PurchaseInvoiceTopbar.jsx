@@ -11,6 +11,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
+import { buildHeaders } from '@/auth/api.js';
 export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
   const ui = useUI();
@@ -19,10 +20,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
 
   useInvoiceUpdatedListener('purchase-invoice', recordId, onRefresh);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   if (!data) return null;
 
@@ -92,7 +90,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
       )}
       {isCompleted && (() => {
         if (badge.isCredit) {
-          // Mirror the grid's "Pendiente de pago" cell for credit instruments: green
+          // Mirror the grid's "Saldo pendiente" cell for credit instruments: green
           // "Aplicada" once fully consumed, else a clickable "Saldo a favor · remaining"
           // badge that opens the same history modal (listing the payments that consumed it).
           if (badge.kind === 'credit-applied') {
