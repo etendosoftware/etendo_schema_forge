@@ -793,6 +793,71 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     window.open = originalOpen;
   });
 
+  // ETP-5013 follow-up: a Financial Account Transaction has no window of its
+  // own — the report sends the PARENT account as invoiceId plus a docQuery
+  // (`txnAny=<transaction id>`) so the financial-account window can deep-link to
+  // the exact movement. The handler stays data-driven: it appends whatever
+  // query the report supplies, never a window-specific param name.
+  it('appends the report-supplied deep-link key/value to the opened URL', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice',
+        invoiceId: 'acct-1',
+        docWindow: 'financial-account',
+        docQueryKey: 'txnAny',
+        docQueryValue: 'txn-7',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/financial-account\/acct-1\?txnAny=txn-7$/);
+
+    window.open = originalOpen;
+  });
+
+  it('opens a clean URL with no trailing "?" when the report supplies no deep-link', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // An empty string is what Handlebars renders for a null doc_query_key — it
+    // must be treated as "no query", not as a bare "?".
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice', invoiceId: 'inv-77', docWindow: 'sales-invoice',
+        docQueryKey: '', docQueryValue: 'REC1',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/sales-invoice\/inv-77$/);
+    expect(url).not.toContain('?');
+
+    window.open = originalOpen;
+  });
+
   it('ignores unrelated postMessage payloads', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
