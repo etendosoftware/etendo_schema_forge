@@ -34,6 +34,23 @@ import {
   X,
 } from 'lucide-react';
 
+function resolveSelectedScope(searchSelectionTargets, currentWindowScope, vectorSearchTargets, ui) {
+  if (searchSelectionTargets === null) return currentWindowScope;
+  if (searchSelectionTargets.length === vectorSearchTargets.length) return null;
+  if (searchSelectionTargets.length === 1) {
+    return vectorSearchTargets.find((target) => target.target === searchSelectionTargets[0]);
+  }
+  const label = searchSelectionTargets.length === 0
+    ? ''
+    : ui('selectedWindows').replace('{count}', searchSelectionTargets.length);
+  return { label };
+}
+
+function resolveScopeLabel(scope, tMenu) {
+  if (!scope?.target) return scope?.label;
+  return tMenu(scope.label) || scope.label;
+}
+
 export default function TopBar({
   onBack,
   title,
@@ -106,13 +123,13 @@ export default function TopBar({
   };
 
   const currentWindowScope = isCurrentWindowScopeEnabled ? currentWindowVectorTarget : null;
-  const selectedScope = searchSelectionTargets === null
-    ? currentWindowScope
-    : searchSelectionTargets.length === vectorSearchTargets.length
-      ? null
-      : searchSelectionTargets.length === 1
-      ? vectorSearchTargets.find((target) => target.target === searchSelectionTargets[0])
-      : { label: searchSelectionTargets.length === 0 ? '' : ui('selectedWindows').replace('{count}', searchSelectionTargets.length) };
+  const selectedScope = resolveSelectedScope(
+    searchSelectionTargets,
+    currentWindowScope,
+    vectorSearchTargets,
+    ui,
+  );
+  const selectedScopeLabel = resolveScopeLabel(selectedScope, tMenu);
 
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
@@ -248,7 +265,7 @@ export default function TopBar({
                 className="mr-2 inline-flex min-w-0 max-w-[12rem] shrink items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
                 data-testid="topbar-vector-search-scope"
               >
-                <span className="truncate">{selectedScope.target ? (tMenu(selectedScope.label) || selectedScope.label) : selectedScope.label}</span>
+                <span className="truncate">{selectedScopeLabel}</span>
                 <button
                   type="button"
                   onClick={clearCurrentWindowScope}

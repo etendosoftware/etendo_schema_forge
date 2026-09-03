@@ -79,7 +79,7 @@ its name up to ai@4 and is silently ignored by ai@7: the tool is still
 advertised to the model, just with no schema, so the model calls it with **no
 arguments at all**. The visible symptom is not "invalid arguments" but a browser
 tool failing on `args.path === undefined` while the model reports it "could not
-provide a path" — the exact ETP-5064 dead end. `src/server.test.js` fails if any
+provide a path" — the exact ETP-5064 dead end. `test/server.test.js` fails if any
 browser tool loses its schema or goes back to `parameters`.
 
 ## Tracing a conversation

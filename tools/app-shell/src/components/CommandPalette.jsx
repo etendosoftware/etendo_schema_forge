@@ -49,7 +49,7 @@ const ICON_MAP = {
 function HighlightedQuery({ text, query }) {
   const value = String(text ?? '');
   const normalizedQuery = query.trim();
-  if (!normalizedQuery) return value;
+  if (!normalizedQuery) return [value];
   const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const parts = value.split(new RegExp(`(${escapedQuery})`, 'ig'));
   return parts.map((part, index) => (
@@ -57,6 +57,22 @@ function HighlightedQuery({ text, query }) {
       ? <mark key={`${part}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{part}</mark>
       : part
   ));
+}
+
+function resolveSelectionTargets(targets, target) {
+  if (Array.isArray(targets)) return targets;
+  if (target) return [target];
+  return [];
+}
+
+function resolveVectorSearchScopeLabel(selectedTargets, tMenu, ui) {
+  if (selectedTargets.length === 1) {
+    return tMenu(selectedTargets[0].label) || selectedTargets[0].label;
+  }
+  if (selectedTargets.length > 1) {
+    return ui('selectedWindows').replace('{count}', selectedTargets.length);
+  }
+  return ui('allWindows');
 }
 
 export function CommandPalette() {
@@ -120,9 +136,10 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open || vectorSearchTargets.length === 0) return;
-    const targets = selectedVectorTargetKeys === null
-      ? (initializedScopeTarget.current ? vectorSearchTargetKeys : null)
-      : requestedVectorSearchTargetKeys;
+    let targets = requestedVectorSearchTargetKeys;
+    if (selectedVectorTargetKeys === null) {
+      targets = initializedScopeTarget.current ? vectorSearchTargetKeys : null;
+    }
     if (!targets) return;
     document.dispatchEvent(new CustomEvent('schema-forge:vector-search-selection', {
       detail: { pathname: location.pathname, targets },
@@ -238,9 +255,7 @@ export function CommandPalette() {
         setScopeOverride({ pathname, targets: null });
         return;
       }
-      const selectedTargets = Array.isArray(targets)
-        ? targets
-        : vectorSearchTarget ? [vectorSearchTarget] : [];
+      const selectedTargets = resolveSelectionTargets(targets, vectorSearchTarget);
       setSelectedVectorTargetKeys(selectedTargets);
       setScopeOverride(vectorSearchTarget || Array.isArray(targets) ? { pathname, targets: selectedTargets } : null);
     };
@@ -307,11 +322,7 @@ export function CommandPalette() {
     });
   };
 
-  const vectorSearchScopeLabel = selectedVectorTargets.length === 1
-    ? tMenu(selectedVectorTargets[0].label) || selectedVectorTargets[0].label
-    : selectedVectorTargets.length > 1
-      ? ui('selectedWindows').replace('{count}', selectedVectorTargets.length)
-      : ui('allWindows');
+  const vectorSearchScopeLabel = resolveVectorSearchScopeLabel(selectedVectorTargets, tMenu, ui);
   const visibleWindowSearchSuggestions = windowSearchSuggestions.filter((suggestion) => {
     const target = vectorSearchTargets.find((item) => item.specName === suggestion.specName);
     return !target || requestedVectorSearchTargetKeys.includes(target.target);

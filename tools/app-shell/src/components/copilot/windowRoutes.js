@@ -39,7 +39,8 @@ export function normalizeWindowKey(value) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
   if (!slug) return '';
   return slug
     .split('-')
@@ -99,13 +100,13 @@ export class WindowRouteIndex {
 
   /** Slugs competing for a normalized key; `[]` when it is not ambiguous. */
   candidatesFor(key) {
-    return [...(this.#ambiguous.get(key) ?? [])].sort();
+    return [...(this.#ambiguous.get(key) ?? [])].sort((left, right) => left.localeCompare(right));
   }
 
   /** Every window reachable through this index, sorted. */
   slugs() {
     const fromClashes = [...this.#ambiguous.values()].flatMap(set => [...set]);
-    return [...new Set([...this.#routes.values(), ...fromClashes])].sort();
+    return [...new Set([...this.#routes.values(), ...fromClashes])].sort((left, right) => left.localeCompare(right));
   }
 }
 
@@ -169,9 +170,10 @@ export class UnknownWindowError extends Error {
  */
 export class AmbiguousWindowError extends Error {
   constructor(reference, candidates) {
+    const candidatePaths = candidates.map(slug => `/${slug}`).join(', ');
     super([
       `Ambiguous window reference ${JSON.stringify(reference)}.`,
-      `It matches ${candidates.length} windows: ${candidates.map(slug => `/${slug}`).join(', ')}.`,
+      `It matches ${candidates.length} windows: ${candidatePaths}.`,
       'Retry with one of those exact paths, or ask the user which one they mean.',
     ].join(' '));
     this.name = 'AmbiguousWindowError';

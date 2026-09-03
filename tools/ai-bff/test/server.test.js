@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { browserTools, createServer, handleChat, hasConfiguredSecret } from './server.js';
+import { browserTools, createServer, handleChat, hasConfiguredSecret } from '../src/server.js';
 
 function request(headers = {}) {
   const req = new EventEmitter();

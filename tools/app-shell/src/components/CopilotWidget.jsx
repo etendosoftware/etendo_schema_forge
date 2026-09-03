@@ -15,6 +15,89 @@ import { ChatView } from './copilot/ChatView.jsx';
 
 const LEFT_SIDE_ROUTES = ['/quick-sales-order', '/quick-purchase-order'];
 
+function CopilotBody({ state, maximized, showSidebar, actions, sidebarProps, chatProps, onSelectAssistant, welcomeMessage }) {
+  if (!state.selectedAssistant) {
+    return (
+      <AssistantSelector
+        assistants={state.assistants}
+        filter={state.filter}
+        onFilterChange={actions.setFilter}
+        onSelect={onSelectAssistant}
+        isLoading={state.isLoadingAssistants}
+        welcomeMessage={welcomeMessage}
+        error={state.error}
+        data-testid="AssistantSelector__bbc4ba" />
+    );
+  }
+  if (maximized) {
+    return (
+      <div className="flex flex-1 min-h-0">
+        <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
+          <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />
+        </div>
+        <div className="flex flex-1 flex-col min-w-0">
+          <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />
+        </div>
+      </div>
+    );
+  }
+  if (showSidebar) return <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />;
+  return <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />;
+}
+
+function pageHelpCopy(state) {
+  if (state.pageHelpError) {
+    return {
+      heading: 'No pude analizar esta pantalla',
+      detail: state.pageHelpError,
+    };
+  }
+  if (state.pageHelpLoading) {
+    return {
+      heading: 'Analizando esta pantalla…',
+      detail: 'Revisando la información visible para encontrar algo útil.',
+    };
+  }
+  return {
+    heading: 'Ayuda con esta página',
+    detail: state.pageHelpSuggestion,
+  };
+}
+
+function PageHelpCallout({ state, actions }) {
+  const copy = pageHelpCopy(state);
+  const handleClick = state.pageHelpError ? actions.requestPageHelp : actions.showPageHelp;
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="fixed bottom-24 left-20 z-70 max-w-xs rounded-xl border border-primary/20 bg-card px-3 py-2 text-left text-sm text-foreground shadow-xl"
+      aria-label="Open page help in Copilot"
+      disabled={state.pageHelpLoading}
+      data-testid="PageHelpCallout__bbc4ba">
+      <span className="font-medium">{copy.heading}</span>
+      <span className="mt-1 block line-clamp-3 text-muted-foreground">{copy.detail}</span>
+    </button>
+  );
+}
+
+function PageHelpButton({ isLoading, onClick }) {
+  const icon = isLoading
+    ? <Loader2 className="h-4 w-4 animate-spin" data-testid="PageHelpLoading__bbc4ba" />
+    : <Sparkles className="h-4 w-4" data-testid="PageHelpSparkles__bbc4ba" />;
+  return (
+    <Button
+      onClick={onClick}
+      size="icon"
+      className="fixed bottom-24 left-6 z-70 h-10 w-10 rounded-full shadow-lg"
+      aria-label="Get help with this page"
+      title="Get help with this page"
+      data-testid="PageHelpButton__bbc4ba">
+      {icon}
+    </Button>
+  );
+}
+
 export function CopilotWidget({ hideTrigger = false }) {
   const { isOpen: open, close: closePanel, toggle, state, actions } = useCopilot();
   const { current: currentWindow } = useCurrentWindowContext();
@@ -217,46 +300,6 @@ export function CopilotWidget({ hideTrigger = false }) {
     inputPlaceholder,
   };
 
-  // --- Render body based on mode ---
-
-  function renderBody() {
-    // Assistant selector (same in both modes)
-    if (!state.selectedAssistant) {
-      return (
-        <AssistantSelector
-          assistants={state.assistants}
-          filter={state.filter}
-          onFilterChange={actions.setFilter}
-          onSelect={handleSelectAssistant}
-          isLoading={state.isLoadingAssistants}
-          welcomeMessage={welcomeMessage}
-          error={state.error}
-          data-testid="AssistantSelector__bbc4ba" />
-      );
-    }
-
-    // Maximized: sidebar always visible on the left, chat on the right
-    if (maximized) {
-      return (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
-            <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />
-          </div>
-          <div className="flex flex-1 flex-col min-w-0">
-            <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />
-          </div>
-        </div>
-      );
-    }
-
-    // Compact: toggle between sidebar view and chat view
-    if (showSidebar) {
-      return <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />;
-    }
-
-    return <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />;
-  }
-
   return (
     <>
       {/* Panel */}
@@ -342,36 +385,27 @@ export function CopilotWidget({ hideTrigger = false }) {
           <CardContent
             className="flex flex-1 min-h-0 flex-col p-0"
             data-testid="CardContent__bbc4ba">
-            {renderBody()}
+            <CopilotBody
+              state={state}
+              maximized={maximized}
+              showSidebar={showSidebar}
+              actions={actions}
+              sidebarProps={sidebarProps}
+              chatProps={chatProps}
+              onSelectAssistant={handleSelectAssistant}
+              welcomeMessage={welcomeMessage}
+              data-testid="CopilotBody__bbc4ba" />
           </CardContent>
         </Card>
       </div>
       {pageHelpEnabled && (state.pageHelpSuggestion || state.pageHelpLoading || state.pageHelpError) && !open && actions.showPageHelp && (
-        <button
-          type="button"
-          onClick={state.pageHelpError ? actions.requestPageHelp : actions.showPageHelp}
-          className="fixed bottom-24 left-20 z-70 max-w-xs rounded-xl border border-primary/20 bg-card px-3 py-2 text-left text-sm text-foreground shadow-xl"
-          aria-label="Open page help in Copilot"
-          disabled={state.pageHelpLoading}
-          data-testid="PageHelpCallout__bbc4ba">
-          <span className="font-medium">{state.pageHelpError ? 'No pude analizar esta pantalla' : state.pageHelpLoading ? 'Analizando esta pantalla…' : 'Ayuda con esta página'}</span>
-          <span className="mt-1 block line-clamp-3 text-muted-foreground">
-            {state.pageHelpError || (state.pageHelpLoading ? 'Revisando la información visible para encontrar algo útil.' : state.pageHelpSuggestion)}
-          </span>
-        </button>
+        <PageHelpCallout state={state} actions={actions} data-testid="PageHelpCallout__bbc4ba" />
       )}
       {pageHelpEnabled && actions.requestPageHelp && (
-        <Button
-          onClick={() => actions.requestPageHelp()}
-          size="icon"
-          className="fixed bottom-24 left-6 z-70 h-10 w-10 rounded-full shadow-lg"
-          aria-label="Get help with this page"
-          title="Get help with this page"
-          data-testid="PageHelpButton__bbc4ba">
-          {state.pageHelpLoading
-            ? <Loader2 className="h-4 w-4 animate-spin" data-testid="PageHelpLoading__bbc4ba" />
-            : <Sparkles className="h-4 w-4" data-testid="PageHelpSparkles__bbc4ba" />}
-        </Button>
+        <PageHelpButton
+          isLoading={state.pageHelpLoading}
+          onClick={actions.requestPageHelp}
+          data-testid="PageHelpButton__bbc4ba" />
       )}
       {/* FAB button */}
       {!hideTrigger && <Button

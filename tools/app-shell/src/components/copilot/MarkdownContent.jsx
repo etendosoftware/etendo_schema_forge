@@ -40,6 +40,14 @@ function renderList(lines, startIndex, expression, Tag) {
   };
 }
 
+function isParagraphLine(line) {
+  const trimmed = line.trim();
+  return Boolean(trimmed)
+    && !HEADING_RE.test(trimmed)
+    && !BULLET_RE.test(trimmed)
+    && !ORDERED_RE.test(trimmed);
+}
+
 export function MarkdownContent({ children }) {
   if (!children) return null;
   const lines = String(children).split('\n');
@@ -67,8 +75,7 @@ export function MarkdownContent({ children }) {
       continue;
     }
     const paragraph = [];
-    while (index < lines.length && lines[index].trim() && !HEADING_RE.test(lines[index].trim())
-      && !BULLET_RE.test(lines[index].trim()) && !ORDERED_RE.test(lines[index].trim())) {
+    while (index < lines.length && isParagraphLine(lines[index])) {
       if (paragraph.length) paragraph.push(<br key={`break-${index}`} />);
       paragraph.push(...renderInline(lines[index]));
       index += 1;
