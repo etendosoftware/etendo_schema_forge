@@ -11,10 +11,13 @@ if (scope.unmatched.length || scope.ambiguous.length || scope.unaccountedXmlReco
   process.exit(1);
 }
 const deleteIds = new Set(scope.deleteIds);
+const deactivateIds = scope.deactivateIds || [];
 const parentRepoints = scope.parentRepoints || {}; // { childId: newParentIdOrNull }
 
+const DISCARDED_DESCRIPTION = 'Discarded Tax for EtendoGO'; // reporter's exact wording — do not translate/rephrase
+
 let xml = fs.readFileSync(XML_PATH, 'utf8');
-const counts = { rate: 0, trl: 0, obtl: 0, zone: 0, reparented: 0 };
+const counts = { rate: 0, trl: 0, obtl: 0, zone: 0, reparented: 0, deactivated: 0 };
 
 function stripEntity(tag, keyTag, matchIds) {
   const re = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>\\n?`, 'g');
@@ -56,6 +59,33 @@ for (const [childId, newParentId] of Object.entries(parentRepoints)) {
   counts.reparented++;
 }
 
+// DEACTIVATE: for each deactivateId, flip <active>false</active> and set
+// <description>Discarded Tax for EtendoGO</description> IN PLACE — the
+// record itself, and its Trl/Zone/OBTL_Tax_Parameter rows, are otherwise
+// left completely untouched (they're not in deleteIds, so stripEntity above
+// never touched them either). Same bounded-block-extraction + splice-back
+// technique as the parentRepoints/MODIFY code below, for the same reason:
+// an unbounded regex risks silently corrupting an unrelated record.
+for (const id of deactivateIds) {
+  const blockRe = new RegExp(`<FinancialMgmtTaxRate\\b[^>]*\\bid="${id}"[^>]*>[\\s\\S]*?<\\/FinancialMgmtTaxRate>`);
+  const m = xml.match(blockRe);
+  if (!m) throw new Error(`deactivateIds: target ${id} not found in XML — aborting`);
+  const original = m[0];
+  let block = original;
+  let activeHit = false, descHit = false;
+  block = block.replace(/<active>[\s\S]*?<\/active>/, () => { activeHit = true; return '<active>false</active>'; });
+  // description is sometimes a self-closing xsi:nil element instead of an
+  // open/close pair (confirmed elsewhere in this file, same quirk the
+  // MODIFY step below already handles) — try both shapes.
+  block = /<description\b[^>]*\/>/.test(block)
+    ? block.replace(/<description\b[^>]*\/>/, () => { descHit = true; return `<description>${DISCARDED_DESCRIPTION}</description>`; })
+    : block.replace(/<description>[\s\S]*?<\/description>/, () => { descHit = true; return `<description>${DISCARDED_DESCRIPTION}</description>`; });
+  if (!activeHit || !descHit) throw new Error(`deactivateIds: deactivation did not apply cleanly for ${id} (active:${activeHit} description:${descHit}) — inspect the record shape manually`);
+  xml = xml.replace(original, block);
+  counts.deactivated++;
+}
+if (counts.deactivated !== deactivateIds.length) throw new Error(`deactivateIds: expected ${deactivateIds.length} deactivations, applied ${counts.deactivated}`);
+
 // MODIFY: rename in FinancialMgmtTaxRate.name/description and the paired
 // Trl.name. Asserts the replace actually landed instead of silently no-op'ing
 // — `description` is often a self-closing `xsi:nil="true"` element rather
@@ -91,6 +121,6 @@ if (!trlHit) throw new Error(`MODIFY rename did not find/update the paired Finan
 
 const outPath = XML_PATH + '.new';
 fs.writeFileSync(outPath, xml);
-console.log('Removed:', counts);
-console.log('Expected (from resolved-scope.json):', scope.dependentCounts, '+', scope.deleteIds.length, 'rate records');
+console.log('Removed/changed:', counts);
+console.log('Expected (from resolved-scope.json):', scope.dependentCounts, '+', scope.deleteIds.length, 'rate records deleted +', deactivateIds.length, 'deactivated +', Object.keys(parentRepoints).length, 'reparented');
 console.log('Wrote', outPath, '— diff it against the source before replacing.');
