@@ -96,11 +96,11 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await expect(page.getByTestId('topbar-vector-search-scope')).toContainText('Producto');
     await expect(page.getByTestId('vector-search-scope')).toContainText('Producto');
 
-    // Clearing the scope updates both surfaces immediately and exposes the
-    // all-windows state in the dropdown.
+    // Clearing the scope updates both surfaces immediately. With no scoped
+    // targets, the dropdown correctly omits the scope control.
     await page.getByTestId('topbar-vector-search-scope-clear').click();
     await expect(page.getByTestId('topbar-vector-search-scope')).toHaveCount(0);
-    await expect(page.getByTestId('vector-search-scope')).toContainText('Todas las ventanas');
+    await expect(page.getByTestId('vector-search-scope')).toHaveCount(0);
   });
 
   test('selecting every window removes the redundant all-windows top-bar pill', async ({ page }) => {
