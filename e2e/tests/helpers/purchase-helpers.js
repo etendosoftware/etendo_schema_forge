@@ -525,18 +525,27 @@ async function ensureVendorAddress(page, bpId) {
     await firstInput.fill(VENDOR_FIXTURE_ADDRESS_LINE);
   }
 
-  // Select País — button opens a search dialog with country list
-  const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+  // Select País — button opens a search dialog with country list.
+  // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+  // asterisk inside the same element, so its textContent is "País*" and Playwright
+  // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+  const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
   await paisButton.click();
 
   const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
   await expect(countrySearch).toBeVisible({ timeout: 5_000 });
   await countrySearch.fill('spa');
 
-  const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-    .or(page.getByRole('button', { name: /^spain$/i }))
-    .or(page.locator('button').filter({ hasText: /^España$/ }))
-    .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+  // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+  // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+  // on create), so an unscoped "España" button locator resolves to the FIELD button,
+  // which sits behind the picker overlay — the click then times out on intercepted
+  // pointer events instead of selecting the option.
+  const countryPicker = page.locator('div[style*="z-index: 160"]');
+  const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+    .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+    .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+    .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
   await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
   await countryOption.first().click();
 
