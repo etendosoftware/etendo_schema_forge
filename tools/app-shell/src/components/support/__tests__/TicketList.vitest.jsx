@@ -74,6 +74,29 @@ describe('TicketList', () => {
     expect(screen.getByText('supportNewMessageBadge')).toBeInTheDocument();
   });
 
+  it('prepends the linked Jira ticket key, in its own lighter span, before the title', () => {
+    const conversations = [
+      { id: 'c1', subject: 'Duda sobre facturación', status: 'open', jiraTicketKey: 'ESD-1234' },
+    ];
+    const { container } = render(<TicketList conversations={conversations} isLoading={false} onSelect={vi.fn()} />);
+    const title = container.querySelector('.sc-t-title');
+    expect(title).toHaveTextContent('ESD-1234 - Duda sobre facturación');
+    const key = container.querySelector('.sc-t-key');
+    expect(key).toHaveTextContent('ESD-1234');
+    // The key must render BEFORE the subject text, not after.
+    expect(title.firstChild).toBe(key);
+  });
+
+  it('shows just the subject with no leading key span when there is no jiraTicketKey '
+    + '(regression guard against the title silently drifting)', () => {
+    const conversations = [
+      { id: 'c1', subject: 'Duda sobre facturación', status: 'open' },
+    ];
+    const { container } = render(<TicketList conversations={conversations} isLoading={false} onSelect={vi.fn()} />);
+    expect(screen.getByText('Duda sobre facturación')).toBeInTheDocument();
+    expect(container.querySelector('.sc-t-key')).not.toBeInTheDocument();
+  });
+
   describe('additional coverage', () => {
     it('renders the "open" status badge and CSS class when a conversation has no explicit status', () => {
       const conversations = [{ id: 'c1', subject: 'Sin estado', unread: false }];

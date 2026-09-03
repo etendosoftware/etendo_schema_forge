@@ -121,6 +121,47 @@ describe('applyOnSelectMappings', () => {
     applyOnSelectMappings({ onSelectMappings: [{ to: 'X' }, { from: 'a' }, null] }, { a: 1 }, handleChange);
     expect(handleChange).not.toHaveBeenCalled();
   });
+
+  // ETP-5039 — markTouched reports mapped targets so applyCalloutUpdates can
+  // protect the label/value the user picked from a parallel callout race.
+  it('calls markTouched once per mapping target, not for the $_identifier key', () => {
+    const handleChange = vi.fn();
+    const markTouched = vi.fn();
+    const field = {
+      onSelectMappings: [
+        { from: 'a', to: 'X' },
+        { from: 'b', to: 'Y' },
+      ],
+    };
+    applyOnSelectMappings(field, { a: 1, b: 2 }, handleChange, markTouched);
+    expect(markTouched).toHaveBeenCalledTimes(2);
+    expect(markTouched).toHaveBeenCalledWith('X');
+    expect(markTouched).toHaveBeenCalledWith('Y');
+    expect(markTouched).not.toHaveBeenCalledWith('X$_identifier');
+    expect(markTouched).not.toHaveBeenCalledWith('Y$_identifier');
+  });
+
+  it('does not throw when markTouched is omitted (backwards compatible 3-arg call)', () => {
+    const handleChange = vi.fn();
+    const field = { onSelectMappings: [{ from: 'a', to: 'X' }] };
+    expect(() => applyOnSelectMappings(field, { a: 1 }, handleChange)).not.toThrow();
+    expect(handleChange).toHaveBeenCalledWith('X', 1);
+  });
+
+  it('does not call markTouched for a mapping that is skipped', () => {
+    const handleChange = vi.fn();
+    const markTouched = vi.fn();
+    const field = {
+      onSelectMappings: [
+        { to: 'X' },                          // missing from
+        { from: 'a' },                        // missing to
+        null,                                 // malformed
+        { from: 'missing', to: 'Y' },         // resolves to null
+      ],
+    };
+    applyOnSelectMappings(field, { a: 1 }, handleChange, markTouched);
+    expect(markTouched).not.toHaveBeenCalled();
+  });
 });
 
 describe('buildDisplayCatalogMaps', () => {

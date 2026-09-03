@@ -133,9 +133,16 @@ describe('report-trial-balance — accountLevel SQL wiring (ETP-4898)', () => {
     assert.match(cte, /FROM ad_tree t WHERE t\.treetype = 'EV' AND t\.isactive = 'Y'/);
   });
 
-  it('base aggregates by account_id plus the three dimension names (not by ev.value)', () => {
+  it('base aggregates by account_id plus each dimension\'s id and name columns (not by ev.value)', () => {
     const cte = extractCte(SQL, 'base');
-    assert.match(cte, /GROUP BY fa\.account_id, bp\.name, p\.name, pj\.name/);
+    // Each dimension id (ETP-5013 follow-up) rides alongside its own name
+    // column — it's what lets that dimension row's own value become a
+    // drill-down link (report-grouping.js's groupByIdField, one per
+    // dimension: bpartner_id/product_id/project_id/costcenter_id).
+    assert.match(
+      cte,
+      /GROUP BY fa\.account_id, bp\.c_bpartner_id, bp\.name, p\.m_product_id, p\.name, pj\.c_project_id, pj\.name, cc\.c_costcenter_id, cc\.name/
+    );
     assert.doesNotMatch(cte, /GROUP BY ev\.value/);
   });
 
@@ -177,10 +184,18 @@ describe('report-trial-balance — accountLevel SQL wiring (ETP-4898)', () => {
 
   it('the final SELECT preserves the account × dimension grain foldAggregateRows() relies on', () => {
     const finalSelect = extractFinalSelect(SQL);
-    for (const col of ['bpname', 'productname', 'projectname']) {
+    for (const col of ['bpartner_id', 'bpname', 'product_id', 'productname', 'project_id', 'projectname', 'costcenter_id', 'costcentername']) {
       assert.match(finalSelect, new RegExp(`b\\.${col}\\b`), `expected ${col} in the final SELECT list`);
     }
-    assert.match(finalSelect, /GROUP BY ev\.value, ev\.c_elementvalue_id, ev\.name, b\.bpname, b\.productname, b\.projectname/);
+    // Each dimension id (ETP-5013 follow-up, extended to all 4) is what lets
+    // that dimension row's own value become a drill-down link (see
+    // report-grouping.js's groupByIdField) — it must ride along in the
+    // SELECT/GROUP BY exactly like its name column does, not as a separate
+    // un-grouped column.
+    assert.match(
+      finalSelect,
+      /GROUP BY ev\.value, ev\.c_elementvalue_id, ev\.name, b\.bpartner_id, b\.bpname, b\.product_id, b\.productname, b\.project_id, b\.projectname, b\.costcenter_id, b\.costcentername/
+    );
   });
 
   it('the final SELECT re-sums the four amount columns the contract declares', () => {
@@ -315,9 +330,15 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
   it('guards the drill-down in BOTH render branches (two ifCond guards in the source)', () => {
     const guards = TEMPLATE_SRC.match(/\{\{#ifCond @root\.meta\.params\.accountLevel '===' 'S'\}\}/g) || [];
     assert.equal(guards.length, 2, 'expected the accountLevel guard in both the grouped and flat branches');
-    // No unguarded account-link markup left anywhere.
+    // ETP-5013 follow-up: a THIRD, independently-guarded account-link now
+    // exists — the Contacto dimension row's own drill-down, gated on
+    // `{{#if this.dimensionId}}` (only set when the dimension declares a
+    // groupByIdField), not on accountLevel. So account-link occurrences
+    // outnumber the accountLevel guards by exactly one.
+    const dimensionIdGuards = TEMPLATE_SRC.match(/\{\{#if this\.dimensionId\}\}/g) || [];
+    assert.equal(dimensionIdGuards.length, 1, 'expected exactly one dimensionId-gated drill-down');
     const links = TEMPLATE_SRC.match(/<span class="account-link"/g) || [];
-    assert.equal(links.length, guards.length);
+    assert.equal(links.length, guards.length + dimensionIdGuards.length);
   });
 });
 
