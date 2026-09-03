@@ -43,7 +43,7 @@ describe('CommandPalette', () => {
   });
 
   it('renders translated label inside CommandItem span', () => {
-    assert.match(src, /<span>\s*<HighlightedQuery\s+text=\{translatedLabel\}\s+query=\{query\}\s*\/?>\s*<\/span>/);
+    assert.match(src, /<span>\s*<HighlightedQuery\s+text=\{translatedLabel\}\s+query=\{query\}(?:\s+data-testid="[^"]+")?\s*\/?>\s*<\/span>/);
   });
 
   it('does not hardcode English group names as literal strings outside JSX', () => {

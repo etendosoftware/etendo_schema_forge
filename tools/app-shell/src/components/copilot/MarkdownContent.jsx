@@ -48,6 +48,12 @@ function isParagraphLine(line) {
     && !ORDERED_RE.test(trimmed);
 }
 
+function renderListBlock(lines, index, line) {
+  if (BULLET_RE.test(line)) return renderList(lines, index, BULLET_RE, 'ul');
+  if (ORDERED_RE.test(line)) return renderList(lines, index, ORDERED_RE, 'ol');
+  return null;
+}
+
 export function MarkdownContent({ children }) {
   if (!children) return null;
   const lines = String(children).split('\n');
@@ -62,16 +68,10 @@ export function MarkdownContent({ children }) {
       index += 1;
       continue;
     }
-    if (BULLET_RE.test(line)) {
-      const result = renderList(lines, index, BULLET_RE, 'ul');
-      blocks.push(result.node);
-      index = result.nextIndex;
-      continue;
-    }
-    if (ORDERED_RE.test(line)) {
-      const result = renderList(lines, index, ORDERED_RE, 'ol');
-      blocks.push(result.node);
-      index = result.nextIndex;
+    const list = renderListBlock(lines, index, line);
+    if (list) {
+      blocks.push(list.node);
+      index = list.nextIndex;
       continue;
     }
     const paragraph = [];

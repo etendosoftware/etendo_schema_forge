@@ -33,14 +33,17 @@
  */
 export function normalizeWindowKey(value) {
   if (typeof value !== 'string') return '';
-  const slug = value
+  const normalized = value
     .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
+    .replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  let end = normalized.length;
+  while (normalized[start] === '-') start += 1;
+  while (normalized[end - 1] === '-') end -= 1;
+  const slug = normalized.slice(start, end);
   if (!slug) return '';
   return slug
     .split('-')
