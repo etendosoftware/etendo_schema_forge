@@ -22,7 +22,7 @@ const statusField = null;
 
 // @sf-generated-start extraBadges:matchedInvoice
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:matchedInvoice
 

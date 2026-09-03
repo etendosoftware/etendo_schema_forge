@@ -15,6 +15,14 @@
     },
     "summaryFields": [],
     "noHeaderBorder": true,
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill in the detail top bar — same declarative mechanism as goods-receipt (ETP-5075)."
+      }
+    ],
     "menuActions": [
       {
         "key": "post",

@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-02T14:40:15.987Z",
-  "updatedAt": "2026-09-02T21:18:24.005Z",
-  "checksum": "1a279f0a1147d301",
+  "updatedAt": "2026-09-03T02:37:12.013Z",
+  "checksum": "7c41ab662d74c8c6",
   "frontendContract": {
     "window": {
       "id": "107",
@@ -58,7 +58,15 @@
       },
       "noHeaderBorder": true,
       "attachments": false,
-      "layoutType": "default"
+      "layoutType": "default",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill in the detail top bar — same declarative mechanism as goods-receipt (ETP-5075)."
+        }
+      ]
     },
     "entities": {
       "matchedInvoice": {
@@ -329,7 +337,15 @@
         }
       },
       "noHeaderBorder": true,
-      "attachments": false
+      "attachments": false,
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill in the detail top bar — same declarative mechanism as goods-receipt (ETP-5075)."
+        }
+      ]
     },
     "entities": {
       "matchedInvoice": {

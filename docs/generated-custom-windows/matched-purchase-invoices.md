@@ -41,7 +41,7 @@ Spec/artifact name: `matched-purchase-invoices` (kebab-case of the AD window nam
 | Quantity | Cantidad | Numeric | Read-only |
 | Transaction Date | Fecha de transacción | Date | Read-only |
 | Processed | Procesada | Badge (Yes/No) | Read-only |
-| Posted | Contabilizado | Badge (green/orange) | Read-only, grid only. Gated by `visibleWhenCapability: "showAccountingFields"` — only shown to roles with accounting visibility. Same `posted` field/badge config as `purchase-invoice`/`goods-receipt` (added after the initial 6-field scope). |
+| Posted | Contabilizado | Badge (green/orange) | Read-only, grid only (not rendered inline in the form — `form: false`). Also rendered as a **status pill** in the detail top bar, next to Cancel, via `window.statusPills` — same declarative mechanism `goods-receipt` uses. Gated by `visibleWhenCapability: "showAccountingFields"` — only shown to roles with accounting visibility. Same `posted` field/badge config as `purchase-invoice`/`goods-receipt` (added after the initial 6-field scope). |
 
 Not to be confused with **Accounting Status** (`etblkpAccountingstatus`, the field behind Classic's "Accounting Status: Pending Refresh" banner) — a 17-value enum, not a boolean, and not declared here (stays `discarded`, matching `purchase-invoice`/`goods-receipt`, which don't declare it either).
 
