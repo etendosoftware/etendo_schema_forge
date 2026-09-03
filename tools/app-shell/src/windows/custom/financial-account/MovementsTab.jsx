@@ -97,11 +97,19 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, autoOpenNewMovement = false },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false },
   ref,
 ) {
   const [filters, setFilters] = useState({
-    dateRange: { presetId: 'last30' },
+    // A `?txnAny=<id>` deep-link (ETP-5013 follow-up — the Journal Entries report's
+    // "Financial Account Transaction" drill-down) targets ONE specific movement,
+    // which is very often older than the 30-day default: the row simply would
+    // not be in `movements` at all, so the highlight/expand below silently did
+    // nothing and the user landed on an empty-looking list. Opening that one
+    // case unbounded guarantees the targeted movement is loaded. Plain `?txn=`
+    // (the four in-app callers) always points at a recent movement and keeps
+    // the 30-day default, so their view is unchanged.
+    dateRange: txnUnbounded ? null : { presetId: 'last30' },
     type: null,
     search: '',
   });
