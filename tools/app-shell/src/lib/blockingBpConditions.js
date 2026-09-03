@@ -62,12 +62,36 @@
 
 const CREDIT_LIMIT_PATTERN = /credit\s+limit|cr[eé]dito.{0,20}l[ií]mite|l[ií]mite.{0,20}(de\s+)?cr[eé]dito/i;
 const ON_HOLD_PATTERN = /\bon\s+hold\s+for\s+this\s+document\b|bloquead[oa]\s+para\s+este\s+documento/i;
+
 // Trailing numeric token, plain decimal OR scientific notation (Java's
 // `Double.toString()` — see `SE_Order_BPartner.java` above — switches to
 // scientific notation, e.g. `1.2345678E7`, for values >= 1e7, which is routine
-// for ARS/COP/CLP amounts). Number() parses the scientific form natively once
-// captured, so no separate exponent-expansion step is needed.
-const TRAILING_AMOUNT_PATTERN = /(-?\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?)\s*$/;
+// for ARS/COP/CLP amounts). Extracted with a manual backward scan rather than a
+// regex: SonarQube flagged the previous `/(-?\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?)\s*$/`
+// as a ReDoS hotspot (javascript:S5852) — this scans `text`, backend copy that can
+// embed user-influenced substrings, so the same "no backtracking-capable pattern"
+// precedent `backendErrors.js`'s header comment documents for its own parameterized
+// matchers applies here too. This scan only isolates the CANDIDATE trailing run of
+// number-ish characters; `Number()` below still does the real numeric validation
+// (parses scientific notation natively), so a false candidate (e.g. a sentence that
+// happens to end in a bare "." with no digits) is filtered out downstream exactly
+// like the old regex's non-match case — see `hasDigit` below for why an all-digit
+// requirement is enforced up front instead of relying solely on that filter.
+const NUMBER_TOKEN_CHARS = '0123456789.,eE+-';
+const WHITESPACE_CHARS = ' \t\n\r\f\v';
+
+function extractTrailingNumberToken(text) {
+  let end = text.length;
+  while (end > 0 && WHITESPACE_CHARS.includes(text[end - 1])) end -= 1;
+  let start = end;
+  let hasDigit = false;
+  while (start > 0 && NUMBER_TOKEN_CHARS.includes(text[start - 1])) {
+    if (text[start - 1] >= '0' && text[start - 1] <= '9') hasDigit = true;
+    start -= 1;
+  }
+  if (start === end || !hasDigit) return null;
+  return { token: text.slice(start, end), index: start };
+}
 
 /**
  * @param {string} text an already-localized backend message
@@ -76,9 +100,9 @@ const TRAILING_AMOUNT_PATTERN = /(-?\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?)\s*$/;
 export function detectBlockingBpCondition(text) {
   if (!text || typeof text !== 'string') return null;
   if (CREDIT_LIMIT_PATTERN.test(text)) {
-    const match = text.match(TRAILING_AMOUNT_PATTERN);
+    const match = extractTrailingNumberToken(text);
     const label = match ? text.slice(0, match.index).trimEnd() : text;
-    const parsed = match ? Number(match[1].replace(',', '.')) : NaN;
+    const parsed = match ? Number(match.token.replace(',', '.')) : NaN;
     const amount = Number.isFinite(parsed) ? parsed : null;
     return { kind: 'creditLimit', text: label, amount };
   }

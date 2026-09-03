@@ -1872,6 +1872,58 @@ export function useEntity(entity, childEntity, {
         return saved;
     }, [handleSave, entity, specName, refresh, ui, apiFetch]);
 
+    // Extracted from handleProcess (SonarQube javascript:S3776 — cognitive
+    // complexity) so the success path's own branching (isCompletionProcess) is
+    // scored against this small function instead of nesting inside the outer
+    // try/if. Behavior is unchanged — this is the verbatim `if (res.ok)` body.
+    const handleProcessSuccess = useCallback((process) => {
+        const specificKey = `${process.columnName ?? process.name}Completed`;
+        const specificMsg = ui(specificKey);
+        const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
+        toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
+        window.dispatchEvent(new CustomEvent('neo:processSuccess', {
+            detail: {
+                process,
+                entity,
+                recordId: selected?.id
+            }
+        }));
+        if (isCompletionProcess(process)) {
+            trackDocumentCompleted({
+                entity,
+                specName,
+                source: 'process_action',
+                operation: 'complete',
+            });
+            // ETP-5024: a document that just completed successfully can no longer be
+            // blocked by the condition that may have been shown before (credit limit /
+            // BP on hold) — clear it and signal DetailView so it drops the banner even
+            // when the banner came from useCallout, which this hook cannot reach.
+            setBlockingCondition(null);
+            setCompletionSignal(c => c + 1);
+        }
+        fetchById(selected?.id);
+        refresh();
+    }, [entity, specName, selected, fetchById, refresh, ui]);
+
+    // Extracted alongside handleProcessSuccess above, same rationale — the verbatim
+    // `else` body of handleProcess's `if (res.ok)`.
+    const handleProcessFailure = useCallback(async (res) => {
+        const msg = await extractErrorMessage(res, ui);
+        // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
+        // inline banner instead of an auto-dismissing toast — skip the toast for it and
+        // let DetailView pick it up via `blockingCondition`. Every other process error
+        // keeps the existing toast.
+        const condition = detectBlockingBpCondition(msg);
+        if (condition) {
+            setBlockingCondition(condition);
+        } else {
+            toast.error(msg);
+        }
+        // A refused process may still have bumped `updated` — see refreshRecordVersion.
+        await refreshRecordVersion(selected?.id);
+    }, [ui, selected, refreshRecordVersion]);
+
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
         // ETP-4542: mark this process as running so consumers (DetailView) can show a
@@ -1892,54 +1944,16 @@ export function useEntity(entity, childEntity, {
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
-                const specificKey = `${process.columnName ?? process.name}Completed`;
-                const specificMsg = ui(specificKey);
-                const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
-                toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
-                window.dispatchEvent(new CustomEvent('neo:processSuccess', {
-                    detail: {
-                        process,
-                        entity,
-                        recordId: selected.id
-                    }
-                }));
-                if (isCompletionProcess(process)) {
-                    trackDocumentCompleted({
-                        entity,
-                        specName,
-                        source: 'process_action',
-                        operation: 'complete',
-                    });
-                    // ETP-5024: a document that just completed successfully can no longer be
-                    // blocked by the condition that may have been shown before (credit limit /
-                    // BP on hold) — clear it and signal DetailView so it drops the banner even
-                    // when the banner came from useCallout, which this hook cannot reach.
-                    setBlockingCondition(null);
-                    setCompletionSignal(c => c + 1);
-                }
-                fetchById(selected.id);
-                refresh();
+                handleProcessSuccess(process);
             } else {
-                const msg = await extractErrorMessage(res, ui);
-                // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
-                // inline banner instead of an auto-dismissing toast — skip the toast for it and
-                // let DetailView pick it up via `blockingCondition`. Every other process error
-                // keeps the existing toast.
-                const condition = detectBlockingBpCondition(msg);
-                if (condition) {
-                    setBlockingCondition(condition);
-                } else {
-                    toast.error(msg);
-                }
-                // A refused process may still have bumped `updated` — see refreshRecordVersion.
-                await refreshRecordVersion(selected.id);
+                await handleProcessFailure(res);
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, refresh, fetchById, ui, apiFetch]);
+    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST

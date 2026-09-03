@@ -117,6 +117,20 @@ describe('detectBlockingBpCondition', () => {
         amount: 10000000,
       });
     });
+
+    // ETP-5024 Sonar fix (javascript:S5852): the regex-based extractor was replaced
+    // with a manual backward character scan. A lone trailing separator with no digit
+    // (a sentence ending in a bare period, comma, "e"/"E", "+" or "-") must NOT be
+    // treated as a candidate number and stripped from the label — the scan requires
+    // at least one digit in the trailing run before returning a match.
+    it('does not treat a trailing period with no digits as an amount', () => {
+      const result = detectBlockingBpCondition('El límite de crédito fue superado.');
+      assert.deepEqual(result, {
+        kind: 'creditLimit',
+        text: 'El límite de crédito fue superado.',
+        amount: null,
+      });
+    });
   });
 
   describe('onHold — English', () => {
