@@ -12,9 +12,9 @@ const ACCOUNT_CODE_LENGTH = 8;
  *   onChange    — (newFullCode: string) => void  — always fires with the complete 8-char value
  *   record      — full form data object (used to detect summaryLevel and codePrefix)
  *   readOnly    — when true, renders as a single locked display
- *   placeholder — 4-digit suffix hint for the empty-suffix state (e.g. the last used
- *                 number under the selected prefix). Falls back to `codeSuffixPlaceholder`
- *                 ("0000") when not supplied.
+ *   placeholder — 4-digit suffix hint for the empty-suffix state (the next available
+ *                 number under the selected prefix, i.e. highest existing sibling + 1).
+ *                 Falls back to `codeSuffixPlaceholder` ("0000") when not supplied.
  *
  * Render rules:
  *   - summaryLevel === 'Y' OR readOnly  → single read-only display  (data-testid="account-code-readonly")
