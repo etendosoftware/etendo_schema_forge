@@ -6,13 +6,19 @@ import { useFeatureFlag, WEBMCP_AGENT_CHAT } from '@/lib/flags';
 
 const CopilotContext = createContext(null);
 
-export function CopilotProvider({ children }) {
+/**
+ * @param {object} props
+ * @param {Array} [props.menuGroups] — the access-filtered menu groups the
+ *   sidebar renders. They are the allow-list the agent's navigation tools
+ *   resolve window names against (see copilot/windowRoutes.js).
+ */
+export function CopilotProvider({ children, menuGroups }) {
   const [isOpen, setIsOpen] = useState(false);
   const { token } = useAuth();
   const legacy = useCopilotChat({ token });
   const open = useCallback(() => setIsOpen(true), []);
   const agentEnabled = useFeatureFlag(WEBMCP_AGENT_CHAT);
-  const ai = useAiCopilotChat({ token, onOpenCopilot: open });
+  const ai = useAiCopilotChat({ token, onOpenCopilot: open, menuGroups });
   const state = useMemo(() => {
     if (!agentEnabled) return legacy.state;
     return {
