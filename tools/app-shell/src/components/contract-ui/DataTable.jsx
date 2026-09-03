@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Inbox, X, ChevronDown, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
+import { Search, Inbox, X, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useUI, useLocale, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';

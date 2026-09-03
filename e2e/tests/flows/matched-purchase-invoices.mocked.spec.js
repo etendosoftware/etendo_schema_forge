@@ -102,7 +102,7 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('selecting 2 rows shows the floating bar, the dropdown offers post AND unpost, and confirming fires one POST per row', async ({ page }) => {
+  test('selecting 2 rows shows the floating bar, the dropdown offers post AND unpost, and confirming "post" only sends it for the row that is not already posted', async ({ page }) => {
     const row1 = page.getByTestId(`row-${ROWS[0].id}`);
     const row2 = page.getByTestId(`row-${ROWS[1].id}`);
     await expect(row1).toBeVisible();
@@ -137,9 +137,20 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     // (labelKey 'done'), not a document-status label — this window has no DocAction.
     await dialog.getByRole('button', { name: /^(completado|done)$/i }).click();
 
-    await expect.poll(() => actionRequests.length).toBe(2);
+    // rowFilter pre-blocks mi-002 for 'post' — it is already posted ('Y') — so only
+    // mi-001 (state 'T', not posted) is actually sent. Sending 'post' again on an
+    // already-posted row would hit the backend with a confusing accounting error instead
+    // of this clear, immediate per-row message (see MatchedInvoiceBulkActions' rowFilter).
+    await expect.poll(() => actionRequests.length).toBe(1);
     const byId = Object.fromEntries(actionRequests.map((r) => [r.id, r.action]));
     expect(byId['mi-001']).toBe('post');
-    expect(byId['mi-002']).toBe('post');
+    expect(byId['mi-002']).toBeUndefined();
+
+    // The shared modal counts the pre-blocked row as "failed" (1 ok, 1 failed) and shows
+    // it via the reload-then-toast flow (useBulkActionToast reads sessionStorage on mount).
+    const toastByText = (re) => page.locator('[data-sonner-toast]').filter({ hasText: re });
+    await expect(
+      toastByText(/1 registros procesados correctamente y 1 registros fallidos/i),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });

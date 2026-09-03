@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
-import { ArrowUpRight, ChevronDown, Loader2, Search } from 'lucide-react';
+import { ArrowUpRight, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
