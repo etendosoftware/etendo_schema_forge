@@ -7,7 +7,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -289,6 +289,31 @@ function parseListSortBy(listSortBy) {
 
 function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
+}
+
+// Extracted so the guard/try-finally doesn't add to ListView's own cognitive
+// complexity (S3776) — same rationale as the other top-level helpers above.
+async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
+  if (isPrinting) return;
+  setIsPrinting(true);
+  try {
+    await printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl);
+  } finally {
+    setIsPrinting(false);
+  }
+}
+
+// Same rationale: the ternary itself is what feeds ListView's cognitive
+// complexity, regardless of where its result is used — a plain function call
+// keeps the branch out of the caller's count (mirrors iconSizeClass above).
+function printButtonLabel(isPrinting, ui) {
+  return isPrinting ? ui('generating') : ui('print');
+}
+
+function printButtonIcon(isPrinting, selectionBarSize) {
+  return isPrinting
+    ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+    : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
 }
 
 /**
@@ -816,7 +841,13 @@ export function ListView({
   const [deselectTrigger, setDeselectTrigger] = useState(0);
   const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
+
+  const handleBulkPrint = useCallback(
+    () => executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }),
+    [isPrinting, windowName, selectedRows, token, ui, apiBaseUrl]
+  );
 
   const handlePreviewClose = useCallback(() => {
     if (previewRow) {
@@ -1046,11 +1077,12 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    title={ui('print')}
-                    aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    title={printButtonLabel(isPrinting, ui)}
+                    aria-label={printButtonLabel(isPrinting, ui)}
+                    disabled={isPrinting}
+                    onClick={handleBulkPrint}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
                 {onCloneRow && (
