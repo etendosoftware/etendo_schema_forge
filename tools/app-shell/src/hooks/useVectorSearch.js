@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getApiBase } from '@/hooks/useNeoResource.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const VECTOR_MAX_RESULTS = 10;
 const VECTOR_FETCH_MIN_SCORE = 0.45;
 
 export function useVectorSearch({ query, requestedTargetKeys, selectedTargetKeys, onSearch }) {
+  const apiFetch = useApiFetch(getApiBase());
   const [matches, setMatches] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -21,7 +23,6 @@ export function useVectorSearch({ query, requestedTargetKeys, selectedTargetKeys
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
-        const token = localStorage.getItem('sf_auth_token');
         const queryTargets = selectedTargetKeys === null && requestedTargetKeys.length > 1
           ? requestedTargetKeys.map((target) => [target])
           : [requestedTargetKeys];
@@ -32,8 +33,7 @@ export function useVectorSearch({ query, requestedTargetKeys, selectedTargetKeys
             minScore: String(VECTOR_FETCH_MIN_SCORE),
             maxResults: String(VECTOR_MAX_RESULTS),
           });
-          const response = await fetch(`${getApiBase()}/sws/neo/vectorsearch?${params}`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          const response = await apiFetch(`/sws/neo/vectorsearch?${params}`, {
             signal: controller.signal,
           });
           if (!response.ok) throw new Error(`Vector search failed: ${response.status}`);
@@ -56,7 +56,7 @@ export function useVectorSearch({ query, requestedTargetKeys, selectedTargetKeys
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [onSearch, query, requestedTargetKeys, selectedTargetKeys]);
+  }, [apiFetch, onSearch, query, requestedTargetKeys, selectedTargetKeys]);
 
   return { matches, isLoading };
 }
