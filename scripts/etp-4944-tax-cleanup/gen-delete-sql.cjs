@@ -8,6 +8,19 @@
 // "tax" and "zone"), NOT `c_taxzone` as originally guessed in the plan. All
 // other table/column names (`c_tax`, `c_tax_trl`, `obtl_tax_parameter`,
 // `c_tax_id`, `parent_tax_id`, `ad_client_id`) were confirmed correct as-is.
+//
+// NOTE (real gap found empirically 2026-09-03, dry-run against local dev DB):
+// `c_tax_acct` (per-client, per-account-schema tax accounting setup) is a
+// 4th FK-dependent table the plan never accounted for — it isn't part of
+// the reference-data XML at all (0 hits, confirmed by grep), so Task 3's
+// transform doesn't need it, but it DOES hold a live FK to c_tax and is
+// populated per client as a byproduct of account-schema setup (not "real
+// document usage" the way c_invoiceline/c_orderline etc. are — see
+// 00-assess-usage.sql candidates). The first real dry-run against the local
+// dev DB failed with `c_tax_acct_c_tax` FK violation before this was added.
+// Every client that has ever set up an accounting schema accumulates one
+// c_tax_acct row per system tax rate, so this delete is expected to hit
+// every client, not just client '0'.
 const fs = require('fs');
 const path = require('path');
 const scope = JSON.parse(fs.readFileSync(path.join(__dirname, 'resolved-scope.json'), 'utf8'));
@@ -36,6 +49,10 @@ lines.push(`-- Dependents first (FK order), then the tax rate rows themselves`);
 lines.push(`DELETE FROM obtl_tax_parameter WHERE c_tax_id IN (${inList});`);
 lines.push(`DELETE FROM c_tax_zone WHERE c_tax_id IN (${inList});`);
 lines.push(`DELETE FROM c_tax_trl WHERE c_tax_id IN (${inList});`);
+lines.push(`-- c_tax_acct: per-client tax accounting setup, not reference data (not in`);
+lines.push(`-- the XML) — but still FK's to c_tax across every client that has ever`);
+lines.push(`-- initialized an account schema, so it must be cleared before c_tax itself.`);
+lines.push(`DELETE FROM c_tax_acct WHERE c_tax_id IN (${inList});`);
 lines.push(`DELETE FROM c_tax WHERE c_tax_id IN (${inList}) AND ad_client_id = '0';`);
 lines.push('');
 lines.push(`-- MODIFY: rename ${modId}`);
