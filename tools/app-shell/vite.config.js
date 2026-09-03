@@ -204,7 +204,24 @@ export default defineConfig(({ mode }) => {
   // dev-server proxy (relative API calls, no `VITE_API_BASE` at all) never hit it —
   // which is why a developer's own `make dev`-backed manual E2E run works fine while
   // the pre-push hook's dedicated E2E build did not.
-  ...(E2E_BUILD ? { define: { 'import.meta.env.VITE_API_BASE': JSON.stringify('') } } : {}),
+  define: {
+    // ETP-5125 — this bundle's build instant, read by `lib/attachmentFreshness.js` as
+    // `RENDERER_BUILD_EPOCH_MS` to discard a cached printable PDF that an OLDER bundle
+    // rendered. A PDF depends on the template, the labels and the helpers as much as on
+    // the record, and changing those moves no timestamp — so before this, a completed
+    // document cached under the previous design served it forever (the ETP-5125 bug:
+    // the printable still read "IVA%" after the labels were fixed).
+    //
+    // Evaluated once per Vite process, so under `make dev` it is the dev-server BOOT
+    // time: editing a template while the server runs does NOT invalidate anything —
+    // restart `make dev` (or unmark the attachment) when iterating locally.
+    //
+    // Deliberately absent outside a Vite build: plain `node --test`, and Vitest, whose
+    // `vitest.config.js` is a separate config with no `define`. The check reads `0`
+    // there and goes inert, so no existing test changes behaviour.
+    __RENDERER_BUILD_EPOCH_MS__: JSON.stringify(Date.now()),
+    ...(E2E_BUILD ? { 'import.meta.env.VITE_API_BASE': JSON.stringify('') } : {}),
+  },
   plugins: [
     react(),
     sliceLabelsPlugin(),

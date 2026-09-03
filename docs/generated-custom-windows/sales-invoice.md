@@ -1046,8 +1046,17 @@ five entry points (preview, download, both email paths, print). Mechanism and de
   `buildInvoiceData`. It is read from the header, **not** from the `currencyData` argument, which is
   `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
   When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
 
 Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
 `windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
 `documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
-`documentPdf.template.vitest.jsx`.
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.

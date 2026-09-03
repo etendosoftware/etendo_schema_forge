@@ -11,7 +11,7 @@ import {
   notifyAttachmentsChanged,
   useAttachmentsChanged,
 } from '@/components/attachments/attachmentsBus';
-import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
+import { isCachedRenderingStale } from '@/lib/attachmentFreshness.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
@@ -90,7 +90,7 @@ export function useMainAttachment({
         setStoredFileIsStale(false);
         return;
       }
-      setStoredFileIsStale(isAttachmentStale(main, recordUpdated));
+      setStoredFileIsStale(isCachedRenderingStale(main, recordUpdated));
       objectUrl = await fetchAttachmentBlobUrl({ token, attachmentId: main.id, apiBaseUrl });
       if (objectUrl) applyAttachment(main.id, main.name, main.dataType, objectUrl);
     } catch {
