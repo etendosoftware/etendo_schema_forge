@@ -9,21 +9,30 @@ const XML_PATH = path.join(__dirname, '../../../modules/com.etendoerp.go.localiz
 const IN_DIR = path.join(__dirname, 'input');
 const DELIM = ','; // confirmed comma-delimited against the real attachments (2026-09-02)
 
-// Explicit overrides, NOT CSV edits — the reporter's CSVs stay the unmodified
-// source of truth. FinancialMgmtTaxRate id="867FFFAC82CC44069FE6497E4C5C6348"
-// (name="IVA Normal") is an already-inactive placeholder (active=false,
-// validFromDate=9999-01-01) that the spreadsheet review never saw. Per the
-// user's explicit 2026-09-02 decision, it was first added to DELETE and
-// empirically tested via the Task 4 dry-run against the local dev DB.
+// --- Reporter's final scope decision (2026-09-03): a per-id fallback policy
+// instead of a blanket delete of the 246. Every CSV DELETE id is attempted as
+// a real DELETE UNLESS it hits one of two fallback conditions, in which case
+// it is DEACTIVATED instead (active=false + description="Discarded Tax for
+// EtendoGO", record otherwise untouched — its Trl/Zone/OBTL_Tax_Parameter
+// rows are left alone since the parent row still exists, nothing to orphan):
+//   (a) it has a live-usage FK reference anywhere in the system, or
+//   (b) it's one of the ids referenced in the 303/347apr/390 sibling AEAT
+//       modules' OWN reference data (those 3 files are explicitly NOT being
+//       patched by this ticket — see sibling-overlap.json / find-sibling-
+//       overlap.cjs, the committed, reproducible form of the Task 2 check).
 //
-// RESULT (2026-09-03): the dry-run FAILED with a `c_invoiceline_c_tax` FK
-// violation naming this exact id — it IS referenced by a real invoice line,
-// despite being inactive/placeholder-looking. Per the decision rule ("if
-// something breaks, we keep it"), this settles KEEP, not DELETE. Moved from
-// EXTRA_DELETE_IDS to EXTRA_KEEP_IDS below so it's still accounted for (not
-// re-flagged as unaccountedXmlRecords) but excluded from deleteIds.
-const EXTRA_DELETE_IDS = [];
-const EXTRA_KEEP_IDS = ['867FFFAC82CC44069FE6497E4C5C6348']; // IVA Normal — kept: live c_invoiceline reference found empirically 2026-09-03
+// FinancialMgmtTaxRate id="867FFFAC82CC44069FE6497E4C5C6348" (name="IVA
+// Normal") is case (a): an already-inactive placeholder (active=false,
+// validFromDate=9999-01-01) that the spreadsheet review never saw, not in
+// either CSV. First empirically tested as a real DELETE via the Task 4
+// dry-run against the local dev DB — it FAILED with a `c_invoiceline_c_tax`
+// FK violation naming this exact id, i.e. it IS referenced by a real invoice
+// line. Deactivate path applies here too (idempotent on the `active` flip,
+// since it's already false — but it still needs the description set).
+const IVA_NORMAL_ID = '867FFFAC82CC44069FE6497E4C5C6348'; // not in any CSV — manual deactivate addition, live c_invoiceline reference found empirically 2026-09-03
+
+const siblingOverlap = JSON.parse(fs.readFileSync(path.join(__dirname, 'sibling-overlap.json'), 'utf8'));
+const siblingOverlapSet = new Set(siblingOverlap.overlapIds);
 
 function decodeXml(s) {
   return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
@@ -96,15 +105,6 @@ function resolveBucket(rows, bucket) {
 const D = resolveBucket(del, 'delete');
 const K = resolveBucket(keep, 'keep');
 
-// Merge the explicit overrides into the resolved buckets (post-CSV-resolution,
-// per the documented decisions above — the CSV itself stays untouched).
-for (const id of EXTRA_DELETE_IDS) {
-  if (!D.ids.includes(id)) D.ids.push(id);
-}
-for (const id of EXTRA_KEEP_IDS) {
-  if (!K.ids.includes(id)) K.ids.push(id);
-}
-
 // MODIFY comes from its own csv (different header shape — a before/after
 // name pair, not a single Nombre column), not a hardcoded literal.
 if (modifyRows.length !== 1) throw new Error(`Expected exactly 1 MODIFY row, got ${modifyRows.length}`);
@@ -118,39 +118,90 @@ const MODIFY = {
   newName: (modRow['nombre corregido'] || '').trim(),
 };
 
-// --- Unaccounted records: in the XML but in neither CSV bucket nor MODIFY ---
-const accountedIds = new Set([...D.ids, ...K.ids, MODIFY.id]);
+// --- Split the CSV DELETE bucket into a real-delete set and a deactivate
+// set, per the reporter's final scope decision (see IVA_NORMAL_ID comment
+// above). `deactivateIds` = (sibling-overlap ∩ CSV deleteIds) ∪ {IVA Normal}.
+// `deleteIds` is reduced to exclude everything in `deactivateIds` — those
+// ids still get a real cascade delete, deactivated ones get an in-place
+// active/description flip only (Task 3/4 branch on this split).
+const deactivateIds = [...new Set([
+  ...D.ids.filter(id => siblingOverlapSet.has(id)),
+  IVA_NORMAL_ID,
+])];
+const deactivateSet = new Set(deactivateIds);
+const finalDeleteIds = D.ids.filter(id => !deactivateSet.has(id));
+
+// --- Unaccounted records: in the XML but in neither CSV bucket, MODIFY, nor
+// the manual deactivate addition (IVA Normal). Note this uses D.ids (the
+// full CSV delete bucket, pre-split) union deactivateIds — deactivateIds
+// already includes everything reachable from D.ids plus the one manual
+// addition, so this is equivalent to finalDeleteIds ∪ deactivateIds ∪ K.ids
+// ∪ {MODIFY.id} but written the clearer way.
+const accountedIds = new Set([...D.ids, ...K.ids, MODIFY.id, ...deactivateIds]);
 const unaccountedXmlRecords = rates.filter(r => !accountedIds.has(r.id)).map(r => ({ id: r.id, name: r.name }));
 
 // --- Cross-bucket conflicts: same id resolved into >1 bucket (e.g. its name
 // was accidentally listed in BOTH the DELETE and KEEP csv, or collides with
 // the MODIFY id), or the same name appears twice within one bucket's csv.
 // Silently letting this through would delete a rate the reporter meant to
-// keep (or vice versa) — must be a hard gate, not a warning.
+// keep (or vice versa) — must be a hard gate, not a warning. Computed against
+// the CSV-derived buckets (D/K/MODIFY) BEFORE the delete/deactivate split —
+// that split only re-partitions the 'delete' bucket internally, it isn't a
+// new source-of-truth bucket, so it can't itself create a cross-bucket
+// conflict. IVA_NORMAL_ID is included here too as a defensive check: if it
+// ever turned up inside D.ids/K.ids/MODIFY.id as well, that's a genuine
+// inconsistency worth failing loudly on rather than silently double-counting.
 const bucketOf = new Map();
 for (const id of D.ids) bucketOf.set(id, [...(bucketOf.get(id) || []), 'delete']);
 for (const id of K.ids) bucketOf.set(id, [...(bucketOf.get(id) || []), 'keep']);
 bucketOf.set(MODIFY.id, [...(bucketOf.get(MODIFY.id) || []), 'modify']);
+bucketOf.set(IVA_NORMAL_ID, [...(bucketOf.get(IVA_NORMAL_ID) || []), 'deactivate-manual']);
 const conflictingBucket = [...bucketOf.entries()]
   .filter(([, buckets]) => new Set(buckets).size > 1 || buckets.length > 1)
   .map(([id, buckets]) => ({ id, name: (rates.find(r => r.id === id) || {}).name, buckets }));
 
-// --- parentTaxRate blockers: a non-deleted rate whose parent IS a delete id ---
-const deleteSet = new Set(D.ids);
-const parentTaxRateBlockers = rates
-  .filter(r => !deleteSet.has(r.id) && r.parentTaxRate && deleteSet.has(r.parentTaxRate))
+// --- parentTaxRate blockers: a non-deleted rate whose parent IS a real
+// delete id. Uses finalDeleteIds (the 144), NOT the full CSV delete bucket —
+// a deactivated parent row still physically exists (just active=false), so
+// it can't orphan a child's parentTaxRate FK the way an actual delete would.
+//
+// The delete/deactivate split (new in this revision) reintroduces a class of
+// blocker that didn't exist under a blanket "delete all 246 together" policy:
+// a child that's being DEACTIVATED (survives, active=false) whose own parent
+// IS being really deleted (removed entirely) — that child's parentTaxRate FK
+// would dangle. Auto-resolved below via `parentRepoints` (nulling), NOT
+// silently — this is a deliberate, narrow, documented default, not the
+// "get a human decision" escape hatch Task 1 Step 3 otherwise requires: it
+// only ever fires when the child is ALREADY being marked
+// inactive+"Discarded Tax for EtendoGO", so nulling a metadata link on an
+// already-retired record changes no live/active behavior — it purely
+// prevents an FK violation. A blocker whose child is a pure KEEP (still
+// active, still user-facing) is deliberately NOT auto-resolved this way —
+// that would be a real business-meaning change and must still gate & escalate.
+const finalDeleteSet = new Set(finalDeleteIds);
+const rawParentTaxRateBlockers = rates
+  .filter(r => !finalDeleteSet.has(r.id) && r.parentTaxRate && finalDeleteSet.has(r.parentTaxRate))
   .map(r => ({ childId: r.id, childName: r.name, parentId: r.parentTaxRate }));
 
-// --- Informational dependent counts (for the DELETE ids) ---
+const parentRepoints = {};
+for (const b of rawParentTaxRateBlockers) {
+  if (deactivateSet.has(b.childId)) parentRepoints[b.childId] = null; // safe: child is already being deactivated
+}
+const parentTaxRateBlockers = rawParentTaxRateBlockers.filter(b => !(b.childId in parentRepoints));
+
+// --- Informational dependent counts (for the real DELETE ids only —
+// deactivated ids leave their Trl/Zone/OBTL_Tax_Parameter rows untouched by
+// design, so they must NOT be counted here; Task 3's cascade-strip only
+// operates on finalDeleteIds and this cross-check must match it exactly).
 function countRefsFor(tag, ids) {
   const re = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'g');
   const blocks = xml.match(re) || [];
   return blocks.filter(b => ids.has(fk(b, 'tax'))).length;
 }
 const dependentCounts = {
-  trl: countRefsFor('FinancialMgmtTaxTrl', deleteSet),
-  obtl: countRefsFor('OBTL_Tax_Parameter', deleteSet),
-  zone: countRefsFor('FinancialMgmtTaxZone', deleteSet),
+  trl: countRefsFor('FinancialMgmtTaxTrl', finalDeleteSet),
+  obtl: countRefsFor('OBTL_Tax_Parameter', finalDeleteSet),
+  zone: countRefsFor('FinancialMgmtTaxZone', finalDeleteSet),
 };
 
 const result = {
@@ -162,7 +213,9 @@ const result = {
   unaccountedXmlRecords,
   parentTaxRateBlockers,
   conflictingBucket,
-  deleteIds: D.ids,
+  deleteIds: finalDeleteIds,
+  deactivateIds,
+  parentRepoints,
   modify: MODIFY,
   dependentCounts,
 };
@@ -175,7 +228,8 @@ if (result.csvCounts.delete !== 246) console.warn(`WARNING: ticket says 246 DELE
 if (result.csvCounts.keep !== 405) console.warn(`WARNING: ticket says 405 KEEP rows, CSV parsed ${result.csvCounts.keep} — re-check DELIM/NAME_COL.`);
 
 const blockers = result.unmatched.length + result.ambiguous.length + result.unaccountedXmlRecords.length + result.parentTaxRateBlockers.length + result.conflictingBucket.length;
-console.log(JSON.stringify({ ...result, deleteIds: `[${result.deleteIds.length} ids]` }, null, 2));
+console.log(JSON.stringify({ ...result, deleteIds: `[${result.deleteIds.length} ids]`, deactivateIds: `[${result.deactivateIds.length} ids]` }, null, 2));
+console.log(`\n>>> Split: ${result.deleteIds.length} real deletes, ${result.deactivateIds.length} deactivations, 1 rename.`);
 if (blockers > 0) {
   console.error(`\n>>> ${blockers} unresolved item(s) — see resolved-scope.json. DO NOT proceed to Task 3/4 until this is 0.`);
   process.exit(1);
