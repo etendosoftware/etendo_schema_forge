@@ -954,7 +954,7 @@ export default function LocationEditorModal({
 
                             {/* Línea 1 */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark /></div>
+                                <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark data-testid="RequiredMark__927831" /></div>
                                 <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} style={INPUT} />
                             </div>
 
@@ -978,7 +978,7 @@ export default function LocationEditorModal({
 
                             {/* País */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark /></div>
+                                <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
                                 <button
                                     type="button"
                                     onClick={() => setCountryPickerOpen(true)}
