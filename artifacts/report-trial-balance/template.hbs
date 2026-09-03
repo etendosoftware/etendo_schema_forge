@@ -89,7 +89,7 @@
       {{#each this.dimensionRows}}
       <tr>
         <td></td>
-        <td>{{this.dimensionValue}}</td>
+        <td>{{#if this.dimensionId}}<span class="account-link" onclick="window.parent.postMessage({type:'trial-balance-drilldown',accountId:'{{../account_id}}',accountValue:'{{../account_no}}',accountName:'{{../account_name}}',dimensionGroupBy:'{{@root.meta.params.groupBy}}',dimensionId:'{{this.dimensionId}}',dimensionValue:'{{this.dimensionValue}}'},'*')">{{this.dimensionValue}}</span>{{else}}{{this.dimensionValue}}{{/if}}</td>
         <td class="cell-amount">{{formatCurrency this.opening_balance}}</td>
         <td class="cell-amount">{{formatCurrency this.activity_debit}}</td>
         <td class="cell-amount">{{formatCurrency this.activity_credit}}</td>

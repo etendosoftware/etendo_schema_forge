@@ -254,15 +254,24 @@ async function saveContactData({
   }
   setSaving(true);
   try {
+    // Thunks, not promises, and awaited one at a time (ETP-5112). Both are PUTs carrying their
+    // record's `updated` token, and core parses that token through a non-thread-safe static
+    // `SimpleDateFormat` (`JsonToDataConverter` line 129) — two writes arriving together corrupt
+    // each other's parse and one is refused as a conflict against a record nobody touched. This is
+    // the same two-write shape that reproduced it on the Organization screen.
+    //
+    // The request must NOT be started while building this list: calling `apiFetch` here would put
+    // both in flight immediately and awaiting them in order afterwards would serialise only the
+    // reading of the results, not the requests themselves — leaving the race exactly as it was.
     const saves = [
-      apiFetch(`/businessPartner/${bpId}`, {
+      () => apiFetch(`/businessPartner/${bpId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name || null, taxID: taxID || null, oBTIKTaxIDKey: taxIDKey || null }),
       }),
     ];
     if (hasInvoice) {
-      saves.push(invoiceApiFetch(`/${invoiceSpec}/header/${invoiceId}`, {
+      saves.push(() => invoiceApiFetch(`/${invoiceSpec}/header/${invoiceId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,7 +280,10 @@ async function saveContactData({
         }),
       }));
     }
-    const results = await Promise.all(saves);
+    const results = [];
+    for (const save of saves) {
+      results.push(await save());
+    }
     if (results.every(r => r.ok)) {
       toast.success(ui('contactDetail.saved'));
       onClose();

@@ -35,7 +35,13 @@ async function resolveClientRoute({ client, token, apiBaseUrl, apiFetch }) {
   }
 }
 
-export function TopClientsList({ clients = [], currencyLabel = '', token = '', apiBaseUrl = '' }) {
+/**
+ * ETP-5088 — `canCreateContact` gate the empty state's creation CTAs (including "create with Copilot", whose
+ * only purpose here is to create that same record). Creation actions need the WRITE tier on the
+ * target window, not mere visibility. Default `true` so existing callers and tests keep their
+ * behaviour; `DashboardPage` passes the resolved values.
+ */
+export function TopClientsList({ clients = [], currencyLabel = '', token = '', apiBaseUrl = '', canCreateContact = true }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -77,6 +83,8 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
               </p>
             </div>
             <div className="flex flex-row items-center" style={{ gap: '12px' }}>
+              {canCreateContact && (
+              <>
               <button
                 type="button"
                 onClick={openCopilot}
@@ -103,6 +111,8 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                   {ui('newClient')}
                 </span>
               </button>
+              </>
+              )}
             </div>
           </div>
         </div>
