@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTag } from '@/components/ui/status-tag';
 import { cn } from '@/lib/utils';
@@ -184,15 +185,23 @@ function TxnChip({ line, ui, onOpen }) {
   );
 }
 
+/**
+ * Formats a business date for display, via the canonical `formatCalendarDate`.
+ *
+ * It reads the leading `yyyy-MM-dd` and builds the Date with the LOCAL-time
+ * constructor, so the calendar day survives regardless of the host's offset —
+ * and regardless of whether the payload carries a zone suffix.
+ *
+ * This used to be `new Date(iso)` + `Intl.DateTimeFormat(..., timeZone: 'UTC')`,
+ * on the premise that the backend always sent UTC midnight. ETP-5100 removed
+ * that premise (NEO now emits the civil `yyyy-MM-dd'T'HH:mm:ss` in the server's
+ * own zone), and the two UTC assumptions then stacked instead of cancelling:
+ * `new Date("2026-09-01T22:59:10")` parses as LOCAL, and rendering that instant
+ * back in UTC pushed it to 02/09. Going through the shared helper removes the
+ * assumption entirely rather than swapping it for the opposite one.
+ */
 function formatDate(iso, bcpLocale) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  // Date-only value sent as UTC midnight — format in UTC so a negative-offset
-  // timezone doesn't shift it to the previous day.
-  return new Intl.DateTimeFormat(bcpLocale, {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-  }).format(d);
+  return formatCalendarDate(iso, bcpLocale);
 }
 
 function formatMoney(amount, currency) {

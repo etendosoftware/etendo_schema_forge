@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -52,10 +52,27 @@ const ROW_DOC_TYPE_LABEL_KEYS = {
   'Matched Invoice': 'docTypeMatchedInvoices',
 };
 
-/** Backend row label unless we deliberately renamed that document type's window. */
-function rowDocTypeLabel(row, ui) {
+/**
+ * Resolves the grid badge label, in precedence order:
+ *
+ * 1. **Our deliberate rename** (`ROW_DOC_TYPE_LABEL_KEYS`) — a product decision that the
+ *    Etendo Go window's own name wins over core's AD translation, so it must outrank the
+ *    backend-provided label rather than be a fallback to it.
+ * 2. **`documentTypeLabels`** (ETP-4945, from develop) — the already-translated
+ *    `{value,label}` pairs of the filter-options response, keyed by AD_Ref_List **code**.
+ *    Kept because it is the generic mechanism that covers every document type at once.
+ *    Note it resolves nothing with today's backend: `NotPostedDocumentsHandler#buildRow`
+ *    passes through `NoPostedDocumentDS`'s raw LABEL (`"Matched Invoice"`), not the code
+ *    ETP-4945's own comment assumes — verified against `origin/develop` of
+ *    `com.etendoerp.go`, which still reads `row.get("documentType")` as that raw label. So
+ *    this lookup is latent today and starts working for free if the backend ever switches
+ *    rows to codes; it is deliberately NOT deleted for that reason.
+ * 3. The raw value, unchanged — same final fallback both sides always had.
+ */
+function rowDocTypeLabel(row, ui, documentTypeLabels) {
   const key = ROW_DOC_TYPE_LABEL_KEYS[row.documentType];
-  return key ? ui(key) : row.documentType;
+  if (key) return ui(key);
+  return documentTypeLabels?.get(row.documentType) ?? row.documentType;
 }
 
 function MultiSelect({ options, selected, onToggle, 'data-testid': dataTestId }) {
@@ -104,6 +121,14 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   // ── Filter options (fetched once) ────────────────────────────────────────────
   const [filterOptions, setFilterOptions] = useState({ documentTypes: [], accountingStatuses: [] });
+
+  // row.documentType is the raw AD_Ref_List code (e.g. "GLJ", "PI") that backs
+  // filterOptions.documentTypes — reuse those already-translated {value,label}
+  // pairs to render the badge instead of the raw code (ETP-4945).
+  const documentTypeLabels = useMemo(
+    () => new Map(filterOptions.documentTypes.map(o => [o.value, o.label])),
+    [filterOptions.documentTypes]
+  );
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -270,7 +295,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
   }
 
-  useSetPageMeta({ title: ui('notPostedDocuments'), recordCount: rows.length });
+  useSetPageMeta({
+    title: ui('notPostedDocuments'),
+    breadcrumb: `${ui('finance')} / ${ui('notPostedDocuments')}`,
+    recordCount: rows.length,
+  });
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
@@ -325,7 +354,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
                     />
                   </td>
                   <td>
-                    <span className="npd-doc-type-badge">{rowDocTypeLabel(row, ui)}</span>
+                    <span className="npd-doc-type-badge">
+                      {rowDocTypeLabel(row, ui, documentTypeLabels)}
+                    </span>
                   </td>
                   <td>{row.description}</td>
                   <td className="npd-date">{formatDate(row.accountingDate)}</td>
@@ -373,12 +404,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         </div>
 
         <div className="npd-filter-field">
-          <label>From</label>
+          <label>{ui('filterFrom')}</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </div>
 
         <div className="npd-filter-field">
-          <label>To</label>
+          <label>{ui('filterTo')}</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
         </div>
 

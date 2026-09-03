@@ -48,3 +48,36 @@ export function useCapabilitiesSafe() {
     throw err;
   }
 }
+
+// ETP-5088 — the `windowAccess` counterpart of EMPTY_CAPABILITIES, for the same
+// stable-reference reason.
+const EMPTY_WINDOW_ACCESS = Object.freeze({});
+
+/**
+ * ETP-5088 — Reads the whole `windowAccess` map off `useAuth()` with the same
+ * no-AuthProvider tolerance as `useCapabilitiesSafe()` above (see that comment
+ * for why the exception is caught, and why only that one is).
+ *
+ * The core's `useWindowAccess(windowId)` resolves ONE window per call, so it
+ * cannot gate a variable number of windows in one render (rules of hooks) —
+ * which the dashboard needs, since `useDashboardWidgetAccess()` resolves every
+ * gated widget's windows at once. This hook hands over the raw map instead and
+ * lets the plain functions in `lib/dashboardWidgetAccess.js` do the resolving,
+ * mirroring the `useCapabilitiesSafe()` + `isCapabilityVisible()` split.
+ *
+ * Falls back to `{}`, which every consumer treats as "nothing loaded" and
+ * therefore fails closed.
+ *
+ * @returns {Record<string, string>}
+ */
+export function useWindowAccessSafe() {
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- see comment above
+    return useAuth().windowAccess || EMPTY_WINDOW_ACCESS;
+  } catch (err) {
+    if (err instanceof Error && err.message === NO_AUTH_PROVIDER_MESSAGE) {
+      return EMPTY_WINDOW_ACCESS;
+    }
+    throw err;
+  }
+}

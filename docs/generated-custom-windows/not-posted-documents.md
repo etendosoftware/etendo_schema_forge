@@ -12,11 +12,13 @@ The window has no backing AD window — it is 100% custom. Data is served by `No
 
 Not every document type in `ETBLKP_Documents` (`AD_Reference_ID = DE94535164E741AB9B1A560EF3F72854`) can actually be posted in a standard Etendo + APRM installation, and 5 more are excluded globally by product decision. The table below is the authoritative reference.
 
-The **enabled** column reflects two mechanisms combined, both live in `NotPostedDocumentsHandler.java` — there is no static "enabled list" to edit:
-1. A **dynamic** check: the code's `AD_Table_ID` (from `DOCUMENT_TYPE_CODE_TO_TABLE_ID`) must appear in `SELECT DISTINCT ad_table_id FROM c_acctschema_table WHERE isactive = 'Y'`, evaluated at request time.
-2. A **static** exclusion: the code must NOT be in `APRM_DISABLED_TYPES` — a hardcoded set of codes that are always hidden regardless of the dynamic check.
+The **enabled** column reflects two mechanisms combined:
+1. A **dynamic** check: the code's `AD_Table_ID` (from `DOCUMENT_TYPE_CODE_TO_TABLE_ID` in `NotPostedDocumentsHandler.java`) must appear in `SELECT DISTINCT ad_table_id FROM c_acctschema_table WHERE isactive = 'Y'`, evaluated at request time.
+2. A **static** exclusion: the code's `AD_Table_ID` must NOT be in `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS` — a hardcoded set of table ids that are always hidden regardless of the dynamic check.
 
 (A legacy `ENABLED_DOCUMENT_TYPE_CODES` set existed in earlier revisions and has been fully replaced by this dynamic-check + static-exclusion combination — see commits `27caeaf1`, `44b5e179`, `ad210c51`, `4bf31a1e` in `com.etendoerp.go`.)
+
+**ETP-4948:** the predicate itself (the dynamic check + the static exclusion set) was extracted out of `NotPostedDocumentsHandler` into a shared static utility, `com.etendoerp.go.schemaforge.util.AccountingDocumentTypeSupport` (`isTableAccountingRelevant`/`isAprmDisabledTable`/`loadTablesWithActiveAccounting`), so the Calendar window's `documents` entity (`PeriodControlDocOpenCloseHandler`) can reuse the exact same rule — see [`calendar.md`](calendar.md#documents-entity-open-close-period-control-spec--c_periodcontrol-per-document-type-rows) for that side. `NotPostedDocumentsHandler` keeps its own `DOCUMENT_TYPE_CODE_TO_TABLE_ID` / `DOCUMENT_TYPE_TO_TABLE_ID` maps (its own "ETBLKP_Documents" code vocabulary) and now calls the shared utility instead of maintaining its own copy of the exclusion set — the two windows can no longer silently drift apart on what counts as accounting-relevant, even though they key the same underlying tables by two different document-type code vocabularies.
 
 | Code | Name | AD_Table | AD_Table_ID | In c_acctschema_table? | Posting status | **Enabled** | Reason |
 |------|------|----------|-------------|------------------------|----------------|:-----------:|--------|
@@ -52,9 +54,11 @@ Etendo's Advanced Payables & Receivables Management (APRM) module routes all fin
 
 Unlike the APRM codes above, `BMP` (Bill of Materials Production), `DD` (Doubtful Debt), `LC` (Landed Cost), `LCC` (Landed Cost Cost) and `CA` (Cost Adjustment) are **not** APRM-managed — their backing tables have active `c_acctschema_table` entries and some tenants genuinely post documents against them. They are excluded by an explicit **product decision** (ETP-4452), applied globally for ALL tenants.
 
-**Accepted tradeoff:** this hides legitimate not-posted documents for tenants that have these types actively configured for posting — confirmed cases include QA Testing and F&B International Group. The product owner accepted this tradeoff; it is not a bug and must not be "fixed" by removing the codes from `APRM_DISABLED_TYPES` without a new product decision.
+**Accepted tradeoff:** this hides legitimate not-posted documents for tenants that have these types actively configured for posting — confirmed cases include QA Testing and F&B International Group. The product owner accepted this tradeoff; it is not a bug and must not be "fixed" by removing the corresponding table id from `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS` without a new product decision.
 
-To re-enable any of the 5 (e.g. a future decision to scope the exclusion per-tenant instead of globally), remove its code from `APRM_DISABLED_TYPES` in `NotPostedDocumentsHandler.java`.
+**ETP-4948:** the product owner confirmed the same 5 exclusions also apply to Calendar's `documents` entity, in that window's own DocBaseType code space (`MMP`, `DDB`, `LDC`, `LCC`, `CAD` — same underlying tables, different codes) — see `calendar.md`. No divergence between the two windows' document-type universes is intended.
+
+To re-enable any of the 5 (e.g. a future decision to scope the exclusion per-tenant instead of globally), remove its table id from `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS` in `com.etendoerp.go.schemaforge.util` — this affects BOTH windows at once, by design.
 
 ### Two SEPARATE table-id maps — "Enabled" above does not guarantee posting works (ETP-5075)
 
@@ -93,10 +97,10 @@ ORDER BY 1, 2;
 SELECT DISTINCT ad_table_id FROM c_acctschema_table WHERE isactive = 'Y'
 ```
 
-A document type is shown if and only if:
+A document type is shown if and only if (`AccountingDocumentTypeSupport.isTableAccountingRelevant`):
 1. Its code is in `DOCUMENT_TYPE_CODE_TO_TABLE_ID` (the static code → `AD_Table_ID` map in the handler)
 2. That `AD_Table_ID` is returned by the query above
-3. Its code is NOT in `APRM_DISABLED_TYPES`
+3. That `AD_Table_ID` is NOT in `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS`
 
 **Consequence:** any new Etendo module that registers its document table in `c_acctschema_table` with `isactive = 'Y'` will automatically appear in the dropdown — no code change needed.
 
@@ -108,14 +112,14 @@ A document type is shown if and only if:
 3. If the code is also new in `AD_Ref_List` (reference `DE94535164E741AB9B1A560EF3F72854`), `NoPostedDocumentDS` must handle that document type in its `searchStrategies` too — that's inside the `bulk.posting` JAR and out of scope here.
 
 **Case B — existing code has its module activated (no `c_acctschema_table` entry yet):**
-Once the module inserts an `isactive = 'Y'` row into `c_acctschema_table` for that table, the code appears automatically (dynamic check) — no code change needed, unless it's also in `APRM_DISABLED_TYPES` (see Case C).
+Once the module inserts an `isactive = 'Y'` row into `c_acctschema_table` for that table, the code appears automatically (dynamic check) — no code change needed, unless its table is also in `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS` (see Case C).
 
 **Case C — statically excluded type (BS/PIN/POT/R APRM types, or BMP/DD/LC/LCC/CA global exclusion, ETP-4452) is re-enabled:**
-Remove its code from `APRM_DISABLED_TYPES`. For the APRM codes, also verify that new documents of that type are no longer initialized with `posted = 'D'`. For the ETP-4452 global-exclusion codes, this requires a new product decision overriding the accepted tradeoff — do not remove them unilaterally.
+Remove its table id from `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS`. For the APRM codes, also verify that new documents of that type are no longer initialized with `posted = 'D'`. For the ETP-4452 global-exclusion codes, this requires a new product decision overriding the accepted tradeoff — do not remove them unilaterally. Removing a table id here affects Calendar's `documents` entity identically (ETP-4948), by design.
 
 ### How to disable a document type
 
-Remove its code from `DOCUMENT_TYPE_CODE_TO_TABLE_ID`, or add it to `APRM_DISABLED_TYPES` (if it should be permanently suppressed regardless of accounting schema state).
+Remove its code from `DOCUMENT_TYPE_CODE_TO_TABLE_ID`, or add its table id to `AccountingDocumentTypeSupport.APRM_DISABLED_TABLE_IDS` (if it should be permanently suppressed regardless of accounting schema state, in BOTH this window and Calendar's `documents` entity).
 
 To verify accounting schema state at any time:
 ```sql
@@ -222,6 +226,15 @@ WHERE tablename IN ('C_Invoice','M_InOut','M_Movement','A_Amortization',
                     'M_Movement','M_LandedCost','M_LC_Cost','FIN_Finacc_Transaction');
 ```
 
+### Shared accounting-relevance predicate (ETP-4948)
+
+`buildRow()` and `refListDocumentTypes()` no longer carry their own APRM-exclusion logic — both
+call `com.etendoerp.go.schemaforge.util.AccountingDocumentTypeSupport`
+(`isAprmDisabledTable(tableId)` / `isTableAccountingRelevant(tableId, accountedTableIds)` /
+`loadTablesWithActiveAccounting()`), the same shared utility Calendar's `documents` entity
+(`PeriodControlDocOpenCloseHandler.afterHandle`) uses. See "Document type accounting support"
+above and `calendar.md` for the other side.
+
 ### AD_Ref_List constants
 
 | Constant | AD_Reference_ID | Purpose |
@@ -259,6 +272,12 @@ and [`../neo-headless-extensibility.md`](../neo-headless-extensibility.md) §2.7
 File: `tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx`
 
 Props: `{ token, apiBaseUrl }` — `apiBaseUrl` is already spec-scoped.
+
+### Menu entry, breadcrumb & i18n (ETP-4945)
+
+- Breadcrumb: `Finanzas / Documentos no contabilizados` (`` `${ui('finance')} / ${ui('notPostedDocuments')}` ``, passed to `useSetPageMeta`). Previously this window passed no `breadcrumb` key at all — `TopBar` renders nothing when `breadcrumb` is falsy, so the window had no breadcrumb whatsoever before this fix, even though its `title` (`ui('notPostedDocuments')`) was already correctly translated.
+- The date-range filter labels now read `ui('filterFrom')` / `ui('filterTo')` (`"Desde"`/`"Hasta"` in `es_ES.json`, `"From"`/`"To"` in `en_US.json`) instead of hardcoded English `<label>From</label>` / `<label>To</label>`.
+- The document-type badge (`.npd-doc-type-badge`) now shows the translated label instead of the raw `row.documentType` code, by mapping it through the already-translated `{value, label}` pairs `filterOptions.documentTypes` returns (`documentTypeLabels` map built with `useMemo`, keyed by `o.value`) — no new lookup table or backend change needed, since `NoPostedDocumentDS`'s `documentType` is already the same AD_Ref_List code (e.g. `"GLJ"`, `"PI"`) used as the filter dropdown's own option `value`, not a human-readable label.
 
 ### Accounting status multi-select
 

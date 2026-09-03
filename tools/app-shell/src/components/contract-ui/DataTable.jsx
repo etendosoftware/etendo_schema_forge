@@ -17,7 +17,8 @@ import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { resolveFkNavigation } from './fkNavigation.js';
-import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
+import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
@@ -64,8 +65,20 @@ function getByPath(obj, path) {
  * the row, optionally with a display label resolved from one of several keys.
  * Replaces window-specific branches like `if (entity === 'internalConsumptionLine')`
  * with metadata declared in the contract.
+ *
+ * ETP-5039: every mapped target is reported through the optional `markTouched`
+ * callback. A value the user selected in the lookup drawer is an explicit user
+ * choice, so a callout fired by the same selection (e.g. the product callout
+ * returning the default locator) must not overwrite it — see
+ * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
+ * companions.
+ *
+ * @param {object}   field        Field whose `onSelectMappings` are applied
+ * @param {object}   item         Item selected in the lookup
+ * @param {Function} handleChange (key, value) row-state setter
+ * @param {Function} [markTouched] (key) called for every mapped target field
  */
-export function applyOnSelectMappings(field, item, handleChange) {
+export function applyOnSelectMappings(field, item, handleChange, markTouched) {
   const mappings = field?.onSelectMappings;
   if (!Array.isArray(mappings) || mappings.length === 0) return;
   for (const m of mappings) {
@@ -80,6 +93,7 @@ export function applyOnSelectMappings(field, item, handleChange) {
     }
     handleChange(`${m.to}$_identifier`, label == null ? value : label);
     handleChange(m.to, value);
+    markTouched?.(m.to);
   }
 }
 
@@ -274,12 +288,23 @@ function isBelowMin(f, valuesRef) {
   return !isNaN(Number(v)) && Number(v) < f.min;
 }
 
-// Format guard for the inline add-row (email + phone). Empty is valid (these
-// fields are optional — never made required); only a non-empty malformed value is
-// flagged. Returns the i18n error KEY (or null) via the shared format helpers.
-function getFieldFormatError(f, valuesRef) {
+// Format guard for the inline add-row (email + phone + website, plus the
+// Contacts-only text-field checks). Empty is valid (these fields are optional —
+// never made required); only a non-empty malformed value is flagged. Returns
+// `{ key, params }` (never a bare string) so a parameterized message like
+// `fieldMaxLengthError` can interpolate correctly; the email/phone/website
+// helpers return a plain key string, wrapped here into the same shape for a
+// uniform call site. ETP-5031 added the website check (previously missing here
+// even though the form already validated it) and the Contacts text-field gate.
+function getFieldFormatError(f, valuesRef, specName) {
   const v = valuesRef.current[f.key];
-  return getEmailFieldError(f, v) ?? getPhoneFieldError(f, v);
+  const emailErr = getEmailFieldError(f, v);
+  if (emailErr) return { key: emailErr, params: {} };
+  const phoneErr = getPhoneFieldError(f, v);
+  if (phoneErr) return { key: phoneErr, params: {} };
+  const websiteErr = getWebsiteFieldError(f, v);
+  if (websiteErr) return { key: websiteErr, params: {} };
+  return getContactsTextFieldError(specName, f, v);
 }
 
 function buildSelectorUrl(apiBaseUrl, entity, field) {
@@ -392,7 +417,7 @@ function formatTwoDecimals(raw) {
 
 function renderInputCell({
   field, col, values, invalidFields, isFirst, firstInputRef,
-  handleFieldChange, handleKeyDown, fieldLabel,
+  handleFieldChange, handleKeyDown, fieldLabel, specName,
 }) {
   const isNumeric = NUMERIC_FIELD_TYPES.has(field.type);
   const isTwoDecimal = field.type === 'amount' || field.type === 'price';
@@ -406,7 +431,11 @@ function renderInputCell({
   // in-progress decimals ("1.") survive; numeric coercion happens at commit.
   const partialPattern = field.type === 'integer' ? /^-?\d*$/ : /^-?\d*(?:\.\d*)?$/;
   const onChange = (e) => {
-    const raw = e.target.value;
+    // ETP-5031 — Contacts phone-like fields never even display a disallowed
+    // character (filtered at keystroke time), so this happens before the
+    // partial-number-pattern gate below. No-op for every window/field this
+    // doesn't apply to — filterContactsInputValue returns the raw value unchanged.
+    const raw = filterContactsInputValue(specName, field, e.target.value);
     if (!isNumeric || raw === '' || partialPattern.test(raw)) {
       handleFieldChange(field.key, raw);
     }
@@ -467,7 +496,7 @@ function renderDerivedAddCell(col, values) {
 // on its type (lookup, search, static select, selector, boolean, or plain input).
 function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
   values, firstInputRef, selectorContext, token, apiBaseUrl, entity, catalogs,
-  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields, locale,
+  handleChange, handleFieldChange, handleKeyDown, touchedFieldsRef, invalidFields, locale, specName,
 }) {
   if (isLookupSearchField(field)) {
     const selectorUrl = buildSelectorUrl(apiBaseUrl, entity, field);
@@ -489,7 +518,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
             touchedFieldsRef.current.add(field.key);
             handleChange(field.key + '$_identifier', resolveLookupItemLabel(item));
             handleFieldChange(field.key, item.id, item);
-            applyOnSelectMappings(field, item, handleChange);
+            applyOnSelectMappings(field, item, handleChange, (key) => touchedFieldsRef.current.add(key));
           }}
           onKeyDown={handleKeyDown}
           title={lookupTitle}
@@ -577,7 +606,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
   }
   return renderInputCell({
     field, col, values, invalidFields, isFirst, firstInputRef,
-    handleFieldChange, handleKeyDown, fieldLabel,
+    handleFieldChange, handleKeyDown, fieldLabel, specName,
   });
 }
 
@@ -669,7 +698,7 @@ function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
   return empty;
 }
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -770,11 +799,11 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // cell (red border via invalidFields), toast the specific error, focus, and block
     // the commit. Empty stays valid, so an untouched optional field never blocks the row.
     const formatInvalid = fields
-      .map(f => ({ f, err: getFieldFormatError(f, valuesRef) }))
+      .map(f => ({ f, err: getFieldFormatError(f, valuesRef, specName) }))
       .filter(({ err }) => err !== null);
     if (formatInvalid.length > 0) {
       setInvalidFields(new Set(formatInvalid.map(({ f }) => f.key)));
-      toast.error(ui(formatInvalid[0].err));
+      toast.error(ui(formatInvalid[0].err.key, formatInvalid[0].err.params));
       const firstInvalid = formatInvalid[0].f;
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
@@ -977,7 +1006,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         fieldMap, values, t, locale, firstInputCtx, firstInputRef,
         selectorContext, token, apiBaseUrl, entity, catalogs,
         handleChange, handleFieldChange, handleKeyDown,
-        touchedFieldsRef, invalidFields,
+        touchedFieldsRef, invalidFields, specName,
       }))}
       {/* Skip action cells in inlineEditable add-row mode — actions belong to
           InlineLinesPanel's 160px slot, not to separate columns here. */}
@@ -2261,6 +2290,7 @@ export function DataTable({
                 token={token}
                 apiBaseUrl={apiBaseUrl}
                 entity={entity}
+                specName={specName}
                 selectorContext={selectorContext}
                 ilpHasNoAmountCol={ilpHasNoAmountCol}
                 ilpTrailing={ilpTrailing}
