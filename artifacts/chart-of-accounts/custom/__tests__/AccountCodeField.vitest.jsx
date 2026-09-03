@@ -246,3 +246,43 @@ describe('AccountCodeField — blur validation', () => {
     );
   });
 });
+
+// ─── placeholder prop (ETP-5101 — last-used suffix hint) ─────────────────────
+
+describe('AccountCodeField — placeholder prop', () => {
+  it('uses the supplied placeholder on the suffix input when provided', () => {
+    render(
+      <AccountCodeField
+        value=""
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '2000' }}
+        placeholder="0004"
+      />
+    );
+    expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', '0004');
+  });
+
+  it('falls back to the codeSuffixPlaceholder i18n key when placeholder is omitted', () => {
+    render(
+      <AccountCodeField
+        value=""
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '2000' }}
+      />
+    );
+    // The mocked useUI echoes the key back for anything but codeExact8Digits.
+    expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', 'codeSuffixPlaceholder');
+  });
+
+  it('falls back to the codeSuffixPlaceholder i18n key when placeholder is explicitly undefined', () => {
+    render(
+      <AccountCodeField
+        value=""
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '2000' }}
+        placeholder={undefined}
+      />
+    );
+    expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', 'codeSuffixPlaceholder');
+  });
+});
