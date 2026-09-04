@@ -168,6 +168,155 @@ describe('BillingPreferencesForm', () => {
       expect(toastSuccess).not.toHaveBeenCalled();
     });
   });
+
+  // ETP-5026 Sonar refactor coverage: the update/create branches of handleDiscountChange
+  // (updateDiscount / createDiscount) had no test at all — a pre-existing gap the extraction
+  // did not introduce, closed here so new-code coverage does not regress the gate.
+  describe('discount update/create (Sonar refactor coverage)', () => {
+    const BP_ID = 'bp-1';
+    const DISCOUNT_ID = 'bd-1';
+    const CATALOG = [
+      { id: 'disc-a', label: 'Discount A' },
+      { id: 'disc-b', label: 'Discount B' },
+    ];
+
+    /** No existing discount record for this BP -> selecting one should CREATE it. */
+    function installCreateFetch({ result } = {}) {
+      globalThis.fetch = vi.fn((rawUrl, init = {}) => {
+        const url = String(rawUrl);
+        const method = String(init.method || 'GET').toUpperCase();
+        if (method === 'POST' && url.includes('/basicDiscount?parentId=')) {
+          if (result === 'fail') {
+            return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ response: { data: [{ id: 'new-disc-1', discount: 'disc-b' }] } }),
+          });
+        }
+        if (url.includes('/basicDiscount/selectors/')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: CATALOG }) });
+        }
+        if (url.includes('/basicDiscount?parentId=')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
+    }
+
+    /** Existing discount record set to disc-a -> selecting a different one should UPDATE it. */
+    function installUpdateFetch({ result } = {}) {
+      globalThis.fetch = vi.fn((rawUrl, init = {}) => {
+        const url = String(rawUrl);
+        const method = String(init.method || 'GET').toUpperCase();
+        if (method === 'PUT' && url.includes(`/basicDiscount/${DISCOUNT_ID}`)) {
+          if (result === 'fail') {
+            return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ response: { data: [{ id: DISCOUNT_ID, discount: 'disc-b' }] } }),
+          });
+        }
+        if (url.includes('/basicDiscount/selectors/')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: CATALOG }) });
+        }
+        if (url.includes('/basicDiscount?parentId=')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ response: { data: [{ id: DISCOUNT_ID, discount: 'disc-a' }] } }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
+    }
+
+    /** The discount `<select>` is the only combobox this form renders. */
+    async function renderForm(data) {
+      render(
+        <BillingPreferencesForm
+          data={data}
+          token="t"
+          apiBaseUrl="/api"
+          onChange={vi.fn()}
+        />,
+      );
+      return waitFor(() => {
+        const select = screen.getByRole('combobox');
+        // Options land only after the selector catalog resolves.
+        expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
+        return select;
+      });
+    }
+
+    function findCall(method) {
+      return globalThis.fetch.mock.calls.find(
+        ([, init]) => String(init?.method || 'GET').toUpperCase() === method,
+      );
+    }
+
+    it('POSTs a new /basicDiscount record with the derived customer/vendor flags when none exists yet', async () => {
+      installCreateFetch();
+      const select = await renderForm({ id: BP_ID, customer: true, vendor: false });
+
+      fireEvent.change(select, { target: { value: 'disc-b' } });
+
+      await waitFor(() => expect(select.value).toBe('disc-b'));
+
+      const postCall = findCall('POST');
+      expect(postCall).toBeTruthy();
+      const [url, init] = postCall;
+      expect(url).toContain(`/basicDiscount?parentId=${BP_ID}`);
+      expect(JSON.parse(init.body)).toEqual({
+        discount: 'disc-b',
+        lineNo: 10,
+        applyInOrder: 'Y',
+        customer: 'Y',
+        vendor: 'N',
+      });
+    });
+
+    it('leaves the discount record unchanged when the create POST responds with a non-ok status', async () => {
+      installCreateFetch({ result: 'fail' });
+      const select = await renderForm({ id: BP_ID, customer: true, vendor: false });
+
+      fireEvent.change(select, { target: { value: 'disc-b' } });
+
+      // createDiscount never calls setDiscountRecord on a non-ok response, so the record
+      // stays null and the select falls back to the "none" (empty) value.
+      await waitFor(() => expect(select.disabled).toBe(false));
+      expect(select.value).toBe('');
+    });
+
+    it('PUTs the existing /basicDiscount record when a different discount is selected', async () => {
+      installUpdateFetch();
+      const select = await renderForm({ id: BP_ID, customer: true, vendor: false });
+
+      await waitFor(() => expect(select.value).toBe('disc-a'));
+      fireEvent.change(select, { target: { value: 'disc-b' } });
+
+      await waitFor(() => expect(select.value).toBe('disc-b'));
+
+      const putCall = findCall('PUT');
+      expect(putCall).toBeTruthy();
+      const [url, init] = putCall;
+      expect(url).toContain(`/basicDiscount/${DISCOUNT_ID}`);
+      expect(JSON.parse(init.body)).toEqual({ discount: 'disc-b' });
+    });
+
+    it('leaves the discount record unchanged when the update PUT responds with a non-ok status', async () => {
+      installUpdateFetch({ result: 'fail' });
+      const select = await renderForm({ id: BP_ID, customer: true, vendor: false });
+
+      await waitFor(() => expect(select.value).toBe('disc-a'));
+      fireEvent.change(select, { target: { value: 'disc-b' } });
+
+      // updateDiscount never calls setDiscountRecord on a non-ok response, so the record
+      // (and the rendered value) stays exactly as it was before the change.
+      await waitFor(() => expect(select.disabled).toBe(false));
+      expect(select.value).toBe('disc-a');
+    });
+  });
 });
 
 // NOTE: the SII (AEAT) invoicing-default fields (`aeatsiiDefaultsiikey` /
