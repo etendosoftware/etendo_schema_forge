@@ -43,8 +43,12 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
     return fetcher();
   }, [apiFetch, apiBaseUrl, dataCache, cacheScope]);
 
+  // ETP-4576: do NOT gate the KPI load on `token`. Under the cookie credential
+  // mode the bearer token is empty by design (the browser sends the session
+  // cookie), so a `!token` guard would permanently skip the fetch and leave the
+  // KPI panel silently empty. apiFetch carries auth for both modes.
   const load = useCallback((id, { force = false } = {}) => {
-    if (!id || !token || !apiBaseUrl) {
+    if (!id || !apiBaseUrl) {
       setStats(null);
       setTrend(null);
       return;
@@ -57,7 +61,7 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
     runKpi('bp-trend', id, { force })
       .then(data => setTrend(data?.response?.data ?? EMPTY_TREND))
       .catch(() => setTrend(EMPTY_TREND));
-  }, [token, apiBaseUrl, runKpi]);
+  }, [apiBaseUrl, runKpi]);
 
   useEffect(() => { load(recordId); }, [recordId, load]);
 

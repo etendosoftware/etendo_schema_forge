@@ -36,8 +36,9 @@ const opts = (extra = {}) => ({ tableName: 'C_BPartner', recordId: 'BP1', token:
 
 function makeWrapper(cache, session = { token: 'tok', selectedOrg: { id: 'o1' } }) {
   return function Wrapper({ children }) {
+    // restoreSession={null}: opt out of ETP-4576 auto-restore — see useEntity.cache
     return (
-      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
         <DataProvider cache={cache}>{children}</DataProvider>
       </AuthProvider>
     );
