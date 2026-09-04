@@ -18,8 +18,11 @@ vi.mock('@/lib/rolesApi.js', () => ({
 // unrelated reasons and would silently break these assertions.
 //
 // Fixture groups, in DECLARATION order (= `groupOrder`): Sales(0), Zeta(1), Alpha(2),
-// DupGroup(3) — Zeta/Alpha are deliberately out of alphabetical order so ordering tests
-// below can tell "sorted by groupOrder" apart from "sorted alphabetically".
+// DupGroup(3), RowOrder(4) — Zeta/Alpha are deliberately out of alphabetical order so
+// ordering tests below can tell "sorted by groupOrder" apart from "sorted alphabetically".
+// RowOrder's own two items (Zebra Row=itemOrder 0, Alpha Row=itemOrder 1) are likewise
+// deliberately out of alphabetical order, for the same reason at the ROW level
+// (ETP-5071 follow-up — `itemOrder`/row sort within a category).
 // `useRolesOverviewData.js` (at `src/pages/roles/`) imports '../../menu.json' (-> `src/menu.json`).
 // From THIS test file (at `src/pages/roles/__tests__/`), that same file is 3 levels up.
 vi.mock('../../../menu.json', () => ({
@@ -49,6 +52,18 @@ vi.mock('../../../menu.json', () => ({
           // '502': hidden entry listed FIRST, visible listed second (reversed order).
           { name: 'dup-b-hidden', label: 'Hidden B', windowId: '502', hidden: true },
           { name: 'dup-b-visible', label: 'Visible B', windowId: '502', hidden: false },
+        ],
+      },
+      {
+        // ETP-5071 follow-up — row-within-category ordering fixture. '701' is declared
+        // FIRST (itemOrder 0, label "Zebra Row"), '702' SECOND (itemOrder 1, label "Alpha
+        // Row") — alphabetically by label this is BACKWARDS, so any test asserting
+        // itemOrder-based row order here cannot be accidentally passing due to alphabetical
+        // sorting instead.
+        group: 'RowOrder',
+        items: [
+          { name: 'row-order-zebra', label: 'Zebra Row', windowId: '701' },
+          { name: 'row-order-alpha', label: 'Alpha Row', windowId: '702' },
         ],
       },
     ],
@@ -109,9 +124,10 @@ describe('resolveRoleKind', () => {
 });
 
 describe('buildMenuWindowIndex', () => {
-  it('resolves group/label/groupOrder for a windowId present in menu.json', () => {
+  it('resolves group/label/groupOrder/itemOrder for a windowId present in menu.json', () => {
     const index = buildMenuWindowIndex();
-    expect(index.get('201')).toEqual({ group: 'Sales', label: 'Sales Order', groupOrder: 0, hidden: false });
+    // '201' is the FIRST item (index 0) inside the 'Sales' group's own `items[]` array.
+    expect(index.get('201')).toEqual({ group: 'Sales', label: 'Sales Order', groupOrder: 0, itemOrder: 0, hidden: false });
   });
 
   it('prefers the non-hidden entry for a duplicate windowId when the VISIBLE one is listed first', () => {
@@ -434,5 +450,89 @@ describe('adaptMatrix (via useRolesOverviewData) — ETP-5071 menu.json resoluti
     const { getResult, waitFor } = await renderHook();
     await waitFor(() => expect(getResult().loading).toBe(false));
     expect(getResult().matrix.map((g) => g.category)).toEqual(['Sales', 'Apple', 'Zoo']);
+  });
+
+  // ETP-5071 follow-up (commit 13fa3589f) — ROWS within a resolved category are sorted
+  // by `itemOrder` (the window's index within its menu.json group's own `items[]`), not
+  // by whatever order the backend fed them in. Uses the `RowOrder` fixture group: '701'
+  // (itemOrder 0, "Zebra Row") declared BEFORE '702' (itemOrder 1, "Alpha Row") — the
+  // labels are deliberately reverse-alphabetical so these tests can't accidentally pass
+  // because itemOrder order happens to coincide with alphabetical order.
+  it('sorts rows within a category by itemOrder (menu.json item-declaration order), not by the backend\'s feed order', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        // Fed with '702' (itemOrder 1) BEFORE '701' (itemOrder 0) — the output must
+        // still put '701' first.
+        categories: [
+          {
+            name: 'RowOrder-ish',
+            windows: [
+              { id: '702', name: 'raw 702', access: {} },
+              { id: '701', name: 'raw 701', access: {} },
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'RowOrder');
+    expect(group.rows.map((r) => r.windowId)).toEqual(['701', '702']);
+  });
+
+  it('proves the row sort is itemOrder-based, not alphabetical-by-name, via a case where the two disagree', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          {
+            name: 'RowOrder-ish',
+            windows: [
+              { id: '701', name: 'raw 701', access: {} }, // resolved label "Zebra Row", itemOrder 0
+              { id: '702', name: 'raw 702', access: {} }, // resolved label "Alpha Row", itemOrder 1
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'RowOrder');
+    // Alphabetically this would be ["Alpha Row", "Zebra Row"] — itemOrder order wins.
+    expect(group.rows.map((r) => r.windowName)).toEqual(['Zebra Row', 'Alpha Row']);
+  });
+
+  it('sorts a fallback row (windowId absent from menu.json, no itemOrder) after every ordered row in its category, alphabetically among other fallback rows', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          {
+            // Same resolved category ("RowOrder") as the ordered rows below, so the
+            // fallback rows land in the SAME output group and their relative position
+            // can be asserted directly.
+            name: 'RowOrder',
+            windows: [
+              { id: 'unmapped-zeta-fallback', name: 'Zeta Fallback', access: {} },
+              { id: '702', name: 'raw 702', access: {} }, // itemOrder 1
+              { id: 'unmapped-beta-fallback', name: 'Beta Fallback', access: {} },
+              { id: '701', name: 'raw 701', access: {} }, // itemOrder 0
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'RowOrder');
+    // Ordered rows first (by itemOrder: 701 then 702), THEN fallback rows, sorted
+    // alphabetically by windowName among themselves ("Beta..." before "Zeta...").
+    expect(group.rows.map((r) => r.windowId)).toEqual([
+      '701',
+      '702',
+      'unmapped-beta-fallback',
+      'unmapped-zeta-fallback',
+    ]);
   });
 });
