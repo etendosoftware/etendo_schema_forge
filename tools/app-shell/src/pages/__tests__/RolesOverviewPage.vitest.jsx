@@ -72,10 +72,9 @@ const SAMPLE_CARDS = [
   { id: 'admin', name: 'GOClient Admin', isClientAdmin: true, windowCount: 48, userCount: 2 },
   { id: 'sales', name: 'Sales', windowCount: 13, userCount: 3 },
 ];
-// Uses a category other than "General" — RolesAccessMatrix always overlays a
-// hardcoded "General" section (Inicio/Favoritos/Copilot) of its own ahead of
-// whatever `matrix` prop it receives, so a same-named fixture category here
-// would collide on data-testid="RolesAccessMatrix__category-General".
+// ETP-5071 — RolesAccessMatrix no longer overlays a hardcoded "General" section
+// (Inicio/Favoritos/Copilot) ahead of the real matrix; it renders ONLY the
+// `matrix` prop's own categories. No naming restriction applies here anymore.
 const SAMPLE_MATRIX = [
   { category: 'Commercial', rows: [{ windowId: 'w-contacts', windowName: 'Business Partner', access: { admin: 'full', sales: 'full' } }] },
 ];
@@ -149,7 +148,9 @@ describe('RolesOverviewPage', () => {
     it('renders the access matrix below the cards', () => {
       render(<RolesOverviewPage />);
       expect(screen.getByTestId('RolesAccessMatrix')).toBeTruthy();
-      expect(screen.getByTestId('RolesAccessMatrix__category-General')).toBeTruthy();
+      // ETP-5071 — no more hardcoded "General" overlay; the real matrix.categories
+      // group(s) passed in via SAMPLE_MATRIX are what actually render.
+      expect(screen.getByTestId('RolesAccessMatrix__category-Commercial')).toBeTruthy();
     });
 
     it('exposes no create/edit/delete affordance anywhere on the page', () => {
