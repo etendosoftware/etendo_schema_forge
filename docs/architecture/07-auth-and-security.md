@@ -244,6 +244,28 @@ Each role has explicit window access grants:
 
 **Backend enforcement (mandatory)**: Every RequestHandler MUST validate that the current user's role has access to the requested window/entity before processing any CRUD operation. Frontend-only enforcement is trivially bypassed.
 
+### MCP and Schema Forge Security Boundary
+
+The security responsibilities remain deliberately split:
+
+- **Schema Forge** declares the contract surface: which specs, entities, fields, and optional
+  capabilities are exposed. It does not mint or infer role grants.
+- **MCP** authenticates the token, enforces the OAuth scope axis (`neo:read`, `neo:write`,
+  `neo:process`, `neo:report`), and creates the `OBContext` from the token identity before tool
+  discovery, resource access, or tool execution. Its `NeoAccessUtils` facade delegates role checks
+  to the canonical runtime helper; it must not maintain a second permission model.
+- **NEO/Etendo runtime** remains the authority for `AD_Window_Access`, `AD_Process_Access`,
+  organization visibility, and DAL entity access. A window-backed MCP entity derives its visible
+  mutation verbs from the same window grant used by NEO Headless. The MCP catalog is advisory;
+  every request is checked again before data access or mutation.
+- **DB Extended** owns vector indexing and retrieval. Vector endpoints must receive the caller's
+  authenticated `OBContext` and authorize each physical source entity before returning matches;
+  a vector target is not a substitute for a window grant.
+
+`tools/list` and `resources/*` are part of this boundary, not anonymous metadata endpoints: they
+run inside the same token-derived context as `tools/call`. This prevents discovery from being
+computed with an ambient servlet context or administrative role.
+
 ### Organization-Based Data Filtering
 
 Etendo filters data by the user's active organization via `OBContext`:
