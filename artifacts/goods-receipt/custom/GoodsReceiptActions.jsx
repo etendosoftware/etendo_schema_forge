@@ -82,6 +82,17 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     return () => { cancelled = true; };
   }, [wizardOpen, recordId, base, headers, data?.businessPartner]);
 
+  // ETP-5063 — when confirming the receipt created no related invoice, skip
+  // the result modal and communicate success via an auto-dismissing toast
+  // instead, matching the UX used everywhere else success is communicated.
+  useEffect(() => {
+    if (confirmedDocs && !confirmedDocs.invoice?.id) {
+      toast.success(ui('goodsReceipt.confirmModal.confirmedTitle'));
+      onRefresh?.();
+      setConfirmedDocs(null);
+    }
+  }, [confirmedDocs, onRefresh, ui]);
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
@@ -196,13 +207,10 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         />
       )}
 
-      {confirmedDocs && createPortal(
+      {confirmedDocs?.invoice?.id && createPortal(
         <ConfirmResultModal
           title={ui('goodsReceipt.confirmModal.confirmedTitle')}
-          docs={confirmedDocs?.invoice?.id
-            ? [{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]
-            : []
-          }
+          docs={[{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
