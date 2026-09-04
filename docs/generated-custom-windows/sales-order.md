@@ -94,7 +94,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 3. Start a new order and verify business partner is required, partner address stays disabled until a business partner is selected, the order-line tab is already visible, and `Save`, `Save draft`, and `Cancel` are present before the first save. Verify inline contact creation is available from the detail page.
 4. Verify the header now exposes `Payment Method`, `Payment Terms`, and `Warehouse` as visible fields on the generated header form. Confirm `Warehouse` appears at the end of the second row (4th column). On a draft order, confirm it is editable; on a confirmed order, confirm it is read-only.
 5. Add one or more lines and verify the line editor exposes product, ordered quantity, list price (`listPrice`), discount, tax, and line gross amount, then verify that changing quantity, price, or discount updates the line gross amount instantly without a server round-trip, and that header totals refresh after saving. Confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured sales taxes (filtered by `IsSOTrx=Y` and validity against the order date), not a free-text search that returns "Sin resultados".
-6. Open a draft order and verify confirm and clone actions are available, and that the Send/"Enviar" action is **not** shown yet (it only appears once the order is confirmed). Use the confirm flow once with no downstream documents and once with shipment and/or invoice creation selected. From the list view, select one or more orders, run `Clone`, close the result modal and confirm that the cloned drafts appear in the list without manually pressing `Refresh`. Confirm the same draft order and verify the Send/"Enviar" action now appears both in the detail topbar and as a row quick action in the list.
+6. Open a draft order and verify confirm and clone actions are available, and that the Send/"Enviar" action is **not** shown yet (it only appears once the order is confirmed). Use the confirm flow once with no downstream documents selected and confirm the order is completed **without** a result modal — instead an auto-dismissing green `sonner` toast reading `soConfirmedTitle` ("Order confirmed"/"Pedido confirmado") appears and the page refreshes (ETP-5063). Repeat the confirm flow with shipment and/or invoice creation selected and confirm the result modal **does** appear, listing the created document(s). From the list view, select one or more orders, run `Clone`, close the result modal and confirm that the cloned drafts appear in the list without manually pressing `Refresh`. Confirm the same draft order and verify the Send/"Enviar" action now appears both in the detail topbar and as a row quick action in the list.
 7. On a draft order with a business partner already chosen, change `Payment Terms` to a different value than the BP default and save. Reopen the record and confirm the chosen value persisted (regression: it used to revert to the BP default).
 8. Open a completed order with remaining fulfillment or invoicing work and verify the top-bar management action opens shipment/invoice handling rather than a generic process entry screen.
 9. On a completed order with related records, open `Related Documents` and confirm quotation, shipment, invoice, and payment chips navigate to the expected records. Verify the quotation chip shows the green `Closed - Order Created` / `Cerrado - Pedido creado` pill (regression: the chip used to render `Completed` / `Confirmado` because the status was hardcoded to `CO`).
@@ -376,3 +376,38 @@ Same fix pattern, same file shape, as
 `docs/generated-custom-windows/purchase-order.md`'s "Related Documents auto-refresh — ETP-4779"
 section — read that one for the fuller before/after narrative (missing-listener pass +
 premature-dispatch pass) since both bugs were found and fixed in the same two-pass sequence.
+
+## Printable — generic tax labels and document currency — ETP-5125
+
+This window's printable shares `DOCUMENT_TEMPLATE` with the other three commercial documents
+(`windows/custom/shared/documentPdf.js`), so both fixes below apply to all four at once, across all
+five entry points (preview, download, both email paths, print). Mechanism and decisions:
+`docs/document-printables.md` (D12–D14).
+
+- **Tax wording.** The lines-table tax column now reads **"Impuesto"** (was `IVA%`), and the Totals
+  rows read **"Impuestos"** and **"Subtotal (sin impuestos)"** (were `IVA` / `Subtotal (sin IVA)`).
+  The `%` was wrong because that column's cell prints the tax's *name* (`tax$_identifier`, e.g.
+  "IVA 21%"), not a rate; and the on-screen `DocumentTotalsPanel` already said "Impuesto", so the
+  PDF contradicted the screen. Changed values only, in the three source locales
+  (`src/locales/{es_ES,es_AR,en_US}.json` → `invoicePdfColTax` / `invoicePdfTax` /
+  `invoicePdfSubtotal`); `src/locales/generated/core.*.json` is gitignored build output.
+- **Document currency in the header.** The header meta block (below `N.º Pedido`) now shows
+  `Moneda: <ISO>` — new key `invoicePdfCurrency` plus `currencyCode` in the template data, resolved
+  by `resolveDocumentCurrencyCode(header)` from `header['currency$_identifier']` inside
+  `buildOrderData('sales-order', ...)`. It is read from the header, **not** from the `currencyData` argument, which is
+  `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
+  When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
+
+Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
+`windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
+`documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.

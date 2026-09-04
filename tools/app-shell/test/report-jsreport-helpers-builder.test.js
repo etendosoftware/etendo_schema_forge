@@ -349,6 +349,17 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       [[{ amount: null }, { amount: '' }, { amount: '4' }], 'amount'],
       [[{ amount: 1 }], 'missingField'],
     ],
+    // ETP-4900: sumFields adds VALUES (not a field name across rows, like
+    // sumField above) — the trailing element in each case stands in for the
+    // Handlebars options object every helper call receives, dropped internally.
+    sumFields: [
+      [1, 2, 3, {}],
+      [0, 0, 0, {}],
+      ['abc', 2, {}],
+      [null, undefined, '', {}],
+      [1.5, '2.5', 3, {}],
+      [{}],
+    ],
     formatDateDisplay: [
       [null], [undefined], [''], [0], [123],
       ['2026-08-06'], ['2026-8-6'], ['2026-08-06T00:00:00'],

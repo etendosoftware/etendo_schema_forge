@@ -65,6 +65,16 @@ describe('FiscalStatusBadge — known status', () => {
     expect(screen.getByText('fiscalMonitor.tbai.status.Recibido')).toBeTruthy();
   });
 
+  // ETP-5087: the Batuz column maps the `tbaiIssent` boolean to "Enviada". The
+  // column tests mock FiscalStatusBadge, so without this case a deleted CONFIG
+  // entry would still pass everywhere while rendering the untranslated literal
+  // "Enviada" with a neutral tone.
+  it('renders the i18n key for tbai Enviada with a success tone', () => {
+    const { container } = render(<FiscalStatusBadge status="Enviada" />);
+    expect(screen.getByText('fiscalMonitor.tbai.status.Enviada')).toBeTruthy();
+    expect(container.querySelector('span').style.color).toBe('var(--status-success-fg)');
+  });
+
   it('renders the i18n key for verifactu accepted', () => {
     render(<FiscalStatusBadge status="accepted" />);
     expect(screen.getByText('fiscalMonitor.status.vf.accepted')).toBeTruthy();

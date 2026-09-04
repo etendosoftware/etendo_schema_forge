@@ -40,7 +40,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: null })),
+  useFiscalConfig: vi.fn(() => ({ profile: null, tbaiRecord: null })),
 }));
 
 vi.mock('@/windows/custom/shared/fiscalTargets.js', () => ({
@@ -238,6 +238,15 @@ import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.j
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { resolveFilterMode } from '@/lib/gridQuery';
 import PurchaseInvoiceHeaderTable from '../PurchaseInvoiceHeaderTable.jsx';
+
+// ETP-5087: the fiscal-column tests at the bottom of this file assert the REAL
+// Bizkaia-only rule rather than restating it in a mock — a mocked rule can only
+// ever agree with itself. `getInvoiceFiscalTargets` stays module-mocked (older
+// describes drive it directly), so the genuine implementation is pulled in here
+// and installed as the mock's implementation for that block only.
+const { getInvoiceFiscalTargets: realGetInvoiceFiscalTargets } = await vi.importActual(
+  '@/windows/custom/shared/fiscalTargets.js',
+);
 
 const BASE_PROPS = {
   apiBaseUrl: '/api',
@@ -802,6 +811,7 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     // Restore the shared mock holders so the rest of the file keeps its defaults.
     i18nMock.dictionary = i18nMock.defaultDictionary;
     authMock.selectedOrg = authMock.defaultSelectedOrg;
+    useFiscalConfig.mockReturnValue({ profile: null, tbaiRecord: null });
   });
 
   function getColumn(key) {
@@ -901,6 +911,20 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     authMock.selectedOrg = null;
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     expect(useFiscalConfig).toHaveBeenCalledWith(null, '/api');
+  });
+
+  // ETP-5087: territory (from the active TBAI config) must be resolved and forwarded
+  // to getInvoiceFiscalTargets so the SII/TBAI column gating stays territory-aware.
+  it('forwards the TBAI config territory to getInvoiceFiscalTargets', () => {
+    useFiscalConfig.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { etsgSifTerritory: 'BIZKAIA' } });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', 'BIZKAIA');
+  });
+
+  it('forwards null territory when no TBAI config exists', () => {
+    useFiscalConfig.mockReturnValue({ profile: 'sii', tbaiRecord: null });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii', null);
   });
 
   // ── row-level fallbacks in the outstandingAmount cell (lines 153/154) ──────
@@ -1055,5 +1079,151 @@ describe('PurchaseInvoiceHeaderTable — bank-transfer state on the payment colu
   it('leaves an invoice with no reported state exactly as before', () => {
     const { container } = renderPaymentCell(PAID_ROW);
     expect(container.querySelector('[data-testid^="invoice-transfer-"]')).toBeNull();
+  });
+});
+
+// ── ETP-5087: fiscal columns resolve SYNCHRONOUSLY from the globally-selected org ──
+// The Batuz column used to be gated on a per-row, async org resolution
+// (`useOrgFiscalConfigs` + `resolveRowTargets`). That machinery produced three
+// consecutive production regressions and has been removed: BOTH fiscal columns
+// now derive from `useFiscalConfig(selectedOrg.id)` in a single synchronous
+// memo, exactly like the SII column always did. These tests use the REAL
+// `getInvoiceFiscalTargets` so the Bizkaia-only rule is asserted where it
+// actually lives, not re-stated in a mock.
+describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
+    getInvoiceFiscalTargets.mockImplementation(realGetInvoiceFiscalTargets);
+    useFiscalConfig.mockReturnValue({ profile: null, tbaiRecord: null });
+  });
+
+  function getColumn(key) {
+    return (capturedColumnsHolder.value || []).find((c) => c.key === key);
+  }
+
+  function renderWith(profile, territory, data = [AP_INVOICE_ROW]) {
+    useFiscalConfig.mockReturnValue({
+      profile,
+      tbaiRecord: territory ? { etsgSifTerritory: territory } : null,
+    });
+    return render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={data} />);
+  }
+
+  describe('column visibility', () => {
+    it('renders BOTH the SII and Batuz columns on the first render for a sii+tbai / BIZKAIA org', () => {
+      renderWith('sii+tbai', 'BIZKAIA');
+      // No waitFor / no act flush: the columns must exist synchronously.
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('_tbaiStatus')).toBeTruthy();
+      expect(getColumn('_tbaiStatus').label).toBe('Batuz Status');
+    });
+
+    it('renders ONLY the SII column for a sii+tbai org outside Bizkaia (GIPUZKOA)', () => {
+      renderWith('sii+tbai', 'GIPUZKOA');
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('_tbaiStatus')).toBeUndefined();
+    });
+
+    it('renders ONLY the SII column for a plain sii profile (no TBAI at all)', () => {
+      renderWith('sii', null);
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('_tbaiStatus')).toBeUndefined();
+    });
+
+    it('renders neither column when the org has no fiscal profile', () => {
+      renderWith(null, null);
+      expect(getColumn('_siiStatus')).toBeUndefined();
+      expect(getColumn('_tbaiStatus')).toBeUndefined();
+    });
+
+    it('derives visibility from the GLOBAL selected org, never from a row field', () => {
+      // Two rows carrying different `adOrgId`s must not change the outcome —
+      // the documented trade-off is that visibility follows the top-nav org
+      // (symmetric with SII), not the individual row.
+      renderWith('sii+tbai', 'BIZKAIA', [
+        { ...AP_INVOICE_ROW, adOrgId: 'org-bizkaia' },
+        { ...AP_INVOICE_ROW, adOrgId: 'org-alava' },
+      ]);
+      expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', 'BIZKAIA');
+      expect(getColumn('_tbaiStatus')).toBeTruthy();
+    });
+
+    it('uses the translated Batuz label when the dictionary provides it', () => {
+      i18nMock.dictionary = {
+        genericLabels: { 'invoiceList.col.tbaiStatusPurchase': 'Estado Batuz' },
+        statuses: {},
+      };
+      renderWith('sii+tbai', 'BIZKAIA');
+      expect(getColumn('_tbaiStatus').label).toBe('Estado Batuz');
+      i18nMock.dictionary = i18nMock.defaultDictionary;
+    });
+  });
+
+  // ETP-5087: the Batuz cell reads `tbaiSyncEstado` FIRST — the real submission
+  // outcome injected by the backend's TbaiSyncStatusInjector (Recibido /
+  // Rechazado / Error), same as the sales-invoice list — and only falls back to
+  // the invoice's own `tbaiIssent` boolean (EM_Tbai_Issent, which NEO may
+  // serialise as `true`/`false` OR as the AD flag 'Y'/'N') when no sync row
+  // exists yet. Before the fix the cell read ONLY `tbaiSyncEstado`, which the
+  // purchase-side backend never populated, so `?? 'Pendiente'` painted a
+  // hardcoded "Pendiente" on every row.
+  describe('Batuz cell — tbaiSyncEstado primary, tbaiIssent fallback', () => {
+    function renderCell(row) {
+      renderWith('sii+tbai', 'BIZKAIA', [row]);
+      return render(<>{getColumn('_tbaiStatus').render(row)}</>).container;
+    }
+
+    it('shows the real state "Recibido" even when tbaiIssent is false', () => {
+      // The injected state wins: the boolean is a weaker, staler signal.
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', tbaiIssent: false };
+      expect(renderCell(row).textContent).toBe('Recibido');
+    });
+
+    it('shows "Rechazado" for a rejected submission — a rejection is NEVER shown as "Enviada"', () => {
+      // The critical case: the invoice WAS submitted (tbaiIssent true) but Batuz
+      // rejected it. Reading the boolean first would report success.
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Rechazado', tbaiIssent: true };
+      expect(renderCell(row).textContent).toBe('Rechazado');
+    });
+
+    it('shows "Error" for a failed submission, not the fallback', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Error', tbaiIssent: 'Y' };
+      expect(renderCell(row).textContent).toBe('Error');
+    });
+
+    it('falls back to "Enviada" when there is no sync state and tbaiIssent is boolean true', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: true }).textContent).toBe('Enviada');
+    });
+
+    it('falls back to "Enviada" when there is no sync state and tbaiIssent is the AD flag "Y"', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: 'Y' }).textContent).toBe('Enviada');
+    });
+
+    it('falls back to "Pendiente" when there is no sync state and tbaiIssent is boolean false', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: false }).textContent).toBe('Pendiente');
+    });
+
+    it('falls back to "Pendiente" for the AD flag "N" (truthy string trap)', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: 'N' }).textContent).toBe('Pendiente');
+    });
+
+    it('falls back to "Pendiente" for a row carrying neither field', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW }).textContent).toBe('Pendiente');
+    });
+
+    it('treats a null tbaiSyncEstado as absent and uses the fallback', () => {
+      // `??` (not `||`) is what makes this work — and an explicit null is what
+      // NEO sends for an invoice with no row in tbai_syncinvoice.
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: null, tbaiIssent: true };
+      expect(renderCell(row).textContent).toBe('Enviada');
+    });
+  });
+
+  it('keeps the SII cell reading aeatsiiEstado, unchanged', () => {
+    const row = { ...AP_INVOICE_ROW, aeatsiiEstado: 'CO' };
+    renderWith('sii+tbai', 'BIZKAIA', [row]);
+    const { container } = render(<>{getColumn('_siiStatus').render(row)}</>);
+    expect(container.textContent).toBe('CO');
   });
 });
