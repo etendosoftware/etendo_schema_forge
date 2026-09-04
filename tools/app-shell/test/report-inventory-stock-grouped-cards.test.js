@@ -50,17 +50,17 @@ function render(meta, rows) {
 
 describe('inventory-stock-report — grouped layout renders one card per group (ETP-5013 follow-up)', () => {
   const rows = [
-    row({ productSearchKey: 'SK-001', product: 'Agua', warehouse: 'Almacen GO' }),
-    row({ productSearchKey: 'SK-001', product: 'Agua', warehouse: 'Almacén Secundario' }),
-    row({ productSearchKey: 'SK-002', product: 'Cerveza', warehouse: 'Almacen GO' }),
-    row({ productSearchKey: 'SK-004', product: 'Queso Sardo', warehouse: 'Almacén Secundario' }),
+    row({ productSearchKey: 'SK-001', product: 'Artículo A', warehouse: 'Almacen A' }),
+    row({ productSearchKey: 'SK-001', product: 'Artículo A', warehouse: 'Almacen B' }),
+    row({ productSearchKey: 'SK-002', product: 'Artículo B', warehouse: 'Almacen A' }),
+    row({ productSearchKey: 'SK-003', product: 'Artículo C', warehouse: 'Almacen B' }),
   ];
 
   it('wraps every group in its own bordered .stock-card, inside .stock-cards', () => {
     const html = render({ dimensionField: 'product' }, rows);
     assert.ok(html.includes('class="stock-cards"'), 'expected a .stock-cards wrapper');
     const cardOccurrences = [...html.matchAll(/class="stock-card"/g)];
-    assert.equal(cardOccurrences.length, 3, 'expected one .stock-card per distinct product (Agua, Cerveza, Queso Sardo)');
+    assert.equal(cardOccurrences.length, 3, 'expected one .stock-card per distinct product (Artículo A, Artículo B, Artículo C)');
   });
 
   it('each card carries its OWN <thead>, not a header shared across groups', () => {
@@ -71,9 +71,9 @@ describe('inventory-stock-report — grouped layout renders one card per group (
 
   it('the group name renders as the value, with a dimensionLabel chip alongside (matching report-general-ledger)', () => {
     const html = render({ dimensionField: 'product', dimensionLabel: 'Producto' }, rows);
-    assert.match(html, /<span class="value">Agua<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Cerveza<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Queso Sardo<\/span><span class="chip">Producto<\/span>/);
+    assert.match(html, /<span class="value">Artículo A<\/span><span class="chip">Producto<\/span>/);
+    assert.match(html, /<span class="value">Artículo B<\/span><span class="chip">Producto<\/span>/);
+    assert.match(html, /<span class="value">Artículo C<\/span><span class="chip">Producto<\/span>/);
   });
 
   it('no longer renders the old flat group-header row', () => {
@@ -103,7 +103,7 @@ describe('inventory-stock-report — grouped layout renders one card per group (
 
 describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5013 follow-up)', () => {
   it('renders a single table, no .stock-card wrapper', () => {
-    const html = render({ dimensionField: '' }, [row({ productSearchKey: 'SK-001', product: 'Agua' })]);
+    const html = render({ dimensionField: '' }, [row({ productSearchKey: 'SK-001', product: 'Artículo A' })]);
     // The .stock-card* rules are always present in the inlined <style> block
     // (CSS declarations aren't conditional) — check the MARKUP usage, not
     // the stylesheet, is absent from the flat/ungrouped body.
@@ -113,7 +113,7 @@ describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5
   });
 
   it('shows all 3 dimension columns (product, warehouse, category) when ungrouped', () => {
-    const html = render({ dimensionField: '' }, [row({ product: 'Agua', warehouse: 'Almacen GO', category: 'Bebidas' })]);
+    const html = render({ dimensionField: '' }, [row({ product: 'Artículo A', warehouse: 'Almacen A', category: 'Otros' })]);
     assert.match(html, /<th style="width: 18%">Producto<\/th>/);
     assert.match(html, /<th style="width: 14%">Almacen<\/th>/);
     assert.match(html, /<th style="width: 14%">Categoría<\/th>/);

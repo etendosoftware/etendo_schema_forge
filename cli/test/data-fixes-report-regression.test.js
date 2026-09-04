@@ -38,6 +38,13 @@ const FIXES_WITH_REPORT = new Set([
   // branch — same "flag, don't guess" pattern as R19. See
   // cli/test/data-fixes-r28-owner-email-backfill.test.js.
   '20260827T120000Z__R28-owner-email-backfill',
+  // R31 (ETP-5079) realigns the seeded document sequences' STARTNO/CURRENTNEXT. Unlike the
+  // entries above, its @report is a pure POST-CONDITION: it lists any in-scope sequence still
+  // off target after the apply, and because CURRENTNEXT is now set in both directions there is
+  // no legitimate "left off target" case left — so it should always come back empty and leave
+  // `detail` null on the APPLIED ledger row. A non-empty detail means a row was skipped or
+  // something raced the update, and is worth investigating.
+  '20260902T120000Z__R31-document-sequence-startno',
 ]);
 
 async function loadCatalogFiles() {
@@ -52,7 +59,10 @@ async function loadCatalogFiles() {
 }
 
 describe('data-fixes catalog — @report is opt-in and backward compatible', () => {
-  it('has at least one fix WITH @report (R19, R24, R28) so this guard is not vacuous', async () => {
+  // The title deliberately does not enumerate the fixes: FIXES_WITH_REPORT grows every time a
+  // new fix opts in, and an enumerating title goes stale silently while the assertion below
+  // keeps passing (it already claimed "R19, R24, R28" long after R26 and R27 had joined).
+  it('has at least one fix WITH @report so this guard is not vacuous', async () => {
     const catalog = await loadCatalogFiles();
     const withReport = catalog.filter(({ fix }) => fix.report.length > 0);
     assert.ok(withReport.length >= 1, 'expected at least one fix with a non-empty @report section');

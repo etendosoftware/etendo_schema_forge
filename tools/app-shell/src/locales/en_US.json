@@ -19625,7 +19625,6 @@
     "onboardingReadinessSession": "The ERP session is not ready.",
     "onboardingReadinessDefaults": "Sales invoice defaults are not ready.",
     "onboardingReadinessPaymentTerms": "Sales invoice payment terms are not available.",
-    "onboardingReadinessCustomers": "Sales invoice customers are not available.",
     "onboardingReadinessDocumentType": "Sales invoice document type is missing or invalid.",
     "onboardingBrandName": "Etendo",
     "organization": "Organization",

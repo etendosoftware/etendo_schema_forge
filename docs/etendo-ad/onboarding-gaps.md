@@ -1405,6 +1405,126 @@ confirmed 0 rows remaining (idempotent).
 
 ---
 
+## N — Initial Dataset Configuration
+
+### N1 — The curated GOClient dataset itself shipped wrong configuration (ETP-5079, 2026-09-01)
+
+**New gap-label series `N`** (defects in the *content* of the onboarding dataset, as opposed to a
+missing provisioning *step*). `M` was the highest label in use across both this doc and
+`onboarding-and-datafixes-map.md` when it was assigned.
+
+**Symptom.** A freshly onboarded tenant opened with a visibly wrong initial configuration on eight
+independent points, all traced to the curated dataset
+(`com.etendoerp.go/referencedata/sampledata/GOClient/*.xml`, filtered by
+`OnboardingDatasetDefinition.INCLUDED_TABLES`) rather than to any onboarding step:
+
+| # | What the tenant saw | Root cause |
+|---|---|---|
+| 1 | Price lists named "Lista de venta/compra (sin impuestos)" and versions named "Version Lista de …" | `M_PRICELIST.xml` / `M_PRICELIST_VERSION.xml` content |
+| 2 | Two warehouses, "Almacen GO" and "Almacén Secundario" | `M_WAREHOUSE.xml` (+ `M_LOCATOR.xml`, `AD_ORG_WAREHOUSE.xml`) |
+| 3 | A "Default Customer" business partner and a "Default Customer Contact" user | `OnboardingDefaultCustomerService` (Java, not dataset) — **removed entirely**, see below |
+| 4 | Four sample products (Agua, Cerveza, Fernet, Queso Sardo) with prices | `M_PRODUCT.xml` / `M_PRODUCTPRICE.xml` |
+| 5 | Three financial accounts (Caja, Cuenta de Banco, Tarjeta) | `FIN_FINANCIAL_ACCOUNT.xml` / `FIN_FINACC_PAYMENTMETHOD.xml` |
+| 6 | Document sequences whose Start Number and Next Assigned Number were wildly out of step (e.g. Standard Order start 50 000 / next 1 000 011) | `AD_SEQUENCE.xml` content |
+| 7 | Every document type rendered with its English name in a Spanish UI | `C_DOCTYPE_TRL` **was not in `INCLUDED_TABLES`** — verified live: a fresh tenant had 49 doc types and **0** `C_DOCTYPE_TRL` rows. Worse, the 47 `es_ES` rows in the XML held the *English* text, so importing them as-is would have fixed nothing. |
+| 8 | Two document types named in Spanish ("Factura Rectificativa", "Factura Rectificativa (compras)") among 47 English ones | `C_DOCTYPE.xml`, created that way by ETP-4737/R17 |
+
+**Two items in the original report were NOT defects and needed no change:**
+
+* **"Contactos" sample business partners** ("Laura Morat", "Juan Perez"). `C_BPARTNER` is *not* in
+  `INCLUDED_TABLES`, so the dataset import creates **no** sample business partners at all. Those
+  rows exist only in the developer's own local database. The only BP a tenant used to get was the
+  synthetic `ONBOARDING_DEFAULT_CUSTOMER`, created in Java — and that is now gone too (below), so a
+  new tenant is born with **zero** business partners.
+* **The Reconciliation document type** (`DOCBASETYPE='REC'`) is already created for new tenants; it
+  landed with ETP-4795 (commit `a195ea5c`) and is in `develop`. Only tenants onboarded *before* that
+  need it, which is a corrective-only concern.
+
+**Non-obvious dependency found while fixing #5 — the seed-validation gate.**
+`OnboardingDatasetImportService.validateImportedSeed` threw an `OBException` when the imported seed
+contained zero financial accounts, and `isSeedAlreadyPresent` used the same four-way condition as its
+idempotent-resume probe. Removing the three template accounts from the dataset without touching that
+Java would therefore have made **every new onboarding fail outright**, and — had the gate been
+relaxed but the probe left alone — would have made the probe permanently `false`, so any retry after
+a partial failure would re-import the whole dataset and duplicate products, warehouses and price
+lists. Both were changed to drop the financial-account leg; the count is still logged.
+
+**Functional consequence the business accepted.** With no financial account in the dataset, a fresh
+tenant **cannot register a payment or a receipt until a user creates one manually**. That is what the
+ticket asks for, but it is a real change in day-one capability.
+
+**What must NOT be removed:**
+
+* `M_PRODUCT` `ETGO_DTO` ("Discount") — the product the inline-discount feature resolves at runtime
+  (`ETGO_DTO_PRODUCT_ID`). Deleting it breaks discounts across sales and purchase orders.
+* Two of the three `M_PRODUCT_CATEGORY` rows — **`Discounts`**, required by `ETGO_DTO`, and
+  **`Otros`**, kept as the generic starter category. `Bebidas` was removed (2026-09-02, after
+  inspecting the live FranOB2 tenant); the earlier reason given for keeping it — that
+  `M_PRODUCT_CATEGORY_ACCT` references it — did not hold, since that table is not in
+  `INCLUDED_TABLES` and so never reaches a tenant.
+* `FIN_PAYMENTMETHOD` (Efectivo, Transferencia bancaria, Recibo, Tarjeta) — payment *methods*, not
+  accounts; the ticket did not ask for their removal.
+
+**The "Default Customer" business partner is removed outright.** The first cut of this ticket
+removed only its contact `AD_User`, on the belief that
+`OnboardingAccountingWiringService.wireBusinessPartnerAccounts()` depended on the BP. **That belief
+was wrong** — `BP_CUSTOMER_ACCT_SQL` / `BP_VENDOR_ACCT_SQL` are set-based
+`INSERT ... SELECT ... FROM c_bpartner WHERE ad_client_id = :clientId AND iscustomer = 'Y'`, so with
+zero business partners they insert zero rows and the chain continues. `OnboardingDefaultCustomerService`,
+its servlet step, its `customer` NDJSON progress events and the `wireBusinessPartnerAccounts` call it
+carried (its only caller — the method is gone with it) are all deleted. A new tenant is born with no
+business partners at all; partners it creates later get their posting rows from Classic's own
+`c_bpartner_trg`.
+
+**Blocker this uncovered — the SPA locks the user out of a tenant with no customer.**
+`tools/app-shell/src/pages/onboarding/onboardingReadiness.js` gated entry into the new environment on
+`C_BPartner_ID` returning at least one usable selector item, and
+`SetupProgressStep.jsx` (in `schema_forge_core`) returns without redirecting on `!readiness.ready`.
+So onboarding would have finished provisioning and then refused to let the user in. The `customers`
+leg — endpoint, failure key, `Promise.all` destructuring, `checks` entry and its `onboardingReadinessCustomers`
+i18n string in all three locales — is removed. The other legs (session, defaults, payment terms,
+document type) assert real configuration, not sample data, and stay.
+
+**① Preventive.** Dataset content corrected in place, plus four Java changes:
+`OnboardingDatasetDefinition.INCLUDED_TABLES` gains `C_DOCTYPE_TRL`;
+`OnboardingDefaultCustomerService` is deleted along with its step in
+`EtendoGoJwtServlet#ensureOnboardingDataset`;
+`OnboardingAccountingWiringService#wireBusinessPartnerAccounts` is deleted with its only caller;
+and `OnboardingDatasetImportService` drops financial accounts from the seed gate and the resume
+probe.
+
+**② Corrective — `20260902T120000Z__R31-document-sequence-startno.sql`.** Corrects the document
+sequences on already-provisioned tenants: it sets both `STARTNO` and `CURRENTNEXT` to the target on
+the same 11 sequences the preventive front fixed, so each ends at delta 0 (the ticket's TC-6).
+
+`CURRENTNEXT` is set in **both** directions. An earlier version raised it only, on the grounds that
+lowering it makes a sequence re-issue document numbers it has already handed out — duplicate
+document numbers, a fiscal defect. That guard was dropped on 2026-09-02: there are no production
+environments yet (every tenant is a test tenant, plus one small pre-prod), so no real document
+numbers can be re-issued, and measured live the guard made the fix a complete no-op for five of the
+eleven sequences — `DocumentNo_C_Invoice`, `DocumentNo_M_InOut`, `DocumentNo_M_Movement`,
+`DocumentNo_A_Asset` and `Secuencia TICKETBAI` already carried the right `STARTNO`, so lowering
+`CURRENTNEXT` was the only correction they ever needed. **If the fix is ever re-targeted at a tenant
+holding genuinely issued documents the forward-only guard must be restored first**; the file's own
+header carries that instruction. Scope stays pinned to the 11 names the dataset change covers.
+
+**`ONBOARDING_PROVISIONED_THROUGH` deliberately NOT bumped.**
+The watermark tells the runner which correctives a newborn tenant may skip, and a newborn tenant
+already gets correct sequences straight from the corrected `AD_SEQUENCE.xml`, so R31's own `@check`
+returns 0 rows there and the runner records a clean `SKIPPED_NOT_NEEDED` — the same terminal state
+the watermark would have produced, reached by actually looking. Bumping it to R31's timestamp would
+instead push the cutoff past `R30-financial-account-card-ledger-account` (`2026-08-30`) and
+`R29-transfer-link-multicurrency` (`2026-08-31`), neither of which bumped it themselves, silently
+suppressing both for every new tenant — the "CUT bump without its `.sql`" hazard the constant's own
+contract forbids.
+
+**`R4-default-customer-location` retired** (`cli/src/data-fixes/retired.json`, `retiredBy: ETP-5079`).
+It existed only to give the now-removed BP a currency, an address and a contact user on older
+tenants; leaving it live would keep minting exactly the "Default Customer Contact" `AD_User` this
+ticket stops creating. Obsoleted, not superseded — `supersededBy` is empty.
+
+---
+
 ## Recommended Order of Operations
 
 Consolidated from the field checklist; covers A1–C2. D1 and E1 are addressed inside the Initial Client Setup process itself.

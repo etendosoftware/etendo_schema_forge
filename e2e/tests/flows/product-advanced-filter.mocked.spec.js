@@ -56,7 +56,7 @@ import { login } from '../helpers/auth.js';
  */
 
 const CATEGORY_OPTION = { id: 'cat-1', label: 'General' };
-const OTHER_CATEGORY_OPTION = { id: 'cat-2', label: 'Bebidas' };
+const OTHER_CATEGORY_OPTION = { id: 'cat-2', label: 'Servicios' };
 const UOM_OPTION = { id: 'uom-1', label: 'Unit' };
 
 // Pre-existing products (not created through the UI — only the "new" one is,

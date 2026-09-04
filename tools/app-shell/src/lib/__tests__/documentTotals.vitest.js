@@ -16,7 +16,7 @@ describe('resolveTotalDiscountPct', () => {
   it('returns the header discount pct when no ETGO_DTO line is present', () => {
     const data = { etgoTotalDiscount: 5 };
     const lines = [
-      { id: '1', product: 'prod-fernet', lineNetAmount: 44 },
+      { id: '1', product: 'prod-a', lineNetAmount: 44 },
     ];
     expect(resolveTotalDiscountPct(data, lines)).toBe(5);
   });
@@ -26,7 +26,7 @@ describe('resolveTotalDiscountPct', () => {
     // that already carries the discount would double-count the reduction.
     const data = { etgoTotalDiscount: 5 };
     const lines = [
-      { id: '1', product: 'prod-fernet', lineNetAmount: 44 },
+      { id: '1', product: 'prod-a', lineNetAmount: 44 },
       { id: '2', product: ETGO_DTO_PRODUCT_ID, lineNetAmount: -2.2 },
     ];
     expect(resolveTotalDiscountPct(data, lines)).toBe(0);

@@ -227,6 +227,43 @@ balanced close would have to declare a negative balance.
 
 Because it spans four windows, its timeout is 600s (not the 300s the other integration specs use).
 
+### Master-data fixtures — a fresh tenant seeds almost nothing (ETP-5079)
+
+ETP-5079 emptied several GOClient onboarding dataset files, so a freshly onboarded tenant has **no
+products, no business partners, no financial accounts and no account/payment-method links** (the
+tables are still in `OnboardingDatasetDefinition.INCLUDED_TABLES`; their XML is now `<data></data>`).
+An integration spec must therefore provision every piece of master data it needs, through the
+idempotent `ensure*` helpers — never by picking "whatever row happens to be first", and never by
+relying on another spec having run before it. The `integration` project runs `workers: 1` in
+alphabetical file order, which is exactly what let those implicit dependencies hide: `f`-named specs
+were silently seeding the `p`-named ones and vice versa.
+
+| Helper | File | Provides |
+|---|---|---|
+| `ensureProductSetup(page, fixture)` | `tests/helpers/product-helpers.js` | A priced product (`E2E-ALPHA` / `E2E-BETA`) |
+| `ensureVendorSetup(page, { navigateTo })` | `tests/helpers/purchase-helpers.js` | The `E2E Vendor Fixture` contact — flagged both customer and vendor, with an address and PO payment terms/method |
+| `ensureFinancialAccountSetup(page)` | `tests/helpers/financial-account-helpers.js` | A cash account, and through it the `FIN_FINACC_PAYMENTMETHOD` link every payment-method selector needs |
+| `ensureSecondaryWarehouse(page)` | `tests/helpers/warehouse-helpers.js` | A second warehouse (`E2E-WH2`) |
+| `ensureOpenPeriod()` | `tests/helpers/period-helpers.js` | An open `c_periodcontrol` for the doc base types being confirmed |
+
+The financial-account one is the least obvious and the easiest to re-break. The payment-method
+fields on a business partner (`PO_Paymentmethod_ID`, `FIN_Paymentmethod_ID`) and on an invoice
+(`C_Invoice.FIN_Paymentmethod_ID`) are governed by AD validation rules that are `EXISTS` checks over
+the **link** table `FIN_FinAcc_PaymentMethod`, not over the `FIN_PaymentMethod` masters — so with
+zero financial accounts every one of those selectors is empty even though the four payment-method
+masters are seeded. NEO exposes no route to the link table (the `financial-account` spec's
+`paymentMethod` entity is `ISINCLUDED=N`), so the helper creates a type-`C` account instead and
+relies on `FinancialAccountHandler#afterHandle` → `FinancialAccountSupport.assignDefaultPaymentMethods`
+to write the link, then re-probes the selector to verify it actually landed (that hook is
+best-effort and swallows its own failures). `ensureVendorSetup` calls it automatically; call it
+directly from any spec that needs a payment method without needing a vendor.
+
+**`ISPOST=Y` on an `ETGO_SF_ENTITY` row does not mean the entity is routable** — `NeoServlet#findEntity`
+filters on `ISINCLUDED` first, so a non-included entity answers `404 Entity not found in spec`, not
+`405`. Always check `ISINCLUDED` in
+`com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` before writing a `page.request`
+call against a new entity.
+
 The spec asserts on the **backend payloads captured from the app's own requests**
 (`waitForResponse` → `response.data`), never on formatted currency read out of the DOM: the money
 formatting is already covered by `cashCloseMath.test.js`, and re-parsing `1.234,56 €` in an E2E spec

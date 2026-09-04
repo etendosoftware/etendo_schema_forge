@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import { waitForDocumentActionResponse } from '../helpers/purchase-helpers.js';
 
 /**
@@ -88,6 +89,14 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
     });
+
+    // ETP-5079: the onboarding dataset no longer seeds any visible product (the
+    // demo "Queso Sardo" row this test used to search for was deleted along with
+    // the other three), so provision a dedicated, priced, returnable fixture
+    // first. See e2e/tests/helpers/product-helpers.js. The persisted name is read
+    // back off the created/found record — that is what the drawer renders and
+    // what ensureStockOnHand's own product selector has to match.
+    const productFixture = await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
 
     await test.step('Create a new Sales Order with one line', async () => {
       await navigateTo(page, 'sales-order');
@@ -180,11 +189,17 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await slow(page);
 
       const searchInput = page.getByTestId('product-search-input');
-      await searchInput.fill('Queso Sardo');
+      await searchInput.fill(productFixture.name);
       await page.waitForTimeout(1000);
 
-      const productOption = page.locator('[data-testid^="product-search-option-"]').first();
-      await expect(productOption).toBeVisible({ timeout: 15_000 });
+      // Filter by name as well as searching: the search is a backend query, and
+      // matching the option client-side too keeps this from silently binding to
+      // whatever else the drawer happens to return first.
+      const productOption = page.locator('[data-testid^="product-search-option-"]')
+        .filter({ hasText: productFixture.name }).first();
+      await expect(productOption,
+        `Product "${productFixture.name}" should appear in the search drawer`,
+      ).toBeVisible({ timeout: 15_000 });
 
       const productCalloutResponse = page.waitForResponse(
         (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
@@ -207,7 +222,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       // instead of this order's actual line row.
       await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
 
-      // Guarantee enough on-hand stock for "Queso Sardo" at this order's warehouse
+      // Guarantee enough on-hand stock for the fixture product at this order's warehouse
       // BEFORE the shipment gets confirmed later in this flow — confirming a shipment
       // whose line quantity exceeds on-hand stock fails Etendo's M_CHECK_STOCK
       // validation with "No hay suficiente en stock". Repeated suite runs drain a
@@ -216,7 +231,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       // minQty is 5x the line's own ordered quantity (defaultValue: 1 on
       // sales-order's orderedQuantity field) — a comfortable buffer for several runs.
       await ensureStockOnHand(page, {
-        productName: 'Queso Sardo',
+        productName: productFixture.name,
         warehouseName,
         minQty: 5,
       });

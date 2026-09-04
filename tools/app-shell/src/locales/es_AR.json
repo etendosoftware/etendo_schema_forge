@@ -19105,7 +19105,6 @@
     "onboardingReadinessSession": "La sesión del ERP todavía no está lista.",
     "onboardingReadinessDefaults": "Los valores por defecto de factura de venta todavía no están listos.",
     "onboardingReadinessPaymentTerms": "Las condiciones de pago de factura de venta no están disponibles.",
-    "onboardingReadinessCustomers": "Los clientes de factura de venta no están disponibles.",
     "onboardingReadinessDocumentType": "El tipo de documento de factura de venta falta o no es válido.",
     "onboardingBrandName": "Etendo",
     "organization": "Organización",
