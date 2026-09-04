@@ -535,4 +535,83 @@ describe('adaptMatrix (via useRolesOverviewData) — ETP-5071 menu.json resoluti
       'unmapped-zeta-fallback',
     ]);
   });
+
+  // ETP-5071 follow-up — Sentinel QA regression-insurance coverage (found 0 bugs, but
+  // flagged these 3 comparator paths of the already-correct row-sort as untested).
+
+  it('degrades to pure alphabetical order among 2+ rows when EVERY row in a category is a fallback (no itemOrder at all)', async () => {
+    // Every windowId here is absent from the mocked menu.json — the row comparator's
+    // "both sides have no itemOrder" branch (`a.windowName.localeCompare(b.windowName)`)
+    // is the ONLY thing that can order them; the other tests above always mix in at
+    // least one ordered row.
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          {
+            name: 'AllFallback',
+            windows: [
+              { id: 'unmapped-zulu', name: 'Zulu Only Fallback', access: {} },
+              { id: 'unmapped-echo', name: 'Echo Only Fallback', access: {} },
+              { id: 'unmapped-mike', name: 'Mike Only Fallback', access: {} },
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'AllFallback');
+    expect(group.rows.map((r) => r.windowId)).toEqual(['unmapped-echo', 'unmapped-mike', 'unmapped-zulu']);
+  });
+
+  it('preserves original feed order (stable sort) for two rows that resolve to the identical itemOrder', async () => {
+    // Both entries below are the SAME windowId ('701'), so both resolve to the exact
+    // same itemOrder (0) — the comparator returns 0 for this pair, and
+    // `Array.prototype.sort` is spec-guaranteed stable, so the two rows must come out in
+    // the same relative order they were fed in. Distinguished via `access`, since
+    // `windowId`/`windowName` are identical for both by construction.
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          {
+            name: 'StableSortBucket',
+            windows: [
+              { id: '701', name: 'raw one', access: { roleA: 'full' } },
+              { id: '701', name: 'raw two', access: { roleA: 'read-only' } },
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'RowOrder');
+    expect(group.rows).toHaveLength(2);
+    expect(group.rows.every((r) => r.windowId === '701' && r.windowName === 'Zebra Row')).toBe(true);
+    // Feed order preserved: 'full' (fed first) stays before 'read-only'->'readOnly' (fed second).
+    expect(group.rows.map((r) => r.access.roleA)).toEqual(['full', 'readOnly']);
+  });
+
+  it('sorts correctly by itemOrder even when two DIFFERENT backend categories merge into the SAME resolved category, fed in the REVERSE of their real itemOrder', async () => {
+    // Protects the merge-then-sort phase separation in `adaptMatrix`: the flatten/bucket
+    // loop pushes '702' (itemOrder 1) into `rowsByCategory.get('RowOrder')` BEFORE '701'
+    // (itemOrder 0), since it's fed from an earlier backend category — if a future
+    // refactor fused that loop with the sort (e.g. sorted incrementally on push instead
+    // of once at the end), this order-dependent bug would slip through unnoticed.
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          { name: 'BucketHigh', windows: [{ id: '702', name: 'raw high', access: {} }] }, // -> RowOrder, itemOrder 1, fed FIRST
+          { name: 'BucketLow', windows: [{ id: '701', name: 'raw low', access: {} }] }, // -> RowOrder, itemOrder 0, fed SECOND
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const group = getResult().matrix.find((g) => g.category === 'RowOrder');
+    expect(group.rows.map((r) => r.windowId)).toEqual(['701', '702']);
+  });
 });
