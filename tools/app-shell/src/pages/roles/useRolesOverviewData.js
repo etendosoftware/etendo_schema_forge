@@ -174,31 +174,44 @@ function adaptCards(roles) {
  * out of scope here) — e.g. "Product" shows under "Master Data Management" instead of
  * "Inventory". `adaptMatrix` below re-resolves both against this index.
  *
- * Flattens every `menu[].items[]` entry that carries a `windowId`. `groupOrder` is the
- * index of that entry's `menu[]` group in menu.json's OWN declaration order — ETP-5071's
- * product decision is to sort categories by that declaration order, not alphabetically.
- * `itemOrder` (ETP-5071 follow-up) is that same entry's index WITHIN `group.items` —
- * `menu.json`'s `items[]` array is already in the exact order the real sidebar renders
- * them, confirmed live against the Finance group's own order, so `adaptMatrix` below
- * sorts each category's ROWS by `itemOrder` too, not just the categories themselves by
- * `groupOrder` — the backend's `matrix.categories[].windows[]` order is its own
- * alphabetical-by-raw-classic-`AD_Window.name` sort (`SFRolesOverview.java`, out of
- * scope), unrelated to the sidebar's order.
+ * Flattens every `menu[].items[]` entry that carries an identity id. Same convention as
+ * `windows/registry.js`'s `filterMenuGroupsByAccess()` (its own `itemIds` helper treats
+ * `windowId`/`processId`/`obuiappProcessId` as equivalent/interchangeable identity keys
+ * for menu-filtering) — here each item's identity resolves as `item.windowId ??
+ * item.obuiappProcessId ?? item.processId` (first non-null wins; no item sets more than
+ * one of these today, so precedence between them doesn't actually arise in practice, but
+ * it's written defensively). This is what lets ETP-5071's 3 windowless-but-proxied menu
+ * items (`fiscal-monitor`/`fiscal-models` via `windowId`, `not-posted-documents` via
+ * `obuiappProcessId`) resolve through this same index like any real window.
  *
- * Precedence for a `windowId` shared by 2+ items (confirmed live, today always a
- * same-group visible/hidden pair — `"123"` People: `contacts`/`business-partner`, `"117"`
- * Finance: `calendar`/`fiscal-calendar` — never cross-group, though this does not assume
- * that can never happen): prefer the entry WITHOUT `hidden: true`; if every entry for
- * that id is hidden (or the first-seen entry already isn't), keep the first one
- * encountered. `itemOrder` travels with whichever candidate wins, same as `group`/`label`.
+ * `groupOrder` is the index of that entry's `menu[]` group in menu.json's OWN declaration
+ * order — ETP-5071's product decision is to sort categories by that declaration order,
+ * not alphabetically. `itemOrder` (ETP-5071 follow-up) is that same entry's index WITHIN
+ * `group.items` — `menu.json`'s `items[]` array is already in the exact order the real
+ * sidebar renders them, confirmed live against the Finance group's own order, so
+ * `adaptMatrix` below sorts each category's ROWS by `itemOrder` too, not just the
+ * categories themselves by `groupOrder` — the backend's `matrix.categories[].windows[]`
+ * order is its own alphabetical-by-raw-classic-`AD_Window.name` sort
+ * (`SFRolesOverview.java`, out of scope), unrelated to the sidebar's order.
+ *
+ * Precedence for an id shared by 2+ items (confirmed live, today always a same-group
+ * visible/hidden pair — `"123"` People: `contacts`/`business-partner`, `"117"` Finance:
+ * `calendar`/`fiscal-calendar` — never cross-group, though this does not assume that can
+ * never happen): prefer the entry WITHOUT `hidden: true`; if every entry for that id is
+ * hidden (or the first-seen entry already isn't), keep the first one encountered.
+ * `itemOrder` travels with whichever candidate wins, same as `group`/`label`. The winning
+ * candidate's own `hidden` flag is therefore `true` only when EVERY menu.json entry for
+ * that id is hidden (no visible alternative exists) — `adaptMatrix` uses exactly that
+ * signal to drop sidebar-hidden windows from the matrix (see ETP-5071 below).
  */
 export function buildMenuWindowIndex() {
   const index = new Map();
   const groups = menuConfig?.menu ?? [];
   groups.forEach((group, groupOrder) => {
     group.items?.forEach((item, itemOrder) => {
-      if (item?.windowId == null) return;
-      const windowId = String(item.windowId);
+      const rawId = item?.windowId ?? item?.obuiappProcessId ?? item?.processId;
+      if (rawId == null) return;
+      const windowId = String(rawId);
       const candidate = { group: group.group, label: item.label, groupOrder, itemOrder, hidden: !!item.hidden };
       const existing = index.get(windowId);
       if (!existing) {
@@ -227,6 +240,17 @@ const MENU_WINDOW_INDEX = buildMenuWindowIndex();
  * `category.name`/`w.name` — it must never disappear from the matrix just because it
  * isn't in menu.json.
  *
+ * ETP-5071 — a window IS excluded from the output entirely when it resolves to a
+ * `menuIndex` match whose own `hidden` flag is `true` — meaning every menu.json entry for
+ * that id is hidden (see `buildMenuWindowIndex`'s precedence rule: a visible alternative,
+ * if one exists, always wins the index slot first). Two confirmed real cases: Match Rule
+ * and Periods (`Finance`), both hidden-only in menu.json yet granted real
+ * `AD_Window_Access` — an admin configuring "what can this role see" should never be
+ * shown a toggle for something nobody can navigate to. This check only fires on an actual
+ * match; the "never disappear" fallback above for an absent `menuIndex` entry is
+ * unaffected — `match` is `undefined` in that case, not a hidden `true`.
+ *
+
  * Re-groups and re-sorts by the RESOLVED category, not the backend's original grouping:
  * since two different backend `category.name` buckets can map to the same menu.json
  * `group` (or vice versa), every window is flattened across all backend categories first,
@@ -252,6 +276,7 @@ function adaptMatrix(matrix, menuIndex) {
   for (const category of categories) {
     for (const w of category.windows ?? []) {
       const match = menuIndex.get(String(w.id));
+      if (match?.hidden) continue;
       const resolvedCategory = match?.group ?? category.name;
       const resolvedName = match?.label ?? w.name;
       const row = {
