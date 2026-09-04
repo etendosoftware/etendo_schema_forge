@@ -10,6 +10,51 @@ vi.mock('@/lib/rolesApi.js', () => ({
   fetchRolesOverview: vi.fn(),
 }));
 
+// ETP-5071 — `useRolesOverviewData.js` now imports the real `../../menu.json` at module
+// scope (`with { type: 'json' }`) to build `MENU_WINDOW_INDEX` once, used by `adaptMatrix`
+// to re-resolve category/window names. Mocked with a small synthetic fixture (same
+// convention as `CommandPalette.vitest.jsx`'s `vi.mock('../../menu.json', ...)`) rather
+// than relying on real, currently-live windowIds — real `menu.json` can be edited for
+// unrelated reasons and would silently break these assertions.
+//
+// Fixture groups, in DECLARATION order (= `groupOrder`): Sales(0), Zeta(1), Alpha(2),
+// DupGroup(3) — Zeta/Alpha are deliberately out of alphabetical order so ordering tests
+// below can tell "sorted by groupOrder" apart from "sorted alphabetically".
+// `useRolesOverviewData.js` (at `src/pages/roles/`) imports '../../menu.json' (-> `src/menu.json`).
+// From THIS test file (at `src/pages/roles/__tests__/`), that same file is 3 levels up.
+vi.mock('../../../menu.json', () => ({
+  default: {
+    menu: [
+      {
+        group: 'Sales',
+        items: [
+          { name: 'sales-order', label: 'Sales Order', windowId: '201' },
+          { name: 'sales-order-2', label: 'Sales Order 2', windowId: '202' },
+        ],
+      },
+      {
+        group: 'Zeta',
+        items: [{ name: 'zeta-window', label: 'Zeta Window', windowId: '401' }],
+      },
+      {
+        group: 'Alpha',
+        items: [{ name: 'alpha-window', label: 'Alpha Window', windowId: '301' }],
+      },
+      {
+        group: 'DupGroup',
+        items: [
+          // '501': visible entry listed FIRST, hidden listed second.
+          { name: 'dup-a-visible', label: 'Visible A', windowId: '501', hidden: false },
+          { name: 'dup-a-hidden', label: 'Hidden A', windowId: '501', hidden: true },
+          // '502': hidden entry listed FIRST, visible listed second (reversed order).
+          { name: 'dup-b-hidden', label: 'Hidden B', windowId: '502', hidden: true },
+          { name: 'dup-b-visible', label: 'Visible B', windowId: '502', hidden: false },
+        ],
+      },
+    ],
+  },
+}));
+
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import {
   buildRowKey,
@@ -17,6 +62,7 @@ import {
   sortByRoleOrder,
   resolveRoleKind,
   normalizeTier,
+  buildMenuWindowIndex,
   ROLE_ORDER,
   useRolesOverviewData,
 } from '../useRolesOverviewData.js';
@@ -59,6 +105,28 @@ describe('resolveRoleKind', () => {
   it('returns null for an unrecognized role instead of guessing', () => {
     expect(resolveRoleKind({ name: 'Some Custom Role' })).toBeNull();
     expect(resolveRoleKind({})).toBeNull();
+  });
+});
+
+describe('buildMenuWindowIndex', () => {
+  it('resolves group/label/groupOrder for a windowId present in menu.json', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('201')).toEqual({ group: 'Sales', label: 'Sales Order', groupOrder: 0, hidden: false });
+  });
+
+  it('prefers the non-hidden entry for a duplicate windowId when the VISIBLE one is listed first', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('501')).toMatchObject({ group: 'DupGroup', label: 'Visible A', hidden: false });
+  });
+
+  it('prefers the non-hidden entry for a duplicate windowId when the VISIBLE one is listed second (hidden first)', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('502')).toMatchObject({ group: 'DupGroup', label: 'Visible B', hidden: false });
+  });
+
+  it('omits a windowId that never appears in any menu.json group, rather than erroring', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.has('does-not-exist-anywhere')).toBe(false);
   });
 });
 
@@ -221,7 +289,12 @@ describe('useRolesOverviewData', () => {
     expect(getResult().cards[0].userCount).toBe(0);
   });
 
-  it('should not happen per the backend contract, but a matrix category with an empty windows array adapts to an empty rows list rather than crashing', async () => {
+  it('should not happen per the backend contract, but a matrix category with an empty windows array adapts to zero output categories rather than crashing', async () => {
+    // ETP-5071 — `adaptMatrix` now flattens every window across ALL backend categories
+    // first, then re-buckets by the RESOLVED category. An empty `windows[]` contributes
+    // nothing to flatten, so there is no window left to resolve a category name from —
+    // the category itself does not survive, unlike the pre-ETP-5071 behavior which kept
+    // an empty `{category: 'Finance', rows: []}` placeholder.
     fetchRolesOverview.mockResolvedValue({
       roles: [{ id: 'r-admin', name: 'Admin', isClientAdmin: true }],
       matrix: { categories: [{ name: 'Finance', windows: [] }] },
@@ -229,7 +302,7 @@ describe('useRolesOverviewData', () => {
     const { getResult, waitFor } = await renderHook();
     await waitFor(() => expect(getResult().loading).toBe(false));
     expect(getResult().error).toBeNull();
-    expect(getResult().matrix).toEqual([{ category: 'Finance', rows: [] }]);
+    expect(getResult().matrix).toEqual([]);
   });
 
   it('passes a role/window pair entirely missing from a malformed/partial access map through as absent (RolesAccessMatrix, not this adapter, defaults it to "none" at render time)', async () => {
@@ -253,5 +326,113 @@ describe('useRolesOverviewData', () => {
     const row = getResult().matrix[0].rows[0];
     expect(row.access['r-admin']).toBe('full');
     expect(row.access['r-fin']).toBeUndefined();
+  });
+});
+
+// ETP-5071 — `adaptMatrix(matrix, menuIndex)` is not exported (the file exports
+// `buildMenuWindowIndex`/`normalizeTier`/`buildRowKey`/`flattenMatrixRows`/
+// `sortByRoleOrder`/`resolveRoleKind`, but not this one) — tested only indirectly
+// through `useRolesOverviewData()`'s public surface, same convention already used
+// above for the plain adapter-shape assertions. Uses the mocked `menu.json` fixture
+// declared at the top of this file (Sales/Zeta/Alpha/DupGroup, groupOrder 0..3).
+describe('adaptMatrix (via useRolesOverviewData) — ETP-5071 menu.json resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function renderHook() {
+    const React = await import('react');
+    const { render, waitFor } = await import('@testing-library/react');
+    let result;
+    function Probe() {
+      result = useRolesOverviewData();
+      return null;
+    }
+    render(React.createElement(Probe));
+    return { getResult: () => result, waitFor };
+  }
+
+  it('resolves category/name from menu.json when the windowId IS in the index, ignoring the backend\'s raw values', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          { name: 'WrongBucketName', windows: [{ id: '201', name: 'Wrong Raw Name', access: {} }] },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().matrix).toEqual([
+      { category: 'Sales', rows: [{ windowId: '201', windowName: 'Sales Order', access: {} }] },
+    ]);
+  });
+
+  it('falls back to the backend\'s raw category/name when the windowId is NOT in menu.json — never dropped', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          { name: 'LegacyBucket', windows: [{ id: 'unmapped-1', name: 'Legacy Window', access: {} }] },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().matrix).toEqual([
+      { category: 'LegacyBucket', rows: [{ windowId: 'unmapped-1', windowName: 'Legacy Window', access: {} }] },
+    ]);
+  });
+
+  it('merges two backend categories whose windows both resolve to the SAME menu.json group into one output category', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          { name: 'BucketA', windows: [{ id: '201', name: 'raw A', access: {} }] },
+          { name: 'BucketB', windows: [{ id: '202', name: 'raw B', access: {} }] },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    const result = getResult();
+    expect(result.matrix).toHaveLength(1);
+    expect(result.matrix[0].category).toBe('Sales');
+    expect(result.matrix[0].rows.map((r) => r.windowId).sort()).toEqual(['201', '202']);
+  });
+
+  it('orders categories by menu.json declaration order (groupOrder), not alphabetically', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        // Fed in an order that would look "alphabetical" (Alpha, Sales, Zeta) if the
+        // adapter sorted category names lexically — it must not.
+        categories: [
+          { name: 'whatever-alpha-bucket', windows: [{ id: '301', name: 'x', access: {} }] }, // -> Alpha (groupOrder 2)
+          { name: 'whatever-sales-bucket', windows: [{ id: '201', name: 'x', access: {} }] }, // -> Sales (groupOrder 0)
+          { name: 'whatever-zeta-bucket', windows: [{ id: '401', name: 'x', access: {} }] }, // -> Zeta (groupOrder 1)
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().matrix.map((g) => g.category)).toEqual(['Sales', 'Zeta', 'Alpha']);
+  });
+
+  it('sorts categories with only fallback (unmapped) windows after every menu.json-ordered category, alphabetically among themselves', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [],
+      matrix: {
+        categories: [
+          { name: 'Zoo', windows: [{ id: 'zoo-1', name: 'z', access: {} }] },
+          { name: 'Sales-ish', windows: [{ id: '201', name: 'x', access: {} }] }, // -> Sales (groupOrder 0)
+          { name: 'Apple', windows: [{ id: 'apple-1', name: 'a', access: {} }] },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().matrix.map((g) => g.category)).toEqual(['Sales', 'Apple', 'Zoo']);
   });
 });
