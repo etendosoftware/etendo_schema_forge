@@ -17397,6 +17397,7 @@
     "rolesSummaryCardNavigateAria": "View users with the {role} role",
     "userRolesTabLabel": "User roles",
     "userRolesTabEmptyState": "Select a role to view permissions",
+    "userRolesTabAdminFullAccessMessage": "This user has full access as an administrator",
     "userRolesTabWindowColumn": "Window",
     "userRolesTabGeneralCategory": "General",
     "userRolesTabDashboardRow": "Home (Dashboard)",
