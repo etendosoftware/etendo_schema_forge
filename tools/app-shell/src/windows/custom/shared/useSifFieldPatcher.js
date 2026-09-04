@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { resolveInvoiceOrgId } from '@/windows/custom/shared/resolveInvoiceOrgId.js';
 
 export const CLAVE_TIPO_OPTIONS = [
   { value: 'F1', labelKey: 'sifDataTabs.option.invoice' },
@@ -66,12 +67,15 @@ export const TBAI_REVERSEINVOICECODE_OPTIONS = [
 // schema_forge_core) irrelevant here — SIF fields only ever need `onChange`.
 export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   const ui = useUI();
+  // ETP-5087: keyed by the INVOICE's own org (data.adOrgId), not the top-nav org
+  // selector — see resolveInvoiceOrgId.js.
   const { selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id ?? null;
+  const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
 
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
-  const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const territory = tbaiRecord?.etsgSifTerritory ?? null;
+  const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile, territory);
   const isPurchaseInvoice = specName === 'purchase-invoice';
   const siiTypeField = isPurchaseInvoice ? 'aeatsiiClaveTipoFc' : 'aeatsiiClaveTipo';
   const siiDescriptionMasterIdentifier = isPurchaseInvoice

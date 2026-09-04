@@ -69,11 +69,13 @@ describe('inventory-stock-report — grouped layout renders one card per group (
     assert.equal(theadOccurrences.length, 3, 'expected one <thead> per group, not one shared thead');
   });
 
-  it('the group name renders as the value, with a dimensionLabel chip alongside (matching report-general-ledger)', () => {
+  it('the group name renders as the value, with a dimensionLabel chip appearing FIRST (matching report-general-ledger, ETP-5128)', () => {
     const html = render({ dimensionField: 'product', dimensionLabel: 'Producto' }, rows);
-    assert.match(html, /<span class="value">Artículo A<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Artículo B<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Artículo C<\/span><span class="chip">Producto<\/span>/);
+    // Order is chip-then-value since ETP-5013 (template.hbs line 57); the names are
+    // neutral because ETP-5079 deleted the demo products this used to name.
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Artículo A<\/span>/);
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Artículo B<\/span>/);
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Artículo C<\/span>/);
   });
 
   it('no longer renders the old flat group-header row', () => {

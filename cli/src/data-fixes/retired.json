@@ -23,6 +23,17 @@
     ]
   },
   {
+    "fixId": "20260828T120000Z__R28-standard-cost-anchor",
+    "checksum": "46cba2777a0d49533d85a01a3f4f8bf4eead1d384605a365e40dcff1c8ba6846",
+    "checksumAlgorithm": "sha256",
+    "reason": "Superseded by the unified, M_Transaction-sourced anchor fix. R28 only covered Shipment/Receipt (m_inoutline/m_inout); tracing CostingServer.process() and StandardAlgorithm.getTransactionCost() (src/org/openbravo/costing/) showed the SAME @NoStandardCostDefined failure is architecturally reachable from four more document families that also write M_Transaction rows and go through the identical default-case cost lookup: Physical Inventory (m_inventoryline/m_inventory -- confirmed with LIVE gap data, 2 real tenants, 2026-09-03), Internal Movement, Internal Consumption, and Manufacturing/Production (the latter three architecturally exposed but zero live gap rows on any Standard-cost tenant at authoring time). R33-standard-cost-anchor-unified is a strict superset: same target table (m_costing), same guard shape (two-layer idempotency, :client_id scope, IsManual='Y'/IsPermanent='Y'/CostType='STA', warehouse-independent, next-Standard-row bounding), same fallback cost chain, PLUS it fixes a real (if narrow) date-precision bug R28 carried: R28 anchored datefrom at M_InOut.DateAcct, but StandardAlgorithm.getOutgoingTransactionCost() actually looks up the cost at M_Transaction.TrxProcessDate for any tenant with M_Costing_Rule.BackdatedTrxsFixed='N' (all 5 Standard-cost tenants checked) -- R28's anchor only worked because DateAcct <= TrxProcessDate always held (conservative, not exact); R33 reproduces the real per-tenant/per-TrxType date formula. R28's own @check has no awareness it was superseded and would keep running its narrower, less-precise Shipment/Receipt-only query forever if left active alongside R33 -- running both is unnecessary (R33 already covers everything R28 covers) though not unsafe (both guard inserts via the same m_costing NOT EXISTS shape, so no double-anchoring or conflict was observed in side-by-side rolled-back-transaction testing). R28's .sql file stays byte-for-byte untouched (checksum verified against its live bytes in this repo at retirement time); this retirement list is the mechanism, not an edit to the fix. Ledger check (2026-09-03, local dev DB): R28 has ZERO rows in ETGO_DATA_FIX_HISTORY -- it has never actually been run (via node cli/src/data-fixes/run.js) against any real tenant on this DB; only ad-hoc rolled-back-transaction validation touched it. The Experimental GOClient environment could not be reached from this session (network egress blocked, documented SSH tunnel not established) to check its ledger, so this does not rule out R28 having been APPLIED there or elsewhere -- retirement is safe regardless per the framework's own design (an APPLIED-and-superseded fix is exactly what this mechanism is for).",
+    "retiredBy": "ETP-5142",
+    "retiredUtc": "2026-09-03T18:00:00.000Z",
+    "supersededBy": [
+      "20260903T120000Z__R33-standard-cost-anchor-unified"
+    ]
+  },
+  {
     "fixId": "20260716T120000Z__R14-payment-method-multicurrency",
     "checksum": "dc2621d860ccfe985b77fb83ded2ddc570c6f3cf2082859b101a4f5777df8554",
     "checksumAlgorithm": "sha256",

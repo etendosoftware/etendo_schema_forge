@@ -2465,7 +2465,7 @@
       "description": "Number of days the product is guaranteed or available"
     },
     "A_Asset_Group_ID": {
-      "label": "Asset Category",
+      "label": "Asset Group",
       "description": "A classification of assets based on similar characteristics."
     },
     "IsDepreciated": {
@@ -14913,7 +14913,7 @@
       "label": "System"
     },
     "Asset Category": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Attribute Set": {
       "label": "Attribute Set"
@@ -17253,9 +17253,11 @@
     "invoicePreviewStatus": "Status",
     "invoicePreview.fiscalStatus.sii": "SII Status",
     "invoicePreview.fiscalStatus.tbai": "TicketBAI Status",
+    "invoicePreview.fiscalStatus.tbaiPurchase": "Batuz Status",
     "invoicePreview.fiscalStatus.verifactu": "VERI*FACTU Status",
     "invoiceList.col.siiStatus": "SII Status",
     "invoiceList.col.tbaiStatus": "TicketBAI Status",
+    "invoiceList.col.tbaiStatusPurchase": "Batuz Status",
     "invoiceList.col.verifactuStatus": "VERI*FACTU Status",
     "invoicePreviewNoPaymentsRecorded": "No payments recorded",
     "invoicePreviewPendingSync": "pending sync",
@@ -17641,6 +17643,7 @@
     "comingSoon": "Coming soon",
     "reportServiceUnavailable": "The reporting service is unavailable. Please try again in a moment.",
     "pdfGenerationFailed": "Could not generate the PDF. Please try again.",
+    "printAllDraftExcluded": "All selected documents are in Draft and cannot be printed. Complete them first.",
     "report": "Report",
     "format": "Format",
     "records": "records",
@@ -17979,6 +17982,7 @@
     "invoicePdfError": "Could not generate invoice PDF.",
     "invoicePdfTitle": "Sales invoice",
     "invoicePdfDocumentNo": "Invoice No.",
+    "invoicePdfCurrency": "Currency:",
     "invoicePdfTaxId": "Tax ID:",
     "invoicePdfPage": "Page",
     "invoicePdfCustomerSection": "Customer details",
@@ -17993,10 +17997,10 @@
     "invoicePdfColQty": "Qty",
     "invoicePdfColUnitPrice": "List Price",
     "invoicePdfColDiscount": "Disc.%",
-    "invoicePdfColTax": "Tax%",
+    "invoicePdfColTax": "Tax",
     "invoicePdfColTotal": "Total",
-    "invoicePdfSubtotal": "Subtotal (excl. tax)",
-    "invoicePdfTax": "Tax",
+    "invoicePdfSubtotal": "Subtotal (excl. taxes)",
+    "invoicePdfTax": "Taxes",
     "invoicePdfGrandTotal": "Total",
     "invoicePdfNotes": "Notes",
     "orderPdfGenerating": "Generating order...",
@@ -20561,6 +20565,7 @@
     "fiscalMonitor.tbai.status.Recibido": "Accepted",
     "fiscalMonitor.tbai.status.Rechazado": "Rejected",
     "fiscalMonitor.tbai.status.Error": "Error",
+    "fiscalMonitor.tbai.status.Enviada": "Sent",
     "fiscalMonitor.kpi.sii.issued": "Issued invoices",
     "fiscalMonitor.kpi.sii.received": "Received invoices",
     "fiscalMonitor.kpi.tbai.total": "TicketBAI sent",
@@ -20765,12 +20770,16 @@
     "sendToSifBodySii": "This invoice will be sent to SII.",
     "sendToSifBodyTbai": "This invoice will be sent to TicketBAI.",
     "sendToSifBodyBoth": "This invoice will be sent to SII and TicketBAI.",
+    "sendToSifBodyTbaiPurchase": "This invoice will be sent to Batuz.",
+    "sendToSifBodyBothPurchase": "This invoice will be sent to SII and Batuz.",
     "sendToSifConfirm": "Send",
     "sendToSifSending": "Sending… this may take a few seconds.",
     "sendToSifSuccessSii": "Sent to SII successfully.",
     "sendToSifSuccessTbai": "Sent to TicketBAI successfully.",
+    "sendToSifSuccessTbaiPurchase": "Sent to Batuz successfully.",
     "sendToSifErrorSii": "Error sending to SII.",
     "sendToSifErrorTbai": "Error sending to TicketBAI.",
+    "sendToSifErrorTbaiPurchase": "Error sending to Batuz.",
     "sifDataTabs.sectionTitle": "SIF",
     "sifDataTabs.tab.sii": "SII",
     "sifDataTabs.tab.tbai": "TicketBAI",

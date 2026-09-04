@@ -4109,7 +4109,7 @@
       "description": "Dirección destinada a la descripción de un producto, a la que puede accederse via Internet."
     },
     "A_Asset_Group_ID": {
-      "label": "Grupo activo",
+      "label": "Categoría de activo",
       "description": "Clasificación de los activos basada en características similares."
     },
     "C_Currency_ID": {
@@ -14062,8 +14062,8 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Grupo de activos",
-      "newLabel": "Nuevo grupo"
+      "label": "Categoría de activo",
+      "newLabel": "Nueva categoría"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -15326,7 +15326,7 @@
       "label": "Proceso"
     },
     "Asset Category": {
-      "label": "Grupo de activos"
+      "label": "Categoría de activo"
     },
     "Attribute Set": {
       "label": "Conjunto atributos"
@@ -17484,9 +17484,11 @@
     "invoicePreviewStatus": "Estado",
     "invoicePreview.fiscalStatus.sii": "Estado SII",
     "invoicePreview.fiscalStatus.tbai": "Estado TicketBAI",
+    "invoicePreview.fiscalStatus.tbaiPurchase": "Estado Batuz",
     "invoicePreview.fiscalStatus.verifactu": "Estado VERI*FACTU",
     "invoiceList.col.siiStatus": "Estado SII",
     "invoiceList.col.tbaiStatus": "Estado TicketBAI",
+    "invoiceList.col.tbaiStatusPurchase": "Estado Batuz",
     "invoiceList.col.verifactuStatus": "Estado VERI*FACTU",
     "invoicePreviewNoPaymentsRecorded": "No hay pagos registrados",
     "invoicePreviewPendingSync": "pendiente de sincronización",
@@ -17873,6 +17875,7 @@
     "comingSoon": "Próximamente",
     "reportServiceUnavailable": "El servicio de reportes no está disponible. Intentalo de nuevo en un momento.",
     "pdfGenerationFailed": "No se pudo generar el PDF. Intentalo de nuevo.",
+    "printAllDraftExcluded": "Todos los documentos seleccionados están en Borrador y no se pueden imprimir. Complétalos primero.",
     "report": "Informe",
     "format": "Formato",
     "records": "registros",
@@ -18151,6 +18154,7 @@
     "invoicePdfError": "No se pudo generar el PDF de la factura.",
     "invoicePdfTitle": "Factura de venta",
     "invoicePdfDocumentNo": "Nº de factura",
+    "invoicePdfCurrency": "Moneda:",
     "invoicePdfTaxId": "CIF:",
     "invoicePdfPage": "Página",
     "invoicePdfCustomerSection": "Datos del cliente",
@@ -18165,10 +18169,10 @@
     "invoicePdfColQty": "Cantidad",
     "invoicePdfColUnitPrice": "Precio tarifa",
     "invoicePdfColDiscount": "Desc.%",
-    "invoicePdfColTax": "IVA%",
+    "invoicePdfColTax": "Impuesto",
     "invoicePdfColTotal": "Total",
-    "invoicePdfSubtotal": "Subtotal (sin IVA)",
-    "invoicePdfTax": "IVA",
+    "invoicePdfSubtotal": "Subtotal (sin impuestos)",
+    "invoicePdfTax": "Impuestos",
     "invoicePdfGrandTotal": "Total",
     "invoicePdfNotes": "Observaciones",
     "orderPdfGenerating": "Generando pedido...",
@@ -20797,6 +20801,7 @@
     "fiscalMonitor.tbai.status.Recibido": "Aceptado",
     "fiscalMonitor.tbai.status.Rechazado": "Rechazado",
     "fiscalMonitor.tbai.status.Error": "Error",
+    "fiscalMonitor.tbai.status.Enviada": "Enviada",
     "fiscalMonitor.kpi.sii.issued": "Facturas emitidas",
     "fiscalMonitor.kpi.sii.received": "Facturas recibidas",
     "fiscalMonitor.kpi.tbai.total": "TicketBAI enviadas",
@@ -21001,12 +21006,16 @@
     "sendToSifBodySii": "Esta factura se enviará al SII.",
     "sendToSifBodyTbai": "Esta factura se enviará a TicketBAI.",
     "sendToSifBodyBoth": "Esta factura se enviará al SII y a TicketBAI.",
+    "sendToSifBodyTbaiPurchase": "Esta factura se enviará a Batuz.",
+    "sendToSifBodyBothPurchase": "Esta factura se enviará al SII y a Batuz.",
     "sendToSifConfirm": "Enviar",
     "sendToSifSending": "Enviando… esto puede tardar unos segundos.",
     "sendToSifSuccessSii": "Enviado al SII correctamente.",
     "sendToSifSuccessTbai": "Enviado a TicketBAI correctamente.",
+    "sendToSifSuccessTbaiPurchase": "Enviado a Batuz correctamente.",
     "sendToSifErrorSii": "Error al enviar al SII.",
     "sendToSifErrorTbai": "Error al enviar a TicketBAI.",
+    "sendToSifErrorTbaiPurchase": "Error al enviar a Batuz.",
     "sifDataTabs.sectionTitle": "SIF",
     "sifDataTabs.tab.sii": "SII",
     "sifDataTabs.tab.tbai": "TicketBAI",
@@ -25518,7 +25527,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Grupo de activos"
+      "label": "Categoría de activo"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"

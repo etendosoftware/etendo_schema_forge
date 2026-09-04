@@ -2,7 +2,7 @@
   "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
   "updatedAt": "2026-09-02T16:41:27.753Z",
-  "contractChecksum": "b5d4db43c6a106d0",
+  "contractChecksum": "e2389d65df5bb975",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -183,6 +183,11 @@
             {
               "param": "IsSOTrx",
               "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -291,7 +296,16 @@
         "column": "SalesRep_ID",
         "reference": "User",
         "inputMode": "search",
-        "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative"
+        "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative",
+        "context": {
+          "required": [
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "header",
@@ -337,6 +351,14 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "adOrgId",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/header/selectors/adOrgId"
       },
       {
         "entity": "lines",
@@ -1515,6 +1537,9 @@
             "readOnly": true,
             "readOnlyLogic": "true"
           },
+          "tbaiIssent": {
+            "readOnly": true
+          },
           "processed": {
             "readOnly": true,
             "required": true
@@ -1559,7 +1584,13 @@
           "eTGODeliveryStatus": {
             "readOnly": true
           },
-          "eTGOCurrencyRate": {}
+          "eTGOCurrencyRate": {},
+          "adOrgId": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#AD_Org_ID@"
+          }
         }
       },
       "lines": {
@@ -2008,6 +2039,11 @@
             {
               "param": "IsSOTrx",
               "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -2058,6 +2094,19 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "salesRepresentative",
+        "context": {
+          "required": [
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -2195,5 +2244,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "c1090d793a39570f"
+  "checksum": "238c2045947c9cf3"
 }

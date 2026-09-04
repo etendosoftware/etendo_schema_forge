@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 
 /**
  * Sales Quotation — Full happy-path integration E2E against a real backend.
@@ -77,6 +78,13 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       await login(page, { user, password });
       await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
+    });
+
+    await test.step('Ensure the product fixture exists', async () => {
+      // ETP-5079 emptied the seeded product list. Without this the drawer is
+      // empty on a genuinely fresh tenant and the pick below only worked when
+      // an earlier spec in the run happened to leave a product behind.
+      await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
     });
 
     await test.step('Navigate to Sales Quotation list view', async () => {
@@ -171,8 +179,14 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      const productOption = page.locator('[data-testid^="product-search-option-"]').first();
-      await expect(productOption).toBeVisible({ timeout: 15_000 });
+      // Narrow to the fixture by name instead of taking whatever sits first:
+      // drawer position depends on what else the tenant accumulated.
+      await page.getByTestId('product-search-input').fill(PRODUCT_FIXTURE_ALPHA.name);
+      const productOption = page.locator('[data-testid^="product-search-option-"]')
+        .filter({ hasText: PRODUCT_FIXTURE_ALPHA.name }).first();
+      await expect(productOption,
+        `Product "${PRODUCT_FIXTURE_ALPHA.name}" should appear in the search drawer`,
+      ).toBeVisible({ timeout: 15_000 });
 
       // Retry click if the product element detaches mid-click (the drawer
       // re-renders its list when waterfall fetches complete — see purchase-helpers.js).

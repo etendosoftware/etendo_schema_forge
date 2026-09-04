@@ -658,6 +658,121 @@ describe('ReconciliationSplitPanel', () => {
     expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD', 'SR']);
   });
 
+  // ── ETP-5121 / CP-1: a reactivated statement keeps its reconciled line ───────
+  //
+  // "Reactivar" on an imported statement only clears FIN_BankStatement.Processed; it does not
+  // touch the reconciliation chain of an already-matched line (line -> transaction ->
+  // reconciliation, the reconciliation still processed). The backend's PENDING_LINES_SQL used to
+  // gate the WHOLE pendingLines query on `bs.processed = 'Y'`, so after a reactivation BOTH lines
+  // of that statement vanished from the panel — under every filter, not just "Conciliadas" — and
+  // the reconciled one became unreachable (it could no longer be un-reconciled from here).
+  //
+  // With the backend gate fixed the reconciled line is returned again. Note the gate's exception
+  // is deliberately NARROW: only the already-reconciled line comes back for a draft statement —
+  // its unmatched sibling stays out, because a draft statement's pending lines genuinely are not
+  // reconcilable yet. The two-line fixture below therefore models the statement's lines as the
+  // endpoint reports them WHILE STILL PROCESSED, which is the payload that exercises both buckets.
+  //
+  // This panel's filtering is 100% client-side (`matchesStatus` in reconciliationStatusFilter.js)
+  // and keys off `state` alone — it knows nothing about the parent statement's Processed flag. So
+  // what has to be guarded here is that a reconciled line is bucketed ONLY under 'reconciled' and
+  // never under the default 'pending' filter, and that it is reachable (selectable and
+  // un-reconcilable) once the user switches to it — the bug made the row absent under every filter.
+
+  /** The reconciled line — the one the fixed gate keeps returning after a reactivation. */
+  const REACTIVATED_RECONCILED_LINE = {
+    id: 'RS-REC', date: '2026-06-01T00:00:00Z', description: 'Cobro ya conciliado',
+    state: 'reconciled', status: 'reconciled', reconcileStatus: 'RECONCILED', amount: 50,
+    pendingAmount: 0, reconciledAmount: 50, reconciledPct: 100,
+    // No draftReconciliationId: the reconciliation is still PROCESSED — reactivating the
+    // STATEMENT is not the same thing as reactivating the reconciliation.
+    draftReconciliationId: '',
+    txns: [{
+      transactionId: 'T2', documentNo: '1000099', contact: 'Globex', amount: 50,
+      autoCreated: false,
+    }],
+  };
+  /**
+   * Its sibling on the same statement, never matched. Present here so the filter matrix has both
+   * buckets to sort; the backend only returns it while the statement is still processed.
+   */
+  const REACTIVATED_PENDING_LINE = {
+    id: 'RS-PEND', date: '2026-06-02T00:00:00Z', description: 'Cargo sin conciliar',
+    state: 'pending', status: 'pending', amount: -40,
+  };
+  const REACTIVATED_LINES = [REACTIVATED_RECONCILED_LINE, REACTIVATED_PENDING_LINE];
+  const REACTIVATED_COUNTS = {
+    all: 2, pending: 1, suggested: 0, byRule: 0, difference: 0, reconciled: 1,
+  };
+
+  it('keeps the reconciled line of a reactivated statement under the reconciled filter', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    // This is the regression: before the backend fix the row was not in `lines` at all, so the
+    // "Conciliadas" filter rendered an empty list.
+    expect(visibleLineIds()).toEqual(['RS-REC']);
+    expect(screen.getByTestId('recon-line-row-RS-REC')).toBeInTheDocument();
+  });
+
+  it('shows only the unmatched sibling line of a reactivated statement under the default filter', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    // Default filter is 'pending' = "everything not reconciled" — the reconciled line stays out of
+    // it even though its statement is back in draft.
+    expect(visibleLineIds()).toEqual(['RS-PEND']);
+    expect(screen.queryByTestId('recon-line-row-RS-REC')).not.toBeInTheDocument();
+  });
+
+  it('shows both lines of a reactivated statement under the "Todos" entry', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['RS-REC', 'RS-PEND']);
+  });
+
+  it('reports one reconciled line in the status chip for a reactivated statement', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    // The chip labels are `${ui(key)} (${count})`; the reconciled one lives in the popover, so
+    // open the dropdown before reading it.
+    fireEvent.click(screen.getByText(/financeReconcileFilterStatusPending/));
+    expect(screen.getByText((content) => (
+      content.includes('financeReconcileFilterStatusReconciled') && content.includes('1')
+    ))).toBeInTheDocument();
+  });
+
+  it('keeps the reconciled line of a reactivated statement selectable and un-reconcilable', () => {
+    setLines(REACTIVATED_LINES);
+    setCandidates([RECON_CAND_T2]);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+    fireEvent.click(screen.getByTestId('recon-line-radio-RS-REC'));
+
+    // Reachable again: its linked document shows up pre-checked and the bulk "Desconciliar (N)"
+    // action is enabled — which is the whole point of not dropping the row (the statement itself
+    // cannot be deleted while it still holds a matched line either).
+    expect(screen.getByTestId('recon-cand-row-T2')).toBeInTheDocument();
+    expect(candidateCheckbox('T2')).toBeChecked();
+    const action = screen.getByTestId('recon-action-reconcile');
+    expect(action).toHaveTextContent('financeReconcileActionRemoveCount');
+    expect(action).not.toBeDisabled();
+    // Read-only line: the transaction-type selector stays hidden even in a draft statement.
+    expect(screen.queryByText(/financeReconcileSourceReceipts/)).not.toBeInTheDocument();
+  });
+
   // ── Source filter visibility (single "Tipo de transacción" selector) ──────────
 
   it('renders the source filter only after selecting a non-reconciled line', () => {

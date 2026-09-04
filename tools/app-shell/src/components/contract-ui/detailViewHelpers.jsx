@@ -15,6 +15,7 @@ import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -933,8 +934,33 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
   );
 }
 
-export function resolveHeaderContent(headerContent, data) {
-  return typeof headerContent === 'function' ? headerContent(data) : headerContent;
+// ETP-5024: `bpBanner`, when passed, renders the persistent credit-limit/BP-on-hold
+// inline warning (BlockingBpBanner.jsx) above the resolved header content. Optional
+// so every call site that has nothing to report (no BP-related callout/process
+// wiring in scope) keeps behaving exactly as before.
+//
+// `currencyCode` is derived from `data['currency$_identifier']` here. A REVIEW pass
+// (ETP-5024) found the original "the header endpoint always returns
+// currency$_identifier, no session-level fallback needed" assumption WRONG for the
+// credit-limit callout's actual firing point: it fires while creating a NEW,
+// unsaved document, where `data` is `hook.editing` (DetailView.jsx) — never a
+// header GET response — so `currency$_identifier` genuinely isn't there yet. Rather
+// than thread DetailView.jsx's `sessionCurrencyCode` through this call (DetailView.jsx
+// is a governed God Component — `.claude/hooks/check-detailview-growth.mjs` blocks it
+// from growing, and this branch is already over its line budget), BlockingBpBanner
+// itself calls `useCurrency()` as the session-level fallback — see that component.
+export function resolveHeaderContent(headerContent, data, bpBanner) {
+  const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
+  if (!bpBanner) return resolvedHeader;
+  return (
+    <>
+      <BlockingBpBanner
+        {...bpBanner}
+        currencyCode={data?.['currency$_identifier'] ?? null}
+        data-testid="BlockingBpBanner__dfc406" />
+      {resolvedHeader}
+    </>
+  );
 }
 
 export function isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) {
