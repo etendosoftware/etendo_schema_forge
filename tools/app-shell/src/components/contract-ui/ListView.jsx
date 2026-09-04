@@ -314,6 +314,12 @@ async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selecte
   setIsPrinting(true);
   try {
     await printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl);
+  } catch (err) {
+    // printDocuments() already surfaces failures via toast and never rejects
+    // in practice — this catch exists purely so the loading state cannot get
+    // stuck if that contract is ever violated, without turning a defensive
+    // failure into an unhandled promise rejection (ETP-5129).
+    console.error('[ListView] bulk print failed:', err);
   } finally {
     setIsPrinting(false);
   }
