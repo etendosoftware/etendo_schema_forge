@@ -217,7 +217,10 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('offers "Eliminar cuenta" only on the deletable row', async ({ page }) => {
+  // ETP-5111 inverted this: the item used to be hidden on a non-deletable row, which left the
+  // user unable to tell an account that CANNOT be deleted from one where the action does not
+  // exist. It is offered on every row now, and the refusal is explained after confirming.
+  test('offers "Eliminar cuenta" on every row, deletable or not', async ({ page }) => {
     // The kebab trigger sits behind `opacity-0 group-hover:opacity-100` — hover the row first,
     // same as the existing financial-accounts-page.mocked.spec.js row-actions coverage.
     await page.getByTestId('row-acc-1').hover();
@@ -225,9 +228,10 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
     await expect(page.getByTestId('account-row-menu-delete-acc-1')).toBeVisible();
     await page.keyboard.press('Escape');
 
+    // acc-2 is the NON-deletable fixture — the one that used to have no item at all.
     await page.getByTestId('row-acc-2').hover();
     await page.getByTestId('account-row-menu-trigger-acc-2').click();
-    await expect(page.getByTestId('account-row-menu-delete-acc-2')).toHaveCount(0);
+    await expect(page.getByTestId('account-row-menu-delete-acc-2')).toBeVisible();
   });
 
   test('confirming the delete removes the row and shows a success toast', async ({ page }) => {
