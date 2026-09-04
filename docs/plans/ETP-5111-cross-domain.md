@@ -100,17 +100,17 @@ change (`platform-change` mixed with `window:financial-account`).
   - `tools/app-shell/src/windows/custom/financial-account/index.jsx`
   - `tools/app-shell/src/windows/custom/financial-account/MovementsTab.jsx`
   - `tools/app-shell/src/windows/custom/financial-account/MovementRowKebab.jsx`
-  - `tools/app-shell/src/windows/custom/financial-account/movementDeleteEligibility.js` (new)
+  - `tools/app-shell/src/windows/custom/financial-account/movementActionEligibility.js` (new)
   - `tools/app-shell/src/windows/custom/financial-account/ImportedStatementsTab.jsx`
   - `artifacts/financial-account/custom/AccountsHeaderTable.jsx`
   - `tools/app-shell/src/windows/custom/financial-account/__tests__/*.vitest.jsx`
-  - `tools/app-shell/src/windows/custom/financial-account/__tests__/movementDeleteEligibility.test.js` (new)
+  - `tools/app-shell/src/windows/custom/financial-account/__tests__/movementActionEligibility.test.js` (new)
   - `artifacts/financial-account/custom/__tests__/AccountsHeaderTable.test.js`
   - `e2e/tests/flows/financial-account-delete.mocked.spec.js`
   - `docs/generated-custom-windows/financial-account.md`
 
   Why: this is the window whose three surfaces are being unified. The per-window half of the change
-  is the new pure decision module (`movementDeleteEligibility.js`), the selection-size flag on the
+  is the new pure decision module (`movementActionEligibility.js`), the selection-size flag on the
   Movimientos bulk delete, the always-rendered kebab item, the removal of the statements tab's
   `resolveBulkDeleteBlock` / `selectionHasNonDraft` / `bulkDeleteDisabledReason`, and the Cuentas
   slot no longer unmounting its toolbar during a selection. The e2e spec is listed here because
@@ -146,7 +146,7 @@ change (`platform-change` mixed with `window:financial-account`).
 ## Tests
 
 - Pure decision module (Node test runner, no React):
-  - `tools/app-shell/src/windows/custom/financial-account/__tests__/movementDeleteEligibility.test.js`
+  - `tools/app-shell/src/windows/custom/financial-account/__tests__/movementActionEligibility.test.js`
     — deliberately inside `__tests__/`, next to the window's other suites, so the canonical glob
     collects it.
 - Window behaviour (Vitest):
@@ -254,13 +254,13 @@ rejecting deletes the UI still presents as unconditional, and reverting only the
   If a partial rollback is ever wanted, that file is the one worth keeping.
 - **Window**: revert `windows/custom/financial-account/*` and
   `artifacts/financial-account/custom/AccountsHeaderTable.jsx`, and delete
-  `movementDeleteEligibility.js` and its test. This restores the three previous criteria as they
+  `movementActionEligibility.js` and its test. This restores the three previous criteria as they
   were, including the hidden kebab item and the unmounting toolbar.
 - **Tests**: restore `ListView.isRowDeletable.vitest.jsx` and revert the inverted suites (the four
   `financial-account/__tests__/*` ones, `artifacts/.../AccountsHeaderTable.test.js`,
   `lib/__tests__/batchDelete.vitest.js`, `hooks/__tests__/useStatementActions.vitest.jsx`) plus
   `e2e/tests/flows/financial-account-delete.mocked.spec.js`; delete
-  `__tests__/movementDeleteEligibility.test.js` with its module. The new sentinel in
+  `__tests__/movementActionEligibility.test.js` with its module. The new sentinel in
   `ListView.bulkDelete.vitest.jsx` must be removed in the same revert, or it will fail against the
   restored prop.
 - **Docs**: revert `docs/generated-custom-windows/financial-account.md` (removing the "Unified

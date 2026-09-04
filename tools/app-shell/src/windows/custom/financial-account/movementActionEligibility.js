@@ -1,12 +1,13 @@
 /**
- * ETP-5111 — why a movement cannot be deleted, decided in ONE place.
+ * ETP-5111 — why a movement cannot be deleted OR reactivated, decided in ONE place.
  *
- * The unified delete rule for this window is "never pre-block the affordance, always explain the
- * refusal": the row kebab's "Eliminar" and the bulk-delete trash button are always offered, and a
- * movement the backend would reject is answered with the reason instead of a hidden or disabled
- * control. For the kebab that reason is known client-side, so it is shown as an immediate toast
- * with no round-trip; the rules below mirror the backend's own 409 guards in
- * `FinancialAccountTransactionsHandler.handleDelete` so both paths read identically.
+ * The unified rule for this window is "never pre-block the affordance, always explain the refusal":
+ * the row kebab's "Eliminar" and "Reactivar" and the bulk-delete trash button are always offered,
+ * and a movement the backend would reject is answered with the reason instead of a hidden or
+ * disabled control. For the kebab that reason is known client-side, so it is shown as an immediate
+ * toast with no round-trip; the rules below mirror the backend's own 409 guards in
+ * `FinancialAccountTransactionsHandler.handleDelete` / `.handleReactivate` so both paths read
+ * identically.
  *
  * A plain `.js` module (no JSX, no React) — same pattern as the sibling `statementStatus.js` and
  * `movementStatusConfig.js` — so the decision is unit-testable without a renderer and can be
@@ -50,6 +51,39 @@ export function resolveMovementDeleteBlock(movement) {
 
   if (movement.transferTxnId && movement.trxType !== 'BF') {
     return { key: 'backendError.transferMovementNotDeletable' };
+  }
+
+  return null;
+}
+
+/**
+ * Resolves the reason a movement cannot be reactivated (Processed → Draft).
+ *
+ * Same philosophy as {@link resolveMovementDeleteBlock}, and the same key-not-string contract, so
+ * the sentence is byte-identical whether it came from this pre-check or from
+ * `handleReactivate`'s 409. Until ETP-5111 the kebab simply HID Reactivar for a payment-linked
+ * movement (`canReactivate = isGlTransaction && isProcessed`), which left the user with no
+ * explanation and left the backend path unguarded for REST/MCP callers.
+ *
+ * Linked to a payment or a receipt → refused. Reactivating the bank transaction alone would
+ * desynchronise it from its `FIN_Payment`: the correct procedure is to remove the payment from its
+ * own window, and if the real intent was only to undo the reconciliation, that belongs to the
+ * Conciliación tab. `paymentIsReceipt === 'Y'` picks the cobro wording, anything else pago — the
+ * same test `MovementsTable.openPayment` uses.
+ *
+ * A funds-transfer leg is deliberately NOT blocked here: unlike a delete, reactivating it touches
+ * no RESTRICT self-FK, so there is nothing for this pre-check to pre-empt.
+ *
+ * @param {{ paymentId?: string, paymentIsReceipt?: string }} movement
+ * @returns {{ key: string }|null} `null` when a reactivate may be attempted.
+ */
+export function resolveMovementReactivateBlock(movement) {
+  if (!movement) return null;
+
+  if (movement.paymentId) {
+    return movement.paymentIsReceipt === 'Y'
+      ? { key: 'backendError.receiptMovementNotReactivatable' }
+      : { key: 'backendError.paymentMovementNotReactivatable' };
   }
 
   return null;

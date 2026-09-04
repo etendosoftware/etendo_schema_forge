@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
-import { resolveMovementDeleteBlock } from './movementDeleteEligibility.js';
+import { resolveMovementDeleteBlock, resolveMovementReactivateBlock } from './movementActionEligibility.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -42,12 +42,18 @@ async function callTransactionAction(apiFetch, url, token) {
  * Per-row kebab menu for a movement row.
  * Only visible on row hover (parent row must have `group` class).
  *
- * Edit / Process / Reactivate apply ONLY to manual G/L-item transactions
- * (no `paymentId`); movements linked to an invoice payment/collection are managed
- * from the Payments module, so those actions are hidden for them. Post/Unpost
- * (contabilizar/descontabilizar) apply to any processed/posted movement.
+ * Edit / Process apply ONLY to manual G/L-item transactions (no `paymentId`); movements linked to
+ * an invoice payment/collection are managed from the Payments module, so those actions are hidden
+ * for them. Post/Unpost (contabilizar/descontabilizar) apply to any processed/posted movement.
  *
- * Delete is the exception, and deliberately so (ETP-5111, the unified delete rule): the item is
+ * Delete and Reactivate are the exceptions, and deliberately so (ETP-5111, the unified rule): both
+ * are offered on every row that could conceivably take them, and a movement the backend would
+ * refuse is answered with the reason instead of a hidden item. They differ in ONE respect, on
+ * purpose: Delete always confirms first (so it and the bulk-delete trash never give the same act
+ * different protection), while a blocked Reactivate refuses with the toast alone — there is no bulk
+ * reactivate to be consistent with, so a dialog would only add a click before the same sentence.
+ *
+ * The rest of the Delete contract (ETP-5111): the item is
  * offered on EVERY row and an undeletable movement is answered with the reason instead of a hidden
  * item. Every row confirms first, always, so this control and the bulk-delete trash never differ in
  * how much protection the same act gets. Which confirmation it is depends on what is actually at
@@ -79,12 +85,17 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   // (the modal locks amount/type). Posted → must reactivate first, so no edit.
   const canEdit = isGlTransaction && !isPosted;
   const canProcess = isGlTransaction && !isProcessed;
-  const canReactivate = isGlTransaction && isProcessed;
-  // ETP-5111 — the reason this movement cannot be deleted, or `null` when a delete may be
-  // attempted. The item is rendered either way; a block turns the click into an explanatory
-  // toast. Kept in `movementDeleteEligibility.js` so the rules are testable without React and
-  // stay a single statement of the backend's own 409 guards.
+  // Reactivar is offered on every PROCESSED movement, payment-linked included (ETP-5111). A draft
+  // is excluded because there is nothing to revert, not because of who owns the movement — the
+  // `isGlTransaction` half of this condition used to HIDE the item for a payment-linked row, which
+  // left the user with no explanation and left `handleReactivate` unguarded for REST/MCP callers.
+  const canReactivate = isProcessed;
+  // ETP-5111 — the reason this movement cannot be deleted / reactivated, or `null` when the action
+  // may be attempted. Each item is rendered either way; a block turns the click into an explanatory
+  // toast. Kept in `movementActionEligibility.js` so the rules are testable without React and stay
+  // a single statement of the backend's own 409 guards.
   const deleteBlock = resolveMovementDeleteBlock(movement);
+  const reactivateBlock = resolveMovementReactivateBlock(movement);
   // Contabilizar only makes sense once the movement is Processed (and not yet posted).
   const canPost = isProcessed && !isPosted;
   // "Is there anything to undo?" — the movement is posted (contabilizado) and/or reconciled.
@@ -97,8 +108,10 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   // enumerate; everywhere else the row kebab shows the very dialog the bulk trash shows, because
   // two different-looking confirmations for the same act on the same record was the original
   // complaint.
-  //   - Reactivar        → always the cartel (its own `needsConfirm` gate means it never opens
-  //                        without a conciliación and/or an asiento to undo).
+  //   - Reactivar        → always the cartel, because it only ever opens a dialog when there IS
+  //                        something to undo: a blocked row is refused by the toast before
+  //                        `confirm` is ever set, and a merely-Processed one reactivates on the
+  //                        spot without confirming.
   //   - Eliminar, blocked → generic dialog. Nothing will happen at all, so the cartel would
   //                        promise to remove an asiento this delete never touches — including for
   //                        a blocked row that IS posted, which is the case that makes this matter.
@@ -138,6 +151,20 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   // then learns the delete cannot proceed.
   function handleDeleteClick() {
     setConfirm('delete');
+  }
+
+  // Reactivar, unlike Eliminar, refuses with NO dialog (ETP-5111). The asymmetry is deliberate and
+  // it is not the one the user rejected for delete: that one existed because the bulk trash and the
+  // kebab confirmed the SAME act differently. There is no bulk reactivate — the selection bar only
+  // deletes — so there is no second path to be consistent with, and making the user confirm an
+  // action that provably cannot happen would only add a click before the same sentence.
+  function handleReactivateClick() {
+    if (reactivateBlock) {
+      toast.error(ui(reactivateBlock.key));
+      return;
+    }
+    if (needsConfirm) setConfirm('reactivate');
+    else runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError');
   }
 
   // Runs the action confirmed in the dialog, then closes it.
@@ -264,12 +291,12 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
             </DropdownMenuItem>
           )}
 
-          {/* Reactivate — Processed → Draft (G/L only); confirms first only when posted/reconciled */}
+          {/* Reactivate — Processed → Draft, offered on EVERY processed row (ETP-5111). A
+              payment-linked one is refused with an explanatory toast; otherwise it confirms first
+              only when there is a conciliación and/or an asiento to undo. */}
           {canReactivate && (
             <DropdownMenuItem
-              onClick={() => (needsConfirm
-                ? setConfirm('reactivate')
-                : runLifecycle(reactivateMovement, 'financeAccountTxRowReactivateSuccess', 'financeAccountTxRowReactivateError'))}
+              onClick={handleReactivateClick}
               disabled={busy}
               data-testid="movement-row-reactivate">
               <RotateCcw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RotateCcw__64eff3" />

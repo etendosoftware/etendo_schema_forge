@@ -12,7 +12,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveMovementDeleteBlock } from '../movementDeleteEligibility.js';
+import { resolveMovementDeleteBlock } from '../movementActionEligibility.js';
 
 /** A plain manual G/L movement: nothing references it, so nothing blocks it. */
 const GL_MOVEMENT = { id: 'gl-1', trxType: 'BPD' };

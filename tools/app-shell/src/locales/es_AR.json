@@ -19490,6 +19490,8 @@
     "backendError.transferMovementNotDeletable": "No es posible eliminar movimientos generados por transferencias.",
     "backendError.paymentMovementNotDeletable": "Este movimiento está asociado a un pago. Para eliminarlo, hacelo desde el pago.",
     "backendError.receiptMovementNotDeletable": "Este movimiento está asociado a un cobro. Para eliminarlo, hacelo desde el cobro.",
+    "backendError.paymentMovementNotReactivatable": "Este movimiento está asociado a un pago, así que no es posible reactivarlo. Para hacerlo, eliminá el pago desde la ventana de Pagos. Si solo querés deshacer la conciliación, hacelo desde la pestaña Conciliación.",
+    "backendError.receiptMovementNotReactivatable": "Este movimiento está asociado a un cobro, así que no es posible reactivarlo. Para hacerlo, eliminá el cobro desde la ventana de Cobros. Si solo querés deshacer la conciliación, hacelo desde la pestaña Conciliación.",
     "backendError.movementProcessedNotDeletable": "El movimiento ya está procesado o contabilizado. Seleccionalo solo para eliminarlo.",
     "backendError.statementBankConnectedNotDeletable": "Los extractos de una cuenta conectada al banco no se pueden eliminar.",
     "backendError.accountHasTransactions": "Esta cuenta tiene movimientos registrados.",

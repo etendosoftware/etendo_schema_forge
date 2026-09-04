@@ -239,7 +239,7 @@ describe('MovementRowKebab — lifecycle visibility matrix', () => {
  * ETP-5111 — the unified delete rule on this surface: Eliminar is offered on EVERY row, and a row
  * the backend would refuse is answered with the reason instead of a hidden item. The check is
  * client-side (`resolveMovementDeleteBlock`, whose precedence is unit-tested in
- * movementDeleteEligibility.test.js), so the refusal costs no request and shows no modal.
+ * movementActionEligibility.test.js), so the refusal costs no request and shows no modal.
  *
  * What matters behaviourally, and is asserted below, is the pair: the toast fires AND the hook is
  * never called. A test that only checked the toast would still pass if the delete also went out.
@@ -311,7 +311,7 @@ describe('MovementRowKebab — delete is always offered, and explains its refusa
   });
 
   // The null case, mirrored from the backend's `Boolean.TRUE.equals(isReceipt())`: an unset flag
-  // is a pago on both sides. Pinned here as well as in movementDeleteEligibility.test.js because
+  // is a pago on both sides. Pinned here as well as in movementActionEligibility.test.js because
   // this is the surface where the wrong wording would actually be read by a user.
   it('a payment-linked movement with paymentIsReceipt unset reads as a pago', async () => {
     await expectBlockedWithToast(

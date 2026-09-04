@@ -581,7 +581,7 @@ re-fragment this rule one window at a time, and the three delete surfaces of `fi
 already drifted into three mutually inconsistent criteria (ETP-4871, ETP-4921 + PSD2, ETP-5085)
 before ETP-5111 pulled them back together. A window whose rows are conditionally deletable expresses
 that on its **per-row** affordance — a kebab item that pre-checks and toasts, as
-`MovementRowKebab` + `movementDeleteEligibility.js` do — or lets the backend's 4xx do the talking.
+`MovementRowKebab` + `movementActionEligibility.js` do — or lets the backend's 4xx do the talking.
 Never by graying out a button that covers a heterogeneous selection. A sentinel test in
 `ListView.bulkDelete.vitest.jsx` asserts the rule in the positive (rows with `deletable: false`
 selected → the button stays enabled with its plain `delete` title), so reintroducing the prop breaks
