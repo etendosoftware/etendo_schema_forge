@@ -124,11 +124,18 @@ not as alternatives: DAL stamps `updated` on insert too, so it is always the rig
 present.)
 
 ```
-lib/attachmentFreshness.js   isAttachmentStale(attachment, recordUpdated)
+lib/attachmentFreshness.js   isCachedRenderingStale(attachment, recordUpdated)
+   │    ├── isAttachmentStale     : the record changed      (ETP-4787)
+   │    └── isRenderedByOlderBundle : the renderer changed  (ETP-5125)
    ├── pdfUtils.js  → fetchCachedBlob   : stale ⇒ return null ⇒ render fresh
    └── useMainAttachment.js             : stale ⇒ storedFileIsStale: true
           └── GenericPreviewModal       : re-uploads the fresh blob (replaces the stale row)
 ```
+
+`isCachedRenderingStale` is the predicate production code calls — **never one of the two
+halves directly.** `isAttachmentStale` stays exported as the record-vs-file comparison
+ETP-4787 shipped (and as its own spec); a consumer left on it would invalidate on one
+half only, which is precisely the asymmetry that makes this bug class so confusing.
 
 Both halves are needed. Without the second one the check would be permanent: the read side
 would re-render on every open and nothing would ever refresh the cache, since the auto-store
@@ -148,9 +155,14 @@ exactly as it did before ETP-4787 rather than silently switching itself off. The
 strict, and both timestamps are truncated to whole seconds on the wire, so an edit landing in the
 same second as the upload reads as fresh.
 
-**Two windows deliberately opt out**: purchase-invoice and return-material-receipt. Their
-attachment slot holds the *counterparty's* own document (the OCR source, the customer's signed
-receipt), not a cache of something we rendered — no edit of ours can make it stale.
+**Three windows deliberately opt out** by passing no `recordUpdated`: purchase-invoice,
+goods-receipt and return-material-receipt. Their attachment slot holds the *counterparty's* own
+document (the OCR source, the supplier's delivery note, the customer's signed receipt), not a
+cache of something we rendered — no edit of ours can make it stale. They also pass no
+`sourceBlob`, so the write half cannot fire either: two independent guards, because the failure
+mode here is overwriting a real user file. **That opt-out is load-bearing for every future
+invalidation rule added to this module — keep new checks behind the `recordUpdated` guard, never
+above it.**
 
 The bug this closes:
 
@@ -171,6 +183,43 @@ Two accepted consequences, both deliberate:
   is the responsibility of whoever writes raw SQL, not of this mechanism.
 - `updated` changes on *any* edit, so the cache is invalidated often. Regenerating more often is
   the desired trade-off: serving a stale document is worse than re-rendering.
+
+### The second cause: the renderer changed (ETP-5125)
+
+A rendered PDF is a function of **four** inputs — the record's data, the template, the
+labels/locale and the Handlebars helpers. The timestamp check above covers only the first. The
+other three live in the code, where a change moves **no timestamp at all**, so a completed
+document cached under the previous design kept serving it forever.
+
+That is exactly how ETP-5125 was observed: the tax labels were fixed, but a sales order whose
+preview had been cached minutes earlier still printed `IVA%`. The cached file on disk proved it —
+it carried the *new* template (the currency row was there) with the *old* dictionary
+(`invoicePdfCurrency USD`, the raw key). Print and email looked correct the whole time, because
+neither reads the cache.
+
+**Bundle identity is the signal.** A renderer change can only reach a user through a new
+frontend bundle, so `vite.config.js` injects the build instant
+(`__RENDERER_BUILD_EPOCH_MS__` → `RENDERER_BUILD_EPOCH_MS`) and any cached file written before it
+was produced by a different renderer. One re-render per document on its first open, then it
+re-caches and stays cached.
+
+Three properties worth knowing before touching it:
+
+- **It is inert outside a Vite build.** The constant reads `0` under plain `node --test` and
+  under Vitest (whose `vitest.config.js` is a separate config with no `define`), so the whole
+  check disappears and no unit test changes behaviour. Same fail-open bias as the rest of the
+  module — which also means a **renamed or dropped `define` silently disables it**, with no error
+  anywhere. `src/lib/__tests__/rendererBuildEpoch.vitest.js` exists to catch precisely that.
+- **It over-approximates on purpose.** A deploy that leaves the template untouched also
+  invalidates. The cost is one cold cache per deploy, which is the same trade already accepted
+  for `updated` just above. The exact alternative — a fingerprint of the renderer stored beside
+  the attachment — needs a metadata field on the upload (the multipart carries only `file`), and
+  the only free-text column that round-trips, `C_File.TEXT`, is user-editable in the Adjuntos
+  tab. Rejected: it changes the upload path the OCR flow and the Adjuntos tab share.
+- **It does not help during a live `make dev` session.** `define` is evaluated once per Vite
+  process, so the epoch is the dev-server *boot* time: editing a template while the server runs
+  invalidates nothing. Restart `make dev`, or unmark the attachment (see §3 of the
+  `/document-printables` skill). This is the case that will still waste an afternoon.
 
 ### Known waste, separate from the cache
 
@@ -197,6 +246,11 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D10 | `SendDocumentModal` falls back to the registry when no caller supplies a PDF | ETP-4912 | the generic modal in `ListView` has no hook, so it used to preview **and attach** the artifact. One fix covers every present and future consumer |
 | D11 | The PDF hook runs on demand, not on mount | ETP-4912 | `InvoiceTopbarExtra` rendered a full PDF just for opening a completed invoice in edit mode. Now the id is passed only once a consumer opens |
 | D12 | `ListView`'s multi-select `printDocuments()` excludes Draft (`documentStatus === 'DR'`) documents from the batch before rendering anything; if the whole selection is Draft, nothing is generated and an info toast (`printAllDraftExcluded`) is shown instead | ETP-5124 | generic, decisions-driven: the caller (`ListView`'s `toPrintableDocument`) forwards `documentStatus` only for rows that carry it — the same field every document window's `hidePrintWhen: { documentStatus: { notEquals: 'CO' } }` already reads — so a window without that grid field keeps printing everything unfiltered (fail-open) instead of breaking. Partial exclusion is silent by design (AC#6); only the all-Draft case needs a notice (AC#7). The single-document drawer print is unaffected — it is already gated at the button level by `hidePrintWhen` and never reaches this code path in a Draft state |
+| D13 | The header's document currency comes from `header['currency$_identifier']` inside each builder, **never** from the `currencyData` argument | ETP-5125 | `currencyData` is `null` on the hook-free print path (`commercial()` in `documentPdfRegistry.js`), so reading it there would print a currency in the preview and none in the print — two PDFs for one record, against criterion 1. The header is fetched by every builder anyway |
+| D14 | An unresolved currency prints **nothing**; there is no fallback to the org currency (`session.currencyCode`) | ETP-5125 | Stating the wrong currency on a customer-facing document is worse than stating none. `resolveDocumentCurrencyCode()` returns `null` and the template guards on it |
+| D15 | The commercial template's tax labels are **generic** ("Impuesto" / "Impuestos" / "Subtotal (sin impuestos)"), not "IVA" | ETP-5125 | The lines-table tax column prints the tax *name* (`tax$_identifier`, e.g. "IVA 21%"), so a `%` header was wrong; and non-IVA taxes exist. The on-screen `DocumentTotalsPanel` already said "Impuesto", so the PDF contradicted the screen |
+| D16 | The cache is invalidated by **bundle identity** too, not only by the record's `updated` | ETP-5125 | A PDF depends on the template/labels/helpers as much as on the data, and changing those moves no timestamp — a cached document served the old design forever. Deliberately over-invalidates (one cold cache per deploy): the same "re-rendering beats serving stale" trade this cache already takes for `updated` |
+| D17 | The invalidation marker is the **build instant**, not a hand-bumped constant nor a stored renderer fingerprint | ETP-5125 | A constant has to be remembered on every future template change (this repo has shipped the same formatting bug 3× for exactly that reason) and leaves a deploy-slip window. A fingerprint is exact but needs a metadata field the upload cannot carry, and the only free-text column that round-trips is user-editable in the Adjuntos tab |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).
@@ -296,6 +350,30 @@ template engine or a PDF-merging library to the browser bundle.
 builder and a `buildXxxPdfLabels(ui)` / `getXxxPdfLabels(ui)` function, or a `generateXxxPdf` /
 `generateXxxHtml` pair for a movement document), make the hook consume them so the labels are not
 duplicated, add the entry, and verify the five rows of §"Where the printables are used".
+
+## The commercial template's labels are one shared set
+
+Every `{{labels.*}}` in `DOCUMENT_TEMPLATE` comes from **one** builder,
+`buildDocumentPdfLabels(ui, overrides)` in `documentPdf.js`. The four
+`buildXxxPdfLabels()` functions override only `title / documentNo /
+documentSection / date / colQty / validUntil` — everything else is inherited.
+
+Two consequences worth knowing before touching either side:
+
+- **Changing a `genericLabels` value fixes (or breaks) all four documents at
+  once, on all five entry points**, because the hook-free print path reuses the
+  very same builders. That is the whole of ETP-5125's fix: three locale values.
+- **The source of truth is `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`.**
+  `src/locales/generated/core.*.json` is gitignored build output regenerated
+  from them by `vite-plugins/slice-labels.js` — never edit it. Editing a
+  top-level locale while `make dev` runs does take effect (ETP-4830 wired the
+  watcher); if you see a raw key in the PDF, restart the dev server.
+
+The tax wording is deliberately generic. `labels.colTax` heads the column whose
+cell prints `taxName` — the tax's **name**, not a rate — so it reads "Impuesto",
+never "IVA%"; `labels.tax` / `labels.subtotal` read "Impuestos" /
+"Subtotal (sin impuestos)", matching the on-screen `DocumentTotalsPanel`
+(D15). The header's currency row is `labels.currency` + `currencyCode` (D13/D14).
 
 ## Changing a printable
 
