@@ -5,12 +5,14 @@
   "window": {
     "category": "configuration",
     "name": "Tax Category",
+    "breadcrumb": "Finance / Tax Category",
     "detailEntity": null,
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideCreate": true,
     "hideDelete": true,
-    "hideDeleteButton": true
+    "hideDeleteButton": true,
+    "noHeaderBorder": true
   },
   "entities": {
     "taxCategory": {

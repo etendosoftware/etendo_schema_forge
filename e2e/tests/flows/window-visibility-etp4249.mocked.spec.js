@@ -149,7 +149,7 @@ test.describe('TC-35 — Tax Category window accessible', () => {
   });
 
   test('menu-item for tax-category is present in the navigation', async ({ page }) => {
-    // tax-category is declared in menu.json (Settings group, windowId "138").
+    // tax-category is declared in menu.json (Finance group, windowId "138").
     // Expand the sidebar so sub-items are rendered in the DOM (collapsed mode
     // only renders group icons via a hover-triggered Popover).
     await expandSidebar(page);
@@ -174,7 +174,7 @@ test.describe('TC-37 — Tax Rate window unaffected', () => {
   });
 
   test('menu-item for tax is still present in the navigation', async ({ page }) => {
-    // tax is declared in menu.json (Settings group, windowId "137").
+    // tax is declared in menu.json (Finance group, windowId "137").
     // Expand the sidebar so sub-items are rendered in the DOM.
     await expandSidebar(page);
     await expect(page.getByTestId('menu-item-tax')).toBeVisible();
@@ -194,21 +194,26 @@ test.describe('TC-37 — Tax Rate window unaffected', () => {
 // These tests are the regression net for that removal: a bulk `make regen` or a
 // bad merge re-adding the menu entry would silently undo the ticket.
 //
-// IMPORTANT — why every test here navigates to `/tax` first: in expanded mode
-// the SideMenu only renders the sub-items of the OPEN group, and the open group
-// is the one matching the current route (`findActiveGroup`). Asserting the
-// absence of a `menu-item-*` testid from `/dashboard` is therefore VACUOUS — it
-// passes whether or not the entry still exists in menu.json. `tax` is a Settings
-// sibling (windowId "137", already covered by TC-37), so landing on `/tax` opens
-// exactly the group the retired entry used to live in, and the sanity test below
-// pins that precondition so this suite can never silently go green for the wrong
-// reason.
+// IMPORTANT — why every test here navigates to `/payment-term` first: in
+// expanded mode the SideMenu only renders the sub-items of the OPEN group,
+// and the open group is the one matching the current route
+// (`findActiveGroup`). Asserting the absence of a `menu-item-*` testid from
+// `/dashboard` is therefore VACUOUS — it passes whether or not the entry
+// still exists in menu.json. `payment-term` is a Settings sibling (windowId
+// "141"), so landing on `/payment-term` opens exactly the group the retired
+// entry used to live in, and the sanity test below pins that precondition so
+// this suite can never silently go green for the wrong reason.
+//
+// `tax` was the original anchor, but ETP-5146 moved it (and `tax-category`)
+// from Settings to Finance, so it no longer opens the right group — do not
+// revert this anchor back to `tax`/`tax-category` without re-checking which
+// group they live in.
 // ---------------------------------------------------------------------------
 test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
-    await installListMock(page, 'tax');
-    await page.goto('/tax');
+    await installListMock(page, 'payment-term');
+    await page.goto('/payment-term');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await expandSidebar(page);
   });
@@ -216,7 +221,7 @@ test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu
   test('precondition — the Settings group is open and renders its items', async ({ page }) => {
     // Guards the whole suite: if this fails, the absence assertions below prove
     // nothing and must be fixed rather than trusted.
-    await expect(page.getByTestId('menu-item-tax')).toBeVisible();
+    await expect(page.getByTestId('menu-item-payment-term')).toBeVisible();
     await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
   });
 

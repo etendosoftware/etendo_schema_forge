@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-07-21T12:35:24.346Z",
-  "checksum": "fe68572d8a6ad233",
+  "updatedAt": "2026-09-04T14:57:45.773Z",
+  "checksum": "687f4612ef4a9ac3",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -14,7 +14,9 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
+      "breadcrumb": "Finance / Tax Category",
       "detailEntity": null,
+      "noHeaderBorder": true,
       "layoutType": "default"
     },
     "entities": {
@@ -330,7 +332,9 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
-      "detailEntity": null
+      "breadcrumb": "Finance / Tax Category",
+      "detailEntity": null,
+      "noHeaderBorder": true
     },
     "entities": {
       "taxCategory": {
