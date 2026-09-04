@@ -242,9 +242,10 @@ describe('AutoMatchSuggestionModal', () => {
     fireEvent.click(screen.getByTestId('automatch-modal-apply'));
 
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringContaining('financeReconcileAutomatchToastError'),
-    );
+    // The backend's own reason wins over the generic key: applySuggestions answers 201 even when
+    // every group is rejected, so results[].error.message is the ONLY place the cause survives.
+    // Reducing it to a bare "could not apply" is what sent QA back with an unactionable toast.
+    expect(toast.error).toHaveBeenCalledWith('boom 1');
     expect(toast.warning).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
   });

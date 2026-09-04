@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { ListProgressBar } from './ListProgressBar.jsx';
+import { StatusBadge } from './reconciliationBadges.jsx';
 import {
   Table,
   TableHeader,
@@ -76,26 +77,8 @@ const STATUS_LABEL_KEY = {
   reconciled: 'financeReconcileFilterStatusReconciled',
 };
 
-/** Pill badge for line/candidate status. Suggested → blue, reconciled → green, else grey. */
-function StatusBadge({ kind }) {
-  const ui = useUI();
-  // Figma badge palette: grey / blue / amber / red / green (all full pills).
-  const map = {
-    suggested: { labelKey: 'financeReconcileBadgeSuggested', cls: 'bg-[var(--status-info-bg)] text-[var(--status-info-fg)]' },
-    byRule: { labelKey: 'financeReconcileBadgeByRule', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-    difference: { labelKey: 'financeReconcileBadgeDifference', cls: 'bg-[var(--status-destructive-bg)] text-[hsl(var(--destructive))]' },
-    reconciled: { labelKey: 'financeReconcileBadgeReconciled', cls: 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' },
-    pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
-    invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-    partial: { labelKey: 'financeReconcileBadgePartial', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-  };
-  const cfg = map[kind] ?? map.pending;
-  return (
-    <span className={cn('inline-flex h-6 items-center rounded-full px-2 py-0.5 text-xs font-normal', cfg.cls)}>
-      {ui(cfg.labelKey)}
-    </span>
-  );
-}
+/* StatusBadge moved to ./reconciliationBadges.jsx (ETP-4965 QA round) so the automatch modal renders
+   the very same pill: same palette, same labels, one place to change them. */
 
 /**
  * Badge kind for a candidate row: reconciled (read-only) → invoice → near match → suggested →

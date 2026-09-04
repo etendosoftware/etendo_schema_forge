@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
 import { cn } from '@/lib/utils';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { StatusBadge, automatchBadgeKind } from './reconciliationBadges.jsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +80,15 @@ function StatementContent({ group, currency }) {
   const opCount = (group.operations ?? []).length;
   const amount = Number(line.amount ?? 0);
   const isRule = group.origin === 'rule';
+  // Every group states its type, using the same pill the left panel shows for the same line. Only
+  // rule groups used to be labelled, so an exact match and a within-tolerance one looked identical
+  // even though the second one posts an accounting entry (ETP-4965 QA round).
+  const badgeKind = automatchBadgeKind(group);
+  // The rule badge keeps its own key because it appends the rule name; the other two are the plain
+  // shared labels ("Con sugerencia" / "Con diferencia").
+  const badgeLabel = isRule && group.ruleName
+    ? `${ui('financeReconcileAutomatchBadgeByRule')} ${group.ruleName}`
+    : undefined;
 
   return (
     <div className="flex flex-col gap-1">
@@ -101,15 +111,10 @@ function StatementContent({ group, currency }) {
           className="flex-none text-sm font-semibold"
           data-testid="MoneyAmount__a89979" />
       </div>
-      {/* Rule badge (rule-origin groups only) */}
-      {isRule && group.ruleName && (
-        <div className="flex">
-          <RuleTypeBadge
-            label={`${ui('financeReconcileAutomatchBadgeByRule')} ${group.ruleName}`}
-            tone="rule"
-            data-testid="RuleTypeBadge__a89979" />
-        </div>
-      )}
+      {/* Type badge: suggested / difference / by rule */}
+      <div className="flex gap-1" data-testid={`automatch-group-kind-${badgeKind}`}>
+        <StatusBadge kind={badgeKind} label={badgeLabel} data-testid="StatusBadge__a89979" />
+      </div>
       {/* Reference + date */}
       {line.referenceNo && (
         <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{line.referenceNo}</span>
@@ -119,6 +124,17 @@ function StatementContent({ group, currency }) {
       )}
     </div>
   );
+}
+
+/**
+ * What the operation cell calls this row. A difference row names the accounting account the leftover
+ * will be posted to, or says it is missing — the whole point being that the user learns BEFORE
+ * applying that the account has nothing configured.
+ */
+function displayName(op, ui) {
+  if (op.missingGlItem) return ui('financeReconcileAutomatchDiffNoAccount');
+  if (op.isNew) return op.name || op.glItemId || '—';
+  return op.partnerName || op.documentNo || '—';
 }
 
 function OperationRow({ op, isLast, currency }) {
@@ -135,17 +151,24 @@ function OperationRow({ op, isLast, currency }) {
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium leading-5 text-[hsl(var(--foreground))]">
-            {isNew ? (op.name || op.glItemId || '—') : (op.partnerName || op.documentNo || '—')}
+          <span className={cn(
+            'truncate text-sm font-medium leading-5',
+            op.missingGlItem ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]',
+          )}>
+            {displayName(op, ui)}
           </span>
-          <RuleTypeBadge
-            label={isNew ? ui('financeReconcileAutomatchBadgeNew') : (op.documentNo || op.typeLabel || '')}
-            tone={isNew ? 'new' : 'default'}
-            data-testid="RuleTypeBadge__a89979" />
+          {/* No "Nueva" chip when the movement cannot be created: promising a new row and then
+              failing on apply is exactly what this round is fixing. */}
+          {!op.missingGlItem && (
+            <RuleTypeBadge
+              label={isNew ? ui('financeReconcileAutomatchBadgeNew') : (op.documentNo || op.typeLabel || '')}
+              tone={isNew ? 'new' : 'default'}
+              data-testid="RuleTypeBadge__a89979" />
+          )}
         </div>
         {isNew && (
           <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
-            {ui('financeReconcileAutomatchOpNew')}
+            {ui(op.isDifference ? 'financeReconcileAutomatchOpDifference' : 'financeReconcileAutomatchOpNew')}
           </span>
         )}
       </div>
@@ -164,12 +187,12 @@ function OperationRow({ op, isLast, currency }) {
   );
 }
 
-function GroupRow({ group, checked, onToggle, currency }) {
+function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
   const realOps = group.operations ?? [];
   // Rule-origin groups have no existing transaction — the system will create a payment.
   // For now this is purely visual: show one proposed "New / Create payment" operation with the
   // rule name and the statement-line amount. The actual creation is wired in a later step.
-  const ops = group.origin === 'rule'
+  const baseOps = group.origin === 'rule'
     ? [{
         id: 'new',
         isNew: true,
@@ -177,6 +200,22 @@ function GroupRow({ group, checked, onToggle, currency }) {
         amount: Number(group.statementLine?.amount ?? 0),
       }]
     : realOps;
+
+  // A near match links its operation AND posts the leftover to the account's accounting account.
+  // That second movement was invisible until now: the modal showed only the linked operation, so
+  // the user could not tell a within-tolerance match from an exact one, nor where the difference
+  // would land. Same shape a rule group already uses for its proposed movement.
+  const difference = Number(group.difference ?? 0);
+  const ops = group.nearMatch && Math.abs(difference) > 0
+    ? [...baseOps, {
+        id: 'difference',
+        isNew: true,
+        isDifference: true,
+        name: glItemDifference?.name || '',
+        amount: difference,
+        missingGlItem: !glItemDifference?.id,
+      }]
+    : baseOps;
 
   return (
     <div className="flex flex-row items-stretch overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]">
@@ -222,9 +261,11 @@ function GroupRow({ group, checked, onToggle, currency }) {
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
  * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess?,
- *   onEditAccount? }} props `onEditAccount` opens the account editor; offered only once a group has
- *   actually failed for a missing accounting concept (ETP-4965), since that is the only thing the
- *   user can do about it from here.
+ *   onEditAccount?, glItemDifference? }} props `onEditAccount` opens the account editor; offered
+ *   only once a group has actually failed for a missing accounting account (ETP-4965), since that is
+ *   the only thing the user can do about it from here. `glItemDifference` is the account's
+ *   `{ id, name }` for differences — the same object `ReconciliationTab` already composes for the
+ *   panel — used to name (or flag as missing) the movement a near-match group will create.
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -236,6 +277,7 @@ export function AutoMatchSuggestionModal({
   onClose,
   onSuccess,
   onEditAccount,
+  glItemDifference = null,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
@@ -252,6 +294,12 @@ export function AutoMatchSuggestionModal({
   useEffect(() => {
     setChecked(new Set(groups.map((g) => g.groupKey)));
   }, [groups]);
+
+  // Reopening starts clean: the flag is set by a failed apply and was never cleared, so a later run
+  // on an account that IS configured still showed the "Editar cuenta" remedy for a problem gone.
+  useEffect(() => {
+    if (open) setNeedsGlItem(false);
+  }, [open]);
 
   const allChecked = checked.size === groups.length && groups.length > 0;
 
@@ -273,7 +321,12 @@ export function AutoMatchSuggestionModal({
     [groups, checked],
   );
 
-  const willCreate = checkedGroups.filter((g) => g.isNew).length;
+  // A near-match group both links its operation AND creates the movement that absorbs the
+  // difference, so it counts on both sides. Counting only the link is what made the footer promise
+  // one movement while the apply created two. A DATE-only near match has a zero difference and
+  // creates nothing — same rule the backend's willCreate KPI applies.
+  const willCreate = checkedGroups.filter(
+    (g) => g.isNew || (g.nearMatch && Math.abs(Number(g.difference ?? 0)) > 0)).length;
   const willLink = checkedGroups.filter((g) => !g.isNew).length;
 
   const handleApply = async () => {
@@ -289,18 +342,29 @@ export function AutoMatchSuggestionModal({
       };
       const response = await apply(payload);
       const results = response?.results ?? [];
-      const failedCount = results.filter((r) => r?.error).length;
+      const failures = results.filter((r) => r?.error);
+      const failedCount = failures.length;
       const successCount = results.length - failedCount;
+      // applySuggestions answers 201 even when every group is rejected — the reason travels inside
+      // results[]. Reducing that to two counters is what produced a bare "Error al aplicar la
+      // conciliación" for a problem as specific and as fixable as an unconfigured account.
+      const glItemFailures = failures.filter((r) => r?.code === 'GL_ITEM_REQUIRED').length;
       if (failedCount === 0) {
         toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
+      } else if (glItemFailures === failedCount) {
+        // Name the cause instead of the outcome — it is the one failure the user can act on, and
+        // the "Editar cuenta" button below is its remedy. Still a warning rather than an error when
+        // part of the batch did go through, so the tone matches what actually happened.
+        (successCount > 0 ? toast.warning : toast.error)(
+          ui('financeReconcileAutomatchToastNoGlItem', { count: failedCount }));
       } else if (successCount > 0) {
         toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
       } else {
-        toast.error(ui('financeReconcileAutomatchToastError'));
+        toast.error(failures[0]?.error?.message || ui('financeReconcileAutomatchToastError'));
       }
       // Keep the modal open when the ONLY thing standing in the way is the account's missing
-      // accounting concept: closing it would hide both the failure and its remedy.
-      if (results.some((r) => r?.code === 'GL_ITEM_REQUIRED')) {
+      // accounting account: closing it would hide both the failure and its remedy.
+      if (glItemFailures > 0) {
         setNeedsGlItem(true);
         onSuccess?.();
         return;
@@ -351,6 +415,9 @@ export function AutoMatchSuggestionModal({
             { label: ui('financeReconcileAutomatchKpiPending'), value: kpis.pendingLines ?? 0 },
             { label: ui('financeReconcileAutomatchKpiGroups'), value: kpis.groupsFound ?? 0 },
             { label: ui('financeReconcileAutomatchKpiOps'), value: kpis.opsToLink ?? 0 },
+            // "A crear" was translated in all three locales but never rendered, so the movements
+            // the run generates (rule payments + difference postings) had no figure anywhere.
+            { label: ui('financeReconcileAutomatchKpiNew'), value: kpis.willCreate ?? 0 },
           ].map(({ label, value }) => (
             <div key={label} className="flex flex-1 flex-col">
               <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
@@ -406,6 +473,7 @@ export function AutoMatchSuggestionModal({
                   checked={checked.has(group.groupKey)}
                   onToggle={onToggle}
                   currency={currency}
+                  glItemDifference={glItemDifference}
                   data-testid="GroupRow__a89979" />
               ))
             )}

@@ -489,6 +489,11 @@ export function FinancialAccountDetail({ recordId }) {
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
         onEditAccount={() => setEditOpen(true)}
+        // Same shape ReconciliationTab hands the split panel — the modal names the accounting
+        // account a near-match difference will be posted to, or flags that none is configured.
+        glItemDifference={account?.glItemDifferenceId
+          ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
+          : null}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
         open={editOpen}

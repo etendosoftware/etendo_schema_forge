@@ -73,6 +73,11 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
     'financeReconcileDiffRowMatched',
     'financeReconcileDiffRowStatement',
     'financeReconcileDiffToastSuccess',
+    // QA round: the automatch modal now names the movement a near match will create, and says so
+    // when the account has no accounting account for it.
+    'financeReconcileAutomatchOpDifference',
+    'financeReconcileAutomatchDiffNoAccount',
+    'financeReconcileAutomatchToastNoGlItem',
   ];
 
   for (const key of BACKFILLED_KEYS) {
