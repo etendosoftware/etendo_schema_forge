@@ -8169,8 +8169,8 @@
       "description": "Fecha baja"
     },
     "Datepurchased": {
-      "label": "Fecha compra",
-      "description": "Fecha compra"
+      "label": "Fecha de compra",
+      "description": "Fecha de compra"
     },
     "Residualassetvalueamt": {
       "label": "Valor residual",
