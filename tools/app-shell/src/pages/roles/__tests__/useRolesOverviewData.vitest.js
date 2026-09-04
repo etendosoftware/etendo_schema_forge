@@ -66,6 +66,27 @@ vi.mock('../../../menu.json', () => ({
           { name: 'row-order-alpha', label: 'Alpha Row', windowId: '702' },
         ],
       },
+      {
+        // ETP-5071 (commit 8ef63c36a) — hidden-window exclusion fixture. '901' has ONLY
+        // a hidden menu.json entry, no visible alternative anywhere — this is the real
+        // Match Rule/Periods shape. Distinct id from the DupGroup fixture above, which
+        // covers the "hidden + visible pair" case instead.
+        group: 'HiddenOnly',
+        items: [{ name: 'hidden-only-window', label: 'Hidden Only', windowId: '901', hidden: true }],
+      },
+      {
+        // ETP-5071 (commit 8ef63c36a) — `obuiappProcessId`/`processId` identity-resolution
+        // fixture. '801' mirrors the real `not-posted-documents` shape (ONLY
+        // `obuiappProcessId`, no `windowId`); '802' is the same shape for `processId`
+        // (defensive fallback, no real menu.json item uses it today); '803'/'804' proves
+        // the `??` precedence — `windowId` wins over `obuiappProcessId` when both are set.
+        group: 'ProcessIds',
+        items: [
+          { name: 'obuiapp-only', label: 'Obuiapp Only', obuiappProcessId: '801' },
+          { name: 'process-only', label: 'Process Only', processId: '802' },
+          { name: 'both-ids-precedence', label: 'Both Ids', windowId: '803', obuiappProcessId: '804' },
+        ],
+      },
     ],
   },
 }));
@@ -143,6 +164,38 @@ describe('buildMenuWindowIndex', () => {
   it('omits a windowId that never appears in any menu.json group, rather than erroring', () => {
     const index = buildMenuWindowIndex();
     expect(index.has('does-not-exist-anywhere')).toBe(false);
+  });
+
+  // ETP-5071 (commit 8ef63c36a) — BLOCKER 2: `obuiappProcessId`/`processId` fallback
+  // chain (`item.windowId ?? item.obuiappProcessId ?? item.processId`) had zero coverage.
+  it('indexes an item by obuiappProcessId when it sets no windowId (real not-posted-documents shape)', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('801')).toEqual({
+      group: 'ProcessIds',
+      label: 'Obuiapp Only',
+      groupOrder: 6,
+      itemOrder: 0,
+      hidden: false,
+    });
+  });
+
+  it('indexes an item by processId when it sets neither windowId nor obuiappProcessId (defensive fallback)', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('802')).toEqual({
+      group: 'ProcessIds',
+      label: 'Process Only',
+      groupOrder: 6,
+      itemOrder: 1,
+      hidden: false,
+    });
+  });
+
+  it('prefers windowId over obuiappProcessId when an item hypothetically sets both', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('803')).toMatchObject({ label: 'Both Ids' });
+    // '804' (the obuiappProcessId on that same item) must NOT get its own index slot —
+    // windowId ('803') won the `??` chain, so '804' was never used as the identity key.
+    expect(index.has('804')).toBe(false);
   });
 });
 
@@ -613,5 +666,102 @@ describe('adaptMatrix (via useRolesOverviewData) — ETP-5071 menu.json resoluti
     await waitFor(() => expect(getResult().loading).toBe(false));
     const group = getResult().matrix.find((g) => g.category === 'RowOrder');
     expect(group.rows.map((r) => r.windowId)).toEqual(['701', '702']);
+  });
+
+  // ETP-5071 (commit 8ef63c36a) — BLOCKER 1: Alex rejected the commit for missing
+  // coverage on `adaptMatrix`'s new `if (match?.hidden) continue;` exclusion. Real cases:
+  // Match Rule and Periods, both hidden-only in menu.json with no visible alternative.
+  describe('hidden-window exclusion', () => {
+    it('drops a window entirely from the matrix when its ONLY menu.json entry is hidden', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [],
+        matrix: {
+          categories: [
+            {
+              name: 'HiddenBucket',
+              windows: [{ id: '901', name: 'raw hidden only', access: {} }],
+            },
+          ],
+        },
+      });
+      const { getResult, waitFor } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+      // Not just relabeled/hidden-flagged — the row (and, since it was the only window fed
+      // in, its whole category) must be genuinely absent from the output.
+      expect(getResult().matrix).toEqual([]);
+    });
+
+    it('does NOT drop a window whose id ALSO has a non-hidden menu.json entry — the precedence winner is visible', async () => {
+      // '501' (DupGroup fixture): a hidden entry AND a non-hidden entry share this id,
+      // mirroring the real contacts/business-partner shape — buildMenuWindowIndex's
+      // "prefer non-hidden" precedence must resolve `hidden: false` here, so adaptMatrix's
+      // exclusion check must NOT fire.
+      fetchRolesOverview.mockResolvedValue({
+        roles: [],
+        matrix: {
+          categories: [
+            { name: 'WhateverBucket', windows: [{ id: '501', name: 'raw 501', access: {} }] },
+          ],
+        },
+      });
+      const { getResult, waitFor } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+      expect(getResult().matrix).toEqual([
+        { category: 'DupGroup', rows: [{ windowId: '501', windowName: 'Visible A', access: {} }] },
+      ]);
+    });
+
+    it('does NOT drop a window with no menu.json match at all — the pre-existing "never disappear" fallback is unaffected', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [],
+        matrix: {
+          categories: [
+            { name: 'LegacyBucket', windows: [{ id: 'absent-from-menu', name: 'Legacy Window', access: {} }] },
+          ],
+        },
+      });
+      const { getResult, waitFor } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+      expect(getResult().matrix).toEqual([
+        { category: 'LegacyBucket', rows: [{ windowId: 'absent-from-menu', windowName: 'Legacy Window', access: {} }] },
+      ]);
+    });
+  });
+
+  // ETP-5071 (commit 8ef63c36a) — BLOCKER 2, proven end-to-end through adaptMatrix: a
+  // backend matrix row whose `id` equals a menu.json item's `obuiappProcessId`/`processId`
+  // (no `windowId`) must resolve category/label from menu.json just like a real window.
+  describe('obuiappProcessId/processId row resolution', () => {
+    it('resolves a backend row by obuiappProcessId (real not-posted-documents shape)', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [],
+        matrix: {
+          categories: [
+            { name: 'WrongBucket', windows: [{ id: '801', name: 'raw not-posted', access: {} }] },
+          ],
+        },
+      });
+      const { getResult, waitFor } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+      expect(getResult().matrix).toEqual([
+        { category: 'ProcessIds', rows: [{ windowId: '801', windowName: 'Obuiapp Only', access: {} }] },
+      ]);
+    });
+
+    it('resolves a backend row by processId (defensive fallback, no real menu.json item uses it today)', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [],
+        matrix: {
+          categories: [
+            { name: 'WrongBucket', windows: [{ id: '802', name: 'raw process-only', access: {} }] },
+          ],
+        },
+      });
+      const { getResult, waitFor } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+      expect(getResult().matrix).toEqual([
+        { category: 'ProcessIds', rows: [{ windowId: '802', windowName: 'Process Only', access: {} }] },
+      ]);
+    });
   });
 });
