@@ -1126,6 +1126,13 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
         ref={btnRef}
         type="button"
         data-testid={fieldKey ? `inline-add-field-${fieldKey}` : undefined}
+        // Marks "nothing picked yet" the way Radix's own triggers do. The
+        // button's text is its PLACEHOLDER while empty ("Producto"), so
+        // anything reading the rendered text as the current value — the
+        // walkthrough's `targetValue` gate, an e2e assertion — would read a
+        // placeholder as a filled field. Presence of the attribute is the
+        // signal; its value is deliberately empty.
+        {...(value ? {} : { 'data-placeholder': '' })}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           // Once a value is selected, Enter should bubble up so the row's

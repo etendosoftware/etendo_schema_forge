@@ -1,5 +1,6 @@
 import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
+import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
 import {
   Tooltip,
@@ -203,6 +204,12 @@ export default function TopBar({
 
         {/* Right: action icons */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
+          {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
+              via `rightExtras` (which comes from per-page PageMeta) so the
+              entry point is reachable from every screen. Renders nothing when
+              no WalkthroughProvider is mounted above it. */}
+          <WalkthroughLauncher data-testid="WalkthroughLauncher__133e64" />
+
           <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
             <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
               <button

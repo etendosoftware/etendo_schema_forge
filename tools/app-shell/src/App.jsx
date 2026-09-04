@@ -5,6 +5,11 @@ import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
+import {
+  trackWalkthroughFinished,
+  trackWalkthroughMenuOpened,
+  trackWalkthroughStarted,
+} from '@/lib/walkthrough/walkthrough-events.js';
 import AppLayout from './layout/AppLayout.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
@@ -294,7 +299,15 @@ export default function App() {
 
   return (
     <ObservabilityProvider
-      value={{ trackMcpConnectTabSelected }}
+      // ETP-5144 — the core's walkthrough launcher describes what happened
+      // in plain data; naming the events is this app's job. See
+      // `lib/walkthrough/walkthrough-events.js`.
+      value={{
+        trackMcpConnectTabSelected,
+        trackWalkthroughMenuOpened,
+        trackWalkthroughStarted,
+        trackWalkthroughFinished,
+      }}
       data-testid="ObservabilityProvider__ecaf3f">
       <AppShellRuntime
         basename={routerBase}
