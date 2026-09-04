@@ -8,7 +8,7 @@ import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Configuration / Tax Category';
+const breadcrumb = 'Finance / Tax Category';
 
 
 // @sf-generated-start summary:taxCategory
@@ -107,6 +107,7 @@ export default function TaxCategoryPage({ windowName, recordId, ...props }) {
         hideDeleteButton
         hidePrint
         hideMoreMenu
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_TaxCategory", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}

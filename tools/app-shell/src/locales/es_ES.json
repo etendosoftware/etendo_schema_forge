@@ -1141,8 +1141,8 @@
       "description": "Pending amount"
     },
     "EM_Obspti_Transactiontype": {
-      "label": "Transaction type",
-      "description": "Transaction type"
+      "label": "Tipo de transacción",
+      "description": "Tipo de transacción"
     },
     "EM_Obspti_Isreversecharge": {
       "label": "Inversión sujeto pasivo",
@@ -1497,8 +1497,8 @@
       "description": "Invoice"
     },
     "EM_Obspti_Taxtype": {
-      "label": "Tax type",
-      "description": "Tax type"
+      "label": "Tipo de impuesto",
+      "description": "Tipo de impuesto"
     },
     "Logs": {
       "label": "Logs",
@@ -1553,8 +1553,8 @@
       "description": "Real estate tax rate"
     },
     "EM_Aeatsii_Declarable": {
-      "label": "SII declarable",
-      "description": "SII declarable"
+      "label": "Declarable SII",
+      "description": "Declarable SII"
     },
     "Total_Pymnts_Partial": {
       "label": "Accepted payments with errors",
@@ -1633,8 +1633,8 @@
       "description": "Accounting register date"
     },
     "EM_Obspti_Ratetype": {
-      "label": "Rate type",
-      "description": "Rate type"
+      "label": "Tipo de tasa",
+      "description": "Tipo de tasa"
     },
     "Aeatsii_Cash_Receipt_V_ID": {
       "label": "Cash receipt transaction",
@@ -10061,7 +10061,7 @@
       "description": "Indica si la dimensión contable se muestra en la cabecera del documento."
     },
     "Asbom": {
-      "label": "As per BOM",
+      "label": "Según LDM",
       "description": "Categoría Virtual de Impuestos que indica que los impuestos se definen por los productos de la Lista de Materiales"
     },
     "Generated_Credit": {

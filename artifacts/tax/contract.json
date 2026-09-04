@@ -1,8 +1,8 @@
 {
   "version": "0.12.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-08-20T15:17:34.024Z",
-  "checksum": "026f6f93d2302e44",
+  "updatedAt": "2026-09-04T14:56:43.882Z",
+  "checksum": "72d9af136d8a6c2e",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -14,7 +14,7 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
-      "breadcrumb": "Settings / Tax",
+      "breadcrumb": "Finance / Tax",
       "detailEntity": "accounting",
       "headerExtra": {
         "customForm": "TaxSifField"
@@ -35,6 +35,7 @@
           "Description": "Description"
         }
       },
+      "noHeaderBorder": true,
       "layoutType": "default",
       "maxDetailLines": 1
     },
@@ -889,7 +890,7 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
-      "breadcrumb": "Settings / Tax",
+      "breadcrumb": "Finance / Tax",
       "detailEntity": "accounting",
       "headerExtra": {
         "customForm": "TaxSifField"
@@ -910,6 +911,7 @@
           "Description": "Description"
         }
       },
+      "noHeaderBorder": true,
       "maxDetailLines": 1
     },
     "entities": {
