@@ -66,10 +66,10 @@ export function resolveMovementDeleteBlock(movement) {
  * explanation and left the backend path unguarded for REST/MCP callers.
  *
  * Linked to a payment or a receipt → refused. Reactivating the bank transaction alone would
- * desynchronise it from its `FIN_Payment`: the correct procedure is to remove the payment from its
- * own window, and if the real intent was only to undo the reconciliation, that belongs to the
- * Conciliación tab. `paymentIsReceipt === 'Y'` picks the cobro wording, anything else pago — the
- * same test `MovementsTable.openPayment` uses.
+ * desynchronise it from its `FIN_Payment`: the correct procedure is the SAME action on the owning
+ * document, i.e. reactivate the pago/cobro from its own window, which brings its bank movement
+ * with it. `paymentIsReceipt === 'Y'` picks the cobro wording, anything else pago — the same test
+ * `MovementsTable.openPayment` uses.
  *
  * A funds-transfer leg is deliberately NOT blocked here: unlike a delete, reactivating it touches
  * no RESTRICT self-FK, so there is nothing for this pre-check to pre-empt.

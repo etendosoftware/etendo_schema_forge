@@ -99,8 +99,9 @@ const BACKEND_ERROR_MAP = {
   // ETP-5111 — the same guard for handleReactivate. Until this ticket the kebab simply HID
   // Reactivar for a payment-linked movement, so there was nothing to translate and nothing
   // stopping a REST/MCP caller from desynchronising the transaction from its FIN_Payment. The copy
-  // carries the two-step procedure the business asked for: remove the payment from its own window,
-  // or, if the real intent was only to undo the reconciliation, use the Conciliación tab.
+  // points at the SAME action on the owning document — reactivate the pago/cobro from its own
+  // window — not at deleting it: the user is trying to reactivate, and telling them to delete
+  // instead described a different operation with different consequences.
   'This movement belongs to a payment. Reactivate it from the payment instead.':
     'backendError.paymentMovementNotReactivatable',
   'This movement belongs to a receipt. Reactivate it from the receipt instead.':
