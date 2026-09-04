@@ -438,12 +438,32 @@ async function fillStartDate(page, digits) {
   await dateInput.blur(); // commit so the form becomes dirty
 }
 
+/** Save and assert the success toast, ARMING the toast expectation before the
+ *  click. A post-hoc assertion races the toast's own auto-dismiss: the DOM
+ *  captured on a failing run had zero toasts and a disabled Save button — the
+ *  save had landed and its toast was already gone. Declaring the expectation
+ *  first is the same pattern ETP-4903 applied to waitForResponse.
+ *
+ *  Save must be enabled here: `saveAsset` returns early on a clean form, which
+ *  would leave the caller waiting for a toast no save ever produced. Asserting
+ *  it enabled turns that into a loud, accurate failure instead. */
+async function saveAssetExpectingToast(page) {
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
+  await expect(saveBtn.first(),
+    'Save should be enabled — this call site always has pending edits',
+  ).toBeEnabled({ timeout: 10_000 });
+
+  const toastShown = expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro guardado/i, { timeout: 15_000 });
+  await saveAsset(page);
+  await toastShown;
+}
+
 /** Edit Descripción in place and save, expecting "Registro guardado". */
 async function editDescriptionInPlace(page, stamp) {
   await setFieldUntilDirty(page, 'field-description', `Descripción de prueba ${stamp}`);
-  await saveAsset(page);
-  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-    .toContainText(/Registro guardado/i, { timeout: 10_000 });
+  await saveAssetExpectingToast(page);
 }
 
 /** Edit Valor residual with negative / 0 / below / above Valor a amortizar
@@ -453,9 +473,7 @@ async function editResidualValues(page) {
   for (const value of ['-100', '0', '1000', '3000', '0']) {
     await setFieldUntilDirty(page, 'field-residualAssetValue', value);
     await verifySidebarSync(page);
-    await saveAsset(page);
-    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-      .toContainText(/Registro guardado/i, { timeout: 10_000 });
+    await saveAssetExpectingToast(page);
   }
 }
 
