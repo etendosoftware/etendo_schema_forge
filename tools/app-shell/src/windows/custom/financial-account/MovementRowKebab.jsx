@@ -320,7 +320,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {confirm && (showCartel ? (
+      {confirm && showCartel && (
         <MovementLifecycleConfirmModal
           action={confirm}
           reconciled={isReconciled}
@@ -328,9 +328,12 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
           onConfirm={runConfirmed}
           onClose={() => setConfirm(null)}
           data-testid="MovementLifecycleConfirmModal__64eff3" />
-      ) : (
-        // The same component the bulk trash renders — see `DeleteConfirmDialog`. `count={1}`
-        // because this row action is exactly one record.
+      )}
+      {/* The same component the bulk trash renders — see `DeleteConfirmDialog`. `count={1}`
+          because this row action is exactly one record. Two sibling conditionals rather than a
+          ternary: the data-testid codemod re-prints a ternary's alternate branch wrapped in
+          parentheses, so the shape below is what keeps the pre-push check clean. */}
+      {confirm && !showCartel && (
         <DeleteConfirmDialog
           open
           count={1}
@@ -338,7 +341,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
           onConfirm={runConfirmed}
           onClose={() => setConfirm(null)}
           data-testid="DeleteConfirmDialog__64eff3" />
-      ))}
+      )}
     </>
   );
 }
