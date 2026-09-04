@@ -8153,12 +8153,12 @@
       "description": "Importe a amortizar"
     },
     "Amortizationenddate": {
-      "label": "Fecha fin",
-      "description": "Fecha fin"
+      "label": "Fecha de fin de amortización",
+      "description": "Fecha de fin de amortización"
     },
     "Amortizationstartdate": {
-      "label": "Fecha inicio",
-      "description": "Fecha inicio"
+      "label": "Fecha de inicio de amortización",
+      "description": "Fecha de inicio de amortización"
     },
     "Annualamortizationpercentage": {
       "label": "% anual amortización",
@@ -8909,7 +8909,7 @@
       "description": "Tipo de cálculo"
     },
     "Depreciatedpreviousamt": {
-      "label": "Amortizado anterior",
+      "label": "Valor amortizado previamente",
       "description": ""
     },
     "C_Dp_Management_ID": {
@@ -13809,7 +13809,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -14024,7 +14024,7 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -16211,6 +16211,9 @@
     "Return Shipment": {
       "label": "Albarán de devolución"
     },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
+    },
     "Purchase Invoice": {
       "label": "Factura de Compra"
     },
@@ -16725,6 +16728,9 @@
     "reactivate": "Reactivar",
     "reactivateOrder": "Reactivar pedido",
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
+    "bulkRowAlreadyPosted": "Ya está contabilizado",
+    "bulkRowNotPosted": "No está contabilizado",
+    "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "confirmBulk": "Confirmar",
     "documentAction": "Acción de documento",
@@ -16865,6 +16871,8 @@
     "postingFailed": "Error al contabilizar",
     "filterDocumentType": "Tipo de documento",
     "filterAccountingStatus": "Estado contable",
+    "filterFrom": "Desde",
+    "filterTo": "Hasta",
     "accountingDate": "Fecha contable",
     "accountingStatus": "Estado contable",
     "postedStatus": "Contabilizado",
@@ -17330,6 +17338,7 @@
     "invoicePreviewInvoiceMustBeCompletedToAddPayments": "La factura debe estar completada para añadir pagos",
     "invoicePreviewAddAttachment": "Añadir adjunto",
     "invoicePendingPayment": "Pendiente de pago",
+    "pendingPaymentColumn": "Saldo pendiente",
     "sendModalTitle": "Enviar {documentType} #{documentNo}",
     "sendModalTo": "Para",
     "sendModalNoEmail": "No se encontró email para este contacto",
@@ -17402,6 +17411,21 @@
     "configureDashboard": "Configurar dashboard",
     "searchInvoices": "Buscar facturas...",
     "searchPages": "Buscar páginas...",
+    "searchIn": "Buscar en",
+    "allWindows": "Todas las ventanas",
+    "filterWindows": "Filtrar ventanas",
+    "selectedWindows": "{count} ventanas",
+    "overdueSalesInvoices": "Facturas de venta vencidas",
+    "clearSearchScope": "Buscar en todas las ventanas",
+    "semanticSearchResults": "Resultados semánticos",
+    "relevantSearchResults": "Coincidencias principales",
+    "exactSearchResults": "Coincidencias por texto",
+    "relatedSearchResults": "Otras coincidencias",
+    "searchMoreRelated": "Buscar más resultados relacionados",
+    "recentSearches": "Búsquedas recientes",
+    "searchNavigate": "Navegar",
+    "searchOpen": "Abrir",
+    "suggestions": "Sugerencias",
     "askSomething": "Pregunta algo...",
     "noResults": "Sin resultados",
     "noResultsFor": "Sin resultados para",
@@ -17972,6 +17996,7 @@
     "financeAccountTransferFx": "Conversión de divisa",
     "financeAccountTransferRate": "Tasa de conversión",
     "financeAccountTransferRatePlaceholder": "1,00",
+    "financeAccountTransferRateMissing": "No hay tasa de cambio vigente de {from} a {to}. Ingresala manualmente.",
     "cpPendingPrefix": "Pendiente",
     "cpLeaveCredit": "Dejar a crédito",
     "cpLeaveCreditHint": "{amount} a favor del tercero",
@@ -18078,7 +18103,7 @@
     "financeReconcileLeftTitle": "Líneas del extracto",
     "financeReconcileRightEmptyTitle": "Selecciona un movimiento",
     "financeReconcileRightEmptyHint": "Elige un movimiento del extracto para ver sugerencias y conciliar.",
-    "financeReconcileFilterStatusPending": "Pendiente",
+    "financeReconcileFilterStatusPending": "Pendientes",
     "financeReconcileFilterStatusSuggested": "Con sugerencia",
     "financeReconcileFilterStatusByRule": "Por regla",
     "financeReconcileFilterStatusDifference": "Con diferencia",
@@ -18412,7 +18437,7 @@
     "financeAccountStatementsManualColContactName": "Nombre del contacto",
     "financeAccountStatementsManualColContact": "Contacto",
     "financeAccountStatementsManualColGlItem": "Concepto contable",
-    "financeAccountStatementsManualGlItemPlaceholder": "Buscar concepto contable…",
+    "financeAccountStatementsManualGlItemPlaceholder": "Buscar concepto…",
     "financeAccountStatementsManualContactPlaceholder": "Buscar contacto…",
     "financeAccountStatementsManualAddLinesCta": "Añadir líneas",
     "financeAccountStatementsManualAddLinesCtaDesc": "Introduce los movimientos del extracto a mano",
@@ -18522,6 +18547,8 @@
     "financeAccountStatementLinesMatchedYes": "Conciliado",
     "financeAccountStatementLinesMatchedNo": "Sin conciliar",
     "dashboardTitle": "Inicio",
+    "dashboardNoWidgetsTitle": "No hay widgets disponibles para tu rol",
+    "dashboardNoWidgetsSubtitle": "Tu rol no tiene acceso a los datos que muestran estos paneles. Contactá a tu administrador si creés que es un error.",
     "dashboardGreetingHello": "Hola, {name}",
     "dashboardGreetingHeadline": "Estas son tus tareas pendientes",
     "dashboardCopilotCta": "¿En qué te puedo ayudar hoy?",
@@ -19142,7 +19169,7 @@
     "selectCountryFirst": "Selecciona un país primero",
     "removeLocation": "Eliminar",
     "addLocation": "+ Agregar Dirección",
-    "addAddress": "+ Agregar dirección",
+    "addAddress": "+ Añadir dirección",
     "none": "Ninguno",
     "soConfirmBtn": "Confirmar",
     "soConfirmTitle": "Confirmar pedido #{number}",
@@ -19326,12 +19353,12 @@
     "assetsCurrencyLabel": "Moneda",
     "assetsPurchaseDateLabel": "Fecha de compra",
     "assetsCancellationDateLabel": "Fecha de cancelación",
-    "assetsDepStartDateLabel": "Fecha inicio de amortización",
-    "assetsDepEndDateLabel": "Fecha fin de amortización",
+    "assetsDepStartDateLabel": "Fecha de inicio de amortización",
+    "assetsDepEndDateLabel": "Fecha de fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
     "assetsDepreciationAmtLabel": "Monto de amortización",
-    "assetsPrevDepreciatedLabel": "Monto ya amortizado",
+    "assetsPrevDepreciatedLabel": "Valor amortizado previamente",
     "poSave": "Guardar",
     "poSaveDraft": "Guardar borrador",
     "poConfirmBtn": "Confirmar",
@@ -19396,7 +19423,7 @@
     "poBulkOrderHasDraftReceipt": "Pedido {documentNo} ya tiene un albarán en borrador.",
     "cloneOrderBtn": "Clonar",
     "quickAction.edit": "Editar",
-    "quickAction.clone": "Duplicar",
+    "quickAction.clone": "Clonar",
     "quickAction.email": "Enviar / Descargar",
     "quickAction.more": "Más acciones",
     "quickAction.delete": "Eliminar",
@@ -19551,7 +19578,7 @@
     "customerDataSection": "Datos de cliente",
     "vendorDataSection": "Datos de proveedor",
     "fiscal.title": "Configuración Fiscal",
-    "fiscal.monitor.nav": "Monitor de facturas",
+    "fiscal.monitor.nav": "Monitor fiscal",
     "fiscal.wip.badge": "Trabajo en progreso",
     "fiscal.wip.tooltip": "Esta ventana está en desarrollo activo. Los campos, el diseño y el comportamiento pueden cambiar sin previo aviso y no son definitivos.",
     "fiscal.territory.question": "¿En qué territorio fiscal opera esta organización?",
@@ -20263,6 +20290,7 @@
     "purchaseOrders": "Órdenes de compra",
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
+    "finance": "Finanzas",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -20383,6 +20411,7 @@
     "fm.kpi.deadline_days": "días",
     "fm.kpi.deadline_blocking": "bloq.",
     "fm.list.title": "Declaraciones",
+    "fm.breadcrumb.section": "Modelos Fiscales",
     "fm.list.count": "declaraciones",
     "fm.filter.all": "Todos",
     "fm.filter.model_prefix": "Modelo",
@@ -21593,7 +21622,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuario"
@@ -21791,7 +21820,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Grupo de activos"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -22233,6 +22262,9 @@
     },
     "Return Shipment": {
       "label": "Albarán de Devolución"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
     },
     "Account": {
       "label": "Plan de cuentas"

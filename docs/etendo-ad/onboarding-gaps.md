@@ -1405,13 +1405,229 @@ confirmed 0 rows remaining (idempotent).
 
 ---
 
+## N — GL Item Provisioning
+
+### N1 — Pre-ETP-5020 subaccounts have no `C_Glitem`/`C_Glitem_Acct` pair (ETP-5101 S2.2, 2026-09-01)
+
+**Symptom:** posting through a leaf chart-of-accounts subaccount ("Cuenta contable") relies on an
+invisible `C_Glitem`/`C_Glitem_Acct` pair behind it (Etendo Classic's posting engine routes journal
+entries through GL Items, not the subaccount directly). ETP-5020 made subaccount creation
+auto-provision that pair, but only forward-looking — a subaccount created BEFORE ETP-5020 shipped
+(2026-08-30), and never PUT/re-saved since, has none, and nothing retroactively creates one.
+Confirmed live on this DB (2026-09-01): every real+demo tenant is missing the vast majority of its
+GL Items — GOClient itself (only 2 pre-existing hand-made rows, "Capital social"/"Sueldos y
+salarios") is missing all 658 of its ~658 postable leaves.
+
+**Root cause:** `GlItemProvisioningSupport#ensureGlItemForSubaccount`
+(`com.etendoerp.go/.../schemaforge/handlers/GlItemProvisioningSupport.java`) is called from exactly
+two live entry points — `ChartOfAccountsHandler#afterHandle` (a live POST/PATCH through the NEO
+"chart-of-accounts" window) and `OnboardingAccountingWiringService#provisionGlItemsForImportedChart`
+(a new tenant's bulk chart-of-accounts import). Neither fires retroactively for a pre-existing,
+untouched subaccount.
+
+**Preventive front: ALREADY CLOSED, in a separate, earlier ticket (ETP-5020, merged 2026-08-30).**
+No new preventive Java in this ticket — `GlItemProvisioningSupport`/`ChartOfAccountsHandler` were
+explicitly out of scope. This is a deliberately corrective-only gap per the framework's own
+boundary rule (`onboarding-and-datafixes-map.md` §0): "a gap that is purely about existing-tenant
+state with no onboarding-process cause... may be corrective-only". A tenant onboarded (or
+subaccount created) after 2026-08-30 already gets its GL Items minted live; this fix's own `@check`
+naturally converges to 0 rows for such a subaccount regardless of the
+`ONBOARDING_PROVISIONED_THROUGH` watermark.
+
+**`ONBOARDING_PROVISIONED_THROUGH` bumped anyway**, to `2026-09-01T14:00:00Z` (R31's own
+timestamp) — mirrors the A2c/ETP-4743 precedent: ETP-5020's preventive fix shipped without ever
+bumping the CUT for it (deferred exactly until its corrective twin existed in the repo, per "never
+bump CUT without matching `.sql` already in the repo"). This bump is a pure optimization (skip even
+running `@check` for tenants onboarded after the bump), not a correctness dependency.
+
+**Corrective fix:** `20260901T140000Z__R31-glitem-subaccount-backfill.sql` — one coupled,
+single-statement `@apply` (data-modifying CTEs, the same "coupled 1:1... via a data-modifying CTE"
+technique R18/R28 established for this framework): resolves each leaf subaccount's natural
+all-dimensions-NULL `C_ValidCombination` per active `C_AcctSchema` (mirroring
+`resolveNaturalCombination`'s exact 11-dimension shape), reuses an existing GL Item when the
+subaccount already has one on ANY schema (mirrors `findGlItemLinkedToAnyCombinationOf` — verified
+against this DB's own hand-made GL Items, e.g. "Capital social"/"Sueldos y salarios", which were
+correctly reused, not duplicated), and otherwise mints exactly one new `C_Glitem` row per
+subaccount (`composeGlItemName`'s ETP-5101 `"<code>-<name>"` format, code leading) shared across every schema
+that needs one. Idempotency key is the natural combination itself (`glitem_debit_acct`), never the
+GL Item name, matching the Java's own documented key choice.
+
+Live-validated in rolled-back transactions (2026-09-01/02, before and after the N2 truncation fix
+below):
+- **GOClient** (1 active schema, 658 missing pairs): `@apply` inserted all 658 rows (0 skipped —
+  N2 fixed means nothing is length-blocked anymore); `@check` after converges to 0 rows; re-run
+  inserted 0 (idempotent); the 2 pre-existing manual GL Items stayed at exactly 1 row each
+  (reused). All 294 previously-blocked rows (composed name > 60 chars) checked byte-for-byte
+  against a reference reimplementation of `truncateToFit`: 0 mismatches.
+- **QA Testing** (2 active schemas, 61 distinct subaccounts needing a new item): `@apply` inserted
+  61 rows; 3 GL Items ended up linked to BOTH schemas (multi-schema reuse); `@check` after
+  converges to 0; re-run inserted 0.
+
+Three real bugs were found and fixed DURING this fix's own live validation (see
+`tenant-remediation-knowledge.md` for the durable write-ups):
+1. `get_uuid()` called inside a `SELECT DISTINCT` (before dedup) minted a different id per schema
+   for the same subaccount, violating `c_glitem_acct_glitem_acctsc_un` — fixed by deduplicating
+   subaccounts into their own CTE before minting any id.
+2. QA Testing carries two genuine duplicate all-dimensions-NULL `C_ValidCombination` rows for the
+   same (subaccount, schema) pair — fixed with `DISTINCT ON` (lowest combination id wins), mirroring
+   `resolveNaturalCombination`'s own `ORDER BY id ASC / setMaxResults(1)`.
+3. `@check` originally iterated every raw combination row (not deduplicated), so for those same 2
+   QA Testing subaccounts it kept reporting NEEDS FIX forever even AFTER a fully successful
+   `@apply` had closed everything it legitimately could — the exact
+   `@check`-promises-more-than-`@apply`-can-deliver asymmetry Sentinel caught in R22/ETP-4743.
+   Fixed by rewriting `@check` to use the identical `DISTINCT ON` dedup as `@apply`'s own
+   `natural_combos` CTE, so the two are symmetric by construction.
+
+A real, committed (non-rolled-back) run through the actual runner CLI against a disposable E2E test
+tenant was attempted and blocked by this environment's write-approval gate; its dry-run leg
+confirmed `WOULD_APPLY — @check matched (1 row(s))` through the real runner path.
+
+**Status:** preventive front closed by ETP-5020 (separate, earlier ticket); corrective `.sql`
+written and live-validated in rolled-back transactions on GOClient and QA Testing (full
+convergence, both before N2 was found and after it was fixed); CUT bumped.
+
+---
+
+### N2 — `C_Glitem.Name` (varchar(60)) is too short for `composeGlItemName`'s composed format (discovered 2026-09-01, FIXED 2026-09-02)
+
+**Symptom:** `composeGlItemName`'s concatenated format (ETP-5101 §2.1) originally had no length
+guard, but `C_Glitem.Name` is `varchar(60)` while `C_ElementValue.Name` is `varchar(255)`.
+Spanish PGC account names routinely exceed that once the 8-digit code is appended — e.g. "Reversión
+del deterioro de participaciones en instrumentos de patrimonio neto a largo plazo otras partes
+vinculadas 79620000" (124 chars). Confirmed live: **294 of GOClient's 658 leaf subaccounts (45%)**
+needing a brand-new GL Item exceeded the limit.
+
+**This affected BOTH fronts, silently — not just the backfill.**
+`GlItemProvisioningSupport#ensureGlItemForSchema` wraps each schema's provisioning in its own
+try/catch that logs a warning and continues (the class's documented best-effort contract: a GL
+Item defect must never block the subaccount save). A save that hit this length limit failed OBDal's
+length validation, was silently swallowed, and left that subaccount without a GL Item forever —
+indistinguishable from the N1 gap. In other words: a NEW tenant onboarded, or an existing tenant
+creating a new long-named subaccount, could STILL end up with a missing GL Item on the live
+preventive path, purely because of this length limit.
+
+**Fixed, same session, on BOTH fronts:**
+- **Preventive (Java, `GlItemProvisioningSupport`):** `composeGlItemName` + a new `truncateToFit`
+  helper, `GL_ITEM_NAME_MAX_LENGTH = 60`. Format is `"<searchKey>-<name, truncated to fit>"` — the
+  code leads (it is the more useful sort/scan key in a flat GL Item list) and always survives
+  intact; the NAME portion is truncated, hard cut (`String#substring(0, n)`, no ellipsis). Budget
+  when a code is present: `60 - (1 + code.length())`; `60` flat otherwise.
+- **Corrective (`R31-glitem-subaccount-backfill.sql`):** mirrors the EXACT same formula in SQL
+  (`left(str, n)` is Postgres's `String#substring(0, n)`; `GREATEST(..., 0)` mirrors Java's
+  `Math.max(0, maxLength)`), so both fronts converge on byte-identical GL Item names — not merely
+  "no longer diverges going forward". Verified with 0 mismatches across all 294 previously-blocked
+  GOClient rows against a reference reimplementation of the Java formula. The length guard that
+  used to skip a subaccount entirely is gone — nothing is skipped anymore, every composed name fits
+  by construction. `@report` now lists which subaccounts actually got a truncated (not verbatim)
+  name, matched by exact equality against the deterministic truncation formula (so a pre-existing,
+  reused, differently-named manual GL Item is correctly excluded, never mislabeled as truncated).
+
+**Status:** FIXED on both fronts (2026-09-02). No follow-up ticket needed for the length limit
+itself; widening `C_Glitem.Name` to 255 remains a possible FUTURE cosmetic improvement (truncated
+names are still functional and disambiguated by their code) but is no longer a correctness gap.
+
+---
+
+### N3 — `C_Glitem.Name` goes stale after an already-linked GL Item's subaccount is renamed (ETP-5101, 2026-09-02)
+
+**Symptom:** a leaf subaccount ("Cuenta contable") whose GL Item is ALREADY linked (i.e. it is not
+the N1 "no GL Item at all" gap) can still carry a `C_Glitem.Name` that no longer matches what
+`composeGlItemName` would produce from the subaccount's CURRENT name/code — nothing retroactively
+resyncs it. Confirmed live on this DB (2026-09-02, rolled-back transaction, current un-migrated
+state — R31 itself has only ever been dry-run/rolled-back here, never committed): GOClient has
+exactly ONE stale-named linked GL Item — the hand-made "Capital social" row, still its
+pre-ETP-5101 bare name (`"Capital social"`) instead of the expected `"10000000-Capital social"`.
+QA Testing has THREE: two DIFFERENT GL Items (`"GL Item 1"`/`"GL Item 2"`) both linked to the SAME
+subaccount (`"11100-Petty Cash"`, one per active schema) — a genuine pre-existing
+multi-GL-Item-per-subaccount state, not a duplicate to collapse away — plus one (`"Fees"`,
+subaccount `"62900-Otros servicios"`).
+
+**Root cause:** `GlItemProvisioningSupport#ensureGlItemForSchema`'s existing-link branch (the
+branch that fires when `findGlItemAccountsByCombination` already finds a link for the subaccount's
+natural combination on a given schema) DOES already call `syncGlItemName` unconditionally — but
+only when that Java code path actually runs, i.e. on a live POST/PATCH/PUT through
+`ChartOfAccountsHandler`. A subaccount whose GL Item was linked BEFORE the current naming
+convention existed — name-only (pre-ETP-5101), name-then-code (`composeGlItemName`'s original
+order, flipped code-first the same session), or a hand-authored row predating ETP-5020
+auto-provisioning entirely — and never PUT/re-saved since that convention changed, keeps its stale
+name forever. This is the SAME "born correct once, drifts, nothing heals it" shape as N1/N2, given
+its own label per this file's own precedent (a fresh N-suffix per distinct symptom under one gap
+letter, same series as N1/N2).
+
+**Preventive front: ALREADY CLOSED, same session, no new Java in this ticket.**
+`ChartOfAccountsHandler#afterHandle`'s PATCH/PUT branch now calls a new private method,
+`syncGlItemNameAfterUpdate(context)`, whenever the request body touches `name` or `searchKey` — it
+re-invokes `GlItemProvisioningSupport#ensureGlItemForSubaccount`, whose existing-link branch
+already unconditionally resyncs the linked GL Item's name via `syncGlItemName`. So a live rename
+now self-heals going forward; this data-fix is corrective-only, closing the gap for tenants whose
+GL Items are ALREADY linked with a stale name and have not been touched by a rename since that fix
+shipped. `ONBOARDING_PROVISIONED_THROUGH` is deliberately NOT bumped for this fix — out of scope
+for this ticket (`com.etendoerp.go` untouched by this data-fix's own author) and safe per the
+framework's own table ("only the `.sql`, no CUT bump" is always safe, merely redundant for
+tenants the preventive front already covers): a subaccount touched by a live PUT since the
+preventive fix shipped already has a correct name, so this fix's own `@check` naturally converges
+to 0 for it regardless of the CUT watermark, exactly like N1's own reasoning.
+
+**Deliberately NOT excluding hand-made GL Items — a design decision, not an oversight.** R31's own
+header says its reuse path "never touches the GL Item's name" — that describes R31's OWN
+deliberately narrow choice (it only INSERTs missing links, never UPDATEs an existing row), not a
+statement that a hand-made row is permanently protected from renaming. The live Java's
+`ensureGlItemForSchema` existing-link branch unconditionally resyncs the name for ANY
+already-linked GL Item, hand-made or not — confirmed live: GOClient's own "Capital social" (one of
+the 2 pre-ETP-5020 manual rows) is precisely the ONE row this fix's `@check` flags today. The
+moment that subaccount is next renamed via a live PUT, `ChartOfAccountsHandler` already overwrites
+its GL Item name with the composed format too — this fix simply does the same thing
+proactively/in bulk instead of waiting for that PUT.
+
+**Corrective fix:** `cli/src/data-fixes/sql/20260902T090000Z__R32-glitem-name-resync.sql` — a
+single guarded `UPDATE c_glitem`, keyed by the same natural-combination lookup R31 established
+(11-dimension all-NULL `C_ValidCombination`, `DISTINCT ON` dedup, textually identical between
+`@check` and `@apply` per the R22/N1 symmetry lesson), joined to `c_glitem_acct` via
+`glitem_debit_acct` to find each subaccount's ALREADY-linked GL Item. A `DISTINCT ON
+(gi.c_glitem_id)` dedup in `resync_candidates` collapses the "same GL Item reused across 2+
+schemas" case to one candidate row (update it once, not once per schema link) while correctly
+leaving QA Testing's genuinely-distinct-per-schema "Petty Cash" GL Items as two separate candidate
+rows (both resolve to the same expected name, since the composed name depends only on the
+subaccount). Guarded by `WHERE gi.name IS DISTINCT FROM <composed expected name>` both in the
+candidate CTE and again on the `UPDATE` itself (two-layer idempotency), and by `ad_client_id =
+:client_id` on every statement. `@report` captures the `UPDATE ... RETURNING`'s old/new names into
+a session-scoped `TEMP TABLE` (populated inside `@apply`, read by the separate `@report` query —
+safe because the runner keeps `@apply`/`@report` on the same DB connection/transaction, and the
+temp table is fully undone by `ROLLBACK` when the run doesn't commit). **A COMMITted temp table is
+NOT dropped just because the connection is later returned to the pool** (`client.release()` does
+not issue `DISCARD ALL`/end the backend session, and this framework's pool is reused across
+tenants) — ETP-5101 REVIEW FINDING B2, caught before merge. Since R32 runs per-tenant, a second
+tenant reusing the same pooled connection would otherwise hit `relation ... already exists` and
+abort. `@apply` therefore leads with an explicit `DROP TABLE IF EXISTS etgo_r32_glitem_name_resync`
+before its data-modifying CTE, making every run self-cleaning regardless of connection reuse. It
+lists every subaccount whose GL Item name actually changed this run, old name → new name — mirrors
+R19/R31's `@report` intent but needs the pre-image, unlike R31's own simpler post-apply recompute.
+
+**Live-validated in rolled-back transactions (2026-09-02):**
+- **GOClient:** `@check` → 1 row; `@apply` → 1 row updated; `@report` → `10000000 | Capital social
+  | Capital social -> 10000000-Capital social`; `@check` re-run in the SAME transaction (post-apply)
+  → 0 rows; `@apply` re-run → 0 rows (idempotent).
+- **QA Testing:** `@check` → 1 row (its `LIMIT 1`, correctly non-zero); `@apply` → 3 rows updated;
+  `@report` → `11100 | Petty Cash | GL Item 2 -> 11100-Petty Cash`, `11100 | Petty Cash | GL Item 1
+  -> 11100-Petty Cash`, `62900 | Otros servicios | Fees -> 62900-Otros servicios`; `@check` re-run
+  → 0 rows; `@apply` re-run → 0 rows (idempotent).
+
+Both runs were executed against the live DB inside `BEGIN ... ROLLBACK` (nothing committed) using
+the exact `parseFix`/`inlineParams` templating the real runner uses, so the validated path matches
+the actual runner execution model end-to-end short of the ledger write itself.
+
+**Status:** preventive front closed (same session, `com.etendoerp.go`, out of scope for this data
+fix); corrective `.sql` written and live-validated in rolled-back transactions on GOClient and QA
+Testing (full convergence, idempotent re-run); CUT deliberately not bumped (see reasoning above).
 ## N — Initial Dataset Configuration
 
-### N1 — The curated GOClient dataset itself shipped wrong configuration (ETP-5079, 2026-09-01)
+### N4 — The curated GOClient dataset itself shipped wrong configuration (ETP-5079, 2026-09-01)
 
 **New gap-label series `N`** (defects in the *content* of the onboarding dataset, as opposed to a
 missing provisioning *step*). `M` was the highest label in use across both this doc and
-`onboarding-and-datafixes-map.md` when it was assigned.
+`onboarding-and-datafixes-map.md` when the series was opened. ETP-5101 opened the same series
+concurrently (N1-N3, GL Item provisioning) and reached `develop` first, so this dataset gap was
+renumbered to `N4` on merge.
 
 **Symptom.** A freshly onboarded tenant opened with a visibly wrong initial configuration on eight
 independent points, all traced to the curated dataset

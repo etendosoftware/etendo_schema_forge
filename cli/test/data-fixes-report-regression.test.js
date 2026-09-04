@@ -38,12 +38,27 @@ const FIXES_WITH_REPORT = new Set([
   // branch — same "flag, don't guess" pattern as R19. See
   // cli/test/data-fixes-r28-owner-email-backfill.test.js.
   '20260827T120000Z__R28-owner-email-backfill',
-  // R31 (ETP-5079) realigns the seeded document sequences' STARTNO/CURRENTNEXT. Unlike the
-  // entries above, its @report is a pure POST-CONDITION: it lists any in-scope sequence still
-  // off target after the apply, and because CURRENTNEXT is now set in both directions there is
-  // no legitimate "left off target" case left — so it should always come back empty and leave
-  // `detail` null on the APPLIED ledger row. A non-empty detail means a row was skipped or
-  // something raced the update, and is worth investigating.
+  // R31 backfills C_Glitem/C_Glitem_Acct for pre-ETP-5020 subaccounts; its @report lists every
+  // subaccount whose composed "<code>-<name>" GL Item name was truncated to fit
+  // C_Glitem.Name's 60-char limit (gap N2) — operator visibility into which names got
+  // shortened, same "flag, don't guess" pattern as R19/R28. See
+  // cli/test/data-fixes-r31-glitem-subaccount-backfill.test.js.
+  '20260901T140000Z__R31-glitem-subaccount-backfill',
+  // R32 resyncs C_Glitem.Name for already-linked GL Items whose composed name went stale (gap N3);
+  // its @report lists every row this run actually renamed — subaccount code/name plus old_name ->
+  // new_name — read back from the temp table @apply fills from its own UPDATE ... RETURNING, since
+  // the pre-apply name is gone by the time @report runs. Operator visibility, not a "skipped work"
+  // flag: empty on a clean re-run. See cli/test/data-fixes-r32-glitem-name-resync.test.js.
+  '20260902T090000Z__R32-glitem-name-resync',
+  // ETP-5079 realigns the seeded document sequences' STARTNO/CURRENTNEXT. The R31 number is
+  // reused here — R-number collisions are normal in this catalog (R14, R17, R23 and R26 each
+  // occur three times); the timestamped id is the real key, and this fix has already been
+  // applied under it, so renaming would orphan its etgo_data_fix_history row and re-run it.
+  // Unlike every entry above, its @report is a pure POST-CONDITION: it lists any in-scope
+  // sequence still off target after the apply, and because CURRENTNEXT is now set in both
+  // directions there is no legitimate "left off target" case left — so it should always come
+  // back empty and leave `detail` null on the APPLIED ledger row. A non-empty detail means a
+  // row was skipped or something raced the update, and is worth investigating.
   '20260902T120000Z__R31-document-sequence-startno',
 ]);
 

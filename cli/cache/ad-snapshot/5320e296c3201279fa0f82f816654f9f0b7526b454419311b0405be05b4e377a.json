@@ -4489,7 +4489,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "e20fe6eef26262aada0cbbefaf1e28e622c2cc4ad28995ee391eda9c8f2d5f7e",
+      "checksum": "3fd87e439cbc8fd93e905c339ac2cb97d1c763621cff2a97fd6a011c039ac194",
       "params": [
         "183"
       ],
@@ -5288,7 +5288,7 @@
         },
         {
           "columnname": "EM_Tbai_Xmlgenerator",
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Registrar Factura en Batuz",
@@ -14937,6 +14937,30 @@
         "82922976BB524D1BAA3CF8462B9219FE"
       ],
       "rows": []
+    },
+    "f24b576bdb7d04fb296f50cbd4db119ef42027696d641e54b927e50a4ae81ae0": {
+      "checksum": "cd3367ba85c50528890ace48e71c9e36b1dc97feb7b0be1f4244716b71fd5bfc",
+      "params": [
+        "107"
+      ],
+      "rows": [
+        {
+          "columnname": "EM_Etblkp_Bulkposting",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Bulk Posting",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Posted",
+          "readonlylogic": null
+        }
+      ]
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

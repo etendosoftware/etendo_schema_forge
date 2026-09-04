@@ -19,6 +19,9 @@ import {
 import {
   DifferenceBanner, DifferenceModal, differenceState,
 } from './ReconciliationDifference.jsx';
+import {
+  STATUS_CODES, countForStatus, matchesStatus,
+} from './reconciliationStatusFilter.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
@@ -64,7 +67,6 @@ const SKELETON_CELL_KEYS = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5'];
 // Elevation shadow shared by the selected row in both panels.
 const ELEVATED_SHADOW =
   'shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]';
-const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
 // i18n label key per status code, shared by the filter and the row badges.
 const STATUS_LABEL_KEY = {
   pending: 'financeReconcileFilterStatusPending',
@@ -130,7 +132,9 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
 
 function ReconciliationStatusFilter({ value, onChange, counts = {} }) {
   const ui = useUI();
-  const countFor = (code) => counts[code] ?? 0;
+  // Summed over the states each code covers, not read straight off `counts` — the "Pendiente" entry
+  // is a superset, so its own bucket would under-report the rows it shows (ETP-5033).
+  const countFor = (code) => countForStatus(counts, code);
   return (
     <DistinctValuesFilter
       value={value}
@@ -160,11 +164,9 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
   return (
     <DistinctValuesFilter
       value={value}
-      // Always keep a concrete selection — ignore the "clear" (all) action.
-      onChange={(v) => onChange(v || value)}
+      onChange={onChange}
       codes={SOURCE_CODES}
       labelFor={(code) => `${ui(SOURCE_META[code]?.labelKey ?? code)} (${counts[code] ?? 0})`}
-      allLabel={ui('financeReconcileSourceLabel')}
       searchPlaceholder={ui('financeReconcileSourceLabel')}
       popoverWidth="w-64"
       data-testid="recon-source-filter" />
@@ -477,7 +479,7 @@ function StatementLinesPanel({
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
       </button>
       <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} data-testid="ReconciliationStatusFilter__d0f4d5" />
-      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('financeReconcileFilterDate')} data-testid="DateRangePopover__d0f4d5" />
+      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />
     </ToolbarShell>
   );
 
@@ -767,7 +769,7 @@ function CandidateOperationsPanel({
       <DateRangePopover
         value={dateRange}
         onChange={onDateRangeChange}
-        placeholder={ui('financeReconcileFilterDate')}
+        placeholder={ui('dateRangeAnyTime')}
         data-testid="DateRangePopover__d0f4d5" />
       </ToolbarShell>
     </>
@@ -1237,10 +1239,17 @@ export function ReconciliationSplitPanel({
   const [leftStatus, setLeftStatus] = useState('pending');
   // Last 12 months, not 30 days: a statement line often has to be matched against an
   // invoice or payment months older than itself, and the 30-day window hid those
-  // candidates by default. It also makes the picker's own trigger honest — the
-  // `financeReconcileFilterDate` placeholder already read "Últimos 12 meses" while the
-  // state said last30. `last12m` is a preset dateRangeBounds and DateRangePopover both
-  // already support, so nothing else changes.
+  // candidates by default. `last12m` is a preset dateRangeBounds and DateRangePopover
+  // both already support, so nothing else changes.
+  //
+  // The trigger text comes from this preset, NOT from the placeholder. It used to
+  // be the other way round: the placeholder was `financeReconcileFilterDate`,
+  // whose es_ES value happens to read the same as `dateRangeLast12Months`. The
+  // all-time option (`dateRangeAllTime`) is encoded as a `null` value, which is
+  // indistinguishable from "nothing chosen", so computeTriggerLabel fell through
+  // to the placeholder and the button kept naming a 12-month window even though
+  // the filter had widened (ETP-4956). The placeholder is now
+  // `dateRangeAnyTime`, matching every other DateRangePopover call site.
   const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last12m' });
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSource, setRightSource] = useState('receipts');
@@ -1289,7 +1298,7 @@ export function ReconciliationSplitPanel({
     // table's own status predicate (`visibleLines` below), including its null/empty = "Todos" case.
     // Search is deliberately NOT mirrored: typing to look something up is a transient view change,
     // not the line moving.
-    if (leftStatus && (live.state || 'pending') !== leftStatus) {
+    if (!matchesStatus(live.state, leftStatus)) {
       return null;
     }
     return live;
@@ -1351,7 +1360,8 @@ export function ReconciliationSplitPanel({
     const q = leftSearch.trim().toLowerCase();
     return lines.filter((l) => {
       // Client-side state filter (null/empty = "Todos"); the backend already computed l.state.
-      if (leftStatus && (l.state || 'pending') !== leftStatus) return false;
+      // Membership, not equality: "Pendiente" covers every non-reconciled state (ETP-5033).
+      if (!matchesStatus(l.state, leftStatus)) return false;
       if (!q) return true;
       return [l.description, l.partnerName, l.referenceNo]
         .some((v) => (v || '').toLowerCase().includes(q));

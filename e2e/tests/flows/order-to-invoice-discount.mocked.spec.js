@@ -406,15 +406,28 @@ test.describe('Sales Order → Sales Invoice — total discount (ETP-4015)', () 
     await login(page);
     await openInvoicePage(page);
 
-    // Wait for stable values, then verify the invariant in a single snapshot.
-    await expect.poll(() => readRow(page, 'totals-row-total-value'),
-      { timeout: 6_000 }).toBeGreaterThan(0);
-    const subtotal = await readRow(page, 'totals-row-subtotal-value');
-    const tax      = await readRow(page, 'totals-row-tax-value');
-    const total    = await readRow(page, 'totals-row-total-value');
+    // Poll the INVARIANT itself, not just "total > 0": that condition is already
+    // true for the intermediate render before the discount is applied, and the
+    // three reads below then land in different renders — which is how this
+    // assertion failed with 45.98 against a 43.89 subtotal+tax.
+    let snapshot;
+    await expect.poll(async () => {
+      const [subtotal, tax, total] = await Promise.all([
+        readRow(page, 'totals-row-subtotal-value'),
+        readRow(page, 'totals-row-tax-value'),
+        readRow(page, 'totals-row-total-value'),
+      ]);
+      snapshot = { subtotal, tax, total };
+      if (!(total > 0)) return null;
+      return Math.round(total * 100) / 100 === Math.round((subtotal + tax) * 100) / 100;
+    }, {
+      message: 'displayed subtotal + tax should settle to equal the displayed total',
+      timeout: 10_000,
+    }).toBe(true);
 
-    const sum = Math.round((subtotal + tax) * 100) / 100;
-    const rounded = Math.round(total * 100) / 100;
+    // Re-assert the settled snapshot so a failure reports the actual numbers.
+    const sum = Math.round((snapshot.subtotal + snapshot.tax) * 100) / 100;
+    const rounded = Math.round(snapshot.total * 100) / 100;
     expect(rounded).toBe(sum);
   });
 

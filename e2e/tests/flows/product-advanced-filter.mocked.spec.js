@@ -28,9 +28,21 @@ import { login } from '../helpers/auth.js';
  *      `GET .../product?_distinct=productCategory&_distinctSearch=...`);
  *      typing a fragment of the label must narrow the picker's own results,
  *      and applying the filter must narrow the GRID to the matching rows.
- *   4. Filtrar por Tipo con "Es cualquiera de" y validar resultados
- *      case-insensitive — the already-shipped inSet fix (PR #946): typing
- *      lower-case codes must narrow the grid to the upper-case-coded rows.
+ *   4. Filtrar por Tipo (an `enumLabel` column) and validate the grid
+ *      narrows correctly — as of ETP-4956 (published in
+ *      `@etendosoftware/app-shell-core` 0.3.45), `inSet` ("Es cualquiera de")
+ *      was removed from `OPERATORS_BY_MODE.enumLabel`: enum columns no
+ *      longer offer it as a freshly-selectable operator, because their
+ *      values are now picked through a multi-select checkbox popover
+ *      (`DistinctEnumPicker`) instead of a free-text, comma-separated,
+ *      case-sensitive-on-the-backend input. That also retires the
+ *      case-insensitive-typed-codes concern this bullet used to cover —
+ *      there is no free text left to mistype the case of. This spec now
+ *      asserts (a) `inSet` is correctly absent from the operator dropdown
+ *      for `productType`, and (b) the "Es" (equals) operator drives the same
+ *      real narrowing behavior via `DistinctEnumPicker`'s checkbox
+ *      multi-select, OR-composed as `equals` (not `iEquals` — the codes come
+ *      from checkboxes, never typed, so there is nothing to case-fold).
  *   5. Verificar que campos obligatorios no muestren operadores "Está
  *      vacío"/"No está vacío" — `productCategory` is `required: true`.
  *
@@ -43,9 +55,10 @@ import { login } from '../helpers/auth.js';
  * ProductCustomTable.filters.vitest.jsx and docs/list-filters.md).
  *
  * Single comprehensive flow (create → multiField identity-cell check →
- * field-label check → Categoría "Es" + search + grid narrowing → Tipo inSet
- * case-insensitive + grid narrowing → required-column operator exclusion)
- * per this repo's E2E convention of one flow per describe block.
+ * field-label check → Categoría "Es" + search + grid narrowing → Tipo "Es"
+ * checkbox multi-select + grid narrowing (inSet absence asserted) →
+ * required-column operator exclusion) per this repo's E2E convention of one
+ * flow per describe block.
  *
  * Mocked routes are installed AFTER login() so they win over the generic
  * /sws/** catch-all (Playwright LIFO route matching) — see
@@ -129,7 +142,7 @@ function filterRowsByCriteria(rows, criteriaRaw) {
 }
 
 test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
-  test('creates a product, then validates field labels, Categoría search+equals, Tipo case-insensitive inSet, and required-column operator exclusion', async ({ page }) => {
+  test('creates a product, then validates field labels, Categoría search+equals, Tipo equals multi-select (inSet no longer offered for enum columns, ETP-4956), and required-column operator exclusion', async ({ page }) => {
     const state = { rows: [...SEED_ROWS], postBodies: [] };
 
     await login(page);
@@ -154,6 +167,12 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
             { id: CATEGORY_OPTION.id, _identifier: CATEGORY_OPTION.label },
             { id: OTHER_CATEGORY_OPTION.id, _identifier: OTHER_CATEGORY_OPTION.label },
           ];
+        }
+        if (field === 'productType') {
+          // DistinctEnumPicker only reads `id` from these entries — labels
+          // come from the column's own `enumLabels` i18n keys, not from
+          // `_identifier` (see labelFor() in AdvancedFilterBuilder.jsx).
+          entries = ['I', 'S', 'R', 'E'].map((id) => ({ id, _identifier: id }));
         }
         if (search) {
           entries = entries.filter((e) => e._identifier.toLowerCase().includes(search));
@@ -352,7 +371,10 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     const valueTrigger = popover.getByRole('button', { name: 'Seleccionar valor' });
     await valueTrigger.click();
 
-    const searchInput = page.getByPlaceholder('Buscar');
+    // The global search bar also contains a longer placeholder beginning with
+    // "Buscar". Use the picker input's exact placeholder to avoid matching
+    // both controls now that global search is present on every window.
+    const searchInput = page.locator('input[placeholder="Buscar"]');
     await expect(searchInput).toBeVisible({ timeout: 5_000 });
 
     // Validate the searcher: typing a fragment of the label narrows the
@@ -390,8 +412,10 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     await expect(page.getByTestId('row-prod-same-category')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('row-prod-other-category')).toHaveCount(0);
 
-    // ── Bullet 4: Filtrar por Tipo con "Es cualquiera de" y validar
-    // resultados case-insensitive. ──
+    // ── Bullet 4: Filtrar por Tipo (enumLabel column) — "Es cualquiera de"
+    // (inSet) must NOT be a freshly-selectable operator (ETP-4956); "Es"
+    // (equals) drives the same real narrowing via DistinctEnumPicker's
+    // checkbox multi-select. ──
     await page.getByTestId('filter-advanced').click();
     await expect(popover).toBeVisible({ timeout: 5_000 });
 
@@ -401,9 +425,33 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     await page.getByRole('option', { name: 'Tipo', exact: true }).click();
 
     await opSelect.click();
-    await page.getByRole('option', { name: 'Es cualquiera de', exact: true }).click();
 
-    await popover.getByPlaceholder('Valores separados por coma').fill('i,s');
+    // Regression guard for ETP-4956: enum columns no longer offer inSet as a
+    // fresh choice — only "Es"/"No es" (equals/notEqual).
+    await expect(page.getByRole('option', { name: 'Es cualquiera de', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('option', { name: 'Es', exact: true })).toBeVisible({ timeout: 5_000 });
+
+    await page.getByRole('option', { name: 'Es', exact: true }).click();
+
+    // "Es" on an enumLabel column opens DistinctEnumPicker — a checkbox
+    // popover backed by the same `_distinct` endpoint as Categoría's
+    // IdentifierMultiPicker above, but rendering the column's own
+    // `enumLabels` i18n labels rather than raw codes or `_identifier`s.
+    const typeValueTrigger = popover.getByRole('button', { name: 'Seleccionar valor' });
+    await typeValueTrigger.click();
+
+    // DistinctEnumPicker's own search input uses a different placeholder
+    // ("Buscar valor...") than IdentifierMultiPicker's ("Buscar") above.
+    await expect(page.getByPlaceholder('Buscar valor...')).toBeVisible({ timeout: 5_000 });
+
+    // Multi-select: the popover stays open across clicks so both codes can
+    // be ticked in one pass — mirrors real user behavior for "is any of".
+    await page.getByRole('button', { name: 'Artículo', exact: true }).click();
+    await page.getByRole('button', { name: 'Servicio', exact: true }).click();
+
+    // Close the value picker without closing the outer funnel panel.
+    await page.keyboard.press('Escape');
+    await expect(page.getByPlaceholder('Buscar valor...')).toHaveCount(0);
 
     const typeListReqPromise = page.waitForRequest(
       (r) => r.method() === 'GET' && r.url().includes('/sws/neo/product/product') && r.url().includes('criteria='),
@@ -412,14 +460,18 @@ test.describe('Product grid — Advanced Filter (ETP-4609)', () => {
     await popover.getByRole('button', { name: 'Aplicar', exact: true }).click();
     const typeListReq = await typeListReqPromise;
 
-    // The lower-case-typed codes reach the backend request unmodified, OR-composed
-    // as case-insensitive `iEquals` criteria (buildRowCriteria → generateInSetCriteria
-    // in lib/gridQuery.js) — this is the ETP-4609 fix already shipped in PR #946.
+    // The checked codes reach the backend OR-composed as plain `equals`
+    // criteria (buildRowCriteria → buildOrCriteria in lib/gridQuery.js) —
+    // never `iEquals`/`inSet`: values come from checkboxes bound to real
+    // backend codes, not typed free text, so there is nothing to case-fold.
     const typeCriteriaRaw = new URL(typeListReq.url()).searchParams.get('criteria');
     expect(typeCriteriaRaw).toBeTruthy();
-    expect(typeCriteriaRaw).toContain('iEquals');
-    expect(typeCriteriaRaw).toContain('"i"');
-    expect(typeCriteriaRaw).toContain('"s"');
+    expect(typeCriteriaRaw).toContain('"productType"');
+    expect(typeCriteriaRaw).toContain('"equals"');
+    expect(typeCriteriaRaw).not.toContain('iEquals');
+    expect(typeCriteriaRaw).not.toContain('inSet');
+    expect(typeCriteriaRaw).toContain('"I"');
+    expect(typeCriteriaRaw).toContain('"S"');
 
     // The grid narrows to the case-insensitively-matching productType rows:
     // the new product (backend code "I") and the different-category seed row

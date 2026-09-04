@@ -32,7 +32,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - Implementation type: custom `contacts` window registered in the app-shell registry. The wrapper adds a contacts-specific provider, header persona toggle, filtered header form, custom list table, financial panel, location modal, and right-side sidebar around the generated window contract. A scoped stylesheet (`contacts.css`) applies Figma-aligned input styles (default white, hover `#F5F7F9`, focus double-border `#121217`, disabled `#F5F7F9`) exclusively to the `.contacts-rows` scope without affecting other windows.
 - Shape: master-child window. The master record is `businessPartner`; child work areas are `contact` (Person), `bankAccount`, `locationAddress`, `customerAccounting` (Customer Accounting), and `vendorAccounting` (Vendor Accounting), while the Financial tab also edits related customer/vendor preference fields and discount data.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
-- Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing. When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
+- Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing, and so does clicking the row's content; ticking the row's **selection checkbox** only selects the row and never opens the modal (ETP-5029 — the checkbox cell stops the click from reaching the row-body handler, the same way `DataTable` does). When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
 
 ## Reactive behavior and dependencies
 
@@ -65,6 +65,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - In the Location modal, country is required; choosing a country clears the region, reloads region options through country-filtered selectors, and keeps country/region option loading paginated behind searchable pickers.
 - New locations default shipping address and invoicing address to true, and the modal creates or updates the business-partner location plus underlying location data through the same `locationAddress` endpoint.
 - The same `LocationEditorModal` is also reused by the shared partner-address picker for inline "+ Add address" flows in other windows. That reuse is proved in code/tests, but it is not a distinct extra screen inside `/contacts` itself.
+- The Location tab's own add-line button reads **"+ Añadir dirección"** (ETP-5021) — `secondaryTabs.locationAddress.addLineLabelKey: "addAddress"` in `decisions.json` swaps in the same standardized text used by the header-level partner-address picker mentioned above, instead of the generic tab-name-derived "Añadir Dirección". See `docs/decisions-reference.md`'s `addLineLabelKey` row for the mechanism.
 - Bank account defaults are partially visible in current evidence: country defaults from configuration and bank format defaults to `GENERIC`. A bank-account format field exists, but current evidence does not prove how the form reacts between generic, IBAN, SWIFT, and Spanish modes.
 - The detail view shows a **horizontal financial summary** in both primary tabs (no right-side sidebar): above the General form and at the top of the Financial tab. The summary widget shows three KPIs — **Balance Neto** (Net Balance, computed client-side as Income − Expenses), **Ingresos** (Income), and **Gastos** (Expenses) — each with a trend badge (green up-arrow `#EEFBF4`/`#17663A` for non-negative, red down-arrow `#FEF0F4`/`#D50B3E` for negative) whose text reads "vs últimos 3/6 meses" according to the selected period. A **Ver gráfico** button opens a dialog with the trend chart (`BPChartSVGContent`) and a 3M/6M toggle. KPI values come from `bp-stats` (current-month income/expenses; Net Balance = income − expenses). The trend badges are **period-aware**: they are computed from the `bp-trend` series via `windowTrend(arr, months)` as `((lastMonth − firstMonthOfWindow) / |firstMonthOfWindow|) * 100` over the last N months of the selected period (3M or 6M), so the percentage changes with the period and stays consistent with the chart. The badge is omitted when the window has fewer than 2 points or the first month is zero/non-finite.
 - The **period selector** ("Últimos 3 meses") sits in the tabs bar, immediately to the right of the General/Financial tabs (`DetailView` `tabsBarAfter` slot — rendered right after the tab buttons, not pushed to the far right). It and the summary widget share the selected period and the fetched data through `ContactsFinanceContext`, so changing the period updates both badges and chart. Chart axis labels are localized based on the active locale.
@@ -101,6 +102,7 @@ The Contacts window should let users maintain a shared business-partner master r
 13. Select a payment method in the financial section and confirm the eligible financial account selector is filtered to only accounts compatible with that payment method.
 10. Open the Location add flow and confirm it uses a modal, requires country, clears region when country changes, paginates/searches selector options, and defaults shipping/invoicing flags on a new address.
 11. Add or edit a location and confirm the saved address is reflected back in the contact detail and list enrichment.
+11. In the Dirección tab, tick a row's selection checkbox and confirm the row is marked as selected (and the selection bar appears) while the `LocationEditorModal` stays **closed**; untick it and confirm the modal stays closed. Tick the header select-all and confirm the same. Then click the row's content (outside the checkbox) and confirm the modal **does** open for that address. Repeat the checkbox check in the Persona and Cuenta Bancaria tabs to confirm pencil/inline-edit is unaffected.
 12. Add a bank account and confirm the saved row stays linked to the current contact.
 13. In both the General and Financial tabs, confirm the horizontal summary shows three KPIs — Balance Neto, Ingresos (green), and Gastos (red) — each with a trend badge. Click the period selector to the right of the tabs, switch between "Últimos 3 meses" and "Últimos 6 meses", and confirm the badge text updates ("vs últimos 3/6 meses"). Click **Ver gráfico** and confirm a chart dialog opens with a 3M/6M toggle. Confirm Balance Neto equals Ingresos − Gastos.
 14. Reopen an existing person-like contact and verify the toggle shows Person mode (persisted via `EM_Etgo_IsPerson`). Create a new contact in Person mode, save it, and confirm the toggle stays in Person mode after the record is saved.
@@ -210,9 +212,9 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 
 ## ETP-4447 — CSV/TXT import
 
-**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "contacts"`, `entity: "businessPartner"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
+**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "contacts"`, `entity: "businessPartner"`, `formats: ["csv", "txt", "xlsx"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
 
-**Composite descriptor splits one CSV row into three records.** Contacts registers a custom import descriptor (`contactsImportDescriptor.js`, name `contacts`) instead of the plain single-entity default: a row builds a `businessPartner` op (with `oBTIKTaxIDKey` defaulted and `searchKey` falling back to `name`), and — only when address fields are present — a `locationAddress` op plus a `contact` (person) op, so a single "Company + contact person + address" row lands correctly across the three underlying tabs. `country`/`region` resolve through dedicated FK resolvers (`contactsFkResolvers.js`) rather than the generic per-field resolver, since they need the composite descriptor's own SimSearch calls.
+**Composite descriptor splits one CSV row into three records.** Contacts registers a custom import descriptor (`contactsImportDescriptor.js`, name `contacts`) instead of the plain single-entity default: a row builds a `businessPartner` op (with `oBTIKTaxIDKey` defaulted and `searchKey` falling back to `name`), and — only when address fields are present — a `locationAddress` op plus a `contact` (person) op, so a single "Company + contact person + address" row lands correctly across the three underlying tabs. `country` resolves through a dedicated FK resolver (`contactsFkResolvers.js`) rather than the generic per-field resolver, since it needs the composite descriptor's own SimSearch call. `region` used to have one too — see the ETP-4997 section below for why it does not any more.
 
 **Row-level dedupe.** ⚠️ **Superseded by ETP-4995:** the key is now `["taxID"]`, not `["etgoEmail"]` — email is optional, and `dedupeRows` skips deduplication entirely when any key part is blank. `window.import.dedupe` was `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
 
@@ -228,7 +230,7 @@ The import mapping exposes aliases for Spanish compact and spaced headers: `codi
 
 **Review queue is a real per-field data grid.** Instead of collapsing a row into one cell, the queue renders one column per declared field with a frozen leading Status column (line number, status pill, inline Retry/Copy/Skip icons, and — for an already-skipped row — an "Edit again" action that brings it back for another look). A field that failed FK matching (e.g. `country`) renders as a click-to-open popover backed by the same SimSearch candidates already computed for it, with a live, debounced re-search as the user types and a "browse all" fallback when there were no close candidates at all — fixing the row is picking the right record, not retyping text and hoping "Re-validate" matches this time.
 
-**Known gap.** The country/region SimSearch matching is only as good as Etendo's own SimSearch fuzzy scoring (e.g. "España" alone can rank real matches surprisingly low); the pick-a-value/browse-all UI above exists specifically to make that recoverable without re-editing the source file.
+**Known gap.** The country SimSearch matching is only as good as Etendo's own SimSearch fuzzy scoring (e.g. "España" alone can rank real matches surprisingly low); the pick-a-value/browse-all UI above exists specifically to make that recoverable without re-editing the source file.
 - Tab labels ("Customer Accounting" / "Vendor Accounting") already existed as AD-derived `tabs` dictionary entries in both `packages/app-shell-core/src/locales/en_US.json` and `es_ES.json` ("Contabilidad cliente" / "Contabilidad proveedor"), so no new i18n keys were required.
 
 ## ETP-4533 — Explicit header save + Razón Social pre-fill
@@ -621,3 +623,415 @@ Regression coverage: `importRowValidators.vitest.js`, the extended
 `importTemplateRoundTrip.vitest.js`, and in app-shell-core `existingRecordLookup.test.js`,
 `parseImportNumber.test.js`, `rowValidators.test.js`, plus the ETP-4996 block in
 `ImportDialog.test.jsx`.
+
+## ETP-4992 — Tax ID field relabelled "CIF/NIF" -> "NIF" (Spanish locale)
+
+CIF was abolished in Spain and folded into NIF in 2008, so the header's tax-identification
+field ("CIF/NIF") no longer matches the correct terminology. The field itself
+(`taxID` on `businessPartner`, AD column `TaxID`) is unchanged; only its Spanish display
+label is renamed to **NIF**, in every place it is rendered by this window: the General tab
+form field, the grid column (if ever surfaced), the advanced-filter field list, and the
+CSV/TXT import's column-mapping step and review-queue column header.
+
+**Mechanism.** `useLabel()`'s resolution chain (`labelOverrides[locale][column] →
+dictionary.fields[column].label → raw spec label`) always finds the global AD dictionary
+entry for `TaxID` (`"CIF/NIF"`, shared by every other window that exposes this column), so a
+plain per-field `label` in `decisions.json` would never be reached and would not change what
+renders. The window-scoped override that actually wins is
+`decisions.json → window.labelOverrides.es_ES.TaxID: "NIF"` — the same mechanism already used
+for `C_BP_Group_ID` -> "Contact Category" (see the ETP-4566 note above). The global
+`es_ES.json`/`es_AR.json` dictionary entries for `TaxID`/`Taxid` were left untouched, since
+they are shared by other windows. English (`en_US`) and `es_AR` are unchanged — this is a
+Spain-specific fiscal-terminology fix.
+
+The import field-mapping entry (`window.import.fields`, `target: "taxID"`) also had its
+`label` changed from `"CIF/NIF"` to `"NIF"`, since `ImportColumnMapping.jsx` and
+`ImportReviewQueue.jsx` (both in the published `@etendosoftware/app-shell-core` import
+components) render `field.label` directly in the column-mapping dropdown and the review
+queue's column header — both are part of this window's own Import flow.
+
+**Scope broadened to `CreateContactModal.jsx` (human decision, same day).** The shared
+quick-create modal's own `taxIDField` locale key (`genericLabels.taxIDField` in
+`es_ES.json`) was initially left out of scope because `CreateContactModal.jsx` is not part
+of the `/contacts` window itself — it is the partner-selector "+ crear contacto" flow opened
+from *other* windows (Sales Order, Sales Quotation, Purchase Order, Purchase Invoice, Goods
+Shipment — see the ETP-4700 E2E coverage in `e2e/tests/flows/contacts-integration.spec.js`).
+The human asked for it anyway for real-world consistency: it is the same fiscal field (CIF no
+longer exists in Spain), so a stale "CIF/NIF" in the quick-create modal while the main window
+says "NIF" would just be confusing. `genericLabels.taxIDField` in `es_ES.json` is now `"NIF"`
+too (`es_AR.json` is untouched — Argentina's own fiscal-ID terminology, CUIT/CUIL, is a
+separate matter this ticket does not touch). `CreateContactModal.jsx` and `contactModalConfig.js`
+have no hardcoded "CIF"/"NIF" strings of their own — the field is declared as
+`{ id: 'taxID', labelKey: 'taxIDField', ... }` and rendered via `{ui(f.labelKey)}` in
+`EntityCreationModal.jsx`, so the locale-key edit is the only change needed for it to take
+effect. `e2e/tests/flows/contacts-integration.spec.js`'s two ETP-4700 tests, which fill this
+modal's tax-ID input by locating its label text, were updated from
+`page.getByText(/^cif\/nif/i)` to `page.locator('label', { hasText: /^nif$/i })` — scoped to
+`<label>` specifically because the sibling "Clave NIF país residencia" `<select>` also has a
+literal `<option>NIF</option>`, which a plain `getByText(/^nif/i)` would ambiguously match too.
+
+The import's `TAX_ID_KEY_VALUES` alias list in `contactsImportDescriptor.js` (accepting
+user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as synonyms for the *Tax ID Type* enum value `NIF`)
+remains unchanged — it recognizes what users type in their own CSV files and is unrelated to
+the displayed field label. Likewise the `taxID` import field's own `aliases` array in
+`decisions.json` (`["cif/nif", "cif", "nif", ...]`) is unchanged, so old import templates and
+files with a "CIF/NIF" column header still map correctly — only the *displayed* label changed,
+not what the importer recognizes as input.
+
+**`generated/core.es_ES.json` note.** The app does not read `es_ES.json` directly at runtime —
+`useLocaleDictionaries` loads the gitignored, build-time-sliced
+`src/locales/generated/core.<locale>.json` instead (see `vite-plugins/slice-labels.js`, ETP-4300/
+ETP-4830). That file is regenerated automatically from `es_ES.json` on every `make dev` boot and
+on every save to a top-level locale file while `make dev` is already running — no manual step or
+extra commit is needed for the `taxIDField` change (or the `TaxID` `labelOverrides` change above)
+to take effect; it was spot-checked locally by re-running the slicer once, confirming
+`generated/core.es_ES.json` picked up `"NIF"`.
+
+## ETP-5031 — Text-field length and unsafe-character validation
+
+Free-text fields accepted any content with no length limit and no charset guard — a phone
+field took `abc!@#`, a name field took `<script>alert(1)</script>`, and the record saved
+without objection. The prior fix (email/website/phone **format**, name-heuristic, applies
+repo-wide) never covered **length** or the **Name** field, and left grid/inline-edit
+inconsistent with the form (missing the website check there).
+
+**Scope is deliberately this window only.** `getContactsTextFieldError` (new module,
+`tools/app-shell/src/components/contract-ui/contactsFieldValidation.js`) gates on
+`windowName !== 'contacts'` as its very first check, so importing it into the shared
+components (`EntityForm`, `useEntity`, `DataTable`, `InlineLinesPanel`) cannot affect any
+other window. This was a deliberate tradeoff over wiring the repo-wide `validation` object
+already resolved in every window's `contract.json` (via the generic `validateRecord` engine
+published in `@etendosoftware/app-shell-core`) — that would have turned on `maxLength`
+enforcement across all 47+ windows at once, out of scope for this fix.
+
+**Length limits are hardcoded**, sourced directly from `artifacts/contacts/contract.json`'s
+resolved `validation.maxLength` for each text field of `businessPartner` (`name`,
+`etgoFirstname`, `etgoLastname`, `taxID`, `etgoWeb`, `etgoEmail`, `etgoPhone`) and `contact`
+(`firstName`, `lastName`, `email`, `phone`, `position`, `comments`) — not read from the
+contract at runtime, because the generator does not emit `maxLength` into the field literals
+the components receive (only `key`/`column`/`type`/`label`/`required`/`section`).
+
+**Unsafe characters** (`hasUnsafeChars`): ASCII control characters (excluding tab/newline/CR,
+the normal editing ones) and any `<`/`>` — enough to catch the `<script>` injection case
+without attempting full HTML sanitization. Checked after length, so a value failing both
+surfaces the length error first.
+
+Wired at the same 4 call sites as the existing numeric/format validators: `EntityForm`'s
+on-blur toast, `useEntity`'s hard save-block gate, `DataTable`'s inline-add row, and
+`InlineLinesPanel`'s inline cell edit — `windowName`/`specName` now threads all the way from
+`DetailView` through `SecondaryTableTab` into both grid components, closing a gap where it
+previously stopped short. While there, the grid/inline-edit paths also gained the
+`getWebsiteFieldError` check that the form already had but they were missing.
+
+The save-block gate in `useEntity` is scoped to fields the user actually edited **this
+session** (same scoping as the email/website/phone checks), not every registered field — a
+pre-existing over-limit or unsafe value on an untouched legacy record never blocks an
+unrelated edit.
+
+New i18n keys (`genericLabels`, both `en_US.json`/`es_ES.json`): `fieldMaxLengthError`
+(interpolates `{maxLength}`) and `fieldInvalidCharacters`.
+
+Regression coverage: `contactsFieldValidation.test.js` (length, unsafe chars, `<script>`, and
+the window-scoping gate — asserts `null` for any window other than `contacts` regardless of
+value).
+
+**Follow-up — keystroke-level phone filtering.** The save-time format check above (`abc!@#`
+blocked with a toast on Save) left a UX gap: the user could still type the disallowed text
+into the field and see nothing happen until they tried to save. `filterContactsInputValue`
+(same module) closes that gap for phone-like fields (`etgoPhone`, `phone`, any field whose
+key/column contains "phone") by stripping every character outside the phone charset
+(`\d+()-. ` and whitespace) as the value is typed — a disallowed character never appears in
+the input at all, instead of appearing and then being rejected on Save. Same `windowName
+!== 'contacts'` gate. Wired into the header form's plain `<Input onChange>` in `EntityForm.jsx`
+and the inline-add row's `onChange` in `DataTable.jsx`. The `InlineLinesPanel` inline-edit
+cell (editing an existing Person's phone in the grid) still relies on the save-time block only
+— its `<Input>` is uncontrolled and reaching it would need threading `specName` through two
+more render layers (`renderLineCell` → `EditCell`), left for a follow-up if needed.
+
+**Follow-up — "Página web" required a real domain shape, not just the scheme.**
+`isSecureUrl` (`recipientEdits.js`, repo-wide, not Contacts-scoped) only checked that the
+value started with `https://` followed by any non-whitespace — `"https://asda"` passed as
+"secure", a real value that shipped on this window. Tightened to require a domain-shaped host
+after the scheme: at least one `label.` segment followed by a 2+ letter TLD (`SECURE_URL_RE`).
+`"https://asda"` is now correctly rejected; `"https://acme.com"` / `"https://sub.acme.co.uk"`
+still pass. The `websiteInsecureUrl` message text was also corrected — since both Contacts and
+Organization always show a fixed, non-editable `https://` chip via `inputPrefix`, the actual
+mistake is never "wrong scheme", it's an incomplete domain, so the old "must use a secure URL"
+wording was misleading (the URL genuinely was already `https://`). New text: "Introduce un
+dominio válido, por ejemplo dominio.com" / "Enter a valid domain, e.g. example.com". This is a
+generic, repo-wide fix (not gated to `windowName === 'contacts'`) — it strengthens the same
+shared validator both Contacts and Organization already call.
+
+Regression coverage: `recipientEdits.test.js` (`isSecureUrl` — rejects a dotless host, accepts
+a multi-label domain and a domain with a port).
+
+## ETP-4997 — CSV export from the list
+
+**Export button beside Import.** The list toolbar (`ListView.jsx`) now carries an Export action
+on the same `window.import.enabled` gate: a window with no import template has no columns to
+export either. It streams the current list as CSV through the backend's generic
+`export=csv` flag (`NeoCsvExportService`, com.etendoerp.go) via the `useCsvExport` hook, so a
+5000-row export never materializes in the browser. A column whose key is absent from the row
+serializes as an empty cell, which is what the contact-scoped columns below rely on.
+
+**`NeoCsvExportService` had to learn the generic list envelope (com.etendoerp.go).** Its
+`locateRows` only recognized `{response:{data:{<key>:[…]}}}` — the shape a custom handler
+(bank statements, movements) returns. A generic CRUD list goes through
+`DefaultJsonDataService.fetch`, whose standard Openbravo envelope puts the rows in
+`response.data` **as the array itself**, so `optJSONObject("data")` returned null, `tryExport`
+declined, and the servlet wrote its normal JSON. The bug was invisible from the outside: the
+browser saved a 200 response under the `.csv` name, so the first symptom was the import
+rejecting the downloaded file. `locateRows` now accepts both shapes, and `useCsvExport` refuses
+to download a response whose `Content-Type` is not a CSV, so a future decline surfaces as the
+export-failed toast instead of a corrupt file.
+
+**Filters are honoured by re-running the query, not by exporting what is on screen.** The list is
+filtered, sorted and paginated server-side, so the rows already in memory are only the pages the
+user happened to scroll. `useEntity` now exposes `buildListQuery()` — the same `_sortBy` +
+`criteria` composition `refresh` uses — and the export re-issues it with the row window widened
+to `window.import.limit.maxRows` (5000 here, the same ceiling the import honours).
+
+**Columns come from the import template, not from a second config.** There is no
+`window.export` block: `importExportColumns.js` derives the column spec from
+`window.import.fields` at runtime, and the headers come from app-shell-core's own
+`resolveTemplateHeaders` — the function `ImportDialog` calls to write the downloadable template.
+So an export and a template are byte-identical, including the session language (resolved through
+the same `importFieldLabel` passed to `ImportDialog` as `fieldLabelFn`), the collision handling
+that keeps `parseDelimited` from rejecting duplicate headers, and the trailing `*` on required
+columns (which `mapColumns.stripRequiredMarker` removes again on the way back in).
+
+**The header qualifier now names the right tab.** A Contacts row is split across THREE records —
+the business partner, its contact person (`AD_User`) and its address (`C_BPartner_Location` +
+`C_Location`) — but `headerScope` had a single value, `"contact"`, covering everything not on the
+header entity. `ListView.importFieldLabel` rendered that as the word "Contacto", so an exported
+file labelled its address columns `Dirección (Contacto)`, `Ciudad (Contacto)`, … — naming the
+wrong tab, which is exactly how a reader was misled. The five `C_Location` columns now carry
+`headerScope: "address"` and render as `(Dirección)`. The qualifier is driven by a lookup, so an
+unknown scope adds nothing rather than printing a raw key, and it is skipped when the column's own
+label already IS the scope word (otherwise the address column reads "Dirección (Dirección)").
+Renaming a header is safe by construction: `mapColumns` matches the declared `label` and `aliases`
+too, and `ImportDialog` adds the localized header to the aliases before matching — asserted by the
+round-trip test in both languages.
+
+**The ten child-scoped columns are filled by the handler, not by the list row.** `email`,
+`firstName`, `lastName`, `phone`, `position` (scope `contact`) and `address`, `city`, `postal`,
+`country`, `region` (scope `address`) live on `AD_User` and `C_BPartner_Location` + `C_Location`.
+A `C_BPartner` row carries none of them: of its 45 contract fields the only address-shaped one is
+`eTGOLocation`, an AD virtual column (`SQLLOGIC = select etgo_get_location(c_bpartner_id)`)
+returning ONE concatenated display string that cannot be split back into columns. There is no
+expansion escape hatch either — the `fields` projection is an MCP argument, not a REST param, and
+is a flat whitelist over the entity's own keys.
+
+So `BusinessPartnerHandler.attachChildData` (ETP-4997) attaches each partner's primary contact
+person and primary address under `etgoChildData` on a LIST GET carrying `includeChildData=1`,
+which the export always sends. The export reads them by dotted path
+(`etgoChildData.city`) — `NeoCsvExportService` already resolves dotted column keys into nested
+values, and nesting keeps the added keys from ever colliding with a DAL property.
+
+Three properties worth keeping:
+
+- **The address is the one the grid already shows.** The ranking is copied from
+  `ETGO_GET_LOCATION`, the SQL function behind the `eTGOLocation` column: bill-to, then ship-to,
+  then most recently created. A second rule here would let the list and the file disagree.
+- **The contact is the one `etgoEmail` already picks** — the oldest active `AD_User` — so the
+  export and the email fallback can never name different people for one partner.
+- **One statement per child set, not one per row.** Both queries use a window function over
+  `c_bpartner_id = ANY(?)`, so a 5000-row export costs two queries, not ten thousand.
+
+The flag is opt-in because the normal grid does not need the data and should not pay for it, and
+enrichment failure is non-fatal: the handler declines, the default result stands, and the user
+gets empty columns instead of a failed export. Country and region are emitted as
+`C_Country.name` and `COALESCE(C_Region.name, C_Location.regionname)` — the base names the
+import's own simSearch resolves against, which is what makes them re-importable, and the
+`regionname` fallback covers the free-text regions Etendo stores when no `C_Region` row exists.
+`category` needs the
+one source-key override this window declares (`registerExportHints` in
+`contactsImportDescriptor.js`), because the list row spells it `businessPartnerCategory` and
+carries the readable half in `businessPartnerCategory$_identifier`.
+
+**Coded columns are exported as words, not codes.** A raw list row carries `etgoIsperson` as
+`true`/`false` and `oBTIKTaxIDKey` as `1`…`7`. Those re-import fine (the code is always accepted)
+but they are unreadable in a spreadsheet, which defeats the edit half of the loop, so the export
+writes `Empresa`/`Persona` and `NIF`/`Otro documento probatorio` instead.
+
+The labels are NOT read from the AD `$_identifier`: they are inverted from the descriptor's own
+synonym tables with `codeLabels()` (`codedValue.js`), the very tables `resolveCodedValue`
+validates against. That is what makes the round trip structural — a word this writes is one the
+import accepts, rather than one that merely happens to match today and stops matching when a
+translation changes. `importExportColumns.vitest.js` asserts exactly that: every label resolves,
+and to the same code its raw value means. `etgoIsperson` is mapped from both `true`/`false` and
+`Y`/`N`, since it is an AD Yes/No column that NEO serializes as a JSON boolean.
+
+Because the CSV is serialized server-side, the map travels as the `valueMaps` query param
+(`{"column":{"raw":"Label"}}`) and `NeoCsvExportService` applies it per column after reading the
+value. A blank cell is never translated — empty means "this row says nothing about the field",
+which is how the import reads it back too — and a malformed param degrades to raw codes rather
+than failing the export.
+
+**The non-fatal enrichment hides its own bugs — hence a DB-backed guardrail.** The first
+version of `PRIMARY_LOCATIONS_SQL` selected `loc.postcode`. `C_Location`'s postal-code column is
+`postal`; `postcode` does not exist, so every execution threw a `SQLException`, `attachChildData`
+swallowed it exactly as designed, and the ten contact-person and address columns came out blank
+for every partner — indistinguishable from a partner that genuinely has no contact and no address.
+Nothing failed anywhere: not the export, not the headers, not CI.
+
+`BusinessPartnerHandlerTest` could not have caught it, and this is the general point rather than
+an oversight: its mocked `ResultSet` declared its own column names, so it asserted the *test's*
+idea of the schema. It agreed with `postcode` and would have agreed with any other invented name.
+That mock now reads `BusinessPartnerHandler.LOCATION_COLUMNS` / `CONTACT_COLUMNS` — the very
+arrays `queryChildData()` walks — so it can no longer disagree with the code it exercises, but a
+mock still cannot say whether those names exist in the database.
+
+`BusinessPartnerHandlerDbTest` (OBBaseTest) answers that half: it executes both statements against
+the live schema with the same `= ANY(?)` varchar-array binding the handler uses, and asserts each
+result set exposes `c_bpartner_id` plus every column name read by name, and that each returned row
+is readable through them. A wrong column name now fails a test instead of silently emptying a
+column. It deliberately asserts nothing about *which* contact or address is primary — those are
+ordering decisions, not schema facts, and the two `row_number()` rankings are covered by the
+mocked test.
+
+**SHELL-02 — icon direction.** The arrow now follows the DATA, not the file: Import uses
+`Download` (records coming into Etendo), Export uses `Upload` (records going out). The import
+button previously carried the outward arrow, which read as an export.
+
+The rule applies **inside** the import popup too, which is the half that was missed: the dropzone
+(`ImportDropzone`, app-shell-core) shipped with `Upload`, so the dialog contradicted the very
+button the user had just clicked. It now renders `Download`, and
+`ImportDropzone.test.jsx` asserts the icon directly — an icon swap is invisible to every other
+test in that file, which is how the mismatch survived. The component lives in
+`schema_forge_core`, so the fix arrives here as a published `@etendosoftware/app-shell-core`
+bump (see `docs/repo-topology.md`).
+
+### Excel (.xlsx), on both ends — ETP-4997
+
+Import accepts `.xlsx` alongside `.csv`/`.txt`, and both the template and the export offer CSV or
+Excel. What makes that safe is a single boundary rather than a second pipeline: `parseXlsx`
+(app-shell-core) is contracted to return **exactly** what `parseDelimited` returns —
+`{ headers, rows }` of plain strings — so `mapColumns`, `validateRows`, the coded-value synonym
+tables, the FK resolvers, the database dedupe and the review queue are all format-blind and
+unchanged. `parseXlsx.test.js` asserts that equivalence against `parseDelimited` itself rather
+than a hand-written expectation, so the two cannot drift.
+
+**Every cell the app writes is a text cell**, and that is the decision the round trip rests on.
+Measured against the reader the import uses: a text cell comes back byte-exact — `08018` keeps its
+leading zero, `1.234,56` keeps its separators, a date keeps the exact `dd-MM-yyyy` the CSV writes.
+A typed cell does not: written as a number, `08018` returns as `8018` and the zero is gone
+unrecoverably. Prettier sorting in Excel is not worth the feature's only real guarantee.
+
+Two consequences that are easy to get backwards:
+
+- **The CSV formula apostrophe must NOT be applied to xlsx.** A workbook string cell is inert — a
+  formula is a different cell type — so `=SUM(A1)` stored as a string is just text, and the
+  apostrophe would be a literal character in the user's spreadsheet. Verified by reading a written
+  workbook back.
+- **A date cell reads at UTC midnight, so local getters lose a day.** A cell holding 2026-08-31
+  arrives as `2026-08-31T00:00:00.000Z`, whose local getters on `America/Cordoba` give **30
+  August**. `parseXlsx` reads dates with `getUTCDate()`/`getUTCMonth()`/`getUTCFullYear()`. It
+  deliberately does NOT use `formatCalendarDate`/`parseCalendarDate`: those exist for date-only
+  *strings* and build their `Date` with the local-time constructor, so handed an already-correct
+  UTC instant they would reintroduce the ETP-4031 / ETP-4850 shift they were written to prevent.
+
+**A workbook with two data sheets is rejected**, not silently half-imported. The error names the
+sheets so the user knows which to remove.
+
+**Server-side, `export=xlsx` joins `export=csv`** in `NeoCsvExportService`, which is now the entry
+point for both formats. The cell projection — column spec, dotted paths, date reformatting,
+`valueMaps`, the `ids` filter — moved to `NeoExportTable`, shared by both writers so the two
+formats cannot disagree cell for cell. `NeoXlsxExportWriter` uses `SXSSFWorkbook` with a sliding
+row window, so the documented invariant that a 5000-row export never materializes now holds in the
+JVM too. It writes to `getOutputStream()`; that is mutually exclusive with the CSV branch's
+`getWriter()` on one response, and `neverTouchesTheWriterOnAnXlsxExport` pins it. Apache POI needed
+no new dependency — it is already in the Etendo core compile classpath and deployed in
+`WEB-INF/lib`, so the module declares it `compileOnly`.
+
+**`window.import.formats` finally governs something.** It was declared and unread, with
+`ImportDropzone` hardcoding both `accept='.csv,.txt'` and its hint text — config that could say
+anything without consequence. It now drives the `accept` attribute and the hint. Input and output
+formats are not the same set: `txt` is input-only (it exists because Spanish Excel's *Guardar como
+→ Texto (delimitado por tabulaciones)* produces one, which is why `parseDelimited` detects tabs),
+so the writable set is derived — `outputFormats = formats ∩ {csv, xlsx}` — rather than declared
+separately. One declaration per window, and the export structurally cannot offer a format the
+import cannot read back. A window declaring CSV alone keeps the single-click export button it had
+before; the menu appears only when there is a real choice.
+
+Full design, including the measurements behind each decision:
+`docs/plans/2026-08-31-xlsx-import-export-support.md`.
+
+Regression coverage: `importExportColumns.vitest.js` (source resolution per field, plus header
+parity and a full re-import round trip asserted against `buildTemplateCsv`/`mapColumns` in both
+a Spanish and an English session), `ListViewExport.vitest.js`, the `baseUrl` and
+non-CSV-response cases in `useCsvExport.vitest.jsx`, the `codeLabels` block in `codedValue.vitest.js`, the child-data block
+in com.etendoerp.go `BusinessPartnerHandlerTest` (attachment, a partner with no children, the
+flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerDbTest` (both child
+statements executed against the live schema), and `NeoCsvExportServiceTest` — which now covers the flat list envelope, an absent
+column key, a `$_identifier` companion, a non-list GET that must still decline, value
+translation, and an unmapped/blank/malformed `valueMaps`.
+
+### The province was never imported — ETP-4997
+
+An imported address arrived with street, city, postal code and country, and **no province**, with
+no error anywhere. Two independent causes, both of which had to go:
+
+**1. The scoping fetch hit an endpoint that does not exist.** Region names collide across
+countries ("Córdoba" is both Spanish and Argentine) and `simSearch`'s webhook cannot scope a query
+by a second column, so `contactsFkResolvers.js` searched unscoped and then asked
+`GET /sws/neo/contacts/region` for each candidate's own country in order to filter. No NEO spec
+exposes a region entity — verified against `ETGO_SF_ENTITY`, which has none in any spec — so every
+one of those calls 404'd, every candidate was filtered out, and the descriptor's
+`if (regionResult.status === 'auto-resolved')` guard skipped the field without raising anything.
+The `else` branch that would have complained did not exist.
+
+**2. Every Spanish province exists twice, and no client-side rule can choose.** A stock instance
+carries the 52 provinces at System level (`AD_Client_ID = '0'`) **and** once for the tenant, the
+tenant copy with a trailing space (`'MADRID '` vs `'MADRID'`) — 104 rows, all active, all readable.
+So even with the entity exposed, the two rows score identically and fall inside the resolver's
+15-point ambiguity gap. Choosing between them requires the session's client, which the browser has
+no business deciding.
+
+**The fix moves the lookup to where both halves resolve.** The province travels as free text
+(`regionName`) on the `locationAddress` operation, and
+`ContactsLocationAddressHandler.resolveRegionByName` resolves it: it already holds the country from
+the same payload — the only scope the lookup ever needed — and runs inside the tenant's
+`OBContext`. Matching is trimmed, accent-folded and upper-cased, so the System/tenant pair collapses
+to one name and a hand-typed "Alava" or "A Coruna" still matches; the tenant's own row then wins
+over the System one, mirroring how Etendo treats every client-overridable master record. An
+explicit `region` id still takes precedence, so the Location modal's selector-driven save is
+untouched.
+
+**A blank province is not an instruction to erase one.** `regionName` is set-if-provided: the
+descriptor trims before deciding whether to send the key at all, and the handler reads it with
+`trimToNull`, so a cell holding only spaces is indistinguishable from a cell that was never
+filled in. Both halves are needed and both were missing (found in PR review): a whitespace value
+is truthy in the browser, so the key shipped; and `nullIfEmpty` only rejects `""`, so it reached
+the resolver, which answers null for a blank name — and the region was **cleared**. Harmless on
+the import, which only ever POSTs a new address, but a PUT would have erased a province the file
+never mentioned. Clearing is now exclusively the `region` id field's job.
+
+**It now refuses instead of degrading.** A province that cannot be resolved fails the row with a
+message naming the region and the country, where before it imported an address quietly missing a
+field. That is a deliberate behaviour change: a file that used to "work" can now fail. The failure
+the user can see and fix is worth more than the one they cannot.
+
+The browser-side `contacts-region` resolver and its `/sws/neo/contacts/region` fetch are deleted
+rather than left dead — `contactsFkResolvers.js` keeps a comment explaining why there is no region
+resolver, so the next person does not re-add one. Coverage:
+`ContactsLocationAddressHandlerTest` (System-vs-tenant preference, System-only fallback, accent and
+case folding, blank without querying, unknown name, missing country, a genuine same-client
+ambiguity, and a whitespace-only name leaving the region untouched) plus the `regionName` assertions in `contactsImportDescriptor.vitest.js`.
+
+### A skipped row showed no data — ETP-4997
+
+Rows the import skips because the record already exists appeared in the review queue as
+`Omitida` — and nothing else. Every data column was blank, in both Contacts and Products.
+
+The entries were never the problem: they carry their full `row`. `ImportReviewQueue` rendered a
+skipped row as two cells — the status pill, then a single cell spanning the entire grid whose
+content was the word "Skipped" again. So the user read the same label twice and lost the row's
+data, which for the commonest skip reason — *this record already exists* — is precisely the
+information needed to tell **which** record it was.
+
+The data cells are now shared with the OK branch through one `RowDataCells` renderer (muted, not
+hidden: a skipped row is inactive, not empty), and the freed space carries the **reason** instead
+of repeating the status. Only a blank-target error counts as the reason — a field-level error
+belongs to a cell, and printing it there would read as if a bad email were why the row was
+skipped. A row the user skipped by hand has no reason and shows none.

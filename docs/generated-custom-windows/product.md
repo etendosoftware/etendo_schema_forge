@@ -14,6 +14,7 @@ identity of separate data series and is not a UI status or theme role.
 
 ## What this window should allow
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
+- Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.
 - Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
@@ -81,6 +82,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 
 ## Manual verification
 1. Open `/product` and confirm the list is a gallery of product cards rather than a flat table.
+1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
 4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
@@ -119,6 +121,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.test.js` verifies that `ProductSidebar` uses the shared `formatDashboardAxisTick` utility for Y-axis labels and does not define a local formatting function. Beyond that, automated evidence in this repo is structural and contract-backed rather than end-to-end proof of the full product workflow.
 
 ## Pipeline regeneration — ETP-4402
@@ -198,7 +201,7 @@ Updated on 2026-06-08 as part of the feature/ETP-4190 branch. Significant change
 
 ## ETP-4447 — CSV/TXT import
 
-**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
+**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt", "xlsx"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
 
 **Composite descriptor — 4 columns, product + price in one batch (ETP-4669).** ⚠️ **Superseded by ETP-4995:** the import now has eight columns (adding `productType`, `uOM`, and splitting `price` into `salesPrice`/`purchasePrice`); see the ETP-4995 section at the end. Historically the import supported exactly four CSV columns: `searchKey` (aliases `codigo`/`código`/`sku`), `name` (alias `nombre`), `description` (aliases `descripcion`/`descripción`), and `price` (alias `precio`). `productImportDescriptor.js` (registered as `product`, wired via `windows/custom/product/index.jsx`) builds a `product` create op from searchKey/name/description, plus — only when the row has a price — a second `price` op (`M_ProductPrice`) `parentRef`-linked to the product in the same `/batch` call, mirroring how `contactsImportDescriptor.js` links its child records. The single CSV `price` is written as `standardPrice`/`listPrice`/`priceLimit` against the org's default **sales** price list version, resolved ONCE per import run from `/price/selectors/M_PriceList_Version_ID` (the same version `ProductPriceBar.jsx`'s add-tariff flow lands on). A non-empty, non-numeric price fails that row with a friendly error; a priced row in an environment with no sales price list also fails clearly rather than guessing.
 
@@ -505,3 +508,55 @@ Regression coverage: `importRowValidators.vitest.js`, the extended
 `importTemplateRoundTrip.vitest.js` (which now also asserts the shipped sample row validates),
 and in app-shell-core `existingRecordLookup.test.js`, `parseImportNumber.test.js`,
 `rowValidators.test.js` plus the ETP-4996 block in `ImportDialog.test.jsx`.
+
+## ETP-4997 — CSV and Excel export from the list
+
+**Export button beside Import.** The list toolbar (`ListView.jsx`) gained an Export action on the
+same `window.import.enabled` gate, streaming the current list as CSV through the backend's
+generic `export=csv` flag (`NeoCsvExportService`, com.etendoerp.go) via the `useCsvExport` hook.
+The full mechanism — why the query is re-run instead of exporting the rows already in memory, and
+why the headers come out of app-shell-core's `resolveTemplateHeaders` rather than being
+re-derived — is documented once in the [Contacts guide](contacts.md#etp-4997--csv-export-from-the-list).
+
+**Products is the clean case: all eight columns carry data.** Unlike Contacts, no import field is
+`headerScope`-scoped, so every column of the template exports with a value. Three need a
+source-key override in `productImportDescriptor.js` (`registerExportHints`) because the list row
+spells them differently from the import target:
+
+| Import target | List-row key | Why |
+|---|---|---|
+| `category` | `productCategory$_identifier` | different name; the `$_identifier` half is the label the import can resolve back |
+| `salesPrice` | `eTGOSalePrice` | the import writes M_ProductPrice rows, which are not on a product row; the list exposes the Etendo GO convenience column |
+| `purchasePrice` | `eTGOPurchasePrice` | same |
+
+`uOM` needs no entry — its `matchEntity` already marks it as a foreign key, so it resolves to
+`uOM$_identifier` by the generic rule. `productType` exports as the word (`Articulo`, `Servicio`,
+`Gasto`) rather than the stored `I`/`S`/`E`, via a `valueLabels` table inverted from
+`PRODUCT_TYPE_VALUES` with `codeLabels()`; see the [Contacts
+guide](contacts.md#etp-4997--csv-export-from-the-list) for why the labels come from the synonym
+table instead of the AD reference list.
+
+**Excel (.xlsx) on both ends.** Import accepts `.xlsx` too, and the template and export each
+offer CSV or Excel. Product needs no window-specific work for it: the xlsx reader
+(`parseXlsx`, app-shell-core) returns exactly what `parseDelimited` returns, so this window's
+`registerExportHints` source keys, its `productType` value labels and its numeric price/stock
+validation all apply unchanged whichever format the file arrives in. The only per-window change is
+`window.import.formats` gaining `"xlsx"` — which is also what makes that key stop being dead
+config. `txt` stays: it is input-only, and the export never writes one.
+
+The behaviour and the reasoning are identical to Contacts and documented once there, in
+`docs/generated-custom-windows/contacts.md` — in particular why every written cell is a text cell,
+why the CSV formula apostrophe must not reach a workbook, and why a date cell has to be read with
+UTC getters. Full design: `docs/plans/2026-08-31-xlsx-import-export-support.md`.
+
+Regression coverage: the product cases in `importExportColumns.vitest.js`, which pin every one of
+the eight source keys and assert header parity plus a full re-import round trip against
+`buildTemplateCsv`/`mapColumns` in both a Spanish and an English session.
+
+**A skipped row now shows its data.** A product skipped because it already exists rendered in the
+review queue as `Omitida` with every data column blank — the row's values were present in the
+entry all along, but `ImportReviewQueue` replaced them with one cell spanning the grid that
+repeated the status label. Fixed generically in app-shell-core (one `RowDataCells` renderer shared
+with the OK branch, plus the skip *reason* in the space the duplicated label used to occupy), so it
+applies to every window with an import, not just this one. Reasoning and coverage in the
+[Contacts guide](contacts.md#a-skipped-row-showed-no-data--etp-4997).

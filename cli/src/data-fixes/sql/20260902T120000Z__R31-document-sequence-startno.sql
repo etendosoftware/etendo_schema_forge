@@ -1,5 +1,5 @@
 -- @id: R31-document-sequence-startno
--- @gap: N1
+-- @gap: N4
 -- @risk: low
 -- @type: sql
 -- @description: ETP-5079 — correct the STARTNO and CURRENTNEXT of the 11 document sequences the
@@ -7,7 +7,7 @@
 --   (delta 0). CURRENTNEXT is set in BOTH directions — see the "no production tenants" premise in
 --   the header before reusing this fix anywhere else.
 
--- Context (ETP-5079, gap N1)
+-- Context (ETP-5079, gap N4)
 -- ---------------------------------------------------------------------------------------------
 -- The curated GOClient dataset (com.etendoerp.go/referencedata/sampledata/GOClient/AD_SEQUENCE.xml)
 -- shipped 11 document sequences whose "Start Number" was wildly out of step with their "Next
@@ -30,7 +30,7 @@
 -- DocumentNo_* rows; likewise out of scope and undecided.)
 --
 -- This fix covers the sequences only; ETP-5079's other dataset corrections are preventive (the
--- GOClient XMLs). See docs/etendo-ad/onboarding-gaps.md section N1.
+-- GOClient XMLs). See docs/etendo-ad/onboarding-gaps.md section N4.
 --
 -- WHY ONBOARDING_PROVISIONED_THROUGH IS NOT BUMPED FOR THIS FIX
 -- ---------------------------------------------------------------------------------------------

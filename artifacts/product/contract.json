@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-27T15:11:37.217Z",
-  "checksum": "ae4716072f313613",
+  "updatedAt": "2026-09-03T23:56:25.177Z",
+  "checksum": "22c7cb75fe65e836",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -73,6 +73,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -80,7 +83,8 @@
         "descriptor": "product",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,
@@ -2506,6 +2510,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -2513,7 +2520,8 @@
         "descriptor": "product",
         "formats": [
           "csv",
-          "txt"
+          "txt",
+          "xlsx"
         ],
         "limit": {
           "maxRows": 5000,

@@ -898,9 +898,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '-2' });
     await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-3' });
 
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'Quotation should have 2 lines, both negative',
-    ).toBeVisible({ timeout: 10_000 });
+    await waitForLinesSettled(page, 2, 'Quotation should have 2 lines, both negative');
 
     const quotRows = page.locator('[data-testid^="line-row-"]');
     const quotRowCount = await quotRows.count();

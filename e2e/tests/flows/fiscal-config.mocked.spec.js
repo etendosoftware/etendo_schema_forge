@@ -198,7 +198,7 @@ test.describe('Fiscal Config — wizard interaction', () => {
     await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click();
     await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
 
-    await page.getByRole('button', { name: new RegExp(t('fiscal.onboarding.back').replace('←', '').trim(), 'i') }).click();
+    await page.getByTestId('fiscal-onboarding-confirm-back').click();
     await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 5_000 });
   });
 });
@@ -221,7 +221,7 @@ async function openCertModal(page) {
 }
 
 async function pickCertFile(page) {
-  const input = page.locator('input[type="file"]').last();
+  const input = page.getByTestId('cert-file-input');
   await input.setInputFiles({ name: 'empresa.p12', mimeType: 'application/x-pkcs12', buffer: FAKE_P12 });
   await expect(page.getByText('empresa.p12')).toBeVisible();
 }
@@ -263,7 +263,7 @@ test.describe('Fiscal Config — certificate upload modal', () => {
     await navigateTo(page, 'fiscal-config');
     await openCertModal(page);
 
-    const input = page.locator('input[type="file"]').last();
+    const input = page.getByTestId('cert-file-input');
     await input.setInputFiles({ name: 'documento.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
 
     await expect(page.getByText(t('fiscal.cert.err.format'))).toBeVisible({ timeout: 3_000 });

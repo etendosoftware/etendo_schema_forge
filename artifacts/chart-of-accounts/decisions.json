@@ -1,10 +1,11 @@
 {
   "$schema": "decisions-v2",
   "window": {
-    "category": "accounting",
+    "category": "finance",
     "name": "Chart of Accounts",
     "hideCreate": true,
     "hideListFilters": true,
+    "hideRecordCount": true,
     "titleField": "searchKey",
     "customComponents": {
       "headerTable": "AccountTreeView"

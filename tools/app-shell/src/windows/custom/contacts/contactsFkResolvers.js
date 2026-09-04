@@ -2,43 +2,30 @@ import { registerFkResolver } from '@etendosoftware/app-shell-core/lib/import/fk
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/resolveForeignKeys.js';
 
-import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 registerFkResolver('contacts-country', async (value, { token, simSearchFn = simSearch }) => {
   const [result] = await simSearchFn({ token, entityName: 'Country', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
 });
 
-async function defaultFetchRegionCountryId(regionId, token, apiBaseUrl) {
-  if (!regionId || !token) return null;
-  const contactsBase = apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/contacts') : '/sws/neo/contacts';
-  const where = `id='${String(regionId).replace(/'/g, "''")}'`;
-  const url = `${contactsBase}/region?_neoWhere=${encodeURIComponent(where)}&limit=1`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return null;
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    return data[0]?.country || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/**
- * Region names collide across countries (e.g. "Córdoba" exists in both Argentina and
- * Spain), so a plain distinct-value simSearch isn't enough — verified against the
- * schema: `simSearch`'s webhook has no way to scope the query by a second column, and
- * `C_Region` rows carry their own `c_country_id`. This resolver runs the free-text
- * search unscoped, then keeps only the candidates whose own country matches the row's
- * already-resolved country before classifying — `fetchRegionCountryId` is injected so
- * tests never need a real NEO fetch.
+/*
+ * There is deliberately NO region resolver here (ETP-4997).
+ *
+ * There was one, and it could not work. Region names collide across countries ("Córdoba" is
+ * both Spanish and Argentine) and `simSearch`'s webhook cannot scope a query by a second
+ * column, so the resolver searched unscoped and then fetched each candidate's own country from
+ * `GET /sws/neo/contacts/region` to filter. No NEO spec exposes a region entity, so every one
+ * of those calls 404'd, every candidate was filtered out, and the descriptor skipped the field
+ * without raising anything — an address imported with street, city, postal code and country and
+ * no province, silently.
+ *
+ * Exposing a region entity would have fixed only half of it. A stock instance carries the 52
+ * Spanish provinces twice — the System copy and the tenant's own, the latter with a trailing
+ * space — both active and both readable, so the scoring gap between them is nil and no
+ * client-side classifier can pick one. Choosing needs the session's client, which the browser
+ * has no business deciding.
+ *
+ * So the province now travels as free text (`regionName`) and
+ * `ContactsLocationAddressHandler.resolveRegionByName` resolves it: it already holds the
+ * country from the same payload and runs inside the tenant's OBContext, which is where both
+ * halves of the problem actually resolve.
  */
-registerFkResolver('contacts-region', async (value, { token, countryId, apiBaseUrl, simSearchFn = simSearch, fetchRegionCountryId = defaultFetchRegionCountryId }) => {
-  const [result] = await simSearchFn({ token, entityName: 'Region', items: [value], qtyResults: 10 });
-  const candidates = result?.candidates ?? [];
-  const candidateCountryIds = await Promise.all(
-    candidates.map((candidate) => fetchRegionCountryId(candidate.id, token, apiBaseUrl)),
-  );
-  const scoped = candidates.filter((_, i) => candidateCountryIds[i] === countryId);
-  return classifyCandidates(scoped);
-});
