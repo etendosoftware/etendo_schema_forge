@@ -4,6 +4,29 @@ import { createPortal } from 'react-dom';
 /* eslint-disable react/prop-types */
 
 /**
+ * Which consequence bullets this cartel lists.
+ *
+ * A caller either hands the list over ready-made through `items`, or hands over the three
+ * per-consequence labels and the record's flags and lets this pick. An EMPTY `items` array is a
+ * deliberate answer, not an absent one, so it is returned untouched — that is how a caller says
+ * "there is nothing to undo" (ETP-5111).
+ *
+ * Extracted from the component to keep its cognitive complexity under the limit: three
+ * flag-and-label pairs are six branches that have nothing to do with rendering.
+ */
+function resolveItems({
+  explicitItems, reconciled, hasTransaction, posted,
+  itemConciliacion, itemTransaccion, itemAsiento,
+}) {
+  if (explicitItems) return explicitItems;
+  const items = [];
+  if (reconciled && itemConciliacion) items.push(itemConciliacion);
+  if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
+  if (posted && itemAsiento) items.push(itemAsiento);
+  return items;
+}
+
+/**
  * Generic confirmation dialog for destructive record-lifecycle actions
  * (Reactivar / Eliminar of a reconciled/posted record). Shared by Movimientos
  * (financial-account) and Cobros/Pagos (payment-in/out) so both surfaces show
@@ -65,13 +88,10 @@ export default function LifecycleConfirmModal({
     }
   };
 
-  let items = explicitItems;
-  if (!items) {
-    items = [];
-    if (reconciled && itemConciliacion) items.push(itemConciliacion);
-    if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
-    if (posted && itemAsiento) items.push(itemAsiento);
-  }
+  const items = resolveItems({
+    explicitItems, reconciled, hasTransaction, posted,
+    itemConciliacion, itemTransaccion, itemAsiento,
+  });
 
   // Portal to <body> so the overlay covers the whole viewport (incl. the left sidebar), escaping
   // any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
