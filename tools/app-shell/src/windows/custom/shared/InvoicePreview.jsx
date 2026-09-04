@@ -102,7 +102,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -176,7 +176,14 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         onAddPayment={onAddPayment}
         specName={specName}
         data-testid="PaymentsCard__cf88e6" />
-      {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
+      {specName !== 'purchase-invoice' && (
+        <EmailsCard
+          onSend={onSend}
+          documentId={invoice?.id}
+          apiBaseUrl={apiBaseUrl}
+          refreshSignal={emailsRefreshSignal}
+          data-testid="EmailsCard__cf88e6" />
+      )}
       <RelatedDocumentsCard
         documentId={invoice?.id}
         token={token}
@@ -195,6 +202,9 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
   const ratePrecision = useCurrencyPrecision();
+  // ETP-5069 — see OrderPreview.jsx: bumped on a successful send so the
+  // email-history card refetches instead of showing its pre-send state.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
   // (GET /preview-file) resolves ahead of the jsreport regeneration behind
   // p.pdfUrl; capturing it here lets Download gate on whichever resolves first.
@@ -324,6 +334,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
           ratePrecision={ratePrecision}
+          emailsRefreshSignal={emailsRefreshSignal}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
     },
@@ -413,6 +424,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           pdfBlobLoading={p.pdfLoading}
           isClosing={p.sendModalClosing}
           onClose={p.closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__cf88e6" />
       )}
     </>
