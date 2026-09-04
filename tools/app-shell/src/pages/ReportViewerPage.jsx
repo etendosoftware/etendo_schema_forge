@@ -1143,10 +1143,18 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </div>
       <div className="flex-1 overflow-y-auto">
         {useAccordion ? (
-          report.sections.map(({ id, label }) => {
-            // A section with no parameters yet still renders (header + empty
-            // body) instead of disappearing — a contract may declare a
-            // section ahead of the fields that will populate it later.
+          report.sections.map(({ id, label, visibleIf }) => {
+            // A section carrying `visibleIf` (same {param, equals} shape as a
+            // field's own, ETP-5128) disappears ENTIRELY while the condition
+            // doesn't hold — e.g. Trial Balance's "Dimensions" section only
+            // makes sense at Account Level "Subaccount"; at any coarser level
+            // there is nothing to group by, so the header itself must go, not
+            // just render collapsed-and-empty. A section with no `visibleIf`
+            // keeps the pre-existing behavior below: it still renders (header
+            // + empty body) instead of disappearing when it has no visible
+            // parameters yet — a contract may declare a section ahead of the
+            // fields that will populate it later, which is a different case.
+            if (!isParamVisible({ visibleIf }, params)) return null;
             const sectionParams = grouped[id] || [];
             const isOpen = !!openSections[id];
             const sectionLabel = label?.[locale] || label?.en_US || id;
@@ -1460,6 +1468,50 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   }, [report, selectedOrgId, selectedOrgName, searchParams]);
 
   const [params, setParams] = useState(getDefaultParams);
+
+  // A field hidden by `visibleIf` keeps its last picked value in `params` —
+  // that value must not reach the backend once the control is gone (ETP-5128):
+  // Trial Balance's "Group by" only shows at Account Level "Subaccount", but
+  // switching to any other level left the previously-picked dimension in
+  // state, and it kept being sent (and honored server-side) even though the
+  // sidebar no longer offered that control at all. `isParamVisible` already
+  // governs whether a field RENDERS; this is the same check applied to what
+  // gets SUBMITTED, so the two can never drift apart.
+  //
+  // Reset to '' rather than delete the key (ETP-5128 follow-up): report-server
+  // echoes the raw request params back as `meta.params` verbatim (no
+  // defaulting), and this SAME report's own template branches on
+  // `{{#ifCond meta.params.groupBy '!==' ''}}` — `undefined !== ''` is true,
+  // so a genuinely DELETED key flipped the template into the grouped branch
+  // with no dimension actually picked, rendering nothing at all (confirmed
+  // against a real Handlebars render: the account rows vanished entirely).
+  // '' is this codebase's existing "no value" convention throughout — every
+  // unfilled param already starts out as '' (`params[p.name] || ''`), and
+  // applyPlaceholders' own SQL-placeholder loop already treats '' and a
+  // missing key identically (stripBlankOptionalClauses removes either the
+  // same way) — so this keeps the fix's whole point (no stale value reaches
+  // the backend) while never turning "not sent" into "sent as absent".
+  //
+  // ONLY `visibleIf` (dynamic, tied to another param's current value) is in
+  // scope here — NEVER a static `hidden: true` field (ETP-5128 regression,
+  // caught immediately after landing): `orgId`/`acctSchemaId`/`glId` are
+  // `hidden: true` + `required: true` on several reports (aging, balance
+  // sheet, profit & loss), auto-populated from the session (`autoDefault`,
+  // or `getDefaultParams`'s own `selectedOrgId` seeding above) with no UI
+  // control at all — they were never part of the reported bug (a STALE
+  // user-picked value surviving a field going invisible), and blanking them
+  // broke every one of those reports outright: NEO 422
+  // "accounting_schema_unresolved" / "Could not resolve an accounting
+  // schema... for organization 0" the moment `orgId`/`glId` went to ''.
+  const submitParams = useMemo(() => {
+    const next = { ...params };
+    for (const p of report.parameters || []) {
+      if (isParamVisible(p, params)) continue;
+      next[p.name] = '';
+    }
+    return next;
+  }, [params, report.parameters]);
+
   // Lifted from ReportSidebar (ETP-4899): the top bar's PDF/Excel/CSV buttons call
   // renderReport() directly, bypassing ReportSidebar's own "Generate Report" button —
   // so validation has to live here too, shared by both entry points, or the top bar
@@ -1558,7 +1610,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
         baseUrl: '',
-        body: JSON.stringify({ format, params, locale }),
+        body: JSON.stringify({ format, params: submitParams, locale }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1587,7 +1639,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, apiFetch, params, locale]);
+  }, [report.id, apiFetch, submitParams, locale]);
 
   // No auto-render on mount — wait for user to click Run Report... UNLESS the
   // page was opened via a deep-link that carries real filter values (e.g. the
