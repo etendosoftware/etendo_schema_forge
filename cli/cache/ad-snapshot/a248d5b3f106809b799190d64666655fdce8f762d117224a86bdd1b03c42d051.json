@@ -624,7 +624,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "e547f9898018b719469e32d68b05dd5752aa16588dd7277978f6844509fb98d1",
+      "checksum": "1a66bdf0c98a068f74f8203154467525d4cdb4621007476ba439c6d480a9dfad",
       "params": [
         "183"
       ],
@@ -688,6 +688,12 @@
           "name": "TBAI_ExistConfigAndIsAvailable",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
+        },
+        {
+          "ad_tab_id": "290",
+          "name": "TBAI_IsBizkaiaPurchaseEligible",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y' AND conf.etsg_sif_territory = 'BIZKAIA') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
         },
         {
           "ad_tab_id": "290",
@@ -820,6 +826,12 @@
           "name": "HASREVERSEDINVOICEPO",
           "tab_name": "Exchange rates",
           "validation_code": "@SQL=SELECT 'Y' \nFROM DUAL \nWHERE EXISTS (SELECT 1 FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID = @C_Invoice_ID@ )\nAND EXISTS (SELECT 1 FROM C_CONVERSION_RATE_DOCUMENT WHERE C_INVOICE_ID = (SELECT REVERSED_C_INVOICE_ID\n                                                                               FROM C_INVOICE_REVERSE\n                                                                               WHERE C_INVOICE_ID = @C_Invoice_ID@))"
+        },
+        {
+          "ad_tab_id": "F51664D68DF4488BA29427C30E96F512",
+          "name": "TBAI_IsBizkaiaPurchaseEligible",
+          "tab_name": "Batuz",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y' AND conf.etsg_sif_territory = 'BIZKAIA') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
         }
       ]
     },
