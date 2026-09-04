@@ -2973,7 +2973,7 @@ export function DetailView({
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
-              {saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
@@ -3059,7 +3059,7 @@ export function DetailView({
                   );
                 })}
 
-              {!saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
                  Both live in this one flex row, so source order is visual order, and the
@@ -3293,7 +3293,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
-                              readOnly={windowReadOnly}
+                              readOnly={windowReadOnly} navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
                               token={token}
@@ -3320,7 +3320,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
-                                  readOnly={windowReadOnly}
+                                  readOnly={windowReadOnly} navigate={navigate}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
@@ -3967,7 +3967,7 @@ export function DetailView({
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
-                              section="other"
+                              section="other" navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
                               token={token}

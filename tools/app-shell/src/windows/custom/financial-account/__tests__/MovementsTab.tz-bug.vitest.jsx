@@ -46,6 +46,8 @@ vi.mock('../FundsTransferModal.jsx', () => ({ FundsTransferModal: () => null }))
 
 vi.mock('@/hooks/useCreateMovement', () => ({
   useDeleteMovement: () => ({ deleteMovement: vi.fn(), deleting: false, error: null }),
+  useUpdateMovement: () => ({ updateMovement: vi.fn(), updating: false, error: null }),
+  buildDimensionUpdatePayload: vi.fn(),
 }));
 vi.mock('@/hooks/useBatchDeleteDialog.jsx', () => ({
   useBatchDeleteDialog: () => ({
