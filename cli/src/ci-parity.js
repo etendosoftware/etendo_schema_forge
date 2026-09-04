@@ -28,6 +28,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inspectAdCache, formatCacheHealth } from './lib/ad-cache-health.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -1428,6 +1429,7 @@ export function parseArgs(argv) {
     dryRun: process.env.DRY_RUN !== '0',
     allowLocalSid: process.env.ALLOW_LOCAL_SID === '1',
     noFetch: process.env.NO_FETCH === '1',
+    checkCache: process.env.CHECK_CACHE === '1',
     json: process.env.JSON === '1',
     help: false,
   };
@@ -1439,6 +1441,7 @@ export function parseArgs(argv) {
     else if (a === '--dry-run') args.dryRun = argv[++i] !== '0';
     else if (a === '--allow-local-sid') args.allowLocalSid = true;
     else if (a === '--no-fetch') args.noFetch = true;
+    else if (a === '--check-cache') args.checkCache = true;
     else if (a === '--json') args.json = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${a}`);
@@ -1471,6 +1474,7 @@ Options:
   --dry-run 0         ACTUALLY EXECUTE. Dry run is the default.
   --allow-local-sid   Permit a target sid equal to your local dev sid (destroys it)
   --no-fetch          Use cached remote refs; freshness may be stale (NO_FETCH=1)
+  --check-cache       Fail if the committed AD cache is missing or invalid
   --json              Machine-readable report (secrets redacted)
   -h, --help          This text
 
@@ -1606,6 +1610,13 @@ function main() {
   const localSid = props.get('bbdd.sid');
   const guard = assertSidGuard({ targetSid: args.sid, localSid, allowLocalSid: args.allowLocalSid });
 
+  // Cache health is reported alongside module parity so an offline drift
+  // result is never interpreted without knowing whether its AD snapshot is
+  // structurally usable. This is read-only; only --check-cache makes it a
+  // blocking precondition for this command.
+  const cachePath = process.env.SF_CACHE_PATH || path.join(REPO_ROOT, 'cli', 'cache', 'ad-snapshot');
+  const cache = inspectAdCache(cachePath);
+
   // --- plans ---------------------------------------------------------------
   const wants = (p) => args.phases.includes(p);
   const alignPlan = wants('align')
@@ -1618,7 +1629,9 @@ function main() {
   const installPlan = wants('install') && guard.ok ? buildInstallPlan({ coreDir, logDir }) : [];
 
   const needsGuard = wants('db') || wants('install');
-  const exitCode = (classification.blockers.length ? 1 : 0) || (needsGuard && !guard.ok ? 1 : 0);
+  const exitCode = (classification.blockers.length ? 1 : 0)
+    || (needsGuard && !guard.ok ? 1 : 0)
+    || (args.checkCache && !cache.trustworthy ? 1 : 0);
 
   // --- JSON output ---------------------------------------------------------
   if (args.json) {
@@ -1643,6 +1656,11 @@ function main() {
       counts: classification.counts,
       blockers: classification.blockers.map((b) => ({ name: b.name, status: b.status, reason: b.reason })),
       database: { target: args.sid, ...dbConfig, guard },
+      cache: {
+        ...cache,
+        required: args.checkCache,
+        actionRequired: !cache.trustworthy,
+      },
       phases: args.phases,
       plan: {
         align: alignPlan,
@@ -1676,6 +1694,11 @@ function main() {
     + (args.sidNormalized ? `  (normalized from "${args.sidRaw}" — PostgreSQL folds unquoted identifiers)` : '')
     + (String(localSid).toLowerCase() === args.sid ? '  <-- SAME AS LOCAL DEV SID' : ''));
   W(`  config      : ${path.relative(REPO_ROOT, configPath)}`);
+  W('');
+
+  W('-- AD CACHE ------------------------------------------------------------');
+  W(formatCacheHealth(cache));
+  if (args.checkCache && !cache.trustworthy) W('  [FAIL] --check-cache makes cache health a required precondition.');
   W('');
 
   W('-- HOST REPOS -----------------------------------------------------------');

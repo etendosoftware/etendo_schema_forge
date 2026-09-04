@@ -191,7 +191,7 @@ The extraction connects to the Etendo PostgreSQL database and queries AD_Window,
 
 #### Optional cache layer (opt-in)
 
-All three extractors (`extract-from-db.js`, `extract-fields.js`, `extract-rules.js`) share a single global query cache at `cli/cache/ad-snapshot.json`. By default the cache is untouched and behavior is identical to a direct DB run. Two flags opt in:
+All three extractors (`extract-from-db.js`, `extract-fields.js`, `extract-rules.js`) share a single global query cache at `cli/cache/ad-snapshot/`, grouped as one file per SQL statement. By default the cache is untouched and behavior is identical to a direct DB run. Two flags opt in:
 
 - `make regen ONLY=<spec> CACHE_DB=1` — run against the DB and refresh the snapshot (commit the diff).
 - `make regen ONLY=<spec> FROM_CACHE=1` — run extractors offline using the snapshot; cache miss = hard error.

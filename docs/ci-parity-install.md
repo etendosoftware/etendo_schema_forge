@@ -11,6 +11,22 @@ Execution requires `DRY_RUN=0` explicitly.
 - Profiles: `pipelines/ci-parity-profiles.json`
 - Targets: `make ci-parity`, `make ci-parity-help`
 
+The report also includes a read-only health check for the committed AD dictionary
+cache (`cli/cache/ad-snapshot/`). This makes cache alignment visible in the same
+parity report as module/branch alignment. Use `CHECK_CACHE=1` when the cache must be
+a blocking precondition; otherwise a missing or invalid cache is reported with the
+refresh action but does not block module-only verification.
+
+```bash
+make ci-parity PHASES=verify JSON=1 NO_FETCH=1
+make ci-parity PHASES=verify CHECK_CACHE=1
+```
+
+The actual offline drift gate is `make regen-check`: it preflights the cache and
+stops before classifying XML differences when the snapshot is not trustworthy. A
+cache refresh is explicit: `make regen CACHE_DB=1` (or `ONLY=<spec>` for a scoped
+refresh), followed by `make regen-check FROM_CACHE=1`.
+
 ---
 
 ## 1. What CI actually does
@@ -399,6 +415,7 @@ In dry run the diff is printed, redacted.
 | `ALLOW_LOCAL_SID` | unset | `1` permits a target sid equal to the local dev sid. |
 | `JSON` | unset | `1` = machine-readable report. **Report-only**: `JSON=1` never executes, even with `DRY_RUN=0`. |
 | `NO_FETCH` | unset | `1` = offline mode: do not refresh remote refs before measuring freshness. The report labels results as cached. |
+| `CHECK_CACHE` | unset | `1` = fail if the committed AD cache is missing, empty, malformed, or has invalid checksums. |
 | `HELP` | unset | `1` = same as `make ci-parity-help`. |
 
 `PHASES`, `DRY_RUN`, `PROFILE` and `BBDD_SID` are names **already used by unrelated

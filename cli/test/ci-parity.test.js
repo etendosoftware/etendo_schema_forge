@@ -1958,7 +1958,7 @@ describe('buildInstallPlan', () => {
 // ===========================================================================
 
 describe('parseArgs', () => {
-  const ENV_KEYS = ['PROFILE', 'BBDD_SID', 'DRY_RUN', 'ALLOW_LOCAL_SID', 'NO_FETCH', 'JSON'];
+  const ENV_KEYS = ['PROFILE', 'BBDD_SID', 'DRY_RUN', 'ALLOW_LOCAL_SID', 'NO_FETCH', 'CHECK_CACHE', 'JSON'];
   const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
   beforeEach(() => {
@@ -1982,6 +1982,7 @@ describe('parseArgs', () => {
       dryRun: true,
       allowLocalSid: false,
       noFetch: false,
+      checkCache: false,
       json: false,
       help: false,
     });
@@ -2022,6 +2023,7 @@ describe('parseArgs', () => {
     process.env.BBDD_SID = 'etendo_probe';
     process.env.ALLOW_LOCAL_SID = '1';
     process.env.NO_FETCH = '1';
+    process.env.CHECK_CACHE = '1';
     process.env.JSON = '1';
     const args = parseArgs([]);
     assert.equal(args.dryRun, false);
@@ -2029,16 +2031,19 @@ describe('parseArgs', () => {
     assert.equal(args.sid, 'etendo_probe');
     assert.equal(args.allowLocalSid, true);
     assert.equal(args.noFetch, true);
+    assert.equal(args.checkCache, true);
     assert.equal(args.json, true);
 
     process.env.DRY_RUN = 'false';
     process.env.ALLOW_LOCAL_SID = 'yes';
     process.env.NO_FETCH = 'yes';
+    process.env.CHECK_CACHE = 'yes';
     process.env.JSON = 'true';
     const strict = parseArgs([]);
     assert.equal(strict.dryRun, true, 'anything other than "0" keeps the dry run');
     assert.equal(strict.allowLocalSid, false);
     assert.equal(strict.noFetch, false);
+    assert.equal(strict.checkCache, false);
     assert.equal(strict.json, false);
   });
 
@@ -2071,6 +2076,7 @@ describe('parseArgs', () => {
   it('accepts the remaining flags', () => {
     assert.equal(parseArgs(['--allow-local-sid']).allowLocalSid, true);
     assert.equal(parseArgs(['--no-fetch']).noFetch, true);
+    assert.equal(parseArgs(['--check-cache']).checkCache, true);
     assert.equal(parseArgs(['--json']).json, true);
     assert.equal(parseArgs(['--help']).help, true);
     assert.equal(parseArgs(['-h']).help, true);
