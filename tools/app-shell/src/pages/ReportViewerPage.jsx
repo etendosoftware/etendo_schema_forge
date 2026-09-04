@@ -820,6 +820,16 @@ function isParamRequired(p, params) {
   return !!p.required || !!(p.requiredIf && params[p.requiredIf.param] === p.requiredIf.equals);
 }
 
+// The required (non-hidden) params still empty right now. Single source of truth
+// for BOTH the live enable/disable of every action button and the red "Required"
+// boxes `validateRequired()` paints, so an enabled button always survives
+// validation and a disabled one is never the reason a click did nothing.
+function missingRequiredParams(report, params) {
+  return (report.parameters || []).filter(
+    (p) => !p.hidden && isParamRequired(p, params) && !params[p.name],
+  );
+}
+
 // Same conditional idea as `isParamRequired`, but for visibility: a param with
 // `visibleIf: {param, equals}` only renders while that other param currently
 // holds the given value (e.g. Profit & Loss's Reference Year/From/To Reference
@@ -845,18 +855,11 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   const [openSections, setOpenSections] = useState(() => ({ [report.sections?.[0]?.id]: true }));
 
   // "Generar informe" is disabled if and only if a required (non-hidden)
-  // param is still empty (ETP-5013) — mirrors the parent's own
-  // `validateRequired()` exactly (same `isParamRequired`/`hidden` check), so
-  // a report the button lets you submit is a report validateRequired would
-  // also accept, and vice versa. Previously the button was only ever
+  // param is still empty (ETP-5013). Previously the button was only ever
   // disabled by `loading`, so clicking it on an incomplete form did nothing
   // visible until the errors appeared — this way the button itself signals
   // "not ready yet" before the click.
-  const hasAllRequiredFilled = (report.parameters || []).every(p => {
-    if (p.hidden) return true;
-    if (!isParamRequired(p, params)) return true;
-    return !!params[p.name];
-  });
+  const hasAllRequiredFilled = missingRequiredParams(report, params).length === 0;
 
   useEffect(() => {
     setOpenSections({ [report.sections?.[0]?.id]: true });
@@ -1464,12 +1467,15 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   // fails server-side, e.g. NEO 400 "dateFrom and dateTo are required", instead of the
   // sidebar showing its usual red "Required" boxes).
   const [errors, setErrors] = useState({});
+  // ETP-4900: the top-bar actions (PDF / Excel / CSV / Print) each run a report
+  // too, so they get the same gate the sidebar's "Generate Report" already had.
+  // Before this they stayed enabled on an incomplete form and a click only
+  // painted red boxes in a sidebar the user may not even be looking at, which
+  // read as "the button is broken" rather than "a filter is missing".
+  const hasAllRequiredFilled = missingRequiredParams(report, params).length === 0;
   const validateRequired = useCallback(() => {
     const newErrors = {};
-    for (const p of report.parameters || []) {
-      if (p.hidden) continue;
-      if (isParamRequired(p, params) && !params[p.name]) newErrors[p.name] = true;
-    }
+    for (const p of missingRequiredParams(report, params)) newErrors[p.name] = true;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }, [report, params]);
@@ -1688,14 +1694,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
             {DOWNLOAD_FORMATS.map(fmt => {
               const Icon = fmt.icon;
               return (
-                <button key={fmt.id} onClick={() => { if (validateRequired()) renderReport(fmt.id); }} disabled={loading}
+                <button key={fmt.id} onClick={() => { if (validateRequired()) renderReport(fmt.id); }} disabled={loading || !hasAllRequiredFilled}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 disabled:opacity-40">
                   <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
                 </button>
               );
             })}
             <div className="w-px h-6 bg-border/50 mx-1" />
-            <button onClick={handlePrint} disabled={loading}
+            <button onClick={handlePrint} disabled={loading || !hasAllRequiredFilled}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
               <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
             </button>
