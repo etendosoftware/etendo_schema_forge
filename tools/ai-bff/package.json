@@ -1,0 +1,16 @@
+{
+  "name": "@schema-forge/ai-bff",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^2.0.39",
+    "@ai-sdk/openai-compatible": "^3.0.39",
+    "ai": "^7.0.83",
+    "zod": "^3.25.76"
+  }
+}

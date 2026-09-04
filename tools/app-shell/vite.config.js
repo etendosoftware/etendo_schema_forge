@@ -365,6 +365,10 @@ export default defineConfig(({ mode }) => {
         target: ETENDO_URL,
         changeOrigin: true,
       },
+      '/api/ai': {
+        target: 'http://localhost:3400',
+        changeOrigin: true,
+      },
       '/jsreport': {
         target: 'http://localhost:5488',
         changeOrigin: true,
