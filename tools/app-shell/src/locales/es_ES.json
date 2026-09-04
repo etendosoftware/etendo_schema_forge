@@ -13844,7 +13844,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuarios"
@@ -16251,6 +16251,9 @@
     "Return Shipment": {
       "label": "Albarán de devolución"
     },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
+    },
     "Purchase Invoice": {
       "label": "Factura de Compra"
     },
@@ -16858,6 +16861,9 @@
     "reactivate": "Reactivar",
     "reactivateOrder": "Reactivar pedido",
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
+    "bulkRowAlreadyPosted": "Ya está contabilizado",
+    "bulkRowNotPosted": "No está contabilizado",
+    "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "confirmBulk": "Confirmar",
     "documentAction": "Acción de documento",
@@ -17731,6 +17737,21 @@
     "configureDashboard": "Configurar dashboard",
     "searchInvoices": "Buscar facturas...",
     "searchPages": "Buscar páginas...",
+    "searchIn": "Buscar en",
+    "allWindows": "Todas las ventanas",
+    "filterWindows": "Filtrar ventanas",
+    "selectedWindows": "{count} ventanas",
+    "overdueSalesInvoices": "Facturas de venta vencidas",
+    "clearSearchScope": "Buscar en todas las ventanas",
+    "semanticSearchResults": "Resultados semánticos",
+    "relevantSearchResults": "Coincidencias principales",
+    "exactSearchResults": "Coincidencias por texto",
+    "relatedSearchResults": "Otras coincidencias",
+    "searchMoreRelated": "Buscar más resultados relacionados",
+    "recentSearches": "Búsquedas recientes",
+    "searchNavigate": "Navegar",
+    "searchOpen": "Abrir",
+    "suggestions": "Sugerencias",
     "askSomething": "Pregunta algo...",
     "noResults": "Sin resultados",
     "noResultsFor": "Sin resultados para",
@@ -17930,7 +17951,7 @@
     "statusColumn": "Estado",
     "statusDocColumn": "Estado doc.",
     "impTotal": "Imp. total",
-    "pendingPaymentColumn": "Pendiente de pago",
+    "pendingPaymentColumn": "Saldo pendiente",
     "cobrada": "Cobrada",
     "pagada": "Pagada",
     "invoiceReceipts": "Cobros de la factura",
@@ -18526,6 +18547,7 @@
     "financeAccountTxRowDeleting": "Eliminando…",
     "financeAccountTxRowDeleteSuccess": "Movimiento eliminado",
     "financeAccountTxRowDeleteError": "No se pudo eliminar el movimiento",
+    "financeAccountTxRowDimensionUpdateError": "No se pudo actualizar la dimensión",
     "financeAccountTransferTitle": "Transferir fondos",
     "financeAccountTransferSubtitle": "Entre cuentas financieras de la organización",
     "financeAccountTransferSourceRole": "Desde · origen",
@@ -18666,6 +18688,7 @@
     "financeAccountsBankConnectionImportSection": "Importación de extractos",
     "financeAccountsBankConnectionImportFrom": "Importar desde",
     "financeAccountsBankConnectionImportTo": "Importar hasta",
+    "financeAccountsBankConnectionImportRangeInvalid": "La fecha «Importar desde» no puede ser posterior a «Importar hasta».",
     "financeAccountsBankConnectionGrouping": "Agrupación de extractos",
     "financeAccountsBankConnectionGroupingNone": "Por defecto",
     "financeAccountsBankConnectionGroupingPlaceholder": "Seleccionar agrupación…",
@@ -19757,6 +19780,7 @@
     "onboardingChangePasswordAction": "Cambiar contraseña",
     "onboardingChangePasswordTitle": "Cambiar contraseña",
     "onboardingChangePasswordSubtitle": "Actualizá la contraseña de tu cuenta local.",
+    "createPasswordLogoutNotice": "Después de crear tu contraseña se cerrará la sesión y deberás iniciar sesión nuevamente. Tus otros métodos de acceso seguirán funcionando.",
     "changePasswordLogoutNotice": "Después de cambiar tu contraseña se cerrará la sesión y deberás iniciar sesión nuevamente.",
     "onboardingPasswordChangedNotice": "Tu contraseña se cambió correctamente. Iniciá sesión con tu nueva contraseña.",
     "onboardingDraftRestoredNotice": "Recuperamos tu progreso guardado para que continúes donde lo dejaste.",
@@ -20324,6 +20348,7 @@
     "backendError.shipmentPriceListRequired": "No se pudo resolver una tarifa para esta factura. Selecciona una tarifa o configura una tarifa por defecto para el Tercero.",
     "backendError.orderNotFound": "Pedido no encontrado: {orderId}",
     "backendError.shipmentNotFound": "Albarán no encontrado: {id}",
+    "backendError.accountAlreadyExists": "La cuenta {code} ya existe.",
     "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos.",
     "backendError.conversionRateNotDraft": "No es posible modificar el tipo de cambio del documento cuando la factura no está en estado Borrador.",
     "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta antes de confirmar un cierre que no cuadra.",
@@ -24591,6 +24616,28 @@
     "windowTypeObuiappPickAndExecute": "Seleccionar y Ejecutar",
     "windowTypeQ": "Sólo consulta",
     "windowTypeT": "Transacción",
+    "accountSettingsTitle": "Configuración de la cuenta",
+    "accountSettingsSecurity": "Seguridad",
+    "accountSettingsSecurityIntro": "Formas con las que puedes entrar a tu cuenta. Siempre debe quedar al menos una.",
+    "accountMethodPassword": "Contraseña",
+    "accountMethodPasswordEnabled": "Configurada",
+    "accountMethodPasswordDisabled": "Sin configurar",
+    "accountMethodLastChanged": "Modificada el {0}",
+    "accountMethodLastLogin": "Último acceso el {0}",
+    "accountMethodChange": "Cambiar",
+    "accountMethodRemove": "Quitar",
+    "accountMethodRemoveLastTooltip": "Es tu único método de acceso. Añade otro antes de quitar este.",
+    "accountMethodRemoveConfirmTitle": "¿Quitar este método de acceso?",
+    "accountMethodRemoveConfirmBody": "Después de quitarlo ya no podrás entrar con él. Los que queden seguirán funcionando.",
+    "accountMethodCurrentPasswordRequired": "Escribe tu contraseña actual para quitarla.",
+    "accountCreatePasswordTitle": "Crear una contraseña",
+    "accountCreatePasswordAction": "Crear contraseña",
+    "accountMethodCreate": "Crear",
+    "accountMethodLastRemaining": "Es tu única forma de iniciar sesión. Añade otro método antes de quitar este.",
+    "accountMethodNotFound": "Ese método de acceso no está habilitado en esta cuenta.",
+    "accountMethodRemoveFailed": "No se pudo quitar el método de acceso.",
+    "accountMethodRemoved": "Método de acceso quitado.",
+    "accountMethodsLoadFailed": "No se pudieron cargar tus métodos de acceso.",
     "exportCsv": "Exportar como CSV",
     "exportXlsx": "Exportar como Excel",
     "importDownloadTemplateCsv": "Descargar plantilla CSV",
@@ -25274,7 +25321,7 @@
       "label": "Idioma"
     },
     "Matched Purchase Invoices": {
-      "label": "Facturas cuadradas"
+      "label": "Relación albarán-factura"
     },
     "User": {
       "label": "Usuarios"
@@ -25915,6 +25962,9 @@
     },
     "Return Shipment": {
       "label": "Albarán de Devolución"
+    },
+    "Receipt-Invoice Link": {
+      "label": "Relación albarán-factura"
     },
     "Account": {
       "label": "Plan de cuentas"

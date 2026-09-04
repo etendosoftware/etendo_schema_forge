@@ -435,6 +435,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
       <input
         ref={inputRef}
         type="file"
+        data-testid="import-statement-file-input"
         accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}
@@ -480,6 +481,7 @@ function SelectedFileBody({
       <input
         ref={inputRef}
         type="file"
+        data-testid="import-statement-file-input"
         accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}

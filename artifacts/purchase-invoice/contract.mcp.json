@@ -1,8 +1,8 @@
 {
-  "version": "0.90.0",
+  "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-08-27T14:01:53.993Z",
-  "contractChecksum": "563c17552801bb26",
+  "updatedAt": "2026-09-02T16:41:27.753Z",
+  "contractChecksum": "b5d4db43c6a106d0",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1346,7 +1346,7 @@
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",
-        "OutstandingAmt": "Pendiente de pago",
+        "OutstandingAmt": "Saldo pendiente",
         "EM_Etgo_Due_Date": "Vencimiento",
         "em_etgo_delivery_status": "Estado de recepción",
         "C_DocTypeTarget_ID": "Tipo de documento",
@@ -1355,11 +1355,14 @@
       },
       "en_US": {
         "POReference": "Document No.",
-        "OutstandingAmt": "Pending Payment",
+        "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount"
+      },
+      "es_AR": {
+        "OutstandingAmt": "Saldo pendiente"
       }
     }
   },
@@ -2192,5 +2195,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "0325ed39a3db53a3"
+  "checksum": "c1090d793a39570f"
 }

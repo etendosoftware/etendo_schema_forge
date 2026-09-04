@@ -290,6 +290,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 <input
                   ref={inputRef}
                   type="file"
+                  data-testid="cert-file-input"
                   accept=".p12,.pfx"
                   className="hidden"
                   onChange={e => pickFile(e.target.files[0])}
