@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, TrendingUp, FileText, Landmark, Package } from 'lucide-react';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import menuConfig from '../../menu.json' with { type: 'json' };
 
 /**
  * ETP-4907 — data module for the redesigned "Configuración > Roles" overview
@@ -165,19 +166,107 @@ function adaptCards(roles) {
   }));
 }
 
-/** Adapts the backend's `matrix.categories[]` into this page's category-grouped row shape, normalizing every cell's tier (see `normalizeTier`). */
-function adaptMatrix(matrix) {
+/**
+ * ETP-5071 — `windowId -> { group, label, groupOrder }` index built from `menu.json`,
+ * this app's real source of truth for category/window display (imported the same way
+ * `windows/registry.js` does). The backend's `matrix.categories[]` sources its category
+ * names and window labels from the classic AD menu tree instead (`SFRolesOverview.java`,
+ * out of scope here) — e.g. "Product" shows under "Master Data Management" instead of
+ * "Inventory". `adaptMatrix` below re-resolves both against this index.
+ *
+ * Flattens every `menu[].items[]` entry that carries a `windowId`. `groupOrder` is the
+ * index of that entry's `menu[]` group in menu.json's OWN declaration order — ETP-5071's
+ * product decision is to sort categories by that declaration order, not alphabetically.
+ *
+ * Precedence for a `windowId` shared by 2+ items (confirmed live, today always a
+ * same-group visible/hidden pair — `"123"` People: `contacts`/`business-partner`, `"117"`
+ * Finance: `calendar`/`fiscal-calendar` — never cross-group, though this does not assume
+ * that can never happen): prefer the entry WITHOUT `hidden: true`; if every entry for
+ * that id is hidden (or the first-seen entry already isn't), keep the first one
+ * encountered.
+ */
+export function buildMenuWindowIndex() {
+  const index = new Map();
+  const groups = menuConfig?.menu ?? [];
+  groups.forEach((group, groupOrder) => {
+    for (const item of group.items ?? []) {
+      if (item?.windowId == null) continue;
+      const windowId = String(item.windowId);
+      const candidate = { group: group.group, label: item.label, groupOrder, hidden: !!item.hidden };
+      const existing = index.get(windowId);
+      if (!existing) {
+        index.set(windowId, candidate);
+      } else if (existing.hidden && !candidate.hidden) {
+        // The first-seen entry for this id was hidden but this one isn't — prefer it.
+        // Any other combination (existing already visible, or both hidden) keeps the
+        // first-encountered entry.
+        index.set(windowId, candidate);
+      }
+    }
+  });
+  return index;
+}
+
+const MENU_WINDOW_INDEX = buildMenuWindowIndex();
+
+/**
+ * Adapts the backend's `matrix.categories[]` into this page's category-grouped row
+ * shape, normalizing every cell's tier (see `normalizeTier`) and — ETP-5071 — resolving
+ * each window's category/name against `menuIndex` (see `buildMenuWindowIndex`) instead
+ * of trusting the backend's classic-AD-tree grouping.
+ *
+ * A window NOT found in `menuIndex` (e.g. "Roles"/"Usuario", deliberately granted to
+ * none of the 4 templates and absent from `menu.json`) falls back to the backend's raw
+ * `category.name`/`w.name` — it must never disappear from the matrix just because it
+ * isn't in menu.json.
+ *
+ * Re-groups and re-sorts by the RESOLVED category, not the backend's original grouping:
+ * since two different backend `category.name` buckets can map to the same menu.json
+ * `group` (or vice versa), every window is flattened across all backend categories first,
+ * then re-bucketed by its resolved category string. The resulting category list is
+ * sorted by `groupOrder` (the smallest `groupOrder` seen among that category's windows);
+ * a category with no `groupOrder` at all (100% fallback windows) sorts last,
+ * alphabetically among themselves.
+ */
+function adaptMatrix(matrix, menuIndex) {
   const categories = matrix?.categories ?? [];
-  return categories.map((category) => ({
-    category: category.name,
-    rows: (category.windows ?? []).map((w) => ({
-      windowId: w.id,
-      windowName: w.name,
-      access: Object.fromEntries(
-        Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
-      ),
-    })),
-  }));
+  const rowsByCategory = new Map();
+  const groupOrderByCategory = new Map();
+
+  for (const category of categories) {
+    for (const w of category.windows ?? []) {
+      const match = menuIndex.get(String(w.id));
+      const resolvedCategory = match?.group ?? category.name;
+      const resolvedName = match?.label ?? w.name;
+      const row = {
+        windowId: w.id,
+        windowName: resolvedName,
+        access: Object.fromEntries(
+          Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
+        ),
+      };
+      if (!rowsByCategory.has(resolvedCategory)) rowsByCategory.set(resolvedCategory, []);
+      rowsByCategory.get(resolvedCategory).push(row);
+
+      if (match?.groupOrder != null) {
+        const currentBest = groupOrderByCategory.get(resolvedCategory);
+        if (currentBest == null || match.groupOrder < currentBest) {
+          groupOrderByCategory.set(resolvedCategory, match.groupOrder);
+        }
+      }
+    }
+  }
+
+  const categoryNames = [...rowsByCategory.keys()].sort((a, b) => {
+    const orderA = groupOrderByCategory.get(a);
+    const orderB = groupOrderByCategory.get(b);
+    if (orderA != null && orderB != null) return orderA - orderB;
+    if (orderA != null) return -1;
+    if (orderB != null) return 1;
+    return a.localeCompare(b);
+  });
+
+  return categoryNames.map((category) => ({ category, rows: rowsByCategory.get(category) }));
 }
 
 /**
@@ -196,7 +285,7 @@ export function useRolesOverviewData() {
           loading: false,
           error: null,
           cards: sortByRoleOrder(adaptCards(data?.roles)),
-          matrix: adaptMatrix(data?.matrix),
+          matrix: adaptMatrix(data?.matrix, MENU_WINDOW_INDEX),
         });
       })
       .catch((err) => {
