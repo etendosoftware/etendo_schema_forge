@@ -177,22 +177,29 @@ function adaptCards(roles) {
  * Flattens every `menu[].items[]` entry that carries a `windowId`. `groupOrder` is the
  * index of that entry's `menu[]` group in menu.json's OWN declaration order — ETP-5071's
  * product decision is to sort categories by that declaration order, not alphabetically.
+ * `itemOrder` (ETP-5071 follow-up) is that same entry's index WITHIN `group.items` —
+ * `menu.json`'s `items[]` array is already in the exact order the real sidebar renders
+ * them, confirmed live against the Finance group's own order, so `adaptMatrix` below
+ * sorts each category's ROWS by `itemOrder` too, not just the categories themselves by
+ * `groupOrder` — the backend's `matrix.categories[].windows[]` order is its own
+ * alphabetical-by-raw-classic-`AD_Window.name` sort (`SFRolesOverview.java`, out of
+ * scope), unrelated to the sidebar's order.
  *
  * Precedence for a `windowId` shared by 2+ items (confirmed live, today always a
  * same-group visible/hidden pair — `"123"` People: `contacts`/`business-partner`, `"117"`
  * Finance: `calendar`/`fiscal-calendar` — never cross-group, though this does not assume
  * that can never happen): prefer the entry WITHOUT `hidden: true`; if every entry for
  * that id is hidden (or the first-seen entry already isn't), keep the first one
- * encountered.
+ * encountered. `itemOrder` travels with whichever candidate wins, same as `group`/`label`.
  */
 export function buildMenuWindowIndex() {
   const index = new Map();
   const groups = menuConfig?.menu ?? [];
   groups.forEach((group, groupOrder) => {
-    for (const item of group.items ?? []) {
-      if (item?.windowId == null) continue;
+    group.items?.forEach((item, itemOrder) => {
+      if (item?.windowId == null) return;
       const windowId = String(item.windowId);
-      const candidate = { group: group.group, label: item.label, groupOrder, hidden: !!item.hidden };
+      const candidate = { group: group.group, label: item.label, groupOrder, itemOrder, hidden: !!item.hidden };
       const existing = index.get(windowId);
       if (!existing) {
         index.set(windowId, candidate);
@@ -202,7 +209,7 @@ export function buildMenuWindowIndex() {
         // first-encountered entry.
         index.set(windowId, candidate);
       }
-    }
+    });
   });
   return index;
 }
@@ -227,6 +234,15 @@ const MENU_WINDOW_INDEX = buildMenuWindowIndex();
  * sorted by `groupOrder` (the smallest `groupOrder` seen among that category's windows);
  * a category with no `groupOrder` at all (100% fallback windows) sorts last,
  * alphabetically among themselves.
+ *
+ * ETP-5071 follow-up — ROWS within each category are then sorted by `itemOrder` (see
+ * `buildMenuWindowIndex`'s JSDoc): the backend's own `category.windows[]` order is just
+ * an alphabetical-by-raw-classic-name sort, unrelated to the real sidebar's order, which
+ * `menu.json`'s `items[]` array declaration order already matches. A row whose window
+ * has no `itemOrder` at all (the same menu.json-absent fallback case `resolvedCategory`
+ * handles above) sorts AFTER every ordered row in that category, alphabetically by
+ * `windowName` among themselves — carried as a transient `_itemOrder` on each row while
+ * bucketing, stripped again before this returns so the shape callers see is unchanged.
  */
 function adaptMatrix(matrix, menuIndex) {
   const categories = matrix?.categories ?? [];
@@ -244,6 +260,7 @@ function adaptMatrix(matrix, menuIndex) {
         access: Object.fromEntries(
           Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
         ),
+        _itemOrder: match?.itemOrder ?? null,
       };
       if (!rowsByCategory.has(resolvedCategory)) rowsByCategory.set(resolvedCategory, []);
       rowsByCategory.get(resolvedCategory).push(row);
@@ -266,7 +283,18 @@ function adaptMatrix(matrix, menuIndex) {
     return a.localeCompare(b);
   });
 
-  return categoryNames.map((category) => ({ category, rows: rowsByCategory.get(category) }));
+  return categoryNames.map((category) => {
+    const rows = [...rowsByCategory.get(category)].sort((a, b) => {
+      if (a._itemOrder != null && b._itemOrder != null) return a._itemOrder - b._itemOrder;
+      if (a._itemOrder != null) return -1;
+      if (b._itemOrder != null) return 1;
+      return a.windowName.localeCompare(b.windowName);
+    });
+    return {
+      category,
+      rows: rows.map(({ _itemOrder, ...row }) => row),
+    };
+  });
 }
 
 /**
