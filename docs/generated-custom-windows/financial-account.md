@@ -873,7 +873,7 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 **Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
-**Reactivar (kebab) and the Reconciliación tab's un-reconcile actions overlap in scope but are separate code paths.** A movement matched to a bank statement can be reactivated from either surface — the Reconciliación split panel's Desconciliar/Reactivar (`ReconciliationHandler`, see above), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
+**Reactivar (kebab) and the Reconciliación tab's un-reconcile action overlap in scope but are separate code paths.** A movement matched to a bank statement can be un-done from either surface — the Reconciliación split panel's Desconciliar (`ReconciliationHandler`, see above; its sibling Reactivar was removed by ETP-5135, see below), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
 
 **Investigated but NOT fixed here (documented root cause, no reported repro):** a task originally reported `HTTP 400 {"error":{"message":"Document already Posted.: <docNo>"}}` from this same kebab action when the matched transaction's reconciliation was already posted (`FIN_Reconciliation.Posted='Y'`). Root cause: `ReconciliationRemovalUtil.removeTransactionFromReconciliation` (in `com.etendoerp.payment.removal`) calls `processReconciliation("R", reconciliation)` without first calling `Utilities.unPostReconciliation(reconciliation)` — its sibling `ReconciliationRemovalUtil.reactivate(rec)` does that unpost step; this method doesn't, so `FIN_ReconciliationProcess`'s `"R"` branch rejects with `@PostedDocument@` whenever the reconciliation is posted. Not reproducible in this environment (local reconciliations sit at `posted='D'`, not `'Y'` — no accounting run here), so left undone; the one-line fix (`if ("Y".equals(reconciliation.getPosted())) { Utilities.unPostReconciliation(reconciliation); }` before the `processReconciliation("R", …)` call) is ready to apply the moment it reproduces.
 
@@ -1064,7 +1064,7 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - **Left panel — pending statement lines** (`usePendingStatementLines(accountId, filters)`): a movements-style toolbar with **back arrow** + status dropdown + date-range picker + search. The current T6 backend only exposes pending lines, so the status dropdown is wired but currently contains `Pendiente (N)` only. Below it, a table with **radio single-select** rows (Fecha · Descripción + status badge · Importe with sign tone) and a `Total: X,XX €` footer.
 - **Right panel — candidate operations** (`useCandidateOperations(accountId, lineId, docType)` — does NOT fetch while no line is selected): an empty state (`Selecciona un movimiento` / hint) until a line is picked, then a `SelectedLineHeader` (line metadata + amount in red/green), a real docType/date/search toolbar, and a table with **checkbox multi-select** rows (Fecha · Información = documentNo + partnerName + badge · Saldo pendiente · Importe). Backend-suggested candidates carry a blue **"Con sugerencia"** badge (ETP-4923, shared label with the left panel's status filter chip); the rest "Pendiente".
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
-- When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
+- When a **reconciled** line is selected, the `Conciliar` button becomes `Desconciliar (N)`, acting on the checked documents. On success, the backend undoes the reconciliation and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel. Since ETP-5135 that is the **only** action offered there — see "ETP-5135" below.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
 #### Match with a difference — detection and automatic posting (ETP-4965)
@@ -1213,8 +1213,8 @@ exactly the failure a user can resolve, and exactly the one they could not see.
   documento en un periodo cerrado` and nothing else.
 - `ReconciliationSplitPanel.confirmRemove` shows it as the toast description, and no longer reuses
   `financeReconcileToastError` — whose copy reads "Error al conciliar", the wrong action for an
-  un-reconcile. The un-reconcile and reactivate paths have their own keys
-  (`financeReconcileToastOperationRemoveError` / `…ReactivateError`).
+  un-reconcile. The un-reconcile path has its own key (`financeReconcileToastOperationRemoveError`).
+  Its reactivate twin (`…ReactivateError`) went away with ETP-5135.
 
 **One path still reports nothing: the whole-line `reactivate`.** It calls `detachSelected` directly
 and discards the accumulator, because unlike `removeOperation` / `reactivateSelected` it never
@@ -1546,11 +1546,16 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
     top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
   - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
     whole reconciliation.
-  - **"Reactivar" — the lightweight alternative** (action `reactivateSelected`): the "Desconciliar
-    (N)" button is a **split button** (chevron → `recon-action-reactivate`, `RotateCcw` icon, same
-    checked selection).
-    - **Reimplemented (this task) as plain detach + reprocess — no more DRAFT-persisting state.**
-      ETP-4502 iteration 6 originally left the `FIN_Reconciliation` in `DR` so the line came back
+  - **"Reactivar" — REMOVED FROM THE UI BY ETP-5135.** It used to be the lightweight alternative
+    (action `reactivateSelected`) behind a chevron on the "Desconciliar (N)" split button
+    (`recon-action-reactivate`, `RotateCcw` icon, same checked selection). A processed reconciliation
+    is now a **final state**: Desconciliar is the only way out from the interface. See the ETP-5135
+    entry at the end of this section for what was deleted and what deliberately stayed. The history
+    below is kept because the backend action still exists and the reasoning still explains its
+    semantics.
+    - **Reimplemented (ETP-4502 iteration 7) as plain detach + reprocess — no more DRAFT-persisting
+      state.**
+      Iteration 6 originally left the `FIN_Reconciliation` in `DR` so the line came back
       pending with its own transactions pre-selected, editable before re-confirming. That relied on
       Core creating **one reconciliation per statement-line group**; once a single automatch batch
       started sharing ONE reconciliation across many lines (see "Cardinality" under "Automatch
@@ -1612,6 +1617,51 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - All new UI uses semantic theme tokens (bar fill `--foreground`, track `--border`, tooltip/primary
   `--text-primary`, "Factura" tag `--status-warning-*`) — no color literals.
 
+### Reactivar removed — a processed reconciliation is final (ETP-5135)
+
+Reactivar left the user in a half-undone state: the transactions lost their visual link to the
+statement line but were not really detached, so the reconciliation looked undone while the data said
+otherwise. It was also redundant — after the ETP-4502 iteration-7 rewrite documented above, it ran
+*the same mechanics* as Desconciliar (detach + re-confirm, no persistent draft), so the two actions
+had converged on everything except their wording. Offering both only invited the user to pick the one
+whose copy promised a lighter undo that no longer existed.
+
+**Removed from `ReconciliationSplitPanel.jsx`:** the chevron split button
+(`recon-action-reconcile-more`) and its `recon-action-reactivate` item, the `onReactivate` prop,
+`requestReactivateSelected`, the `useReactivateSelected` hook call, and the `mode: 'reactivate'`
+discriminator on `removeRequest`. `recon-action-reconcile` is now a plain `rounded-full` button.
+
+**The confirm cartel's copy matrix collapsed to constants.** The six action-keyed lookups
+(`SUB_KEY_BY_ACTION`, `TITLE_KEY_BY_ACTION`, `CONFIRM_LABEL_KEY_BY_ACTION`,
+`ITEM_RECONCILIATION_DESC_KEY_BY_ACTION`, `WARNING_KEY_BY_ACTION`, `CONFIRM_ICON_BY_ACTION`) existed
+only to differentiate two actions; with one left they became `SUB_KEY` / `TITLE_KEY` /
+`CONFIRM_LABEL_KEY` / `ITEM_RECONCILIATION_DESC_KEY` / `WARNING_KEY` and a hardcoded `Minus` icon.
+Note `WARNING_KEY_BY_ACTION.remove` already pointed both of its entries at the same key, so
+Desconciliar's warning never varied — the collapse changed no rendered string.
+
+**The "otra conciliación en borrador" bullet is gone.** Its guard was `reactivate && warnOtherDraft`,
+so it was unreachable without Reactivar. `draftReconciliationCount` is consequently no longer
+destructured from `usePendingStatementLines` — the hook still maps the field, and per the note above
+it has reported zero since iteration 7 anyway.
+
+**Twelve i18n keys deleted** from `en_US.json`, `es_ES.json` and `es_AR.json`:
+`financeReconcileActionReactivateSelected`, `financeReconcileConfirmReactivateTitle`,
+`financeReconcileConfirmReactivate{One,Many}Body`, `financeReconcileConfirmReactivateWarning`,
+`financeReconcileConfirmItemReactivateDesc`, `financeReconcileToastOperationReactivated`,
+`financeReconcileToastOperationReactivateError`, `financeReconcileReactivateOtherDraftWarning`,
+`financeReconcileConfirmItemOtherDraft{Title,Desc}`, and the already-dead
+`financeReconcileToastReactivated`. `reactivarItem1Title` **stays** despite its name — other
+components use it.
+
+**Deliberately NOT touched:**
+- The **Movimientos** kebab's Reactivar (`MovementRowKebab.jsx`, `movement-row-reactivate`) — that
+  reactivates a *movement*, a different operation, which ETP-5111 had just widened on purpose.
+- The **Extractos importados** kebab's Reactivar (`StatementRowKebab.jsx`) — reactivates a *statement*.
+- The backend. `ReconciliationHandler.reactivateSelected()` and `reactivate()` still exist and still
+  work; the ticket scoped the change to the interface. `reactivateSelected` now has **no frontend
+  consumer** — a REST or MCP caller can still reach it. Closing that would be a 409 guard in the
+  handler, following the precedent ETP-5111 set for `handleReactivate`.
+
 ### Automatch engine (T7)
 
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):
@@ -1647,7 +1697,7 @@ The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post act
 ## Not implemented yet
 
 - The older 2-step `NewMovementWizard` (Cobro/Pago + pay-vs-GL) is superseded by the single-view `NewTransactionModal` (accounting account only) and is no longer wired.
-- `Reactivar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above.
+- `Desconciliar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above. (Its former `Reactivar` sibling was removed from the UI by ETP-5135.)
 - `Transferir` / `Nuevo documento` real actions — render but show a "próximamente" toast.
 - Unreconcile row action — visible but disabled, with tooltip. (Post/Unpost are implemented — see ETP-4505 below — and the accounting-account lifecycle actions Confirmar / Reactivar / Eliminar are enabled.)
 - Real bank logos (Santander, BBVA, etc.) — uses the generic `AccountLogoAvatar` for all accounts.
