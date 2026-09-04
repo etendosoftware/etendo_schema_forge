@@ -102,6 +102,34 @@ React SPA -> /sws/neo/email-contracts/{contractName}/send
 
 The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads. See [transactional-email-framework.md](transactional-email-framework.md), [email-contracts.md](email-contracts.md), and [ops/transactional-email-security.md](ops/transactional-email-security.md).
 
+## Optional Global Semantic Search
+
+Schema Forge's global command palette keeps its page search and can additionally show semantic
+matches for windows whose `decisions.json` declares `window.vectorSearch.target`. The pipeline
+copies that opt-in into each `frontendContract.window.vectorSearch`, and the SPA aggregates those
+contract targets before calling `GET /sws/neo/vectorsearch?query=...&targets=...`.
+`com.etendoerp.go` delegates the embedding and pgvector query to `com.etendoerp.db.extended`.
+
+Participation is absent by default: windows that do not declare `vectorSearch` need no explicit
+opt-out. Each declared target must match an active DB Extended search target and all selected sources
+must have compatible embedding profiles. DB Extended derives tenant scope from the authenticated
+`OBContext`, so the browser never supplies a client or organization identifier; Go additionally
+rejects targets whose source AD table is not readable by the current role. If no eligible
+contract is present, unavailable, or the vector capability is disabled, the command palette retains
+its normal page search and shows no semantic matches.
+When a user opens the palette from an opted-in window, a removable pill initially scopes semantic
+requests to that window's contract target. Removing it restores every eligible contract target.
+When semantic matches are available, their group is displayed before navigation results so the
+meaning-based result is the first result category shown to the user.
+While the semantic request is in flight, the command palette displays a localized visible
+searching status below the input. Each match shows the localized window name declared by its
+contract (for example, `Product`), so results from multiple entity types remain distinguishable.
+It is linked through the spec name that declared its target in the contract and opens that
+record's window route in edit mode.
+The endpoint returns a normalized `score` from 0 to 1 for every match and accepts inclusive
+`minScore` and `maxScore` parameters. Its default range is `0.60` to `1.00`, avoiding unrelated
+results when a caller does not explicitly supply a narrower range.
+
 ## Repository Structure
 
 ```
