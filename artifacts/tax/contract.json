@@ -1,8 +1,8 @@
 {
   "version": "0.12.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-08-20T15:17:34.024Z",
-  "checksum": "026f6f93d2302e44",
+  "updatedAt": "2026-09-04T14:17:22.892Z",
+  "checksum": "8d8fcc1ca8e6cb35",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -817,7 +817,8 @@
               "source": "LNA"
             }
           }
-        ]
+        ],
+        "javaQualifier": "taxSifOverrideHandler"
       },
       "accounting": {
         "tableName": "C_Tax_Acct",
@@ -1390,7 +1391,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "taxSifOverrideHandler"
       },
       "accounting": {
         "tableName": "C_Tax_Acct",
