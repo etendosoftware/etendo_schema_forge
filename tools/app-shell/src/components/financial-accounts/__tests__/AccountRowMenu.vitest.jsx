@@ -162,19 +162,29 @@ describe('AccountRowMenu', () => {
       expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
     });
 
-    it('is NOT offered when deletable is explicitly false', async () => {
+    // ETP-5111 inverted both of these. Hiding the item left the user unable to tell an account
+    // that CANNOT be deleted from one where the action does not exist, so it is offered on every
+    // row and the refusal is explained after confirming — the same rule the movements kebab and
+    // the three bulk-delete trash buttons follow. `deletable` no longer gates the menu at all.
+    it('is offered even when deletable is explicitly false', async () => {
       render(<AccountRowMenu account={{ ...baseAccount, deletable: false }} />);
       openMenu();
-      // Wait on something that IS rendered so the query below isn't racing the menu mount.
-      await screen.findByTestId('account-row-menu-open-acc-1');
-      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
     });
 
-    it('is NOT offered when deletable is absent (most fixtures)', async () => {
+    it('is offered when deletable is absent (most fixtures)', async () => {
       render(<AccountRowMenu account={baseAccount} />);
       openMenu();
-      await screen.findByTestId('account-row-menu-open-acc-1');
-      expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+    });
+
+    it('calls onDelete for a non-deletable account, so the refusal can be explained', async () => {
+      const onDelete = vi.fn();
+      render(<AccountRowMenu account={{ ...baseAccount, deletable: false }} onDelete={onDelete} />);
+      openMenu();
+      (await screen.findByTestId('account-row-menu-delete-acc-1')).click();
+      expect(onDelete).toHaveBeenCalledTimes(1);
+      expect(onDelete.mock.calls[0][0]).toMatchObject({ id: 'acc-1', deletable: false });
     });
 
     it('is still offered alongside Archive on a deletable, still-active account', async () => {

@@ -33,12 +33,16 @@ vi.mock('@/i18n', () => ({
       bulkDeletePartialFailure: '{succeeded} of {total} record(s) deleted. {failed} could not be deleted.',
       bulkDeleteAllFailed: 'None of the {count} selected record(s) could be deleted.',
       // ETP-5111 — the two account-delete blocker sentences the tests below exercise. Present so
-      // the reason assertions go through the REAL translation path (`translateAccountDeleteBlocked`
-      // peels each blocker off the "Cannot delete this account. " prefix and translates it through
-      // BACKEND_ERROR_MAP) instead of silently landing on its untranslated fallback — which is
-      // what the user would read if a key were missing, and therefore not what to assert against.
-      'backendError.accountHasTransactions': 'Esta cuenta tiene transacciones registradas.',
-      'backendError.accountHasPayments': 'Esta cuenta tiene pagos registrados.',
+      // the reason assertion goes through the REAL translation path (`translateAccountDeleteBlocked`
+      // recognises the "Cannot delete this account. " prefix and answers with ONE generic
+      // sentence) instead of silently landing on its untranslated fallback — which is what the
+      // user would read if the key were missing, and therefore not what to assert against.
+      //
+      // One key, not nine: the backend lists every applicable blocker and the toast used to
+      // concatenate all of them, which read as a system dump of near-identical sentences the user
+      // could not act on differently. Collapsed by the user's own call, which is also the generic
+      // error the ticket's acceptance criteria asked for on this surface.
+      'backendError.accountHasLinkedRecords': 'Esta cuenta tiene registros vinculados, así que no se puede eliminar.',
     };
     let text = map[key] || key;
     if (params) {
@@ -452,10 +456,16 @@ describe('useBulkRowDelete', () => {
    * that path runs — asserting the raw English would also pass if translation silently fell back.
    */
   describe('backend reason on a failed bulk delete (ETP-5111)', () => {
-    /** The real shape `FinancialAccountHandler.deleteAccount` answers a blocked delete with. */
-    const BLOCKED_REASON = 'Cannot delete this account. This account has registered transactions.';
-    /** …and what the user must actually read for it (see the i18n mock's blocker keys). */
-    const BLOCKED_REASON_ES = 'Esta cuenta tiene transacciones registradas.';
+    /**
+     * The real shape `FinancialAccountHandler.deleteAccount` answers a blocked delete with. FOUR
+     * blockers on purpose, the way a real account produces them — this is what the toast used to
+     * render verbatim, one sentence after another.
+     */
+    const BLOCKED_REASON = 'Cannot delete this account. This account has registered transactions. '
+      + 'This account has reconciliations recorded. This account has bank statements recorded. '
+      + 'This account has payments recorded.';
+    /** …and the single sentence the user must actually read for it, however many blockers there were. */
+    const BLOCKED_REASON_ES = 'Esta cuenta tiene registros vinculados, así que no se puede eliminar.';
     const COUNTER_ONE = 'None of the 1 selected record(s) could be deleted.';
 
     /** A DELETE response that refuses with `status` + a body message, the way NEO really does. */

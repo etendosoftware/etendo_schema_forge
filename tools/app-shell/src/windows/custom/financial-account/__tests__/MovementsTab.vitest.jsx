@@ -411,6 +411,19 @@ describe('MovementsTab — selection toggle', () => {
 // selection, via BulkDeleteSelectionBar + useBatchDeleteDialog (neither
 // mocked here — the real components render, matching ImportedStatementsTab's
 // equivalent suite).
+// ETP-5111 — WHICH confirmation the trash opens depends on what is at stake, so the button's
+// testid depends on the selection. A one-row selection whose movement carries a conciliación
+// and/or an asiento gets the lifecycle cartel (`movement-confirm-*`), because that row is
+// deleted through Payment Removal exactly as the row kebab does it and the same consequences
+// have to be spelled out; everything else gets the neutral count dialog the bulk bar has always
+// shown (`batch-delete-*`). Which one appeared is asserted explicitly in the suite below — this
+// helper only has to click the right thing.
+function confirmBulkDelete() {
+  act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
+  const cartelAccept = screen.queryByTestId('movement-confirm-accept');
+  act(() => (cartelAccept ?? screen.getByTestId('batch-delete-confirm')).click());
+}
+
 describe('MovementsTab — bulk delete selection bar', () => {
   beforeEach(() => {
     mockDeleteMovement.mockReset();
@@ -465,8 +478,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
 
     act(() => screen.getByTestId('toggle-select-a').click());
     act(() => screen.getByTestId('toggle-select-b').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
     // ETP-5111 — still one call per selected id, but each now carries the delete SEMANTICS for
@@ -489,8 +501,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
 
     act(() => screen.getByTestId('toggle-select-a').click());
     act(() => screen.getByTestId('toggle-select-b').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastWarning).toHaveBeenCalled());
     expect(toastSuccess).not.toHaveBeenCalled();
@@ -506,8 +517,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
     renderTab({ onReload });
 
     act(() => screen.getByTestId('toggle-select-a').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onReload).not.toHaveBeenCalled();
@@ -533,8 +543,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
     renderTab({ onReload });
 
     act(() => screen.getByTestId('toggle-select-a').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(toastError).toHaveBeenCalledWith('translated:backendError.transferMovementNotDeletable');
@@ -555,8 +564,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
 
     act(() => screen.getByTestId('toggle-select-a').click());
     act(() => screen.getByTestId('toggle-select-b').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('bulkDeleteAllFailed'));
     expect(toastError).not.toHaveBeenCalledWith('translated:backendError.transferMovementNotDeletable');
@@ -589,10 +597,6 @@ describe('MovementsTab — bulk delete semantics by selection size', () => {
     toastError.mockReset();
   });
 
-  function confirmBulkDelete() {
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
-  }
 
   it('ONE selected row is deleted with paymentRemoval: true (Payment Removal)', async () => {
     renderTab({ onReload: vi.fn() });

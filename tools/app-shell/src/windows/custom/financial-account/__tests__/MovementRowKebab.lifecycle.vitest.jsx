@@ -47,6 +47,11 @@ vi.mock('@/hooks/useCreateMovement', () => ({
   usePostMovement: () => ({ postMovement, posting: false }),
 }));
 
+// A partial mock, so every icon reachable from this tree has to be listed. `X` is NOT one the
+// kebab itself renders: it is the close button inside shadcn's `DialogContent`, which arrives
+// through `DeleteConfirmDialog` (ETP-5111). Before the kebab routed its non-cartel deletes to that
+// dialog, no Radix dialog ever mounted here and the omission was invisible — its absence then
+// failed ~20 tests at once with an error that names the mock rather than the cause.
 vi.mock('lucide-react', () => ({
   MoreVertical: () => null,
   ExternalLink: () => null,
@@ -57,6 +62,7 @@ vi.mock('lucide-react', () => ({
   RotateCcw: () => null,
   Trash2: () => null,
   Pencil: () => null,
+  X: () => null,
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -172,19 +178,22 @@ describe('MovementRowKebab — lifecycle visibility matrix', () => {
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
   });
 
-  // ETP-5111 — Eliminar is no longer hidden for a payment-linked movement. The G/L-only actions
-  // still are (that movement is managed from the Payments module), but the delete item is offered
-  // and explains its refusal on click — see the "delete is always offered" describe below.
-  it('payment-linked, posted movement exposes Unpost + Eliminar and no G/L lifecycle actions', () => {
+  // ETP-5111 — neither Eliminar NOR Reactivar is hidden for a payment-linked movement any more.
+  // Editar and Procesar still are: those genuinely do not apply, because the movement's content is
+  // managed from the Payments module. Delete and Reactivate are offered and explain their refusal
+  // on click — see the "delete is always offered" and reactivate describes below. That difference
+  // is the whole point: an action that cannot succeed still tells the user why, while one that
+  // does not exist for this kind of row stays out of the menu.
+  it('payment-linked, posted movement exposes Unpost, Eliminar and Reactivar but no Editar/Procesar', () => {
     renderKebab(PAYMENT_LINKED);
     expect(screen.queryByTestId('movement-row-edit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('movement-row-process')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('movement-row-reactivate')).not.toBeInTheDocument();
     // Because it is posted, Unpost (descontabilizar) applies (ETP-4505 merge)…
     expect(screen.getByTestId(`movement-row-menu-${PAYMENT_LINKED.id}`)).toBeInTheDocument();
     expect(screen.getByTestId('movement-row-unpost')).toBeInTheDocument();
-    // …and Eliminar is present rather than hidden.
+    // …and both refusable actions are present rather than hidden.
     expect(screen.getByTestId('movement-row-delete')).toBeInTheDocument();
+    expect(screen.getByTestId('movement-row-reactivate')).toBeInTheDocument();
   });
 
   // ── funds-transfer delete guard (ETP-5085, inverted by ETP-5111) ───────────
