@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, SearchX } from 'lucide-react';
+import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, Unlink, SearchX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -954,11 +954,15 @@ function RemoveOperationConfirmDialog({
       warning={warning}
       confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
-      confirmIcon={<Minus
+      // Unlink, not a bare Minus: the cartel's whole point is that the link to the statement line
+      // is broken, and a lone dash reads as a stray rule next to the label. This is the variant
+      // with the burst marks — the sibling `Unlink2` used by AccountRowMenu / EditAccountModal is a
+      // single gapped stroke that turns to mush at the 15px these confirm icons render at.
+      confirmIcon={<Unlink
         width={15}
         height={15}
         strokeWidth={2.2}
-        data-testid="Minus__recon-remove" />}
+        data-testid="Unlink__recon-remove" />}
       onConfirm={busy ? NOOP : onConfirm}
       onClose={onClose}
       testIdPrefix="recon-remove"
