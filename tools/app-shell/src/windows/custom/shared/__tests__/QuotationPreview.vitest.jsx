@@ -80,11 +80,19 @@ vi.mock('../useQuotationPdf.js', () => ({
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
-  default: ({ onClose, documentNo }) => (
+  default: ({ onClose, onSent, documentNo }) => (
     <div data-testid="send-modal" data-docno={documentNo}>
       <button data-testid="send-modal-close" onClick={onClose}>
         Close Send
       </button>
+      {/* ETP-5069 — simulates the modal reporting a SUCCESSFUL send (its new `onSent`
+          callback, which a cancel never reaches), so the panel's refresh wiring can be
+          exercised without the real modal. */}
+      {onSent && (
+        <button data-testid="send-modal-sent" onClick={() => onSent({ status: 'SENT' })}>
+          Simulate Sent
+        </button>
+      )}
     </div>
   ),
 }));
@@ -373,5 +381,52 @@ describe('QuotationPreview', () => {
 
       expect(screen.getByTestId('download-btn')).toBeDisabled();
     });
+  });
+});
+
+// ── ETP-5069: the EMAILS card now reads the document's real send history ─────
+// The card needs the document id and the API base to issue that request, plus a
+// `refreshSignal` the panel bumps once a send succeeds — otherwise the card would keep
+// showing the state it had BEFORE the email went out.
+describe('QuotationPreview — email history wiring (ETP-5069)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useQuotationPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  function lastEmailsCardProps() {
+    return vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+  }
+
+  it('passes the quotation id and the API base down to EmailsCard', () => {
+    renderQuotationPreview();
+    const props = lastEmailsCardProps();
+    expect(props.documentId).toBe('q-1');
+    expect(props.apiBaseUrl).toBe('/api/sales-quotation');
+  });
+
+  it('starts EmailsCard with a defined refreshSignal', () => {
+    renderQuotationPreview();
+    expect(lastEmailsCardProps().refreshSignal).toBeDefined();
+  });
+
+  it('bumps refreshSignal on EmailsCard when the send modal reports a successful send', () => {
+    renderQuotationPreview();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('email-btn'));
+    fireEvent.click(screen.getByTestId('send-modal-sent'));
+
+    expect(lastEmailsCardProps().refreshSignal).not.toBe(before);
+  });
+
+  it('leaves refreshSignal untouched when the send modal is merely closed', () => {
+    renderQuotationPreview();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('email-btn'));
+    fireEvent.click(screen.getByTestId('send-modal-close'));
+
+    expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });
