@@ -40,7 +40,7 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  * grid), and it gives the caller no way to decline the delete after the user has confirmed — which
  * the Movimientos kebab needs for a row its client-side pre-check has already ruled out.
  */
-export function useBatchDeleteDialog({ deleteOneFn, onOutcome }) {
+export function useBatchDeleteDialog({ deleteOneFn, onOutcome, renderDialog }) {
   const ui = useUI();
   const [pendingItems, setPendingItems] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -74,15 +74,32 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome }) {
   // ETP-5111 — the markup moved to `DeleteConfirmDialog` so the Movimientos row kebab can render
   // the very same dialog for a single row instead of a lookalike. Byte-identical output: same
   // component, same keys, same data-testids.
-  const batchDeleteDialog = (
-    <DeleteConfirmDialog
-      open={Boolean(pendingItems)}
-      count={count}
-      deleting={deleting}
-      onConfirm={confirm}
-      onClose={close}
-      data-testid="DeleteConfirmDialog__batch-delete" />
-  );
+  //
+  // `renderDialog` lets a host substitute a domain-specific confirmation while keeping every batch
+  // semantic above (the outcome toast, `onOutcome`, the in-flight lock). Movimientos needs it
+  // because a ONE-row selection is deleted through Payment Removal — it desconcilia and
+  // descontabiliza — so that case has to carry the same warning the row kebab shows, while a
+  // multi-row selection keeps the neutral count dialog. It receives the pending items so the host
+  // can inspect the actual records, not just how many there are.
+  const dialogProps = {
+    open: Boolean(pendingItems),
+    count,
+    items: pendingItems || [],
+    deleting,
+    onConfirm: confirm,
+    onClose: close,
+  };
+  const batchDeleteDialog = renderDialog
+    ? renderDialog(dialogProps)
+    : (
+      <DeleteConfirmDialog
+        open={dialogProps.open}
+        count={count}
+        deleting={deleting}
+        onConfirm={confirm}
+        onClose={close}
+        data-testid="DeleteConfirmDialog__batch-delete" />
+    );
 
   return { requestBatchDelete, batchDeleteDialog, deleting };
 }

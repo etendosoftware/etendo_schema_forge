@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
-import { resolveMovementDeleteBlock, resolveMovementReactivateBlock } from './movementActionEligibility.js';
+import { resolveMovementDeleteBlock, resolveMovementReactivateBlock, movementHasUndoableState } from './movementActionEligibility.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -53,14 +53,10 @@ async function callTransactionAction(apiFetch, url, token) {
  * different protection), while a blocked Reactivate refuses with the toast alone — there is no bulk
  * reactivate to be consistent with, so a dialog would only add a click before the same sentence.
  *
- * The rest of the Delete contract (ETP-5111): the item is
- * offered on EVERY row and an undeletable movement is answered with the reason instead of a hidden
- * item. Every row confirms first, always, so this control and the bulk-delete trash never differ in
- * how much protection the same act gets. Which confirmation it is depends on what is actually at
- * stake — `showCartel` below. `resolveMovementDeleteBlock` decides eligibility client-side, and for
- * a blocked row (payment- or receipt-linked, or a funds-transfer leg) the reason is shown after the
- * user confirms, with no request made. Because Delete is always present, this kebab always has at
- * least one item.
+ * WHICH confirmation Delete gets depends on what is actually at stake — see `showCartel` below.
+ * `resolveMovementDeleteBlock` decides eligibility client-side, and for a blocked row (payment- or
+ * receipt-linked, or a funds-transfer leg) the reason is shown after the user confirms, with no
+ * request made. Because Delete is always present, this kebab always has at least one item.
  *
  * @param {{ movement: object, onReload?: () => void, onEdit?: (m: object) => void }} props
  */
@@ -101,8 +97,10 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   // "Is there anything to undo?" — the movement is posted (contabilizado) and/or reconciled.
   // Two different jobs read it: Reactivar uses it to decide whether to confirm AT ALL (a
   // merely-Processed movement reactivates on the spot), while Eliminar always confirms and uses it
-  // only to pick WHICH dialog (see `showCartel` below).
-  const needsConfirm = isPosted || isReconciled;
+  // only to pick WHICH dialog (see `showCartel` below). Imported rather than inlined because the
+  // bulk-delete bar has to reach the same verdict for a one-row selection — it runs the same
+  // Payment Removal — and two copies of this expression are exactly how the two surfaces drifted.
+  const needsConfirm = movementHasUndoableState(movement);
   // ETP-5111 — WHICH confirmation the pending action gets. The lifecycle cartel exists to
   // enumerate what an action will undo, so it earns its place only when there is something to
   // enumerate; everywhere else the row kebab shows the very dialog the bulk trash shows, because

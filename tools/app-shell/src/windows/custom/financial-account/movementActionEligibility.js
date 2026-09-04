@@ -88,3 +88,24 @@ export function resolveMovementReactivateBlock(movement) {
 
   return null;
 }
+
+/**
+ * Does this movement carry state an action would have to UNDO — a conciliación and/or an asiento
+ * contable?
+ *
+ * This is the predicate behind "which confirmation does the user get": the lifecycle cartel earns
+ * its place only when it has real consequences to enumerate, and the plain delete dialog is right
+ * everywhere else. It lives here, exported, because **two surfaces have to agree on it** — the row
+ * kebab and the bulk-delete bar. They did not: a single selected movement is deleted through
+ * Payment Removal (the bulk path sends `paymentRemoval: true` for a one-row selection, exactly
+ * what the kebab does), so it desconcilia and descontabiliza just the same, yet the bulk bar was
+ * showing the neutral "¿Estás seguro?" dialog while the kebab showed the full warning for the very
+ * same record. Duplicated inline predicates are how that drift happened, so there is now one.
+ *
+ * @param {{ posted?: string, paymentStatus?: string }} movement
+ * @returns {boolean} true when the movement is posted (contabilizado) and/or reconciled.
+ */
+export function movementHasUndoableState(movement) {
+  if (!movement) return false;
+  return movement.posted === 'Y' || movement.paymentStatus === 'RPPC';
+}

@@ -19,6 +19,9 @@ import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { useDeleteMovement } from '@/hooks/useCreateMovement';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
+import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
+import { resolveMovementDeleteBlock, movementHasUndoableState } from './movementActionEligibility.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 // ---------------------------------------------------------------------------
@@ -159,6 +162,35 @@ export const MovementsTab = forwardRef(function MovementsTab(
       } else {
         setSelectedIds(new Set(failed));
       }
+    },
+    // ETP-5111 — a ONE-row selection is deleted through Payment Removal, which desconcilia and
+    // descontabiliza, so it must carry the same warning the row kebab shows for that very record
+    // instead of the neutral count dialog. `movementHasUndoableState` is the shared predicate, so
+    // the two surfaces cannot disagree again. A multi-row selection keeps the count dialog: it is
+    // a plain per-row delete, and the cartel enumerates consequences a plain delete never has.
+    renderDialog: ({ open, count, items, deleting, onConfirm, onClose }) => {
+      const single = count === 1 ? movements.find((m) => m.id === items[0]) : null;
+      const showCartel = Boolean(single)
+        && !resolveMovementDeleteBlock(single)
+        && movementHasUndoableState(single);
+      if (!open) return null;
+      return showCartel ? (
+        <MovementLifecycleConfirmModal
+          action="delete"
+          reconciled={single.paymentStatus === 'RPPC'}
+          posted={single.posted === 'Y'}
+          onConfirm={onConfirm}
+          onClose={onClose}
+          data-testid="MovementLifecycleConfirmModal__bulk-delete" />
+      ) : (
+        <DeleteConfirmDialog
+          open
+          count={count}
+          deleting={deleting}
+          onConfirm={onConfirm}
+          onClose={onClose}
+          data-testid="DeleteConfirmDialog__bulk-delete" />
+      );
     },
   });
   const requestDelete = useCallback(() => {
