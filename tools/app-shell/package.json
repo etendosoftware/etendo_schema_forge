@@ -19,8 +19,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.86",
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.46-preview.mergeblock-ETP-5137.20260904000726.13b5767",
-    "@etendosoftware/etendo-go-core": "0.3.46-preview.mergeblock-ETP-5137.20260904000726.13b5767",
+    "@etendosoftware/app-shell-core": "0.3.46",
+    "@etendosoftware/etendo-go-core": "0.3.46",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
     "@openfeature/web-sdk": "^1.9.0",
