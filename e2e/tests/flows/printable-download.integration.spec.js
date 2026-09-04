@@ -3,13 +3,20 @@ import { navigateTo } from '../helpers/auth.js';
 import {
   waitForDetailReady, expectSaveResponse, waitForConfirmResponse, slow,
 } from '../helpers/purchase-helpers.js';
-import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
+import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import {
   loginAndAssertJsreport, waitUntilCompleted, downloadAndAssertPdf,
 } from '../helpers/printable-helpers.js';
 
-const PRODUCT = 'Queso Sardo';
-const WAREHOUSE = 'Almacen GO';
+// Both of these used to be literals ('Queso Sardo' / 'Almacen GO') naming rows the
+// GOClient onboarding dataset happened to seed. ETP-5079 deleted the four demo
+// products and renamed the warehouse, so a fresh tenant has neither — this spec
+// was written against the old dataset in parallel and broke on the merge. Name the
+// fixture and the shared constant instead: the product is provisioned by the spec
+// itself via ensureProductSetup, and the warehouse name lives in one place.
+const PRODUCT = PRODUCT_FIXTURE_ALPHA.name;
+const WAREHOUSE = DEFAULT_WAREHOUSE_NAME;
 
 /**
  * Printable downloads — sales flow (integration, live backend).
@@ -148,6 +155,9 @@ test.describe('Printable downloads — sales flow (integration)', () => {
 
   test('every confirmed stage of the sales flow downloads a real PDF', async ({ page }) => {
     await loginAndAssertJsreport(page);
+    // The dataset seeds no products at all since ETP-5079, so the drawer would be
+    // empty. Provision the fixture before anything tries to pick a line.
+    await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
 
     await createDraftWithLine(page, 'sales-order');
 
@@ -289,7 +299,7 @@ test.describe('Printable downloads — sales flow (integration)', () => {
 
       await waitForDetailReady(page);
       await expect(page).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-      await expect(page.getByText(/queso sardo/i).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(PRODUCT).first()).toBeVisible({ timeout: 10_000 });
       await slow(page);
     });
 
@@ -321,6 +331,7 @@ test.describe('Printable downloads — sales flow (integration)', () => {
 
   test('a quotation under evaluation downloads a real PDF', async ({ page }) => {
     await loginAndAssertJsreport(page);
+    await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
     await createDraftWithLine(page, 'sales-quotation');
 
     await test.step('Send the quotation to evaluation (DR → UE)', async () => {
