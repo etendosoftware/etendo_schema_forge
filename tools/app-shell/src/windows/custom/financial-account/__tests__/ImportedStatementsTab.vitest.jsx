@@ -505,6 +505,36 @@ describe('ImportedStatementsTab', () => {
     expect(toastSuccess).toHaveBeenCalledWith('financeAccountStatementsReactivateSuccess');
   });
 
+  // ── ETP-5121 — reactivating a statement that already has a reconciled line ──
+  //
+  // s3 is the RECONCILED fixture. Returning it to draft does NOT reverse its reconciliations
+  // (BankStatementsHandler.handleReactivate is explicit about it), so the reconciled line stays
+  // reconciled and the reconciliation panel has to keep listing it. At THIS level that means two
+  // things: the tab must send nothing but the id (it can never resend, and so never rewrite, the
+  // already-matched lines), and it must re-read the statement from the server instead of
+  // optimistically rewriting its status locally.
+  it('reactivates a reconciled statement without resending its lines and re-reads it from the server', async () => {
+    reactivateStatement.mockResolvedValueOnce({ id: 's3', processed: false });
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={ACCOUNT} />);
+
+    const rowsBefore = screen.getByTestId('stub-table').getAttribute('data-len');
+
+    await user.click(screen.getByTestId('row-reactivate-s3'));
+    await user.click(screen.getByTestId('confirm-run'));
+
+    // Header-only operation: exactly one argument, the id.
+    expect(reactivateStatement).toHaveBeenCalledTimes(1);
+    expect(reactivateStatement.mock.calls[0]).toEqual(['s3']);
+
+    await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+    // Still listed, with the status the SERVER reports — no local downgrade that would make the
+    // still-reconciled line look unmatched.
+    expect(screen.getByTestId('stub-table')).toHaveAttribute('data-len', rowsBefore);
+    expect(screen.getByTestId('row-s3')).toHaveTextContent('BS-003');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it('surfaces an error toast and keeps the dialog open when the action fails', async () => {
     deleteStatement.mockRejectedValueOnce(new Error('HTTP 400'));
     const user = userEvent.setup();
