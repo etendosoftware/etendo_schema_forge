@@ -250,7 +250,7 @@ const MENU_WINDOW_INDEX = buildMenuWindowIndex();
  * match; the "never disappear" fallback above for an absent `menuIndex` entry is
  * unaffected — `match` is `undefined` in that case, not a hidden `true`.
  *
-
+ *
  * Re-groups and re-sorts by the RESOLVED category, not the backend's original grouping:
  * since two different backend `category.name` buckets can map to the same menu.json
  * `group` (or vice versa), every window is flattened across all backend categories first,
