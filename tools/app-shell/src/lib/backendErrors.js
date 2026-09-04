@@ -193,24 +193,6 @@ const BACKEND_ERROR_MAP = {
   // FinancialAccountDeleteSupport.java:62-72 (com.etendoerp.go, ETP-4871) — the nine REASON_*
   // blocker sentences `FinancialAccountHandler.deleteAccount` can report. Package-private on the
   // Java side specifically so `FinancialAccountsPageHandler`'s batched loader can reuse the exact
-  // same strings for the `deleteBlockedReason` list-row field (its own comment: "the DELETE 409
-  // message and the list-row tooltip must never drift apart") — so these are mapped here as
-  // ordinary standalone entries in case either surface ever sends one on its own. ETP-5111 is what
-  // makes them reachable in a TOAST rather than a hover tooltip: the 409 body is these same
-  // sentences space-joined behind a "Cannot delete this account. " prefix, handled below by
-  // `translateAccountDeleteBlocked` (which reuses this very map for each individual sentence, so
-  // adding one here is enough to cover both shapes).
-  'This account has registered transactions.': 'backendError.accountHasTransactions',
-  'This account has reconciliations recorded.': 'backendError.accountHasReconciliations',
-  'This account has bank statements recorded.': 'backendError.accountHasBankStatements',
-  'This account has payments recorded.': 'backendError.accountHasPayments',
-  'This account has payment proposals recorded.': 'backendError.accountHasPaymentProposals',
-  'This account has GL journal entries recorded.': 'backendError.accountHasJournalLines',
-  'This account has bank file exceptions recorded.': 'backendError.accountHasBankFileExceptions',
-  "This account is set as a business partner's default financial account.":
-    'backendError.accountIsBpartnerDefault',
-  'This account is connected to a bank — disconnect the bank first.':
-    'backendError.accountHasBankConnection',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -682,64 +664,32 @@ export async function parseBackendErrorMessage(res) {
   return raw;
 }
 
-// FinancialAccountHandler.deleteAccount (ETP-4871, com.etendoerp.go) — the 409 body is this fixed
-// prefix followed by one or more of the nine REASON_* sentences from
-// FinancialAccountDeleteSupport.java:62-72, joined by a single space (`String.join(" ",
-// blockers)`). ETP-5111 is what makes this reachable in a toast rather than only a hover tooltip
-// (`useBulkRowDelete`'s outcome toast on the Cuentas grid), so an untranslated concatenation would
-// otherwise reach a Spanish-first UI verbatim.
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
 
-// Sentence boundary inside that concatenation. Every REASON_* literal ends in a period and none
-// contains one (no abbreviations, and "GL" is not "G.L."), so "run of non-periods, then a period,
-// then whitespace or end" isolates each sentence exactly. `[^.]+` is a single character class with
-// no nested quantifier, so there is no super-linear backtracking to worry about (javascript:S5852).
-//
-// Deliberately NOT a `(?<=\.)\s+` lookbehind split, which reads more neatly: Safari only shipped
-// lookbehind in 16.4, and nothing else in this file needs it.
-//
-// The `g` flag is required by `String.match` to return every sentence. Safe here — `match` does not
-// carry `lastIndex` between calls the way `test`/`exec` do (which is why `OPAQUE_REASON_RE`
-// deliberately has no `g`).
-const ACCOUNT_DELETE_SENTENCE_RE = /[^.]+\.(?:\s+|$)/g;
-
 /**
- * Translates a `FinancialAccountHandler.deleteAccount` 409 body, or returns `null` when there is
- * nothing to translate — not this endpoint's message, a shape it could not have produced, or no
- * recognized sentence in it at all. `null` leaves the caller showing the original text untouched.
+ * Collapses a `FinancialAccountHandler.deleteAccount` 409 into ONE generic sentence, or returns
+ * `null` when the message is not this endpoint's.
  *
- * Splits the remainder after the fixed prefix into sentences and translates each one through
- * `BACKEND_ERROR_MAP` independently, so a single edit to that map serves both this concatenated
- * shape and a standalone sentence. Two consequences worth stating, both deliberate:
+ * The backend answers with the fixed prefix above followed by every applicable REASON_* sentence
+ * from `FinancialAccountDeleteSupport`, space-joined — so a single account could produce
+ * *"Esta cuenta tiene movimientos registrados. Esta cuenta tiene conciliaciones registradas. Esta
+ * cuenta tiene extractos bancarios registrados. Esta cuenta tiene pagos registrados."* That is
+ * four near-identical sentences the user cannot act on differently: whichever one they resolved,
+ * the account still would not delete, and the wall of text reads as a system dump rather than an
+ * answer. It is replaced by one sentence saying the account has linked records.
  *
- * - **Order-independent.** It does not care which order the backend lists its blockers in, so
- *   nothing here has to be kept in sync with `findDeleteBlockers`'s check order.
- * - **Degrades per sentence.** A blocker added on the Java side with no entry here yet stays in
- *   English while its siblings still render translated, instead of dropping all nine back to
- *   English. Same choice `translateBackendError` already makes for its newline-joined path, for the
- *   same reason: "the parts we know" beats all-or-nothing, and nothing is ever silently dropped.
+ * This is also what the ticket's own acceptance criteria asked for on this surface — a generic
+ * error — and it retires a nine-literal wire contract with `FinancialAccountDeleteSupport`: the
+ * only thing still matched by text is the prefix, so adding a tenth blocker on the Java side needs
+ * no frontend change at all.
+ *
+ * The individual reasons are NOT lost to whoever needs them: they remain in the 409 body, in the
+ * server log, and on the row's own `deletable` flag. Only the toast is generic.
  */
 function translateAccountDeleteBlocked(msg, t) {
   if (!msg.startsWith(ACCOUNT_DELETE_BLOCKED_PREFIX)) return null;
-  const remainder = msg.slice(ACCOUNT_DELETE_BLOCKED_PREFIX.length);
-  const chunks = remainder.match(ACCOUNT_DELETE_SENTENCE_RE);
-  // Integrity check: the matches must account for the remainder in full. If they don't (a sentence
-  // arriving without its terminating period, say) this is not the shape this function knows, and
-  // guessing at it risks dropping text the backend meant the user to read.
-  if (!chunks || chunks.join('') !== remainder) return null;
-
-  let anyTranslated = false;
-  const parts = chunks.map((chunk) => {
-    const sentence = chunk.trim();
-    const key = BACKEND_ERROR_MAP[sentence];
-    const translated = key ? t(key) : null;
-    if (translated && translated !== key) {
-      anyTranslated = true;
-      return translated;
-    }
-    return sentence;
-  });
-  return anyTranslated ? parts.join(' ') : null;
+  const translated = t('backendError.accountHasLinkedRecords');
+  return (translated && translated !== 'backendError.accountHasLinkedRecords') ? translated : null;
 }
 
 // Translates ONE already-trimmed backend message, or returns null when nothing matched — including
