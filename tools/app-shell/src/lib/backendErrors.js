@@ -76,6 +76,18 @@ const BACKEND_ERROR_MAP = {
   // deleted", with no hint that the reason was the statement being processed already.
   'Only draft (unprocessed) statements can be modified': 'backendError.statementNotDraft',
   'Only processed statements can be reactivated': 'backendError.statementNotProcessed',
+  // ETP-5111 — the SECOND refusal a delete can hit, and the one the user meets after doing what
+  // the first one told them: reactivating a statement makes it a draft, but it can still carry a
+  // reconciled line, and deleting the statement would take that line with it. `requireDraft` lets
+  // it through and `hasMatchedLines` stops it (BankStatementsHandler:715). It had no entry here at
+  // all, so this was reaching a Spanish-first UI as raw English.
+  //
+  // Note the wording asymmetry with the key above: `statementNotDraft` guards process, update AND
+  // delete, so its Spanish is deliberately delete-flavoured — delete is the only one of the three
+  // a user can actually reach (Procesar renders disabled for a processed statement and the edit
+  // pencil hides), leaving the other two to REST/MCP callers.
+  'The statement has matched lines; unreconcile them before deleting':
+    'backendError.statementHasMatchedLines',
   // Funds-transfer leg delete guard (FinancialAccountTransactionsHandler.handleDelete, ETP-5085).
   // The two legs of a transfer reference each other through RESTRICT self-FKs, so removing either
   // one is rejected with a 409 instead of the JDBC constraint violation that used to surface as an
