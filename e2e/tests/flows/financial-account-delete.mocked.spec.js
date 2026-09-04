@@ -10,20 +10,28 @@ import { login } from '../helpers/auth.js';
  * dependent records anywhere), while archiving moved to its own `PATCH {active:false}`. This
  * spec covers, entirely in mock mode (no backend):
  *
- *   1. A mixed selection (some deletable, some not) disables ListView's generic
- *      "Eliminar seleccionados" bar with an explanatory tooltip (`isRowDeletable`, wired in
- *      `windows/custom/financial-account/index.jsx`'s default export).
+ *   1. ListView's generic "Eliminar seleccionados" bar stays ENABLED whatever the selection
+ *      holds, including a row with `deletable === false` (ETP-5111 — see below).
  *   2. The row kebab's "Eliminar cuenta" item only appears when `deletable === true`
  *      (`AccountRowMenu.jsx`), opens `DeleteAccountDialog`, and a confirmed delete issues the
  *      real DELETE and drops the row from the list on refetch.
  *   3. The backend's 409 (a dependency appeared between the list load and the confirm) is
  *      shown verbatim and leaves the dialog open / the row in place.
  *
+ * ETP-5111 inverted (1). ETP-4871 pre-disabled the bulk trash for an ineligible selection via a
+ * generic `isRowDeletable` prop on `ListView`; the unified delete rule replaced that with "always
+ * let the user try, then explain the failure", so the prop, its tooltip key
+ * (`bulkDeleteBlockedTooltip`) and the wiring in `index.jsx` are all gone. Note (2) is UNCHANGED
+ * and deliberately so: the row kebab still reads `row.deletable` directly and hides its own
+ * "Eliminar cuenta" item — that per-row affordance was explicitly out of ETP-5111's scope.
+ *
  * Exhaustive branch coverage lives at unit level — see:
  *   - tools/app-shell/src/hooks/__tests__/useAccountMutations.vitest.jsx (deleteAccount)
  *   - tools/app-shell/src/windows/custom/financial-account/__tests__/DeleteAccountDialog.vitest.jsx
  *   - tools/app-shell/src/components/financial-accounts/__tests__/AccountRowMenu.vitest.jsx
- *   - tools/app-shell/src/components/contract-ui/__tests__/ListView.isRowDeletable.vitest.jsx
+ *   - tools/app-shell/src/components/contract-ui/__tests__/ListView.bulkDelete.vitest.jsx
+ *     ("never disabled by row eligibility" — the sentinel that replaced the deleted
+ *     ListView.isRowDeletable.vitest.jsx)
  */
 
 const ACCOUNTS = [
@@ -139,7 +147,7 @@ async function installDeleteMock(page, { deletedIds, failWith409For = new Set() 
   });
 }
 
-test.describe('Financial Accounts — bulk delete blocked by non-deletable rows (ETP-4871)', () => {
+test.describe('Financial Accounts — bulk delete is never pre-blocked by row eligibility (ETP-5111)', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await installAccountsListMock(page);
@@ -154,35 +162,46 @@ test.describe('Financial Accounts — bulk delete blocked by non-deletable rows 
     const bulkDelete = page.getByTestId('bulk-delete-selected');
     await expect(bulkDelete).toBeVisible();
     await expect(bulkDelete).toBeEnabled();
-    // ETP-4972 made this button icon-only (no visible "Eliminar" label), so it now always
-    // carries a `title` for hover discoverability — "Eliminar" (es_ES, mock-mode default)
-    // when nothing blocks the delete, vs. the explanatory blocked-count tooltip below.
+    // ETP-4972 made this button icon-only (no visible "Eliminar" label), so it always carries a
+    // `title` for hover discoverability — "Eliminar" (es_ES, mock-mode default).
     await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
   });
 
-  test('selecting a mix that includes a non-deletable account disables the button with a tooltip', async ({ page }) => {
+  // ETP-5111 — this used to assert the opposite (disabled, with an explanatory blocked-count
+  // tooltip). The refusal is not pre-empted any more: the delete is attempted and an account
+  // with dependent records comes back as a per-row 409, reported by the outcome toast.
+  test('selecting a mix that includes a non-deletable account leaves the button enabled', async ({ page }) => {
     await rowCheckbox(page, 'acc-1').click(); // deletable
     await rowCheckbox(page, 'acc-2').click(); // NOT deletable
 
     const bulkDelete = page.getByTestId('bulk-delete-selected');
     await expect(bulkDelete).toBeVisible();
-    await expect(bulkDelete).toBeDisabled();
-    // "{count} registro(s) seleccionado(s) no se pueden eliminar." (es_ES, mock-mode default) —
-    // asserting only the digit keeps this locale-agnostic, matching this guide's convention of
-    // preferring testids/regex over exact copy where the exact string isn't the point.
-    await expect(bulkDelete).toHaveAttribute('title', /1/);
+    await expect(bulkDelete).toBeEnabled();
+    // The plain delete label, never the retired `bulkDeleteBlockedTooltip` ("{count}
+    // registro(s) seleccionado(s) no se pueden eliminar."), whose only digit was the count.
+    await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
   });
 
-  test('deselecting the blocking row re-enables the button', async ({ page }) => {
+  test('the button stays enabled with ONLY a non-deletable account selected', async ({ page }) => {
+    await rowCheckbox(page, 'acc-2').click(); // NOT deletable, and nothing else
+
+    const bulkDelete = page.getByTestId('bulk-delete-selected');
+    await expect(bulkDelete).toBeVisible();
+    await expect(bulkDelete).toBeEnabled();
+    await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
+  });
+
+  // The toolbar swap ETP-4656 introduced was retired in the same ticket: ticking a checkbox used
+  // to unmount `cuentas-toolbar` (and with it "Nueva cuenta", the filters and "Ordenar por"),
+  // which the floating selection pill never actually replaced.
+  test('the window toolbar stays on screen while rows are selected', async ({ page }) => {
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
+
     await rowCheckbox(page, 'acc-1').click();
-    await rowCheckbox(page, 'acc-2').click();
-    await expect(page.getByTestId('bulk-delete-selected')).toBeDisabled();
 
-    await rowCheckbox(page, 'acc-2').click();
-
-    await expect(page.getByTestId('bulk-delete-selected')).toBeEnabled();
-    // See the "plain delete tooltip" test above — icon-only button, always carries a title.
-    await expect(page.getByTestId('bulk-delete-selected')).toHaveAttribute('title', 'Eliminar');
+    await expect(page.getByTestId('bulk-delete-selected')).toBeVisible();
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
+    await expect(page.getByTestId('cuentas-new-account-button')).toBeVisible();
   });
 });
 

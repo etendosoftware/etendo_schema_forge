@@ -206,6 +206,12 @@ describe('toastBatchDeleteOutcome', () => {
  * The reason is now named WHEN, and only when, every failure is a 4xx sharing one intelligible
  * message; anything else (a 500, a JS `TypeError`, a bare status code, several different reasons)
  * must keep the old counter-only wording rather than leak plumbing at the user.
+ *
+ * ETP-5111 narrowed that to the only selection size where one sentence can honestly speak for the
+ * whole batch: exactly ONE record, where the backend's reason REPLACES the counter message. From
+ * two records up the toast is counters-only — appending a single reason to a multi-row batch
+ * implied it explained every failure, and the user could not tell which row it belonged to. The
+ * `…WithReason` message variants are gone, so a reason leaking into an N>1 toast is now a bug.
  */
 describe('toastBatchDeleteOutcome — common failure reason', () => {
   it('all failed, ONE item, 4xx with a message: the toast IS the backend sentence, with no counter', () => {
@@ -224,7 +230,10 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
     expect(toast.warning).not.toHaveBeenCalled();
   });
 
-  it('all failed, several items sharing one 4xx reason: counter message + reason', () => {
+  // ETP-5111 — the inverted half of the ETP-5085 rule. Even a batch where EVERY failure shares one
+  // intelligible 4xx reason gets counters only above a single record: the sentence is written in the
+  // singular by the backend and the user cannot tell which of the three rows it came from.
+  it('all failed, several items sharing one 4xx reason: counters only, the reason is withheld', () => {
     const ui = interpolatingUi();
     const errors = [
       rejectionWith(BUSINESS_REASON, 409),
@@ -238,11 +247,35 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
       errors,
     });
 
-    expect(toast.error).toHaveBeenCalledWith(
-      `bulkDeleteAllFailedWithReason:{"count":3,"reason":"${BUSINESS_REASON}"}`,
-    );
+    expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":3}');
+    // Neither the sentence itself nor the retired `…WithReason` key may appear.
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining(BUSINESS_REASON));
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('WithReason'));
   });
 
+  // The boundary itself, stated as one assertion pair rather than left implicit across two suites:
+  // the SAME single shared reason is named at total === 1 and withheld at total === 2. This is the
+  // rule the product decision turns on, so it must break loudly if the threshold ever moves.
+  it('names one shared reason at total === 1 and withholds it at total === 2', () => {
+    const ui = interpolatingUi();
+
+    toastBatchDeleteOutcome(ui, {
+      succeeded: [], failed: [{ id: 'a' }], total: 1,
+      errors: [rejectionWith(BUSINESS_REASON, 409)],
+    });
+    expect(toast.error).toHaveBeenLastCalledWith(BUSINESS_REASON);
+
+    toastBatchDeleteOutcome(ui, {
+      succeeded: [], failed: [{ id: 'a' }, { id: 'b' }], total: 2,
+      errors: [rejectionWith(BUSINESS_REASON, 409), rejectionWith(BUSINESS_REASON, 409)],
+    });
+    expect(toast.error).toHaveBeenLastCalledWith('bulkDeleteAllFailed:{"count":2}');
+  });
+
+  // Still the right OUTCOME, but note what enforces it since ETP-5111: the selection-size gate
+  // (total !== 1), not `commonFailureReason`'s reason-dedup. Several distinct reasons can only
+  // arise from several records, which are counters-only regardless — so the dedup branch is now
+  // unreachable through this entry point. Kept because the user-visible guarantee is the point.
   it('all failed for DIFFERENT 4xx reasons: falls back to the plain counter message', () => {
     const ui = interpolatingUi();
     toastBatchDeleteOutcome(ui, {
@@ -332,7 +365,10 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
     expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":1}');
   });
 
-  it('partial failure sharing one 4xx reason: warning toast names it alongside the counts', () => {
+  // ETP-5111 — a PARTIAL outcome implies at least two records by construction (something succeeded
+  // and something failed), so it is unconditionally counters-only now: there is no selection size
+  // at which a partial failure may name a reason.
+  it('partial failure sharing one 4xx reason: counters only, the reason is withheld', () => {
     const ui = interpolatingUi();
     toastBatchDeleteOutcome(ui, {
       succeeded: [{ id: 'a' }],
@@ -342,8 +378,10 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
     });
 
     expect(toast.warning).toHaveBeenCalledWith(
-      `bulkDeletePartialFailureWithReason:{"succeeded":1,"total":3,"failed":2,"reason":"${BUSINESS_REASON}"}`,
+      'bulkDeletePartialFailure:{"succeeded":1,"total":3,"failed":2}',
     );
+    expect(toast.warning).not.toHaveBeenCalledWith(expect.stringContaining(BUSINESS_REASON));
+    expect(toast.warning).not.toHaveBeenCalledWith(expect.stringContaining('WithReason'));
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
@@ -384,7 +422,11 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
     expect(toast.error).not.toHaveBeenCalledWith(MAPPED_REASON);
   });
 
-  it('translation happens before dedup: same mapped message across items is still one reason', () => {
+  // ETP-5111 — the same MAPPED reason on both rows, which is the most tempting case to surface
+  // (one translated sentence, unambiguous, shared by the whole batch) and is still withheld: the
+  // rule is the selection size, not how confident the message is. The translated key must not leak
+  // either — a regression that re-added the reason would most likely show up in this exact shape.
+  it('two items sharing one MAPPED reason: counters only, not even the translated sentence', () => {
     const ui = interpolatingUi();
     toastBatchDeleteOutcome(ui, {
       succeeded: [],
@@ -393,8 +435,8 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
       errors: [rejectionWith(MAPPED_REASON, 409), rejectionWith(MAPPED_REASON, 409)],
     });
 
-    expect(toast.error).toHaveBeenCalledWith(
-      'bulkDeleteAllFailedWithReason:{"count":2,"reason":"translated:backendError.transferMovementNotDeletable"}',
-    );
+    expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":2}');
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('backendError.'));
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining(MAPPED_REASON));
   });
 });

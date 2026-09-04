@@ -260,18 +260,18 @@ describe('AccountsHeaderTable — layout', () => {
 });
 
 /**
- * ETP-4656 — the selection bar ListView draws above this slot REPLACES the window toolbar
- * instead of stacking on top of it. ListView renders that bar as a sibling and cannot reach
- * inside the slot, so the swap has to happen here, driven by the `selectedRows` prop.
+ * ETP-4656 unmounted this slot's own toolbar while a selection was active, so ListView's
+ * selection bar read as its replacement. ETP-5111 REVERSES that: once the bar became a floating
+ * pill (ETP-4972) the swap no longer replaced anything — it merely took "Nueva cuenta", the
+ * filters, "Reglas de conciliación" and the "Ordenar por" control away from a user who had just
+ * ticked one checkbox.
  *
- * Unmounting (not hiding) is the contract the e2e spec asserts with
- * `getByTestId('cuentas-toolbar')).toHaveCount(0)`, and the swap is driven straight off
- * ListView's state rather than a local mirror of `onSelectionChange` — DataTable empties or
- * prunes its internal selection Set silently from its `clearSelectionTrigger` /
- * `deselectTrigger` effects WITHOUT calling `onSelectionChange`, so a mirror would still read
- * "selected" after a successful bulk delete and the toolbar would never come back.
+ * So the toolbar is now permanently mounted, at every selection size. `selectedRows` is still
+ * destructured in the slot (it must never reach DataTable, where the name means internal
+ * selection state) but no longer gates anything — the structural half of that is pinned in
+ * `artifacts/financial-account/custom/__tests__/AccountsHeaderTable.test.js`.
  */
-describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
+describe('AccountsHeaderTable — toolbar stays mounted across selection changes', () => {
   it('keeps the toolbar mounted while nothing is selected', () => {
     renderTable({ selectedRows: [] });
 
@@ -284,21 +284,30 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
   });
 
-  it('unmounts its own toolbar while a selection is active', () => {
+  it('keeps its own toolbar mounted while a selection is active', () => {
     renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
 
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
-    // Only the toolbar goes; the grid and the KPI sidebar stay.
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    // …alongside everything that was already staying put.
     expect(screen.getByTestId('data-table')).toBeInTheDocument();
     expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
   });
 
-  it('brings the toolbar back when the selection empties', () => {
+  // The actions a user reaches for WITH rows selected are exactly the ones the swap used to hide.
+  it('keeps the toolbar actions reachable while a selection is active', () => {
+    renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
+
+    expect(screen.getByTestId('cuentas-new-account-button')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-matching-rules-button')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-search-input')).toBeInTheDocument();
+  });
+
+  it('keeps the toolbar mounted across a selection that fills and then empties', () => {
     const { rerender } = render(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[0]]} />,
     );
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
 
     rerender(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
@@ -307,10 +316,10 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
   });
 
-  // The type filter and the search term live in this component's state, so the unmount must
-  // not reset them: the grid stays filtered while the selection bar is up (the user only ever
-  // bulk-deletes what they can see), and the toolbar comes back showing the same term.
-  it('preserves the search term across the toolbar unmount and remount', () => {
+  // The type filter and the search term live in this component's state. They had to survive the
+  // old unmount; they must equally survive never unmounting — the grid stays filtered while rows
+  // are selected (the user only ever bulk-deletes what they can see) and the input keeps its text.
+  it('preserves the search term, and the toolbar itself, across a selection change', () => {
     const { rerender } = render(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
     );
@@ -321,8 +330,9 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     rerender(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[2]]} />,
     );
-    // Still filtered with the toolbar gone.
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    // Still filtered, and now the toolbar showing that filter is still on screen too.
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-search-input')).toHaveValue('visa');
     expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
     expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
 
@@ -784,10 +794,13 @@ describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
     expect(onSort).not.toHaveBeenCalled();
   });
 
-  it('goes away with the toolbar while rows are selected', () => {
+  // ETP-5111 — it used to disappear along with the toolbar while rows were selected. Since the
+  // toolbar no longer unmounts on selection, sorting stays available: ticking a checkbox is not a
+  // reason to lose the only sort affordance this window has (it sets `hideListBar: true`).
+  it('stays available while rows are selected', () => {
     renderTable({ selectedRows: [{ id: 'acc-1' }] });
 
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    expect(toolbar).toContainElement(screen.getByTestId('list-sort-toggle'));
   });
 });

@@ -1,8 +1,5 @@
 import { useCallback, useState } from 'react';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
-} from '@/components/ui/dialog.jsx';
-import { Button } from '@/components/ui/button.jsx';
+import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { useUI } from '@/i18n';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
@@ -34,6 +31,14 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  * The host is expected to re-fetch its list (when at least one item
  * succeeded) inside `onOutcome` — that naturally drops the deleted items and
  * leaves the failed ones in place, no manual list surgery needed here.
+ *
+ * ETP-5111 — the DIALOG now lives in `DeleteConfirmDialog`, so a single-row surface can show the
+ * identical confirmation without adopting this hook's semantics. Reaching for that component
+ * directly is the right move for a per-row action, and this hook is deliberately NOT the reuse
+ * vehicle: it owns the outcome toast (`toastBatchDeleteOutcome`'s counter wording, which reads
+ * oddly for one row), it always renders its dialog node (one hidden Radix dialog per row on a long
+ * grid), and it gives the caller no way to decline the delete after the user has confirmed — which
+ * the Movimientos kebab needs for a row its client-side pre-check has already ruled out.
  */
 export function useBatchDeleteDialog({ deleteOneFn, onOutcome }) {
   const ui = useUI();
@@ -66,38 +71,17 @@ export function useBatchDeleteDialog({ deleteOneFn, onOutcome }) {
 
   const count = pendingItems?.length ?? 0;
 
+  // ETP-5111 — the markup moved to `DeleteConfirmDialog` so the Movimientos row kebab can render
+  // the very same dialog for a single row instead of a lookalike. Byte-identical output: same
+  // component, same keys, same data-testids.
   const batchDeleteDialog = (
-    <Dialog
+    <DeleteConfirmDialog
       open={Boolean(pendingItems)}
-      onOpenChange={(open) => { if (!open) close(); }}
-      data-testid="Dialog__batch-delete">
-      <DialogContent className="max-w-sm" data-testid="DialogContent__batch-delete">
-        <DialogHeader data-testid="DialogHeader__batch-delete">
-          <DialogTitle data-testid="DialogTitle__batch-delete">{ui('bulkDeleteConfirmTitle')}</DialogTitle>
-          <DialogDescription data-testid="DialogDescription__batch-delete">
-            {ui('bulkDeleteConfirmMessage', { count })}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter data-testid="DialogFooter__batch-delete">
-          <DialogClose asChild data-testid="DialogClose__batch-delete">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={deleting}
-              data-testid="Button__batch-delete-cancel">{ui('cancel')}</Button>
-          </DialogClose>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={deleting}
-            data-testid="batch-delete-confirm"
-            onClick={confirm}
-          >
-            {ui('delete')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      count={count}
+      deleting={deleting}
+      onConfirm={confirm}
+      onClose={close}
+      data-testid="DeleteConfirmDialog__batch-delete" />
   );
 
   return { requestBatchDelete, batchDeleteDialog, deleting };

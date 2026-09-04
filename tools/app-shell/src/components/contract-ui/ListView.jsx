@@ -328,12 +328,12 @@ export function ListView({
   window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
-  // ETP-4871 — optional `(row) => boolean` gating ListView's own bulk-delete button (the
-  // selection-bar "Delete selected", not to be confused with a window's own per-row delete
-  // affordance). Absent means "every row is deletable" — unchanged default behavior for every
-  // window that does not pass it. When present, the button disables the moment the CURRENT
-  // selection includes a row that fails the predicate, with a tooltip explaining how many.
-  isRowDeletable = null,
+  // NOTE (ETP-5111): there is deliberately NO `isRowDeletable` prop here any more. ETP-4871 let a
+  // host pre-disable the bulk-delete button for an ineligible selection; the unified delete rule
+  // replaced that with "always let the user try, then explain the failure" (the reason is shown
+  // when a single record was selected — see `toastBatchDeleteOutcome`). Re-introducing a
+  // row-eligibility gate on this button would put a third delete pattern back in the codebase;
+  // `ListView.bulkDelete.vitest.jsx` asserts the button is never disabled by row eligibility.
   listViewOptions = {},
   baseFilter = null,
   quickFilters = null,
@@ -990,13 +990,6 @@ export function ListView({
     hiddenColumns,
   };
 
-  // ETP-4871 — how many of the CURRENT selection fail `isRowDeletable`, if the host passed one.
-  // 0 (the default, `isRowDeletable` absent) means the bulk-delete button behaves exactly as
-  // before for every other window — this must never regress an existing window's bulk delete.
-  const blockedDeleteCount = isRowDeletable
-    ? selectedRows.filter((row) => !isRowDeletable(row)).length
-    : 0;
-
   return (
     <>
       <div className="flex-1 min-h-0 flex flex-col" data-testid="list-view">
@@ -1071,9 +1064,8 @@ export function ListView({
                     explicitly — inferring it from that prop's mere presence was fragile,
                     since selectionBarRightActions can be used for things other than
                     delete).
-                    ETP-4871 — additionally disabled (with an explanatory tooltip) once the
-                    selection includes a row the host's `isRowDeletable` rejects; absent, this
-                    never differs from the pre-existing behavior. */}
+                    ETP-5111 — never disabled by row eligibility: whatever the selection holds,
+                    the delete is attempted and the outcome toast reports it. */}
                 {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
                     zoomed straight into the applied Figma instance's canvas
                     render (not just the Dev Mode property panel) and confirmed
@@ -1084,11 +1076,9 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    disabled={bulkDeleting || blockedDeleteCount > 0}
+                    disabled={bulkDeleting}
                     onClick={() => requestBulkDelete(selectedRows)}
-                    title={blockedDeleteCount > 0
-                      ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : ui('delete')}
+                    title={ui('delete')}
                     aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />

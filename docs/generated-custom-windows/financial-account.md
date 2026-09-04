@@ -1,3 +1,139 @@
+# Financial Account — Unified delete rule (ETP-5111)
+
+> The "Regla unificada de borrado" the ticket asked for, kept as the **first** section of this file
+> on purpose: it is the single statement of how deletion behaves across **all three** surfaces of
+> this window, so the next ticket reads it here instead of re-deriving it from three places. Before
+> ETP-5111 those three places had drifted into three different criteria — ETP-4871 on the Cuentas
+> list, ETP-4921 + PSD2 on Extractos importados, ETP-5085 on Movimientos. Two of them said "don't
+> let the user touch the trash can"; one said "let them try, and explain the failure". ETP-5111
+> settles on the second, everywhere.
+
+## The rule
+
+1. **The trash button is always enabled** — on the Cuentas list, on Movimientos and on Extractos
+   importados alike. Nothing pre-disables it from what happens to be selected: `ListView`'s
+   `isRowDeletable` prop, `BulkDeleteSelectionBar`'s `disabledReason` prop,
+   `ImportedStatementsTab`'s `resolveBulkDeleteBlock` and the `bulkDeleteBlockedTooltip` key are all
+   gone. The button is disabled only while a delete is actually in flight.
+2. **One selected record means Payment Removal; more than one means a classic delete.** The
+   Movimientos bulk delete sends `paymentRemoval: true` for a single row (the backend unreconciles,
+   unposts and reactivates before removing) and `paymentRemoval: false` from two rows up, where a
+   processed row is rejected with a 409.
+3. **The reason is explained only when exactly one record is selected.** For a single row the
+   backend's own sentence *replaces* the counter message; from two rows up the toast reports
+   counters only (`bulkDeletePartialFailure` / `bulkDeleteAllFailed`). The `…WithReason` toast
+   variants and their locale keys no longer exist — one sentence hoisted out of a multi-row batch
+   implied it explained every failure, and the user could not tell which row it belonged to.
+
+   This holds on all three surfaces, but it is worth knowing *why* it takes work to hold, because
+   the mechanism is **opt-in per call site**: `toastBatchDeleteOutcome` names a reason only if the
+   caller passes `errors` **and** each rejection carries a numeric 4xx `status`. The two detail tabs
+   get it from `useBatchDeleteDialog`. Cuentas goes through the generic `useBulkRowDelete`, which
+   until ETP-5111 threw a bare `new Error(extractErrorMessage(...))` and called the toast without
+   `errors` — so a single undeletable account degraded to the counter message and the server's 409
+   was discarded. It now attaches `err.status = res.status` and forwards `errors`, the same shape
+   `useCreateMovement.postAction` and `useStatementActions.post` use. A new bulk-delete surface has
+   to do both or it silently falls back to counters; see `docs/ui-customization.md` §9c.
+4. **The kebab always offers Eliminar, always confirms, and explains the block itself.** In
+   Movimientos the item is rendered for every movement, including a payment-linked one and a
+   funds-transfer leg, both previously hidden. **Every** row opens a confirmation — blocked ones
+   included — and a blocked row's red toast fires only *after* the user confirms, from
+   `runConfirmed`; `deleteMovement` is never called, so there is still no request and no 409
+   round-trip. Which confirmation appears depends on what is at stake: a row with real consequences
+   to enumerate (posted and/or reconciled) gets the lifecycle cartel, and everything else — a plain
+   draft, and any blocked row *including a blocked posted one* — gets the same generic
+   `DeleteConfirmDialog` the bulk trash shows. `needsConfirm` still exists but now only gates
+   Reactivar, and picks the dialog for Eliminar.
+
+   The pre-check returns a **key**, never a formatted string, and every branch returns one of the
+   same `backendError.*` keys the server's 409 literals map to — so the kebab and the bulk / REST /
+   MCP paths read byte-identically *by construction*. Nothing is interpolated: the payment's
+   document number was deliberately dropped from the message, which is what allows that guarantee
+   (only the client knows the number, so naming it would have made the two paths permanently
+   divergent). The one thing the message does distinguish is **pago vs cobro**, off
+   `paymentIsReceipt` client-side and `FIN_Payment.isReceipt()` server-side, both treating
+   absent/unset as *pago*.
+5. **A per-row affordance may pre-check; a shared button may not.** That is the line the rule draws,
+   and it is what keeps rules 1 and 4 from contradicting each other. A row kebab knows exactly which
+   record it is refusing, so it can answer with a specific sentence. A bulk trash button covers a
+   heterogeneous selection, so pre-blocking it either denies a legitimate partial delete or explains
+   one row's problem as though it were the batch's.
+
+## Why the database forces rule 2
+
+`APRM_FIN_FINACC_TRAN_CHECK_TRG` (`modules_core/org.openbravo.advpaymentmngt`,
+`src-db/database/model/triggers/`) ends with:
+
+```plsql
+IF(DELETING) THEN
+ IF(:OLD.PROCESSED='Y') THEN
+   RAISE_APPLICATION_ERROR(-20000, '@20501@');
+ END IF;
+END IF;
+```
+
+`@20501@` resolves to `AD_MESSAGE` record **`800042`** (`VALUE = 20501`,
+`MSGTEXT = Document posted/processed`). Where that record lives is worth writing down, because the
+obvious guess is wrong: it sits in the **core root**, at
+`src-db/database/sourcedata/AD_MESSAGE.xml:7429-7439` — one tree *up* from the trigger, and nowhere
+under `modules_core/`. Grepping `modules_core` for the token finds nothing, which reads as "this
+message is undefined". It is defined; the search was in the wrong tree.
+
+A plain DELETE of a processed movement is therefore impossible **at the database level**. That is
+why Classic offers two different buttons — the toolbar trash can (plain DELETE, which hits exactly
+that error) and REMOVE TRANSACTION (Payment Removal, which unreconciles, unposts and runs
+`FIN_TransactionProcess("R")`, leaving `PROCESSED='N'`, *before* deleting). Rule 2 is that pair of
+buttons expressed as one button whose meaning depends on the size of the selection, which is what
+makes it parity with Classic rather than a new invention.
+
+One nuance worth keeping, because it is counter-intuitive: the trigger is **not** the safety net of
+the current happy path. `TransactionRemovalUtil.reactivateAndRemove` leaves `PROCESSED='N'` before
+the `remove()`, so the `DELETING` branch never fires on that route. It can only fire on the
+`paymentRemoval: false` route this ticket introduced — and letting it fire would produce a JDBC
+error rather than an `OBException`, which escapes `runMutation`'s business branch and comes out as
+an opaque **500**; a 500 does not pass `isBusinessRejection`, so the reason would be lost even for a
+single-record selection. Hence the handler pre-checks `isProcessed` and returns the 409 itself.
+Full detail in the `action=delete` section further down.
+
+## What changed, per surface
+
+| Surface | Before | After |
+|---|---|---|
+| **Cuentas** (the list — generic `ListView` + `AccountsHeaderTable` slot) | trash disabled whenever the selection held a row with `deletable === false` (ETP-4871, via `isRowDeletable`); the slot's own toolbar unmounted while a selection was active | trash always enabled — an undeletable account comes back as a 409 per-row failure; the toolbar stays mounted |
+| **Movimientos** | trash always enabled (ETP-5085), with the shared reason appended to any failure toast; the kebab's Eliminar hidden for a payment-linked movement and for a funds-transfer leg | trash always enabled; 1 row = Payment Removal, N rows = classic delete; reason only for 1 row; the kebab always shows Eliminar — toasting the reason on a blocked row, confirming first on every other |
+| **Extractos importados** | trash disabled for a processed statement or on a bank-connected account (ETP-4921 + PSD2, via `resolveBulkDeleteBlock` → `disabledReason`) | trash always enabled — the backend answers 400 (`requireDraft`) or 409 (bank-connected); the per-row hover trash icon is still hidden for a processed statement |
+
+## Two backend guards came with it
+
+Both close holes that "always-enabled trash" would otherwise widen, and both are data-integrity
+fixes rather than UX:
+
+- **A movement carrying a `FIN_Payment` is now rejected with 409**
+  (`FinancialAccountTransactionsHandler.handleDelete`). It was previously deletable over REST, MCP
+  and the bulk path with **no validation at all**, orphaning the payment.
+- **A statement belonging to a PSD2 bank-connected account is now rejected with 409**
+  (`BankStatementsHandler.handleDelete`). Previously enforced in the frontend only.
+
+## Accepted consequence
+
+Bulk-deleting **processed** movements used to work — `useBatchDeleteDialog` ran one Payment Removal
+per selected row. It now fails for the processed rows, by design. This is a user-visible functional
+change, not only a UX change, and it is the price of parity with Classic's toolbar trash button. A
+user who needs a processed movement gone selects it on its own, or uses the row kebab.
+
+## How the rule is enforced mechanically
+
+`isRowDeletable`'s own regression test (`ListView.isRowDeletable.vitest.jsx` — whose header called
+its first case "the single highest-value case", the guard against another window regressing) was not
+simply deleted with the prop. It was replaced by a sentinel in `ListView.bulkDelete.vitest.jsx` that
+asserts the new rule **in the positive**: with rows carrying `deletable: false` selected, the
+bulk-delete button stays enabled and keeps its plain `delete` title. The sentinel changed sign
+rather than disappearing, so reintroducing a pre-blocking prop breaks a test instead of passing in
+silence. The same reasoning — and the retirement of `isRowDeletable` and `disabledReason` — is
+recorded generically in `docs/ui-customization.md` §9c.
+
+---
+
 # Financial Account — Account Management (ETP-4096)
 
 > This section covers the **create / edit / archive** flows introduced in ETP-4096. The detail view (movements, reconciliation, statements) is documented below.
@@ -689,7 +825,7 @@ All keys added to both `en_US.json` and `es_ES.json`.
 | `financeAccountsArchive*` / `financeAccountsUnarchive*` | Confirmation dialog copy, button labels, success/error toasts including the 409 open-reconciliation message |
 | `financeAccountsDelete*` (ETP-4871) | Delete dialog copy (`financeAccountsDeleteConfirmTitle`/`...Message`/`...Confirm`), success/error toasts. The backend's 409 message is shown verbatim (no local conflict key) |
 | `financeAccountsMenu*` | Row kebab actions (`financeAccountsMenuEdit`, `financeAccountsMenuArchive`, `financeAccountsMenuUnarchive`, `financeAccountsMenuDelete`) |
-| `bulkDeleteBlockedTooltip` (generic, ETP-4871, not `financeAccounts*`-scoped) | ListView's disabled-bulk-delete tooltip when the selection includes an undeletable row — entity-agnostic, shared by every window that passes `isRowDeletable` |
+| ~~`bulkDeleteBlockedTooltip`~~ (generic, ETP-4871) | **Retired in ETP-5111**, together with `ListView`'s `isRowDeletable` prop. It was the tooltip on a bulk-delete button *disabled* because the selection included an undeletable row; that button is never disabled by row eligibility any more, so there is nothing left for it to explain. Removed from `en_US.json` / `es_ES.json` and from `generated/core.*`. See "Unified delete rule" at the top of this file |
 | `financeAccountTransfer*` | Funds transfer modal (ETP-4272): action/title, source/destination, amount, currency-from/to, conversion rate, bank fee, description, confirm/cancel, success + validation errors |
 | `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, section titles (`...SectionPaymentIn`/`...SectionPaymentOut`, plus the reused `financeAccountsEditTabGeneral` for Banco's General sub-section), the 9 field labels (`...BankRevaluationGain`/`...Loss`, `...BankFee`, `...InTransitIn`, `...Deposit`, `...ClearedIn`, `...InTransitOut`, `...Withdrawal`, `...ClearedOut`, ETP-4872), empty-ledger message. The retired `fINAssetAcct`/`fINTransitoryAcct` keys (`...BankAsset`, `...Transitory`, `...BankAssetRequired[Summary]`) are left in both locale files, unused, since nothing renders them anymore — pending confirmation the "no field required" behavior (ETP-4872) is final before deleting them |
 | `financeAccountsNewFieldCountry` / `financeAccountsBankConnectionFieldCountry` (ETP-4896) | Country field label — New Account form and Edit modal respectively (kept separate from `financeAccountsNewBankCountry`, the unrelated BankPicker flag-dropdown `aria-label`) |
@@ -776,7 +912,43 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
-- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating. **Eliminar carries one further exclusion (ETP-5085): it is hidden for a funds-transfer leg** — `isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF'`. The two legs of a transfer reference each other through RESTRICT self-FKs, so the removal could only ever fail, and it failed as an opaque HTTP 500; the backend now rejects it with a 409 and the action is hidden rather than disabled, like every other inapplicable item in this menu. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
+- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (offered on *every* row since ETP-5111, and always confirming first — see below; a Draft is then removed directly, a Processed one reactivated+removed via Payment Removal). Payment-linked movements hide **Editar / Procesar / Reactivar** (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
+
+  **Eliminar is the exception since ETP-5111: it is rendered unconditionally** — for a payment-linked movement and for a funds-transfer leg alike, both of which used to hide it (the ETP-5085 `canDelete = isGlTransaction && !isTransferLeg` predicate and its early-return are gone, and so is the "nothing to offer" early return that used to hide the whole kebab on a payment-linked draft — precisely the row whose refusal now needs explaining). Because Eliminar is the only unconditional item, its leading `DropdownMenuSeparator` is gated on `hasActionsAboveDelete`, or it renders as a stray divider on exactly that row.
+
+  Whether the attempt may even be made moved out of the component into the pure module `movementDeleteEligibility.js` — `resolveMovementDeleteBlock(movement)` returns `null` when a delete may be attempted, or `{ key }` naming the reason when it may not — in the same "decide outside React, test without a renderer" style as the sibling `statementStatus.js` and `movementStatusConfig.js`. **Every branch returns one of the `backendError.*` keys `BACKEND_ERROR_MAP` maps the server's own 409 literals to, and none of them interpolates anything**, so the kebab and the bulk/REST/MCP paths are byte-identical *by construction* rather than by coincidence — that is the whole reason the function returns a key instead of a formatted string. Its precedence mirrors the backend's guards: a payment-linked movement (`movement.paymentId`) → `backendError.receiptMovementNotDeletable` when `movement.paymentIsReceipt === 'Y'` (a cobro) else `backendError.paymentMovementNotDeletable` (a pago) — the same test `MovementsTable.openPayment` uses to route to `payment-in` vs `payment-out`; then a funds-transfer leg (`movement.transferTxnId && movement.trxType !== 'BF'`) → `backendError.transferMovementNotDeletable`; otherwise `null`. A **processed or posted** movement is deliberately NOT blocked here: deleting it one at a time runs Payment Removal server-side, which reactivates it first. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
+
+  **The pago/cobro split (ETP-5111) and the two null conventions that have to agree.** The message names which side the movement belongs to, because "go delete it from the payment" is useless advice if the record is a receipt. The frontend picks off the grid's `paymentIsReceipt`, the backend off `FIN_Payment.isReceipt()` — and `isReceipt()` is a **boxed** `Boolean` that is `null` on a payment whose flag was never set. Both sides therefore treat absent/unset as **pago**: `Boolean.TRUE.equals(trx.getFinPayment().isReceipt())` server-side, `paymentIsReceipt === 'Y'` client-side. That agreement is deliberate and is the one place these two paths could have diverged into two different sentences for the same row.
+
+  **The document number is deliberately NOT named.** An earlier iteration interpolated the payment's `documentNo` into the sentence and carried a second `…NoRef` variant for when the grid's `COALESCE(fp.documentno, '')` came back empty. Both keys (`financeAccountTxRowDeletePaymentLinked` / `…NoRef`) are **deleted from all three locales**: the number changed nothing the user could act on differently, while costing a longer sentence, a second variant, an interpolation and — since only the client knows the number — a permanent guarantee that the kebab and the 409 could never read the same. Dropping it is what makes "identical by construction" true.
+
+  **Clicking Eliminar always confirms first — with no exception, blocked or not (ETP-5111).** `handleDeleteClick` does nothing but `setConfirm('delete')`. The eligibility check moved into `runConfirmed`: the user confirms, and only then learns the delete cannot proceed (`toast.error(ui(deleteBlock.key))`, with `deleteMovement` deliberately **not** called, so there is still no request and no 409 round-trip). This took three passes to settle, and each intermediate state was the same bug in a new place: first the kebab deleted a draft on a single click while the bulk trash confirmed every selection; then the kebab skipped the dialog for a *blocked* row while the bulk trash still showed one for that same record. Both were user-reported, and both were "the same act on the same row is protected differently depending on which control you reach for" — the very complaint this ticket exists to remove.
+
+  **Which dialog you get depends on what is actually at stake** (`showCartel`):
+
+  ```js
+  const showCartel = confirm === 'reactivate' || (confirm === 'delete' && !deleteBlock && needsConfirm);
+  ```
+
+  | Row / action | Dialog |
+  |---|---|
+  | **Reactivar**, any row | the cartel (`MovementLifecycleConfirmModal`) |
+  | **Eliminar**, blocked — *including blocked **and** posted* | the generic `DeleteConfirmDialog` |
+  | **Eliminar**, plain draft | the generic `DeleteConfirmDialog` |
+  | **Eliminar**, posted and/or reconciled | the cartel, unchanged |
+
+  **The principle is not visual uniformity — it is that the cartel earns its place only when it has real consequences to enumerate.** The user compared the two dialogs side by side and asked for the common one; then, shown the posted-state cartel with its *"Se eliminará el asiento generado"* bullet and its yellow warning, kept that one — *"porque acá sí hay que advertir que se va a eliminar"*. So the most destructive thing this menu can do keeps its two-step warning, and everything else shows the plain "¿Estás seguro de que deseas eliminar 1 registro(s)?" that the bulk trash shows. **The blocked-and-posted row is what makes this more than cosmetics:** it is posted, so the old routing would have given it the cartel promising to reverse an accounting entry — for a delete that never happens at all.
+
+  `needsConfirm` (`isPosted || isReconciled`) survives, but its two jobs are now different: it still gates **whether** Reactivar confirms, and for Eliminar it only picks **which** dialog. Do not read it as the shared delete/reactivate gate it once was.
+
+  **Making the dialog honest about a draft needed a fourth state, and a change to the shared modal.** `MovementLifecycleConfirmModal`'s `resolveStateKey(reconciled, posted)` used to have three branches — `both`, `reconciled`, and a final `return 'posted'` that in practice caught *everything else*. That was sound by contract rather than by luck: the dialog could only open when `isPosted || isReconciled`, so "neither" was genuinely unreachable, and the function's JSDoc said exactly that. Always-confirm invalidated the contract from three files away, and the fallthrough started rendering **posted** copy for a plain draft: *"Al eliminarlo se deshará el asiento contable asociado."* and *"Esta acción deshará la contabilización del movimiento."* — both false for a row with no accounting entry — over an empty effects list, under an *"Eliminar de todos modos"* button overriding a warning that was never shown.
+
+  The wrapper resolves a real fourth state: `resolveStateKey` gained `if (!posted) return 'neither';` **before** the `'posted'` return, `SUB_KEY_BY_ACTION.delete.neither` is `financeAccountTxConfirmDeleteSubNeither` (it says only that the delete is permanent, the one true thing left to say), `WARNING_KEY_BY_STATE.neither` is **`null`**, and `resolveConfirmLabelKey` swaps the button to a plain `Eliminar` (`financeAccountTxConfirmDeleteBtnPlain`) for `delete` + `'neither'` only — the three warning-bearing states keep *"Eliminar de todos modos"*, which only means anything as an override of the yellow box. **`reactivate` deliberately has no `neither` subtitle:** Reactivar is offered only on a Processed movement and still carries its own `needsConfirm` gate, so the state cannot occur; if that gate is ever removed the subtitle renders **empty**, chosen as the safe direction to fail over repeating the posted-state lie.
+
+  > **The `'neither'` tier is now deliberate dead code — do not delete it as an oversight.** The routing above superseded it: an effect-less delete never reaches this cartel any more, it goes to `DeleteConfirmDialog`. The branch is kept anyway, because it is not really about the draft case — it is about `resolveStateKey`'s **final `return 'posted'`**, which is a catch-all wearing a specific state's name. Remove `if (!posted) return 'neither';` and any future caller arriving with neither flag set is silently reported as posted, and the dialog promises to reverse an accounting entry that does not exist. A wrong answer is worse than an empty one, so the tier stays as the safe landing, with its two locale keys, and the source says so at both the branch and the component's JSDoc. Two things follow: this is the *second* protection against the same fallthrough (the routing is the first), and a coverage report will show this branch unreached — that is expected, not a gap to close.
+
+  That `null` warning is why this touched **shared** code. `warning` reaches `windows/custom/shared/LifecycleConfirmModal.jsx` as a **pre-resolved string** from each domain wrapper, and the shared component rendered the yellow box unconditionally — so "no warning" was not expressible. Three things there are now conditional: the warning box, the items list, and **the padded body wrapper itself** (`items.length > 0 || warning`), because with both halves hidden it left ~24px of dead space between subtitle and buttons — the same empty-container bug one level up. Each half is guarded separately, so a caller with only one of the two still looks right. No existing dialog loses or gains content: the other consumers all pass a real `warning` string — `ReconciliationSplitPanel.jsx:1043` (in `components/contract-ui/`), `BankConnectionDeleteConfirmModal.jsx:41`, and `PaymentLifecycleConfirmModal.jsx:142` (itself reached from `PaymentHeaderTableBase`). There is exactly one **cosmetic** delta, and it is an improvement: the items `<div>` carried `marginBottom: 16`, so a caller producing an *empty* items list used to pay 16px of dead space above its warning box — `PaymentLifecycleConfirmModal` on a **draft** payment is that case (`reconciled`/`hasTransaction`/`posted` all false → `items = []`, with a truthy generic `paymentConfirmWarning`), so its warning box now sits 16px higher. Because the file is shared, this lands in the PR's `platform-change` domain — see `docs/plans/ETP-5111-cross-domain.md`. The component's own contract is documented in `docs/ui-customization.md` §9f.
+
 - **Status column** shows three states derived from the transaction status code (`movementStatusConfig.js`): **Borrador** (grey — `RPAP`/`RPAE`, not yet processed), **Sin conciliar** (processed, not cleared), **Conciliado** (`RPPC`, cleared against a bank statement).
 - Back arrow in the toolbar runs `navigate(-1)`.
 - The action bar's primary button is **`Nuevo movimiento`** (opens the accounting-account modal), with **`Transferir fondos`** (ETP-4272) inside its ▾ dropdown. The **accounts grid** row kebab (`AccountRowMenu.jsx`) also offers **`Nuevo movimiento`**, which deep-links to that account's Movements tab with the modal auto-opened (`?tab=movements&newMovement=true` → `index.jsx` sets `autoOpenNewMovement` on `MovementsTab`).
@@ -857,7 +1029,7 @@ constructor, so it is correct for either wire shape. The `AutoMatchSuggestionMod
 it; these three were the stragglers. Backend counterpart and the full write-up:
 `com.etendoerp.go/docs/neo-headless.md` §4.3.1.
 
-**A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
+**A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable, and `?action=delete` answers 409 with a translated message. **What changed in ETP-5111 is only how the UI says so:** the movements kebab used to *hide* **Eliminar** on a transfer leg (`canDelete = isGlTransaction && !isTransferLeg`); both that predicate and its early-return are gone, the item now renders unconditionally, and clicking it on a leg opens the generic delete confirmation like any other row — the toast carrying that same sentence fires once the user confirms. `movementDeleteEligibility.js` pre-checks it client-side against `backendError.transferMovementNotDeletable`, the very key the 409 maps to, so both paths read identically and no request is ever sent. The refusal itself is unchanged; only the hiding is. To undo a transfer, register the compensating movement — there is no un-transfer action.
 
 **Layout note:** the modal's body wrapper (`<div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">`, right below the header) carries `min-w-0`. `DialogContent` renders as `display: grid`, and grid items default to `min-width: auto` — without this, an extremely long value anywhere deep inside (e.g. `transfer-receive-amount` computing a huge product) inflates this whole column past the dialog's own `max-w-[600px]`, and only the rightmost sliver gets clipped, cropping every row uniformly instead of just the offending field. Confirmed live via Playwright (`getBoundingClientRect()` before/after) — do not remove this class when touching this wrapper.
 
@@ -1655,36 +1827,115 @@ GET  /sws/neo/financial-account-transactions?...&export=csv&columns=...&ids=... 
 POST /sws/neo/financial-account-transactions?action=create                       → create one FIN_Finacc_Transaction
 POST /sws/neo/financial-account-transactions?action=create-payment               → register a payment (Classic "Add Payment")
 POST /sws/neo/financial-account-transactions?action=transfer                     → funds transfer between accounts (ETP-4272)
-POST /sws/neo/financial-account-transactions?action=delete                       → delete one movement (409 on a transfer leg)
+POST /sws/neo/financial-account-transactions?action=delete                       → delete one movement (409 on a transfer leg, on a payment-linked movement, or on a processed movement when paymentRemoval:false)
 ```
 
 **`action=transfer`** (ETP-4272) — body `{ sourceAccountId, destinationAccountId, amount, glItemId?, transferDate?, conversionRate?, bankFee?, bankFeeFrom?, bankFeeTo?, description? }`. Validates (source ≠ destination, amount > 0, destination in the source's org tree, amount ≤ source `currentBalance`) and **delegates to Etendo Classic `FundsTransferActionHandler.createTransfer(...)`** (`org.openbravo.advpaymentmngt`) — it never reimplements the transfer. That creates the source withdrawal (`BPW`) + destination deposit (`BPD`), optional bank-fee (`BF`) transactions on the source and/or destination, conversion-rate docs (multi-currency), processes them (→ `PWNC` / `RDNC`, Pending until reconciled) and runs the module's post-hooks. The handler exposes `loadAccount` / `availableBalance` / `sameOrgScope` / `doTransfer` as package-private test seams.
 
-**`action=delete`** (ETP-5085) — body `{ id }`. A Draft is removed directly; a Processed movement is reactivated and
-removed through `TransactionRemovalUtil.reactivateAndRemove`. **A leg of a funds transfer is rejected up-front with a
-409** and the message `Movements generated by a funds transfer cannot be deleted.` — deleting a transfer is not allowed
-by design. The check is `FinancialAccountTransactionsSupport.isTransferCounterpart(trx)`, two `OBCriteria` probes asking
+**`action=delete`** (ETP-5085 · rewritten in ETP-5111) — body `{ id, paymentRemoval? }`.
+`paymentRemoval` defaults to **`true`**, so every pre-existing caller (the row kebab, the REST API,
+MCP) keeps the behaviour it had; only the bulk-delete path ever sends `false`, and only when more
+than one row is selected. `handleDelete` applies four guards, in this order:
+
+| # | Guard | Answer |
+|---|---|---|
+| 1 | the id resolves to no transaction | 404 · `MSG_TRANSACTION_NOT_FOUND` |
+| 2 | `trx.getFinPayment() != null` (`handleDelete:839`) — the movement belongs to a payment or a receipt (**new in ETP-5111**) | 409 · `Boolean.TRUE.equals(…isReceipt())` picks `MSG_RECEIPT_LINKED_NOT_DELETABLE` → `backendError.receiptMovementNotDeletable`, else `MSG_PAYMENT_LINKED_NOT_DELETABLE` → `backendError.paymentMovementNotDeletable` |
+| 3 | `FinancialAccountTransactionsSupport.isTransferCounterpart(trx)` — a funds-transfer leg | 409 · `MSG_TRANSFER_NOT_DELETABLE` → `backendError.transferMovementNotDeletable` |
+| 4 | the movement is processed **and** `paymentRemoval` is `false` (**new in ETP-5111**) | 409 · `MSG_PROCESSED_NOT_DELETABLE` → `backendError.movementProcessedNotDeletable` |
+
+Past the guards: a processed movement with `paymentRemoval: true` goes through
+`TransactionRemovalUtil.reactivateAndRemove` (Payment Removal — unreconcile, unpost,
+`FIN_TransactionProcess("R")`, then delete); anything else is a plain `OBDal.remove` + `flush`.
+
+**Guard 2 closes a real data-integrity hole, not a UX gap.** Before ETP-5111 the transfer guard was
+the only one, so a movement carrying a `FIN_PAYMENT_ID` could be deleted over REST, MCP or the bulk
+path **with no validation whatsoever**, leaving the `FIN_Payment` without its bank transaction. The
+correct direction is payment → transaction, which the modules themselves confirm:
+`PaymentRemovalUtil.reactivate` calls into `TransactionRemovalUtil`, while `TransactionRemovalUtil`
+holds **zero** references back to `PaymentRemovalUtil`. Removing a payment-linked movement is
+therefore a Payments-module operation, and this endpoint refuses it rather than half-performing it.
+Which of the two sentences it refuses with is chosen off `FIN_Payment.isReceipt()` — a **boxed**
+`Boolean` that is `null` when the flag was never set, so the guard unwraps it with
+`Boolean.TRUE.equals(...)` (the same convention `isProcessed()` gets two guards below) and an unset
+flag reads as *pago*. The frontend's `paymentIsReceipt === 'Y'` agrees by construction, which is the
+point: this is the one branch where the two paths could have produced different sentences for the
+same row.
+
+**Guard 4 mirrors a database trigger instead of letting it fire.**
+`APRM_FIN_FINACC_TRAN_CHECK_TRG` (`org.openbravo.advpaymentmngt`) ends with
+`IF(DELETING) THEN IF(:OLD.PROCESSED='Y') THEN RAISE_APPLICATION_ERROR(-20000, '@20501@')`, so a
+plain DELETE of a processed movement is impossible at the DB level (`@20501@` is
+`AD_MESSAGE.VALUE = 20501`, record id `800042`, *"Document posted/processed"* — see the note on
+locating that record in "Why the database forces rule 2" at the top of this file) — which is exactly why Classic
+ships two separate buttons (the toolbar trash can, and REMOVE TRANSACTION). Letting the trigger fire
+would surface as a **JDBC** error, not an `OBException`, so it would escape
+`FinancialAccountTransactionsSupport.runMutation`'s business branch (`OBException` → 400 carrying
+the message; everything else → **500 with fixed text**) — and a 500 does not pass
+`isBusinessRejection` in `lib/batchDelete.js`, which only accepts a 4xx, so the reason would be lost
+even for a single-record selection. That is the exact trap ETP-5085 fell into. Note that the trigger
+is **not** the safety net of the happy path: `reactivateAndRemove` leaves `PROCESSED='N'` before the
+`remove()`, so the `DELETING` branch never fires on that route. It can only fire on the new
+`paymentRemoval: false` route — which is precisely why the guard has to exist.
+
+**Guard 3 is unchanged from ETP-5085.** `isTransferCounterpart` runs two `OBCriteria` probes asking
 the FK's own question — *does any other transaction point at me?* — over
 `FIN_FinaccTransaction.PROPERTY_APRMFINACCTRANSORIGIN` (Classic, destination → source) and
-`PROPERTY_ETGOFINACCTRANSDEST` (the mirror half written by `FundsTransferDestinationHook`, source → destination). Both
-columns are **RESTRICT**, so before this guard the removal reached `OBDal.flush()` and died there with a
-`ConstraintViolationException` — which is not an `OBException`, so it escaped `runMutation`'s business-error branch and
-surfaced as an opaque **HTTP 500** (`Could not delete the movement. Please check logs for details.`) with the FK
-violation only visible in the Tomcat log.
+`PROPERTY_ETGOFINACCTRANSDEST` (the mirror half written by `FundsTransferDestinationHook`, source →
+destination). Both columns are **RESTRICT**, so before this guard the removal reached
+`OBDal.flush()` and died there with a `ConstraintViolationException` — the same 500 trap described
+above, with the FK violation visible only in the Tomcat log. Two deliberate properties of the
+predicate: it is shaped like the FK rather than reading the transaction's own outgoing links, so a
+destination-side **bank fee (`BF`) stays deletable** (it carries an origin, but nothing references
+it), and it also covers transfers created **before the mirror column existed**, where only the
+Classic half is set.
 
-Two deliberate properties of that predicate: it is shaped like the FK rather than reading the transaction's own outgoing
-links, so a destination-side **bank fee (`BF`) stays deletable** (it carries an origin, but nothing references it), and it
-also covers transfers created **before the mirror column existed**, where only the Classic half is set. The frontend
-hides the kebab's Eliminar for those rows, so this guard is the server-side enforcement for the bulk-delete path, the
-REST API and MCP.
+> **Careful — these Java literals are a de-facto wire contract.** `BACKEND_ERROR_MAP`
+> (`tools/app-shell/src/lib/backendErrors.js`) recognises them by exact text after `.trim()`, so
+> rewording one without updating the map silently returns the user to English. A new literal needs
+> its map entry **and** its `backendError.*` key in all three locale files, in the same change.
 
-**Bulk delete surfaces the reason too.** `MovementsTab.jsx` → `useBatchDeleteDialog` still does **not** pre-filter the
-selection — the same deliberate choice already made for payment-linked movements — so a selected transfer leg comes back
-as a per-row failure. What changed is that the 3-outcome toast no longer reports bare counters: because `postAction`
-rejects with the backend's message and a `status` of 409, `toastBatchDeleteOutcome` names the reason, and for a single
-selected row it shows that sentence alone instead of "No se pudo eliminar ninguno de los 1 registros seleccionados". The
-generic contract (only a 4xx counts, opaque status-code messages are discarded, several distinct reasons fall back to the
-counter) is documented in `docs/ui-customization.md` §9c.
+**So here are the exact bytes.** This table is the mitigation, not a convenience: the wire contract
+has silently dropped users back to English more than once in this repo's history, and it fails
+*silently* — the untranslated English sentence is a perfectly valid-looking toast. Rewording any
+cell below without editing `BACKEND_ERROR_MAP` in the same commit is a regression.
+
+| Constant (Java) | Exact literal — the bytes that are matched | → i18n key |
+|---|---|---|
+| `MSG_TRANSACTION_NOT_FOUND` | `Transaction not found` | *(404, not a business rejection — deliberately no map entry)* |
+| `MSG_TRANSFER_NOT_DELETABLE` (ETP-5085) | `Movements generated by a funds transfer cannot be deleted.` | `backendError.transferMovementNotDeletable` |
+| `MSG_PAYMENT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a payment. Delete it from the payment instead.` | `backendError.paymentMovementNotDeletable` |
+| `MSG_RECEIPT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a receipt. Delete it from the receipt instead.` | `backendError.receiptMovementNotDeletable` |
+| `MSG_PROCESSED_NOT_DELETABLE` (ETP-5111) | `The movement is already processed or posted. Select it on its own to delete it.` | `backendError.movementProcessedNotDeletable` |
+| `MSG_STATEMENT_BANK_CONNECTED` (ETP-5111 — declared in `BankStatementsHandler`, not this one) | `Statements from a bank-connected account cannot be deleted.` | `backendError.statementBankConnectedNotDeletable` |
+
+All six are ASCII-only, single-line, and carry no leading or trailing whitespace. The **trailing
+period is part of the matched text** for the five that have one; `Transaction not found` has none.
+The payment/receipt pair differs in exactly two words each — `payment`/`receipt` — so a
+copy-paste-and-edit of one row is the likeliest way to break the other.
+The map entries live in `tools/app-shell/src/lib/backendErrors.js` (each with a comment tying it to
+the method that raises it), and every `backendError.*` key must exist in `en_US.json`, `es_ES.json`
+**and** `es_AR.json`.
+
+**Bulk delete: one selected row means Payment Removal, two or more mean a plain delete
+(ETP-5111).** `MovementsTab.jsx` → `useBatchDeleteDialog` still does **not** pre-filter the
+selection, and the trash button is never disabled by row eligibility. What the selection size
+decides is the *request*: `requestDelete` captures `ids.length === 1` into a `paymentRemovalRef` at
+click time — a ref rather than a closure over `selectedIds`, because `useBatchDeleteDialog` holds
+`deleteOneFn` across the confirm dialog and would otherwise read a stale closure — and `deleteOneFn`
+sends it as `paymentRemoval`. So a single processed movement is removed through Payment Removal,
+while the very same movement inside a 3-row selection is refused by guard 4.
+
+**That is a user-visible functional regression, accepted deliberately for parity with Classic's
+toolbar trash button:** bulk-deleting processed movements used to work (one Payment Removal per
+row) and now fails for the processed rows. The reason is reported only for a one-row selection;
+from two rows up the toast is counters-only (`bulkDeletePartialFailure` / `bulkDeleteAllFailed`)
+and the failed rows stay checked for retry. Worth knowing when reading that: `MovementsTable`'s
+`handleSelectAll` selects *every* filtered movement with no eligibility guard, so "N rows" can be a
+selection made with one click. The generic toast contract — only a 4xx counts as a reason, a message
+that is just a status code is discarded, several distinct reasons collapse — is documented in
+`docs/ui-customization.md` §9c. The window-wide statement of the rule is "Unified delete rule" at
+the top of this file.
 
 Implemented by `com.etendoerp.go.schemaforge.FinancialAccountTransactionsHandler` (CDI bean registered via `@Named("financial-account-transactions")`). The handler:
 
@@ -1748,12 +1999,35 @@ POST /sws/neo/bank-statements?action=create                          → manual 
                        glItemId, in, out }] }
 POST /sws/neo/bank-statements?action=process   body: { id }            → process a draft
 POST /sws/neo/bank-statements?action=update    body: { id, ...create }  → edit a draft (replaces all lines)
-POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines)
+POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines); 409 on a bank-connected account
 ```
 
 The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**` — Reference No is optional in BOTH flows). A non-blank line whose `in` and `out` are both 0 is rejected with a 400 ("Every line must have an amount in either Deposit or Withdrawal") rather than silently dropped: the manual flow has a user who can fix it. The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
 
 **Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **rebuilds only the unmatched lines** (see the reactivation section below), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
+
+**ETP-5111 adds one more guard to `delete`, applied after `requireDraft`:** a statement whose
+account is **PSD2 bank-connected** (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`, the
+Salt Edge status `"CO"`) is rejected with a **409**. The literal is
+`MSG_STATEMENT_BANK_CONNECTED` = `Statements from a bank-connected account cannot be deleted.`,
+mapped to `backendError.statementBankConnectedNotDeletable` — exact text, trailing period included;
+see the wire-contract table in the `action=delete` section above for why that matters. The statements of a connected account
+come from the bank, so they must not be hand-deleted — a rule this window already enforced by
+disabling its own affordances, and which now holds for REST, MCP and the bulk-delete path too.
+Before this, `BankStatementsHandler` had **zero** references to PSD2. The constant lives in a
+**third** module (`com.etendoerp.psd2.bank.integration`), reachable because
+`com.etendoerp.go` declares it as a **Gradle** dependency
+(`modules/com.etendoerp.go/build.gradle:72`, `implementation('com.etendoerp:psd2.bank.integration:[2.0.0,)')`).
+Note it is **not** an AD module dependency: `com.etendoerp.go`'s own
+`src-db/database/sourcedata/AD_MODULE_DEPENDENCY.xml` declares only Core and "OpenAPI
+Implementation", so there is no AD-level dependency record to add or maintain for this. Its other
+real call sites —
+`PaymentRegistrationService`, `PisPaymentService`, `FinancialAccountBankConnectionHandler` — must
+stay in lockstep with it. (`FinancialAccountsPageHandler` is *not* one of them: it compares
+`"CO"` inline against a `ResultSet` column, a hardcoded duplicate of the constant and a small debt
+of its own.) Accepted consequence, already owned by the PSD2 ticket: an old **manual** statement
+sitting on an account that is connected today is no longer deletable either — it is one that could
+no longer be created there in the first place.
 
 #### Reactivating a partially reconciled statement (ETP-4921)
 
@@ -1987,28 +2261,43 @@ either. The known consequence, accepted knowingly: a legacy MANUAL statement sit
 now-connected account also becomes non-reactivable — it is one that could no longer be created
 there in the first place.
 
-Three entry points are closed, all from the same flag threaded
-`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`:
+Two entry points are closed, both fed by the same flag threaded
+`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`. A third — the
+bulk-delete trigger — was closed the same way until ETP-5111 moved that enforcement to the
+backend:
 
 | Entry point | Behaviour |
 |---|---|
 | `StatementRowKebab` Reactivar | disabled, tooltip `financeAccountStatementsRowBankSyncedTooltip` |
 | `RowActions` inline Edit + Delete | not rendered at all, even for a draft — same as they already do for a processed statement |
-| Bulk-delete trigger | disabled with the same reason, via `resolveBulkDeleteBlock` |
+| Bulk-delete trigger | **no longer gated in the frontend (ETP-5111)** — the trash button stays enabled and `BankStatementsHandler.handleDelete` answers 409 instead (see below) |
 
 Procesar is deliberately NOT gated: completing a draft is not editing its content.
 
-`resolveBulkDeleteBlock` (exported from `ImportedStatementsTab`, unit-tested directly) states the
-precedence between the two block reasons: the connected-account one wins over "the selection
-contains a processed statement", because it is unconditional. Reporting "processed statements
-cannot be modified" on a connected account would point the user at a state they could try to
-change, when nothing in this window unblocks it. That is also why the copy is a new key rather
-than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+`resolveBulkDeleteBlock` used to live here (exported from `ImportedStatementsTab` and unit-tested
+directly) and stated the precedence between the two block reasons: the connected-account one won
+over "the selection contains a processed statement", because it is unconditional. Reporting
+"processed statements cannot be modified" on a connected account would point the user at a state
+they could try to change, when nothing in this window unblocks it — which is also why the copy is
+its own key rather than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+
+**ETP-5111 removed the function together with the whole pre-blocking approach**, and moved the
+connected-account rule to where it belonged all along — the server.
+`BankStatementsHandler.handleDelete` now reads the account's PSD2 connection status itself and
+answers **409** (`MSG_STATEMENT_BANK_CONNECTED`, translated through
+`backendError.statementBankConnectedNotDeletable` — exact literal in the wire-contract table of the
+`action=delete` section above). Until then this was a **frontend-only** gate:
+the same delete was still reachable over REST, MCP and the bulk path with no server-side validation
+at all. The precedence question disappears with the function — a single-statement delete surfaces
+whichever reason the server actually returned — and the two tooltips that survive
+(`financeAccountStatementsRowBankSyncedTooltip` on Reactivar,
+`financeAccountStatementsRowProcessedTooltip` on Procesar and on the inline row actions) each
+explain one specific control that is still genuinely disabled.
 
 Follow-up worth having: if the PSD2 module ever marks the statements it creates, this gate should
 move to that per-statement flag — it would then also leave legacy manual statements editable.
 
-#### Bulk delete cannot attempt a processed statement, and failures explain why (ETP-4921)
+#### Bulk delete may attempt a processed statement, and the backend rejects it (ETP-4921, criterion inverted by ETP-5111)
 
 The per-row hover trash icon (`StatementsTable`'s `RowActions`) was already hidden for a processed
 statement — `isDraftStatement(s)` (now `statementStatus.js`, a plain `.js` module so both
@@ -2021,15 +2310,26 @@ delete the backend was guaranteed to reject — surfacing only the generic
 `toastBatchDeleteOutcome` count message ("None of the 1 selected could be deleted"), with no hint
 that the reason was the statement being processed.
 
-Fixed at the trigger, not the checkbox: `ImportedStatementsTab` computes
-`selectionHasNonDraft` (any selected id whose statement fails `isDraftStatement`) and passes it to
-`BulkDeleteSelectionBar` as `disabledReason` — a new, additive prop (`MovementsTab`'s own bulk-bar
-usage is unaffected, since it doesn't pass it). The trigger disables itself and its
-`title`/`aria-label` become the reason, reusing the exact same
-`financeAccountStatementsRowProcessedTooltip` copy `StatementRowKebab` already shows for its own
+That was fixed at the trigger, not the checkbox: `ImportedStatementsTab` computed
+`selectionHasNonDraft` (any selected id whose statement fails `isDraftStatement`) and passed it to
+`BulkDeleteSelectionBar` as `disabledReason` — a new, additive prop. The trigger disabled itself and
+its `title`/`aria-label` became the reason, reusing the exact same
+`financeAccountStatementsRowProcessedTooltip` copy `StatementRowKebab` already showed for its own
 gated Procesar item — "don't let them touch the trash can", not "let them try and fail". Selecting
-even one processed statement blocks the WHOLE batch (not just that item), matching the
-per-row hover behavior it mirrors.
+even one processed statement blocked the WHOLE batch, matching the per-row hover behaviour it
+mirrored.
+
+**ETP-5111 reverses exactly that half.** The unified rule for this window is "let them try, and
+explain the refusal", so the trash button is no longer disabled by what is selected:
+`resolveBulkDeleteBlock`, `selectionHasNonDraft`, `bulkDeleteDisabledReason` and the
+`disabledReason` prop on `BulkDeleteSelectionBar` itself are all removed — `MovementsTab` never
+passed it and neither did `ListModalWindow`, so once this tab stopped passing it the prop had no
+consumer left. A processed statement now goes out, `requireDraft` answers 400, and it surfaces as a
+per-row failure: with exactly one statement selected the reason is spelled out (which is what the
+`error.status` fix below makes possible), and from two statements up the toast reports counters
+only. What was **not** reversed is ETP-4921's other half — `RowActions`' per-row hover trash icon is
+still hidden for a processed statement, because a per-row affordance knows which row it is refusing
+and a shared button does not.
 
 The single-row delete confirm (`ImportedStatementsTab.runConfirm`, shared by the Process /
 Reactivate / Delete confirm dialog) also stopped discarding the backend's actual rejection reason:
@@ -2039,6 +2339,15 @@ same helper `DetailView.jsx` uses) instead of prefixing the raw response text wi
 per-variant generic toast. Two new `BACKEND_ERROR_MAP` entries in `backendErrors.js` translate
 `BankStatementsHandler`'s `requireDraft`/`requireProcessed` guard messages:
 `backendError.statementNotDraft` / `backendError.statementNotProcessed`.
+
+**ETP-5111 completed that plumbing: `useStatementActions.post()` also attaches
+`error.status = res.status`**, the way `useCreateMovement.postAction` in `src/hooks/` already did.
+Parsing the message was only half of it — `lib/batchDelete.js`'s `isBusinessRejection` accepts a
+rejection only when it carries a numeric 4xx `status`, so without it the parsed reason was
+discarded before it could be shown and even a **single**-statement delete fell back to the counter
+message. Note that `useStatementActions` lives in `src/hooks/`, not
+`windows/custom/financial-account/hooks/`: it is a **global** hook, so this is a platform change and
+every consumer now receives the status alongside the message.
 
 **Status derivation** — `EM_ETGO_STATUS` (Etendo Go-only extension column) is a real STORED value, not computed on read: the list reads it straight off the row and only falls back to a live `BankStatementsSupport.deriveStatementStatus(processed, lineCount, matchedCount)` call when the column is blank (legacy rows predating it). The formula itself: not processed → `DRAFT`; otherwise `PENDING` (no matched lines) / `PARTIAL` / `RECONCILED` (all matched). The list also returns `notes`, and `?action=lines` returns each line's `bpartnerId`/`glItemId` (+ joined `bpartnerFkName`/`glItemName`) and separate `in`/`out` so the edit modal can hydrate the FK pickers.
 
@@ -2836,16 +3145,17 @@ path** — no bespoke bulk-delete code in this window:
 | Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
 | Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
 
-**How the flow behaves.** Tick one or more row checkboxes → the slot's own
-`AccountsToolbar` unmounts (it reads `ListView`'s `selectedRows` prop; see the load-bearing
-note below) while `ListView`'s floating `SelectionToolbar` pill appears bottom-center of the
-viewport (ETP-4972 — a true `position: fixed` portal, not anchored to any scrolled element,
-so it does not occupy the slot's own layout the way the retired in-flow bar did) → the
-icon-only red trash button (no "(N)" count in the button itself anymore — the pill's own
-counter segment shows it) opens the shared confirm dialog → on confirm one DELETE per row
-goes out in parallel, then a single toast reports the outcome:
+**How the flow behaves.** Tick one or more row checkboxes → `ListView`'s floating
+`SelectionToolbar` pill appears bottom-center of the viewport (ETP-4972 — a true
+`position: fixed` portal, not anchored to any scrolled element, so it does not occupy the slot's
+own layout the way the retired in-flow bar did) while the slot's own `AccountsToolbar` **stays
+mounted** (ETP-5111 — it used to unmount so the selection bar read as its replacement, but once
+that bar became a floating pill the swap only took "Nueva cuenta", the filters and "Reglas de
+conciliación" away for no benefit) → the icon-only red trash button (no "(N)" count in the button
+itself anymore — the pill's own counter segment shows it) opens the shared confirm dialog → on
+confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
 
-- **all succeeded** → list refetches, selection clears, toolbar comes back.
+- **all succeeded** → list refetches, selection clears, the pill disappears.
 - **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
   rows stay checked, so the user can retry exactly those. `ListView` keeps them checked in
   DataTable's internal Set via `deselectTrigger` + `deselectRowIds`.
@@ -2873,15 +3183,23 @@ had been missed in the original ETP-4972 floating-pill migration; it is now the 
 viewport-fixed floating pill as everywhere else, icon-only delete button, no separate X — see
 `docs/ui-customization.md` §9e.)
 
-**`isRowDeletable` (ETP-4871, generic `ListView` prop) gates the button itself for a mixed
-selection.** `windows/custom/financial-account/index.jsx` passes
-`isRowDeletable={(row) => row.deletable !== false}` to `AccountPage` (forwarded straight through
-to `ListView` via its `{...props}` spread). `ListView` computes, on every selection change, how
-many of the *currently selected* rows fail that predicate; if any do, the icon-only delete button
-disables and its tooltip switches to `bulkDeleteBlockedTooltip` (generic/entity-agnostic) naming how many
-are blocked, instead of letting the batch go out and resolving as a confusing partial failure. The
-prop is optional and defaults to "every row is deletable" — every other `ListView` window is
-unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
+**`isRowDeletable` is gone (ETP-5111) — the trash button is never pre-disabled.** Until
+ETP-5111 the wrapper (`windows/custom/financial-account/index.jsx`) passed
+`isRowDeletable={(row) => row.deletable !== false}` straight through to `ListView`, which counted
+how many of the *currently selected* rows failed that predicate and, if any did, disabled the
+icon-only delete button and switched its tooltip to `bulkDeleteBlockedTooltip`. The prop, its
+JSDoc, `ListView`'s `blockedDeleteCount` computation, the disabled/`title` branch on the button and
+the `bulkDeleteBlockedTooltip` key are all removed — from this window **and** from the generic
+component, since `financial-account` was its only production consumer.
+
+The button now stays enabled for any selection. An account with dependent records is *attempted*,
+`FinancialAccountHandler`'s DELETE branch re-validates `deletable` and answers 409, and the row
+lands in the "failed" bucket of the partial-failure branch above — exactly the path that already
+existed as defense-in-depth for a row whose state changed between selection and click. That path is
+now the only path. The per-row "Eliminar cuenta" kebab item (`AccountRowMenu`) is untouched and
+still reads `row.deletable` directly: a per-row affordance is allowed to pre-check, a shared button
+is not. See "Unified delete rule" at the top of this file, and `docs/ui-customization.md` §9c for
+the generic contract that replaced the retired §9d.
 
 **Two things were load-bearing to make this work, and both are easy to re-break:**
 
@@ -2895,11 +3213,15 @@ unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
    reach the grid. The hover quick-actions overlay stays suppressed **separately** and
    declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
    the trailing `AccountRowActions` column — do not conflate the two.
-   The toolbar swap reads `ListView`'s `selectedRows` prop directly and **must not** mirror
-   it into slot-local state via `onSelectionChange`: `DataTable` empties its internal
-   selection `Set` silently from its `clearSelectionTrigger` / `deselectTrigger` effects
-   without calling `onSelectionChange`, so a mirror would still read "selected" after a
-   successful bulk delete or a cancel and the toolbar would never reappear.
+   `AccountsHeaderTable` still **destructures `selectedRows` out of the spread** even though
+   ETP-5111 removed the toolbar swap that consumed it: `selectedRows` is also the name of
+   `DataTable`'s own internal selection state, so forwarding a prop under that name reads as a
+   controlled-selection prop `DataTable` does not have. Keep the destructuring — that is the
+   whole of what it is load-bearing for now. (The generic rule it used to illustrate — a slot
+   that derives from `selectedRows` must never mirror it into local state via
+   `onSelectionChange`, because `DataTable` empties its internal selection `Set` silently from
+   its `clearSelectionTrigger` / `deselectTrigger` effects without calling it — still holds for
+   any slot that does swap; see `docs/ui-customization.md` §9c.)
 2. **`listViewOptions.hideListBar` gates only the IDLE list bar, not the selection bar** —
    see `docs/ui-customization.md` §9c. This window sets `hideListBar: true` (its slot draws
    the whole toolbar), and while that flag also suppressed the selection bar there was no
@@ -2916,9 +3238,12 @@ action in the bar besides its own built-in close button.
 `Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
 `selection-count`, `bulk-delete-selected`, and the dialog's
 `DialogContent__bulk-delete` / `bulk-delete-confirm` / `Button__bulk-delete-cancel`.
-The toolbar's `cuentas-toolbar` genuinely **leaves the DOM** while a selection is active
-(it is unmounted, not hidden), so a `toHaveCount(0)` assertion is correct. Type filter and
-search text are held in `AccountsHeaderTable` state, so they survive that unmount.
+Since ETP-5111 the toolbar's `cuentas-toolbar` **stays in the DOM while a selection is
+active** — a `toHaveCount(0)` assertion on it during a selection is now wrong, and the
+suite that asserted the swap was inverted rather than deleted. (It used to be genuinely
+unmounted, which is why Type filter and search text being held in `AccountsHeaderTable`
+state mattered: they had to survive that unmount. They still live there; nothing unmounts
+them now.)
 
 ## Known deviations from the Figma frame
 

@@ -133,15 +133,25 @@ export const MovementsTab = forwardRef(function MovementsTab(
   // ETP-4656 (Gap 2) — bulk "Delete selected" for the movements grid, wired onto
   // the checkbox selection that already existed here. Reuses the same
   // POST .../financial-account-transactions?action=delete call the per-row kebab's
-  // "Eliminar" already makes (useDeleteMovement — a Draft is removed directly, a
-  // Processed one is reactivated + removed server-side); not every movement is
-  // deletable (payment-linked ones aren't, see MovementRowKebab's canDelete), so
-  // attempting to delete one of those surfaces as a normal per-row failure in the
-  // 3-outcome toast rather than being pre-filtered out of the selection.
+  // "Eliminar" already makes (useDeleteMovement).
+  //
+  // ETP-5111 — the delete SEMANTICS now depend on the size of the selection, for parity with
+  // Classic's own toolbar: exactly ONE selected row means Payment Removal (the backend
+  // reactivates and then removes, so a processed/posted movement can be deleted), while TWO
+  // or more mean a plain delete per row, which the DB trigger
+  // (APRM_FIN_FINACC_TRAN_CHECK_TRG) refuses for any row that is still processed. The flag is
+  // captured in a ref at click time because `deleteOneFn` is held by `useBatchDeleteDialog`
+  // across the confirm dialog and would otherwise read a stale closure over `selectedIds`.
+  //
+  // The trash button itself is NEVER pre-disabled by row eligibility (the unified delete rule):
+  // a row the backend refuses — payment-linked, funds-transfer leg, or processed inside a
+  // multi-row batch — surfaces as an ordinary per-row failure in the 3-outcome toast, and the
+  // reason is spelled out only when a single row was selected.
   const { deleteMovement } = useDeleteMovement();
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const paymentRemovalRef = useRef(true);
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
-    deleteOneFn: (id) => deleteMovement({ id }),
+    deleteOneFn: (id) => deleteMovement({ id, paymentRemoval: paymentRemovalRef.current }),
     onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) onReload?.();
       if (failed.length === 0) {
@@ -151,6 +161,12 @@ export const MovementsTab = forwardRef(function MovementsTab(
       }
     },
   });
+  const requestDelete = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    // 1 → Payment Removal · N → plain delete.
+    paymentRemovalRef.current = ids.length === 1;
+    requestBatchDelete(ids);
+  }, [selectedIds, requestBatchDelete]);
 
   const filteredMovements = useMemo(
     () => applyAdvancedFilter(applyFilters(movements, filters), advancedFilter),
@@ -215,7 +231,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         count={selectedIds.size}
         deleting={bulkDeleting}
         onCancel={clearSelection}
-        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+        onDelete={requestDelete}
         data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
       <MovementsToolbar
         filters={filters}
