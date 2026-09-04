@@ -1,0 +1,144 @@
+{
+  "id": "create-product",
+  "schemaVersion": 1,
+  "revision": 1,
+  "titleKey": "walkthroughProductTitle",
+  "descriptionKey": "walkthroughProductDescription",
+  "icon": "Package",
+  "navPathSpeedMs": 3000,
+  "steps": [
+    {
+      "id": "open-new",
+      "route": "/product",
+      "navTimeoutMs": 15000,
+      "navPath": [
+        {
+          "targetTestId": "sidebar-expand",
+          "optional": true,
+          "timeoutMs": 800
+        },
+        {
+          "targetTestId": "menu-group-inventory",
+          "skipIf": {
+            "targetTestId": "menu-item-product"
+          }
+        },
+        {
+          "targetTestId": "menu-item-product"
+        }
+      ],
+      "targetTestId": "action-new",
+      "titleKey": "walkthroughProductStepNewTitle",
+      "bodyKey": "walkthroughProductStepNewBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "search-key",
+      "targetTestId": "field-searchKey",
+      "titleKey": "walkthroughProductStepSearchKeyTitle",
+      "bodyKey": "walkthroughProductStepSearchKeyBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "name",
+      "targetTestId": "field-name",
+      "titleKey": "walkthroughProductStepNameTitle",
+      "bodyKey": "walkthroughProductStepNameBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "product-type",
+      "target": "[data-testid=\"field-productType\"], [data-testid=\"field-productType-chip\"]",
+      "titleKey": "walkthroughProductStepTypeTitle",
+      "bodyKey": "walkthroughProductStepTypeBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "uom",
+      "target": "[data-testid=\"field-uOM\"], [data-testid=\"field-uOM-chip\"]",
+      "titleKey": "walkthroughProductStepUomTitle",
+      "bodyKey": "walkthroughProductStepUomBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual",
+        "requireValue": true
+      }
+    },
+    {
+      "id": "category",
+      "target": "[data-testid=\"field-productCategory\"], [data-testid=\"field-productCategory-chip\"]",
+      "titleKey": "walkthroughProductStepCategoryTitle",
+      "bodyKey": "walkthroughProductStepCategoryBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual",
+        "requireValue": true
+      }
+    },
+    {
+      "id": "tax-category",
+      "targetTestId": "field-taxCategory",
+      "titleKey": "walkthroughProductStepTaxCategoryTitle",
+      "bodyKey": "walkthroughProductStepTaxCategoryBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual",
+        "requireValue": true
+      },
+      "optional": true,
+      "targetTimeoutMs": 1500
+    },
+    {
+      "id": "save",
+      "targetTestId": "action-save",
+      "titleKey": "walkthroughProductStepSaveTitle",
+      "bodyKey": "walkthroughProductStepSaveBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "price-tab",
+      "targetTestId": "tab-custom:pricing",
+      "titleKey": "walkthroughProductStepPriceTabTitle",
+      "bodyKey": "walkthroughProductStepPriceTabBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "price-add",
+      "targetTestId": "price-add-tariff",
+      "titleKey": "walkthroughProductStepPriceAddTitle",
+      "bodyKey": "walkthroughProductStepPriceAddBody",
+      "placement": "left",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "price-set",
+      "targetTestId": "price-add-tariff-row",
+      "titleKey": "walkthroughProductStepPriceSetTitle",
+      "bodyKey": "walkthroughProductStepPriceSetBody",
+      "placement": "top",
+      "advance": {
+        "on": "manual"
+      }
+    }
+  ]
+}

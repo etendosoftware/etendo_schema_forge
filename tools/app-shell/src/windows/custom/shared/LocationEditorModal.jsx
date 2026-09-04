@@ -34,6 +34,27 @@ function sameForm(a, b) {
     return true;
 }
 
+/**
+ * Marks a picker button as "nothing chosen yet".
+ *
+ * A picker BUTTON always has text -- the placeholder -- so anything reading its
+ * label as a value would consider an untouched field already answered. The
+ * walkthrough engine's `requireValue` gate is one such reader.
+ */
+function placeholderAttr(value) {
+    return value ? {} : { 'data-placeholder': '' };
+}
+
+/** Picker label colour: a real value reads as text, a placeholder as disabled. */
+function pickerTextColor(value) {
+    return value ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))';
+}
+
+/** A picker that is inert until its prerequisite is chosen (region needs a country). */
+function pickerButtonStyle(base, enabled) {
+    return { ...base, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' };
+}
+
 function normalizeText(value) {
     return String(value ?? '')
         .normalize('NFD')
@@ -86,6 +107,8 @@ function CountryPicker({
                        }) {
     return (
         <div
+            role="dialog"
+            aria-modal="true"
             className="fixed inset-0 z-[160] flex items-center justify-center bg-foreground/30 p-4"
             onMouseDown={onClose}
         >
@@ -823,7 +846,12 @@ export default function LocationEditorModal({
     };
 
     return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        // `role="dialog"` is not decoration here: the walkthrough engine detects an
+        // open app dialog by role and suspends its scrim / parks its card so the
+        // dialog stays usable (useForeignDialog). Without it a tour that opens this
+        // modal dims it from above and the user cannot type. It is also simply
+        // correct a11y for a focus-trapping overlay.
+        <div role="dialog" aria-modal="true" data-testid="location-modal" style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
 
                 {/* Header */}
@@ -862,24 +890,24 @@ export default function LocationEditorModal({
                             {/* Línea 1 */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('addressLine1')}</div>
-                                <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} style={INPUT} />
+                                <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} data-testid="location-field-address" style={INPUT} />
                             </div>
 
                             {/* Línea 2 */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('addressLine2')}</div>
-                                <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} style={INPUT} />
+                                <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} data-testid="location-field-address2" style={INPUT} />
                             </div>
 
                             {/* CP + Ciudad en grid */}
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('postalCodeLabel')}</div>
-                                    <input type="text" value={form.postalCode} onChange={e => setField('postalCode', e.target.value)} style={INPUT} />
+                                    <input type="text" value={form.postalCode} onChange={e => setField('postalCode', e.target.value)} data-testid="location-field-postalCode" style={INPUT} />
                                 </div>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('cityLabel')}</div>
-                                    <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} style={INPUT} />
+                                    <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} data-testid="location-field-city" style={INPUT} />
                                 </div>
                             </div>
 
@@ -891,9 +919,11 @@ export default function LocationEditorModal({
                                     onClick={() => setCountryPickerOpen(true)}
                                     aria-haspopup="dialog"
                                     aria-expanded={countryPickerOpen}
+                                    data-testid="location-field-country"
+                                    {...placeholderAttr(form.country)}
                                     style={PICKER_BTN}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.country ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.country) }}>
                                         {selectedCountryLabel}
                                     </span>
                                     <ChevronDown
@@ -910,11 +940,13 @@ export default function LocationEditorModal({
                                     type="button"
                                     onClick={() => { if (form.country) setRegionPickerOpen(true); }}
                                     disabled={!form.country}
+                                    data-testid="location-field-region"
+                                    {...placeholderAttr(form.region)}
                                     aria-haspopup="dialog"
                                     aria-expanded={regionPickerOpen}
-                                    style={{ ...PICKER_BTN, opacity: form.country ? 1 : 0.5, cursor: form.country ? 'pointer' : 'not-allowed' }}
+                                    style={pickerButtonStyle(PICKER_BTN, !!form.country)}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.region ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.region) }}>
                                         {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
                                     </span>
                                     <ChevronDown
@@ -948,6 +980,7 @@ export default function LocationEditorModal({
                 <div style={{ padding: '14px 20px', borderTop: '1px solid hsl(var(--border-subtle))', display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
                     <button
                         onClick={onClose}
+                        data-testid="location-cancel"
                         style={{ font: '400 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--border-control))', cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                     >
                         {ui('cancel')}
@@ -956,6 +989,10 @@ export default function LocationEditorModal({
                         <button
                             onClick={handleSave}
                             disabled={saving || initialLoading}
+                            // Referenced by the `create-contact` walkthrough's closing step
+                            // (tools/app-shell/src/walkthrough/flows/create-contact.json).
+                            // Renaming it breaks a shipped tour.
+                            data-testid="location-save"
                             style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (saving || initialLoading) ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
@@ -970,8 +1007,12 @@ export default function LocationEditorModal({
 
             </div>
             {/* Country picker */}
+            {/* role="dialog" on the picker: the walkthrough engine detects an open
+                app dialog by role and suspends its scrim over it. Without it a tour
+                step that points at this picker's trigger keeps dimming the list and
+                cuts a band through it (useForeignDialog). Correct a11y regardless. */}
             {countryPickerOpen && (
-                <div style={PICKER_MODAL} onMouseDown={() => setCountryPickerOpen(false)}>
+                <div role="dialog" aria-modal="true" style={PICKER_MODAL} onMouseDown={() => setCountryPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
                             <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('countryLabel')}</span>
@@ -1008,8 +1049,12 @@ export default function LocationEditorModal({
                 </div>
             )}
             {/* Region picker */}
+            {/* role="dialog" on the picker: the walkthrough engine detects an open
+                app dialog by role and suspends its scrim over it. Without it a tour
+                step that points at this picker's trigger keeps dimming the list and
+                cuts a band through it (useForeignDialog). Correct a11y regardless. */}
             {regionPickerOpen && (
-                <div style={PICKER_MODAL} onMouseDown={() => setRegionPickerOpen(false)}>
+                <div role="dialog" aria-modal="true" style={PICKER_MODAL} onMouseDown={() => setRegionPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
                             <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('regionLabel')}</span>

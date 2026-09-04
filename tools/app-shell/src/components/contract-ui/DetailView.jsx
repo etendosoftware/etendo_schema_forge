@@ -532,7 +532,11 @@ function secondaryAddLineBar(props) {
       {/* alignSelf:flex-start keeps this span from being stretched by
           the flex-column parent — otherwise data-inline-add-portal would
           cover the whole bar and the outside-click save would never fire. */}
-      <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+      {/* The shared AddLineButton hardcodes data-testid="action-add-line", which is
+          not unique in a window that renders one per secondary tab (plus the primary
+          lines bar). The wrapper carries a per-tab hook so a test -- or a walkthrough
+          step -- can name the tab it means. */}
+      <span data-inline-add-portal="true" data-testid={`secondary-add-line-${props.st.key}`} style={{ alignSelf: 'flex-start' }}>
         <AddLineButton
           onClick={props.onAddLineClick}
           label={props.addLineLabel}

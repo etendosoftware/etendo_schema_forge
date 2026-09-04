@@ -21,6 +21,17 @@ import { Button } from '@/components/ui/button';
 import { useLogout } from '@/auth/useLogout.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
+import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
+import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+
+/**
+ * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
+ * look up the finished flow's `revision`. Module-level so its identity is
+ * stable across renders; it persists progress AND reports the outcome, which
+ * must agree on the same run (see `lib/walkthrough/walkthrough-events.js`).
+ */
+const reportWalkthroughFinish = (info) => handleWalkthroughFinish(info, WALKTHROUGH_FLOWS);
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
@@ -171,10 +182,20 @@ export default function AppLayout({ menuGroups }) {
           <FavoritesProvider data-testid="FavoritesProvider__488148">
             <SidebarProvider data-testid="SidebarProvider__488148">
               <PageMetaProvider data-testid="PageMetaProvider__488148">
-                <AppLayoutInner
-                  menuGroups={filteredMenuGroups}
-                  embedded={embedded}
-                  data-testid="AppLayoutInner__488148" />
+                {/* ETP-5144 — mounted here, inside the router and the locale
+                    provider but ABOVE the routed Outlet, so a walkthrough that
+                    navigates between windows survives the route change. The
+                    flows are pure data (src/walkthrough/flows); the engine
+                    itself lives in app-shell-core and is window-agnostic. */}
+                <WalkthroughProvider
+                  flows={WALKTHROUGH_FLOWS}
+                  onFinish={reportWalkthroughFinish}
+                  data-testid="WalkthroughProvider__488148">
+                  <AppLayoutInner
+                    menuGroups={filteredMenuGroups}
+                    embedded={embedded}
+                    data-testid="AppLayoutInner__488148" />
+                </WalkthroughProvider>
               </PageMetaProvider>
             </SidebarProvider>
           </FavoritesProvider>
