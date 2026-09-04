@@ -2,7 +2,7 @@
   "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
   "updatedAt": "2026-09-02T16:41:27.753Z",
-  "contractChecksum": "b5d4db43c6a106d0",
+  "contractChecksum": "f0732ae68fc587f0",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",

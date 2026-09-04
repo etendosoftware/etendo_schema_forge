@@ -1029,3 +1029,90 @@ Three constraints worth knowing:
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
 different endpoint (`AddPaymentService`), and this modal never used it.
+
+## Product-selector price currency — ETP-5148
+
+The product-selector drawer opened from **Add line** used to label the catalog price with the
+**document** currency instead of the currency the price list is expressed in. On a sales invoice switched to
+USD (rate 1.47) against a EUR organization, the drawer rendered `$5,00` — the *number* was the
+untouched EUR catalog price (the backend never converts it; the same request returns `5,00` for a EUR
+and a USD header alike), only the symbol was wrong. A user reading `$5,00` reasonably concludes the
+catalog is priced in dollars.
+
+### Cause
+
+`window.selectorPriceCurrency` was absent from `artifacts/sales-invoice/decisions.json`. The resolution
+chain has no conditional branch that can avoid the wrong symbol once the flag is missing:
+
+```
+no flag  ->  DetailView.jsx        priceCurrency = null
+         ->  ProductSearchDrawer   currency = selectorContext.priceCurrency
+                                            ?? selectorContext.currency   <-- document currency
+                                            ?? sessionCurrency ?? 'USD'
+         ->  formatCurrency('USD', 5)  ->  "$5,00"
+```
+
+`sales-order`, `purchase-order` and `sales-quotation` already declared `selectorPriceCurrency: "org"`
+and showed `5,00 €` correctly in both cases — they were the working reference, not a second bug.
+
+### Fix
+
+`window.selectorPriceCurrency: "org"` in `artifacts/sales-invoice/decisions.json`, which makes
+`DetailView` set `selectorContext.priceCurrency` to the organization/session currency so it wins the
+`??` chain ahead of the document currency. Configuration only — no generator or component change.
+See the `selectorPriceCurrency` row in `docs/decisions-reference.md` for the full contract.
+
+Scope note: only `sales-invoice` and `purchase-invoice` were affected. `amortization` and
+`return-to-vendor-shipment` have `addLineFields` but no `product` field, and the windows on the
+`product-stock` drawer (`lookupDrawers.js`) render no price at all.
+
+### Converted price as secondary information
+
+ETP-5148's second requirement — the document-currency equivalent shown beside the catalog price,
+in smaller type, as secondary information — is implemented generically in `ProductSearchDrawer.jsx`.
+No new `decisions.json` key was added; the behavior activates automatically wherever
+`window.selectorPriceCurrency: "org"` is already set (the primary-price fix above) AND the header
+carries a usable `eTGOCurrencyRate`.
+
+The rate flows through the same `selectorContext` used for the primary price:
+`DetailView.jsx`'s `buildLineSelectorContext` (in `tools/app-shell/src/lib/selectorContext.js`)
+parses `headerRecord.eTGOCurrencyRate` and adds it as `selectorContext.priceCurrencyRate` whenever
+it is finite and non-zero — the same ETP-4836 sentinel rule as
+`useDocumentCurrency.js`'s `resolveDualCurrencyDisplay`: `0`/`null`/`undefined`/`NaN` mean "no
+override", a genuine rate of exactly `1` must NOT be treated as absent. `eTGOCurrencyRate` is the
+org→doc multiplier (e.g. `1.47` = "1 EUR = 1.47 USD") and is used directly, never inverted:
+`converted = catalogPrice * eTGOCurrencyRate`.
+
+`ProductSearchDrawer.jsx` renders the secondary line only when all of the following hold:
+- `selectorContext.priceCurrency` is set (the window opted in via `selectorPriceCurrency: "org"`)
+- `selectorContext.currency` (the document currency) differs from `priceCurrency`
+- `selectorContext.priceCurrencyRate` resolved to a usable number
+- the item's catalog price itself is numeric
+
+Any one of those being false renders only the primary catalog price — never a stray `NaN`/`0,00`
+secondary line. Same-currency documents (e.g. a EUR invoice against a EUR organization) show no
+secondary line at all.
+
+### Not fixed here (deliberately)
+
+- **Lines are not repriced when the header currency changes.** Switching the header to USD leaves
+  `netlistprice` at its EUR value, so the totals panel flips `5,00 EUR` to `$5,00` — symbol changed,
+  number unchanged. `SummaryBar.jsx` formats with `currency$_identifier`, which is correct for
+  totals; the stale amount comes from Etendo not repricing the lines. This affects posted amounts,
+  not a label, and is tracked separately from ETP-5148.
+
+### Manual verification
+
+1. Open a draft sales invoice whose header currency equals the organization currency (EUR) and open the
+   product selector from **Add line**: prices show `5,00 EUR` with the euro symbol.
+2. Change the header currency to USD with a rate (e.g. 1.47) and reopen the selector: prices keep
+   the same numbers and still show the euro symbol — no `$`.
+3. Confirm the totals panel still formats in the document currency (USD), which is intended.
+
+### Automated evidence
+
+- `artifacts/sales-invoice/decisions.json` — `window.selectorPriceCurrency: "org"`.
+- `artifacts/sales-invoice/contract.json` — `selectorPriceCurrency` carried into the window block.
+- `artifacts/sales-invoice/generated/web/sales-invoice/HeaderPage.jsx` — `selectorPriceCurrency="org"` passed to
+  `DetailView`.
+- `sf-validate-pipeline --scope=sales-invoice` — clean.

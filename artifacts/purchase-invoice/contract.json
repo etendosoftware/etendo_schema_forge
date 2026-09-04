@@ -1,8 +1,8 @@
 {
   "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-03T23:29:35.812Z",
-  "checksum": "b5d4db43c6a106d0",
+  "updatedAt": "2026-09-04T16:26:42.868Z",
+  "checksum": "f0732ae68fc587f0",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -110,6 +110,7 @@
       },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org",
       "vectorSearch": {
         "target": "purchase-invoice"
       },
@@ -5259,6 +5260,7 @@
         "allowEmail": false
       },
       "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org",
       "vectorSearch": {
         "target": "purchase-invoice"
       },

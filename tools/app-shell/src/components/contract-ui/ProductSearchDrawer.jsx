@@ -52,15 +52,43 @@ function useDefaultVariant(ctx) {
 
   const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency ?? 'USD';
 
+  // ETP-5148 — secondary converted price (e.g. catalog price in org currency EUR shown
+  // alongside its equivalent in the document currency USD). Only meaningful when the
+  // window opted into `priceCurrency` (window.selectorPriceCurrency: "org") AND the
+  // document currency actually differs from it AND a usable rate was resolved — see
+  // selectorContext.js's buildLineSelectorContext for the rate's sentinel rules.
+  const documentCurrency = selectorContext?.currency ?? null;
+  const conversionRate = (selectorContext?.priceCurrency && documentCurrency && documentCurrency !== selectorContext.priceCurrency)
+    ? selectorContext?.priceCurrencyRate
+    : null;
+
   // Reset the transient highlight when the drawer opens (the shell stays mounted).
   useEffect(() => { if (open) setSelectedId(null); }, [open]);
+
+  // Raw numeric price, or null when missing/non-numeric — shared by the main
+  // (string-or-number-tolerant) formatter below and the conversion helper, which
+  // needs a real number to multiply by the rate (case: non-numeric price → no
+  // secondary line, same as the main price falling back to the raw string).
+  const getRawPrice = (item) => {
+    const p = item.standardPrice || item.listPrice || item.price;
+    if (p == null) return null;
+    const num = typeof p === 'number' ? p : parseFloat(p);
+    return isNaN(num) ? null : num;
+  };
 
   const getPrice = (item) => {
     const p = item.standardPrice || item.listPrice || item.price;
     if (p == null) return null;
-    const num = typeof p === 'number' ? p : parseFloat(p);
-    if (isNaN(num)) return String(p);
+    const num = getRawPrice(item);
+    if (num == null) return String(p);
     return formatCurrency(currency, num);
+  };
+
+  const getConvertedPrice = (item) => {
+    if (!conversionRate) return null;
+    const num = getRawPrice(item);
+    if (num == null) return null;
+    return formatCurrency(documentCurrency, num * conversionRate);
   };
 
   const handleSelect = (item) => {
@@ -85,6 +113,7 @@ function useDefaultVariant(ctx) {
         const name = getName(item);
         const code = getCode(item);
         const price = getPrice(item);
+        const convertedPrice = getConvertedPrice(item);
         const isActive = i === activeIdx;
         const isSelected = selectedId === item.id || selectedIds.includes(item.id);
 
@@ -113,7 +142,12 @@ function useDefaultVariant(ctx) {
                 {code && <p className="text-xs text-muted-foreground">{code}</p>}
               </div>
               {price && (
-                <span className="text-sm tabular-nums text-muted-foreground shrink-0">{price}</span>
+                <span className="flex flex-col items-end shrink-0">
+                  <span className="text-sm tabular-nums text-muted-foreground">{price}</span>
+                  {convertedPrice && (
+                    <span className="text-xs tabular-nums text-muted-foreground/70">{convertedPrice}</span>
+                  )}
+                </span>
               )}
               {isSelected && (
                 <Check className="h-4 w-4 text-primary shrink-0" data-testid="Check__pds" />
