@@ -63,6 +63,22 @@ describe('formatDashboardAmount', () => {
 
 describe('formatDashboardCompact', () => {
   it('keeps compact suffix, now with the currency symbol instead of the ISO code prefix', () => {
-    assert.equal(formatDashboardCompact(1500, { currencyLabel: 'EUR' }), `1,50${NBSP}€K`);
+    assert.equal(formatDashboardCompact(1500, { currencyLabel: 'EUR' }), `1,50K${NBSP}€`);
+  });
+
+  it('ETP-5105: places the scale suffix before the currency symbol, not after ("K€", not "€K")', () => {
+    assert.equal(formatDashboardCompact(197450, { currencyLabel: 'EUR' }), `197,45K${NBSP}€`);
+    assert.equal(formatDashboardCompact(1970000, { currencyLabel: 'EUR' }), `1,97M${NBSP}€`);
+  });
+
+  it('ETP-5105: an unconfigured currency defaults to right-side (same as EUR) — suffix still before the symbol', () => {
+    // isCurrencySymbolRightSide() defaults to `true` for any code the format-config
+    // fetch hasn't populated yet (see currencyFormatConfig.js) — this unit suite
+    // never calls fetchCurrencyFormatConfig(), so USD renders right-side here too.
+    assert.equal(formatDashboardCompact(197450, { currencyLabel: 'USD' }), `197,45K${NBSP}$`);
+  });
+
+  it('amounts without abbreviation are unaffected', () => {
+    assert.equal(formatDashboardCompact(197.45, { currencyLabel: 'EUR' }), `197,45${NBSP}€`);
   });
 });
