@@ -7,8 +7,8 @@ import {
 const ui = (key) => key; // identity translator
 
 const ACCOUNTS = [
-  { id: 'a1', name: 'Cuenta de Banco', type: 'B', currentBalance: 83.7, eTGOPendingCount: 52 },
-  { id: 'a2', name: 'Caja', type: 'C', currentBalance: -226538.85, eTGOPendingCount: 0 },
+  { id: 'a1', name: 'Cuenta bancaria de prueba', type: 'B', currentBalance: 83.7, eTGOPendingCount: 52 },
+  { id: 'a2', name: 'Caja de prueba', type: 'C', currentBalance: -226538.85, eTGOPendingCount: 0 },
   { id: 'a3', name: 'Tarjeta de prueba', type: 'CA', currentBalance: 0, eTGOPendingCount: 0 },
 ];
 

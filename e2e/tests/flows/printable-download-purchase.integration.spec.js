@@ -5,6 +5,7 @@ import {
   dismissSuccessModal, slow,
 } from '../helpers/purchase-helpers.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import {
   loginAndAssertJsreport, waitUntilCompleted, downloadAndAssertPdf,
 } from '../helpers/printable-helpers.js';
@@ -40,6 +41,9 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
 
     await test.step('Ensure vendor setup', async () => {
       await ensureVendorSetup(page, { navigateTo });
+      // ETP-5079 emptied the seeded product list, so picking by drawer position
+      // only worked while an earlier spec happened to leave a product behind.
+      await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
     });
 
     await test.step('Create a draft purchase order with a vendor and a line', async () => {
@@ -54,7 +58,7 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
       await waitForDetailReady(page);
 
-      await addProductLine(page, { isFirst: true });
+      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
       await slow(page);
     });
 
@@ -103,6 +107,9 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
 
     await test.step('Ensure vendor setup', async () => {
       await ensureVendorSetup(page, { navigateTo });
+      // ETP-5079 emptied the seeded product list, so picking by drawer position
+      // only worked while an earlier spec happened to leave a product behind.
+      await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
     });
 
     await test.step('Create a draft purchase order with a vendor and a line', async () => {
@@ -117,7 +124,7 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
       await waitForDetailReady(page);
 
-      await addProductLine(page, { isFirst: true });
+      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
       await slow(page);
     });
 

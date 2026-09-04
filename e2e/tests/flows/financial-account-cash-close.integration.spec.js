@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import { openSelectorField } from '../helpers/selectors.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, addProductLine,
+  loadCredentials, slow, waitForDetailReady, saveDraft, addProductLine, ensureVendorSetup,
   // Generic despite the name: it picks the first real option of `field-businessPartner`, with no
   // vendor-specific step. Aliased so the call site reads correctly in a sales flow.
   selectVendorBP as selectBusinessPartner,
@@ -46,12 +47,16 @@ import { ensureOpenPeriod } from '../helpers/period-helpers.js';
  *   9. Reload and verify, from the backend's own payloads, that the balance carried forward, no
  *      draft was left behind and the movement is no longer pending.
  *
- * Why it creates its own account instead of using the seeded "Caja": a fresh drawer starts with an
- * initial balance of 0 and zero movements, so the expected figures are exact rather than derived
+ * Why it creates its own account rather than reusing an existing one: a fresh drawer starts with
+ * an initial balance of 0 and zero movements, so the expected figures are exact rather than derived
  * from whatever the tenant happens to hold, and the spec is repeatable — it never consumes shared
- * seed data. It also covers the account wizard's own contract: `FinancialAccountSupport`
- * auto-assigns Efectivo to every type-'C' account on creation, which is precisely what makes
- * step 4 possible.
+ * data. It also covers the account wizard's own contract: `FinancialAccountSupport` auto-assigns
+ * Efectivo to every type-'C' account on creation, which is precisely what makes step 4 possible.
+ * (ETP-5079 additionally removed the seeded "Caja"/"Cuenta de Banco"/"Tarjeta" accounts from the
+ * onboarding dataset, so a fresh tenant's account list is empty — creating its own is now the only
+ * thing this spec could do, not merely the better one. The invoice line it collects is likewise
+ * built on a self-provisioned product fixture, since no product is seeded either — and on a
+ * self-provisioned contact, since a fresh tenant has no business partners at all.)
  *
  * A sales invoice (not a purchase one) on purpose: the collection is money coming IN, so the drawer
  * ends up with a POSITIVE counted balance — the way a cash desk actually reads. Paying a purchase
@@ -198,7 +203,31 @@ test.describe('Cash close (real backend)', () => {
 
     await login(page, { user, password });
     await expect(page, 'Login should redirect to /dashboard').toHaveURL(/dashboard/, { timeout: 30_000 });
+
+    // ETP-5079: no product is seeded on a fresh tenant, so the invoice line this
+    // flow collects in cash has nothing to pick. One priced fixture is enough —
+    // the spec only needs *a* line of a known, non-zero amount. The persisted name
+    // is read back off the created/found record, which is what the drawer renders.
+    const productFixture = await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
     await slow(page);
+
+    // ETP-5079: a freshly onboarded tenant has ZERO contacts either — C_BPARTNER is not in
+    // OnboardingDatasetDefinition.INCLUDED_TABLES — so the business-partner selector in STEP 3
+    // has nothing to offer and dies with "element(s) not found". This spec must provision its
+    // OWN counterparty instead of borrowing whatever an earlier spec happened to leave behind:
+    // the `integration` project runs single-worker in alphabetical file order, so this file
+    // ("f") runs BEFORE the purchase specs ("p") that call ensureVendorSetup, and the only
+    // reason it ever passed was that leftover. The fixture is flagged both iscustomer=Y and
+    // isvendor=Y, so it is a valid counterparty for a SALES invoice. Idempotent find-or-create.
+    //
+    // Placed here, before the invoice form opens, deliberately: unlike ensureProductSetup this
+    // one NAVIGATES (it drives the Contacts window), so it must never sit between a response
+    // waiter and the request that waiter is meant to observe. It does NOT have to run after
+    // STEP 2 — ensureVendorSetup provisions its own financial-account/payment-method
+    // precondition (ensureFinancialAccountSetup, financial-account-helpers.js), so it no longer
+    // borrows the account this spec creates below. Nothing in this file depends on any other
+    // spec, and nothing in any other spec depends on this one.
+    await ensureVendorSetup(page, { navigateTo });
 
     // ═════════════════════════════════════════════════════════════════════════
     // STEP 2: Create a brand-new cash account
@@ -232,7 +261,7 @@ test.describe('Cash close (real backend)', () => {
     expect(invoiceId, `could not read the invoice id out of ${page.url()}`).toBeTruthy();
     await waitForDetailReady(page);
 
-    await addProductLine(page, { isFirst: true });
+    await addProductLine(page, { isFirst: true, productName: productFixture.name });
 
     // Saving a line with Enter leaves a FRESH, empty inline-add row open for rapid entry. Escape
     // closes it, so the confirm below does not run against a dirty row — and so the line count is

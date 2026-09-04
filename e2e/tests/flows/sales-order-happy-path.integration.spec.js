@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
 
 /**
  * Sales Order + Invoice — Full happy-path integration E2E.
@@ -72,6 +75,15 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await login(page, { user, password });
       await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
+    });
+
+    // ETP-5079: the onboarding dataset no longer seeds any visible product
+    // (the demo "Queso Sardo"/"Agua"/"Cerveza"/"Fernet" rows were deleted, and
+    // the only remaining product is hidden behind a system category), so the
+    // two lines this test adds have nothing to search for unless the suite
+    // provisions its own fixtures first. See e2e/tests/helpers/product-helpers.js.
+    await test.step('Ensure product fixtures', async () => {
+      await ensureProductFixtures(page);
     });
 
     await test.step('Navigate to Sales Order list view', async () => {
@@ -163,12 +175,12 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Search for "Queso Sardo" — wait for filtered results to appear
+      // Search for the first fixture product — wait for filtered results to appear
       const searchInput = page.getByTestId('product-search-input');
-      await searchInput.fill('Queso Sardo');
+      await searchInput.fill(PRODUCT_FIXTURE_ALPHA.name);
 
       const productOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: /queso sardo/i }).first();
+        .filter({ hasText: PRODUCT_FIXTURE_ALPHA.name }).first();
       await expect(productOption).toBeVisible({ timeout: 15_000 });
 
       // Retry click if the product element detaches mid-click (the drawer
@@ -195,7 +207,7 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
 
       // Wait for the saved line to render with the product name in the lines list
-      await expect(page.getByText('Queso Sardo').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 15_000 });
 
       // Wait for any inline-add-row to disappear (save fully committed to table)
       await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
@@ -222,12 +234,12 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Search for "Agua" — wait for filtered results to appear
+      // Search for the second fixture product — wait for filtered results to appear
       const searchInput2 = page.getByTestId('product-search-input');
-      await searchInput2.fill('Agua');
+      await searchInput2.fill(PRODUCT_FIXTURE_BETA.name);
 
       const secondOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: /agua/i }).first();
+        .filter({ hasText: PRODUCT_FIXTURE_BETA.name }).first();
       await expect(secondOption).toBeVisible({ timeout: 10_000 });
 
       // Retry click if the product element detaches mid-click (same drawer
@@ -346,8 +358,8 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await expect(invoicePill).toContainText(/borrador|draft/i, { timeout: 5_000 });
 
       // Verify the invoice inherited both lines from the order
-      await expect(page.getByText(/queso sardo/i).first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText(/agua/i).first()).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_BETA.name).first()).toBeVisible({ timeout: 5_000 });
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i })).toBeVisible({ timeout: 5_000 });
       await slow(page);
     });

@@ -20,7 +20,6 @@
     "retiredUtc": "2026-08-28T12:00:00.000Z",
     "supersededBy": [
       "20260828T120000Z__R28-standard-cost-anchor"
-
     ]
   },
   {
@@ -43,7 +42,15 @@
     "retiredUtc": "2026-08-31T12:00:00.000Z",
     "supersededBy": [
       "20260831T120000Z__R29-transfer-link-multicurrency"
-
     ]
+  },
+  {
+    "fixId": "20260616T130000Z__R4-default-customer-location",
+    "checksum": "732f3b3a1278f34759b5be0369b98bba9cc9d4be8569b3ed8e7c8b9a881a22a8",
+    "checksumAlgorithm": "sha256",
+    "reason": "Obsoleted -- NOT superseded -- by ETP-5079, which removes the synthetic \"Default Customer\" business partner from onboarding entirely (OnboardingDefaultCustomerService and its call site in EtendoGoJwtServlet#ensureOnboardingDataset are deleted). R4 exists for the sole purpose of giving that BP (c_bpartner.value = 'ONBOARDING_DEFAULT_CUSTOMER') a currency, a C_Location/C_BPartner_Location address and a linked AD_User contact on tenants onboarded before that wiring existed. With the BP no longer provisioned for new tenants, and with the business decision on ETP-5079 being that existing tenants are NOT repaired, R4 has nothing left to accomplish: on a tenant that never had the BP its @check already returns 0 rows, and on a legacy tenant that still has one it would keep minting an address and a contact user for a partner the product has decided should not exist -- including exactly the \"Default Customer Contact\" AD_User that ETP-5079 stops creating. Retiring it prevents that contradiction. No replacement fix is shipped, so supersededBy is deliberately empty. R4's .sql file stays byte-for-byte untouched (already applied to real tenants, immutable, checksum tracked here) -- this retirement list is the mechanism, not an edit to the fix.",
+    "retiredBy": "ETP-5079",
+    "retiredUtc": "2026-09-01T12:00:00.000Z",
+    "supersededBy": []
   }
 ]
