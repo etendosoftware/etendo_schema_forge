@@ -43,7 +43,7 @@ function FinanceProbe({ recordId }) {
 function renderFinance(recordId, cache) {
   const session = { token: 'tok', selectedRole: { id: 'r1' }, selectedOrg: { id: 'o1' } };
   return render(
-    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
       <DataProvider cache={cache}>
         <ContactsFinanceProvider token="tok" apiBaseUrl={API}>
           <FinanceProbe recordId={recordId} />
@@ -119,7 +119,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
 
     // org o1
     const a = render(
-      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o1' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o1' } }}>
+      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o1' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o1' } }} restoreSession={null}>
         <DataProvider cache={cache}>
           <ContactsFinanceProvider token="tok" apiBaseUrl={API}><FinanceProbe recordId="BP1" /></ContactsFinanceProvider>
         </DataProvider>
@@ -130,7 +130,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
 
     // same contact, org o2 → distinct key → refetch (no leak)
     render(
-      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o2' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o2' } }}>
+      <AuthProvider storage={createMemoryAuthStorage({ token: 'tok', selectedOrg: { id: 'o2' } })} initialSession={{ token: 'tok', selectedOrg: { id: 'o2' } }} restoreSession={null}>
         <DataProvider cache={cache}>
           <ContactsFinanceProvider token="tok" apiBaseUrl={API}><FinanceProbe recordId="BP1" /></ContactsFinanceProvider>
         </DataProvider>

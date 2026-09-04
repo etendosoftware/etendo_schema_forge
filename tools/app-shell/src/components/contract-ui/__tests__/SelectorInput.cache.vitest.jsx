@@ -35,7 +35,7 @@ function makeFetch() {
 function renderSel(cache, selectorContext) {
   const session = { token: 'tok', selectedOrg: { id: 'o1' } };
   return render(
-    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+    <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
       <DataProvider cache={cache}>
         <SelectorInput
           entityName="header" field={field} value="" displayValue="" onChange={vi.fn()}

@@ -22,8 +22,9 @@ async function seed(cache) {
 function makeWrapper(cache) {
   const session = { token: 'tok', selectedRole: { id: 'r1' }, selectedOrg: { id: 'o1' } };
   return function Wrapper({ children }) {
+    // restoreSession={null}: opt out of ETP-4576 auto-restore — see useEntity.cache
     return (
-      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session}>
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
         <DataProvider cache={cache}>{children}</DataProvider>
       </AuthProvider>
     );
