@@ -61,8 +61,12 @@ function makeFetch(overrides = {}) {
 
 function makeWrapper(cache) {
   return function Wrapper({ children }) {
+    // restoreSession={null}: the cache is the subject, not session restore.
+    // Under ETP-4576 credentialMode 'auto' the restore fires on mount, fails
+    // with no server, and its catch clears the token — flipping the cache
+    // identity (token ?? csrfToken) and firing cache.clear(). Opt out.
     return (
-      <AuthProvider storage={createMemoryAuthStorage(SESSION)} initialSession={SESSION}>
+      <AuthProvider storage={createMemoryAuthStorage(SESSION)} initialSession={SESSION} restoreSession={null}>
         <DataProvider cache={cache}>{children}</DataProvider>
       </AuthProvider>
     );
