@@ -35,6 +35,21 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 
 /**
+ * Normalizes a selected grid row into what `printDocuments()` needs to exclude Draft
+ * documents from a multi-select print batch (ETP-5124 AC#6/AC#7). Returns a bare id
+ * when the row carries no `documentStatus` — a plain id already selected, or a window
+ * whose decisions.json doesn't declare that field with `grid: true` — so
+ * `printDocuments`'s fail-open default (never treat a missing status as Draft) applies
+ * unchanged; returns `{ id, documentStatus }` only when a status is actually available
+ * to filter on.
+ */
+function toPrintableDocument(row) {
+  const id = row?.id || row;
+  const documentStatus = (row && typeof row === 'object') ? row.documentStatus : undefined;
+  return documentStatus !== undefined ? { id, documentStatus } : id;
+}
+
+/**
  * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
  * compares a CSV header — so two labels this calls equal are also two headers the import
  * treats as the same column.
@@ -298,7 +313,7 @@ async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selecte
   if (isPrinting) return;
   setIsPrinting(true);
   try {
-    await printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl);
+    await printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl);
   } finally {
     setIsPrinting(false);
   }

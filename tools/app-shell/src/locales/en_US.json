@@ -17641,6 +17641,7 @@
     "comingSoon": "Coming soon",
     "reportServiceUnavailable": "The reporting service is unavailable. Please try again in a moment.",
     "pdfGenerationFailed": "Could not generate the PDF. Please try again.",
+    "printAllDraftExcluded": "All selected documents are in Draft and cannot be printed. Complete them first.",
     "report": "Report",
     "format": "Format",
     "records": "records",
