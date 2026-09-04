@@ -1056,14 +1056,34 @@ export async function openDraftRow(page, { label = 'draft row' } = {}) {
  * Click the confirm button (action-save) on a draft document.
  * In draft mode, action-save is the "Confirmar" button.
  */
-export async function clickConfirmButton(page) {
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {RegExp|string} [expectedModalText] - optional text that should become visible
+ *   right after the click (e.g. the confirm modal's title). When given, the click is
+ *   retried until that text appears — this class of flake showed up under a loaded CI
+ *   agent as the click landing but the modal not mounting within a single flat wait,
+ *   same environment-tail-latency shape as the lines-count and product-search waits
+ *   fixed elsewhere in this file. Safe to retry here: by this point in every caller's
+ *   flow the record is already persisted, so runDraftModeConfirm's own pre-checks
+ *   (flushPendingLines / maybeSaveBeforeConfirm) are no-ops — this click only opens a
+ *   client-side modal, it does not resubmit anything.
+ */
+export async function clickConfirmButton(page, expectedModalText) {
   const confirmBtn = page.getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
   // Wait for enabled — the button stays disabled while a save is in-flight
   // or while BP callouts are still propagating derived fields.
   await expect(confirmBtn).toBeEnabled({ timeout: 15_000 });
-  await confirmBtn.click();
-  // Caller is responsible for waiting on the modal/response that follows
+
+  if (expectedModalText) {
+    await expect(async () => {
+      await confirmBtn.click({ timeout: 3_000 });
+      await expect(page.getByText(expectedModalText).first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+  } else {
+    await confirmBtn.click();
+  }
+  // Caller is responsible for waiting on any other modal/response that follows
   await slow(page);
 }
 
