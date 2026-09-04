@@ -14,7 +14,7 @@ async function resolveClientRoute({ client, token, apiBaseUrl, apiFetch }) {
   if (client?.id) return `/contacts/${client.id}`;
 
   const name = String(client?.name ?? '').trim();
-  if (!token || !apiBaseUrl || !name) return '/contacts';
+  if (!apiBaseUrl || !name) return '/contacts';
 
   const criteria = encodeURIComponent(JSON.stringify({
     operator: 'and',

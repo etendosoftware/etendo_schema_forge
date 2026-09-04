@@ -65,7 +65,7 @@ describe('RejectQuotationModal', () => {
     it('POSTs to the rejectQuotation action endpoint', () => {
       assert.match(
         src,
-        /fetch\(\s*`\$\{entityUrl\}\/\$\{quotationId\}\/action\/rejectQuotation`/,
+        /apiFetch\(\s*`\$\{entityUrl\}\/\$\{quotationId\}\/action\/rejectQuotation`/,
       );
     });
 

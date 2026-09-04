@@ -34,7 +34,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
   const abortMapRef = useRef({});
 
   const executeCallout = useCallback((field, value, formState, meta) => {
-    if (!field || !token || !apiBaseUrl || !entity) return;
+    if (!field || !apiBaseUrl || !entity) return;
 
     // Cancel any pending debounced call for THIS field only
     if (debounceMapRef.current[field]) clearTimeout(debounceMapRef.current[field]);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login, MOCK_ORG_ID } from '../helpers/auth.js';
 
 /**
  * Organization save — regression suite for ETP-5112 (mocked).
@@ -43,7 +43,16 @@ import { login } from '../helpers/auth.js';
 
 // AD_Org and AD_OrgInfo share this id on purpose — that is the real Etendo shape and
 // the whole point of the per-entity token assertions below.
-const ORG_ID = 'e2e-org-0001';
+//
+// ETP-4576: it has to be the id the MOCKED SESSION RESTORE reports, not one this spec
+// picks. The token is remembered under the id in the RECORD the GET returned and looked
+// up under the id in the PATCH's PATH, so the two ids must be the same record - and the
+// path's id comes from `selectedOrg`, which is now the restored session's. With a
+// spec-chosen id the GET harvested `e2e-org-0001` while the PATCH asked for
+// `e2e-mock-org`, found nothing, and went out with no `updated` at all: the exact 400
+// `missing_updated` shape this suite exists to catch, produced by the fixture rather
+// than by the bug.
+const ORG_ID = MOCK_ORG_ID;
 
 // Deliberately different, and deliberately not date-shaped: the client must forward
 // whatever opaque string the read returned, and a crossed token has to be obvious in
@@ -151,20 +160,10 @@ async function installOrganizationMock(page, options = {}) {
   return journal;
 }
 
-/**
- * `OrganizationPage` reads its record id from `useAuth().selectedOrg`, which `login()`
- * does not seed (it only seeds token + role). Without this the page has no orgId, never
- * fetches, and renders an empty form with no save button.
- */
-async function seedSelectedOrg(page) {
-  await page.addInitScript((orgId) => {
-    localStorage.setItem('sf_auth_selected_org', JSON.stringify({ id: orgId, name: 'E2E Organización' }));
-  }, ORG_ID);
-}
-
 async function openOrganization(page, options) {
+  // No localStorage seeding for the org: `sf_auth_selected_org` is purged on mount now, so
+  // `useAuth().selectedOrg` comes from the mocked GET /sws/go/session that `login()` installs.
   await login(page);
-  await seedSelectedOrg(page);
   const journal = await installOrganizationMock(page, options);
   await page.goto('/organization');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

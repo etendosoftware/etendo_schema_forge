@@ -58,8 +58,10 @@ describe('GenerateLinesModal — source contract', () => {
     assert.match(src, /method:\s*['"]POST['"]/);
   });
 
-  it('sends a Bearer token Authorization header', () => {
-    assert.match(src, /Authorization:\s*`Bearer\s*\$\{token\}`/);
+  // ETP-4576 — the credential is apiFetch's, not the component's.
+  it('through apiFetch, never a hand-built credential header', () => {
+    assert.match(src, /apiFetch\(/);
+    assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
   it('guards against double submission while a request is in flight', () => {

@@ -321,7 +321,6 @@ export function useCopilotChat({ token }) {
    * Fetch assistants and labels in parallel and populate the store.
    */
   const loadBootstrap = useCallback(async () => {
-    if (!token) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingAssistants', value: true });
     dispatch({ type: SET_ERROR, payload: '' });
@@ -348,7 +347,7 @@ export function useCopilotChat({ token }) {
    * Load active conversations for the currently selected assistant.
    */
   const loadConversations = useCallback(async () => {
-    if (!token || !state.selectedAssistant) return;
+    if (!state.selectedAssistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: true });
     try {
@@ -365,7 +364,7 @@ export function useCopilotChat({ token }) {
    * Load archived conversations for the currently selected assistant.
    */
   const loadArchivedConversations = useCallback(async () => {
-    if (!token || !state.selectedAssistant) return;
+    if (!state.selectedAssistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingArchivedConversations', value: true });
     try {
@@ -389,7 +388,7 @@ export function useCopilotChat({ token }) {
    */
   const selectAssistant = useCallback(async (assistant) => {
     dispatch({ type: SET_SELECTED_ASSISTANT, payload: assistant });
-    if (!token || !assistant) return;
+    if (!assistant) return;
 
     dispatch({ type: SET_LOADING, key: 'isLoadingConversations', value: true });
     try {
@@ -412,7 +411,7 @@ export function useCopilotChat({ token }) {
    * @param {object} conv - Conversation object (must have conversation_id)
    */
   const selectConversation = useCallback(async (conv) => {
-    if (!token || !conv?.conversation_id) return;
+    if (!conv?.conversation_id) return;
 
     dispatch({ type: SET_CONVERSATION_ID, payload: conv.conversation_id });
     dispatch({ type: SET_LOADING, key: 'isLoadingMessages', value: true });
@@ -447,7 +446,7 @@ export function useCopilotChat({ token }) {
    * @param {string} question - Text to send
    */
   const sendMessage = useCallback(async (question) => {
-    if (!question?.trim() || !state.selectedAssistant || !token || state.isSending) return;
+    if (!question?.trim() || !state.selectedAssistant || state.isSending) return;
 
     dispatch({ type: SET_ERROR, payload: '' });
     dispatch({ type: SET_LOADING, key: 'isSending', value: true });
@@ -545,7 +544,7 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const deleteConversationAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
       await apiDeleteConversation(token, id);
       // Move from active to archived list.
@@ -569,7 +568,7 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const restoreConversationAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
       await apiRestoreConversation(token, id);
       const conv = state.archivedConversations.find((c) => c.conversation_id === id);
@@ -591,7 +590,7 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const permanentDelete = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
       await apiPermanentDeleteConversation(token, id);
       dispatch({ type: REMOVE_CONVERSATION, id });
@@ -607,7 +606,7 @@ export function useCopilotChat({ token }) {
    * @param {string} title - New title
    */
   const renameConversationAction = useCallback(async (id, title) => {
-    if (!token || !id || !title?.trim()) return;
+    if (!id || !title?.trim()) return;
     try {
       await apiRenameConversation(token, id, title.trim());
       dispatch({ type: UPDATE_CONVERSATION, id, updates: { title: title.trim() } });
@@ -622,7 +621,7 @@ export function useCopilotChat({ token }) {
    * @param {string} id - conversation_id
    */
   const generateTitleAction = useCallback(async (id) => {
-    if (!token || !id) return;
+    if (!id) return;
     try {
       const response = await generateTitle(token, id);
       const title = response?.title || response?.generated_title;
@@ -644,7 +643,7 @@ export function useCopilotChat({ token }) {
    * @param {File} file
    */
   const uploadFileAction = useCallback(async (file) => {
-    if (!token || !file) return;
+    if (!file) return;
     try {
       const data = await uploadFile(token, file);
       const uploadId =

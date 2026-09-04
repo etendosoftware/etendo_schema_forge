@@ -1001,7 +1001,7 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
-  setSelectedChildRows, setExecutingDetailProcess,
+  setSelectedChildRows, setExecutingDetailProcess, apiFetch: request = apiFetch,
 }) {
   const rows = explicitRows || selectedChildRows;
   const fieldValues = {};
@@ -1015,7 +1015,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return request(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
           body: JSON.stringify({ fieldValues }),
           token, baseUrl: '',
@@ -1877,7 +1877,7 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+    if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
 
@@ -2291,7 +2291,7 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -2376,7 +2376,7 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
+    if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // These fields are computed client-side — no callout needed.
@@ -2674,7 +2674,11 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  // ETP-4576 — hands down the hook's apiFetch, not the module-level one this file also
+  // imports. The two read the CSRF proof from different places, and only the hook's is
+  // reliably populated here: the module one sent this POST with no proof and the backend
+  // answered 403, which is what stopped every document confirm.
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
   const othersRef = useRef(null);
 

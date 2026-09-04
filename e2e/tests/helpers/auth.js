@@ -14,6 +14,13 @@
 const MOCK_MODE_OVERRIDE = process.env.E2E_USE_MOCK;
 const IS_MOCK_MODE = MOCK_MODE_OVERRIDE === '1' || (MOCK_MODE_OVERRIDE !== '0' && !process.env.BASE_URL);
 
+// ETP-4576 — the organization the MOCKED session restore reports. Exported because a spec
+// can no longer choose it by seeding `sf_auth_selected_org`: that key is one of the legacy
+// ones `purgeLegacyAuthStorage` wipes on mount, so the org the app actually uses is the one
+// this payload names. A spec whose assertions depend on the id (rather than merely on some
+// org existing) must read it from here.
+export const MOCK_ORG_ID = 'e2e-mock-org';
+
 export const DEFAULT_USER = process.env.E2E_USER || 'goadmin@etendo.software';
 export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
 
@@ -23,10 +30,97 @@ export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
  * In mock mode: seeds localStorage + intercepts /sws/* API calls.
  * In real mode: fills the onboarding login form and enters the first available environment.
  */
+/**
+ * ETP-4576 — the session no longer lives in `localStorage`.
+ *
+ * It is held in memory by `AuthProvider` (and, under the cookie scheme, by an
+ * HttpOnly cookie), so a spec that wants to call the backend itself — an
+ * independent server re-read, a lookup the UI does not expose — can no longer
+ * dig the credential out of `localStorage.sf_auth_token`; that key is gone and
+ * the read silently yields `null`, which the backend answers with a 401.
+ *
+ * Instead we let the application prove its own identity and reuse the proof:
+ * every `/sws/**` request it makes is inspected and whatever authenticates it
+ * is remembered. That is scheme-agnostic on purpose — under bearer it captures
+ * `Authorization`, under cookies there is nothing to capture and the cookie
+ * jar of `page.request` (which shares the context's) carries the session on
+ * its own. Either way the spec sends exactly what the app sends.
+ */
+const capturedApiHeaders = new WeakMap();
+
+export function captureApiCredentials(page) {
+  if (capturedApiHeaders.has(page)) return;
+  capturedApiHeaders.set(page, {});
+  page.on('request', (request) => {
+    if (!request.url().includes('/sws/')) return;
+    const headers = request.headers();
+    const captured = {};
+    if (headers.authorization) captured.Authorization = headers.authorization;
+    if (headers['x-go-csrf']) captured['X-Go-CSRF'] = headers['x-go-csrf'];
+    if (Object.keys(captured).length > 0) capturedApiHeaders.set(page, captured);
+  });
+}
+
+/**
+ * The auth headers the application itself is sending, for a spec that needs to
+ * call the backend through `page.request`. Empty under the cookie scheme — that
+ * is correct, not a failure: the context's cookie jar already carries it.
+ * `login()` starts the capture, so call this only after logging in.
+ */
+export async function apiAuthHeaders(page) {
+  const headers = { ...(capturedApiHeaders.get(page) || {}) };
+  // The CSRF proof is ASKED FOR, never replayed from a captured request. Two reasons the
+  // spied value is not good enough: entering an environment ROTATES the session (see
+  // `handleSessionEnvironment`), so a proof captured before that is already stale and comes
+  // back 403; and if the app happens to issue only reads after login there is no unsafe
+  // request to capture one from at all. `GET /sws/go/session` answers with the CURRENT
+  // csrfToken, and `page.request` shares the context's cookie jar, so this call
+  // authenticates itself.
+  //
+  // Fails LOUDLY when the session answers but carries no proof. A helper that quietly
+  // returns credential-less headers is what cost two full integration runs: every write
+  // came back 403 from deep inside a fixture, pointing at the fixture instead of at the
+  // credential. A 401/network error stays silent on purpose - that is the legitimate
+  // "bearer scheme, or not logged in yet" case, where the captured header is all there is.
+  // ETP-4576 — `Origin` is as mandatory as the token itself. GoSessionSecurity gates every
+  // unsafe request on `isOriginAllowed(request) && isCsrfValid(...)`, and `page.request`
+  // sends neither Origin nor Referer: it is not a browser navigation. So a request from a
+  // helper came back "CSRF validation failed" even carrying a perfectly valid proof, which
+  // is what made this read as a token problem for two full runs. Same-origin as the page.
+  try {
+    const origin = new URL(page.url()).origin;
+    if (origin && origin !== 'null') headers.Origin = origin;
+  } catch {
+    // about:blank or similar — nothing sensible to declare.
+  }
+
+  let status = null;
+  let body = null;
+  try {
+    const res = await page.request.get('/sws/go/session');
+    status = res.status();
+    if (res.ok()) body = await res.json().catch(() => null);
+  } catch {
+    return headers;
+  }
+  if (status === 200) {
+    if (!body?.csrfToken) {
+      throw new Error(
+        `apiAuthHeaders: GET /sws/go/session answered 200 but carried no csrfToken `
+        + `(keys: ${body ? Object.keys(body).join(',') : 'no JSON body'}). `
+        + 'Every unsafe request from this helper would go out with no proof and come back 403.',
+      );
+    }
+    headers['X-Go-CSRF'] = body.csrfToken;
+  }
+  return headers;
+}
+
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
 } = {}) {
+  captureApiCredentials(page);
   if (IS_MOCK_MODE) {
     // Inject token before React boots so AuthContext.isAuthenticated = true.
     await page.addInitScript(() => {
@@ -76,6 +170,29 @@ export async function login(page, {
     await page.route('**/sws/**', (route) => {
       const url = route.request().url();
       const method = route.request().method();
+      // ETP-4576 — the session is RESTORED FROM THE SERVER, not seeded into localStorage: the
+      // shell asks GET /sws/go/session on mount and treats anything else as anonymous. Handled
+      // here rather than in its own page.route because Playwright resolves routes LIFO, so this
+      // catch-all — registered last — would swallow a more specific one anyway. Without it every
+      // spec bounces off the auth guard into /onboarding and never reaches the page under test.
+      if (url.includes('/sws/go/session') && method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            // No csrfToken on purpose: its presence is what resolves the scheme to `cookie`,
+            // and the mocked suite exercises the shipped default, which is still the bearer
+            // path. A cookie-scheme run is the job of the dual-scheme suites, not of every spec.
+            account: { name: 'admin', email: 'admin@e2e.test' },
+            environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: MOCK_ORG_ID },
+            roleList: [{
+              id: 'e2e-mock-role',
+              name: 'Administrator',
+              orgList: [{ id: MOCK_ORG_ID, name: 'E2E Org' }],
+            }],
+          }),
+        });
+      }
       // SFListMenu is reached via `/sws/neo/listmenu` now (ETP-4513 — moved off the Webhooks
       // module's `/webhooks/SFListMenu`). Before that move, this generic `/sws/**` catch-all
       // never matched the old `/webhooks/*` path at all, so the fetch failed unmocked and

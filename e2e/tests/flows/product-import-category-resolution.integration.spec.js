@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { login, navigateTo } from '../helpers/auth.js';
+import { apiAuthHeaders, login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
@@ -53,22 +53,18 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     await navigateTo(page, 'product');
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
 
-    const categoriesPayload = await page.evaluate(async () => {
-      const token = localStorage.getItem('sf_auth_token');
-      const response = await fetch('/sws/neo/product-category/productCategory?limit=1000', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return { status: response.status, body: await response.json() };
-    });
+    const categoriesResponse = await page.request.get(
+      '/sws/neo/product-category/productCategory?limit=1000',
+      { headers: await apiAuthHeaders(page) },
+    );
+    const categoriesPayload = { status: categoriesResponse.status(), body: await categoriesResponse.json() };
     expect(categoriesPayload.status).toBe(200);
     const categories = categoriesPayload.body?.response?.data ?? categoriesPayload.body?.data ?? [];
-    const defaultsPayload = await page.evaluate(async () => {
-      const token = localStorage.getItem('sf_auth_token');
-      const response = await fetch('/sws/neo/product/product/defaults', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return { status: response.status, body: await response.json() };
-    });
+    const defaultsResponse = await page.request.get(
+      '/sws/neo/product/product/defaults',
+      { headers: await apiAuthHeaders(page) },
+    );
+    const defaultsPayload = { status: defaultsResponse.status(), body: await defaultsResponse.json() };
     expect(defaultsPayload.status).toBe(200);
     const defaultUomId = defaultsPayload.body?.defaults?.uOM;
     const defaultUomLabel = defaultsPayload.body?.defaults?.['uOM$_identifier'];

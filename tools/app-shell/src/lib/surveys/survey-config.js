@@ -123,7 +123,7 @@ export function getRemoteCannedResponses(surveyId, language) {
 export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fetch, logger = console } = {}) {
   // apiBaseUrl is legitimately '' in dev (getApiBase() resolves to the app root) — only bail
   // when it's truly absent (null/undefined), not just falsy, or the fetch never fires locally.
-  if (apiBaseUrl == null || !token) return;
+  if (apiBaseUrl == null) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/`, {
       headers: authHeaders(token),
@@ -148,7 +148,7 @@ export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fe
 export async function submitSurveyResponse({
   apiBaseUrl, token, surveyKey, score, feedback, tags, fetchImpl = fetch, logger = console,
 } = {}) {
-  if (apiBaseUrl == null || !token || !surveyKey) return;
+  if (apiBaseUrl == null || !surveyKey) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/response`, {
       method: 'POST',

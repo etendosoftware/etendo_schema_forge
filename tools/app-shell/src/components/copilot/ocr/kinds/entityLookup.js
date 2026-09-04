@@ -35,7 +35,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
   const apiFetch = useApiFetch('');
 
   useEffect(() => {
-    if (!open || !endpoint || !token) return undefined;
+    if (!open || !endpoint) return undefined;
     let cancelled = false;
     const trimmed = query.trim();
     const timer = setTimeout(async () => {

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Inline-create sub-modal opened from RejectQuotationModal when the user
@@ -26,10 +27,13 @@ export default function CreateRejectReasonModal({
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -41,9 +45,9 @@ export default function CreateRejectReasonModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBaseUrl}/quotation/${quotationId}/action/createRejectReason`,
-        { method: 'POST', headers, body: JSON.stringify({ name: trimmed }) },
+        { method: 'POST', body: JSON.stringify({ name: trimmed }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

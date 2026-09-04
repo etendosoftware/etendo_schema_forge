@@ -349,11 +349,6 @@ export function useDashboardData() {
   const { isWidgetVisible, filterFeed, pendingAmountsVisibility } = access;
 
   const fetchData = useCallback(async () => {
-    if (!token) {
-      setData(buildEmptyFallback());
-      setLoading(false);
-      return;
-    }
 
     // Resolves to the widget's fetch when visible, and to a `null` result — indistinguishable
     // from an unavailable widget downstream — when it is not.

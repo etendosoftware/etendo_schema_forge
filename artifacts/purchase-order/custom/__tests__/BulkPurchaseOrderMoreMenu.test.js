@@ -85,8 +85,10 @@ describe('BulkPurchaseOrderMoreMenu source', () => {
     assert.match(src, /body:\s*JSON\.stringify\(\{\}\)/);
   });
 
-  it('uses Bearer token authorization on requests', () => {
-    assert.match(src, /Authorization:\s*`Bearer \$\{token\}`/);
+  it('through apiFetch, never a hand-built credential header', () => {
+    // module-level helpers cannot hold a hook, so they use the module apiFetch under an alias
+    assert.match(src, /\b(?:module)?[aA]piFetch\(/);
+    assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
   it('renders i18n labels for each menu item via useUI', () => {

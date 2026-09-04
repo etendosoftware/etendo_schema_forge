@@ -68,7 +68,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   const versionFromRecord = data?.priceListVersion || null;
 
   const loadProductPrices = useCallback(async () => {
-    if (!parentId || !token || !apiBaseUrl) {
+    if (!parentId || !apiBaseUrl) {
       setVersionId(null); setLines([]); setLoading(false); return;
     }
     if (!versionFromRecord) {

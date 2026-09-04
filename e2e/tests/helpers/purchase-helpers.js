@@ -6,6 +6,7 @@
  * line addition) so individual spec files stay focused on their flow.
  */
 import { expect } from '@playwright/test';
+import { apiAuthHeaders } from './auth.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -167,7 +168,7 @@ const VENDOR_FIXTURE_CITY = 'E2E City';
  * (bounded) page and matches by name client-side — see findVendorFixture()'s
  * doc comment for why that second mode exists.
  */
-async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
+async function queryVendorFixtureCandidates(page, headers, { useCriteria }) {
   const params = { _sortBy: 'creationDate', _startRow: '0', _endRow: '500' };
   if (useCriteria) {
     params.criteria = JSON.stringify({
@@ -178,7 +179,7 @@ async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
   }
   const res = await page.request.get('/sws/neo/contacts/businessPartner', {
     params,
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorSetup: fixture lookup failed (${res.status()}): ${await res.text()}`);
@@ -231,20 +232,16 @@ function pickDeterministicFixture(candidates) {
  * cheap insurance against exactly that class of bug regardless.)
  */
 async function findVendorFixture(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureVendorSetup could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureVendorSetup(page, ...).',
-    );
-  }
+  // ETP-4576: the session is no longer readable from localStorage — replay what
+  // the application itself authenticates with (see `apiAuthHeaders`).
+  const headers = await apiAuthHeaders(page);
 
-  const filtered = await queryVendorFixtureCandidates(page, token, { useCriteria: true });
+  const filtered = await queryVendorFixtureCandidates(page, headers, { useCriteria: true });
   if (filtered.length > 0) {
     return pickDeterministicFixture(filtered);
   }
 
-  const unfiltered = await queryVendorFixtureCandidates(page, token, { useCriteria: false });
+  const unfiltered = await queryVendorFixtureCandidates(page, headers, { useCriteria: false });
   if (unfiltered.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -468,16 +465,9 @@ async function ensureVendorPaymentFieldsSet(page) {
  * on almost every run instead of reusing the existing one.
  */
 async function fetchVendorLocationCount(page, bpId) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureVendorAddress could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureVendorSetup(page, ...).',
-    );
-  }
   const res = await page.request.get('/sws/neo/contacts/locationAddress', {
     params: { parentId: bpId },
-    headers: { Authorization: `Bearer ${token}` },
+    headers: await apiAuthHeaders(page),
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorAddress: location lookup failed (${res.status()}): ${await res.text()}`);

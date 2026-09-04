@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import InventoryCreateListModal from './InventoryCreateListModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const itemStyle = {
   width: '100%', textAlign: 'left', padding: '6px 12px',
@@ -10,6 +11,12 @@ const itemStyle = {
 };
 
 export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl, onClose }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -21,9 +28,8 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
     onClose();
     setUpdating(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
+      const res = await apiFetch(`${apiBaseUrl}/inventory/${recordId}/action/updateQuantities`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
       if (!res.ok) {

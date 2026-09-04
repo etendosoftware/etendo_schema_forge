@@ -72,7 +72,7 @@ export function CurrencyRatePicker({
   // Fetch options when the dropdown opens (lazy load)
   // For new records (no ID yet) we pass 'new' — the backend falls back to session context.
   useEffect(() => {
-    if (!open || !apiBaseUrl || !token) return;
+    if (!open || !apiBaseUrl) return;
     let cancelled = false;
     setLoading(true);
     const fetchId = hasRecord ? recordId : 'new';
@@ -97,7 +97,7 @@ export function CurrencyRatePicker({
   // Eagerly fetch options when the record is first saved so the rate is visible in the
   // trigger and the pencil icon appears without requiring the user to open the dropdown.
   useEffect(() => {
-    if (!hasRecord || !apiBaseUrl || !token) return;
+    if (!hasRecord || !apiBaseUrl) return;
     let cancelled = false;
     const fetchId = recordId;
     (async () => {

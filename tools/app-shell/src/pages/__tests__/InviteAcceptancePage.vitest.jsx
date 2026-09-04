@@ -120,7 +120,8 @@ describe('InviteAcceptancePage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/sws/go/login'),
+        // ETP-4576 — logging in creates a SESSION now; the endpoint moved with it.
+        expect.stringContaining('/sws/go/session'),
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
@@ -199,7 +200,8 @@ describe('InviteAcceptancePage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/sws/go/sso/google'),
+        // ETP-4576 — same move for the SSO branch: /sws/go/session/sso/<provider>.
+        expect.stringContaining('/sws/go/session/sso/google'),
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ credential: 'google-jwt' }),

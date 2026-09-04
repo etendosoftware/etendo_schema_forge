@@ -244,7 +244,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     // B's fetch resolves (ETP-4888 QA finding). The functional form keeps the already-empty
     // case referentially stable so the common mount path does not schedule a spare render.
     setTaxById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-    if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
+    if (!enabled || !apiBaseUrl || !recordId) return undefined;
     let cancelled = false;
 
     async function loadTaxCatalog() {

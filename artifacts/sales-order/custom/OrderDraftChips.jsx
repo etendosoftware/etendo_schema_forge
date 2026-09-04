@@ -2,8 +2,14 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { getProgressTone } from '@/lib/progressTone';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [state, setState] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -20,17 +26,13 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
     if (!isCompleted || !recordId) return;
     let cancelled = false;
 
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
 
     Promise.all([
-      fetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`, { headers })
+      apiFetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`)
         .then(r => r.ok ? r.json() : null)
         .then(j => j?.response?.data ?? [])
         .catch(() => []),
-      fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`, { headers })
+      apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`)
         .then(r => r.ok ? r.json() : null)
         .then(j => j?.response?.data ?? [])
         .catch(() => []),

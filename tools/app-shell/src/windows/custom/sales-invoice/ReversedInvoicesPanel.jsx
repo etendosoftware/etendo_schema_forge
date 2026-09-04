@@ -125,7 +125,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
     apiFetch('/header?_startRow=0&_endRow=500')
       .then(r => r.ok ? r.json() : null)
@@ -229,7 +229,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
   const [years, setYears] = useState(null);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { baseUrl: '' })
@@ -595,10 +595,10 @@ export default function ReversedInvoicesPanel({
   // "all models inactive" way everywhere: fail-closed (hidden) until the
   // fetch confirms 349 === true, never a flash of visible-then-hidden.
   const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
 
   useEffect(() => {
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${neoBase}/fiscal-models-catalog`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -645,7 +645,7 @@ export default function ReversedInvoicesPanel({
 
   // ── data fetching ──────────────────────────────────────────────────────────
   const fetchLines = useCallback(async () => {
-    if (!recordId || !apiBaseUrl || !token) return;
+    if (!recordId || !apiBaseUrl) return;
     setLoading(true);
     try {
       const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);

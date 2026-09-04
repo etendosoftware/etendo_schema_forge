@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import {
   Dialog,
   DialogContent,
@@ -71,10 +72,12 @@ export default function PurchaseReturnWizard({
   receiptData,
   lines = [],
   base,
-  headers,
   onSuccess,
   onError,
 }) {
+  // Empty base ON PURPOSE: the URLs below are already absolute (built from `base`), and
+  // resolveApiUrl would otherwise prefix them a second time.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState(() => new Set());
@@ -121,11 +124,11 @@ export default function PurchaseReturnWizard({
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-receipt/goodsReceipt/${receiptData.id}/action/createPurchaseReturn`,
         {
           method: 'POST',
-          headers,
+          
           body: JSON.stringify({
             lines: selectedLines.map((l) => ({ lineId: l.id, returnQuantity: quantities[l.id] })),
             reason,

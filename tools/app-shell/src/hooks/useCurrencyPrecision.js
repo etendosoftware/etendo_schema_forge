@@ -18,7 +18,6 @@ export function useCurrencyPrecision() {
   const [precision, setPrecision] = useState(2);
 
   useEffect(() => {
-    if (!token) return;
     let cancelled = false;
     (async () => {
       try {

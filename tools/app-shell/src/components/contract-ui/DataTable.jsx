@@ -2068,7 +2068,7 @@ export function DataTable({
   }, [filteredData, amountColumns]);
 
   const handleInlineToggle = useCallback(async (row, col, checked) => {
-    if (!apiBaseUrl || !entity || !row?.id || !token) {
+    if (!apiBaseUrl || !entity || !row?.id) {
       toast.error('Inline toggle is not available in this context');
       return;
     }

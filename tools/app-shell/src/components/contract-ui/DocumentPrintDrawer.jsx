@@ -95,7 +95,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
 
   const renderDocument = useCallback(async (docId) => {
     // Design A when this window has a client-side builder.
-    if (hasClientPdf(windowName) && docId && token) {
+    if (hasClientPdf(windowName) && docId) {
       console.info(`[print-drawer] ${docId}: client-rendered PDF (same template as preview/email)`);
       setLoading(true);
       setError(null);
@@ -113,7 +113,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setLoading(false);
       return;
     }
-    if (!reportId || !docId || !token) return;
+    if (!reportId || !docId) return;
     console.info(`[print-drawer] ${docId}: rendering the ${reportId} artifact (separate design)`);
     setLoading(true);
     setError(null);
@@ -278,7 +278,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  */
 export async function printDocuments(windowName, documentIds, token, translate = (key) => key, apiBaseUrl = null) {
   const reportId = `print-${windowName}`;
-  if (!reportId || !token || documentIds.length === 0) return;
+  if (!reportId || documentIds.length === 0) return;
 
   try {
     // Which template each document uses — same rule as the drawer: design A when the

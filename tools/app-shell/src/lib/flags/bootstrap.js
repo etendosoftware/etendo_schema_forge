@@ -260,7 +260,7 @@ export async function setFeatureFlagContext(
 export async function refreshAccountIdentity(
   { token, apiBase = '', fetchImpl = globalThis.fetch, logger = console, storage = globalThis.localStorage } = {}
 ) {
-  if (!token || typeof fetchImpl !== 'function') return undefined;
+  if (typeof fetchImpl !== 'function') return undefined;
   try {
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
       headers: authHeaders(token),

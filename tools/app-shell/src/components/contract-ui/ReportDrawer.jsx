@@ -226,7 +226,7 @@ export default function ReportDrawer({
 
   // Fetch all records when drawer opens
   useEffect(() => {
-    if (!open || !apiBaseUrl || !entity || !token) {
+    if (!open || !apiBaseUrl || !entity) {
       setReportRows(null);
       setError(null);
       return;
