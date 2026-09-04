@@ -111,6 +111,10 @@ vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
   SupportChatWidget: () => <div data-testid="support-chat-widget">SupportChatWidget</div>,
 }));
 
+vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
+  WebMcpEtendoGoTools: () => <div data-testid="webmcp-agent-tools" />,
+}));
+
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSearchParams } from 'react-router-dom';

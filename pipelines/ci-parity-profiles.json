@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "description": "Module profiles for `make ci-parity`. A profile declares which SOURCE modules must exist under <core>/modules for a local checkout to match what a given CI job installs. Profiles point at the two authoritative module-list FILES rather than duplicating their URLs, so those lists stay single-source-of-truth; only the extras that appear in NEITHER list are literal here.",
+  "moduleListFiles": {
+    "schemaForgeCi": {
+      "path": "pipelines/extra-modules.txt",
+      "relativeTo": "repo",
+      "format": "newline",
+      "consumedBy": "etendo_schema_forge Jenkinsfile (EXTRA_MODULES_FILE, pipelines/Jenkinsfile:30)",
+      "reason": "The 8 modules this repo's own CI clones from source into <core>/modules. Everything else resolves as a published JAR."
+    },
+    "go": {
+      "path": "modules/com.etendoerp.go/jenkinsExtraModules.txt",
+      "relativeTo": "core",
+      "format": "comma",
+      "consumedBy": "com.etendoerp.go repository Jenkins job",
+      "reason": "The 15 modules the Etendo Go repo's own CI job clones from source. A superset of this repo's list."
+    }
+  },
+  "branchPolicy": {
+    "developBranch": "develop",
+    "mainBranch": "main",
+    "epicBranch": "epic/ETP-3504",
+    "coreHardcodedBranch": "epic/ETP-3504",
+    "coreHardcodedReason": "pipelines/Jenkinsfile:195-198 forces `git checkout epic/ETP-3504` for etendo_core on every non-hotfix build, because etendo_core's develop is behind it (classes like InitialOrgSetupAccounting* only exist on the epic branch). $GIT_BRANCH still wins if it exists in etendo_core.",
+    "hardcodedBranchModules": [
+      "com.etendoerp.sif.general",
+      "com.smf.ticketbai",
+      "com.etendoerp.verifactu",
+      "org.openbravo.module.aeat347apr.es",
+      "org.openbravo.module.aeat390.es",
+      "org.openbravo.module.intrastat",
+      "org.openbravo.module.sii",
+      "org.openbravo.module.taxreportlauncher"
+    ],
+    "hardcodedBranchModulesReason": "pipelines/Jenkinsfile:230-239 lists these 8; :246-252 pins each to epic/ETP-3504 with NO $GIT_BRANCH override, unlike every other repo in the build."
+  },
+  "profiles": {
+    "union": {
+      "default": true,
+      "description": "Union of both CI module lists plus the declared Etendo Go data dependency. The widest source footprint, and the only profile under which the local pgvector work is exercised from source.",
+      "unpinnedPolicy": "report-only",
+      "unpinnedPolicyReason": "report-only (default): modules reachable only through com.etendoerp.go's jenkinsExtraModules.txt are reported but NOT aligned, because nothing readable from this repo grounds an expected branch for them. Set \"develop-then-branch\" to align them with the else-branch of checkoutChain() (pipelines/Jenkinsfile:179-181): develop, then $GIT_BRANCH if it exists.",
+      "reason": "A local checkout that satisfies the union satisfies BOTH CI jobs at once, so a green local install predicts a green build on either side.",
+      "sourceLists": ["schemaForgeCi", "go"],
+      "warnPublishedJarAgainst": "schemaForgeCi",
+      "alwaysSource": [
+        {
+          "name": "com.etendoerp.go",
+          "url": "git@github.com:etendosoftware/com.etendoerp.go.git",
+          "reason": "The runtime module under test. Cloned unconditionally by pipelines/Jenkinsfile:211-218 (GO_MODULE_SSH), so it appears in no extra-modules list."
+        },
+        {
+          "name": "com.etendoerp.go.localization.es.data",
+          "url": "git@github.com:etendosoftware/com.etendoerp.go.localization.es.data.git",
+          "reason": "A declared AD_MODULE_DEPENDENCY of com.etendoerp.go (dependency name 'Etendo Go - Spanish Fiscal Taxes Data', see com.etendoerp.go/src-db/database/sourcedata/AD_MODULE_DEPENDENCY.xml) yet absent from BOTH Jenkins lists. Present locally; included here so the profile matches what the module graph actually requires."
+        }
+      ],
+      "excluded": [
+        {
+          "name": "com.etendoerp.docker",
+          "reason": "Local dev infrastructure, enabled by docker_com.etendoerp.docker_db=true in gradle.properties. It provisions the local postgres container; CI uses an empty postgres sidecar instead and has no equivalent module. Never flagged, never touched."
+        },
+        {
+          "name": "com.etendoerp.tomcat",
+          "reason": "Local dev infrastructure, enabled by docker_com.etendoerp.tomcat=true in gradle.properties. It provisions the local Tomcat container; CI runs in a 'compiler' container instead. Never flagged, never touched."
+        }
+      ]
+    },
+    "schema-forge-ci": {
+      "default": false,
+      "description": "Exactly what this repo's Jenkinsfile clones from source: com.etendoerp.go plus the 8 entries of pipelines/extra-modules.txt.",
+      "unpinnedPolicy": "report-only",
+      "unpinnedPolicyReason": "Moot for this profile: every required module is cloned by pipelines/extra-modules.txt, so none is ungrounded.",
+      "reason": "Reproduces an etendo_schema_forge CI build faithfully, including the 7 modules that job resolves as published JARs. Use it to reproduce a red build on THIS repo's pipeline.",
+      "sourceLists": ["schemaForgeCi"],
+      "warnPublishedJarAgainst": null,
+      "alwaysSource": [
+        {
+          "name": "com.etendoerp.go",
+          "url": "git@github.com:etendosoftware/com.etendoerp.go.git",
+          "reason": "Cloned unconditionally by pipelines/Jenkinsfile:211-218 (GO_MODULE_SSH)."
+        }
+      ],
+      "excluded": [
+        {
+          "name": "com.etendoerp.docker",
+          "reason": "Local dev infrastructure; no CI equivalent."
+        },
+        {
+          "name": "com.etendoerp.tomcat",
+          "reason": "Local dev infrastructure; no CI equivalent."
+        }
+      ]
+    },
+    "go": {
+      "default": false,
+      "description": "What the com.etendoerp.go repository's own Jenkins job clones from source: com.etendoerp.go plus the 15 entries of its jenkinsExtraModules.txt.",
+      "unpinnedPolicy": "report-only",
+      "unpinnedPolicyReason": "report-only (default): this profile is built entirely from com.etendoerp.go's own list, whose branch logic lives in that repo and is not readable here. Set \"develop-then-branch\" to align them anyway.",
+      "reason": "Reproduces an Etendo Go CI build. Use it when the failure under investigation belongs to the Go repo's pipeline rather than this one.",
+      "sourceLists": ["go"],
+      "warnPublishedJarAgainst": null,
+      "alwaysSource": [
+        {
+          "name": "com.etendoerp.go",
+          "url": "git@github.com:etendosoftware/com.etendoerp.go.git",
+          "reason": "The module the job builds; not listed in its own extra-modules file."
+        }
+      ],
+      "excluded": [
+        {
+          "name": "com.etendoerp.docker",
+          "reason": "Local dev infrastructure; no CI equivalent."
+        },
+        {
+          "name": "com.etendoerp.tomcat",
+          "reason": "Local dev infrastructure; no CI equivalent."
+        }
+      ]
+    }
+  }
+}
