@@ -5,6 +5,7 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
+import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
 import { isPaymentProcessed } from './paymentStatuses.js';
 
@@ -22,8 +23,12 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const [invoiceData, setInvoiceData] = useState(invoice);
   const [showSifModal, setShowSifModal] = useState(false);
   const { token, selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  // ETP-5087: keyed by the INVOICE's own org (invoiceData.adOrgId), not the
+  // top-nav org selector — see resolveInvoiceOrgId.js. Falls back to
+  // selectedOrg only if the record hasn't exposed adOrgId yet.
+  const orgId = resolveInvoiceOrgId(invoiceData, selectedOrg?.id);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
   const jsonHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), []);
@@ -111,10 +116,10 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData);
+  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData, territory);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
-  const sifBodyKey = getSifBodyKey(pendingTargets);
+  const sifBodyKey = getSifBodyKey(specName, pendingTargets);
 
   const closeSifModal = useCallback(() => setShowSifModal(false), []);
 
@@ -168,7 +173,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     // display
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)
-    orgId, profile,
+    orgId, profile, territory,
     // payment modal
     showPaymentModal, setShowPaymentModal,
     // email modal

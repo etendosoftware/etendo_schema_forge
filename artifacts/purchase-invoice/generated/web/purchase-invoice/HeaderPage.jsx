@@ -255,6 +255,11 @@ export const api = {
           {
             "param": "IsSOTrx",
             "source": "windowCategory"
+          },
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
           }
         ]
       }
@@ -363,7 +368,16 @@ export const api = {
       "column": "SalesRep_ID",
       "reference": "User",
       "inputMode": "search",
-      "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative"
+      "url": "/sws/neo/purchase-invoice/header/selectors/salesRepresentative",
+      "context": {
+        "required": [
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -409,6 +423,14 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption"
+    },
+    {
+      "entity": "header",
+      "field": "adOrgId",
+      "column": "AD_Org_ID",
+      "reference": "Org",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/header/selectors/adOrgId"
     },
     {
       "entity": "lines",
