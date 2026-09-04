@@ -17,10 +17,10 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.86",
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.46-preview.feature-ETP-4576.20260903173542.e9b426c",
-    "@etendosoftware/etendo-go-core": "0.3.46-preview.feature-ETP-4576.20260903173542.e9b426c",
-    "@iconicapp/iconic-react": "^1.1.4",
+    "@etendosoftware/app-shell-core": "0.3.46-preview.mergeblock-ETP-5137.20260904000726.13b5767",
+    "@etendosoftware/etendo-go-core": "0.3.46-preview.mergeblock-ETP-5137.20260904000726.13b5767",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
     "@openfeature/web-sdk": "^1.9.0",
@@ -36,6 +36,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/react": "^10.53.0",
+    "ai": "^7.0.83",
     "aws-rum-web": "^1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",

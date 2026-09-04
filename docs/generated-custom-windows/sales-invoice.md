@@ -4,6 +4,10 @@
 
 This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.
 
+Global semantic search opts this window in through the `sales-invoice` target. A shared invoice source indexes `C_Invoice` using `DocumentNo` as content and `IsSOTrx` as metadata; the target filters to `IsSOTrx = Y`. Opening the command palette here initially scopes it with a removable Sales Invoice pill, and selecting a result opens this window's editable record route.
+
+The command palette also exposes the contract-declared `overdueSalesInvoices` suggestion, which opens `/sales-invoice?filter=overdue`. Search suggestions are navigation shortcuts owned by the window contract, so their query parameters are not inferred or hardcoded by the global search component.
+
 The current evidence shows a sales-invoice-specific workspace rather than a plain generated form. It keeps the invoice header and line editing flow, then adds invoice-oriented preview, payment-state, related-document, totals, note, and shipment-import behaviors around it.
 
 ## What this window should allow
