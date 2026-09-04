@@ -68,10 +68,18 @@ export async function safeReload(page) {
 /**
  * Dismiss the "Cerrar" success modal if it appears after a confirmation action.
  * Waits for the page to settle after dismissal.
+ *
+ * ETP-5063 replaced the modal with an auto-dismissing toast for confirmations
+ * that create no related document (receipt/invoice) — that path has nothing
+ * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
   const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-  await expect(closeBtn).toBeVisible({ timeout: 30_000 });
+  try {
+    await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
+  } catch {
+    return; // ETP-5063: toast-only path, no modal to dismiss.
+  }
   await closeBtn.click();
   await slow(page);
 }
