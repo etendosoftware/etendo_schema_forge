@@ -6,6 +6,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -282,6 +283,10 @@ export function CreatableSearchSelect({
   placeholderOverride,
 }) {
   const ui = useUI();
+  // ETP-4564: shared cache for selector option pages (scope-isolated, catalog
+  // freshness). Null when no DataProvider is mounted → direct fetch (prior behavior).
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
   const apiFetch = useApiFetch();
   // `query` is PURE search text — it must never be prefilled with the selected value's
   // label (ETP-4600 Gap B). The chip's label comes from `displayValue` (caller-provided)
@@ -503,10 +508,26 @@ export function CreatableSearchSelect({
     const requestGeneration = searchGenerationRef.current;
     fetchInFlightRef.current = true;
     if (offset === 0) setLoading(true); else setLoadingMore(true);
-    fetchServerOptions({
+    const fetchPage = () => fetchServerOptions({
       apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
       query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
-    })
+    });
+    // ETP-4564: route the FIRST page through the shared cache so reopening the dropdown
+    // (same context + query) reuses it instead of refetching. Falls back to a direct fetch
+    // when no DataProvider is mounted (prior behavior). Load-more pages (offset>0) always
+    // fetch directly — only the initial page is the reuse-on-reopen case ETP-4564 targets.
+    const run = (offset === 0 && dataCache?.cache && cacheScope)
+      ? dataCache.cache.fetchQuery({
+        key: createQueryKey({
+          ...cacheScope, apiBase: selectorUrl, entity: 'selector',
+          filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
+          recordId: `q:${searchQuery ?? ''}`,
+        }),
+        fetcher: fetchPage,
+        staleTime: dataCache.catalogStaleTime,
+      })
+      : fetchPage();
+    run
       .then(({ items, hasMore: more }) => {
         if (searchGenerationRef.current !== requestGeneration) return;
         setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
@@ -526,7 +547,7 @@ export function CreatableSearchSelect({
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch]);
+  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch, dataCache, cacheScope]);
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };

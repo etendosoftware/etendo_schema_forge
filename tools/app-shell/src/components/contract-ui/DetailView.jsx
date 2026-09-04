@@ -1031,7 +1031,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       toast.success(ui('processCompletedCount', { count: ok }) !== 'processCompletedCount'
         ? ui('processCompletedCount', { count: ok })
         : `${process.label || process.name}: ${ok} record(s) processed`);
-      hook.fetchById?.(hook.selected?.id);
+      hook.fetchById?.(hook.selected?.id, { force: true });
       hook.refresh?.();
     }
     const failed = results.length - ok;
@@ -2172,7 +2172,7 @@ export function DetailView({
       setDirectFetched(true);
       // Fetch children even on the justSaved fast-path — the header is already
       // primed but children (e.g. auto-created accounting lines) must be loaded.
-      hook.fetchChildren?.(recordId);
+      hook.fetchChildren?.(recordId, { force: true });
       // One-shot: clear the marker so a manual reload of /:id still fetches.
       navigate(location.pathname, {
         replace: true,
@@ -2227,7 +2227,7 @@ export function DetailView({
     if (!hook.selected?.id) return;
     const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
     if (exchangeRatesIdx < 0) return;
-    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
 
@@ -2900,7 +2900,7 @@ export function DetailView({
                   api={api}
                   onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
-                  onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                  onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
                   data-testid="TopbarExtraComponent__fa3275" />
               );
             })()}
@@ -3080,7 +3080,7 @@ export function DetailView({
                     apiBaseUrl={apiBaseUrl}
                     api={api}
                     onProcess={hook.handleProcess}
-                    onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
                     onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
                     // ETP-4933: a topbarRight action that PERSISTS (ConfirmWithCredit calls
                     // maybeSaveBeforeConfirm, which saves) must honour the required-field gate
@@ -3205,10 +3205,10 @@ export function DetailView({
                   onAddChild: hook.handleAddChild,
                   onRefresh: (parentId = data?.id || recordId) => {
                     if (!parentId) return;
-                    hook.fetchChildren?.(parentId);
-                    hook.fetchById?.(parentId);
+                    hook.fetchChildren?.(parentId, { force: true });
+                    hook.fetchById?.(parentId, { force: true });
                   },
-                  onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId),
+                  onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId, { force: true }),
                 };
                 const ocrDocType = matchOcrDocType(location.pathname);
                 return (
@@ -3419,8 +3419,8 @@ export function DetailView({
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
-                                  hook.fetchChildren?.(data?.id || recordId);
-                                  hook.fetchById?.(data?.id || recordId);
+                                  hook.fetchChildren?.(data?.id || recordId, { force: true });
+                                  hook.fetchById?.(data?.id || recordId, { force: true });
                                 }}
                                 onSave={handleImportClick}
                                 forceOpen={forceOpenImport}
@@ -3624,8 +3624,8 @@ export function DetailView({
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
-                                          hook.fetchChildren?.(data?.id || recordId);
-                                          hook.fetchById?.(data?.id || recordId);
+                                          hook.fetchChildren?.(data?.id || recordId, { force: true });
+                                          hook.fetchById?.(data?.id || recordId, { force: true });
                                         }}
                                         onSave={handleImportClick}
                                         forceOpen={forceOpenImport}
@@ -3835,7 +3835,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId); hook.fetchById?.(data?.id || recordId); }}
+                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4318,7 +4318,7 @@ export function DetailView({
               setCustomModalState({ key: null, rowId: null });
             }}
             onParentRefresh={() => {
-              if (parentRecordId) hook.fetchById(parentRecordId);
+              if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

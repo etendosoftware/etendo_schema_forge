@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const SELECTOR_PAGE = 50;
@@ -41,6 +42,10 @@ export function SelectorInput({
   optionTranslator,
 }) {
   const ui = useUI();
+  // ETP-4564: shared cache for selector option pages. Null when no DataProvider
+  // is mounted → falls back to a direct fetch (prior behavior).
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
   const apiFetch = useApiFetch();
   const catalogOptions = selectorUrl ? [] : getCatalogOptions(catalogs, entityName, field);
   const [serverOptions, setServerOptions] = useState(null);
@@ -73,8 +78,18 @@ export function SelectorInput({
       limit: SELECTOR_PAGE,
       offset,
     });
-    apiFetch(url, { baseUrl: '' })
-      .then(res => res.ok ? res.json() : null)
+    const fetcher = (signal) => apiFetch(url, { baseUrl: '', signal })
+      .then(res => (res.ok ? res.json() : null));
+    // Cache pages by URL + normalized context + offset (scope-isolated); catalog
+    // freshness — selectors are relatively stable lookup data.
+    const run = (dataCache?.cache && cacheScope)
+      ? dataCache.cache.fetchQuery({
+        key: createQueryKey({ ...cacheScope, apiBase: selectorUrl, entity: 'selector', filters: selectorContext ?? {}, recordId: `offset:${offset}` }),
+        fetcher: ({ signal }) => fetcher(signal),
+        staleTime: dataCache.catalogStaleTime,
+      })
+      : fetcher();
+    run
       .then(data => {
         loadingRef.current = false;
         if (!isMountedRef.current) return;
@@ -95,7 +110,7 @@ export function SelectorInput({
         loadingRef.current = false;
         if (isMountedRef.current) setFetching(false);
       });
-  }, [selectorUrl, contextKey, token, apiFetch]);
+  }, [selectorUrl, contextKey, token, apiFetch, dataCache, cacheScope]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually

@@ -5,6 +5,7 @@ import './contactsImportDescriptor.js';
 import BusinessPartnerPage from '@generated/contacts/generated/web/contacts/BusinessPartnerPage';
 import { ContactsProvider } from './ContactsContext';
 import { ContactsFinanceProvider } from './ContactsFinanceContext';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
@@ -43,6 +44,7 @@ export default function ContactsWindow(props) {
   const ui = useUI();
   const apiFetch = useApiFetch(props.apiBaseUrl);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
@@ -71,7 +73,9 @@ export default function ContactsWindow(props) {
     // deselect the succeeded ones — same outcome handling the generic
     // "Delete selected" toolbar button gets for free via useBulkRowDelete.
     reselectFailed(succeeded, failed);
-  }, [pendingBulkDelete, ui, apiFetch]);
+    // ETP-4564: the cached BP list is now stale for other/future readers.
+    invalidateBusinessPartner();
+  }, [pendingBulkDelete, ui, invalidateBusinessPartner, apiFetch]);
 
   const handleBulkDeleteCancel = useCallback(() => {
     setPendingBulkDelete(null);

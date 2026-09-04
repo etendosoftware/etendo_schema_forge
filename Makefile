@@ -101,7 +101,7 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
-	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
+	  && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 

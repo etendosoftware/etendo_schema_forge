@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -101,6 +102,16 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     : '';
   const apiFetch = useApiFetch(attachmentsBase);
 
+  // ETP-4564: `undefined` isActive → treat as always-active (eager), preserving
+  // the prior behavior for consumers that don't pass it; consumers that do pass
+  // isActive get true lazy loading (list fires only once the tab is activated).
+  const active = isActive === undefined ? true : isActive;
+
+  // Shared client-side cache (app-shell-core). Null when no DataProvider is
+  // mounted → the list falls back to a direct fetch, preserving prior behavior.
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
+
   // DetailView routes a not-yet-saved record as the literal string "new" —
   // truthy, so a plain `!recordId` guard misses it. Nothing can be attached
   // to a record that doesn't exist yet, and firing this GET anyway is worse
@@ -110,7 +121,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const hasRealRecord = !!(tableName && recordId && recordId !== 'new');
 
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(hasRealRecord);
+  const [loading, setLoading] = useState(hasRealRecord && active);
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
 
@@ -152,6 +163,22 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     return ctrl;
   }, []);
 
+  // The attachment list for a record is identified by table + record, isolated
+  // by session/org/role via the cache scope.
+  const listKey = useCallback(() => (
+    cacheScope
+      ? createQueryKey({ ...cacheScope, apiBase: attachmentsBase, entity: 'attachments', spec: tableName, recordId })
+      : null
+  ), [cacheScope, attachmentsBase, tableName, recordId]);
+
+  // Mark the cached attachment list stale so the next read revalidates. Called
+  // after any mutation (upload / remove / update) so a reopened tab is fresh.
+  const invalidateList = useCallback(() => {
+    if (dataCache?.cache && cacheScope) {
+      dataCache.cache.invalidate({ entity: 'attachments', spec: tableName, recordId });
+    }
+  }, [dataCache, cacheScope, tableName, recordId]);
+
   // ── list ────────────────────────────────────────────────────────────────
   // `opts.recordId` mirrors upload()'s override (ETP-4315 QA follow-up): the
   // list() closure captured by a caller from an earlier render (e.g. the
@@ -161,7 +188,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // would silently no-op on its own stale guard — passing the just-saved id
   // through here instead of relying on the hook's own (stale) closure fixes
   // that without waiting for a re-render to hand out a fresh `list`.
+  // `opts.force` (ETP-4564) bypasses the shared-cache freshness window.
   const list = useCallback(async (opts = {}) => {
+    const { force = false } = opts;
     const targetRecordId = opts.recordId || recordId;
     const targetHasRealRecord = !!(tableName && targetRecordId && targetRecordId !== 'new');
     if (!targetHasRealRecord) return;
@@ -169,10 +198,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     const ctrl = resetAbortController();
     setLoading(true);
     setError(null);
-    try {
+    const fetcher = async (signal) => {
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${targetRecordId}`,
-        { signal: ctrl.signal, token },
+        { signal, token },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);
@@ -180,8 +209,24 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       }
       const json = await res.json();
       const data = json?.items ?? json?.response?.data ?? json?.data ?? json;
+      return Array.isArray(data) ? data : [];
+    };
+    try {
+      let data;
+      if (dataCache?.cache && cacheScope) {
+        data = await dataCache.cache.fetchQuery({
+          key: listKey(),
+          fetcher: ({ signal }) => fetcher(signal),
+          force,
+          staleTime: dataCache.recordStaleTime,
+          signal: ctrl.signal,
+        });
+      } else {
+        data = await fetcher(ctrl.signal);
+      }
+      // Out-of-order guard (ETP-4315): only the most recent list() commits.
       if (generation === stateGenerationRef.current) {
-        setItems(Array.isArray(data) ? data : []);
+        setItems(data);
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -198,22 +243,24 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       // going to clear it (caught by review on the saveBeforeAttach PR).
       setLoading(false);
     }
-  }, [apiFetch, tableName, recordId, token, resetAbortController, ui]);
+  }, [apiFetch, tableName, recordId, token, resetAbortController, ui, dataCache, cacheScope, listKey]);
 
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
     if (abortRef.current) abortRef.current.abort();
   }, []);
 
-  // Eager load when record is available (same pattern as secondary tabs).
+  // Lazy load: fetch only once the tab is active (ETP-4564). `active` defaults to
+  // true when isActive is not provided, preserving eager behavior for callers
+  // that don't pass it. Reopening a fresh tab reuses the cache (no new request).
   useEffect(() => {
-    if (hasRealRecord) {
+    if (hasRealRecord && active) {
       list();
     }
     // Intentionally not depending on `list` to avoid extra re-runs when
     // its identity changes due to unrelated deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableName, recordId, hasRealRecord]);
+  }, [tableName, recordId, hasRealRecord, active]);
 
   // Reload when another view attaches or deletes a file on this record — e.g.
   // the OCR side panel, which is mounted alongside this tab in form view.
@@ -254,15 +301,17 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         // prop update) so it can't overwrite this with a stale read.
         stateGenerationRef.current += 1;
         setItems((prev) => [created, ...prev]);
+        invalidateList(); // cached list is now stale for other/future readers
       } else {
-        // Fallback: reload list when the server did not return the new item.
+        // Fallback: force a fresh reload when the server did not return the item.
         // Pass targetRecordId explicitly rather than calling list() bare:
         // this closure's own `list` can still be bound to the "new" record
         // from the render that started this call chain (ETP-4315 QA
         // follow-up's saveBeforeAttach flow runs its whole async sequence
         // against the closures captured at drop time, before the force-save
-        // hands out a fresh recordId on the next render).
-        await list({ recordId: targetRecordId });
+        // hands out a fresh recordId on the next render). `force` (ETP-4564)
+        // bypasses the shared-cache freshness window on this fallback reload.
+        await list({ recordId: targetRecordId, force: true });
       }
       announceChange();
       toast.success(ui('attachmentsUploadSuccess'));
@@ -275,7 +324,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiFetch, tableName, recordId, token, list, ui, announceChange]);
+  }, [apiFetch, tableName, recordId, token, list, ui, invalidateList, announceChange]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
@@ -329,13 +378,14 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         const msg = await extractErrorMessage(res);
         throw new Error(msg || `HTTP ${res.status}`);
       }
+      invalidateList();
       announceChange();
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiFetch, token, ui, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, announceChange]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
@@ -353,13 +403,14 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
           })
         )
       );
+      invalidateList();
       announceChange();
       toast.success(ui('attachmentsDeleteAllSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiFetch, token, ui, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, announceChange]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -379,12 +430,13 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         const msg = await extractErrorMessage(res);
         throw new Error(msg || `HTTP ${res.status}`);
       }
+      invalidateList();
       toast.success(ui('attachmentsUpdateSuccess'));
     } catch (err) {
       setItems(snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiFetch, token, ui]);
+  }, [apiFetch, token, ui, invalidateList]);
 
   return {
     items,
