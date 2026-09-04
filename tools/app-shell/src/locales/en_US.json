@@ -2465,7 +2465,7 @@
       "description": "Number of days the product is guaranteed or available"
     },
     "A_Asset_Group_ID": {
-      "label": "Asset Category",
+      "label": "Asset Group",
       "description": "A classification of assets based on similar characteristics."
     },
     "IsDepreciated": {
@@ -14913,7 +14913,7 @@
       "label": "System"
     },
     "Asset Category": {
-      "label": "Asset Category"
+      "label": "Asset Group"
     },
     "Attribute Set": {
       "label": "Attribute Set"
