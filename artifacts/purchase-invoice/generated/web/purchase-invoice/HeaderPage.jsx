@@ -1041,6 +1041,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
         sendDocument={{"enabled":true,"allowEmail":false}}
+        selectorPriceCurrency="org"
         {...props} window={effectiveWindow}
       />
       </>
