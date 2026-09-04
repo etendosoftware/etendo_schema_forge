@@ -59,7 +59,7 @@ const SHARED_INVOICE_COLUMNS = {
     'Contacto',
     'Estado doc.',
     'Imp.total',
-    'Pendiente de pago',
+    'Saldo pendiente',
   ],
   en_US: [
     'Invoice Date',
@@ -68,7 +68,7 @@ const SHARED_INVOICE_COLUMNS = {
     'Business Partner',
     'Document Status',
     'Total Gross Amount',
-    'Pending Payment',
+    'Outstanding Amount',
   ],
 };
 

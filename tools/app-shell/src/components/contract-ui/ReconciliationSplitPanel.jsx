@@ -164,11 +164,9 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
   return (
     <DistinctValuesFilter
       value={value}
-      // Always keep a concrete selection — ignore the "clear" (all) action.
-      onChange={(v) => onChange(v || value)}
+      onChange={onChange}
       codes={SOURCE_CODES}
       labelFor={(code) => `${ui(SOURCE_META[code]?.labelKey ?? code)} (${counts[code] ?? 0})`}
-      allLabel={ui('financeReconcileSourceLabel')}
       searchPlaceholder={ui('financeReconcileSourceLabel')}
       popoverWidth="w-64"
       data-testid="recon-source-filter" />
@@ -481,7 +479,7 @@ function StatementLinesPanel({
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
       </button>
       <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} data-testid="ReconciliationStatusFilter__d0f4d5" />
-      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('financeReconcileFilterDate')} data-testid="DateRangePopover__d0f4d5" />
+      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />
     </ToolbarShell>
   );
 
@@ -771,7 +769,7 @@ function CandidateOperationsPanel({
       <DateRangePopover
         value={dateRange}
         onChange={onDateRangeChange}
-        placeholder={ui('financeReconcileFilterDate')}
+        placeholder={ui('dateRangeAnyTime')}
         data-testid="DateRangePopover__d0f4d5" />
       </ToolbarShell>
     </>
@@ -1241,10 +1239,17 @@ export function ReconciliationSplitPanel({
   const [leftStatus, setLeftStatus] = useState('pending');
   // Last 12 months, not 30 days: a statement line often has to be matched against an
   // invoice or payment months older than itself, and the 30-day window hid those
-  // candidates by default. It also makes the picker's own trigger honest — the
-  // `financeReconcileFilterDate` placeholder already read "Últimos 12 meses" while the
-  // state said last30. `last12m` is a preset dateRangeBounds and DateRangePopover both
-  // already support, so nothing else changes.
+  // candidates by default. `last12m` is a preset dateRangeBounds and DateRangePopover
+  // both already support, so nothing else changes.
+  //
+  // The trigger text comes from this preset, NOT from the placeholder. It used to
+  // be the other way round: the placeholder was `financeReconcileFilterDate`,
+  // whose es_ES value happens to read the same as `dateRangeLast12Months`. The
+  // all-time option (`dateRangeAllTime`) is encoded as a `null` value, which is
+  // indistinguishable from "nothing chosen", so computeTriggerLabel fell through
+  // to the placeholder and the button kept naming a 12-month window even though
+  // the filter had widened (ETP-4956). The placeholder is now
+  // `dateRangeAnyTime`, matching every other DateRangePopover call site.
   const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last12m' });
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSource, setRightSource] = useState('receipts');
