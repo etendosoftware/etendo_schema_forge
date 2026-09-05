@@ -12,7 +12,7 @@ import { RETURN_LABELS } from '@etendosoftware/schema-forge-cli/src/report-i18n.
  * These mirror — verbatim — the generated `artifacts/<id>/helpers.js` functions
  * that the report HTML render path historically registered (the fixed whitelist:
  * isGroupBreak, resetGroupTracking, formatDate, formatCurrency, formatBoolean,
- * formatNumber, ifCond, eq, sumField, formatDateDisplay, sumRowsByCategory,
+ * formatNumber, ifCond, eq, sumField, sumFields, formatDateDisplay, sumRowsByCategory,
  * translateDocType).
  *
  * Keeping them as a trusted in-repo module lets the report server and the Vite
@@ -105,6 +105,20 @@ export function createReportHelpers({ numberFormat } = {}) {
     }, 0);
   }
 
+  // ETP-4900: adds together several VALUES already resolved in the current
+  // Handlebars context (unlike sumField, which sums one FIELD across an array
+  // of rows) — e.g. {{sumFields current days30 days60}} on a single document
+  // row. Handlebars always appends its own options object as the last
+  // argument, even for a plain positional call with no hash/block, so that
+  // trailing argument is dropped before summing.
+  function sumFields() {
+    var args = Array.prototype.slice.call(arguments, 0, arguments.length - 1);
+    return args.reduce(function(acc, v) {
+      var num = Number(v);
+      return acc + (isNaN(num) ? 0 : num);
+    }, 0);
+  }
+
   function formatDateDisplay(value) {
     if (value == null || value === '') return '';
     // Accepts YYYY-MM-DD
@@ -144,6 +158,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     ifCond,
     eq,
     sumField,
+    sumFields,
     formatDateDisplay,
     sumRowsByCategory,
     translateDocType,
@@ -322,6 +337,13 @@ const JSREPORT_HELPER_SOURCES = {
   return rows.reduce(function(acc, row) {
     var val = Number(row[field]);
     return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+}`,
+  sumFields: `function sumFields() {
+  var args = Array.prototype.slice.call(arguments, 0, arguments.length - 1);
+  return args.reduce(function(acc, v) {
+    var num = Number(v);
+    return acc + (isNaN(num) ? 0 : num);
   }, 0);
 }`,
   formatDateDisplay: `function formatDateDisplay(value) {

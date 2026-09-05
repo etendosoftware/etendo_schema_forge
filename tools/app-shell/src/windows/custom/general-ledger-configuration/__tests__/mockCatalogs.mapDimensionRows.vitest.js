@@ -25,6 +25,22 @@ describe('mapDimensionRows', () => {
     expect(mapDimensionRows(rows)).toEqual([]);
   });
 
+  it('drops an OO row regardless of active state (ETP-5120)', () => {
+    const rows = [
+      { id: 'row-oo-active', type: 'OO', label: 'Organization', active: true, mandatory: false },
+      { id: 'row-oo-inactive', type: 'OO', label: 'Organization', active: false, mandatory: false },
+    ];
+    expect(mapDimensionRows(rows)).toEqual([]);
+  });
+
+  it('drops an AC row regardless of active state (ETP-5120)', () => {
+    const rows = [
+      { id: 'row-ac-active', type: 'AC', label: 'Account', active: true, mandatory: false },
+      { id: 'row-ac-inactive', type: 'AC', label: 'Account', active: false, mandatory: false },
+    ];
+    expect(mapDimensionRows(rows)).toEqual([]);
+  });
+
   it('drops any other unrecognized type not present in DIMENSION_TYPE_LABEL_KEYS', () => {
     const rows = [
       { id: 'row-known', type: 'CC', label: 'Cost Center', active: true, mandatory: false },

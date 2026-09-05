@@ -152,8 +152,18 @@ test.describe('TC-35 — Tax Category window accessible', () => {
     // tax-category is declared in menu.json (Settings group, windowId "138").
     // Expand the sidebar so sub-items are rendered in the DOM (collapsed mode
     // only renders group icons via a hover-triggered Popover).
-    await expandSidebar(page);
-    await expect(page.getByTestId('menu-item-tax-category')).toBeVisible();
+    //
+    // The item's own group ("Configuración") also has its own open/closed
+    // state (see SideMenu.jsx's per-group `aria-expanded`/`isOpen`), which is
+    // expected to auto-open for the active route — but that derivation runs
+    // in a later effect than the sidebar-width expand above, so on a slower
+    // CI runner the retry below (re-running expandSidebar, a no-op once the
+    // sidebar is already expanded) gives that effect the extra ticks it needs
+    // instead of asserting on whatever rendered within a single check.
+    await expect(async () => {
+      await expandSidebar(page);
+      await expect(page.getByTestId('menu-item-tax-category')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 10_000 });
   });
 });
 
@@ -230,9 +240,15 @@ test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu
 
   test('no anchor href contains the "conversion-rate-downloader" path segment', async ({ page }) => {
     // Belt-and-suspenders: no sidebar link may point at the retired route,
-    // whatever testid naming a future re-add might use.
-    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
-    await expect(page.locator('nav a[href*="conversion-rate-downloader"]')).toHaveCount(0);
+    // whatever testid naming a future re-add might use. Retried like the
+    // tax-category presence check above: the group's own open-state effect
+    // can still be settling relative to the sidebar-width expand in
+    // beforeEach, so a single read right after can land mid-render on a
+    // slower runner.
+    await expect(async () => {
+      await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible({ timeout: 2_000 });
+      await expect(page.locator('nav a[href*="conversion-rate-downloader"]')).toHaveCount(0);
+    }).toPass({ timeout: 10_000 });
   });
 
   test('direct navigation renders the not-found state instead of the window', async ({ page }) => {

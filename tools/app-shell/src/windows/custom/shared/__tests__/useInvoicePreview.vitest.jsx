@@ -20,8 +20,9 @@ vi.mock('../useInvoicePdf.js', () => ({
   useInvoicePdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
 }));
 
+const useFiscalConfigMock = vi.fn(() => ({ profile: null, tbaiRecord: null }));
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: () => ({ profile: null }),
+  useFiscalConfig: (...args) => useFiscalConfigMock(...args),
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -33,8 +34,9 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 const apiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetch }));
 
+const getPendingSifTargetsMock = vi.fn(() => ({ sendSii: false, sendTbai: false }));
 vi.mock('../sifSending.js', () => ({
-  getPendingSifTargets: () => ({ sendSii: false, sendTbai: false }),
+  getPendingSifTargets: (...args) => getPendingSifTargetsMock(...args),
   getSifBodyKey: () => null,
 }));
 
@@ -201,5 +203,72 @@ describe('useInvoicePreview — free-to-allocate gating', () => {
 
     expect(result.current.freeToAllocate).toBe(200);
     expect(result.current.canAddPayment).toBe(true);
+  });
+});
+
+// ETP-5087: territory (from the active TBAI config) must be resolved and forwarded to
+// getPendingSifTargets, and exposed on the hook's return value for InvoicePreview.jsx to
+// thread into getInvoiceFiscalTargets/useFiscalStatus.
+describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)', () => {
+  beforeEach(() => {
+    getPendingSifTargetsMock.mockClear();
+    apiFetch.mockImplementation(() => emptyResponse());
+  });
+
+  it('resolves territory from tbaiRecord.etsgSifTerritory and forwards it to getPendingSifTargets', async () => {
+    useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { etsgSifTerritory: 'BIZKAIA' } });
+    // NOTE: `invoice` must be a stable reference across re-renders — `useInvoicePreview` has
+    // `useEffect(() => setInvoiceData(invoice), [invoice])`, so a fresh object literal created
+    // inside the renderHook callback would re-trigger that effect on every render, looping forever.
+    const props = { invoice: defaultInvoice, apiBaseUrl: '/api/purchase-invoice', specName: 'purchase-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.territory).toBe('BIZKAIA');
+    expect(getPendingSifTargetsMock).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', expect.anything(), 'BIZKAIA');
+  });
+
+  it('falls back to null territory when tbaiRecord is missing, without throwing', async () => {
+    useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: null });
+    const props = { invoice: defaultInvoice, apiBaseUrl: '/api/purchase-invoice', specName: 'purchase-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.territory).toBeNull();
+    expect(getPendingSifTargetsMock).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', expect.anything(), null);
+  });
+});
+
+// ETP-5087 follow-up: the org used to fetch fiscal config (SII/TBAI) must be the
+// INVOICE's own org (invoiceData.adOrgId), not the top-nav org selector — a
+// mismatch used to silently fetch the wrong config (or none).
+const invoiceWithOrg = { ...defaultInvoice, adOrgId: 'ORG-INVOICE' };
+
+describe('useInvoicePreview — org resolution (ETP-5087 follow-up)', () => {
+  beforeEach(() => {
+    useFiscalConfigMock.mockClear();
+    apiFetch.mockImplementation(() => emptyResponse());
+  });
+
+  it('resolves fiscal config using the invoice adOrgId, not the selected org (useAuth mock returns org-1)', async () => {
+    const props = { invoice: invoiceWithOrg, apiBaseUrl: '/api/purchase-invoice', specName: 'purchase-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.orgId).toBe('ORG-INVOICE');
+    expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG-INVOICE', '/api/purchase-invoice');
+  });
+
+  it('falls back to the selected org (useAuth) when the invoice record has no adOrgId', async () => {
+    const props = { invoice: defaultInvoice, apiBaseUrl: '/api/purchase-invoice', specName: 'purchase-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.orgId).toBe('org-1');
+    expect(useFiscalConfigMock).toHaveBeenCalledWith('org-1', '/api/purchase-invoice');
   });
 });
