@@ -128,11 +128,10 @@ function StatementContent({ group, currency }) {
 
 /**
  * What the operation cell calls this row. A difference row names the accounting account the leftover
- * will be posted to, or says it is missing — the whole point being that the user learns BEFORE
- * applying that the account has nothing configured.
+ * will be posted to; it is always known, because the engine only proposes an amount deviation when
+ * the financial account has one configured.
  */
-function displayName(op, ui) {
-  if (op.missingGlItem) return ui('financeReconcileAutomatchDiffNoAccount');
+function displayName(op) {
   if (op.isNew) return op.name || op.glItemId || '—';
   return op.partnerName || op.documentNo || '—';
 }
@@ -151,24 +150,26 @@ function OperationRow({ op, isLast, currency }) {
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={cn(
-            'truncate text-sm font-medium leading-5',
-            op.missingGlItem ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]',
-          )}>
-            {displayName(op, ui)}
+          <span className="truncate text-sm font-medium leading-5 text-[hsl(var(--foreground))]">
+            {displayName(op)}
           </span>
-          {/* No "Nueva" chip when the movement cannot be created: promising a new row and then
-              failing on apply is exactly what this round is fixing. */}
-          {!op.missingGlItem && (
-            <RuleTypeBadge
-              label={isNew ? ui('financeReconcileAutomatchBadgeNew') : (op.documentNo || op.typeLabel || '')}
-              tone={isNew ? 'new' : 'default'}
-              data-testid="RuleTypeBadge__a89979" />
-          )}
+          <RuleTypeBadge
+            label={isNew ? ui('financeReconcileAutomatchBadgeNew') : (op.documentNo || op.typeLabel || '')}
+            tone={isNew ? 'new' : 'default'}
+            data-testid="RuleTypeBadge__a89979" />
         </div>
         {isNew && (
           <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
             {ui(op.isDifference ? 'financeReconcileAutomatchOpDifference' : 'financeReconcileAutomatchOpNew')}
+          </span>
+        )}
+        {/* The movement's own description — what the Movimientos list shows. A payment number on
+            its own identifies nothing to whoever approves the batch. */}
+        {!isNew && op.description && (
+          <span
+            className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+            data-testid="automatch-op-description">
+            {op.description}
           </span>
         )}
       </div>
@@ -213,7 +214,6 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
         isDifference: true,
         name: glItemDifference?.name || '',
         amount: difference,
-        missingGlItem: !glItemDifference?.id,
       }]
     : baseOps;
 
@@ -261,11 +261,10 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
  * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess?,
- *   onEditAccount?, glItemDifference? }} props `onEditAccount` opens the account editor; offered
- *   only once a group has actually failed for a missing accounting account (ETP-4965), since that is
- *   the only thing the user can do about it from here. `glItemDifference` is the account's
- *   `{ id, name }` for differences — the same object `ReconciliationTab` already composes for the
- *   panel — used to name (or flag as missing) the movement a near-match group will create.
+ *   glItemDifference? }} props `glItemDifference` is the account's `{ id, name }` for differences —
+ *   the same object `ReconciliationTab` composes for the panel — used to name the movement a
+ *   near-match group will create. It is always set when such a group is present: the engine does
+ *   not propose an amount deviation for an account with nowhere to post it.
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -276,15 +275,10 @@ export function AutoMatchSuggestionModal({
   open,
   onClose,
   onSuccess,
-  onEditAccount,
   glItemDifference = null,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
-  // True once an apply came back with at least one group rejected for a missing GL Item Difference.
-  // A mass run cannot ask for a concept line by line, so the only way forward is configuring one on
-  // the account — surfaced as a direct link instead of leaving the user to find the setting.
-  const [needsGlItem, setNeedsGlItem] = useState(false);
 
   const allKeys = useMemo(() => new Set(groups.map((g) => g.groupKey)), [groups]);
   const [checked, setChecked] = useState(allKeys);
@@ -294,12 +288,6 @@ export function AutoMatchSuggestionModal({
   useEffect(() => {
     setChecked(new Set(groups.map((g) => g.groupKey)));
   }, [groups]);
-
-  // Reopening starts clean: the flag is set by a failed apply and was never cleared, so a later run
-  // on an account that IS configured still showed the "Editar cuenta" remedy for a problem gone.
-  useEffect(() => {
-    if (open) setNeedsGlItem(false);
-  }, [open]);
 
   const allChecked = checked.size === groups.length && groups.length > 0;
 
@@ -347,27 +335,13 @@ export function AutoMatchSuggestionModal({
       const successCount = results.length - failedCount;
       // applySuggestions answers 201 even when every group is rejected — the reason travels inside
       // results[]. Reducing that to two counters is what produced a bare "Error al aplicar la
-      // conciliación" for a problem as specific and as fixable as an unconfigured account.
-      const glItemFailures = failures.filter((r) => r?.code === 'GL_ITEM_REQUIRED').length;
+      // conciliación" for problems the backend had already explained.
       if (failedCount === 0) {
         toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
-      } else if (glItemFailures === failedCount) {
-        // Name the cause instead of the outcome — it is the one failure the user can act on, and
-        // the "Editar cuenta" button below is its remedy. Still a warning rather than an error when
-        // part of the batch did go through, so the tone matches what actually happened.
-        (successCount > 0 ? toast.warning : toast.error)(
-          ui('financeReconcileAutomatchToastNoGlItem', { count: failedCount }));
       } else if (successCount > 0) {
         toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
       } else {
         toast.error(failures[0]?.error?.message || ui('financeReconcileAutomatchToastError'));
-      }
-      // Keep the modal open when the ONLY thing standing in the way is the account's missing
-      // accounting account: closing it would hide both the failure and its remedy.
-      if (glItemFailures > 0) {
-        setNeedsGlItem(true);
-        onSuccess?.();
-        return;
       }
       onSuccess?.();
       onClose();
@@ -502,19 +476,6 @@ export function AutoMatchSuggestionModal({
             >
               {ui('cancel')}
             </button>
-
-            {/* Configure the account's accounting concept — only once a group actually failed for
-                the lack of one. */}
-            {needsGlItem && onEditAccount && (
-              <button
-                type="button"
-                onClick={() => { onEditAccount(); onClose(); }}
-                data-testid="automatch-modal-edit-account"
-                className="flex h-10 items-center gap-1 rounded-full border border-[var(--status-destructive-bg)] bg-card px-3 text-sm font-medium text-[hsl(var(--destructive))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[var(--status-destructive-bg)]"
-              >
-                <span>{ui('financeReconcileAutomatchEditAccount')}</span>
-              </button>
-            )}
 
             {/* Open reconciliation */}
             <button

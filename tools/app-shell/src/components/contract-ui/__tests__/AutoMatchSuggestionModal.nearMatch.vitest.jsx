@@ -229,30 +229,6 @@ describe('AutoMatchSuggestionModal — difference operation row', () => {
     expect(screen.getByText(money(-27))).toBeInTheDocument();
   });
 
-  it('reports the missing accounting account instead of a name, with no "new" chip', () => {
-    renderModal({ groups: [GROUP_NEAR_AMOUNT], glItemDifference: null });
-
-    expect(screen.getByText('financeReconcileAutomatchDiffNoAccount')).toBeInTheDocument();
-    // Promising a movement the apply cannot create is exactly what this round removes.
-    expect(screen.queryByText('financeReconcileAutomatchBadgeNew')).toBeNull();
-    expect(screen.queryByText('Diferencias de conciliación')).toBeNull();
-    // Still shows WHAT would have been posted, so the user knows the size of the problem.
-    expect(screen.getByText(money(-0.38))).toBeInTheDocument();
-  });
-
-  it('renders the missing-account text in a destructive tone', () => {
-    renderModal({ groups: [GROUP_NEAR_AMOUNT], glItemDifference: null });
-    expect(screen.getByText('financeReconcileAutomatchDiffNoAccount').className)
-      .toContain('--destructive');
-  });
-
-  it('treats a half-populated glItemDifference (name but no id) as missing', () => {
-    // The id is what the apply actually posts against; a name alone cannot create anything.
-    renderModal({ groups: [GROUP_NEAR_AMOUNT], glItemDifference: { name: 'Diferencias de conciliación' } });
-    expect(screen.getByText('financeReconcileAutomatchDiffNoAccount')).toBeInTheDocument();
-    expect(screen.queryByText('financeReconcileAutomatchBadgeNew')).toBeNull();
-  });
-
   it('adds NO difference row for a date-only near match', () => {
     renderModal({ groups: [GROUP_NEAR_DATE], glItemDifference: GL_ITEM_DIFFERENCE });
 
@@ -337,32 +313,6 @@ describe('AutoMatchSuggestionModal — footer and KPI counts', () => {
 // ---------------------------------------------------------------------------
 
 describe('AutoMatchSuggestionModal — apply outcome reporting', () => {
-  it('warns with the no-GL-item key when every failure is GL_ITEM_REQUIRED and some groups succeeded', async () => {
-    applyMock.mockResolvedValue({
-      results: [{ reconciliationId: 'r1', statementLineId: 'line-1' }, GL_ITEM_REQUIRED_FAILURE],
-    });
-    renderModal({ groups: [GROUP_SUGGESTED, GROUP_NEAR_AMOUNT] });
-    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
-
-    await vi.waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
-    // A warning, not an error: part of the batch did go through.
-    expect(toast.warning).toHaveBeenCalledWith('financeReconcileAutomatchToastNoGlItem count=1');
-    expect(toast.error).not.toHaveBeenCalled();
-    expect(toast.success).not.toHaveBeenCalled();
-  });
-
-  it('errors with the same key when every group failed for a missing accounting account', async () => {
-    applyMock.mockResolvedValue({
-      results: [GL_ITEM_REQUIRED_FAILURE, GL_ITEM_REQUIRED_FAILURE_2],
-    });
-    renderModal({ groups: [GROUP_NEAR_AMOUNT, GROUP_NEAR_DATE] });
-    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
-
-    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect(toast.error).toHaveBeenCalledWith('financeReconcileAutomatchToastNoGlItem count=2');
-    expect(toast.warning).not.toHaveBeenCalled();
-  });
-
   it('falls back to the backend message when the failures are not all about the accounting account', async () => {
     applyMock.mockResolvedValue({
       results: [PLAIN_FAILURE, GL_ITEM_REQUIRED_FAILURE],
@@ -413,38 +363,3 @@ describe('AutoMatchSuggestionModal — apply outcome reporting', () => {
 // account" remedy for a problem that no longer existed.
 // ---------------------------------------------------------------------------
 
-describe('AutoMatchSuggestionModal — needsGlItem lifecycle', () => {
-  it('hides the edit-account button again after the modal is closed and reopened', async () => {
-    applyMock.mockResolvedValue({ results: [GL_ITEM_REQUIRED_FAILURE] });
-    const props = defaultProps({ groups: [GROUP_NEAR_AMOUNT], onEditAccount: vi.fn() });
-    const { rerender } = render(<AutoMatchSuggestionModal {...props} />);
-
-    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
-    expect(await screen.findByTestId(EDIT_ACCOUNT_BUTTON)).toBeInTheDocument();
-
-    // Closing unmounts the dialog body but not the component holding the flag.
-    rerender(<AutoMatchSuggestionModal {...props} open={false} />);
-    expect(screen.queryByTestId('automatch-suggestion-modal')).toBeNull();
-
-    rerender(<AutoMatchSuggestionModal {...props} open />);
-    expect(screen.getByTestId('automatch-suggestion-modal')).toBeInTheDocument();
-    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
-  });
-
-  it('offers the button again if the reopened run fails the same way', async () => {
-    // The reset must be a reset, not a permanent disable.
-    applyMock.mockResolvedValue({ results: [GL_ITEM_REQUIRED_FAILURE] });
-    const props = defaultProps({ groups: [GROUP_NEAR_AMOUNT], onEditAccount: vi.fn() });
-    const { rerender } = render(<AutoMatchSuggestionModal {...props} />);
-
-    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
-    await screen.findByTestId(EDIT_ACCOUNT_BUTTON);
-
-    rerender(<AutoMatchSuggestionModal {...props} open={false} />);
-    rerender(<AutoMatchSuggestionModal {...props} open />);
-    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
-
-    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
-    expect(await screen.findByTestId(EDIT_ACCOUNT_BUTTON)).toBeInTheDocument();
-  });
-});

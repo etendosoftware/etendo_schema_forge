@@ -15,6 +15,7 @@ import { ChipSelect } from '@/components/forms/fields';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
 import { cn } from '@/lib/utils';
+import LifecycleConfirmModal from '@/windows/custom/shared/LifecycleConfirmModal.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -129,7 +130,9 @@ function BreakdownRow({ label, amount, currency, emphasis, testId }) {
  * @param {(payload: {glItemId: string, description: string}) => void} props.onConfirm
  * @param {() => void} props.onClose
  */
-export function DifferenceModal({ open, info, currency, defaultGlItem, busy, onConfirm, onClose }) {
+export function DifferenceModal({
+  open, info, currency, defaultGlItem, busy, onConfirm, onClose, readOnlyGlItem = false,
+}) {
   const ui = useUI();
   const [glItem, setGlItem] = useState(defaultGlItem ?? null);
   const [description, setDescription] = useState('');
@@ -192,13 +195,24 @@ export function DifferenceModal({ open, info, currency, defaultGlItem, busy, onC
           <label className="text-xs font-semibold text-[hsl(var(--foreground))]">
             {ui('financeReconcileDiffConceptLabel')}
           </label>
-          <ChipSelect
-            value={glItem}
-            onChange={setGlItem}
-            useLookup={useGLItemLookup}
-            placeholder={ui('financeReconcileDiffConceptPlaceholder')}
-            testId="recon-difference-concept"
-            data-testid="ChipSelect__recon-difference" />
+          {/* Read-only when the destination is the financial account's own setting: the entry always
+              goes there, so offering a picker would suggest a per-line choice that does not exist.
+              The editable form stays for the banner flow, which is a one-off adjustment. */}
+          {readOnlyGlItem ? (
+            <div
+              className="flex h-10 items-center rounded-md border border-[hsl(var(--border-control))] bg-muted px-3 text-sm text-[hsl(var(--foreground))]"
+              data-testid="recon-difference-concept-readonly">
+              {glItem?.name || glItem?.id || '—'}
+            </div>
+          ) : (
+            <ChipSelect
+              value={glItem}
+              onChange={setGlItem}
+              useLookup={useGLItemLookup}
+              placeholder={ui('financeReconcileDiffConceptPlaceholder')}
+              testId="recon-difference-concept"
+              data-testid="ChipSelect__recon-difference" />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -238,5 +252,68 @@ export function DifferenceModal({ open, info, currency, defaultGlItem, busy, onC
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Asks for the accounting account BEFORE a match with a postable difference can be confirmed, when
+ * the financial account has none configured (ETP-4965, QA round).
+ *
+ * Built on {@link LifecycleConfirmModal} so it reads like the rest of this window's blocking
+ * prompts (heading, consequence list, amber strip, footer) instead of looking like a form that
+ * wandered in. Its `warning` tone: the confirm CONFIGURES something, so a destructive red button
+ * would misdescribe it.
+ *
+ * The chosen account is saved on the FINANCIAL ACCOUNT, not on this reconciliation — every later
+ * difference on that account lands there too — so the copy says so rather than letting the user
+ * discover it. The caller persists it and closes; confirming the reconciliation is a separate,
+ * deliberate second step.
+ *
+ * @param {{ open: boolean, busy?: boolean, onConfirm: (glItem: object) => void, onClose: () => void }} props
+ */
+export function GlItemSetupDialog({ open, busy = false, onConfirm, onClose }) {
+  const ui = useUI();
+  const [glItem, setGlItem] = useState(null);
+
+  // A fresh pick on every open: the previous one was already saved on the account, and leaving it
+  // selected would suggest this dialog edits a value it only ever sets once.
+  useEffect(() => {
+    if (open) setGlItem(null);
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <LifecycleConfirmModal
+      tone="warning"
+      title={ui('financeReconcileGlItemSetupTitle')}
+      sub={ui('financeReconcileGlItemSetupBody')}
+      items={[
+        [ui('financeReconcileGlItemSetupItemScopeTitle'),
+          ui('financeReconcileGlItemSetupItemScopeBody')],
+        [ui('financeReconcileGlItemSetupItemNextTitle'),
+          ui('financeReconcileGlItemSetupItemNextBody')],
+      ]}
+      warning={ui('financeReconcileGlItemSetupHint')}
+      confirmLabel={ui('financeReconcileGlItemSetupConfirm')}
+      cancelLabel={ui('cancel')}
+      confirmDisabled={busy || !glItem?.id}
+      onConfirm={() => onConfirm(glItem)}
+      onClose={onClose}
+      testIdPrefix="recon-glitem-setup"
+      data-testid="LifecycleConfirmModal__recon-glitem-setup">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-[hsl(var(--foreground))]">
+          {ui('financeReconcileDiffConceptLabel')}
+        </label>
+        <ChipSelect
+          value={glItem}
+          onChange={setGlItem}
+          useLookup={useGLItemLookup}
+          placeholder={ui('financeReconcileDiffConceptPlaceholder')}
+          testId="recon-glitem-setup-concept"
+          data-testid="ChipSelect__recon-glitem-setup" />
+      </div>
+    </LifecycleConfirmModal>
   );
 }

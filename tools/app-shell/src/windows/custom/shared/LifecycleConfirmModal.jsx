@@ -44,8 +44,19 @@ import { createPortal } from 'react-dom';
 export default function LifecycleConfirmModal({
   reconciled, posted, hasTransaction, title, sub, confirmLabel, cancelLabel, warning,
   itemConciliacion, itemAsiento, itemTransaccion, items: explicitItems, confirmIcon = null,
-  onConfirm, onClose, testIdPrefix = 'lifecycle-confirm',
+  onConfirm, onClose, testIdPrefix = 'lifecycle-confirm', tone = 'destructive', children = null,
+  confirmDisabled = false,
 }) {
+  // `destructive` is the default because every original caller undoes something. `warning` is for a
+  // blocking prompt whose confirm BUILDS something (configure and continue): the heading still
+  // signals "stop and read", but a red confirm button would tell the user the save is dangerous.
+  const accent = tone === 'warning' ? 'var(--status-warning-fg)' : 'var(--status-destructive-fg)';
+  const confirmBg = tone === 'warning' ? 'hsl(var(--text-primary))' : 'var(--status-destructive-fg)';
+  // The heading stays plain text in the `warning` tone. Colouring it amber put a third warning
+  // signal on a dialog that already has the amber strip and the amber consequence icons, and the
+  // heading is a plain statement of fact ("no accounting account configured"), not the alarm. The
+  // destructive tone keeps its red heading: there the title IS the alarm.
+  const titleColor = tone === 'warning' ? 'hsl(var(--text-primary))' : accent;
   const [loading, setLoading] = useState(false);
 
   const handleConfirm = async () => {
@@ -88,7 +99,7 @@ export default function LifecycleConfirmModal({
         {/* Header */}
         <div style={{ padding: '22px 24px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, paddingRight: 12 }}>
-            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: 'var(--status-destructive-fg)' }}>{title}</h3>
+            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: titleColor }}>{title}</h3>
             <div style={{ font: '400 13px/19px Inter', color: 'hsl(var(--text-disabled))', marginTop: 6 }}>{sub}</div>
           </div>
           <button
@@ -107,9 +118,16 @@ export default function LifecycleConfirmModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {items.map(([t, d]) => (
               <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-destructive-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-                  <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
+                {/* Anchored to the FIRST text line's 18px line box rather than to an eyeballed
+                    margin, plus a 4px optical nudge down. Geometric centring alone still reads high:
+                    the line box includes the ascender space above the caps, so its midpoint sits
+                    above where the eye puts the text's centre of mass. The box keeps it stable if
+                    the line height changes; the nudge is the deliberate optical correction. */}
+                <span style={{ display: 'flex', alignItems: 'center', height: 18, marginTop: 4, flexShrink: 0 }}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </span>
                 <div>
                   <span style={{ font: '600 13px/18px Inter', color: 'hsl(var(--text-primary))' }}>{t}.</span>
                   <span style={{ font: '400 13px/18px Inter', color: 'hsl(var(--text-disabled))' }}> {d}</span>
@@ -117,6 +135,10 @@ export default function LifecycleConfirmModal({
               </div>
             ))}
           </div>
+
+          {/* Caller-supplied content (a picker, a field) between the consequences and the warning.
+              Absent for every confirm-only caller, so their layout is unchanged. */}
+          {children && <div style={{ marginBottom: 16 }}>{children}</div>}
 
           {/* Yellow warning box */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', borderRadius: 8 }}>
@@ -140,10 +162,10 @@ export default function LifecycleConfirmModal({
             {cancelLabel}
           </button>
           <button
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             onClick={handleConfirm}
             data-testid={`${testIdPrefix}-accept`}
-            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: loading ? 'hsl(var(--muted))' : 'var(--status-destructive-fg)', font: '500 14px/1 Inter', color: loading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: loading ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: (loading || confirmDisabled) ? 'hsl(var(--muted))' : confirmBg, font: '500 14px/1 Inter', color: (loading || confirmDisabled) ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: (loading || confirmDisabled) ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             {confirmIcon}
             {loading ? '…' : confirmLabel}

@@ -17,8 +17,9 @@ import {
   WriteoffBreakdown, WriteoffToggleRow, writeoffState,
 } from './WriteoffAdjustment.jsx';
 import {
-  DifferenceBanner, DifferenceModal, differenceState,
+  DifferenceBanner, DifferenceModal, GlItemSetupDialog, differenceState,
 } from './ReconciliationDifference.jsx';
+import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import {
   STATUS_CODES, countForStatus, matchesStatus,
 } from './reconciliationStatusFilter.js';
@@ -1214,6 +1215,9 @@ export function ReconciliationSplitPanel({
   // The account's configured difference concept ({id, name}), used to preselect the modal's picker.
   // Absent → the banner renders with its action disabled and an explanation.
   glItemDifference = null,
+  // The account's record version, echoed back when the setup dialog stores the difference account
+  // (ETP-5073's optimistic-locking guard). Threaded from the host with glItemDifference.
+  accountUpdated = null,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1294,6 +1298,8 @@ export function ReconciliationSplitPanel({
     invoiceMode ? 'invoices' : null,
     toDateParam(rightBounds.from), toDateParam(rightBounds.to));
   const { reconcile, loading: reconciling } = useReconcileGroup();
+  // Only ever used to store the account's difference GL item from the setup dialog below.
+  const { updateAccount } = useAccountMutations();
   const { removeOperation, loading: removing } = useRemoveOperation();
   const { reactivateSelected, loading: reactivating } = useReactivateSelected();
   const { reconcileDifference, loading: postingDifference } = useReconcileDifference();
@@ -1471,7 +1477,7 @@ export function ReconciliationSplitPanel({
    * `AutoMatchSupport.differenceTolerance` applies server-side. Only advisory: the server recomputes
    * this and is the boundary.
    */
-  const differenceNotice = useMemo(() => {
+  const postableDifference = useMemo(() => {
     const pct = Number(amountTolerance) || 0;
     if (invoiceMode || isReconciledLine || pct <= 0) return null;
     if (!selectedLine || selectedOpIds.size === 0) return null;
@@ -1480,19 +1486,33 @@ export function ReconciliationSplitPanel({
     // Over-coverage stays an error: out of scope, and the reconcile button is disabled anyway.
     if (Math.sign(remaining) !== Math.sign(lineAmount)) return null;
     if (gap > Math.abs(lineAmount) * pct / 100) return null;
-    const amount = formatCurrency(currency, gap);
+    return remaining; // signed, as the modal's breakdown expects
+  }, [amountTolerance, invoiceMode, isReconciledLine, selectedLine, selectedOpIds, remaining,
+      lineAmount]);
+
+  const differenceNotice = useMemo(() => {
+    if (postableDifference == null) return null;
+    const amount = formatCurrency(currency, Math.abs(postableDifference));
     return glItemDifference?.name
       ? ui('financeReconcileBarDifferenceNotice', { amount, concept: glItemDifference.name })
       : ui('financeReconcileBarDifferenceNoticeNoConcept', { amount });
-  }, [amountTolerance, invoiceMode, isReconciledLine, selectedLine, selectedOpIds, remaining,
-      lineAmount, currency, glItemDifference, ui]);
+  }, [postableDifference, currency, glItemDifference, ui]);
 
   // Set when the backend answers GL_ITEM_REQUIRED: the match carries a postable difference but the
   // account has no concept configured, so the user picks one and we resubmit. Shape matches
   // `differenceState` so DifferenceModal renders unchanged.
   const [glItemPrompt, setGlItemPrompt] = useState(null);
+  // The pre-reconcile setup dialog: shown when a postable difference has nowhere to go yet.
+  const [glItemSetupOpen, setGlItemSetupOpen] = useState(false);
+  const [savingGlItem, setSavingGlItem] = useState(false);
 
-  const submitReconcile = async (methodId, glItemId) => {
+  /**
+   * @param {string|null} methodId payment method, invoice path only
+   * @param {string} [description] free text for the difference movement, from the read-only
+   *   confirmation modal. No `glItemId` counterpart: the accounting account is the financial
+   *   account's own setting and the backend resolves it (`effectiveGlItemId`).
+   */
+  const submitReconcile = async (methodId, description) => {
     try {
       const payload = {
         // For a PARTIAL line, reconcile the remainder against its pending sub-line
@@ -1515,7 +1535,9 @@ export function ReconciliationSplitPanel({
         // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
       }
-      if (glItemId) payload.glItemId = glItemId;
+      // Names the difference movement in Movimientos; without it the backend falls back to
+      // `defaultDifferenceDescription`. Dropping it silently is what the read-only modal did.
+      if (description) payload.description = description;
       await reconcile(payload);
       toast.success(ui('financeReconcileToastSuccess'));
       setSelectedLineSel(null);
@@ -1526,16 +1548,14 @@ export function ReconciliationSplitPanel({
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
-      // The match leaves a postable difference and the account has no concept configured. Ask for
-      // one and resubmit rather than dead-ending on a toast — the reconcile is one field away.
+      // The account lost its accounting account between loading the panel and pressing Conciliar
+      // (or the difference only became postable server-side). handleReconcile normally catches this
+      // first; this is the race. Same remedy as the proactive path — configure the account — rather
+      // than the read-only confirmation, which would offer a field the user cannot fill.
       if (err?.code === 'GL_ITEM_REQUIRED') {
         setMethodModalOpen(false);
-        setGlItemPrompt({
-          methodId: methodId ?? null,
-          remainder: Number(err?.body?.differenceAmount ?? remaining) || remaining,
-          lineTotal: lineAmount,
-          reconciled: selectedSum,
-        });
+        setGlItemPrompt(null);
+        setGlItemSetupOpen(true);
         return;
       }
       // A 409 on the group head names the pending sub-line the caller should have targeted; retarget
@@ -1564,7 +1584,51 @@ export function ReconciliationSplitPanel({
       setMethodModalOpen(true);
       return;
     }
+    // A difference is an accounting entry, so it is always confirmed before it is booked. With no
+    // accounting account on the financial account there is nothing to confirm yet: that is set up
+    // first, in its own dialog, and reconciling stays a separate deliberate click afterwards.
+    if (postableDifference != null) {
+      if (!glItemDifference?.id) {
+        setGlItemSetupOpen(true);
+        return;
+      }
+      setGlItemPrompt({
+        methodId: null,
+        remainder: postableDifference,
+        lineTotal: lineAmount,
+        reconciled: selectedSum,
+      });
+      return;
+    }
     submitReconcile(null);
+  };
+
+  /**
+   * Stores the chosen accounting account on the FINANCIAL ACCOUNT, then closes. Deliberately does
+   * not chain into the reconciliation: the user confirms that separately, now seeing the read-only
+   * destination in the difference modal.
+   */
+  const confirmGlItemSetup = async (glItem) => {
+    if (!glItem?.id) return;
+    setSavingGlItem(true);
+    try {
+      // `updated` is the record version this panel was loaded with — mandatory since ETP-5073, or
+      // the PUT comes back 400 `missing_updated`.
+      await updateAccount(accountId, {
+        glItemDifferenceId: glItem.id,
+        updated: accountUpdated,
+      });
+      setGlItemSetupOpen(false);
+      // The panel reads glItemDifference from its host, so the account has to be re-read for the
+      // next click to see it. This is the panel's only "refresh the account" channel; it also
+      // reloads movements, which is a cheap price for not threading a second callback for one call.
+      onReconcileSuccess?.();
+      toast.success(ui('financeReconcileGlItemSetupToastSaved'));
+    } catch (err) {
+      toast.error(err?.message || ui('financeReconcileToastError'));
+    } finally {
+      setSavingGlItem(false);
+    }
   };
 
   const confirmMethodAndReconcile = () => {
@@ -1765,9 +1829,18 @@ export function ReconciliationSplitPanel({
         currency={currency}
         defaultGlItem={glItemDifference}
         busy={reconciling}
-        onConfirm={({ glItemId }) => submitReconcile(glItemPrompt?.methodId ?? null, glItemId)}
+        // The destination is the financial account's own setting, so it is shown, not chosen. No
+        // glItemId is sent either: the backend resolves it from the account (effectiveGlItemId).
+        readOnlyGlItem
+        onConfirm={({ description }) => submitReconcile(glItemPrompt?.methodId ?? null, description)}
         onClose={() => setGlItemPrompt(null)}
         data-testid="DifferenceModal__gl-item-required" />
+      <GlItemSetupDialog
+        open={glItemSetupOpen}
+        busy={savingGlItem}
+        onConfirm={confirmGlItemSetup}
+        onClose={() => setGlItemSetupOpen(false)}
+        data-testid="GlItemSetupDialog__d0f4d5" />
       <RemoveOperationConfirmDialog
         open={!!removeRequest}
         count={removeRequest?.count ?? 0}
