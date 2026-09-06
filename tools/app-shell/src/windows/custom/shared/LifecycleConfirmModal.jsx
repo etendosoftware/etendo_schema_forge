@@ -3,6 +3,44 @@ import { createPortal } from 'react-dom';
 
 /* eslint-disable react/prop-types */
 
+// `destructive` is the default because every original caller undoes something. `warning` is for a
+// blocking prompt whose confirm BUILDS something (configure and continue): the heading still
+// signals "stop and read", but a red confirm button would tell the user the save is dangerous.
+//
+// The heading stays plain text in the `warning` tone. Colouring it amber put a third warning signal
+// on a dialog that already has the amber strip and the amber consequence icons, and the heading is
+// a plain statement of fact ("no accounting account configured"), not the alarm. The destructive
+// tone keeps its red heading: there the title IS the alarm.
+const TONE_STYLES = {
+  destructive: {
+    accent: 'var(--status-destructive-fg)',
+    confirmBg: 'var(--status-destructive-fg)',
+    titleColor: 'var(--status-destructive-fg)',
+  },
+  warning: {
+    accent: 'var(--status-warning-fg)',
+    confirmBg: 'hsl(var(--text-primary))',
+    titleColor: 'hsl(var(--text-primary))',
+  },
+};
+
+/**
+ * The ready-made `items` list wins outright when the caller supplies one — a caller whose effects
+ * don't map onto the Conciliación/Transacción/Asiento triad passes it and leaves every flag unset.
+ * Otherwise the triad is derived here, each entry appearing only when the record actually carries
+ * that effect AND the caller worded a label for it.
+ */
+function resolveItems({
+  explicitItems, reconciled, itemConciliacion, hasTransaction, itemTransaccion, posted, itemAsiento,
+}) {
+  if (explicitItems) return explicitItems;
+  const derived = [];
+  if (reconciled && itemConciliacion) derived.push(itemConciliacion);
+  if (hasTransaction && itemTransaccion) derived.push(itemTransaccion);
+  if (posted && itemAsiento) derived.push(itemAsiento);
+  return derived;
+}
+
 /**
  * Generic confirmation dialog for destructive record-lifecycle actions
  * (Reactivar / Eliminar of a reconciled/posted record). Shared by Movimientos
@@ -39,6 +77,9 @@ import { createPortal } from 'react-dom';
  *   onConfirm: () => Promise<void> | void,
  *   onClose: () => void,
  *   testIdPrefix?: string,
+ *   tone?: 'destructive' | 'warning',
+ *   children?: import('react').ReactNode,
+ *   confirmDisabled?: boolean,
  * }} props
  */
 export default function LifecycleConfirmModal({
@@ -47,17 +88,14 @@ export default function LifecycleConfirmModal({
   onConfirm, onClose, testIdPrefix = 'lifecycle-confirm', tone = 'destructive', children = null,
   confirmDisabled = false,
 }) {
-  // `destructive` is the default because every original caller undoes something. `warning` is for a
-  // blocking prompt whose confirm BUILDS something (configure and continue): the heading still
-  // signals "stop and read", but a red confirm button would tell the user the save is dangerous.
-  const accent = tone === 'warning' ? 'var(--status-warning-fg)' : 'var(--status-destructive-fg)';
-  const confirmBg = tone === 'warning' ? 'hsl(var(--text-primary))' : 'var(--status-destructive-fg)';
-  // The heading stays plain text in the `warning` tone. Colouring it amber put a third warning
-  // signal on a dialog that already has the amber strip and the amber consequence icons, and the
-  // heading is a plain statement of fact ("no accounting account configured"), not the alarm. The
-  // destructive tone keeps its red heading: there the title IS the alarm.
-  const titleColor = tone === 'warning' ? 'hsl(var(--text-primary))' : accent;
+  // An unrecognised tone falls back to `destructive`, which is what the previous per-property
+  // ternaries did by treating everything that was not `warning` as destructive.
+  const { accent, confirmBg, titleColor } = TONE_STYLES[tone] ?? TONE_STYLES.destructive;
   const [loading, setLoading] = useState(false);
+
+  // Read four times in the confirm button's markup; collapsing it here keeps the disabled visual
+  // state and the guard from drifting apart.
+  const confirmBlocked = loading || confirmDisabled;
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -69,13 +107,9 @@ export default function LifecycleConfirmModal({
     }
   };
 
-  let items = explicitItems;
-  if (!items) {
-    items = [];
-    if (reconciled && itemConciliacion) items.push(itemConciliacion);
-    if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
-    if (posted && itemAsiento) items.push(itemAsiento);
-  }
+  const items = resolveItems({
+    explicitItems, reconciled, itemConciliacion, hasTransaction, itemTransaccion, posted, itemAsiento,
+  });
 
   // Portal to <body> so the overlay covers the whole viewport (incl. the left sidebar), escaping
   // any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
@@ -162,10 +196,10 @@ export default function LifecycleConfirmModal({
             {cancelLabel}
           </button>
           <button
-            disabled={loading || confirmDisabled}
+            disabled={confirmBlocked}
             onClick={handleConfirm}
             data-testid={`${testIdPrefix}-accept`}
-            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: (loading || confirmDisabled) ? 'hsl(var(--muted))' : confirmBg, font: '500 14px/1 Inter', color: (loading || confirmDisabled) ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: (loading || confirmDisabled) ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: confirmBlocked ? 'hsl(var(--muted))' : confirmBg, font: '500 14px/1 Inter', color: confirmBlocked ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: confirmBlocked ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             {confirmIcon}
             {loading ? '…' : confirmLabel}
