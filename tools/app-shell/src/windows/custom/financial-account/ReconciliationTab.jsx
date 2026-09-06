@@ -33,6 +33,7 @@ export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess 
         glItemDifference={account?.glItemDifferenceId
           ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
           : null}
+        accountUpdated={account?.updated ?? null}
         onBack={() => navigate(-1)}
         onReconcileSuccess={onReconcileSuccess}
         data-testid="ReconciliationSplitPanel__46a213" />

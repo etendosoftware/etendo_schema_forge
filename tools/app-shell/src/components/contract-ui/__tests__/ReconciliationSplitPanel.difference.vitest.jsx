@@ -9,8 +9,11 @@
 //      write an accounting entry;
 //   2. the action bar stops shouting "Restante por conciliar" in red for a gap that is about to be
 //      resolved automatically, and says so instead;
-//   3. a 400 `GL_ITEM_REQUIRED` opens the accounting-concept picker and the retry carries the
-//      chosen `glItemId`, rather than dead-ending in a red toast with an English sentence.
+//   3. "Conciliar" on a match with a postable difference never books blind: with no accounting
+//      account on the financial account it stops and opens `GlItemSetupDialog` (setting up the
+//      ACCOUNT, not this reconciliation) WITHOUT posting anything, and with one configured it asks
+//      for a plain confirmation showing that destination read-only. The 400 `GL_ITEM_REQUIRED` is
+//      demoted to a race fallback for an account that changed under the panel.
 //
 // Mocks BEFORE imports.
 
@@ -74,6 +77,13 @@ vi.mock('@/hooks/useMovementLookups', () => ({
   useGLItemLookup: () => ({ results: GL_ITEMS, loading: false }),
 }));
 
+// The setup dialog writes the chosen concept onto the FINANCIAL ACCOUNT, so the panel now reaches
+// for the account mutations hook. Same identity on every render, so no memo churn.
+const accountMutations = { updateAccount: vi.fn() };
+vi.mock('@/hooks/useAccountMutations.js', () => ({
+  useAccountMutations: () => accountMutations,
+}));
+
 const linesState = {
   lines: [], total: 0, counts: {}, loading: false, reload: vi.fn(), draftReconciliationCount: 0,
 };
@@ -97,6 +107,7 @@ vi.mock('@/hooks/useReconciliation', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -124,12 +135,20 @@ const CAND_EXACT = {
 
 const AMOUNT_TOLERANCE_PCT = 5;
 
+/**
+ * The account's record version as the panel read it. ETP-5073 makes it mandatory on every write,
+ * and it has to be the value READ — a fresh re-read before writing would always satisfy the
+ * optimistic-locking check and defeat it.
+ */
+const ACCOUNT_UPDATED = '2026-09-04T18:32:41Z';
+
 function renderPanel(props = {}) {
   return render(
     <ReconciliationSplitPanel
       accountId="ACC-1"
       currency="EUR"
       amountTolerance={AMOUNT_TOLERANCE_PCT}
+      accountUpdated={ACCOUNT_UPDATED}
       onReconcileSuccess={vi.fn()}
       {...props}
     />,
@@ -160,6 +179,11 @@ function glItemRequiredError() {
 /** The account's configured difference concept, as `FinancialAccountHandler` reports it. */
 const GL_DIFFERENCE = { id: 'GL-1', name: 'Comisiones bancarias' };
 
+/** Presses the bottom action bar's "Conciliar". */
+function clickReconcile() {
+  fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+}
+
 /** The amount cell sitting next to the "Restante por conciliar" label. */
 function remainingAmountCell() {
   return screen.getByText('financeReconcileBarRemaining').nextElementSibling;
@@ -180,6 +204,9 @@ beforeEach(() => {
   removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
   reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({ reactivated: true });
   reconcileDifferenceState.reconcileDifference = vi.fn().mockResolvedValue({ transactionId: 'T' });
+  accountMutations.updateAccount = vi.fn().mockResolvedValue({ id: 'ACC-1' });
+  toast.success.mockClear();
+  toast.error.mockClear();
   uiCalls.length = 0;
 });
 
@@ -314,63 +341,248 @@ describe('action bar within tolerance', () => {
   });
 });
 
-// ── 3. the GL_ITEM_REQUIRED retry ─────────────────────────────────────────────
+// ── 3. setting the account up, BEFORE anything is posted ──────────────────────
+//
+// The account has no `glItemDifference`, so there is nowhere to book the 0.38. The old flow found
+// that out from the server: it posted, took the 400, and only then asked. That is what these tests
+// pin down as gone — the request must not leave the browser at all.
 
-describe('GL_ITEM_REQUIRED retry', () => {
-  it('opens the accounting-concept picker instead of only red-toasting', async () => {
-    reconcileState.reconcile = vi.fn().mockRejectedValueOnce(glItemRequiredError());
+describe('postable difference with no accounting account on the account', () => {
+  it('opens the setup dialog instead of the difference confirmation', async () => {
     renderPanel();
     selectLine();
-    fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    clickReconcile();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('recon-difference-dialog')).toBeInTheDocument());
+    await screen.findByTestId('recon-glitem-setup-modal');
+    // Not the read-only confirmation: there is no destination to confirm yet.
+    expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
   });
 
-  it('retries the SAME reconcile payload with the chosen glItemId', async () => {
-    reconcileState.reconcile = vi.fn()
-      .mockRejectedValueOnce(glItemRequiredError())
-      .mockResolvedValueOnce({ reconciliationId: 'R1' });
+  it('issues NO reconcile call — nothing is posted to find out the concept is missing', async () => {
     renderPanel();
     selectLine();
-    fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    clickReconcile();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('recon-difference-dialog')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('recon-difference-concept-option-GL-1'));
+    await screen.findByTestId('recon-glitem-setup-modal');
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the confirm disabled until a concept is picked', async () => {
+    renderPanel();
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    expect(screen.getByTestId('recon-glitem-setup-accept')).toBeDisabled();
+  });
+
+  it('saves the picked concept on the ACCOUNT, not on this reconciliation', async () => {
+    renderPanel();
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-concept-option-GL-2'));
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-accept'));
+
+    await waitFor(() => expect(accountMutations.updateAccount).toHaveBeenCalledTimes(1));
+    // The difference destination and nothing else, plus the concurrency token the backend
+    // requires on every write (ETP-5073) — echoed from what the panel read, never re-fetched.
+    expect(accountMutations.updateAccount)
+      .toHaveBeenCalledWith('ACC-1', {
+        glItemDifferenceId: 'GL-2',
+        updated: ACCOUNT_UPDATED,
+      });
+  });
+
+  it('closes the dialog and reports the save, still without reconciling', async () => {
+    const onReconcileSuccess = vi.fn();
+    renderPanel({ onReconcileSuccess });
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-concept-option-GL-1'));
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-accept'));
+
+    await waitFor(() => expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull());
+    expect(toast.success).toHaveBeenCalledWith('financeReconcileGlItemSetupToastSaved');
+    // The host owns `glItemDifference`, so it has to re-read the account for the next click to see
+    // the concept — that is what this callback is being borrowed for.
+    expect(onReconcileSuccess).toHaveBeenCalled();
+    // The reconciliation is a separate, deliberate second click.
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+  });
+
+  it('leaves the dialog open and toasts when the account cannot be saved', async () => {
+    accountMutations.updateAccount = vi.fn().mockRejectedValue(new Error('Account is read-only'));
+    renderPanel();
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-concept-option-GL-1'));
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-accept'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Account is read-only'));
+    expect(screen.getByTestId('recon-glitem-setup-modal')).toBeInTheDocument();
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+  });
+
+  it('reconciles nothing when the setup is cancelled', async () => {
+    renderPanel();
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    fireEvent.click(screen.getByTestId('recon-glitem-setup-cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull());
+    expect(accountMutations.updateAccount).not.toHaveBeenCalled();
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+  });
+});
+
+// ── 4. confirming against the account's configured concept ────────────────────
+
+describe('postable difference with an accounting account configured', () => {
+  it('asks for confirmation before booking the entry', async () => {
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-difference-dialog');
+    expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+  });
+
+  it('shows the destination read-only — it is the account\'s setting, not a per-line choice', async () => {
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    const readonly = await screen.findByTestId('recon-difference-concept-readonly');
+    expect(readonly.textContent).toContain(GL_DIFFERENCE.name);
+    // The picker (stubbed as `<testId>-value` + one button per option) must not be offered here.
+    expect(screen.queryByTestId('recon-difference-concept-value')).toBeNull();
+    expect(screen.queryByTestId('recon-difference-concept-option-GL-1')).toBeNull();
+    expect(screen.queryByTestId('recon-difference-concept-option-GL-2')).toBeNull();
+  });
+
+  it('confirms with NO glItemId — the backend resolves it from the account', async () => {
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-difference-dialog');
+    // Enabled straight away: the destination is already known, nothing left to fill in.
+    expect(screen.getByTestId('recon-difference-confirm')).not.toBeDisabled();
     fireEvent.click(screen.getByTestId('recon-difference-confirm'));
 
-    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(2));
-    const [firstPayload] = reconcileState.reconcile.mock.calls[0];
-    const [retryPayload] = reconcileState.reconcile.mock.calls[1];
-    expect(firstPayload.glItemId).toBeUndefined();
-    expect(firstPayload.operationIds).toEqual([CAND_NEAR.id]);
-    expect(retryPayload).toEqual({ ...firstPayload, glItemId: 'GL-1' });
+    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+    const [payload] = reconcileState.reconcile.mock.calls[0];
+    expect(payload).not.toHaveProperty('glItemId');
+    expect(payload.operationIds).toEqual([CAND_NEAR.id]);
+    expect(payload.financialAccountId).toBe('ACC-1');
+    expect(payload.statementLineId).toBe(LINE.id);
+    // The plain reconcile endpoint books the difference; the standalone one is for the banner flow.
+    expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
   });
 
-  it('does not retry while no concept has been chosen', async () => {
+  it('closes without reconciling when the confirmation is cancelled', async () => {
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-difference-dialog');
+    fireEvent.click(screen.getByTestId('recon-difference-cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('recon-difference-dialog')).toBeNull());
+    expect(reconcileState.reconcile).not.toHaveBeenCalled();
+  });
+});
+
+// ── 5. no postable difference ─────────────────────────────────────────────────
+
+describe('exact match', () => {
+  beforeEach(() => {
+    candidatesState.candidates = [CAND_EXACT];
+  });
+
+  it('reconciles straight away, with no dialog in the way', async () => {
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+    const [payload] = reconcileState.reconcile.mock.calls[0];
+    expect(payload).not.toHaveProperty('glItemId');
+    expect(payload.operationIds).toEqual([CAND_EXACT.id]);
+    expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+    expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith('financeReconcileToastSuccess');
+  });
+
+  it('still reconciles straight away when the account has no concept configured', async () => {
+    renderPanel();
+    selectLine();
+    clickReconcile();
+
+    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+  });
+});
+
+// ── 6. GL_ITEM_REQUIRED, demoted to a race fallback ───────────────────────────
+//
+// Only reachable when the account lost (or never had) its concept between the panel's load and the
+// click — handleReconcile catches every other case first. The remedy is the same one the proactive
+// path offers: configure the account. Never the read-only confirmation, which would show a
+// destination that does not exist.
+
+describe('GL_ITEM_REQUIRED as a race fallback', () => {
+  it('opens the setup dialog when a direct reconcile comes back asking for a concept', async () => {
+    candidatesState.candidates = [CAND_EXACT];
     reconcileState.reconcile = vi.fn().mockRejectedValueOnce(glItemRequiredError());
     renderPanel();
     selectLine();
-    fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    clickReconcile();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('recon-difference-dialog')).toBeInTheDocument());
-    // Never confirm an adjustment without a destination account.
-    expect(screen.getByTestId('recon-difference-confirm')).toBeDisabled();
-    expect(reconcileState.reconcile).toHaveBeenCalledTimes(1);
+    await screen.findByTestId('recon-glitem-setup-modal');
+    expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
   });
 
-  it('still surfaces an unrelated failure as an error, with no picker', async () => {
+  it('swaps the confirmation for the setup dialog when the account changed underneath', async () => {
+    // The panel still believes the account has GL-1; the server says otherwise on submit.
+    reconcileState.reconcile = vi.fn().mockRejectedValueOnce(glItemRequiredError());
+    renderPanel({ glItemDifference: GL_DIFFERENCE });
+    selectLine();
+    clickReconcile();
+
+    await screen.findByTestId('recon-difference-dialog');
+    fireEvent.click(screen.getByTestId('recon-difference-confirm'));
+
+    await screen.findByTestId('recon-glitem-setup-modal');
+    expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+    expect(accountMutations.updateAccount).not.toHaveBeenCalled();
+  });
+
+  it('still surfaces an unrelated failure as an error, with no dialog', async () => {
+    candidatesState.candidates = [CAND_EXACT];
     const err = new Error('Statement line is already reconciled');
     err.status = 409;
     err.body = { error: { message: 'Statement line is already reconciled', status: 409 } };
     reconcileState.reconcile = vi.fn().mockRejectedValueOnce(err);
     renderPanel();
     selectLine();
-    fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+    clickReconcile();
 
-    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Statement line is already reconciled'));
     expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+    expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
   });
 });

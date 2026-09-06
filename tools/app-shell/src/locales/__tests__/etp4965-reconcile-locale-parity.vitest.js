@@ -73,6 +73,18 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
     'financeReconcileDiffRowMatched',
     'financeReconcileDiffRowStatement',
     'financeReconcileDiffToastSuccess',
+    // QA round: the automatch modal names the movement a near match will create, and the manual
+    // flow asks for the accounting account before it can book one.
+    'financeReconcileAutomatchOpDifference',
+    'financeReconcileGlItemSetupTitle',
+    'financeReconcileGlItemSetupBody',
+    'financeReconcileGlItemSetupHint',
+    'financeReconcileGlItemSetupConfirm',
+    'financeReconcileGlItemSetupToastSaved',
+    'financeReconcileGlItemSetupItemScopeTitle',
+    'financeReconcileGlItemSetupItemScopeBody',
+    'financeReconcileGlItemSetupItemNextTitle',
+    'financeReconcileGlItemSetupItemNextBody',
   ];
 
   for (const key of BACKFILLED_KEYS) {
