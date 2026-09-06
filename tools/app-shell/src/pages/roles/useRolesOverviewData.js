@@ -242,35 +242,65 @@ function compareByOrderThenFallback(orderA, orderB, fallbackCompare) {
 }
 
 /**
- * Flattens `matrix.categories[].windows[]`, resolving each window's category/name against
- * `menuIndex` (see `buildMenuWindowIndex`) instead of trusting the backend's
- * classic-AD-tree grouping, and buckets rows by that RESOLVED category — since two
- * different backend `category.name` buckets can map to the same menu.json `group` (or
- * vice versa), every window is flattened across all backend categories first, then
- * re-bucketed by its resolved category string.
- *
- * A window NOT found in `menuIndex` (e.g. "Roles"/"Usuario", deliberately granted to
- * none of the 4 templates and absent from `menu.json`) falls back to the backend's raw
- * `category.name`/`w.name` — it must never disappear from the matrix just because it
- * isn't in menu.json.
- *
- * ETP-5071 — a window IS excluded from the output entirely when it resolves to a
- * `menuIndex` match whose own `hidden` flag is `true` — meaning every menu.json entry for
- * that id is hidden (see `buildMenuWindowIndex`'s precedence rule: a visible alternative,
+ * Resolves a single backend window `w` (from `category.windows[]`) against `menuIndex`
+ * (see `buildMenuWindowIndex`) instead of trusting the backend's classic-AD-tree grouping.
+ * Returns `null` when the window must be excluded from the matrix entirely — ETP-5071: a
+ * `menuIndex` match whose own `hidden` flag is `true` (meaning every menu.json entry for
+ * that id is hidden — see `buildMenuWindowIndex`'s precedence rule: a visible alternative,
  * if one exists, always wins the index slot first). Two confirmed real cases: Match Rule
  * and Periods (`Finance`), both hidden-only in menu.json yet granted real
  * `AD_Window_Access` — an admin configuring "what can this role see" should never be
- * shown a toggle for something nobody can navigate to. This check only fires on an actual
- * match; the "never disappear" fallback above for an absent `menuIndex` entry is
- * unaffected — `match` is `undefined` in that case, not a hidden `true`.
+ * shown a toggle for something nobody can navigate to.
  *
- * Also tracks, per resolved category, the smallest `groupOrder` seen among its windows
- * (that window's menu.json group's own declaration-order index) — used by
+ * Otherwise returns the resolved `resolvedCategory` (falls back to the backend's raw
+ * `category.name` when the window isn't in `menuIndex` — e.g. "Roles"/"Usuario",
+ * deliberately granted to none of the 4 templates — it must never disappear from the
+ * matrix just because it isn't in menu.json), the adapted `row` (with a transient
+ * `_itemOrder`, that window's index within its menu.json group or `null` if absent from
+ * `menuIndex`, used by `compareRowsByItemOrder` and stripped again by `adaptMatrix` before
+ * it returns), and the window's own `groupOrder` (that window's menu.json group's own
+ * declaration-order index, or `null` if absent from `menuIndex`) for
+ * `trackBestGroupOrder` to fold into the running per-category best.
+ */
+function resolveMatrixRow(w, category, menuIndex) {
+  const match = menuIndex.get(String(w.id));
+  if (match?.hidden) return null;
+  const resolvedCategory = match?.group ?? category.name;
+  const row = {
+    windowId: w.id,
+    windowName: match?.label ?? w.name,
+    access: Object.fromEntries(
+      Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
+    ),
+    _itemOrder: match?.itemOrder ?? null,
+  };
+  return { resolvedCategory, row, groupOrder: match?.groupOrder ?? null };
+}
+
+/**
+ * Folds one window's `groupOrder` (see `resolveMatrixRow`) into `groupOrderByCategory`,
+ * keeping the smallest value seen so far for `resolvedCategory` — used by
  * `compareCategoriesByOrder` to sort categories by menu.json's own declaration order
- * rather than alphabetically. Each row also carries a transient `_itemOrder` (that
- * window's index within its menu.json group, or `null` if absent from `menuIndex`), used
- * by `compareRowsByItemOrder` and stripped again by `adaptMatrix` before it returns, so
- * the shape callers see is unchanged.
+ * rather than alphabetically. A `null` `groupOrder` (window absent from `menuIndex`)
+ * leaves the map untouched; `0` is a real, trackable value (not treated as absent).
+ * Mutates `groupOrderByCategory` in place.
+ */
+function trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder) {
+  if (groupOrder == null) return;
+  const currentBest = groupOrderByCategory.get(resolvedCategory);
+  if (currentBest == null || groupOrder < currentBest) {
+    groupOrderByCategory.set(resolvedCategory, groupOrder);
+  }
+}
+
+/**
+ * Flattens `matrix.categories[].windows[]` and buckets rows by their RESOLVED category
+ * (see `resolveMatrixRow`) — since two different backend `category.name` buckets can map
+ * to the same menu.json `group` (or vice versa), every window is flattened across all
+ * backend categories first, then re-bucketed by its resolved category string. Windows
+ * excluded by `resolveMatrixRow` (sidebar-hidden, ETP-5071) are skipped entirely. Also
+ * tracks, per resolved category, the smallest `groupOrder` seen among its windows via
+ * `trackBestGroupOrder`.
  */
 function bucketRowsByResolvedCategory(categories, menuIndex) {
   const rowsByCategory = new Map();
@@ -278,27 +308,12 @@ function bucketRowsByResolvedCategory(categories, menuIndex) {
 
   for (const category of categories) {
     for (const w of category.windows ?? []) {
-      const match = menuIndex.get(String(w.id));
-      if (match?.hidden) continue;
-      const resolvedCategory = match?.group ?? category.name;
-      const resolvedName = match?.label ?? w.name;
-      const row = {
-        windowId: w.id,
-        windowName: resolvedName,
-        access: Object.fromEntries(
-          Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
-        ),
-        _itemOrder: match?.itemOrder ?? null,
-      };
+      const resolved = resolveMatrixRow(w, category, menuIndex);
+      if (!resolved) continue;
+      const { resolvedCategory, row, groupOrder } = resolved;
       if (!rowsByCategory.has(resolvedCategory)) rowsByCategory.set(resolvedCategory, []);
       rowsByCategory.get(resolvedCategory).push(row);
-
-      if (match?.groupOrder != null) {
-        const currentBest = groupOrderByCategory.get(resolvedCategory);
-        if (currentBest == null || match.groupOrder < currentBest) {
-          groupOrderByCategory.set(resolvedCategory, match.groupOrder);
-        }
-      }
+      trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder);
     }
   }
 
