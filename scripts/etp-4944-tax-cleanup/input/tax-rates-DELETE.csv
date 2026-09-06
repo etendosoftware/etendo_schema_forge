@@ -1,0 +1,247 @@
+Nombre,Indice,Valido desde,Grupo de impuesto
+Adquisición Bienes Inversión 18%,18,2010-07-01,IVA Normal Bienes Inversión
+Adquisición B.Inmuebles 16%,16,2001-01-01,IVA Normal B.Inmuebles
+Adquisición B.Inmuebles 18%,18,2010-07-01,IVA Normal B.Inmuebles
+Adquisición B.Inmuebles 7%,7,2001-01-01,IVA Reducido B.Inmuebles
+Adquisición B.Inmuebles 8%,8,2010-07-01,IVA Reducido B.Inmuebles
+"Adquisiciones a Canarias,Ceuta y Melilla 16%",16,2001-01-01,IVA Normal
+"Adquisiciones a Canarias,Ceuta y Melilla 18%",18,2010-07-01,IVA Normal
+"Adquisiciones a Canarias,Ceuta y Melilla 7%",7,2001-01-01,IVA Reducido
+"Adquisiciones a Canarias,Ceuta y Melilla 8%",8,2010-07-01,IVA Reducido
+Adquisiciones IGIC 13.5%,13.5,2012-07-01,IGIC Incrementado 2
+Adquisiciones IGIC 6.5%,6.5,2019-01-01,IGIC General
+Adquisiciones IGIC Implícito 70% s13.5%,13.5,2018-01-01,IGIC Incrementado 2
+Adquisiciones IGIC Implícito 70% s13.5% (4.05%),4.05,2018-01-01,IGIC Incrementado 2
+Adquisiciones IGIC Implícito 70% s13.5% (9.45%),9.45,2018-01-01,IGIC Incrementado 2
+Adquisiciones IGIC Implícito 70% s6.5%,6.5,2019-01-01,IGIC General
+Adquisiciones IGIC Implícito 70% s6.5% (1.95%),1.95,2019-01-01,IGIC General
+Adquisiciones IGIC Implícito 70% s6.5% (4.55%),4.55,2019-01-01,IGIC General
+Adquisiciones intracomunitarias 16%,0,2000-01-01,IVA Normal
+Adquisiciones intracomunitarias 16% (+16%),16,2000-01-01,IVA Normal
+Adquisiciones intracomunitarias 16% (-16%),-16,2000-01-01,IVA Normal
+Adquisiciones intracomunitarias 18%,0,2010-07-01,IVA Normal
+Adquisiciones intracomunitarias 18% (+18%),18,2010-07-01,IVA Normal
+Adquisiciones intracomunitarias 18% (-18%),-18,2010-07-01,IVA Normal
+Adquisiciones intracomunitarias 7%,0,2006-01-01,IVA Reducido
+Adquisiciones intracomunitarias 7% (+7%),7,2000-01-01,IVA Reducido
+Adquisiciones intracomunitarias 7% (-7%),-7,2000-01-01,IVA Reducido
+Adquisiciones intracomunitarias 8%,0,2010-07-01,IVA Reducido
+Adquisiciones intracomunitarias 8% (+8%),8,2010-07-01,IVA Reducido
+Adquisiciones intracomunitarias 8% (-8%),-8,2010-07-01,IVA Reducido
+Adquisiciones intracomunitarias Bienes Inversión 18%,0,2010-07-01,IVA Normal Bienes Inversión
+Adquisiciones intracomunitarias Bienes Inversión 18% (+18%),18,2010-07-01,IVA Normal Bienes Inversión
+Adquisiciones intracomunitarias Bienes Inversión 18% (-18%),-18,2010-07-01,IVA Normal Bienes Inversión
+Adquisiciones IVA 16%,16,2000-01-01,IVA Normal
+Adquisiciones IVA 18%,18,2010-07-01,IVA Normal
+Adquisiciones IVA 7% ,7,2000-01-01,IVA Reducido
+Adquisiciones IVA 8%,8,2010-07-01,IVA Reducido
+Adquisiciones IVA+RE 16+4%,20,2000-01-01,IVA Normal
+Adquisiciones IVA+RE 16+4% (+16%),16,2000-01-01,IVA Normal
+Adquisiciones IVA+RE 16+4% (+4%),4,2000-01-01,IVA Normal
+Adquisiciones IVA+RE 18+4%,22,2010-07-01,IVA Normal
+Adquisiciones IVA+RE 18+4% (+18%),18,2010-07-01,IVA Normal
+Adquisiciones IVA+RE 18+4% (+4%),4,2010-07-01,IVA Normal
+Adquisiciones IVA+RE 7+1% ,8,2000-01-01,IVA Reducido
+Adquisiciones IVA+RE 7+1% (+1%),1,2000-01-01,IVA Reducido
+Adquisiciones IVA+RE 7+1% (+7%),7,2000-01-01,IVA Reducido
+Adquisiciones IVA+RE 8+1% ,9,2010-07-01,IVA Reducido
+Adquisiciones IVA+RE 8+1% (+1%),1,2010-07-01,IVA Reducido
+Adquisiciones IVA+RE 8+1% (+8%),8,2010-07-01,IVA Reducido
+Arrendamiento 16% (cobros),16,2001-01-01,IVA Normal
+Arrendamiento 16% (pagos),16,2001-01-01,IVA Normal
+Arrendamiento 18% (cobros),18,2010-07-01,IVA Normal
+Arrendamiento 18% (pagos),18,2010-07-01,IVA Normal
+"Arrendamientos 0% -19,5%R (cobros)",0,2015-07-12,Exento
+"Arrendamientos 0% -19,5%R (cobros) (+0%)",0,2015-07-12,Exento
+"Arrendamientos 0% -19,5%R (cobros) (-19,5%)",-19.5,2015-07-12,Exento
+"Arrendamientos 0% -19,5%R (pagos)",0,2015-07-12,Exento
+"Arrendamientos 0% -19,5%R (pagos) (+0%)",0,2015-07-12,Exento
+"Arrendamientos 0% -19,5%R (pagos) (-19,5%)",-19.5,2015-07-12,Exento
+Arrendamientos 0% -20%R (cobros),0,2015-01-01,Exento
+Arrendamientos 0% -20%R (cobros) (+0%),0,2015-01-01,Exento
+Arrendamientos 0% -20%R (cobros) (-20%),-20,2015-01-01,Exento
+Arrendamientos 0% -20%R (pagos),0,2015-01-01,Exento
+Arrendamientos 0% -20%R (pagos) (+0%),0,2015-01-01,Exento
+Arrendamientos 0% -20%R (pagos) (-20%),-20,2015-01-01,Exento
+Arrendamientos 0% -21%R (cobros),0,2012-09-01,Exento
+Arrendamientos 0% -21%R (cobros) (+0%),0,2012-09-01,Exento
+Arrendamientos 0% -21%R (cobros) (-21%),-21,2012-09-01,Exento
+Arrendamientos 0% -21%R (pagos),0,2012-09-01,Exento
+Arrendamientos 0% -21%R (pagos) (+0%),0,2013-09-01,Exento
+Arrendamientos 0% -21%R (pagos) (-21%),-21,2013-09-01,Exento
+Arrendamientos 16% -18%R (cobros),16,2001-01-01,IVA Normal
+Arrendamientos 16% -18%R (cobros) (+16%),16,2001-01-01,IVA Normal
+Arrendamientos 16% -18%R (cobros) (-18%),-18,2001-01-01,IVA Normal
+Arrendamientos 16% -18%R (pagos),16,2001-01-01,IVA Normal
+Arrendamientos 16% -18%R (pagos) (+16%),16,2001-01-01,IVA Normal
+Arrendamientos 16% -18%R (pagos) (-18%),-18,2008-01-01,IVA Normal
+Arrendamientos 16% -19%R (cobros),16,2010-01-01,IVA Normal
+Arrendamientos 16% -19%R (cobros) (+16%),16,2010-01-01,IVA Normal
+Arrendamientos 16% -19%R (cobros) (-19%),-19,2010-01-01,IVA Normal
+Arrendamientos 16% -19%R (pagos),16,2010-01-01,IVA Normal
+Arrendamientos 16% -19%R (pagos) (+16%),16,2010-01-01,IVA Normal
+Arrendamientos 16% -19%R (pagos) (-19%),-19,2010-01-01,IVA Normal
+Arrendamientos 18% -19%R (cobros),18,2010-07-01,IVA Normal
+Arrendamientos 18% -19%R (cobros) (+18%),18,2010-07-01,IVA Normal
+Arrendamientos 18% -19%R (cobros) (-19%),-19,2010-07-01,IVA Normal
+Arrendamientos 18% -19%R (pagos),18,2010-07-01,IVA Normal
+Arrendamientos 18% -19%R (pagos) (+18%),18,2010-07-01,IVA Normal
+Arrendamientos 18% -19%R (pagos) (-19%),-19,2010-07-01,IVA Normal
+Arrendamientos 18% -21%R (cobros),18,2012-01-01,IVA Normal
+Arrendamientos 18% -21%R (cobros) (+18%),18,2012-01-01,IVA Normal
+Arrendamientos 18% -21%R (cobros) (-21%),-21,2012-01-01,IVA Normal
+Arrendamientos 18% -21%R (pagos),18,2012-01-01,IVA Normal
+Arrendamientos 18% -21%R (pagos) (+18%),18,2012-01-01,IVA Normal
+Arrendamientos 18% -21%R (pagos) (-21%),-21,2012-01-01,IVA Normal
+"Arrendamientos 21% -19,5%R (cobros)",21,2015-07-12,IVA Normal
+"Arrendamientos 21% -19,5%R (cobros) (-19,5%)",-19.5,2015-07-12,IVA Normal
+"Arrendamientos 21% -19,5%R (cobros) (+21%)",21,2015-07-12,IVA Normal
+"Arrendamientos 21% -19,5%R (pagos)",21,2015-07-12,IVA Normal
+"Arrendamientos 21% -19,5%R (pagos) (-19,5%)",-19.5,2015-07-12,IVA Normal
+"Arrendamientos 21% -19,5%R (pagos) (+21%)",21,2015-07-12,IVA Normal
+Arrendamientos 21% -20%R (cobros),21,2015-01-01,IVA Normal
+Arrendamientos 21% -20%R (cobros) (-20%),-20,2015-01-01,IVA Normal
+Arrendamientos 21% -20%R (cobros) (+21%),21,2015-01-01,IVA Normal
+Arrendamientos 21% -20%R (pagos),21,2015-01-01,IVA Normal
+Arrendamientos 21% -20%R (pagos) (-20%),-20,2015-01-01,IVA Normal
+Arrendamientos 21% -20%R (pagos) (+21%),21,2015-01-01,IVA Normal
+Arrendamientos 21% -21%R (cobros),21,2012-09-01,IVA Normal
+Arrendamientos 21% -21%R (cobros) (+21%),21,2012-09-01,IVA Normal
+Arrendamientos 21% -21%R (cobros) (-21%),-21,2012-09-01,IVA Normal
+Arrendamientos 21% -21%R (pagos),21,2012-09-01,IVA Normal
+Arrendamientos 21% -21%R (pagos) (+21%),21,2012-09-01,IVA Normal
+Arrendamientos 21% -21%R (pagos) (-21%),-21,2012-09-01,IVA Normal
+Arrendamientos en Canarias 6.5%,6.5,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -19%R (pagos),6.5,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -19%R (pagos) (-19%),-19,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -19%R (pagos) (6.5%),6.5,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -21%R (pagos),6.5,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -21%R (pagos) (-21%),-21,2019-01-01,IGIC General
+Arrendamientos en Canarias 6.5% -21%R (pagos) (6.5%),6.5,2019-01-01,IGIC General
+Arrendamientos en Guipúzcoa 21%-10%R (pagos),0,2012-09-01,IVA Normal
+Arrendamientos en Guipúzcoa 21% -10%R (pagos) (-10%),-10,2012-09-01,IVA Normal
+Arrendamientos en Guipúzcoa 21% -10%R (pagos) (+21%),21,2012-09-01,IVA Normal
+Arrendamientos en Navarra 21% -20%R (pagos),0,2012-09-01,IVA Normal
+Arrendamientos en Navarra 21% -20%R (pagos) (-20%),-20,2012-09-01,IVA Normal
+Arrendamientos en Navarra 21% -20%R (pagos) (+21%),21,2012-09-01,IVA Normal
+Entregas Bienes Inversión 18%,18,2010-07-01,IVA Normal Bienes Inversión
+Entregas IGIC 13.5%,13.5,2012-07-01,IGIC Incrementado 2
+Entregas IGIC 6.5%,6.5,2019-01-01,IGIC General
+Entregas IVA 16%,16,2000-01-01,IVA Normal
+Entregas IVA 18%,18,2010-07-01,IVA Normal
+Entregas IVA 7% ,7,2000-01-01,IVA Reducido
+Entregas IVA 8%,8,2010-07-01,IVA Reducido
+Entregas IVA+RE 16+4% ,20,2000-01-01,IVA Normal
+Entregas IVA+RE 16+4% (+16%),16,2000-01-01,IVA Normal
+Entregas IVA+RE 16+4% (+4%),4,2000-01-01,IVA Normal
+Entregas IVA+RE 18+4% ,22,2010-07-01,IVA Normal
+Entregas IVA+RE 18+4% (+18%),18,2010-07-01,IVA Normal
+Entregas IVA+RE 18+4% (+4%),4,2010-07-01,IVA Normal
+Entregas IVA+RE 7+1% ,8,2000-01-01,IVA Reducido
+Entregas IVA+RE 7+1% (+1%),1,2000-01-01,IVA Reducido
+Entregas IVA+RE 7+1% (+7%),7,2000-01-01,IVA Reducido
+Entregas IVA+RE 8+1% ,9,2010-07-01,IVA Reducido
+Entregas IVA+RE 8+1% (+1%),1,2010-07-01,IVA Reducido
+Entregas IVA+RE 8+1% (+8%),8,2010-07-01,IVA Reducido
+Importaciones 16%,16,2001-01-01,IVA Normal
+Importaciones 16%=0%,0,2001-01-01,IVA Normal
+Importaciones 18%,18,2010-07-01,IVA Normal
+Importaciones 18%=0%,0,2010-07-01,IVA Normal
+Importaciones 7%,7,2001-01-01,IVA Reducido
+Importaciones 7%=0%,0,2001-01-01,IVA Reducido
+Importaciones 8%,8,2010-07-01,IVA Reducido
+Importaciones 8%=0%,0,2010-07-01,IVA Reducido
+Importaciones Bienes Inversión 18%,18,2010-07-01,IVA Normal Bienes Inversión
+Importaciones Bienes Inversión 18%=0%,0,2010-07-01,IVA Normal Bienes Inversión
+Inversión Sujeto Pasivo no UE 16%,0,2010-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 16% (0%),0,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 16% (+16%),16,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 16% (-16%),-16,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 18%,0,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 18% (0%),0,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 18% (+18%),18,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 18% (-18%),-18,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 21% -24.75%R,0,2012-09-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 21% -24.75%R (+21%),21,2012-09-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 21% -24.75%R (-21%),-21,2012-09-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 21% -24.75%R (-24.75%),-24.75,2013-09-01,IVA Normal Servicios
+Inversión Sujeto Pasivo no UE 7% ,0,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 7% (0%),0,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 7% (+7%),7,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 7% (-7%),-7,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 8%,0,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 8% (0%),0,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 8% (+8%),8,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo no UE 8% (-8%),-8,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 16%,0,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 16% (0%),0,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 16% (+16%),16,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 16% (-16%),-16,2001-01-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 18%,0,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 18% (+0%),0,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 18% (+18%),18,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 18% (-18%),-18,2010-07-01,IVA Normal Servicios
+Inversión Sujeto Pasivo UE 7%,0,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 7% (0%),0,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 7% (+7%),7,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 7% (-7%),-7,2001-01-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 8%,0,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 8% (+0%),0,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 8% (+8%),8,2010-07-01,IVA Reducido Servicios
+Inversión Sujeto Pasivo UE 8% (-8%),-8,2010-07-01,IVA Reducido Servicios
+Prestación servicios en Canarias 13.5%,13.5,2012-07-01,IGIC Incrementado 2 Servicios
+Prestación servicios en Canarias 5%,5,2010-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5%,6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -15%R,6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -15%R (-15%),-15,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -15%R (+6.5%),6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -19%R,6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -19%R (-19%),-19,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -19%R (+6.5%),6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -21%R,6.5,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -21%R (-21%),-21,2019-01-01,IGIC General Servicios
+Prestación servicios en Canarias 6.5% -21%R (+6.5%),6.5,2019-01-01,IGIC General Servicios
+Prestación servicios nacional 16% ,16,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -15%R,16,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -15%R (-15%),-15,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -15%R (+16%),16,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -7%R,16,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -7%R (+16%),16,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 16% -7%R (-7%),-7,2001-01-01,IVA Normal Servicios
+Prestación servicios nacional 18% ,18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -15%R,18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -15%R (-15%),-15,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -15%R (+18%),18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -1%R,18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -1%R (-1%),-1,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -1%R (18%),18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -7%R,18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -7%R (+18%),18,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 18% -7%R (-7%),-7,2010-07-01,IVA Normal Servicios
+Prestación servicios nacional 21% -15%R (-15%) RDL,-15,2014-07-05,IVA Normal Servicios
+Prestación servicios nacional 21% -15%R (+21%) RDL,21,2014-07-05,IVA Normal Servicios
+Prestación servicios nacional 21% -15%R RDL,21,2014-07-05,IVA Normal Servicios
+Prestación servicios nacional 7%,7,2001-01-01,IVA Reducido Servicios
+Prestación servicios nacional 8% ,8,2010-07-01,IVA Reducido Servicios
+Servicios prestados en Canarias 13.5%,13.5,2012-07-01,IGIC Incrementado 2 Servicios
+Servicios prestados en Canarias 6.5%,6.5,2019-01-01,IGIC General Servicios
+Servicios prestados nacional 16%,16,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -15%R,16,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -15%R (-15%),-15,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -15%R (+16%),16,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -7%R,16,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -7%R (+16%),16,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 16% -7%R (-7%),-7,2001-01-01,IVA Normal Servicios
+Servicios prestados nacional 18%,18,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -15%R,18,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -15%R (-15%),-15,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -15%R (+18%),18,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -7%R,18,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -7%R (+18%),18,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 18% -7%R (-7%),-7,2010-07-01,IVA Normal Servicios
+Servicios prestados nacional 7%,7,2001-01-01,IVA Reducido Servicios
+Servicios prestados nacional 8%,8,2010-07-01,IVA Reducido Servicios
+Transmisión B.Inmuebles 16%,16,2001-01-01,IVA Normal B.Inmuebles
+Transmisión B.Inmuebles 18%,18,2010-07-01,IVA Normal B.Inmuebles
+Transmisión B.Inmuebles 7%,7,2001-01-01,IVA Reducido B.Inmuebles
+Transmisión B.Inmuebles 8%,8,2010-07-01,IVA Reducido B.Inmuebles

@@ -14,7 +14,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 
 ## What this window should allow
 
-- Create and maintain asset master records with core identity fields such as Search Key, Name, and Asset Category.
+- Create and maintain asset master records with core identity fields such as Search Key, Name, and Asset Group.
 - Capture lifecycle and valuation context, including purchase date, depreciation start/end dates, asset value, residual value, and previously depreciated amounts.
 - Decide whether the asset is depreciated at all, then configure the depreciation method:
   - depreciation type
@@ -43,7 +43,7 @@ The Assets window should let a finance user register fixed assets, define how ea
   - When **Depreciate** is on, the window reveals depreciation type and calculation options.
   - When calculation type is **Percentage**, the setup emphasizes **Annual Depreciation %**.
   - When calculation type is **Time**, the setup reveals **Amortize** and then switches between **Usable Life - Years** and **Usable Life - Months** based on the chosen schedule.
-- The asset category selector has a callout attached, so category selection is expected to drive or prefill related depreciation behavior. The repo evidence shows that dependency exists, but it does not fully document every value the callout changes.
+- The asset group selector has a callout attached, so group selection is expected to drive or prefill related depreciation behavior. The repo evidence shows that dependency exists, but it does not fully document every value the callout changes.
 - Currency defaults from `@C_Currency_ID@` and becomes read-only once amortization progress already exists (`depreciatedPlan` or `depreciatedValue` greater than zero), which indicates that key monetary context should stop changing after planning starts.
 - The **Create Amortization** action is only exposed when the asset is marked as depreciated.
 - The amortization footer panel and right sidebar both depend on the current asset record id. They fetch amortization lines with `parentId={assetId}` and sort them by `sEQNoAsset asc`, so the child schedule is expected to stay anchored to the selected asset and appear in sequence order.
@@ -66,12 +66,12 @@ The Assets window should let a finance user register fixed assets, define how ea
 ## Manual verification
 
 1. Open `/assets` from the Finance menu and confirm the Assets list renders with a funnel (Advanced Filter) and "Nuevo activo" button only — no "All statuses ▾" status dropdown, no print or more-menu chrome.
-2. Open or create an asset and confirm the record starts with core setup fields such as Search Key, Name, and Asset Category.
+2. Open or create an asset and confirm the record starts with core setup fields such as Search Key, Name, and Asset Group.
 3. Toggle **Depreciate** off and on and confirm the depreciation setup section appears only when depreciation is enabled.
 4. Switch calculation type between percentage-based and time-based setups and confirm the window swaps the expected inputs:
    - percentage path shows **Annual Depreciation %** (label: `assetsAnnualDepreciationLabel`)
    - time path shows **Amortize** and usable-life inputs
-4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Category regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
+4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Group regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
 4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a **Project** and/or **Cost Center** selector, each independently, only when the client's accounting-dimension configuration enables that dimension for this org's ledger (ETP-4914 — Cost Center is now also "Por config", not "Nunca"), and disappears entirely when both resolve to not-visible. Open each visible selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
@@ -98,7 +98,7 @@ The Assets window should let a finance user register fixed assets, define how ea
   - display logic for depreciation fields
   - currency defaulting and read-only logic once amortization progress exists
   - child CRUD surfaces for `amortizationLine` and `assetAcct`
-  - selector endpoints for asset category, currency, amortization, accounting schema, accumulated depreciation, and depreciation accounts
+  - selector endpoints for asset group, currency, amortization, accounting schema, accumulated depreciation, and depreciation accounts
   - generated validation entries covering field presence, types, read-only/display logic, CRUD flags, and selector endpoints for the assets, amortizationLine, and assetAcct entities
 - `tools/app-shell/src/windows/custom/assets/AssetsConfigPanel.jsx` implements the visible setup logic that switches fields based on depreciation and calculation choices. All field labels — including currency, purchase/cancellation/depreciation dates, asset value, residual value, depreciation amount, previously depreciated amount, and **annual depreciation percentage** (`assetsAnnualDepreciationLabel`) — are resolved through `useUI()` with keys registered in both `en_US` and `es_ES` locales. On new records, a `useEffect` calls `onChange('currency', data.currency)` on mount to register the backend-defaulted currency value in the form's change tracking — preventing it from being silently dropped on first save. The currency default expression `@C_Currency_ID@` is configured in `artifacts/assets/decisions.json` and pushed to `ETGO_SF_FIELD.DefaultValue` so the NEO `/defaults` endpoint resolves the org's functional currency for new records.
 - `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx` fetches amortization lines by `parentId`, refreshes on `neo:processSuccess`, and renders a table of scheduled lines. Navigation to the Amortization document is scoped to the **Período** cell only — a `PeriodLink` component renders the period identifier as an underlined link with an `ArrowUpRight` icon; clicking elsewhere on the row does nothing. No footer total is shown (the information is already in the "Depreciación planificada" sidebar card).
@@ -570,7 +570,7 @@ does not join the "Dimensiones contables" panel at all — it is now always show
 - `decisions.json`: `assets.product.visibility` changed from `discarded` to `editable`
   (`section: "principal"`), matching its natural raw-AD classification.
 - `AssetsDetailPanel.jsx`: `product` is now a regular field in `group1Fields` (Asset Info,
-  next to Asset Category) — `{ key: 'product', column: 'M_Product_ID', type: 'search',
+  next to Asset Group) — `{ key: 'product', column: 'M_Product_ID', type: 'search',
   lookup: true, reference: 'Product', inputMode: 'search', section: 'principal' }`, using the
   same `type: 'search'` pattern as other high-cardinality product lookups (e.g.
   `price-list/PriceListProductPrices.jsx`). It remains in the `readOnlyAll` hardcoded list so
@@ -982,7 +982,7 @@ When a user attempts to create or update an asset with a duplicate Search Key in
 
 ### Architecture note
 
-The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pattern employed by `AssetGroupNameUniqueHandler` for enforcing Asset Category name uniqueness (Client-scoped, not Organization-scoped). Both handlers respond to OBDal persistence events at the model layer, ensuring the validation applies regardless of whether the save originated from the Classic AD window, NEO Headless, or any direct API call. This is distinct from the `NeoHandler` pattern (which hooks the NEO HTTP request layer only).
+The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pattern employed by `AssetGroupNameUniqueHandler` for enforcing Asset Group name uniqueness (Client-scoped, not Organization-scoped). Both handlers respond to OBDal persistence events at the model layer, ensuring the validation applies regardless of whether the save originated from the Classic AD window, NEO Headless, or any direct API call. This is distinct from the `NeoHandler` pattern (which hooks the NEO HTTP request layer only).
 
 ### Tests
 
