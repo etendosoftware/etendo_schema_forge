@@ -1,4 +1,4 @@
-import { MoreVertical, PlayCircle, RotateCcw } from 'lucide-react';
+import { MoreVertical, PlayCircle, RotateCcw, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { isDraftStatement } from './statementStatus.js';
 import {
@@ -20,13 +20,16 @@ import {
  * for processed statements). The non-applicable one renders disabled with an
  * explanatory tooltip.
  *
- * Edit and Delete are NOT here — they live as inline hover quick-actions on the
- * row (see {@link StatementsTable}), mirroring the sales-order grid.
+ * Edit is NOT here — it lives as an inline hover quick-action on the row (see
+ * {@link StatementsTable}), mirroring the sales-order grid. Delete used to be there too, but as of
+ * ETP-5111 it is a kebab item instead: the inline action hides itself for a processed statement, so
+ * on that row the affordance was simply absent and the refusal had nowhere to be explained.
  *
  * `bankConnected` (ETP-4921) closes the whole edit path on a PSD2-connected account: its
  * statements come from the bank and must not be hand-edited. Reactivar is the only door —
- * Edit and Delete already hide themselves for a processed statement, and reactivating is what
- * would reopen them — so disabling it here is what makes the account read-only. It is an
+ * Edit already hides itself for a processed statement and Delete is refused for one, and
+ * reactivating is what would reopen both — so disabling it here is what makes the account
+ * read-only. It is an
  * ACCOUNT-level flag on purpose: nothing on the statement itself records that it came from the
  * bank (the PSD2 module only sets `fileName` from a translated AD_MESSAGE, so its value depends
  * on the language the sync ran in). Keying off the connection is coherent with what this window
@@ -39,10 +42,11 @@ import {
  *   statement: object,
  *   onProcess: (s: object) => void,
  *   onReactivate: (s: object) => void,
+ *   onDelete: (s: object) => void,
  *   bankConnected?: boolean,
  * }} props
  */
-export function StatementRowKebab({ statement: s, onProcess, onReactivate, bankConnected = false }) {
+export function StatementRowKebab({ statement: s, onProcess, onReactivate, onDelete, bankConnected = false }) {
   const ui = useUI();
   const isDraft = isDraftStatement(s);
   const lockedTip = ui('financeAccountStatementsRowProcessedTooltip');
@@ -109,6 +113,22 @@ export function StatementRowKebab({ statement: s, onProcess, onReactivate, bankC
             enabled: !isDraft && !bankConnected,
             tip: reactivateTip,
           })}
+          {/* ETP-5111 — Eliminar joins this menu, and unlike its neighbours it is NEVER gated.
+              It used to exist only as an inline hover quick-action in `StatementsTable`, which
+              hides itself for a processed statement, so on a processed row the action was simply
+              absent and the user had no way to learn why. Offered on every row: the confirm
+              dialog opens, and the backend's 400 (translated in `runConfirm`) explains that the
+              statement has to be reactivated first. Same rule the movements kebab and the three
+              bulk-delete trash buttons follow. */}
+          <DropdownMenuItem
+            data-testid="statement-row-delete"
+            onClick={() => onDelete?.(s)}
+          >
+            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__b97a5b" />
+            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+              {ui('financeAccountStatementsRowDelete')}
+            </span>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </TooltipProvider>

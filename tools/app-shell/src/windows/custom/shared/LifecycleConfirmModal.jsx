@@ -4,6 +4,29 @@ import { createPortal } from 'react-dom';
 /* eslint-disable react/prop-types */
 
 /**
+ * Which consequence bullets this cartel lists.
+ *
+ * A caller either hands the list over ready-made through `items`, or hands over the three
+ * per-consequence labels and the record's flags and lets this pick. An EMPTY `items` array is a
+ * deliberate answer, not an absent one, so it is returned untouched — that is how a caller says
+ * "there is nothing to undo" (ETP-5111).
+ *
+ * Extracted from the component to keep its cognitive complexity under the limit: three
+ * flag-and-label pairs are six branches that have nothing to do with rendering.
+ */
+function resolveItems({
+  explicitItems, reconciled, hasTransaction, posted,
+  itemConciliacion, itemTransaccion, itemAsiento,
+}) {
+  if (explicitItems) return explicitItems;
+  const items = [];
+  if (reconciled && itemConciliacion) items.push(itemConciliacion);
+  if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
+  if (posted && itemAsiento) items.push(itemAsiento);
+  return items;
+}
+
+/**
  * Generic confirmation dialog for destructive record-lifecycle actions
  * (Reactivar / Eliminar of a reconciled/posted record). Shared by Movimientos
  * (financial-account) and Cobros/Pagos (payment-in/out) so both surfaces show
@@ -22,6 +45,13 @@ import { createPortal } from 'react-dom';
  * bank-reconciliation Desconciliar / Reactivar dialog) can pass the ready-made {@code items} list
  * instead and skip the flags entirely; it takes precedence when provided.
  *
+ * <p>ETP-5111 — both halves of the body are optional. An empty item list renders no bulleted
+ * block, and a falsy {@code warning} renders no yellow box; with neither, the body is omitted
+ * altogether and the dialog is title + subtitle + buttons. That is the shape a confirmation for a
+ * record with nothing to undo needs (deleting a draft movement) — before this, an absent warning
+ * was impossible to express, so the Movimientos wrapper fell back to posted-state copy and told
+ * the user a nonexistent accounting entry would be reversed.
+ *
  * @param {{
  *   reconciled?: boolean,
  *   posted?: boolean,
@@ -30,7 +60,7 @@ import { createPortal } from 'react-dom';
  *   sub: string,
  *   confirmLabel: string,
  *   cancelLabel: string,
- *   warning: string,
+ *   warning?: string,
  *   itemConciliacion?: [string, string],
  *   itemAsiento?: [string, string],
  *   itemTransaccion?: [string, string],
@@ -58,13 +88,10 @@ export default function LifecycleConfirmModal({
     }
   };
 
-  let items = explicitItems;
-  if (!items) {
-    items = [];
-    if (reconciled && itemConciliacion) items.push(itemConciliacion);
-    if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
-    if (posted && itemAsiento) items.push(itemAsiento);
-  }
+  const items = resolveItems({
+    explicitItems, reconciled, hasTransaction, posted,
+    itemConciliacion, itemTransaccion, itemAsiento,
+  });
 
   // Portal to <body> so the overlay covers the whole viewport (incl. the left sidebar), escaping
   // any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
@@ -102,8 +129,14 @@ export default function LifecycleConfirmModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* Body. ETP-5111 — the whole block is conditional: a confirmation for a record with
+            NOTHING to undo (a draft movement being deleted) has no effects to list and nothing to
+            warn about, and an unconditional body rendered as an empty 24px gap between the
+            subtitle and the buttons. Each half is guarded separately, so a caller with only one of
+            the two still looks right. */}
+        {(items.length > 0 || warning) && (
         <div style={{ padding: '4px 24px 20px' }}>
+          {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {items.map(([t, d]) => (
               <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -117,15 +150,19 @@ export default function LifecycleConfirmModal({
               </div>
             ))}
           </div>
+          )}
 
-          {/* Yellow warning box */}
+          {/* Yellow warning box — only when the caller actually has something to warn about. */}
+          {warning ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', borderRadius: 8 }}>
             <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-warning-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <span style={{ font: '400 13px/18px Inter', color: 'var(--status-warning-fg)' }}>{warning}</span>
           </div>
+          ) : null}
         </div>
+        )}
 
         {/* Footer. Kept on the card surface rather than `--muted`: that token is blue-tinted
             (hue 210), which read as an unintended colour shift next to the plain ConfirmDialog

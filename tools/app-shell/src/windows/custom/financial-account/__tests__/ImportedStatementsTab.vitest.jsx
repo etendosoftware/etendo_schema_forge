@@ -181,7 +181,10 @@ vi.mock('../ManualStatementModal', () => ({
   ),
 }));
 
-import { ImportedStatementsTab, resolveBulkDeleteBlock } from '../ImportedStatementsTab.jsx';
+// ETP-5111 — `resolveBulkDeleteBlock` is deliberately no longer exported (nor implemented): the
+// tab no longer pre-computes a reason to disable the trash with. Its own describe block went with
+// it; the replacement coverage is "the trigger is enabled and the backend explains the refusal".
+import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'USD' };
 const NOW = new Date();
@@ -616,14 +619,18 @@ describe('ImportedStatementsTab', () => {
       expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's4');
     });
 
-    // ETP-4921 — the actual reported bug: selecting a processed statement and hitting the bulk
-    // trigger used to fire the delete anyway and fail with an uninformative "None of the 1
-    // selected could be deleted" toast. It's now blocked BEFORE the request goes out: the
-    // trigger disables itself and explains why, mirroring the tooltip StatementRowKebab already
-    // shows for its own gated Procesar item — "don't let them touch the trash can", not "let
-    // them try and fail".
-    describe('blocks a processed statement from being attempted', () => {
-      it('disables the trigger, with the processed-statement reason as its tooltip', async () => {
+    /**
+     * ETP-4921 pre-blocked the trash for a processed statement ("don't let them touch the trash
+     * can"). ETP-5111 INVERTS that for all three surfaces of this window: the trigger is never
+     * disabled by what the selection holds, the delete is attempted, and the backend's own 409
+     * reason is what the user reads — spelled out for a single statement, counters-only above
+     * that. The refusal itself is still enforced, just server-side (BankStatementsHandler
+     * .requireDraft), which is the only place that can be authoritative about it.
+     */
+    describe('a processed statement is attempted, not pre-blocked', () => {
+      const NOT_DRAFT = 'Only draft (unprocessed) statements can be modified';
+
+      it('leaves the trigger enabled, with the plain delete label and no eligibility tooltip', async () => {
         const user = userEvent.setup();
         render(<ImportedStatementsTab account={ACCOUNT} />);
 
@@ -631,33 +638,53 @@ describe('ImportedStatementsTab', () => {
         await user.click(screen.getByTestId('row-select-s1'));
 
         const trigger = screen.getByTestId('bulk-delete-selection-trigger');
-        expect(trigger).toBeDisabled();
-        expect(trigger).toHaveAttribute('title', 'financeAccountStatementsRowProcessedTooltip');
-        expect(trigger).toHaveAttribute('aria-label', 'financeAccountStatementsRowProcessedTooltip');
+        expect(trigger).not.toBeDisabled();
+        expect(trigger).toHaveAttribute('title', 'delete');
+        expect(trigger).toHaveAttribute('aria-label', 'delete');
       });
 
-      it('never calls deleteStatement when the disabled trigger is clicked', async () => {
+      // The replacement for "never calls deleteStatement when the disabled trigger is clicked":
+      // the call now DOES go out, and the reason reaches the user from the response. This is the
+      // path `useStatementActions`' `error.status` exists for — `isBusinessRejection` only trusts
+      // a 4xx, so without the status this would degrade to a bare counter even for one statement.
+      it('attempts the delete and surfaces the backend reason for a single statement', async () => {
+        uiMock.mockImplementation((key) => (key === 'backendError.statementNotDraft'
+          ? 'Los extractos procesados no se pueden modificar'
+          : key));
+        const rejection = new Error(NOT_DRAFT);
+        rejection.status = 400;
+        deleteStatement.mockRejectedValue(rejection);
+
         const user = userEvent.setup();
         render(<ImportedStatementsTab account={ACCOUNT} />);
 
         await user.click(screen.getByTestId('row-select-s1'));
-        // userEvent respects the native `disabled` attribute — this click is a no-op.
         await user.click(screen.getByTestId('bulk-delete-selection-trigger'));
+        await user.click(screen.getByTestId('batch-delete-confirm'));
 
-        expect(deleteStatement).not.toHaveBeenCalled();
-        expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument();
+        expect(deleteStatement).toHaveBeenCalledWith('s1');
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+          'Los extractos procesados no se pueden modificar',
+        ));
+        // Neither the bare counter nor the untranslated English.
+        expect(toastError).not.toHaveBeenCalledWith(expect.stringContaining('bulkDelete'));
+        expect(toastError).not.toHaveBeenCalledWith(NOT_DRAFT);
+        // Nothing succeeded, so no refresh and the selection is kept for a retry.
+        expect(reloadFn).not.toHaveBeenCalled();
+        expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
       });
 
-      it('re-enables once the processed statement is deselected, leaving only drafts', async () => {
+      it('stays enabled for a mixed processed + draft selection', async () => {
         const user = userEvent.setup();
         render(<ImportedStatementsTab account={ACCOUNT} />);
 
         await user.click(screen.getByTestId('row-select-s1'));
         await user.click(screen.getByTestId('row-select-s4'));
-        expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeDisabled();
+        expect(screen.getByTestId('bulk-delete-selection-trigger')).not.toBeDisabled();
 
         await user.click(screen.getByTestId('row-select-s1')); // deselect s1
         expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's4');
+        // Enabled before AND after — the selection's contents never gate this button.
         expect(screen.getByTestId('bulk-delete-selection-trigger')).not.toBeDisabled();
       });
     });
@@ -743,53 +770,38 @@ describe('ImportedStatementsTab', () => {
       expect(screen.getByTestId('stub-table')).toHaveAttribute('data-bank-connected', 'false');
     });
 
-    // Even a DRAFT selection — which is normally deletable — is blocked here.
-    it('blocks the bulk trash with the bank-connected reason', async () => {
+    // ETP-5111 — the account-level PSD2 refusal moved to the BACKEND (BankStatementsHandler's new
+    // 409 guard, which is where it can actually be enforced for every caller). The trash is no
+    // longer greyed out here; a DRAFT of a connected account is attempted and refused with the
+    // bank-connected reason. `bankConnectionSynced` itself survives — it still drives the toolbar
+    // and the per-row affordances, which are out of scope.
+    it('attempts the delete and surfaces the bank-connected reason instead of disabling the trash', async () => {
+      const BANK_CONNECTED = 'Statements from a bank-connected account cannot be deleted.';
+      uiMock.mockImplementation((key) => (
+        key === 'backendError.statementBankConnectedNotDeletable'
+          ? 'Los extractos de una cuenta conectada al banco no se pueden eliminar.'
+          : key));
+      const rejection = new Error(BANK_CONNECTED);
+      rejection.status = 409;
+      deleteStatement.mockRejectedValue(rejection);
+
       const user = userEvent.setup();
       render(<ImportedStatementsTab account={CONNECTED} />);
 
       await user.click(screen.getByTestId('row-select-s4')); // s4 is a draft
       const trigger = screen.getByTestId('bulk-delete-selection-trigger');
 
-      expect(trigger).toBeDisabled();
-      expect(trigger).toHaveAttribute('title', 'financeAccountStatementsRowBankSyncedTooltip');
+      expect(trigger).not.toBeDisabled();
+      expect(trigger).toHaveAttribute('title', 'delete');
 
       await user.click(trigger);
-      expect(deleteStatement).not.toHaveBeenCalled();
-    });
-  });
+      await user.click(screen.getByTestId('batch-delete-confirm'));
 
-  /**
-   * The two block reasons have a deliberate precedence. Tested on the pure function rather than
-   * through the DOM: the ordering is the whole point and it reads directly here.
-   */
-  describe('resolveBulkDeleteBlock', () => {
-    const ui = (key) => key;
-
-    it('returns null when nothing blocks', () => {
-      expect(resolveBulkDeleteBlock({
-        ui, bankConnectionSynced: false, selectionHasNonDraft: false,
-      })).toBeNull();
-    });
-
-    it('reports the processed reason for a non-draft selection', () => {
-      expect(resolveBulkDeleteBlock({
-        ui, bankConnectionSynced: false, selectionHasNonDraft: true,
-      })).toBe('financeAccountStatementsRowProcessedTooltip');
-    });
-
-    // The connected-account reason wins: it is unconditional, whereas "processed" points at a
-    // state the user could try to change — misleading when nothing in this window unblocks it.
-    it('prefers the bank-connected reason when both apply', () => {
-      expect(resolveBulkDeleteBlock({
-        ui, bankConnectionSynced: true, selectionHasNonDraft: true,
-      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
-    });
-
-    it('reports the bank-connected reason even for an all-draft selection', () => {
-      expect(resolveBulkDeleteBlock({
-        ui, bankConnectionSynced: true, selectionHasNonDraft: false,
-      })).toBe('financeAccountStatementsRowBankSyncedTooltip');
+      expect(deleteStatement).toHaveBeenCalledWith('s4');
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+        'Los extractos de una cuenta conectada al banco no se pueden eliminar.',
+      ));
+      expect(toastError).not.toHaveBeenCalledWith(BANK_CONNECTED);
     });
   });
 
