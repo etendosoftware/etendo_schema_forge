@@ -600,3 +600,266 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     await expect(page.getByRole('button', { name: 'Crear Factura' })).toHaveCount(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Describe 3: ETP-5063 — no related document created on confirm shows a
+// toast, never the blocking ConfirmResultModal; the doc-created branch must
+// still render the modal exactly as before (regression guard).
+// ---------------------------------------------------------------------------
+
+test.describe('Goods Shipment — Confirm without invoice (ETP-5063 toast fix)', () => {
+  test('unchecking the invoice toggle and confirming shows a toast, never the result modal, and refreshes the header', async ({ page }) => {
+    const shipment = makeShipment({
+      id: 'gs-nodoc-toggle-001',
+      documentNo: 'GS-NODOC-TOGGLE-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      processed: false,
+      'businessPartner$_identifier': 'Cliente Sin Factura S.L.',
+      linkedOrders: [
+        { id: 'order-nodoc-001', grandTotalAmount: 900, 'currency$_identifier': 'EUR' },
+      ],
+    });
+
+    let headerGetCount = 0;
+    page.on('request', (req) => {
+      const url = req.url();
+      if (
+        req.method() === 'GET' &&
+        url.includes(`/sws/neo/goods-shipment/goodsShipment/${shipment.id}`) &&
+        !url.includes('goodsShipmentLine')
+      ) {
+        headerGetCount += 1;
+      }
+    });
+
+    await login(page);
+    await installGoodsShipmentMock(page, [shipment]);
+
+    let documentActionCalls = 0;
+    await page.route(
+      (url) =>
+        url.href.includes(`/sws/neo/goods-shipment/goodsShipment/${shipment.id}/action/documentAction`),
+      async (route) => {
+        documentActionCalls += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: { documentStatus: 'CO' } } }),
+        });
+      }
+    );
+
+    let createDraftInvoiceCalls = 0;
+    await page.route(
+      (url) =>
+        url.href.includes(`/sws/neo/goods-shipment/goodsShipment/${shipment.id}/action/createDraftInvoice`),
+      async (route) => {
+        createDraftInvoiceCalls += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: { data: { id: 'inv-should-not-be-created', documentNo: 'SHOULD-NOT-EXIST', grandTotalAmount: 900 } },
+          }),
+        });
+      }
+    );
+
+    await page.goto(`/goods-shipment/${shipment.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+
+    await expect.poll(() => headerGetCount, { timeout: 8_000 }).toBeGreaterThan(0);
+    const countBeforeConfirm = headerGetCount;
+
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
+    );
+
+    await expect(page.getByTestId('confirm-inout-modal')).toBeVisible({ timeout: 8_000 });
+    const invoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
+    // ETP-4848: defaults to checked — uncheck it to exercise the no-doc path.
+    await expect(invoiceToggle).toHaveAttribute('aria-checked', 'true');
+    await invoiceToggle.click();
+    await expect(invoiceToggle).toHaveAttribute('aria-checked', 'false');
+
+    await page.getByTestId('confirm-modal-confirm-btn').click();
+
+    // Wait for the async confirm flow to fully resolve (documentAction fetch
+    // + the ETP-5063 useEffect firing the toast) before asserting on its side
+    // effects — a synchronous check right after click() would race the
+    // in-flight fetch and read stale counters.
+    const successToast = page.locator('[data-type="success"]').first();
+    await expect(successToast).toBeVisible({ timeout: 5_000 });
+
+    // A success toast communicates the outcome, with the exact resolved
+    // goodsShipment.confirmModal.confirmedTitle text (es_ES: "Albarán de
+    // venta confirmado").
+    await expect(successToast).toContainText('Albarán de venta confirmado');
+
+    // No invoice was requested — createDraftInvoice must never be called —
+    // and the old blocking ConfirmResultModal must never appear.
+    expect(createDraftInvoiceCalls).toBe(0);
+    await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
+    expect(documentActionCalls).toBe(1);
+
+    // onRefresh?.() actually ran — proven by a second header GET after
+    // confirm, not just by the toast text being right.
+    await expect.poll(() => headerGetCount, { timeout: 5_000 }).toBeGreaterThan(countBeforeConfirm);
+  });
+
+  test('confirming an already fully-invoiced shipment shows a toast, never the result modal', async ({ page }) => {
+    const invoicedShipment = makeShipment({
+      id: 'gs-already-invoiced-001',
+      documentNo: 'GS-ALREADYINV-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      processed: false,
+      invoiceStatus: 100,
+      completelyInvoiced: true,
+      'businessPartner$_identifier': 'Cliente Ya Facturado S.L.',
+      linkedInvoices: [
+        { id: 'inv-existing-001', documentNo: 'FAC-EXISTING-001', documentStatus: 'CO', grandTotalAmount: 500, 'currency$_identifier': 'EUR' },
+      ],
+    });
+
+    let headerGetCount = 0;
+    page.on('request', (req) => {
+      const url = req.url();
+      if (
+        req.method() === 'GET' &&
+        url.includes(`/sws/neo/goods-shipment/goodsShipment/${invoicedShipment.id}`) &&
+        !url.includes('goodsShipmentLine')
+      ) {
+        headerGetCount += 1;
+      }
+    });
+
+    await login(page);
+    await installGoodsShipmentMock(page, [invoicedShipment]);
+
+    let documentActionCalls = 0;
+    await page.route(
+      (url) =>
+        url.href.includes(`/sws/neo/goods-shipment/goodsShipment/${invoicedShipment.id}/action/documentAction`),
+      async (route) => {
+        documentActionCalls += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: { documentStatus: 'CO' } } }),
+        });
+      }
+    );
+
+    await page.goto(`/goods-shipment/${invoicedShipment.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+
+    await expect.poll(() => headerGetCount, { timeout: 8_000 }).toBeGreaterThan(0);
+    const countBeforeConfirm = headerGetCount;
+
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
+    );
+
+    // Fully-invoiced branch renders ConfirmShipmentInvoicedModal, whose title
+    // and confirm button both read goodsShipment.confirmModal.titleConfirm /
+    // .confirmBtn = "Confirmar albarán" (title is a <span>, button carries
+    // the same text — scope to the button role to avoid a strict-mode clash).
+    const confirmBtn = page.getByRole('button', { name: 'Confirmar albarán', exact: true });
+    await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
+    await confirmBtn.click();
+
+    const successToast = page.locator('[data-type="success"]').first();
+    await expect(successToast).toBeVisible({ timeout: 5_000 });
+    await expect(successToast).toContainText('Albarán de venta confirmado');
+
+    await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
+    expect(documentActionCalls).toBe(1);
+
+    await expect.poll(() => headerGetCount, { timeout: 5_000 }).toBeGreaterThan(countBeforeConfirm);
+  });
+
+  test('regression guard: confirming WITH the invoice toggle on still shows the result modal with a working "Ver factura" navigation button', async ({ page }) => {
+    const shipment = makeShipment({
+      id: 'gs-withdoc-confirm-001',
+      documentNo: 'GS-WITHDOC-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      processed: false,
+      'businessPartner$_identifier': 'Cliente Con Factura S.L.',
+      linkedOrders: [
+        { id: 'order-withdoc-001', grandTotalAmount: 1200, 'currency$_identifier': 'EUR' },
+      ],
+      resolvedPriceListId: 'pl-withdoc',
+    });
+
+    await login(page);
+    await installGoodsShipmentMock(page, [shipment]);
+
+    await page.route(
+      (url) =>
+        url.href.includes(`/sws/neo/goods-shipment/goodsShipment/${shipment.id}/action/documentAction`),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: { documentStatus: 'CO' } } }),
+        });
+      }
+    );
+
+    await page.route(
+      (url) =>
+        url.href.includes(`/sws/neo/goods-shipment/goodsShipment/${shipment.id}/action/createDraftInvoice`),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: { data: { id: 'inv-withdoc-001', documentNo: 'FAC-WITHDOC-001', grandTotalAmount: 1200 } },
+          }),
+        });
+      }
+    );
+
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: [{ id: 'pl-withdoc', name: 'Tarifa', active: true, salesPriceList: true, default: true }] },
+        }),
+      });
+    });
+
+    await page.goto(`/goods-shipment/${shipment.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
+    );
+
+    await expect(page.getByTestId('confirm-inout-modal')).toBeVisible({ timeout: 8_000 });
+    // Invoice toggle stays checked (default true) — do NOT uncheck it.
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toHaveAttribute('aria-checked', 'true');
+
+    const confirmBtn = page.getByTestId('confirm-modal-confirm-btn');
+    await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+    await confirmBtn.click();
+
+    // Doc WAS created — the ConfirmResultModal must still render exactly as
+    // before this fix, with its "Ver factura" navigation button.
+    await expect(page.getByTestId('confirm-result-modal')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Factura creada', { exact: true })).toBeVisible();
+    const viewInvoiceBtn = page.getByRole('button', { name: 'Ver factura' });
+    await expect(viewInvoiceBtn).toBeVisible();
+  });
+});

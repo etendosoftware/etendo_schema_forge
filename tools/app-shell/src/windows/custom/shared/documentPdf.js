@@ -90,6 +90,7 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
 .inv-header-b .meta .label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--fg-3); font-weight:600; }
 .inv-header-b .meta .doc-type { font-size:12px; color:var(--fg-2); margin-top:2px; }
 .inv-header-b .meta .num { font-size:22px; font-weight:700; line-height:28px; letter-spacing:-0.01em; color:var(--fg-1); margin-top:2px; font-variant-numeric:tabular-nums; }
+.inv-header-b .meta .currency { font-size:12px; color:var(--fg-2); margin-top:4px; }
 
 /* Info grid */
 .inv-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
@@ -133,6 +134,9 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
 // Handlebars template
 // labels.documentSection — set per-document-type by each hook's labels object
 // labels.validUntil      — rendered only when data.validUntil is set (quotations only)
+// currencyCode           — ISO 4217 code of the DOCUMENT currency (ETP-5125), rendered
+//                          in the header meta block only when resolved; see
+//                          resolveDocumentCurrencyCode() below
 // ---------------------------------------------------------------------------
 export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><style>{{{css}}}</style></head>
@@ -169,6 +173,7 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
       <div class="label">{{labels.title}}</div>
       <div class="doc-type">{{labels.documentNo}}</div>
       <div class="num">{{documentNo}}</div>
+      {{#if currencyCode}}<div class="currency">{{labels.currency}} {{currencyCode}}</div>{{/if}}
     </div>
   </div>
 
@@ -286,6 +291,27 @@ export function resolveProductCode(line) {
 }
 
 /**
+ * ETP-5125 — ISO 4217 code of the DOCUMENT's currency (e.g. "EUR"/"USD"/"GBP"),
+ * for the printable's header meta block.
+ *
+ * Read from the header every builder already fetches — deliberately NOT from the
+ * `currencyData` argument, which is `null` on the hook-free print path (see
+ * `documentPdfRegistry.js`, `commercial()`): sourcing it there would make the
+ * printed PDF disagree with the previewed/emailed one for the same record.
+ *
+ * Returns null when the field is absent so DOCUMENT_TEMPLATE's `{{#if}}` guard
+ * prints nothing. There is intentionally NO fallback to the organization's
+ * currency (`session.currencyCode`): stating the wrong currency on a
+ * customer-facing document is worse than stating none.
+ *
+ * @param {object} header  the document header as returned by NEO
+ * @returns {?string} the ISO 4217 code, or null
+ */
+export function resolveDocumentCurrencyCode(header) {
+  return header?.['currency$_identifier'] || null;
+}
+
+/**
  * Builds the company identity block for PDF templates.
  * Falls back to header org fields when the session organization is unavailable.
  * bpAddressFallback is used when header.partnerAddress$_identifier is absent (e.g. purchase-order).
@@ -352,6 +378,7 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation, header.bpAddress),
     documentNo: header.documentNo || '',
+    currencyCode: resolveDocumentCurrencyCode(header),
     invoiceDate: header.orderDate || '',
     customerName: header.businessPartner$_identifier || header.businessPartner || '—',
     paymentMethod: header.paymentMethod$_identifier || null,
@@ -413,6 +440,7 @@ export async function renderDocumentHtml(data) {
 export function buildDocumentPdfLabels(ui, overrides) {
   return {
     taxId:           ui('invoicePdfTaxId'),
+    currency:        ui('invoicePdfCurrency'),
     page:            ui('invoicePdfPage'),
     customerSection: ui('invoicePdfCustomerSection'),
     customer:        ui('invoicePdfCustomer'),

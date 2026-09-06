@@ -4109,7 +4109,7 @@
       "description": "Dirección destinada a la descripción de un producto, a la que puede accederse via Internet."
     },
     "A_Asset_Group_ID": {
-      "label": "Grupo activo",
+      "label": "Categoría de activo",
       "description": "Clasificación de los activos basada en características similares."
     },
     "C_Currency_ID": {
@@ -14024,7 +14024,7 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Grupo de activos"
+      "label": "Categoría de activo"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"
@@ -15286,7 +15286,7 @@
       "label": "Proceso"
     },
     "Asset Category": {
-      "label": "Grupo de activos"
+      "label": "Categoría de activo"
     },
     "Attribute Set": {
       "label": "Conjunto atributos"
@@ -17662,6 +17662,7 @@
     "invoicePdfError": "No se pudo generar el PDF de la factura.",
     "invoicePdfTitle": "Factura de venta",
     "invoicePdfDocumentNo": "Nº de factura",
+    "invoicePdfCurrency": "Moneda:",
     "invoicePdfTaxId": "CIF:",
     "invoicePdfPage": "Página",
     "invoicePdfCustomerSection": "Datos del cliente",
@@ -17676,10 +17677,10 @@
     "invoicePdfColQty": "Cantidad",
     "invoicePdfColUnitPrice": "Precio tarifa",
     "invoicePdfColDiscount": "Desc.%",
-    "invoicePdfColTax": "IVA%",
+    "invoicePdfColTax": "Impuesto",
     "invoicePdfColTotal": "Total",
-    "invoicePdfSubtotal": "Subtotal (sin IVA)",
-    "invoicePdfTax": "IVA",
+    "invoicePdfSubtotal": "Subtotal (sin impuestos)",
+    "invoicePdfTax": "Impuestos",
     "invoicePdfGrandTotal": "Total",
     "invoicePdfNotes": "Observaciones",
     "orderPdfGenerating": "Generando pedido...",
@@ -19858,18 +19859,18 @@
     "fiscal.onboarding.subq.sii.vol.bullet3": "Se solicita mediante el modelo 036 y exonera de presentar los modelos 347 y 390.",
     "fiscal.onboarding.subq.important.note": "si te acoges al SII, ya sea de forma obligatoria o voluntaria, quedas fuera del ámbito de VERI*FACTU.",
     "fiscal.territory.alava": "Álava",
-    "fiscal.territory.bizkaia": "Bizkaia",
+    "fiscal.territory.bizkaia": "Vizcaya",
     "fiscal.territory.gipuzkoa": "Gipuzkoa",
     "fiscal.territory.navarra.systemLong": "SII Foral · Hacienda de Navarra",
     "fiscal.territory.alava.systemLong": "TicketBAI · Hacienda Foral de Álava",
-    "fiscal.territory.bizkaia.systemLong": "TicketBAI · Hacienda Foral de Bizkaia",
+    "fiscal.territory.bizkaia.systemLong": "TicketBAI · Hacienda Foral de Vizcaya",
     "fiscal.territory.gipuzkoa.systemLong": "TicketBAI · Hacienda Foral de Gipuzkoa",
     "fiscal.territory.baleares.systemLong": "Régimen general · AEAT",
     "fiscal.territory.canarias.systemLong": "IGIC · Hacienda Canaria",
     "fiscal.territory.ceuta.systemLong": "IPSI · Ciudades Autónomas",
     "fiscal.territory.navarra.example": "Empresas con domicilio fiscal en Navarra",
     "fiscal.territory.alava.example": "Sociedades con sede en Álava",
-    "fiscal.territory.bizkaia.example": "Sociedades con sede en Bizkaia",
+    "fiscal.territory.bizkaia.example": "Sociedades con sede en Vizcaya",
     "fiscal.territory.gipuzkoa.example": "Sociedades con sede en Gipuzkoa",
     "fiscal.territory.baleares.example": "Régimen común - IVA Estatal",
     "fiscal.territory.canarias.example": "Empresas con IGIC en lugar de IVA",
@@ -19927,6 +19928,7 @@
     "fiscalMonitor.tbai.status.Recibido": "Aceptado",
     "fiscalMonitor.tbai.status.Rechazado": "Rechazado",
     "fiscalMonitor.tbai.status.Error": "Error",
+    "fiscalMonitor.tbai.status.Enviada": "Enviada",
     "fiscalMonitor.kpi.sii.issued": "Facturas emitidas",
     "fiscalMonitor.kpi.sii.received": "Facturas recibidas",
     "fiscalMonitor.kpi.tbai.total": "TicketBAI enviadas",
@@ -20124,12 +20126,16 @@
     "sendToSifBodySii": "Esta factura se enviará al SII.",
     "sendToSifBodyTbai": "Esta factura se enviará a TicketBAI.",
     "sendToSifBodyBoth": "Esta factura se enviará al SII y a TicketBAI.",
+    "sendToSifBodyTbaiPurchase": "Esta factura se enviará a Batuz.",
+    "sendToSifBodyBothPurchase": "Esta factura se enviará al SII y a Batuz.",
     "sendToSifConfirm": "Enviar",
     "sendToSifSending": "Enviando… esto puede tardar unos segundos.",
     "sendToSifSuccessSii": "Enviado al SII correctamente.",
     "sendToSifSuccessTbai": "Enviado a TicketBAI correctamente.",
+    "sendToSifSuccessTbaiPurchase": "Enviado a Batuz correctamente.",
     "sendToSifErrorSii": "Error al enviar al SII.",
     "sendToSifErrorTbai": "Error al enviar a TicketBAI.",
+    "sendToSifErrorTbaiPurchase": "Error al enviar a Batuz.",
     "sifDataTabs.sectionTitle": "SIF",
     "sifDataTabs.tab.sii": "SII",
     "sifDataTabs.tab.tbai": "TicketBAI",
@@ -20139,7 +20145,7 @@
     "sifDataTabs.rail.verifactu.subtitle": "VERI*FACTU",
     "sifDataTabs.panel.sii.title": "Suministro Inmediato de Información",
     "sifDataTabs.panel.sii.subtitle": "AEAT · Modelo 303",
-    "sifDataTabs.panel.tbai.title": "TicketBAI · Hacienda Foral de Bizkaia",
+    "sifDataTabs.panel.tbai.title": "TicketBAI · Hacienda Foral de Vizcaya",
     "sifDataTabs.panel.tbai.subtitle": "Versión 1.2 · Cadena de huellas activa",
     "sifDataTabs.panel.verifactu.title": "VERI*FACTU",
     "sifDataTabs.panel.verifactu.subtitle": "AEAT · Notificación de facturas en tiempo real",
@@ -21831,7 +21837,7 @@
       "label": "Gastos para facturar"
     },
     "Asset Group": {
-      "label": "Grupo de activos"
+      "label": "Categoría de activo"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"

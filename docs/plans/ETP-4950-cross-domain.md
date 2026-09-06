@@ -81,3 +81,57 @@ bar disappear, and a read-only role goes back to seeing buttons that fail on cli
 backend commit in `modules/com.etendoerp.go` reverts independently; with only this one reverted the
 form offers dimensions that the movement may ignore (the pre-ETP-4950 gating state), which is
 degraded but not broken.
+
+---
+
+## QA round (reopened)
+
+QA returned the task with two findings; both are fixed on this same branch.
+
+**Hallazgo 1 — Producto never appeared, even with the dimension active.** The gate read the `FAT`
+*header-level* dimension set, which is the chart of accounts **minus**
+`AD_Client_AcctDimension.Show_In_Header='N'`. The shipped reference data sets exactly that row for
+Product, and Etendo GO ships no screen for `AD_Client_AcctDimension` — so on every tenant
+provisioned from the published dataset the field was unreachable, whatever the user toggled.
+Verified against the local DB: all 109 clients except the hand-tuned `GOClient` carry
+`PR/FAT show_in_header='N'`, and none carries a `PJ/FAT` or `CC/FAT` row — which is why Proyecto and
+Centro de coste appeared to "work". The fix repoints the four consumers
+(`MatchRuleHandler.buildActiveDimensions` / `stripInactiveDimensions`,
+`FinancialAccountTransactionsHandler.loadHeaderDimensions`,
+`ReconciliationHandler.headerDimensionsOf`) to the flat chart-of-accounts set — the only dimension
+configuration the "Esquema contable → Dimensiones" screen writes, and therefore the only one a user
+can change. The header helpers are now `@Deprecated` with no production consumer.
+
+Contacto is gated the same way now: on a rule it is an assignment carried to the generated movement,
+not a matching criterion, so the Accounting Schema toggle must govern it. `C_BPartner_ID`
+deliberately does **not** trigger the `activeDimensions` request (`FETCH_TRIGGER_COLUMNS`), because
+it appears on dozens of windows that do not implement that action.
+
+**Hallazgo 2 — Automatch applied rules from other tenants.** `MatchRuleEngine.loadRules` was raw
+JDBC with no `ad_client_id` / `ad_org_id` predicate, so any account-less ("Todas las cuentas") rule
+applied to every account of every tenant. Reproduced with data: the engine's literal SQL returns
+`GOClient`'s rule when asked for accounts of `Caldenes S.A` and `F&B International Group`, and F&B
+has a real pending line that rule would match. It now loads through the DAL (`OBCriteria` over the
+`ETGO_Match_Rule` entity), which applies the readable-client / readable-organization filter itself —
+the module's own convention for its entities (10 of its 11 generated entities already did; `MatchRule`
+was the sole exception) and unaffected by the `setAdminMode(true)` this path runs in.
+
+Investigating that leak surfaced 15 findings of the same class across financial account /
+reconciliation / bank statements / cash close: request-supplied ids resolved with a bare
+`OBDal.get`, which — unlike `OBCriteria`/`OBQuery` — applies no tenant predicate. All 15 are fixed on
+this branch via the new `TenantOwnership.loadOwned` guard (a foreign row resolves to `null`, so the
+caller's existing "not found" branch answers, indistinguishable from a genuinely missing row), plus
+the `belongsToAccount` check that `applySuggestions` was the only path to skip.
+
+### Domain note
+
+The schema_forge side of this round stays inside `platform-change`
+(`lib/accountingDimensions.js`, `components/contract-ui/`) plus docs. The backend work is entirely in
+`modules/com.etendoerp.go` and reverts independently.
+
+### Rollback (QA round)
+
+Reverting the backend alone restores the previous behaviour: Producto disappears again from the rule
+form and the New Movement wizard, and rules leak across tenants. Reverting only the frontend leaves
+Contacto ungated while the backend still strips it from the body on save — visible but not
+persisted — so the two commits should be reverted together.
