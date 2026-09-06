@@ -329,7 +329,8 @@
         {
           "name": "not-posted-documents",
           "label": "Not Posted Documents",
-          "favname": "Not Posted Documents"
+          "favname": "Not Posted Documents",
+          "obuiappProcessId": "D6AB95CE52D34E1599590526115E26C6"
         },
         {
           "name": "simple-g-l-journal",
@@ -346,7 +347,8 @@
         {
           "name": "fiscal-monitor",
           "label": "Fiscal Monitor",
-          "favname": "Fiscal Monitor"
+          "favname": "Fiscal Monitor",
+          "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C"
         },
         {
           "name": "conversion-rates",
@@ -357,7 +359,8 @@
         {
           "name": "fiscal-models",
           "label": "Fiscal Models",
-          "favname": "Fiscal Models"
+          "favname": "Fiscal Models",
+          "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8"
         },
         {
           "name": "report-viewer-finance",

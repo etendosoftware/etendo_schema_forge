@@ -156,10 +156,11 @@ const MATRIX_FIXTURE = {
   ],
 };
 
-// `GENERAL_ROWS` in `RolesAccessMatrix.jsx` — 3 hardcoded rows (Inicio/
-// Favoritos/Copilot) always overlaid ahead of the real `matrix.categories`,
-// always full access for every role. Never present in a real backend
-// response — this is a pure client-side constant, asserted against directly.
+// ETP-5071 — `GENERAL_ROWS` in `RolesAccessMatrix.jsx` used to be 3 hardcoded
+// rows (Inicio/Favoritos/Copilot) always overlaid ahead of the real
+// `matrix.categories`, always full access for every role. Never present in a
+// real backend response (none of the 3 is a real AD window), so the overlay
+// was removed — these ids are kept here only to assert their absence below.
 const GENERAL_ROW_IDS = ['dashboard', 'favorites', 'copilot'];
 
 /**
@@ -284,23 +285,38 @@ test.describe('Roles overview — admin/client-admin', () => {
     await expect(content.getByRole('button', { name: /new|nuevo/i })).toHaveCount(0);
   });
 
-  test('matrix General section always shows full access for every role', async ({ page }) => {
+  test('matrix renders no hardcoded General overlay — only real matrix.categories (ETP-5071)', async ({ page }) => {
     await page.goto('/roles');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await expect(page.getByTestId('RolesAccessMatrix')).toBeVisible();
-    await expect(page.getByTestId('RolesAccessMatrix__category-General')).toBeVisible();
 
+    // The 3 hardcoded General rows (Inicio/Favoritos/Copilot) were removed —
+    // none of the 3 is a real AD window, they never appeared in the backend's
+    // own `matrix.categories`, and must never render, with or without a
+    // matching category header.
+    await expect(page.getByTestId('RolesAccessMatrix__category-General')).toHaveCount(0);
     for (const rowId of GENERAL_ROW_IDS) {
       const rowKey = `General::${rowId}`;
-      await expect(page.getByTestId(`RolesAccessMatrix__row-${rowKey}`)).toBeVisible();
-      for (const role of ROLES_FIXTURE) {
-        const cell = page.getByTestId(`RolesAccessMatrix__cell-${rowKey}-${role.id}`);
-        // AccessTierPill renders the literal '✓' glyph for 'full' — not an
-        // i18n string, so safe to assert exactly across both locales.
-        await expect(cell).toHaveText('✓');
-      }
+      await expect(page.getByTestId(`RolesAccessMatrix__row-${rowKey}`)).toHaveCount(0);
     }
+
+    // Only the real categories from MATRIX_FIXTURE render — nothing hardcoded
+    // ahead of or alongside them. Both fixture window ids are e2e-only
+    // synthetic ids absent from `menu.json`, so `adaptMatrix`'s "never
+    // disappear" fallback keeps the backend's own raw category names as-is
+    // (see `useRolesOverviewData.js`) — but since neither has a resolved
+    // `groupOrder` either, they fall into that function's alphabetical
+    // fallback sort ("Inventory" before "Sales"), not the fixture's own
+    // declaration order.
+    const categoryTestIds = await page
+      .locator('[data-testid^="RolesAccessMatrix__category-"]')
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-testid')));
+    const expectedCategoryTestIds = MATRIX_FIXTURE.categories
+      .map((category) => category.name)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => `RolesAccessMatrix__category-${name}`);
+    expect(categoryTestIds).toEqual(expectedCategoryTestIds);
   });
 
   test('matrix renders real categories with correct per-role tri-state access cells', async ({ page }) => {

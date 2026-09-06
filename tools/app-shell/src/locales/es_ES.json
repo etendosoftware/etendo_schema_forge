@@ -17629,6 +17629,7 @@
     "rolesSummaryCardNavigateAria": "Ver usuarios con el rol {role}",
     "userRolesTabLabel": "Roles del usuario",
     "userRolesTabEmptyState": "Selecciona un rol para visualizar los permisos",
+    "userRolesTabAdminFullAccessMessage": "Este usuario tiene acceso completo como administrador",
     "userRolesTabWindowColumn": "Ventana",
     "userRolesTabGeneralCategory": "General",
     "userRolesTabDashboardRow": "Inicio (Dashboard)",
