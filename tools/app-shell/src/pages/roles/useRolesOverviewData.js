@@ -214,12 +214,11 @@ export function buildMenuWindowIndex() {
       const windowId = String(rawId);
       const candidate = { group: group.group, label: item.label, groupOrder, itemOrder, hidden: !!item.hidden };
       const existing = index.get(windowId);
-      if (!existing) {
-        index.set(windowId, candidate);
-      } else if (existing.hidden && !candidate.hidden) {
-        // The first-seen entry for this id was hidden but this one isn't — prefer it.
-        // Any other combination (existing already visible, or both hidden) keeps the
-        // first-encountered entry.
+      // Prefer this candidate when there's no existing entry yet, or when the
+      // first-seen entry for this id was hidden but this one isn't. Any other
+      // combination (existing already visible, or both hidden) keeps the
+      // first-encountered entry.
+      if (!existing || (existing.hidden && !candidate.hidden)) {
         index.set(windowId, candidate);
       }
     });
@@ -230,10 +229,25 @@ export function buildMenuWindowIndex() {
 const MENU_WINDOW_INDEX = buildMenuWindowIndex();
 
 /**
- * Adapts the backend's `matrix.categories[]` into this page's category-grouped row
- * shape, normalizing every cell's tier (see `normalizeTier`) and — ETP-5071 — resolving
- * each window's category/name against `menuIndex` (see `buildMenuWindowIndex`) instead
- * of trusting the backend's classic-AD-tree grouping.
+ * ETP-5071 — shared "ordered-first, then alphabetical fallback" comparator shape used by
+ * both `compareCategoriesByOrder` and `compareRowsByItemOrder`: an entry with a known
+ * order value always sorts before one without; two known order values sort numerically
+ * between themselves; two entries with no order at all fall back to `fallbackCompare()`.
+ */
+function compareByOrderThenFallback(orderA, orderB, fallbackCompare) {
+  if (orderA != null && orderB != null) return orderA - orderB;
+  if (orderA != null) return -1;
+  if (orderB != null) return 1;
+  return fallbackCompare();
+}
+
+/**
+ * Flattens `matrix.categories[].windows[]`, resolving each window's category/name against
+ * `menuIndex` (see `buildMenuWindowIndex`) instead of trusting the backend's
+ * classic-AD-tree grouping, and buckets rows by that RESOLVED category — since two
+ * different backend `category.name` buckets can map to the same menu.json `group` (or
+ * vice versa), every window is flattened across all backend categories first, then
+ * re-bucketed by its resolved category string.
  *
  * A window NOT found in `menuIndex` (e.g. "Roles"/"Usuario", deliberately granted to
  * none of the 4 templates and absent from `menu.json`) falls back to the backend's raw
@@ -250,26 +264,15 @@ const MENU_WINDOW_INDEX = buildMenuWindowIndex();
  * match; the "never disappear" fallback above for an absent `menuIndex` entry is
  * unaffected — `match` is `undefined` in that case, not a hidden `true`.
  *
- *
- * Re-groups and re-sorts by the RESOLVED category, not the backend's original grouping:
- * since two different backend `category.name` buckets can map to the same menu.json
- * `group` (or vice versa), every window is flattened across all backend categories first,
- * then re-bucketed by its resolved category string. The resulting category list is
- * sorted by `groupOrder` (the smallest `groupOrder` seen among that category's windows);
- * a category with no `groupOrder` at all (100% fallback windows) sorts last,
- * alphabetically among themselves.
- *
- * ETP-5071 follow-up — ROWS within each category are then sorted by `itemOrder` (see
- * `buildMenuWindowIndex`'s JSDoc): the backend's own `category.windows[]` order is just
- * an alphabetical-by-raw-classic-name sort, unrelated to the real sidebar's order, which
- * `menu.json`'s `items[]` array declaration order already matches. A row whose window
- * has no `itemOrder` at all (the same menu.json-absent fallback case `resolvedCategory`
- * handles above) sorts AFTER every ordered row in that category, alphabetically by
- * `windowName` among themselves — carried as a transient `_itemOrder` on each row while
- * bucketing, stripped again before this returns so the shape callers see is unchanged.
+ * Also tracks, per resolved category, the smallest `groupOrder` seen among its windows
+ * (that window's menu.json group's own declaration-order index) — used by
+ * `compareCategoriesByOrder` to sort categories by menu.json's own declaration order
+ * rather than alphabetically. Each row also carries a transient `_itemOrder` (that
+ * window's index within its menu.json group, or `null` if absent from `menuIndex`), used
+ * by `compareRowsByItemOrder` and stripped again by `adaptMatrix` before it returns, so
+ * the shape callers see is unchanged.
  */
-function adaptMatrix(matrix, menuIndex) {
-  const categories = matrix?.categories ?? [];
+function bucketRowsByResolvedCategory(categories, menuIndex) {
   const rowsByCategory = new Map();
   const groupOrderByCategory = new Map();
 
@@ -299,22 +302,51 @@ function adaptMatrix(matrix, menuIndex) {
     }
   }
 
-  const categoryNames = [...rowsByCategory.keys()].sort((a, b) => {
-    const orderA = groupOrderByCategory.get(a);
-    const orderB = groupOrderByCategory.get(b);
-    if (orderA != null && orderB != null) return orderA - orderB;
-    if (orderA != null) return -1;
-    if (orderB != null) return 1;
-    return a.localeCompare(b);
-  });
+  return { rowsByCategory, groupOrderByCategory };
+}
+
+/**
+ * Sorts resolved category names by the smallest `groupOrder` seen among that category's
+ * windows (see `bucketRowsByResolvedCategory`) — menu.json's own declaration order, not
+ * alphabetical. A category with no `groupOrder` at all (100% fallback windows) sorts
+ * last, alphabetically among themselves.
+ */
+function compareCategoriesByOrder(a, b, groupOrderByCategory) {
+  return compareByOrderThenFallback(groupOrderByCategory.get(a), groupOrderByCategory.get(b), () =>
+    a.localeCompare(b)
+  );
+}
+
+/**
+ * ETP-5071 follow-up — sorts rows within a category by `_itemOrder` (see
+ * `bucketRowsByResolvedCategory`): the backend's own `category.windows[]` order is just
+ * an alphabetical-by-raw-classic-name sort, unrelated to the real sidebar's order, which
+ * `menu.json`'s `items[]` array declaration order already matches. A row with no
+ * `_itemOrder` at all (the same menu.json-absent fallback case handled above) sorts
+ * AFTER every ordered row in that category, alphabetically by `windowName` among
+ * themselves.
+ */
+function compareRowsByItemOrder(a, b) {
+  return compareByOrderThenFallback(a._itemOrder, b._itemOrder, () => a.windowName.localeCompare(b.windowName));
+}
+
+/**
+ * Adapts the backend's `matrix.categories[]` into this page's category-grouped row
+ * shape, normalizing every cell's tier (see `normalizeTier`). Delegates: bucketing +
+ * category/name resolution + hidden-window exclusion to `bucketRowsByResolvedCategory`,
+ * category ordering to `compareCategoriesByOrder`, and row ordering within each category
+ * to `compareRowsByItemOrder`. See those functions' JSDoc for the full ETP-5071 rules.
+ */
+function adaptMatrix(matrix, menuIndex) {
+  const categories = matrix?.categories ?? [];
+  const { rowsByCategory, groupOrderByCategory } = bucketRowsByResolvedCategory(categories, menuIndex);
+
+  const categoryNames = [...rowsByCategory.keys()].sort((a, b) =>
+    compareCategoriesByOrder(a, b, groupOrderByCategory)
+  );
 
   return categoryNames.map((category) => {
-    const rows = [...rowsByCategory.get(category)].sort((a, b) => {
-      if (a._itemOrder != null && b._itemOrder != null) return a._itemOrder - b._itemOrder;
-      if (a._itemOrder != null) return -1;
-      if (b._itemOrder != null) return 1;
-      return a.windowName.localeCompare(b.windowName);
-    });
+    const rows = [...rowsByCategory.get(category)].sort(compareRowsByItemOrder);
     return {
       category,
       rows: rows.map(({ _itemOrder, ...row }) => row),
