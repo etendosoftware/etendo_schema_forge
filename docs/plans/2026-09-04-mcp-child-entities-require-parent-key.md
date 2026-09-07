@@ -1551,6 +1551,54 @@ rename futuro rompe el build en vez de vaciar la configuración.
    radio de F4: para cuando entre el gate, la receta que un agente está siguiendo ya manda
    lo que el gate pide. *(corrección propia, 2026-09-07)*
 
+### La forma FK no persiste mal: se rechaza (medido)
+
+Sobre `sales-order/lines`, mismo pedido y mismo producto, cambiando **sólo** cómo se nombra
+al padre:
+
+| forma | resultado |
+|---|---|
+| `parentId` | creado; `businessPartner`, `partnerAddress`, `orderDate`, tax (`Entregas IVA 21%`) y precio (23) derivados |
+| `salesOrder` (el FK) | **422 `validation_error`** — `orderDate` no se pudo auto-resolver |
+
+Importa para la redacción de los docs y para F4: en specs con un campo obligatorio derivado
+del padre, la forma FK **no llega a la base**, se rechaza de plano. Un rechazo y una
+escritura mala silenciosa piden cosas distintas del que llama, así que "persiste con los
+campos del padre en null" es más débil y menos exacto que "se rechaza" para esos specs.
+*(medido por ETP-5184-sales-order-issues, ambos brazos)*
+
+### Sin verificar: la lista de ejemplos del comentario de `handleDefaults`
+
+El comentario que entró en `1047cc55` dice que `neo_defaults` omite *"la warehouse del padre,
+su price-list version, su next line number"*. Esa lista sale de la redacción de `ddf2994`,
+**no de una medición propia**, y está escrita como si lo fuera.
+
+Lo único medido en la zona es más angosto y puede no tocarla: en `sales-order/lines` el
+`warehouse` **persistido** fue `Almacen GO`, distinto al de la cabecera. Eso es sobre lo que
+el create persiste en un spec; el comentario es sobre lo que `neo_defaults` resuelve, y el
+ejemplo que nombra es el padre de `inventory-line`. Pueden diferir sin contradecirse.
+
+Queda anotado como no verificado en vez de corregido a ciegas. Si alguien mide
+`neo_defaults` sobre `inventory-line` y la warehouse tampoco sale del padre, el comentario
+está mal y hay que arreglarlo.
+
+### Nota de proceso: la autoría de git no distingue sesiones
+
+Todas las sesiones de esta máquina commitean como `Valentin Vivaldi
+<valentin.vivaldi@smfconsulting.es>`, autor y committer. Así que *"no es mío, entonces es
+tuyo"* es una inferencia inválida entre sesiones, y ya costó que un commit de autoría
+desconocida (`f54d5af` en `etendo-go-docs`) llegara a origin dentro del PR #41 atribuido a
+quien no lo escribió. Lo que sí sirve es el reflog: fecha de creación de la rama, momento de
+cada commit, y si la rama existía en algún otro lado en ese momento.
+
+### Git Police exige el prefijo también en el título del PR
+
+`Feature ETP-XXXX:` se valida en el **título del pull request**, no sólo en los mensajes de
+commit, y no está en `workflow.md`. Un PR con el título mal se **cierra** a los minutos. La
+recuperación es retitular primero y reabrir después — reabrir con el título malo lo cierra
+otra vez. `gh pr edit` falla por falta del scope `read:project`; hay que usar el PATCH del
+REST. *(ETP-5184-sales-order-issues, aprendido perdiendo el PR #41)*
+
 ### Las 4 entidades de escritura sin FK al padre
 
 `payment-in/finPaymentScheduleDetail`, `payment-out/lines`,
