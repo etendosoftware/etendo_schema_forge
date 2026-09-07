@@ -450,12 +450,17 @@ describe('AccountsHeaderTable — delete', () => {
     expect(deleteDialogProps.account).toEqual(DELETABLE);
   });
 
-  it('does not offer the delete menu item for a non-deletable row', async () => {
+  // ETP-5111 — the item is offered on every row now, and opening the dialog for a NON-deletable
+  // account is the point: that is where the backend's refusal gets explained. Before, the action
+  // simply did not exist on such a row, which is indistinguishable from a bug to the user.
+  it('offers the delete menu item for a non-deletable row and opens the dialog for it', async () => {
     renderTable();
     openRowMenu('acc-1');
 
-    await screen.findByTestId('account-row-menu-open-acc-1');
-    expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('account-row-menu-delete-acc-1'));
+
+    await waitFor(() => expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'true'));
+    expect(deleteDialogProps.account).toMatchObject({ id: 'acc-1' });
   });
 
   it('refreshes the list after a delete', () => {

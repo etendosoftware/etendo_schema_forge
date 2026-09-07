@@ -555,11 +555,11 @@ export default function FinancialAccountWindow(props) {
       // rows — which the padding would inset from both edges. The slot handles its own
       // inner spacing instead.
       tablePaddingX=""
-      // ETP-4871 — gates ListView's own bulk-delete button (the multi-select "Eliminar
-      // seleccionados" bar) so it disables whenever the selection includes an account that
-      // still has dependent records anywhere. The per-row "Eliminar cuenta" kebab item
-      // (AccountRowMenu) reads `row.deletable` directly and needs no wiring through ListView.
-      isRowDeletable={(row) => row.deletable !== false}
+      // ETP-5111 — no `isRowDeletable` here any more (the prop is gone from ListView): the
+      // unified delete rule is "let the user try, then explain the failure", so the bulk-delete
+      // button stays enabled even when the selection includes an account with dependent
+      // records. The per-row "Eliminar cuenta" kebab item (AccountRowMenu) still reads
+      // `row.deletable` directly and is unaffected.
       listViewOptions={{
         ...(props.listViewOptions || {}),
         // Drops the IDLE list bar only. ListView's SELECTION bar still renders on top of

@@ -220,9 +220,12 @@ export default function AccountsHeaderTable({
   data,
   meta,
   onDataMutated,
-  // ETP-4656 — ListView's authoritative selection (read-only here). Destructured out of
-  // `props` only so it does not travel into DataTable, where `selectedRows` is the name
-  // of local state and would read as a controlled-selection prop it does not have.
+  // ETP-4656 — ListView's authoritative selection. Destructured out of `props` ONLY so it does
+  // not travel into DataTable, where `selectedRows` is the name of local state and would read as
+  // a controlled-selection prop it does not have. Deliberately unused in the body since
+  // ETP-5111 stopped swapping the toolbar out while rows are selected — do not delete it, or the
+  // prop starts reaching DataTable again.
+  // eslint-disable-next-line no-unused-vars
   selectedRows,
   ...props
 }) {
@@ -243,16 +246,6 @@ export default function AccountsHeaderTable({
 
   const reload = () => onDataMutated?.();
 
-  // ETP-4656 — the selection bar ListView renders above this slot REPLACES the toolbar
-  // rather than stacking on top of it (the standardized delete UX). ListView renders that
-  // bar as a sibling and cannot reach inside the slot, so the swap happens here.
-  //
-  // Derived straight from ListView's own state — deliberately NOT mirrored into local
-  // state off `onSelectionChange`. DataTable empties/prunes its internal selection Set
-  // silently from its `clearSelectionTrigger` / `deselectTrigger` effects without calling
-  // `onSelectionChange`, so a local mirror would still read "selected" after a successful
-  // bulk delete or a cancel, and the toolbar would never come back.
-  const selectionActive = (selectedRows?.length ?? 0) > 0;
   const { sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
@@ -385,38 +378,35 @@ export default function AccountsHeaderTable({
     // here — same as the previous hand-rolled page, which loaded every account in one
     // request. Only matters past one batch (75 accounts).
     <div className="flex h-full flex-col overflow-hidden" data-testid="cuentas-card">
-      {/* Fixed: toolbar. Unmounted (not merely hidden) while a selection is active, so
-          `cuentas-toolbar` genuinely leaves the DOM and ListView's selection bar above
-          reads as its replacement. The type filter and the search text are held in this
-          component's state, so they survive the unmount and are still applied when the
-          selection clears. */}
-      {!selectionActive && (
-        <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
-          <AccountsToolbar
-            typeFilter={typeFilter}
-            onTypeFilterChange={setTypeFilter}
-            search={search}
-            onSearchChange={setSearch}
-            onNewAccount={() => setWizardOpen(true)}
-            onMatchingRules={() => navigate('/match-rule')}
-            onRefresh={reload}
-            // The "Ordenar por" control every other list gets from ListView's idle bar. This
-            // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
-            // here the clickable headers would be the only sort affordance. Same component
-            // ListView uses, driven by the same state it forwards through `props`.
-            sortControl={(
-              <ListSortPopover
-                columns={columns}
-                sortColumn={props.sortColumn}
-                sortDirection={props.sortDirection}
-                onSelect={props.onSortSelect}
-                onClear={props.onClearSort}
-                isDefaultSort={props.isDefaultSort}
-                data-testid="ListSortPopover__accthdr" />
-            )}
-            data-testid="AccountsToolbar__accthdr" />
-        </div>
-      )}
+      {/* Fixed: toolbar. ETP-5111 — it now stays mounted while a selection is active. ETP-4656
+          unmounted it so ListView's selection bar read as its replacement, but with the bar
+          reduced to a floating pill (ETP-4972) the swap only took away "Nueva cuenta", the
+          filters and "Reglas de conciliación" for no benefit. */}
+      <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
+        <AccountsToolbar
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          search={search}
+          onSearchChange={setSearch}
+          onNewAccount={() => setWizardOpen(true)}
+          onMatchingRules={() => navigate('/match-rule')}
+          onRefresh={reload}
+          // The "Ordenar por" control every other list gets from ListView's idle bar. This
+          // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
+          // here the clickable headers would be the only sort affordance. Same component
+          // ListView uses, driven by the same state it forwards through `props`.
+          sortControl={(
+            <ListSortPopover
+              columns={columns}
+              sortColumn={props.sortColumn}
+              sortDirection={props.sortDirection}
+              onSelect={props.onSortSelect}
+              onClear={props.onClearSort}
+              isDefaultSort={props.isDefaultSort}
+              data-testid="ListSortPopover__accthdr" />
+          )}
+          data-testid="AccountsToolbar__accthdr" />
+      </div>
 
       {/* min-h-0 lets the flex child actually shrink so the inner overflow engages */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
