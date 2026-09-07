@@ -102,11 +102,11 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
-  const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
+  const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
-    invoice?.id, specName, profile, apiBaseUrl, orgId,
+    invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
   );
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
@@ -147,7 +147,11 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         )}
         {fiscalTargets.showTbai && (
           <InfoRow
-            label={ui('invoicePreview.fiscalStatus.tbai')}
+            // ETP-5027: a purchase invoice's TBAI is always Batuz specifically
+            // (fiscalTargets.js only ever grants it for the Bizkaia territory —
+            // ETP-5087), so the label must say "Estado Batuz", never the generic
+            // "Estado TicketBAI" sales invoices show.
+            label={ui(specName === 'purchase-invoice' ? 'invoicePreview.fiscalStatus.tbaiPurchase' : 'invoicePreview.fiscalStatus.tbai')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
@@ -318,6 +322,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           token={token}
           orgId={p.orgId}
           profile={p.profile}
+          territory={p.territory}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}

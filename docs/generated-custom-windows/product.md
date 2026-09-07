@@ -47,7 +47,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - **Master/child dependency:** the selected product drives price, stock, and transaction loading through `parentId=<productId>`.
 - **Gallery/detail dependency:** selecting a product card in the gallery navigates into that product's detail route.
 - **Additional Info grouping:** the `Additional Info` tab is a custom panel rendered as two-column row sections. Each row section has a left column (148 px wide) containing a section title and description, and a right column (`flex-1`) holding an `EntityForm`. The `Commercial` row groups `Tax Category`, `Sale`, and `Purchase`; an HR divider separates it from the `Logistics` row, which groups `Almacenable` ("Stocked"/`IsStocked` — relabeled from "Almacenado" in ETP-4943), `Returnable`, `Weight`, and `UOM for Weight`. The outer wrapper applies `[&_input]:bg-white` so all input fields, including `Weight`, render on a white background.
-- **Logistics hidden for Service products (ETP-4943):** the entire `Logistics` row (divider included) does not render when `productType === 'S'` — a Service product has no physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for Service products (ETP-4606). While editing, switching the type to Service also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so a Service product can never be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
+- **Logistics hidden for Service/Expense/Resource products (ETP-4943, extended in ETP-5091):** the entire `Logistics` row (divider included) does not render when `productType` is `'S'` (Service), `'E'` (Expense/"Gasto") or `'R'` (Resource/"Recurso") — none of these have a physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for the same three types (ETP-4606, extended in ETP-5091). While editing, switching the type to one of these also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so none of these product types can ever be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
 - **Selector dependencies:** the current evidence shows selector-backed maintenance for category, tax category, UOM, UOM for weight, attribute set, brand, lifecycle status, warehouse, currency, characteristic, characteristic subset, storage bin, and price-list-version references where relevant.
 - **Pricing tab states:**
   - When the product has not been saved yet, the `Price` tab shows a save-first message and blocks pricing maintenance.
@@ -105,7 +105,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - Shared shell/route behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`, especially the generated/custom window loading flow and the shared entity list/detail flow.
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
-  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType === 'S'`
+  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943, extended in ETP-5091) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType` is `'S'`, `'E'` or `'R'`
   - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
@@ -560,3 +560,43 @@ repeated the status label. Fixed generically in app-shell-core (one `RowDataCell
 with the OK branch, plus the skip *reason* in the space the duplicated label used to occupy), so it
 applies to every window with an import, not just this one. Reasoning and coverage in the
 [Contacts guide](contacts.md#a-skipped-row-showed-no-data--etp-4997).
+
+## Logistics hidden for Expense/Resource products too — ETP-5091
+
+Twin bug of ETP-4943, reported separately: `productType` values `'E'` (Expense/"Gasto") and `'R'`
+(Resource/"Recurso")  — like `'S'` (Service) — have no physical existence in inventory, but the
+Logistics section and the stock sidebar only checked for `'S'`, so Gasto/Recurso products still
+showed and could still be saved with `Almacenable`/`Retornable` set. Same three surfaces as
+ETP-4943, all generalized from a single `'S'` check to a `NON_STOCKABLE_PRODUCT_TYPES` set/list of
+`'S'`/`'E'`/`'R'` — no new mechanism introduced:
+
+- **`ProductAdditionalInfoPanel.jsx`** — `isService` (`=== 'S'`) replaced by `isNonStockable`
+  (`NON_STOCKABLE_PRODUCT_TYPES.has(productType)`), gating both the `Logistics` row's
+  `{!isNonStockable && (...)}` wrapper and the force-false `useEffect`.
+- **`ProductSidebar.jsx`** — `data?.productType === 'S'` replaced by
+  `['S', 'E', 'R'].includes(data?.productType)`.
+- **`com.etendoerp.go`'s `ProductDefaultsHandler.java`** — `enforceServiceProductNotStockable`
+  renamed to `enforceNonStockableProductTypes`, `PRODUCT_TYPE_SERVICE` replaced by a
+  `NON_STOCKABLE_PRODUCT_TYPES` `Set.of("S", "E", "R")`. Same authoritative-server-side reasoning
+  as ETP-4943 applies unchanged: the frontend `useEffect` only fires while `Additional Info` is
+  mounted, so the server guard is what actually guarantees a Gasto/Recurso product can never
+  persist as stocked/returnable when saved straight from `General`.
+- **`'Online'` (`'O'`) was deliberately left out** — the ticket's own reported/expected cases only
+  named Gasto and Recurso; Online was not requested and is not touched by this change.
+
+**Reproduced live** with Playwright against a running instance before the fix: created a product,
+set `Tipo` to `Gasto` (then `Recurso`), confirmed the `Logistics` row and the stock sidebar both
+stayed visible/editable — matching the ticket's steps exactly. Post-fix live re-verification is
+tracked in the ticket.
+
+Coverage:
+- `e2e/tests/flows/product-logistics-nonstockable-types.mocked.spec.js` — end-to-end mocked repro
+  of the reported bug: Logistics section and stock sidebar hidden for Gasto/Recurso, control case
+  (Artículo) still shows both.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductAdditionalInfoPanel.vitest.jsx` —
+  the ETP-4943 Service cases parametrized (`describe.each`) across Service/Expense/Resource.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.vitest.jsx` — new coverage
+  (none existed before ETP-5091) asserting the sidebar renders nothing for Service/Expense/Resource
+  and renders normally for Article.
+- `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` — the ETP-4943 Service POST/PATCH/absent-flags
+  cases mirrored for Expense and Resource.
