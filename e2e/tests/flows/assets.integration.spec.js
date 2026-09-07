@@ -83,7 +83,7 @@ async function openNewAsset(page) {
     .catch(() => {}); // OK if spinner never appeared
 }
 
-/** Pick the real "Genérico" category in the Grupo activo selector.
+/** Pick the real "Genérico" category in the Categoría de activo selector.
  *
  * ETP-4600 unified FK fields onto CreatableSearchSelect (chip + combobox model),
  * but `assetCategory` carries an explicit `searchSelect: false` opt-out
@@ -96,7 +96,7 @@ async function openNewAsset(page) {
  * the same `field-assetCategory` trigger, so the post-selection assertion
  * checks that trigger's text instead of a `-chip` testid. This is a legitimate
  * adaptation to the field's real (old) component, not a weakened assertion. */
-async function selectGrupoActivoOtros(page) {
+async function selectCategoryOtros(page) {
   await openSelectorField(page, 'assetCategory');
   await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
   // Original guarantee: a category is now selected — the trigger reflects the label.
@@ -178,11 +178,11 @@ async function saveThenProcess(page, expectRe) {
 }
 
 /**
- * Apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico,
+ * Apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico,
  * and assert the list narrows to exactly the created asset.
  */
-/** Build and apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico. */
-async function applyNameAndGrupoFilter(page, name) {
+/** Build and apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico. */
+async function applyNameAndCategoryFilter(page, name) {
   await page.getByTestId('filter-advanced').click();
   const panel = page.getByRole('dialog');
   await expect(panel).toBeVisible();
@@ -194,10 +194,10 @@ async function applyNameAndGrupoFilter(page, name) {
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('textbox').first().fill(name);
 
-  // Condition 2 — Grupo activo Es Genérico (FK value = IdentifierMultiPicker).
+  // Condition 2 — Categoría de activo Es Genérico (FK value = IdentifierMultiPicker).
   await panel.getByRole('button', { name: 'Añadir condición' }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
-  await page.getByRole('option', { name: /Grupo activo|Asset Category|Categor/i }).click();
+  await page.getByRole('option', { name: /^Categoría de activo$|^Asset Group$/i }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
@@ -208,18 +208,18 @@ async function applyNameAndGrupoFilter(page, name) {
 }
 
 /** Filter the list and assert it narrows to exactly the created asset. */
-async function findByNameAndGrupo(page, name) {
-  await applyNameAndGrupoFilter(page, name);
+async function findByNameAndCategory(page, name) {
+  await applyNameAndCategoryFilter(page, name);
   await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('tbody tr').first()).toContainText(name);
 }
 
-/** After deletion, filter the list by the asset's name + Grupo activo and assert
- *  it no longer appears. */
+/** After deletion, filter the list by the asset's name + Categoría de activo and
+ *  assert it no longer appears. */
 async function verifyAssetNotInList(page, name) {
   await page.goto('/assets');
   await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-  await applyNameAndGrupoFilter(page, name);
+  await applyNameAndCategoryFilter(page, name);
   await expect(page.locator('tbody tr').filter({ hasText: name })).toHaveCount(0, { timeout: 10_000 });
 }
 
@@ -371,7 +371,7 @@ async function createDepreciableAsset(page, { stamp, name }) {
 
   await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
   await page.getByTestId('field-name').fill(name);
-  await selectGrupoActivoOtros(page);
+  await selectCategoryOtros(page);
 
   // Activate "Depreciar" → financial + accounting-dimensions sections appear.
   // Register the evaluate-display wait BEFORE the click (see helper docblock),
@@ -522,13 +522,13 @@ test.describe('Assets (real backend)', () => {
 
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
     await page.getByTestId('field-name').fill(name);
-    await selectGrupoActivoOtros(page);
+    await selectCategoryOtros(page);
     await page.getByTestId('action-save').click();
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
 
     // Open it, edit Descripción + save, then delete the record.
     await editDescriptionAndDelete(page, stamp, name);
@@ -585,7 +585,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/06/2026');
@@ -611,7 +611,7 @@ test.describe('Assets (real backend)', () => {
     // Navigate straight to the list (the blocked-delete dialog is discarded).
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete and verify the asset is gone, then clean
@@ -681,7 +681,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/01/2026');
@@ -704,7 +704,7 @@ test.describe('Assets (real backend)', () => {
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete, verify gone, conditional cascade (Point 4).
@@ -767,7 +767,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/01/2026');
@@ -790,7 +790,7 @@ test.describe('Assets (real backend)', () => {
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete, verify gone, conditional cascade (Point 4).
@@ -989,7 +989,7 @@ test.describe('Assets (real backend)', () => {
 
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
     await page.getByTestId('field-name').fill(name);
-    await selectGrupoActivoOtros(page);
+    await selectCategoryOtros(page);
 
     const depreciarToggle = page.getByRole('switch').first();
 
@@ -1031,7 +1031,7 @@ test.describe('Assets (real backend)', () => {
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
 
     // Open it, edit Descripción + save, then delete the record.
     await editDescriptionAndDelete(page, stamp, name);
