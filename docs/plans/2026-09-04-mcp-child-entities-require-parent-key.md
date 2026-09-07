@@ -1261,8 +1261,36 @@ la letra, entregás vos el precio y el impuesto, y el agente nunca ejercita el c
 un párrafo explicando qué hereda la línea del padre y cuándo sí hace falta pasar un precio (lista
 con impuesto incluido, u override deliberado).
 
-⚠️ El repo `etendo-go-docs` estaba en la rama `feature/ETP-4918`. Los cambios quedaron **sin
-commitear** para no mezclar tickets; hay que moverlos a una rama `feature/ETP-5184` propia.
+Commiteado en `etendo-go-docs`, rama `feature/ETP-5184`: `0af87c6 Feature ETP-5184: Fix the
+MCP line recipe to use parentId and derive price`.
+
+### 14.10.1 La receta ya arreglada no alcanzó — dos lugares seguían enseñando `salesOrder`
+
+Hallazgo del 2026-09-07, posterior al arreglo de §14.10. Una sesión nueva reprodujo el bug de la
+línea degradada (campos derivados del padre en `null`) a pesar de que la receta JSON ya estaba
+corregida. La causa: dos textos que un agente lee **antes o en vez de** la receta seguían
+enseñando la forma rota.
+
+1. `McpSchemaCreateView.CHILD_ENTITY_HINT_SUFFIX` — el hint que devuelve `neo_schema
+   view:"create"` sobre una entidad hija. Es lo primero que un agente lee al inspeccionar la
+   entidad, antes de llegar a ninguna receta de `docs`. Terminaba en "Also send the parent
+   foreign key itself among your neo_create fields (e.g. physInventory on inventoryLine,
+   salesOrder on sales-order/lines) — it is required even though it is not listed above",
+   instrucción directamente contradictoria con `parentId`. Última vez tocado en `a544eb4f`.
+2. `agentic/mcp/index.md:172` — el párrafo de prosa que **introduce** la receta JSON ya
+   arreglada, más categórico que la receta misma ("the parent FK is always required on a child
+   entity ... so always send it"). Un agente que lee la prosa antes del bloque de código se
+   queda con esa instrucción, aunque el JSON de abajo ya diga `parentId`.
+
+Ambos corregidos el mismo día: (1) en `com.etendoerp.go`, commit `14de404e Feature ETP-5184: Fix
+MCP child-entity hint to use parentId`; (2) en `etendo-go-docs`, commit `f54d5af Feature
+ETP-5184: Stop teaching parent FK form on child create` (que de paso corrigió el mismo defecto en
+el ejemplo resuelto de `physical-inventory`/`inventoryLine`, que usaba `physInventory` en vez de
+`parentId` en su propio `neo_create`).
+
+**Lección:** un texto guía (hint de herramienta o prosa introductoria) puede contradecir la receta
+correcta que lo sigue. Corregir la receta no alcanza si el texto que la rodea sigue enseñando la
+forma rota — hay que revisar todo lo que un agente lee antes de llegar al bloque de código.
 
 ---
 
