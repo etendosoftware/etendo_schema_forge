@@ -1,18 +1,40 @@
 import { screen, waitFor } from '@testing-library/react';
 
 /**
- * Triggers the "required" validation error via the top-bar PDF button and waits
- * for the error text to appear.
+ * Asserts that, while a required (non-hidden) param is empty, EVERY action
+ * that can trigger a report render is disabled — the sidebar's own "Generate
+ * Report" button AND the four top-bar actions (PDF / Excel / CSV / Print).
  *
- * The sidebar's own "Generate Report" button is disabled while a required
- * param is empty (ETP-5013, hasAllRequiredFilled), so it can no longer be used
- * to trigger validateRequired() directly. The top-bar PDF button still calls
- * validateRequired() unconditionally (only gated by `loading`), so it remains
- * a reachable path to the same error state — used here to assert both facts:
- * the sidebar button is disabled, and the required error still surfaces.
+ * Before ETP-4900 only the sidebar button was gated by `hasAllRequiredFilled`;
+ * the top-bar PDF button still called `renderReport()` unconditionally (only
+ * gated by `loading`), which made it the last reachable path to trigger
+ * `validateRequired()` and surface the red "required" error text. ETP-4900
+ * closed that gap: PDF/Excel/CSV/Print now share the exact same
+ * `hasAllRequiredFilled` gate as the sidebar button, so there is no longer any
+ * UI entry point that can reach `validateRequired()` while a required param is
+ * empty — `validateRequired()` remains only as a defensive net against a
+ * direct/backend call. The user-visible invariant to test is therefore that
+ * ALL of these actions are disabled (and none of them fires a `/render`
+ * fetch), not that an error message appears.
  */
-export async function assertGenerateDisabledThenPdfTriggersRequired(user) {
+export function assertAllActionsDisabledWhileRequiredEmpty() {
   expect(screen.getByText('runReport')).toBeDisabled();
-  await user.click(screen.getByText('PDF'));
-  await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+  expect(screen.getByText('PDF')).toBeDisabled();
+  expect(screen.getByText('Excel')).toBeDisabled();
+  expect(screen.getByText('CSV')).toBeDisabled();
+  expect(screen.getByText('print')).toBeDisabled();
+}
+
+/**
+ * Waits for the four top-bar actions and the sidebar submit to become
+ * re-enabled once the missing required param is filled in.
+ */
+export async function waitForAllActionsEnabled() {
+  await waitFor(() => {
+    expect(screen.getByText('runReport')).not.toBeDisabled();
+    expect(screen.getByText('PDF')).not.toBeDisabled();
+    expect(screen.getByText('Excel')).not.toBeDisabled();
+    expect(screen.getByText('CSV')).not.toBeDisabled();
+    expect(screen.getByText('print')).not.toBeDisabled();
+  });
 }

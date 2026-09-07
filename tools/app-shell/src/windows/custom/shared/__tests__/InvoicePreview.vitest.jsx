@@ -91,11 +91,16 @@ vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
+// `importActual` keeps `isSifEligibleByDate` real — InvoicePreview.jsx uses it
+// directly for the ETP-5122 date gate — while `getInvoiceFiscalTargets` is
+// replaced with an inspectable mock so ETP-5087 territory-forwarding tests can
+// assert on the args it was called with.
+const getInvoiceFiscalTargetsMock = vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false }));
 vi.mock('../fiscalTargets.js', async () => {
   const actual = await vi.importActual('../fiscalTargets.js');
   return {
     ...actual,
-    getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
+    getInvoiceFiscalTargets: (...args) => getInvoiceFiscalTargetsMock(...args),
   };
 });
 
@@ -159,6 +164,11 @@ const defaultInvoice = {
   'currency$_identifier': 'EUR',
 };
 
+// ETP-5122: far-past adoption dates so pre-existing tests (written before the
+// date gate existed) keep passing without knowing about it. Tests that
+// specifically exercise the gate override these via an explicit hook override.
+const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
+
 function baseInvoicePreviewHook(overrides = {}) {
   return {
     displayInvoice: defaultInvoice,
@@ -169,7 +179,11 @@ function baseInvoicePreviewHook(overrides = {}) {
     installments: [], payments: [], loadingPayments: false,
     totalOutstanding: 0, canAddPayment: false, isFullyPaid: false, fetchPayments: vi.fn(),
     status: 'CO', badgeProps: {}, statusLabel: 'Completed', partnerName: 'Acme Corp', grandTotal: 1000,
-    orgId: 'org-1', profile: null,
+    orgId: 'org-1', profile: null, territory: null,
+    // ETP-5122: adoption-date records, needed to gate each fiscal status InfoRow.
+    siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+    tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+    verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
     showPaymentModal: false, setShowPaymentModal: vi.fn(),
     showSendModal: false, sendModalClosing: false, openEmailModal: vi.fn(), closeEmailModal: vi.fn(),
     showSifModal: false, setShowSifModal: vi.fn(),
@@ -258,6 +272,80 @@ describe('InvoicePreview', () => {
       buttons.forEach((btn) => {
         expect(btn.textContent.trim().length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  // ── ETP-5027: purchase-invoice TBAI is always Batuz, never generic TicketBAI ──
+  // The TBAI InfoRow's label key must switch on specName. SummaryCard is a plain
+  // vi.fn() mock that renders nothing of its own, so the InfoRow element (passed
+  // as a `children` prop) is inspected directly off the last call instead of
+  // querying rendered DOM — the mock never mounts it.
+  describe('TBAI status label is doc-type aware (ETP-5027)', () => {
+    beforeEach(() => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+    });
+
+    function tbaiInfoRow() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      const rows = (props.children || []).filter(Boolean);
+      return rows.find((el) => el?.props?.label);
+    }
+
+    it('purchase invoice shows the Batuz-specific label, never the generic TicketBAI one', () => {
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbaiPurchase');
+    });
+
+    it('sales invoice keeps the generic TicketBAI label, unchanged', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbai');
+    });
+  });
+
+  // ETP-5087 + ETP-5122 combined: territory (forwarded from useInvoicePreview's
+  // `territory`) and the per-system adoption date are independent gates — the
+  // component must forward territory to getInvoiceFiscalTargets AND still
+  // apply the date gate on top of whatever targets that returns.
+  describe('fiscal status territory + date gates combined (ETP-5087 + ETP-5122)', () => {
+    function tbaiInfoRow() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      const rows = (props.children || []).filter(Boolean);
+      return rows.find((el) => el?.props?.label);
+    }
+
+    it('forwards territory to getInvoiceFiscalTargets', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ territory: 'BIZKAIA' }));
+      renderInvoicePreview({ specName: 'purchase-invoice' });
+      expect(getInvoiceFiscalTargetsMock).toHaveBeenCalledWith('purchase-invoice', null, 'BIZKAIA');
+    });
+
+    it('hides the TBAI InfoRow when showTbai is true but the invoice predates TBAI adoption', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+      const oldInvoice = { ...defaultInvoice, invoiceDate: '1999-01-01' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: oldInvoice,
+        territory: 'BIZKAIA',
+        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: oldInvoice });
+      expect(tbaiInfoRow()).toBeUndefined();
+    });
+
+    it('shows the TBAI InfoRow when territory qualifies AND the invoice is dated after adoption', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+      const newInvoice = { ...defaultInvoice, invoiceDate: '2026-06-15' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: newInvoice,
+        territory: 'BIZKAIA',
+        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: newInvoice });
+      expect(tbaiInfoRow()).toBeTruthy();
     });
   });
 

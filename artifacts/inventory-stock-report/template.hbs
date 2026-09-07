@@ -12,10 +12,12 @@
    follow-up request: "no se llega a diferenciar bien"). */
 .stock-cards { display: flex; flex-direction: column; gap: 3mm; }
 .stock-card { border: 1px solid #e2e8f0; border-radius: 1.5mm; overflow: hidden; }
-/* value (left, bold) + a "Producto"/"Almacén"/"Categoría" chip (right) —
-   same layout as report-general-ledger's .dim-group-head, so the "this is
-   what we grouped by" context reads the same across reports. */
-.stock-card-head { display: flex; align-items: center; justify-content: space-between; gap: 3mm; background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; }
+/* Chip (left, the "Producto"/"Almacén"/"Categoría" dimension type) + value
+   (right, bold) — same order/layout as report-general-ledger's own
+   .dim-group-head (ETP-5128), so "this is what we grouped by" reads the
+   same across reports. Was value-then-chip with justify-content pushing
+   the chip off to the far right, which read as the chip missing entirely. */
+.stock-card-head { display: flex; align-items: center; gap: 3mm; background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; }
 .stock-card-head .value { font-weight: 700; font-size: 10.5pt; }
 .stock-card-head .chip { display: inline-block; line-height: 1; font-size: 8pt; font-weight: 600; color: var(--color-primary); background: var(--color-bg-stripe); border: 1px solid rgba(18,18,23,0.15); border-radius: 3mm; padding: 1mm 3mm; }
 </style>
@@ -52,7 +54,7 @@
       {{#if (isGroupBreak @root.meta.dimensionField (lookup this @root.meta.dimensionField))}}
         {{#unless @first}}</tbody></table></div>{{/unless}}
     <div class="stock-card">
-      <div class="stock-card-head"><span class="value">{{lookup this @root.meta.dimensionField}}</span><span class="chip">{{@root.meta.dimensionLabel}}</span></div>
+      <div class="stock-card-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{lookup this @root.meta.dimensionField}}</span></div>
       <table class="report-table">
         <thead><tr>
           <th style="width: 12%">{{@root.meta.labels.productSearchKey}}</th>

@@ -4,6 +4,9 @@
     "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
     "category": "contact",
     "name": "Contacts",
+    "vectorSearch": {
+      "target": "business-partner"
+    },
     "entityLabel": "Contact",
     "sidebarLayout": false,
     "breadcrumb": "Contact",

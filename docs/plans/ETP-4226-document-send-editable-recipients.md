@@ -836,7 +836,7 @@ Only needed for the generic `ListView.jsx` fallback (custom mount points inherit
 - Create: `e2e/tests/flows/send-recipient-chips.mocked.spec.js`
 
 - [ ] **Step 1:** Read `docs/e2e-testing-guide.md` and `e2e/tests/flows/row-quick-actions.mocked.spec.js` (canonical reference) — then delegate the spec to test-generator.
-- [ ] **Step 2:** Scenarios: open send modal from the sales-invoice row quick-action; default chip present; remove + add To + add CC; intercepted POST body contains `recipientEdits` and no `idempotencyKey`; invalid email disables Send; untouched send POSTs the legacy body. Also extend `e2e/tests/flows/i18n-etp4003.mocked.spec.js` with the new keys if that spec asserts the send modal strings.
+- [ ] **Step 2:** Scenarios: open send modal from the sales-invoice row quick-action; default chip present; remove + add To + add CC; intercepted POST body contains `recipientEdits` and no `idempotencyKey`; invalid email disables Send; untouched send POSTs the legacy body. Also extend `e2e/tests/flows/send-document-modal-etp4003.mocked.spec.js` with the new keys if that spec asserts the send modal strings.
 - [ ] **Step 3:** Run per the e2e guide; PASS. **Step 4:** Commit — `Feature ETP-4226: Add mocked e2e for recipient chip editor`
 
 ---

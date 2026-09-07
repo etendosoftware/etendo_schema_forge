@@ -59,6 +59,17 @@ The normal local hook retains its trailer validation. For a manual run, execute:
 PREPUSH_EXECUTION=cloud scripts/run-remote-prepush.sh
 ```
 
+## Seed GO food products
+
+`scripts/seed-go-food-products.sh` creates deterministic `SF-FOOD-001` through
+`SF-FOOD-100` product data in a selected GOClient organization. It discovers the client,
+organization, and product references from the local Etendo database and is idempotent by Search
+Key. The inserts also enqueue configured DB Extended vector-source events.
+
+```bash
+scripts/seed-go-food-products.sh --client-name GOClient --organization-name GOOrg --count 100
+```
+
 Cloud mode accepts one branch update per push. Push multiple refs separately.
 
 ## RTK (Rust Token Killer)

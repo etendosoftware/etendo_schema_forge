@@ -35,6 +35,35 @@ import { parseCalendarDate } from '../../../lib/dateOnly.js';
  *   the correct) default.
  * @returns {{showSii: boolean, showTbai: boolean, showVerifactu: boolean}}
  */
+export function getInvoiceFiscalTargets(specName, profile, territory = null) {
+  const isSales = specName === 'sales-invoice' || specName === 'sales-order';
+  const isPurchase = specName === 'purchase-invoice' || specName === 'purchase-order';
+  // TicketBAI on a purchase document is legitimate ONLY in Bizkaia (Batuz/LROE).
+  const showTbaiForDoc = isSales || (isPurchase && territory === 'BIZKAIA');
+
+  if (profile === 'sii' || profile === 'sii-navarra') {
+    return { showSii: isSales || isPurchase, showTbai: false, showVerifactu: false };
+  }
+
+  if (profile === 'tbai') {
+    return { showSii: false, showTbai: showTbaiForDoc, showVerifactu: false };
+  }
+
+  if (profile === 'sii+tbai') {
+    return {
+      showSii: isSales || isPurchase,
+      showTbai: showTbaiForDoc,
+      showVerifactu: false,
+    };
+  }
+
+  if (profile === 'verifactu') {
+    return { showSii: false, showTbai: false, showVerifactu: isSales };
+  }
+
+  return { showSii: false, showTbai: false, showVerifactu: false };
+}
+
 /**
  * Whether a document's reference date makes it eligible for a given fiscal
  * system (SII / TicketBAI / VERI*FACTU), given that system's "adoption date"
@@ -101,33 +130,4 @@ export function isSifEligibleByDate(referenceDateRaw, adoptionDateRaw) {
  */
 export function isTbaiEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw) {
   return isSifEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw);
-}
-
-export function getInvoiceFiscalTargets(specName, profile, territory = null) {
-  const isSales = specName === 'sales-invoice' || specName === 'sales-order';
-  const isPurchase = specName === 'purchase-invoice' || specName === 'purchase-order';
-  // TicketBAI on a purchase document is legitimate ONLY in Bizkaia (Batuz/LROE).
-  const showTbaiForDoc = isSales || (isPurchase && territory === 'BIZKAIA');
-
-  if (profile === 'sii' || profile === 'sii-navarra') {
-    return { showSii: isSales || isPurchase, showTbai: false, showVerifactu: false };
-  }
-
-  if (profile === 'tbai') {
-    return { showSii: false, showTbai: showTbaiForDoc, showVerifactu: false };
-  }
-
-  if (profile === 'sii+tbai') {
-    return {
-      showSii: isSales || isPurchase,
-      showTbai: showTbaiForDoc,
-      showVerifactu: false,
-    };
-  }
-
-  if (profile === 'verifactu') {
-    return { showSii: false, showTbai: false, showVerifactu: isSales };
-  }
-
-  return { showSii: false, showTbai: false, showVerifactu: false };
 }

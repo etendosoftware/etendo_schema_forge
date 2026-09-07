@@ -102,9 +102,9 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, siiRecord, tbaiRecord, verifactuRecord, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, siiRecord, tbaiRecord, verifactuRecord, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
-  const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
+  const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5122: a single invoice this time (not a grid row), but the same rule —
   // no status before the org's adoption date for that system. SII compares
   // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI and
@@ -113,7 +113,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
   const tbaiEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
   const verifactuEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, verifactuRecord?.inVfactuSystem);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
-    invoice?.id, specName, profile, apiBaseUrl, orgId,
+    invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
   );
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
@@ -154,7 +154,11 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         )}
         {fiscalTargets.showTbai && tbaiEligibleByDate && (
           <InfoRow
-            label={ui('invoicePreview.fiscalStatus.tbai')}
+            // ETP-5027: a purchase invoice's TBAI is always Batuz specifically
+            // (fiscalTargets.js only ever grants it for the Bizkaia territory —
+            // ETP-5087), so the label must say "Estado Batuz", never the generic
+            // "Estado TicketBAI" sales invoices show.
+            label={ui(specName === 'purchase-invoice' ? 'invoicePreview.fiscalStatus.tbaiPurchase' : 'invoicePreview.fiscalStatus.tbai')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
@@ -325,6 +329,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           token={token}
           orgId={p.orgId}
           profile={p.profile}
+          territory={p.territory}
           siiRecord={p.siiRecord}
           tbaiRecord={p.tbaiRecord}
           verifactuRecord={p.verifactuRecord}
