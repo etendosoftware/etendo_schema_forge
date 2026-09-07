@@ -25,15 +25,25 @@ import { login } from '../helpers/auth.js';
  * with drastically different content no longer changes any column width.
  *
  * This spec mocks the Contacts list (`/sws/neo/contacts/businessPartner`)
- * with a default (unsorted) response whose rows have short values in every
- * column, and a sorted (`_sortBy=name`) response whose `name` values are
- * deliberately very long — the exact shape of content-driven width jump
- * `table-layout: auto` would produce. It captures the `name` column header's
+ * with a default response whose rows have short `name` values, and a
+ * `_sortBy=name desc` response whose `name` values are deliberately very
+ * long — the exact shape of content-driven width jump `table-layout: auto`
+ * would produce. It captures the `name` column header's
  * `getBoundingClientRect()` width before and after clicking that header to
  * sort, and asserts it is unchanged — the same before/after real-layout
  * technique `lines-overflow-etp5133.mocked.spec.js` (ETP-5133) uses to prove
  * layout stability in a real browser (jsdom, used by the Vitest unit test
  * for `getTableContainerStyle`, has no layout engine and cannot prove this).
+ *
+ * NOTE on the mock's sort predicate: `artifacts/contacts/decisions.json` sets
+ * `listSortBy: "name asc"`, so the Contacts list now opens ALREADY sorted by
+ * `name asc` (see `ListView.jsx`'s `parseListSortBy` / `initialSortColumn`).
+ * That means the very first request already carries `_sortBy=name asc`, so
+ * the mock cannot key off "does the URL mention name" — it must key off
+ * DIRECTION. A single click on the (already-sorted) `name` header toggles
+ * asc -> desc (see `handleColumnSort` in `ListView.jsx`), so: initial load
+ * (`name asc`) -> SHORT_ROWS, first click (`name desc`) -> SORTED_ROWS
+ * (long names).
  */
 
 const SHORT_ROWS = [
@@ -58,8 +68,11 @@ async function installMocks(page) {
     if (req.method() !== 'GET') return route.fallback();
     if (/\/businessPartner\/[^/?]+/.test(url)) return route.fallback();
 
-    const sorted = /_sortBy=name/.test(url);
-    const rows = sorted ? SORTED_ROWS : SHORT_ROWS;
+    // Contacts opens already sorted `name asc` (decisions.json listSortBy),
+    // so distinguish by DIRECTION, not by the mere presence of `_sortBy=name`
+    // — both the initial load and the toggled state carry that field name.
+    const sortedDesc = /_sortBy=name(\s|\+|%20)desc/.test(url);
+    const rows = sortedDesc ? SORTED_ROWS : SHORT_ROWS;
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -88,15 +101,20 @@ test.describe('ETP-5182 — Contacts list column widths stay stable across sort 
 
     const nameHeader = page.getByTestId('column-header-name');
     await expect(nameHeader).toBeVisible({ timeout: 10_000 });
+    // Initial load is already sorted `name asc` (decisions.json listSortBy) —
+    // that still resolves to SHORT_ROWS under the direction-based mock above.
     await expect(page.getByText('Ana', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     const widthBefore = await nameHeader.evaluate((el) => el.getBoundingClientRect().width);
 
+    // The name column is already the active sort (asc), so this click toggles
+    // it to desc — not to a fresh "name" sort — per handleColumnSort in
+    // ListView.jsx.
     const [request] = await Promise.all([
-      page.waitForRequest((req) => req.url().includes('/sws/neo/contacts/businessPartner') && req.url().includes('_sortBy=name')),
+      page.waitForRequest((req) => req.url().includes('/sws/neo/contacts/businessPartner') && /_sortBy=name(\+|%20)desc/.test(req.url())),
       nameHeader.locator('button').click(),
     ]);
-    expect(request.url()).toContain('_sortBy=name');
+    expect(request.url()).toMatch(/_sortBy=name(\+|%20)desc/);
 
     // Wait for the long-content sorted rows to actually render before re-measuring.
     await expect(page.getByText(LONG_NAME, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
