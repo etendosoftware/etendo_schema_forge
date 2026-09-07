@@ -2980,7 +2980,7 @@ export function DetailView({
               {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
-              {!isNew && processes
+              {!isNew && !windowReadOnly && processes
                 .filter(p => p.displayLogicRaw
                   ? evalDisplayLogicRaw(p.displayLogicRaw, data)
                   : displayLogic?.visibility?.[p.name] !== false)
@@ -3040,7 +3040,7 @@ export function DetailView({
                   The multi-row (selectedChildRows) case is rendered exclusively by the bulk
                   action bar above the lines table (see isDetailBulkBarVisible) to avoid
                   rendering these buttons twice. */}
-              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
+              {!isNew && !windowReadOnly && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
