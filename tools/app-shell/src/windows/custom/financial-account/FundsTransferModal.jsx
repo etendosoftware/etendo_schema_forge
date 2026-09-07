@@ -13,6 +13,7 @@ import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLengthValidation.js';
+import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
@@ -601,25 +602,22 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between">
               <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
-              {/* Always visible, not only once exceeded: the point is to see the limit
-                  coming while typing, which is too late if it only appears on failure. */}
-              <span
-                className={`text-xs tabular-nums ${descriptionError ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}`}
-                data-testid="transfer-description-counter"
-              >
-                {`${description.length}/${FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}`}
-              </span>
+              <FieldLengthCounter
+                value={description}
+                limit={FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}
+                error={descriptionError}
+                testId="transfer-description"
+                data-testid="FieldLengthCounter__7ff08b" />
             </div>
             <input
               className={`${PLAIN_FIELD_CLS} w-full bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))]`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />
-            {descriptionError ? (
-              <p className="text-sm text-[hsl(var(--destructive))]" data-testid="transfer-description-error">
-                {ui(descriptionError.key, descriptionError.params)}
-              </p>
-            ) : null}
+            <FieldLengthError
+              error={descriptionError}
+              testId="transfer-description"
+              data-testid="FieldLengthError__7ff08b" />
           </div>
 
           {error ? (

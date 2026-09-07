@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useUI } from '@/i18n';
 import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement';
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLengthValidation.js';
+import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
 import { Field, DateInput, AmountInput, ChipSelect } from '@/components/forms/fields';
@@ -289,18 +290,17 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               value={form.description}
               onChange={(e) => set({ description: e.target.value })}
               data-testid="tx-description" />
-            <div className="mt-1 flex items-baseline justify-between gap-2">
-              {descriptionError ? (
-                <p className="text-sm text-[hsl(var(--destructive))]" data-testid="tx-description-error">
-                  {ui(descriptionError.key, descriptionError.params)}
-                </p>
-              ) : <span />}
-              <span
-                className={`text-xs tabular-nums ${descriptionError ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}`}
-                data-testid="tx-description-counter"
-              >
-                {`${(form.description || '').length}/${FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}`}
-              </span>
+            <div className="mt-1 flex items-baseline justify-end gap-2">
+              <FieldLengthError
+                error={descriptionError}
+                testId="tx-description"
+                data-testid="FieldLengthError__9a0423" />
+              <FieldLengthCounter
+                value={(form.description || '')}
+                limit={FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}
+                error={descriptionError}
+                testId="tx-description"
+                data-testid="FieldLengthCounter__9a0423" />
             </div>
           </Field>
 
