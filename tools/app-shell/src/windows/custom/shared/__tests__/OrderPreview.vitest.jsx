@@ -78,22 +78,9 @@ vi.mock('../usePurchaseOrderPdf.js', () => ({
   usePurchaseOrderPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
 }));
 
+import { SendDocumentModalMock } from './testUtils/sendDocumentModalMock.jsx';
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
-  default: ({ onClose, onSent, documentNo }) => (
-    <div data-testid="send-modal" data-docno={documentNo}>
-      <button data-testid="send-modal-close" onClick={onClose}>
-        Close Send
-      </button>
-      {/* ETP-5069 — simulates the modal reporting a SUCCESSFUL send (its new `onSent`
-          callback, which a cancel never reaches), so the panel's refresh wiring can be
-          exercised without the real modal. */}
-      {onSent && (
-        <button data-testid="send-modal-sent" onClick={() => onSent({ status: 'SENT' })}>
-          Simulate Sent
-        </button>
-      )}
-    </div>
-  ),
+  default: SendDocumentModalMock,
 }));
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
