@@ -934,15 +934,15 @@ describe('ProductPriceBar', () => {
   // -----------------------------------------------------------------------
   // Tariff name vs. version name (the user picks a TARIFF, so the price list
   // name wins over the version name — they differ for the onboarding-created
-  // lists: "Lista de venta (sin impuestos)" vs "Version Lista de venta (...)").
+  // lists: "Tarifa de venta principal" vs "Version Tarifa de venta principal").
   // -----------------------------------------------------------------------
   it('a row shows the tariff name, not the version name', async () => {
     global.fetch = buildFetch({
       'GET /price?parentId=': {
         response: {
           data: [salesRow({
-            'priceListVersion$_identifier': 'Version Lista de venta (sin impuestos)',
-            'priceList$_identifier': 'Lista de venta (sin impuestos)',
+            'priceListVersion$_identifier': 'Version Tarifa de venta principal',
+            'priceList$_identifier': 'Tarifa de venta principal',
           })],
         },
       },
@@ -950,9 +950,9 @@ describe('ProductPriceBar', () => {
 
     renderBar();
 
-    await screen.findByDisplayValue('Lista de venta (sin impuestos)');
+    await screen.findByDisplayValue('Tarifa de venta principal');
     expect(
-      screen.queryByDisplayValue('Version Lista de venta (sin impuestos)'),
+      screen.queryByDisplayValue('Version Tarifa de venta principal'),
     ).not.toBeInTheDocument();
   });
 
@@ -972,9 +972,9 @@ describe('ProductPriceBar', () => {
       'GET /price/selectors/M_PriceList_Version_ID': {
         items: [{
           id: SALES_PLV_ID,
-          label: 'Version Lista de venta (sin impuestos)',
-          name: 'Version Lista de venta (sin impuestos)',
-          'priceList$_identifier': 'Lista de venta (sin impuestos)',
+          label: 'Version Tarifa de venta principal',
+          name: 'Version Tarifa de venta principal',
+          'priceList$_identifier': 'Tarifa de venta principal',
           salesPriceList: true,
         }],
       },
@@ -986,8 +986,8 @@ describe('ProductPriceBar', () => {
     await openTariffSelect(user);
 
     const option = await screen.findByTestId(`option-priceListVersion-${SALES_PLV_ID}`);
-    expect(option).toHaveTextContent('Lista de venta (sin impuestos)');
-    expect(option).not.toHaveTextContent('Version Lista de venta');
+    expect(option).toHaveTextContent('Tarifa de venta principal');
+    expect(option).not.toHaveTextContent('Version Tarifa de venta');
   });
 
   // -----------------------------------------------------------------------

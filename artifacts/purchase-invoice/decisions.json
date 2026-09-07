@@ -4,6 +4,7 @@
     "category": "purchases",
     "name": "Purchase Invoice",
     "documentDateField": "invoiceDate",
+    "selectorPriceCurrency": "org",
     "sendDocument": {
       "allowEmail": false
     },

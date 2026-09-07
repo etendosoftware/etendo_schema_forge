@@ -44,7 +44,13 @@ export function useStatementActions() {
         // "None of the N selected could be deleted", with no hint that the reason was a processed
         // statement). Falls back to the raw HTTP status when the body isn't the expected shape.
         const message = await parseBackendErrorMessage(res);
-        throw new Error(message || `HTTP ${res.status}`);
+        const err = new Error(message || `HTTP ${res.status}`);
+        // ETP-5111 — the status has to travel with the error: `batchDelete.isBusinessRejection`
+        // only trusts a 4xx to be a stated business reason, so without this a rejected bulk
+        // delete degrades to counters even for a single statement. Same shape as
+        // `useCreateMovement.postAction`.
+        err.status = res.status;
+        throw err;
       }
       const json = await res.json();
       return json?.response?.data ?? {};
