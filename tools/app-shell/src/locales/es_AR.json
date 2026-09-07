@@ -17572,6 +17572,7 @@
     "selectPlaceholder": "Seleccionar...",
     "selectLabelPrefix": "Seleccionar",
     "searchLabelPrefix": "Buscar",
+    "cpPisIbanPlaceholder": "Buscar o introducir IBAN destino...",
     "selectParentFirst": "Selecciona primero el campo padre",
     "recordsFound": "{count} registros encontrados",
     "reportReadyTitle": "Tu informe está listo",

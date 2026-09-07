@@ -18355,6 +18355,7 @@
     "cpPisSubtitle": "Confirma los datos antes de autorizar la operación en tu banco.",
     "cpPisTemplateLabel": "Plantilla de pago",
     "cpPisIbanLabel": "IBAN Destino",
+    "cpPisIbanPlaceholder": "Buscar o introducir IBAN destino...",
     "cpPisIbanUseTyped": "Usar «{iban}»",
     "cpPisBbanLabel": "BBAN del acreedor",
     "cpPisBbanPlaceholder": "Número de cuenta BBAN",
