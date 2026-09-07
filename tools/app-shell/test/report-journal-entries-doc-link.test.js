@@ -96,7 +96,16 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
     // the separate `doc_record_id` (account to open) and `doc_query`
     // (`txn=<id>`, so the window deep-links to the right movement) columns.
     const tables = [...DOC_WINDOW_CASE.matchAll(/UPPER\(adt\.tablename\)\s*=\s*'([A-Z_]+)'/gi)].map((m) => m[1]);
-    assert.deepEqual(tables, ['C_INVOICE', 'M_INOUT', 'M_INVENTORY', 'M_MATCHINV', 'A_AMORTIZATION', 'FIN_FINACC_TRANSACTION']);
+    assert.deepEqual(tables, [
+      'C_INVOICE',
+      'M_INOUT',
+      'M_INVENTORY',
+      'M_MATCHINV',
+      'A_AMORTIZATION',
+      'FIN_FINACC_TRANSACTION',
+      'GL_JOURNAL',
+      'FIN_PAYMENT',
+    ]);
   });
 
   it('normalises the table name with UPPER() (ad_table.tablename casing is not guaranteed)', () => {
@@ -108,6 +117,17 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
       DOC_WINDOW_CASE,
       /UPPER\(adt\.tablename\)\s*=\s*'C_INVOICE'\s+THEN\s+CASE\s+WHEN\s+dt\.issotrx\s*=\s*'Y'\s+THEN\s+'sales-invoice'\s+ELSE\s+'purchase-invoice'\s+END/i,
     );
+  });
+
+  it('splits FIN_PAYMENT into payment-in / payment-out by dt.issotrx', () => {
+    assert.match(
+      DOC_WINDOW_CASE,
+      /UPPER\(adt\.tablename\)\s*=\s*'FIN_PAYMENT'\s+THEN\s+CASE\s+WHEN\s+dt\.issotrx\s*=\s*'Y'\s+THEN\s+'payment-in'\s+ELSE\s+'payment-out'\s+END/i,
+    );
+  });
+
+  it('maps GL_JOURNAL to simple-g-l-journal', () => {
+    assert.match(DOC_WINDOW_CASE, /UPPER\(adt\.tablename\)\s*=\s*'GL_JOURNAL'\s+THEN\s+'simple-g-l-journal'/i);
   });
 
   it('maps M_INVENTORY to physical-inventory', () => {
@@ -223,7 +243,7 @@ describe('report-journal-entries — entry number link markup (ETP-5013)', () =>
   });
 });
 
-// ── Part 4: real render, all nine windows + the null case ──────────────────
+// ── Part 4: real render, all linkable windows + the null case ──────────────
 
 const WINDOW_CASES = [
   { doc_window: 'sales-invoice', document_type: 'AR Invoice' },
@@ -238,7 +258,12 @@ const WINDOW_CASES = [
   // A_Amortization rows, which have no c_doctype name) — the LINK is driven
   // by doc_window, never by the label, so it links while still reading
   // "Journal", exactly as Classic does.
-  { doc_window: 'matched-purchase-invoices', document_type: 'Match Invoice' },
+  // ETP-5128: the underlying ad_ref_list value name is still "Match Invoice"
+  // (shared across 209 doctypes — never renamed), but translateDocType() now
+  // overrides docbasetype MXI unconditionally to "Receipt-Invoice Link"; this
+  // fixture's document_type mirrors what the report actually shows, though
+  // this file only asserts the doc_window link, never the label text.
+  { doc_window: 'matched-purchase-invoices', document_type: 'Receipt-Invoice Link' },
   { doc_window: 'amortization', document_type: 'Journal' },
   {
     doc_window: 'financial-account',
@@ -246,6 +271,11 @@ const WINDOW_CASES = [
     doc_record_id: 'ACCT0000000000000000000000000',
     doc_query_key: 'txnAny',
   },
+  // ETP-5128: GL_JOURNAL and FIN_PAYMENT branches added after
+  // FIN_FINACC_TRANSACTION, before the ELSE NULL fallback.
+  { doc_window: 'simple-g-l-journal', document_type: 'GL Journal' },
+  { doc_window: 'payment-in', document_type: 'AR Receipt' },
+  { doc_window: 'payment-out', document_type: 'AP Payment' },
   { doc_window: null, document_type: 'Journal' },
 ];
 
@@ -330,7 +360,7 @@ describe('report-journal-entries — rendered entry link output (ETP-5013)', () 
     assert.doesNotMatch(HTML, /docWindow:''/);
   });
 
-  it('emits each of the seven windows exactly once across the report', () => {
+  it('emits each linkable window exactly once across the report', () => {
     for (const c of WINDOW_CASES) {
       if (c.doc_window === null) continue;
       const hits = HTML.split(`docWindow:'${c.doc_window}'`).length - 1;
