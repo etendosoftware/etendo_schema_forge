@@ -1484,6 +1484,26 @@ rename futuro rompe el build en vez de vaciar la configuración.
    **obligada por código** (el gate de `handleDefaults`). O sea que hay que cambiar la
    guidance de `neo_create` y dejar la de `neo_defaults` intacta.
 
+   **El orden de merge es docs primero, y esto corrige lo que yo había escrito.** Llegué a
+   decir que el PR de docs no debía mergear antes de F4. Es al revés, y el código lo dice:
+   en `handleCreate` 562-579, `parentId` ya se lee, se resuelve al FK y se pasa a
+   `injectMandatoryDefaults`, que lo baja a `NeoParentValuesLoader.load(adTab, parentId)`.
+   Con el FK solo, `parentIdValue` queda `null` y no hay registro padre que leer — que es
+   justamente por qué salen mal `businessPartner`, `partnerAddress`, `warehouse` y
+   `orderDate`. O sea: `parentId` **no es una alternativa equivalente al FK, es la única
+   forma que carga el padre**, y eso ya es cierto hoy. F4 la vuelve obligatoria; no la
+   vuelve funcional.
+
+   La confirmación independiente es que las dos verificaciones en vivo de D-7 —el
+   diferencial de `C_GetTax` y el precio 0 → 23— sólo se pueden reproducir mandando
+   `parentId`; con `salesOrder` no salen. Una medición que sólo reproduce por una forma es
+   evidencia directa de cuál funciona.
+
+   Entonces la restricción correcta es **F4 no puede salir antes que los docs**, no la
+   simétrica. Mergear el PR temprano deja los docs vivos bien antes, y además achica el
+   radio de F4: para cuando entre el gate, la receta que un agente está siguiendo ya manda
+   lo que el gate pide. *(corrección propia, 2026-09-07)*
+
 ### Las 4 entidades de escritura sin FK al padre
 
 `payment-in/finPaymentScheduleDetail`, `payment-out/lines`,
