@@ -25,23 +25,6 @@ const TONE_STYLES = {
 };
 
 /**
- * The ready-made `items` list wins outright when the caller supplies one — a caller whose effects
- * don't map onto the Conciliación/Transacción/Asiento triad passes it and leaves every flag unset.
- * Otherwise the triad is derived here, each entry appearing only when the record actually carries
- * that effect AND the caller worded a label for it.
- */
-function resolveItems({
-  explicitItems, reconciled, itemConciliacion, hasTransaction, itemTransaccion, posted, itemAsiento,
-}) {
-  if (explicitItems) return explicitItems;
-  const derived = [];
-  if (reconciled && itemConciliacion) derived.push(itemConciliacion);
-  if (hasTransaction && itemTransaccion) derived.push(itemTransaccion);
-  if (posted && itemAsiento) derived.push(itemAsiento);
-  return derived;
-}
-
-/**
  * Which consequence bullets this cartel lists.
  *
  * A caller either hands the list over ready-made through `items`, or hands over the three
