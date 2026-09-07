@@ -69,14 +69,10 @@ describe('canonical csvField — fixture contract', { skip: fixtureSkip }, () =>
     });
   }
 
-  it('covers every declared trigger', () => {
-    const uncovered = (fixtures?.SPREADSHEET_FORMULA_TRIGGERS ?? []).filter(
-      (t) => !fixtures.CSV_NEUTRALIZATION_FIXTURES.some(
-        ({ input, expected }) => typeof input === 'string' && input.includes(t) && expected.startsWith("'"),
-      ),
-    );
-    assert.deepEqual(uncovered, []);
-  });
+  // The table's own invariants (every trigger has a fixture, no row encodes an outcome the
+  // policy cannot produce) belong to whoever owns the table: they are asserted in
+  // schema_forge_core's csvNeutralizationFixtures.test.js, not duplicated here. This file
+  // only checks THIS repo's two implementations against it.
 });
 
 describe('canonical csvField — payloads from the ticket', () => {
