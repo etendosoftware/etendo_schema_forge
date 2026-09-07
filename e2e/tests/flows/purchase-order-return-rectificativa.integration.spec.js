@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
+import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
@@ -87,6 +88,12 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await ensureVendorSetup(page, { navigateTo });
     });
 
+    // ETP-5079: the onboarding dataset no longer seeds any visible product, so the
+    // single line below has nothing to pick unless the suite provisions its own
+    // fixture first. One fixture is enough here — this flow only ever adds one
+    // line. See e2e/tests/helpers/product-helpers.js.
+    await ensureProductSetup(page, PRODUCT_FIXTURE_ALPHA);
+
     await test.step('Create a new Purchase Order with one line', async () => {
       await navigateTo(page, 'purchase-order');
       const newButton = page.getByTestId('action-new');
@@ -106,7 +113,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);
 
-      await addProductLine(page, { isFirst: true, productIndex: 0 });
+      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
 
       // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
       // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
