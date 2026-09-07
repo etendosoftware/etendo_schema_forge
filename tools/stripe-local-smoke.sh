@@ -5,10 +5,14 @@ set -Eeuo pipefail
 # the authenticated hosted Checkout Session endpoint. Card data stays in Stripe.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-${ROOT_DIR}/.env}"
-BASE_URL="${ETENDO_BASE_URL:-http://localhost:8080/etendo_sf2}"
+# Context path comes from etendo_core/gradle.properties (context.name), not a fixed name.
+BASE_URL="${ETENDO_BASE_URL:-http://localhost:8080/etendo}"
 WEBHOOK_PATH="${ETGO_CHECKOUT_WEBHOOK_PATH:-/sws/go/checkout/webhook}"
 CHECKOUT_PATH="${ETGO_CHECKOUT_SESSION_PATH:-/sws/go/checkout/sessions}"
 CLIENT_NAME="${ETGO_CHECKOUT_TEST_CLIENT_NAME:-Stripe Local Smoke Tenant}"
+# The Origin header becomes Stripe's success_url/cancel_url, so it must point at
+# the dev server that is actually running (vite is pinned to 3100 by strictPort).
+APP_ORIGIN="${ETGO_CHECKOUT_APP_ORIGIN:-http://localhost:3100}"
 LOGIN_RESPONSE_FILE="${TMPDIR:-/tmp}/stripe-local-login.$$.json"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -96,7 +100,7 @@ HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "${BASE_URL}${CHECKOUT_PATH}" \
   -H "Authorization: Bearer ${ETENDO_SESSION_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -H 'Origin: http://localhost:5173' \
+  -H "Origin: ${APP_ORIGIN}" \
   -d "{\"clientName\":\"${CLIENT_NAME}\",\"language\":\"en_US\",\"countryCode\":\"AR\"}")"
 cat "$RESPONSE_FILE"; echo
 if [[ "$HTTP_STATUS" == "503" ]] && grep -q 'CHECKOUT_NOT_CONFIGURED' "$RESPONSE_FILE"; then
