@@ -31,6 +31,7 @@ import {
   AccountsToolbar,
   AccountTypeFilter,
 } from '@/components/financial-accounts';
+import { applyAccountAdvancedFilter, withDerivedFields } from '@/components/financial-accounts/accountAdvancedFilter.js';
 import {
   ACCOUNT_CELL_TYPES,
   resolveCellType,
@@ -62,6 +63,7 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 const COLUMN_CHROME = {
   name: { headClass: 'w-[480px] pl-[40px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
+  currency: { headClass: 'w-[120px] px-2', cellClass: 'w-[120px] px-2 py-2' },
   country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
   eTGOPendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
@@ -232,6 +234,10 @@ export default function AccountsHeaderTable({
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [search, setSearch] = useState('');
+  // Advanced "by conditions" filter (ETP-5113). Ephemeral, like every other list's:
+  // the generic builder emits the condition tree and this component evaluates it in
+  // memory, the same way the type filter and the search box already work here.
+  const [advancedFilter, setAdvancedFilter] = useState(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editAccount, setEditAccount] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
@@ -364,12 +370,31 @@ export default function AccountsHeaderTable({
   // used to re-order every render unconditionally.
   const isRestingSort = props.sortColumn === RESTING_SORT.column
     && props.sortDirection === RESTING_SORT.direction;
+  // Type + search only. Kept as its own memo because it is ALSO what seeds the advanced
+  // filter's value pickers: seeding them from the fully filtered result would collapse
+  // each picker to the value already chosen (filter Moneda = EUR and EUR becomes the only
+  // option left), making a selection impossible to widen.
+  const scopedAccounts = useMemo(
+    () => filterAccounts(data, typeFilter, search),
+    [data, typeFilter, search],
+  );
+  // What the funnel's value pickers read. They look up `row[col.key]` directly, and
+  // `countryLabel` is a DERIVED key that only exists after `withDerivedFields` — seeding
+  // them with the raw rows left the País picker with zero options, because every row's
+  // `countryLabel` was undefined. Projecting here keeps that knowledge in one place
+  // (the filter spec owns the derivation) instead of teaching the toolbar about it.
+  const filterPickerRows = useMemo(
+    () => scopedAccounts.map(withDerivedFields),
+    [scopedAccounts],
+  );
   const visibleAccounts = useMemo(
     () => {
-      const rows = filterAccounts(data, typeFilter, search);
+      // Order matters only for cost, not for the result: the cheap type/search pass
+      // narrows the array before the condition tree walks it. All three compose with AND.
+      const rows = applyAccountAdvancedFilter(scopedAccounts, advancedFilter);
       return isRestingSort ? sortAccounts(rows) : rows;
     },
-    [data, typeFilter, search, isRestingSort],
+    [scopedAccounts, advancedFilter, isRestingSort],
   );
 
   return (
@@ -397,6 +422,11 @@ export default function AccountsHeaderTable({
             onTypeFilterChange={setTypeFilter}
             search={search}
             onSearchChange={setSearch}
+            advancedFilter={advancedFilter}
+            onAdvancedFilterChange={setAdvancedFilter}
+            // Seeds the funnel's value pickers. Deliberately the pre-conditions list, and
+            // projected — see the filterPickerRows note above.
+            rows={filterPickerRows}
             onNewAccount={() => setWizardOpen(true)}
             onMatchingRules={() => navigate('/match-rule')}
             onRefresh={reload}

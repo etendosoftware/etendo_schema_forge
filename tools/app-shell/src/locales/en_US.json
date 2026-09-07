@@ -18224,6 +18224,7 @@
     "financeAccountsColAccount": "Account",
     "financeAccountsColType": "Type",
     "financeAccountsColIban": "IBAN",
+    "financeAccountsColCurrency": "Currency",
     "financeAccountsColCountry": "Country",
     "financeAccountsColBalance": "Balance",
     "financeAccountsColPending": "Pending",

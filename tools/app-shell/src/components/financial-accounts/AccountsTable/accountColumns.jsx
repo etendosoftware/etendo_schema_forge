@@ -12,6 +12,7 @@
 import { Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { Tag } from '@/components/ui/tag';
 import { ACCOUNT_TYPE } from '../tokens';
 import { AccountLogoAvatar } from '../AccountLogoAvatar.jsx';
 import { SyncStatusInline } from '../SyncStatusInline.jsx';
@@ -113,6 +114,21 @@ export function CountryCell({ account }) {
       {label || '—'}
     </span>
   );
+}
+
+/** "Moneda" column (ETP-5113) — the account's ISO code as a neutral chip.
+ *
+ *  Reads the server-injected `currencyIso` rather than the `currency` FK the column is
+ *  declared on, exactly as `CountryCell` above reads `countryName`: the AD field is
+ *  declared in `decisions.json` so the header can sort server-side, while the cell paints
+ *  the enriched value. Uses the shared `Tag` primitive on purpose — there are already two
+ *  hand-rolled `CurrencyBadge` copies elsewhere (ReconciliationSplitPanel,
+ *  FundsTransferModal) that duplicate this pill, and this must not become a third. */
+export function CurrencyCell({ account }) {
+  if (!account.currencyIso) {
+    return <span className="text-sm font-normal leading-5 text-[hsl(var(--muted-foreground))]">—</span>;
+  }
+  return <Tag variant="neutral" label={account.currencyIso} />;
 }
 
 export function BalanceCell({ account }) {

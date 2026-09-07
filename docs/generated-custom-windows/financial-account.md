@@ -2925,7 +2925,10 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
 - `components/financial-accounts/contractColumns.js` → `getContractGridColumns(entity)` reads `@generated/financial-account/contract.json` and returns the ordered, grid-flagged fields for an entity (`account`, `transaction`, `importedBankStatements`, `bankStatementLines`), forwarding `column`, `gridLabelKey`, `cellType` and `columnType` along with the name/label/type.
 - Field-level config lives in `artifacts/financial-account/decisions.json`. Per field: `grid` / `gridOrder` (which columns and in what order), `gridLabelKey` (the header's i18n key) and `cellType` (which renderer draws the cell). Edit decisions → `make regen ONLY=financial-account SKIP_EXTRACT=1` regenerates `contract.json`; the grids pick up the change with no JSX edits.
-- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `accountCountry`, `accountBalance`, `reconcilePill`). `accountCountry` (ETP-4896 follow-up) is the **País** column, inserted at `gridOrder: 3` right after Tipo — which bumped `currentBalance` to 4 and `eTGOPendingCount` to 5. It renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
+- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `currencyChip`, `accountCountry`, `accountBalance`, `reconcilePill`). The grid order has been renumbered twice: `accountCountry` (ETP-4896 follow-up) is the **País** column, first inserted at `gridOrder: 3` right after Tipo; ETP-5113 then inserted **Moneda** at 3, so the current order is Cuenta 1 · Tipo & IBAN 2 · Moneda 3 · País 4 · Saldo 5 · Por conciliar 6. The País cell renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
+- **"Moneda" is `currency`, a real AD field rendered as a chip (ETP-5113).** The column is declared on `currency` (`C_Currency_ID`) — a genuine AD column — so the header sorts **server-side** through `_sortBy` like any other; but the cell body (`CurrencyCell` in `AccountsTable/accountColumns.jsx`, bound by `cellType: "currencyChip"`) paints `row.currencyIso`, the ISO code `FinancialAccountHandler` already injects into every list row. That split is exactly what **País** does (declared on `C_Country_ID`, cell reads `countryName`), and it is why no virtual field was needed: had `currencyIso` itself been declared as an `entities.account.virtualFields[]` entry, `appendVirtualFields`' closed whitelist would have stripped both `cellType` and `gridLabelKey` — the trap "Por conciliar" had to escape by becoming a stored computed column. Because `C_Currency`'s identifier **is** the ISO code, the server-side order agrees with what the chip shows.
+
+  The chip is the shared `Tag` primitive (`@/components/ui/tag`, `variant="neutral"` — one colour for every currency, no ISO→colour map to maintain), with an em dash for the (contract-impossible, `required: true`) missing-ISO row. It is deliberately **not** a fourth hand-rolled pill: `ReconciliationSplitPanel.jsx` and `FundsTransferModal.jsx` each still carry their own `CurrencyBadge` copy that duplicates this styling without reusing `Tag`, and deduplicating those two onto `Tag` is an open follow-up.
 - **"Por conciliar" is `eTGOPendingCount`, a stored computed column** (`EM_ETGO_Pending_Count` on `FIN_FINANCIAL_ACCOUNT`, EPL-1807 engine). It used to be an `entities.account.virtualFields[]` entry that `FinancialAccountHandler.afterHandle` injected per row — the same mechanism `payment-in`, `payment-out`, `return-material-receipt` and `return-to-vendor-shipment` still use.
 
   **Why it had to stop being virtual:** a value injected in `afterHandle` can only be reordered *within the page the SQL already selected* (`BATCH_SIZE = 75` + infinite-scroll `loadMore`), and NEO's generic `orderby` sorts by DAL properties, which an aggregate over other tables is not. So the column was unsortable by construction. As a physical column maintained by the engine it is a plain column read — indexable, sortable and filterable.
@@ -2950,6 +2953,106 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 - **The hand-rolled `AccountsTable` host is deleted** (ETP-4658): `AccountsTable/{index,AccountsTableHeader,AccountRow}.jsx`, their tests, the `ACCOUNT_CELL_RENDERERS`/`ACCOUNT_COLUMNS` registry and the barrel export. Nothing mounted it once the list became the generated `ListView`, and declaring `pendingCount` in the contract had left it rendering that column twice with an off-by-one `colspan`. What survives in `AccountsTable/accountColumns.jsx` is only the three cell bodies (`NameCell`/`TypeCell`/`BalanceCell`), bound to columns by `accountCellTypes.jsx`. The folder name is now a misnomer; moving the file was left out on purpose to avoid churning imports and the tests that pin its path.
 - Nothing validates `gridLabelKey` or `cellType` (no rule in the pipeline validator, no whitelist). A typo'd label key renders **the key itself** on screen, because `useUI` returns the key on a miss; an unknown `cellType` falls back to DataTable's generic type renderer.
 - `readOnlyLogic.js` for these fields is produced by `generate-contract.js → convertLogicToJs` (AD expression → JS). The translator handles `@Col@='v'`, `!=`, empty (`!''`/`=''`), `null` and numeric (`>0`) forms; any expression that still contains a raw `@token@` after translation is marked `evaluable:false` (never emits invalid JS). All `readonlylogic-valid` contract tests must stay green after a regen.
+
+### Advanced ("by conditions") filter on the Cuentas list (ETP-5113)
+
+The Cuentas toolbar has a funnel, right after the type filter, opening the **same generic
+`AdvancedFilterBuilder`** the Movimientos / Extractos importados / Conciliaciones tabs use.
+Nothing was built for it: the shared `contract-ui/AdvancedFilterButton` already named
+"accounts" as an intended consumer, and
+`components/financial-accounts/accountAdvancedFilter.js` already held the column spec — it
+was simply never wired to a toolbar, so both of its exports were reachable only from their
+own test.
+
+**Evaluation is client-side**, via the shared `applyConditions`
+(`windows/custom/financial-account/advancedFilterApply.js`), exactly like the sibling tabs.
+That matches how this list already worked: `filterAccounts` filters the in-memory `data` by
+type and search text. The inherited consequence is that the funnel only sees rows already
+fetched — this window loads every account in one batch (`BATCH_SIZE = 75`) and its
+`onReachBottom` is inert anyway (see the `tableOwnsScroll` note above), so it is not a new
+limitation.
+
+**The columns offered mirror the visible grid one-for-one, with one deliberate exception.**
+
+| Field offered | Row key | Mode | Note |
+| --- | --- | --- | --- |
+| Cuenta | `name` | text | `required` → no "is empty" |
+| Tipo | `type` | enum | `enumLabels` Banco / Caja / Tarjeta, `required` |
+| IBAN | `iban` | text | optional, so "is empty" finds the IBAN-less cash/card accounts |
+| Moneda | `currencyIso` | enum + required | picker, `Es`/`No es` only — see below |
+| País | `countryLabel` | enum | picker, + `Está vacío`, **derived** — see below |
+| ~~Por conciliar~~ | — | — | **excluded on purpose** (acceptance criterion) |
+
+"Por conciliar" is a reconciliation backlog counter drawn as a pill, not a property of the
+account, so it is not offered even though the column is sortable and filterable server-side.
+It was in the spec before this ticket and was removed.
+
+Three details that are easy to get wrong:
+
+- **The `key` is the ROW property, not the `decisions.json` field name.** The two diverge:
+  the field is `iBAN`, the row carries `iban`.
+- **País has no flat row property.** `CountryCell` paints `countryName || countryIso`, so the
+  filter would disagree with the screen for any row that only has the fallback. The spec
+  exports `withDerivedFields`, which projects `countryLabel` with that same expression, and
+  hands it to `applyConditions` as its `deriveRow` argument — the same mechanism the
+  Movimientos filter uses for `statusFamily`.
+- **Every column's operator list, and why.** The mode decides the operators; `required`
+  decides whether the two nullish ones survive.
+
+  | Field | `type` | mode | Operators offered |
+  | --- | --- | --- | --- |
+  | Cuenta | `string` + required | text | Contiene · No contiene · Empieza por · Es · No es |
+  | Tipo | `enum` + required | enumLabel | Es · No es |
+  | IBAN | `string` | text | the five text ops + Está vacío · No está vacío |
+  | Moneda | `enum` + required | enumLabel | **Es · No es** |
+  | País | `enum` | enumLabel | **Es · No es · Está vacío · No está vacío** |
+  | Saldo | `number` + required | numeric | Es · No es · > · ≥ · < · ≤ · Entre |
+
+  `enumLabel` is `equals / notEqual / isNull / isNotNull`, and `getOperatorsForColumn` drops
+  the nullish pair for a `required` column — which is what lands Moneda and Tipo on exactly
+  Es / No es.
+
+  **No text operators on Moneda or País.** `selector` (→ `identifier`) would add Contiene /
+  No contiene / Empieza por. `DistinctEnumPicker` already has its own search box, so a text
+  operator buys nothing the user cannot do inside the popover, and on a three-character ISO
+  code it invites nonsense ("contiene EU" matching EUR). Text mode is for genuinely free
+  prose — the account `name`, where a picker would list one option per row.
+
+  **`required` on Moneda but not País is a data statement, not cosmetics.** Currency is
+  mandatory in AD, so Está vacío could only ever match zero rows. Country is not: accounts
+  predating ETP-4896 carry none — 248 of 448 active accounts instance-wide when this was
+  written, 1 of 26 in GOClient — and Está vacío is precisely how a user finds them to fix
+  them. The derived `countryLabel` collapses a missing country to `''`, which `isBlank` reads
+  as empty, so the operator works on the projection.
+
+  **Three wrong turns are recorded on purpose**, because all three shipped and the user caught
+  each one rather than a test. `string` for País gave text mode, whose only widget is a
+  free-text box: it asked the user to type a country name exactly right with no hint of which
+  ones exist. Then `selector` for BOTH was over-applied consistency, handing Moneda three text
+  operators meaningless for a 3-char code. Then keeping `selector` for País alone left it with
+  those same redundant operators, the picker's search box having made them pointless.
+
+  The regression guard pins the resolved **operator list**, not the declared `type` and not
+  even the mode: `identifier` was a perfectly valid mode for País, just the wrong operator set,
+  so a mode-only assertion would not have caught it.
+
+Two wiring notes in `AccountsHeaderTable.jsx`:
+
+- `ACCOUNT_FILTER_COLUMNS` (key → `{ type }`) is passed to `applyConditions` as its
+  `columnsByKey` argument. Without it `tableFor` cannot resolve a mode and **every** column
+  falls through to the string operator table — which silently broke Saldo: `equals` compared
+  text, so a stored `1646.4867` (displayed "1.646,49 €") never matched a typed `1646.49`.
+  `NUMBER_OPERATORS` exists precisely for that, rounding both sides to the typed scale and
+  accepting either decimal separator.
+- The funnel's pickers are seeded from `scopedAccounts` — type + search applied, conditions
+  **not**. Seeding them from the fully filtered result collapses each picker to the value
+  already chosen (filter Moneda = EUR and EUR becomes the only remaining option), making a
+  selection impossible to widen.
+
+`window.hideListFilters` stays `true`: this window draws its own toolbar, so the funnel is
+mounted there rather than in `ListView`'s generic `ListFilterBar`. `AdvancedFilterButton`
+gained an optional `className` for this — its base height is `h-9` while every control in
+the Cuentas toolbar is `h-10` (`docs/list-filters.md` §"Visual parity").
 
 ### Grid multi-select delete on the Cuentas list (ETP-4656 · restored in ETP-4658)
 

@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AdvancedFilterBuilder } from '@/components/contract-ui/AdvancedFilterBuilder.jsx';
 import { useUI } from '@/i18n';
+import { cn } from '@/lib/utils';
 
 /**
  * Funnel button + popover hosting the generic {@link AdvancedFilterBuilder}
@@ -19,9 +20,10 @@ import { useUI } from '@/i18n';
  *   value?: object|null,
  *   onChange?: (next: object|null) => void,
  *   testId?: string,
+ *   className?: string,
  * }} props
  */
-export function AdvancedFilterButton({ columns, rows = [], value = null, onChange, testId, entity = null, apiBaseUrl = null, labelOverrides = null }) {
+export function AdvancedFilterButton({ columns, rows = [], value = null, onChange, testId, entity = null, apiBaseUrl = null, labelOverrides = null, className = '' }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
 
@@ -38,7 +40,10 @@ export function AdvancedFilterButton({ columns, rows = [], value = null, onChang
           type="button"
           data-testid={testId}
           title={ui('advancedFilterTitle')}
-          className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--muted))]"
+          className={cn(
+            'relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--muted))]',
+            className,
+          )}
         >
           <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__1026f3" />
           <span>{ui('filters')}</span>
