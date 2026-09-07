@@ -2,7 +2,7 @@
   "version": "0.1.0",
   "generatedAt": "2026-09-02T14:40:15.987Z",
   "updatedAt": "2026-09-02T21:18:24.005Z",
-  "contractChecksum": "7c41ab662d74c8c6",
+  "contractChecksum": "825143adcb053480",
   "apiPrediction": {
     "specName": "matched-purchase-invoices",
     "baseUrl": "/sws/neo/matched-purchase-invoices",
