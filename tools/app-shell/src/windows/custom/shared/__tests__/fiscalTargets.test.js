@@ -214,3 +214,27 @@ describe('getInvoiceFiscalTargets — SII is direction-agnostic but spec-aware',
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// ETP-5087 — the SII flag must survive a NON-BIZKAIA territory.
+//
+// The matrix above pins showSii only with territory 'BIZKAIA' (or with the
+// argument omitted), and pins showTbai on its own for the other territories.
+// Neither shape asserts the FULL triple for a purchase document whose territory
+// is present but is not Bizkaia. That is exactly the combination the ETP-5087
+// gate narrowed, so a regression that let the TBAI territory check suppress SII
+// on a purchase invoice in Araba/Gipuzkoa would slip through unnoticed.
+// ---------------------------------------------------------------------------
+describe('getInvoiceFiscalTargets — a non-BIZKAIA territory drops TBAI but never SII', () => {
+  for (const spec of PURCHASE_SPECS) {
+    for (const territory of ['ARABA', 'GIPUZKOA']) {
+      it(`${spec} keeps only SII with sii+tbai in ${territory}`, () => {
+        assert.deepEqual(getInvoiceFiscalTargets(spec, 'sii+tbai', territory), {
+          showSii: true,
+          showTbai: false,
+          showVerifactu: false,
+        });
+      });
+    }
+  }
+});

@@ -42,6 +42,40 @@ available. The default is disabled; `0` and any other value also leave capture o
 
 ---
 
+## Copilot Agent Navigation (`webmcp-agent-chat`)
+
+`e2e/tests/flows/copilot-agent-navigation.mocked.spec.js` covers the browser
+half of the AI Copilot loop: a fabricated AI SDK UI-message stream stands in for
+the BFF, so the spec asserts that a `navigate_to` / `open_form` tool call lands
+in the router and that the three failure messages stay distinct (external URL →
+security error, unresolved name → recoverable, ambiguous name → candidates).
+Whether the model *chooses* to call the tool is not testable here.
+
+Two environment constraints, both fixed when Vite starts:
+
+```bash
+# NOTE: no VITE_MOCK — see below
+VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true}' npx vite --port 3104
+E2E_USE_MOCK=1 BASE_URL=http://localhost:3104 E2E_WEBMCP_AGENT_CHAT_FLAG=on \
+  npx playwright test tests/flows/copilot-agent-navigation.mocked.spec.js --project=mocked
+```
+
+- **The flag must be on at server start.** `webmcp-agent-chat` defaults to
+  `false`, and there is no runtime override — same constraint as
+  `proof-of-concept-menu.mocked.spec.js`. The spec skips itself without
+  `E2E_WEBMCP_AGENT_CHAT_FLAG=on` rather than failing on an absent feature.
+- **The server must NOT run in mock mode.** ⚠️ In mock mode `App.jsx` patches
+  `window.fetch` and sets the API base to `/api`, and `mockFetch.js` claims
+  every URL starting with that prefix. The Copilot's endpoint is `/api/ai/chat`,
+  so the mock answers it **in-page**: the request never reaches the network, no
+  `page.route` can intercept it, and the chat silently does nothing — the input
+  clears, the user message renders, and no POST is ever made. This also means
+  **the agent chat does not work under `make dev-mock` at all**, which is worth
+  remembering before debugging it there.
+
+`login()` only seeds a token and intercepts `/sws/**` by URL, so it works
+unchanged against a non-mock dev server.
+
 ## Etendo GO Contextual Selector Smoke
 
 `e2e/tests/flows/etendogo-contextual-selectors.integration.spec.js` validates the non-MCP Etendo GO integration risk for contextual FK selectors. It is skipped by default because it requires a live Etendo backend, a loaded F&B dataset, and a JWT-capable test user.

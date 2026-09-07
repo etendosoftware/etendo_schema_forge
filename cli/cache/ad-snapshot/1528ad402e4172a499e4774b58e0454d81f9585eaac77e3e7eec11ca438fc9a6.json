@@ -716,7 +716,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "178638c32ae636902e46b89d2509db239779d171073e59edee105c01db44aebd",
+      "checksum": "f44aa589a6c2267a9e384957b7b834309b66547da92786a1cf0f41800e1a4e6c",
       "params": [
         "183"
       ],
@@ -790,6 +790,13 @@
           "name": "TBAI_ExistConfigAndIsAvailable",
           "tab_name": "Header",
           "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
+        },
+        {
+          "ad_auxiliarinput_id": "CE5A4F8C5218495A9D5C9878322CD98A",
+          "ad_tab_id": "290",
+          "name": "TBAI_IsBizkaiaPurchaseEligible",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y' AND conf.etsg_sif_territory = 'BIZKAIA') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
         },
         {
           "ad_auxiliarinput_id": "7E3FB488115E46C5937FDF8A73D36098",
@@ -944,6 +951,13 @@
           "name": "HASREVERSEDINVOICEPO",
           "tab_name": "Exchange rates",
           "validation_code": "@SQL=SELECT 'Y' \nFROM DUAL \nWHERE EXISTS (SELECT 1 FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID = @C_Invoice_ID@ )\nAND EXISTS (SELECT 1 FROM C_CONVERSION_RATE_DOCUMENT WHERE C_INVOICE_ID = (SELECT REVERSED_C_INVOICE_ID\n                                                                               FROM C_INVOICE_REVERSE\n                                                                               WHERE C_INVOICE_ID = @C_Invoice_ID@))"
+        },
+        {
+          "ad_auxiliarinput_id": "6F073D27DC724817AAFE0973932FC5D7",
+          "ad_tab_id": "F51664D68DF4488BA29427C30E96F512",
+          "name": "TBAI_IsBizkaiaPurchaseEligible",
+          "tab_name": "Batuz",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y' AND conf.etsg_sif_territory = 'BIZKAIA') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
         }
       ]
     },

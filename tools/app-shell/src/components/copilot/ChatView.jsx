@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { AttachmentChips } from './AttachmentChips.jsx';
+import { MarkdownContent } from './MarkdownContent.jsx';
 
 /**
  * ChatView — scrollable message area + file upload bar + input form.
@@ -94,14 +95,14 @@ export function ChatView({
             )}
             <div
               className={cn(
-                'rounded-lg px-3 py-2 text-sm whitespace-pre-line',
+                'rounded-lg px-3 py-2 text-sm',
                 message.role === 'user' && 'bg-primary text-primary-foreground',
                 message.role === 'copilot' && 'bg-muted text-foreground',
                 message.role === 'error' &&
                   'bg-destructive/10 text-destructive',
               )}
             >
-              <div>{message.text}</div>
+              <MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>
               {Array.isArray(message.files) && message.files.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {message.files.map((file, index) => (

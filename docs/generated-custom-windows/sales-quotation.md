@@ -35,6 +35,7 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Persisted payment-term changes: the `etgo_sf_field` row for `paymentTerms` was historically marked `IsReadOnly=Y`, which made `NeoFieldFilter.filterWriteRequest` strip the field from PATCH bodies and silently drop user changes. The row is now `IsReadOnly=N` (kept in sync via `push-to-neo` and the exported XML in `com.etendoerp.go`), so editing `paymentTerms` on an existing draft quotation actually persists.
 - POST-create cascade no longer overwrites user-set FK values: `NeoCrudHandler.executePostCreate` snapshots the keys submitted in the request body before `injectMandatoryDefaults` runs, and passes them as `protectedFields` into the post-create callout cascade. The cascade can still refine missing/derived fields, but it no longer flips `paymentTerms` (or any other user-set field) back to the business-partner default during the initial save.
 - Header defaulting and callouts: the contract keeps business-partner, address, price-list, order-date, and valid-until callouts. Current evidence supports customer-driven address and price-list autofill expectations, and it also records an intended default of `validUntil = orderDate + 30 days` for new quotations.
+- API/MCP create invariant: `transactionDocument` and `documentType` remain system fields in the Schema Forge create contract, but the backend resolves the active quotation tab's document subtype before persistence and writes the same quotation document type to both columns. This prevents API-created quotations from defaulting to `Standard Order` and disappearing from the Sales Quotation window; an explicitly submitted transaction document is preserved on tabs without an authoritative subtype filter.
 - Pricing dependency: line product selection auto-fills `listPrice` (Net List Price), `tax`, `uOM`, `grossUnitPrice`, and `discount` from the active price list via the `SL_Order_Product` callout. The `forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"]` declaration on the `product` field bypasses the `touchedFieldsRef` guard so callout-returned values are applied even when the user has not directly touched those fields. `discount` is included because product/price-list callouts may return a customer- or product-specific discount on product selection. The Classic callout returns the price as `standardPrice` (PriceStd); `DetailView.jsx` maps it to `listPrice` when the callout zeroes out the `listPrice` field.
 - Line recalculation — client-side model (ETP-3662): `orderedQuantity`, `listPrice`, and `discount` changes are computed entirely in the browser via `useLineGrossAmount` — no callout round-trip is fired for those fields. The formula is `lineGrossAmount = orderedQuantity × listPrice × (1 − discount/100) × taxFactor`, where `taxFactor` is resolved from (in priority order) the product callout response, the tax selector aux data, an in-memory cache, or a ratio derived from sibling lines. The `tax` field still fires a callout (to obtain `taxRate`), but `orderedQuantity`, `listPrice`, and `discount` are pure client-side. After save, `unitPrice = listPrice × (1 − discount/100)` is injected into the POST body as Classic's `priceActual`; `lineGrossAmount` is trusted by `NeoDefaultsService` and stored as-is. Saved lines trigger the `Line_Recalc_Totals` event handler to refresh header totals.
 - Status-driven behavior: editable header fields become read-only when the quotation is processed. The generated detail page still hides the delete affordance for completed records; the print action was previously hidden as well but is now shown (see ETP-4729 note under "Automated evidence" — `hidePrint` was removed).
@@ -356,3 +357,38 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Printable — generic tax labels and document currency — ETP-5125
+
+The quotation's printable shares `DOCUMENT_TEMPLATE` with sales-order, sales-invoice and
+purchase-order (`windows/custom/shared/documentPdf.js`), so both fixes below apply to all four at
+once, across all five entry points (preview, download, both email paths, print). Mechanism and
+decisions: `docs/document-printables.md` (D12–D14).
+
+- **Tax wording.** The lines-table tax column now reads **"Impuesto"** (was `IVA%`), and the Totals
+  rows read **"Impuestos"** and **"Subtotal (sin impuestos)"** (were `IVA` / `Subtotal (sin IVA)`).
+  The `%` was wrong because that column's cell prints the tax's *name* (`tax$_identifier`, e.g.
+  "IVA 21%"), not a rate; and the on-screen `DocumentTotalsPanel` already said "Impuesto", so the
+  PDF contradicted the screen. Changed values only, in the three source locales
+  (`src/locales/{es_ES,es_AR,en_US}.json` → `invoicePdfColTax` / `invoicePdfTax` /
+  `invoicePdfSubtotal`); `src/locales/generated/core.*.json` is gitignored build output.
+- **Document currency in the header.** The header meta block (below `N.º Presupuesto`) now shows
+  `Moneda: <ISO>` — new key `invoicePdfCurrency` plus `currencyCode` in the template data, resolved
+  by `resolveDocumentCurrencyCode(header)` from `header['currency$_identifier']` inside
+  `buildQuotationData`. It is read from the header, **not** from the `currencyData` argument, which
+  is `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
+  When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
+
+Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
+`windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
+`documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.
