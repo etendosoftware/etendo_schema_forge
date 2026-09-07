@@ -16,8 +16,8 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
   const orgId = selectedOrg?.id ?? null;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
 
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
-  const pendingTargets = getPendingSifTargets(specName, profile, data);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const pendingTargets = getPendingSifTargets(specName, profile, data, tbaiRecord);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
 
   if (status !== 'CO' || !hasPendingTargets) return null;

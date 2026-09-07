@@ -25,6 +25,7 @@ function renderButton(overrides = {}) {
     data: {
       aeatsiiIssent: false,
       tbaiIssent: false,
+      invoiceDate: '2026-06-15',
     },
     recordId: 'INV_1',
     apiBaseUrl: '/sws/neo/sales-invoice',
@@ -35,7 +36,10 @@ function renderButton(overrides = {}) {
 
 describe('SendToSifButton', () => {
   beforeEach(() => {
-    useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai' });
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'sii+tbai',
+      tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z' },
+    });
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({}),
@@ -55,9 +59,26 @@ describe('SendToSifButton', () => {
 
   it('does not render for completed invoices when all targets were already sent', () => {
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: true },
+      data: { aeatsiiIssent: true, tbaiIssent: true, invoiceDate: '2026-06-15' },
     });
     expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  // ETP-5122 — TicketBAI must not be offered on an invoice dated before the
+  // org's TBAI adoption date, even though SII may still have a pending target.
+  it('does not render at all when the invoice predates TBAI adoption and SII is already sent', () => {
+    renderButton({
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2019-06-15' },
+    });
+    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  it('shows only the SII confirmation copy when the invoice predates TBAI adoption', () => {
+    renderButton({
+      data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
   });
 
   it('shows the combined confirmation copy when both SII and TBAI are pending', () => {
@@ -74,7 +95,7 @@ describe('SendToSifButton', () => {
 
   it('supports partial retry by calling only the failed target endpoint', async () => {
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: false },
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
@@ -96,7 +117,7 @@ describe('SendToSifButton', () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: false },
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));

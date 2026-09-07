@@ -1,3 +1,8 @@
+// Relative import (not the `@/lib/...` alias): this module is exercised by
+// `fiscalTargets.test.js` via plain `node --test` (see Makefile), which has no
+// alias resolution — only Vitest-run specs can use the `@` alias.
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
+
 /**
  * Which fiscal systems (SII / TicketBAI / VERI*FACTU) apply to a given document.
  *
@@ -30,6 +35,51 @@
  *   the correct) default.
  * @returns {{showSii: boolean, showTbai: boolean, showVerifactu: boolean}}
  */
+/**
+ * Whether an invoice's date makes it eligible for TicketBAI, given the
+ * organization's TBAI "adoption date" (`tbaisystemdate`, from the `tbai-config`
+ * / `header` entity).
+ *
+ * Mirrors the Classic gate exactly (ETP-5122):
+ *   - Display side: `TBAI_ExistConfigAndIsAvailable` auxiliary input —
+ *     `TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate`.
+ *   - Server-side backstop: `SynchronizeUtils.validateConfigAndInvoiceDates` —
+ *     `invoice.getInvoiceDate().compareTo(config.getTbaisystemdate()) < 0` throws.
+ *
+ * Both compare the invoice date **truncated to midnight** (it is a date-only AD
+ * field) against the config's **full timestamp** (`tbaisystemdate` carries a real
+ * time-of-day component — it is set at whatever moment the org enabled TBAI). This
+ * is NOT a same-calendar-day comparison: an invoice dated the same day the org
+ * adopted TBAI, but before the adoption timestamp, is still ineligible — exactly
+ * like Classic.
+ *
+ * `invoiceDateRaw` is parsed via `parseCalendarDate` (never a raw `new Date(string)`
+ * on a date-only value — see `docs/i18n-guide.md`'s sibling rule in CLAUDE.md on
+ * date-only parsing) so the calendar day is never shifted by the host's timezone
+ * offset. `tbaiSystemDateRaw` is a genuine timestamp (not a date-only value), so
+ * parsing it with `new Date(...)` and comparing epoch millis is safe — no local
+ * calendar getters are read off it.
+ *
+ * Fail-safe: with no config / no adoption date on file, eligibility cannot be
+ * confirmed, so this returns `false` (same as Classic's auxiliary input, which
+ * returns 0 when no config row exists).
+ *
+ * @param {string|null|undefined} invoiceDateRaw the invoice's date-only field (e.g. `invoiceDate`)
+ * @param {string|null|undefined} tbaiSystemDateRaw `tbaiRecord.tbaisystemdate` (a timestamp)
+ * @returns {boolean}
+ */
+export function isTbaiEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw) {
+  if (!tbaiSystemDateRaw) return false;
+
+  const invoiceDay = parseCalendarDate(invoiceDateRaw);
+  if (!invoiceDay) return false;
+
+  const adoptionInstant = new Date(tbaiSystemDateRaw);
+  if (Number.isNaN(adoptionInstant.getTime())) return false;
+
+  return invoiceDay.getTime() >= adoptionInstant.getTime();
+}
+
 export function getInvoiceFiscalTargets(specName, profile, territory = null) {
   const isSales = specName === 'sales-invoice' || specName === 'sales-order';
   const isPurchase = specName === 'purchase-invoice' || specName === 'purchase-order';

@@ -23,7 +23,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const [showSifModal, setShowSifModal] = useState(false);
   const { token, selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
   const jsonHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), []);
@@ -111,7 +111,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData);
+  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData, tbaiRecord);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(pendingTargets);

@@ -11,6 +11,14 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/lib/dateOnly', () => ({
   formatCalendarDate: (val) => val || '-',
+  // getPendingSifTargets (via isTbaiEligibleByDate, ETP-5122) needs a real
+  // date-only parser to compare invoiceDate against the TBAI adoption date.
+  parseCalendarDate: (raw) => {
+    if (!raw) return null;
+    const match = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  },
 }));
 
 vi.mock('@/lib/formatAmount.js', () => ({
@@ -105,7 +113,12 @@ vi.mock('@/components/ui/tooltip.jsx', () => ({
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: () => ({ profile: 'tbai' }),
+  useFiscalConfig: () => ({
+    profile: 'tbai',
+    // ETP-5122: TBAI is now also gated on invoiceDate >= tbaisystemdate — keep
+    // this well in the past relative to the fixture invoiceDate below.
+    tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z' },
+  }),
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({

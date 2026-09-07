@@ -1,6 +1,60 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getInvoiceFiscalTargets } from '../fiscalTargets.js';
+import { getInvoiceFiscalTargets, isTbaiEligibleByDate } from '../fiscalTargets.js';
+
+// ---------------------------------------------------------------------------
+// ETP-5122 — invoice-date vs. TBAI adoption-date gate.
+//
+// Mirrors Classic's `TBAI_ExistConfigAndIsAvailable` auxiliary input and the
+// `SynchronizeUtils.validateConfigAndInvoiceDates` server-side backstop:
+// `TO_TIMESTAMP(invoiceDate, 'DD-MM-YYYY') >= config.tbaisystemdate` — the
+// invoice date truncated to midnight, compared against the config's full
+// adoption timestamp (inclusive).
+// ---------------------------------------------------------------------------
+describe('isTbaiEligibleByDate', () => {
+  it('is eligible when the invoice date is after the adoption date', () => {
+    assert.equal(isTbaiEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is eligible when the invoice date exactly equals the adoption date (inclusive)', () => {
+    assert.equal(isTbaiEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is NOT eligible when the invoice date is before the adoption date', () => {
+    assert.equal(isTbaiEligibleByDate('2025-12-31', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  it('is NOT eligible when the adoption timestamp carries a later time-of-day on the same calendar day', () => {
+    // Classic compares the invoice's midnight instant against the FULL adoption
+    // timestamp, not a same-calendar-day truncation on both sides — an invoice
+    // dated the same day TBAI was turned on, but before that exact moment, still
+    // fails, exactly like Classic's `compareTo(...) < 0` check.
+    assert.equal(isTbaiEligibleByDate('2026-01-01', '2026-01-01T14:30:00.000Z'), false);
+  });
+
+  it('fails safe (false) when there is no TBAI config / adoption date at all', () => {
+    assert.equal(isTbaiEligibleByDate('2026-06-15', null), false);
+    assert.equal(isTbaiEligibleByDate('2026-06-15', undefined), false);
+  });
+
+  it('fails safe (false) when the invoice date is missing or unparsable', () => {
+    assert.equal(isTbaiEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
+    assert.equal(isTbaiEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  it('ignores a time-of-day component on the invoice value (it is a date-only field)', () => {
+    // The invoice date field is date-only; any time-of-day noise on the raw string
+    // must not affect the comparison. This is what routing through
+    // `parseCalendarDate` (never a raw `new Date(string)`) buys: a plain
+    // `new Date('2026-01-01T23:00:00Z')` would parse to a different absolute
+    // instant than `new Date('2026-01-01')`, but `parseCalendarDate` collapses
+    // both to the same local calendar day.
+    const adoptionWellInThePast = '2020-01-01T00:00:00.000Z';
+    assert.equal(isTbaiEligibleByDate('2026-01-01', adoptionWellInThePast), true);
+    assert.equal(isTbaiEligibleByDate('2026-01-01T23:59:59', adoptionWellInThePast), true);
+    assert.equal(isTbaiEligibleByDate('2026-01-01T00:00:00.000Z', adoptionWellInThePast), true);
+  });
+});
 
 describe('getInvoiceFiscalTargets — sii+tbai profile', () => {
   it('shows only SII for purchase invoices with sii+tbai', () => {
