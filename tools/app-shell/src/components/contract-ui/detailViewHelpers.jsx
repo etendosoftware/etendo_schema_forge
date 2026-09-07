@@ -16,6 +16,7 @@ import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -708,16 +709,26 @@ function computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries) 
  * `Others` is appended later via pushOthers.
  */
 export function buildInitialTabs(p) {
-  const secondaryEntries = p.secondaryTabs.map((st, i) => {
-    const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
-    const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
-    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
-    return {
-      tab: { key: st.key, label, count: childCount },
-      weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
-      insertionIndex: i,
-    };
-  });
+  const secondaryEntries = p.secondaryTabs
+    .map((st, i) => {
+      // ETP-5116 — a capability-gated secondary tab (e.g. Accounting behind
+      // showAccountingFields) is filtered OUT of this derived, render-facing tab
+      // list only — `p.secondaryTabs` itself is left untouched so index-based
+      // (secondaryHooks[i]) and key-based (secondaryTabs.find) lookups elsewhere
+      // in DetailView keep working. A filtered-out tab never appears in the nav
+      // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
+      // for it (see the `openSecondaryTab` effect in DetailView.jsx).
+      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
+      const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
+      const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+      return {
+        tab: { key: st.key, label, count: childCount },
+        weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
+        insertionIndex: i,
+      };
+    })
+    .filter(Boolean);
 
   const entries = [...secondaryEntries];
 
