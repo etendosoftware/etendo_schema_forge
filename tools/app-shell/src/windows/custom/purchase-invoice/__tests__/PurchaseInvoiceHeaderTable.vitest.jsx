@@ -291,6 +291,9 @@ const AP_INVOICE_ROW = {
   'transactionDocument$_identifier': 'AP Invoice',
   aeatsiiEstado: 'sent',
   accountingDate: '2026-01-01',
+  // ETP-5122: Batuz gates on invoiceDate (not accountingDate) — see the
+  // "fiscal columns (ETP-5087)" describe block below.
+  invoiceDate: '2026-01-01',
 };
 
 // Credit memo with a negative total and half its balance still unused.
@@ -1167,7 +1170,11 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
   function renderWith(profile, territory, data = [AP_INVOICE_ROW]) {
     useFiscalConfig.mockReturnValue({
       profile,
-      tbaiRecord: territory ? { etsgSifTerritory: territory } : null,
+      // ETP-5122: default the Batuz adoption date to "long ago" (mirrors
+      // FAR_PAST_ADOPTION for SII above) so pre-existing tests written before
+      // the date gate keep passing. Tests exercising the gate itself override
+      // `tbaisystemdate` explicitly.
+      tbaiRecord: territory ? { etsgSifTerritory: territory, tbaisystemdate: FAR_PAST_ADOPTION } : null,
       siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
     });
     return render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={data} />);
@@ -1288,5 +1295,53 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     renderWith('sii+tbai', 'BIZKAIA', [row]);
     const { container } = render(<>{getColumn('_siiStatus').render(row)}</>);
     expect(container.textContent).toBe('CO');
+  });
+
+  // ── ETP-5122 (bug fix): Batuz column must gate on invoiceDate eligibility,
+  // exactly like the SII column already gates on accountingDate. Before this
+  // fix the Batuz/TBAI cell had no date gate at all — territory alone
+  // (`targets.showTbai`) decided visibility, so a Bizkaia purchase invoice
+  // dated before the org's Batuz adoption date still showed a fabricated
+  // "Pendiente"/"Enviada" badge on every row.
+  describe('Batuz column gated by tbaisystemdate (invoiceDate, ETP-5122)', () => {
+    function renderBatuzCell(row, tbaisystemdate) {
+      useFiscalConfig.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA', tbaisystemdate },
+        siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      });
+      render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[row]} />);
+      return render(<>{getColumn('_tbaiStatus').render(row)}</>);
+    }
+
+    it('shows the dash, not the badge, for a row dated BEFORE the org Batuz adoption date', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
+      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+      expect(container.textContent).toBe('—');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
+    });
+
+    it('shows the badge normally for a row dated ON/AFTER the org Batuz adoption date', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-07-01' };
+      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+      expect(container.textContent).toBe('Recibido');
+    });
+
+    it('gates on invoiceDate, NOT accountingDate — a row with an eligible accountingDate but an ineligible invoiceDate still shows the dash', () => {
+      const row = {
+        ...AP_INVOICE_ROW,
+        tbaiSyncEstado: 'Recibido',
+        accountingDate: '2026-07-01', // eligible if this were used
+        invoiceDate: '2026-01-01',    // ineligible — this is what must be used
+      };
+      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+      expect(container.textContent).toBe('—');
+    });
+
+    it('fails safe (dash) when there is no Batuz adoption record at all', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido' };
+      const { container } = renderBatuzCell(row, undefined);
+      expect(container.textContent).toBe('—');
+    });
   });
 });

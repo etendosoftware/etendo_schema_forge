@@ -79,7 +79,7 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => (
           isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
             ? <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />
-            : null
+            : <span className="text-muted-foreground">—</span>
         ),
       });
     }
@@ -89,7 +89,7 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => (
           isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
             ? <FiscalStatusBadge status={row.tbaiSyncEstado ?? 'Pendiente'} />
-            : null
+            : <span className="text-muted-foreground">—</span>
         ),
       });
     }
@@ -99,7 +99,7 @@ export default function InvoiceHeaderTable(props) {
         render: (row) => (
           isSifEligibleByDate(row.invoiceDate, verifactuRecord?.inVfactuSystem)
             ? <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />
-            : null
+            : <span className="text-muted-foreground">—</span>
         ),
       });
     }

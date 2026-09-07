@@ -103,7 +103,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
             ? <FiscalStatusBadge
                 status={row.aeatsiiEstado ?? null}
                 data-testid="FiscalStatusBadge__6b7cdb" />
-            : null
+            : <span className="text-muted-foreground">—</span>
         ),
       });
     }
@@ -121,9 +121,19 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // rejection behind a cheerful "Enviada", while still never defaulting to a
         // fabricated status. `isSent` is used rather than a plain truthy test
         // because NEO may deliver the flag as the AD character `'N'`, truthy in JS.
-        render: (row) => <FiscalStatusBadge
-          status={row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
-          data-testid="FiscalStatusBadge__tbai_6b7cdb" />,
+        //
+        // ETP-5122: Batuz is the territorial variant of TBAI and shares the same
+        // adoption date field (`tbaisystemdate`), but the column must gate against
+        // `invoiceDate`, NOT `accountingDate` — that is the one real difference
+        // from the SII column above. A row dated before the org's Batuz adoption
+        // date shows a dash instead of a fabricated status.
+        render: (row) => (
+          isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
+            ? <FiscalStatusBadge
+                status={row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
+                data-testid="FiscalStatusBadge__tbai_6b7cdb" />
+            : <span className="text-muted-foreground">—</span>
+        ),
       });
     }
 
@@ -279,7 +289,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, siiRecord]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, siiRecord, tbaiRecord]);
 
   return (
     <>
