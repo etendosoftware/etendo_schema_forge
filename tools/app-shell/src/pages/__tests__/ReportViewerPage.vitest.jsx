@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
+import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
 
 // Mutable search params — tests can override before rendering
 let mockSearchParams = new URLSearchParams();
@@ -1111,22 +1111,27 @@ describe('ReportViewer (viewer sub-component)', () => {
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
     });
-    const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => {
       expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    // Should show "required" error message
-    await assertGenerateDisabledThenPdfTriggersRequired(user);
+    // ETP-4900: with the required field empty, submit stays disabled — the
+    // sidebar can no longer be used to trigger validateRequired() at all.
+    assertAllActionsDisabledWhileRequiredEmpty();
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
   });
 
-  // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call
-  // renderReport(format) directly, bypassing the required-field validation
-  // that the sidebar's "Generate Report" button already ran — so an empty
-  // required field would still hit the backend and surface a raw NEO 400
-  // error instead of the sidebar's usual red "Required" state. validateRequired()
-  // must now gate all three top-bar buttons too, not just the sidebar submit.
-  it('blocks the top-bar PDF button and shows the required error when a required field is empty', async () => {
+  // ETP-4899 regression, gate hardened by ETP-4900: the top-bar PDF/Excel/CSV
+  // buttons used to call renderReport(format) directly, bypassing the
+  // required-field validation that the sidebar's "Generate Report" button
+  // already ran — so an empty required field would still hit the backend and
+  // surface a raw NEO 400 error instead of a controlled empty-form state.
+  // ETP-4900 closed the gap by disabling PDF/Excel/CSV/Print outright while a
+  // required param is empty, the same way the sidebar submit already was.
+  it('blocks the top-bar PDF button when a required field is empty', async () => {
     const reqReport = {
       ...SAMPLE_REPORT,
       parameters: [
@@ -1145,12 +1150,11 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('PDF')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('PDF'));
+    const pdfButton = screen.getByText('PDF');
+    expect(pdfButton).toBeDisabled();
+    await user.click(pdfButton);
 
-    // Validation must fire and block the request BEFORE any /render fetch happens.
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    // Disabled buttons don't fire their click handler — no /render fetch happens.
     const renderCalls = globalThis.fetch.mock.calls.filter(
       ([url]) => typeof url === 'string' && url.includes('/render')
     );
@@ -1176,11 +1180,10 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('Excel')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Excel'));
+    const excelButton = screen.getByText('Excel');
+    expect(excelButton).toBeDisabled();
+    await user.click(excelButton);
 
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
     const renderCalls = globalThis.fetch.mock.calls.filter(
       ([url]) => typeof url === 'string' && url.includes('/render')
     );
@@ -1236,6 +1239,43 @@ describe('ReportViewer (viewer sub-component)', () => {
     } finally {
       globalThis.URL.createObjectURL = originalCreateObjectURL;
     }
+  });
+
+  // ETP-4900: pins the change itself — all four top-bar actions (PDF, Excel,
+  // CSV, Print), not just the sidebar submit, are gated by hasAllRequiredFilled.
+  it('disables all four top-bar actions while a required field is empty, then re-enables them once filled (ETP-4900)', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Important Field')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('PDF')).toBeDisabled();
+    expect(screen.getByText('Excel')).toBeDisabled();
+    expect(screen.getByText('CSV')).toBeDisabled();
+    expect(screen.getByText('print')).toBeDisabled();
+
+    const input = screen.getByText('Important Field').closest('div').querySelector('input');
+    await user.type(input, 'some value');
+
+    await waitFor(() => {
+      expect(screen.getByText('PDF')).not.toBeDisabled();
+      expect(screen.getByText('Excel')).not.toBeDisabled();
+      expect(screen.getByText('CSV')).not.toBeDisabled();
+      expect(screen.getByText('print')).not.toBeDisabled();
+    });
   });
 
   it('clicking reset clears parameters and increments resetKey', async () => {
