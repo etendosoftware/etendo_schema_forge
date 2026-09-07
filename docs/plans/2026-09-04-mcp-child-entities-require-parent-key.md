@@ -1236,6 +1236,33 @@ integración (OBBaseTest, BD real) sobre `sales-order` cabecera + líneas, o ext
 qualifier del `executePostCreate` privado para que un unit test la alcance con servlet null.
 Tampoco está **verificado en vivo**: falta deployar y re-probar el batch contra experimental.
 
+### 14.10 Las recetas de `docs` enseñaban la forma rota
+
+Hallazgo del 2026-09-07, independiente del código y con valor propio.
+
+`docs(topic:"create sales order")` devolvía, en `agentic/mcp/index.md:460` y
+`agentic/agent-manual.md:219`:
+
+```json
+"fields": { "salesOrder": "<order-header-id>", "product": "<product-id>",
+            "orderedQuantity": 5, "unitPrice": 12.50, "tax": "<tax-id>" }
+```
+
+Tres problemas en cinco líneas:
+
+1. Usa `salesOrder`, la forma que **no** hace que el servidor lea la cabecera.
+2. Pasa `unitPrice` a mano — lo que **tapaba** el bug del precio (§14.8).
+3. Pasa `tax` a mano — lo que **tapaba** el bug del impuesto (§14.3).
+
+Es la explicación de por qué ninguno de los dos bugs se detectó antes: si seguís la receta al pie de
+la letra, entregás vos el precio y el impuesto, y el agente nunca ejercita el camino de derivación.
+
+**Arreglado** en las dos recetas: `parentId` en lugar de `salesOrder`, sin `unitPrice` ni `tax`, más
+un párrafo explicando qué hereda la línea del padre y cuándo sí hace falta pasar un precio (lista
+con impuesto incluido, u override deliberado).
+
+⚠️ El repo `etendo-go-docs` estaba en la rama `feature/ETP-4918`. Los cambios quedaron **sin
+commitear** para no mezclar tickets; hay que moverlos a una rama `feature/ETP-5184` propia.
 
 ---
 
@@ -1438,33 +1465,3 @@ usuario: dejarlas como están. Consecuencia asumida: **F4 las retiene**, resuelv
 seguir ofreciendo un `create` que produce huérfanos. La decisión se toma cuando el gate
 las saque a la luz, con el motivo escrito.
 
-
----
-
-## 14.10 Las recetas de `docs` enseñaban la forma rota
-
-Hallazgo del 2026-09-07, independiente del código y con valor propio.
-
-`docs(topic:"create sales order")` devolvía, en `agentic/mcp/index.md:460` y
-`agentic/agent-manual.md:219`:
-
-```json
-"fields": { "salesOrder": "<order-header-id>", "product": "<product-id>",
-            "orderedQuantity": 5, "unitPrice": 12.50, "tax": "<tax-id>" }
-```
-
-Tres problemas en cinco líneas:
-
-1. Usa `salesOrder`, la forma que **no** hace que el servidor lea la cabecera.
-2. Pasa `unitPrice` a mano — lo que **tapaba** el bug del precio (§14.8).
-3. Pasa `tax` a mano — lo que **tapaba** el bug del impuesto (§14.3).
-
-Es la explicación de por qué ninguno de los dos bugs se detectó antes: si seguís la receta al pie de
-la letra, entregás vos el precio y el impuesto, y el agente nunca ejercita el camino de derivación.
-
-**Arreglado** en las dos recetas: `parentId` en lugar de `salesOrder`, sin `unitPrice` ni `tax`, más
-un párrafo explicando qué hereda la línea del padre y cuándo sí hace falta pasar un precio (lista
-con impuesto incluido, u override deliberado).
-
-⚠️ El repo `etendo-go-docs` estaba en la rama `feature/ETP-4918`. Los cambios quedaron **sin
-commitear** para no mezclar tickets; hay que moverlos a una rama `feature/ETP-5184` propia.
