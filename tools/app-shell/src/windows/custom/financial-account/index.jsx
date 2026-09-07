@@ -488,13 +488,22 @@ export function FinancialAccountDetail({ recordId }) {
         open={autoMatchOpen && !isCashAccount}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
-        onEditAccount={() => setEditOpen(true)}
+        // Same shape ReconciliationTab hands the split panel — the modal names the accounting
+        // account a near-match difference will be posted to.
+        glItemDifference={account?.glItemDifferenceId
+          ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
+          : null}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
         open={editOpen}
         account={account}
         onClose={() => setEditOpen(false)}
-        onSaved={reloadAccount}
+        // The SAME full reload the header's refresh button performs, not just the account. Editing
+        // an account changes automatch INPUTS — the amount/date tolerances and the difference
+        // account — so reloading only the account left the previously fetched suggestions in place:
+        // after configuring the accounting account the modal still opened empty, and pressing
+        // refresh by hand was the only way to see the matches that configuration had just enabled.
+        onSaved={handleReconciliationRefresh}
         onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
         onDelete={(acc) => { setEditOpen(false); setDeleteTarget(acc); }}
         onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}
