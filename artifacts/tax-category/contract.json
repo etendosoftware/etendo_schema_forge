@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-09-04T14:57:45.773Z",
-  "checksum": "687f4612ef4a9ac3",
+  "updatedAt": "2026-09-07T19:24:08.704Z",
+  "checksum": "59687d020ee293b3",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -76,30 +76,6 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 3,
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "asbom",
-            "apiKey": "asbom",
-            "column": "Asbom",
-            "label": "As per BOM",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "section": "principal",
-            "seq": 4,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -304,13 +280,6 @@
         ],
         "computedFields": [
           {
-            "name": "asbom",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
             "name": "aeatsiiDeclarable",
             "derivation": {
               "type": "computed",
@@ -379,7 +348,7 @@
             "apiKey": "asbom",
             "column": "Asbom",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -564,28 +533,12 @@
         "description": "Default value for 'aeatsiiDeclarable' in taxCategory should be a string"
       },
       {
-        "id": "t-default-value-type-taxCategory-asbom",
-        "category": "default-value-type",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Default value for 'asbom' in taxCategory should be a string"
-      },
-      {
         "id": "t-field-presence-taxCategory-aeatsiiDeclarable",
         "category": "field-presence",
         "entity": "taxCategory",
         "field": "aeatsiiDeclarable",
         "runner": "node",
         "description": "Field 'aeatsiiDeclarable' should be present in taxCategory"
-      },
-      {
-        "id": "t-field-presence-taxCategory-asbom",
-        "category": "field-presence",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Field 'asbom' should be present in taxCategory"
       },
       {
         "id": "t-field-presence-taxCategory-default",
@@ -642,14 +595,6 @@
         "field": "aeatsiiDeclarable",
         "runner": "node",
         "description": "Field 'aeatsiiDeclarable' should have type 'boolean' in taxCategory"
-      },
-      {
-        "id": "t-field-type-taxCategory-asbom",
-        "category": "field-type",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Field 'asbom' should have type 'boolean' in taxCategory"
       },
       {
         "id": "t-field-type-taxCategory-default",
@@ -723,6 +668,14 @@
         "description": "System field 'active' should exist in backend but not frontend for taxCategory"
       },
       {
+        "id": "t-system-field-taxCategory-asbom",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "asbom",
+        "runner": "node",
+        "description": "System field 'asbom' should exist in backend but not frontend for taxCategory"
+      },
+      {
         "id": "t-system-field-taxCategory-client",
         "category": "system-field",
         "entity": "taxCategory",
@@ -787,19 +740,19 @@
       }
     ],
     "summary": {
-      "total": 30,
+      "total": 28,
       "byCategory": {
         "crud-flags": 1,
-        "default-value-type": 2,
-        "field-presence": 8,
-        "field-type": 8,
+        "default-value-type": 1,
+        "field-presence": 7,
+        "field-type": 7,
         "rule-declared": 1,
         "searchable-filters": 1,
-        "system-field": 8,
+        "system-field": 9,
         "visibility": 1
       },
       "byRunner": {
-        "node": 30,
+        "node": 28,
         "junit": 0
       }
     }

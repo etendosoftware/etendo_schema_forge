@@ -33,8 +33,7 @@
           "seq": 3
         },
         "asbom": {
-          "section": "principal",
-          "seq": 4
+          "visibility": "discarded"
         },
         "obsptiTaxtype": {
           "section": "principal",
