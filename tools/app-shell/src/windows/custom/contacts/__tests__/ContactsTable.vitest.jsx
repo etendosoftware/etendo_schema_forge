@@ -80,27 +80,46 @@ describe('ContactsTable', () => {
     expect(screen.getByTestId('data-table')).toBeInTheDocument();
   });
 
-  // QA cross-check (ETP-4609 continuation) — ContactsTable declares its own
-  // local `hiddenColumns={HIDDEN_COLS}` (= ['__contactType']) and then spreads
-  // `{...rest}` AFTER it, same shape as the pre-fix ProductCustomTable.jsx bug
-  // (ListView.jsx unconditionally forwards its own `hiddenColumns = []` default
-  // to whatever Table it renders — see ListView.jsx ~line 238 / ~line 930).
-  // Unlike ProductCustomTable, this file was NOT touched by ETP-4609 and does
-  // NOT merge the incoming value — so ListView's default `[]` silently
-  // clobbers HIDDEN_COLS here too, and `__contactType` would render as a
-  // visible column instead of staying hidden.
+  // ETP-5182 (continuation of the ETP-4609 QA finding below) — ContactsTable
+  // declares its own local `hiddenColumns={HIDDEN_COLS}` (= ['__contactType'])
+  // and used to spread `{...rest}` AFTER it, same shape as the pre-fix
+  // ProductCustomTable.jsx bug (ListView.jsx unconditionally forwards its own
+  // `hiddenColumns = []` default to whatever Table it renders — see
+  // ListView.jsx `hiddenColumns = []` default prop and the `tableProps` object
+  // it builds for `ListTableRegion`). `rest.hiddenColumns` silently clobbered
+  // HIDDEN_COLS, so `__contactType` rendered as a second, duplicate "Tipo"
+  // column instead of staying hidden — this is Bug 2 of ETP-5182.
   //
-  // NOTE: as of this writing, `ContactsTable.jsx` is not imported by
-  // `contacts/index.jsx` (which renders the generated `BusinessPartnerPage`
-  // instead) or by any other window file — it appears to be dead code, so
-  // this bug is not currently reachable from any live window. This test
-  // documents the bug so it's either fixed or the file is confirmed
-  // dead/removed. Skipped (not failed) because the bug predates and is out
-  // of scope for ETP-4609 — see QA report on that PR for the repro. Un-skip
-  // once someone picks up the fix (or delete both if the file is removed as
-  // dead code).
-  it.skip('keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)', () => {
+  // CORRECTION to the original ETP-4609 note: `ContactsTable.jsx` is NOT dead
+  // code — `artifacts/contacts/generated/web/contacts/BusinessPartnerPage.jsx`
+  // imports it as `BusinessPartnerTable` and renders
+  // `<ListView Table={BusinessPartnerTable} .../>`, and that generated page is
+  // wired live via `@generated/contacts/generated/web/contacts/BusinessPartnerPage`
+  // in `windows/custom/contacts/index.jsx`, which IS the registered window
+  // component (`src/windows/registry.js`). So this bug was reachable from the
+  // real Contacts window all along.
+  it('keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)', () => {
     render(<ContactsTable {...defaultProps} hiddenColumns={[]} />);
+    const hidden = JSON.parse(screen.getByTestId('data-table').getAttribute('data-hidden-columns'));
+    expect(hidden).toContain('__contactType');
+  });
+
+  // Proves the fix is a MERGE, not just "own hiddenColumns always wins" — a
+  // future real dynamic `hiddenColumns` forwarded by ListView (e.g. computed
+  // from `lineDisplayLogic`, see docs/ui-customization.md §14) must survive
+  // alongside `__contactType`, not be silently dropped by a naive reorder.
+  it('merges a non-empty hiddenColumns forwarded by the parent with HIDDEN_COLS', () => {
+    render(<ContactsTable {...defaultProps} hiddenColumns={['someOtherCol']} />);
+    const hidden = JSON.parse(screen.getByTestId('data-table').getAttribute('data-hidden-columns'));
+    expect(hidden).toContain('__contactType');
+    expect(hidden).toContain('someOtherCol');
+  });
+
+  // Guards the `?? []` fallback — an absent `hiddenColumns` prop (the shape
+  // ContactsTable would get if some future caller omits it entirely) must not
+  // crash and must still hide `__contactType`.
+  it('keeps HIDDEN_COLS when the parent does not forward hiddenColumns at all', () => {
+    render(<ContactsTable {...defaultProps} />);
     const hidden = JSON.parse(screen.getByTestId('data-table').getAttribute('data-hidden-columns'));
     expect(hidden).toContain('__contactType');
   });
