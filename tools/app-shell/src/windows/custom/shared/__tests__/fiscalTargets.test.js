@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getInvoiceFiscalTargets, isTbaiEligibleByDate } from '../fiscalTargets.js';
+import { getInvoiceFiscalTargets, isTbaiEligibleByDate, isSifEligibleByDate } from '../fiscalTargets.js';
 
 // ---------------------------------------------------------------------------
 // ETP-5122 — invoice-date vs. TBAI adoption-date gate.
@@ -53,6 +53,69 @@ describe('isTbaiEligibleByDate', () => {
     assert.equal(isTbaiEligibleByDate('2026-01-01', adoptionWellInThePast), true);
     assert.equal(isTbaiEligibleByDate('2026-01-01T23:59:59', adoptionWellInThePast), true);
     assert.equal(isTbaiEligibleByDate('2026-01-01T00:00:00.000Z', adoptionWellInThePast), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5122 follow-up — generalized gate reused for SII (accountingDate) and
+// VERI*FACTU (invoiceDate). isTbaiEligibleByDate above is now a thin wrapper
+// over this; these cases pin the SAME behavior for the other two systems,
+// each with the reference date Classic itself uses for that system.
+// ---------------------------------------------------------------------------
+describe('isSifEligibleByDate — SII (accounting date vs. fechaAcogidaSII)', () => {
+  it('is eligible when the accounting date is after the adoption date', () => {
+    assert.equal(isSifEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is eligible when the accounting date exactly equals the adoption date (inclusive)', () => {
+    assert.equal(isSifEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is NOT eligible when the accounting date is before the adoption date', () => {
+    assert.equal(isSifEligibleByDate('2025-12-31', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  it('fails safe (false) when there is no SII adoption date on file', () => {
+    assert.equal(isSifEligibleByDate('2026-06-15', null), false);
+    assert.equal(isSifEligibleByDate('2026-06-15', undefined), false);
+  });
+
+  it('fails safe (false) when the accounting date is missing or unparsable', () => {
+    assert.equal(isSifEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
+    assert.equal(isSifEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  });
+});
+
+describe('isSifEligibleByDate — VERI*FACTU (invoice date vs. inVfactuSystem)', () => {
+  it('is eligible when the invoice date is after the adoption date', () => {
+    assert.equal(isSifEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is eligible when the invoice date exactly equals the adoption date (inclusive)', () => {
+    assert.equal(isSifEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+  });
+
+  it('is NOT eligible when the invoice date is before the adoption date', () => {
+    assert.equal(isSifEligibleByDate('2025-12-31', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  it('fails safe (false) when there is no VERI*FACTU adoption date on file', () => {
+    assert.equal(isSifEligibleByDate('2026-06-15', null), false);
+    assert.equal(isSifEligibleByDate('2026-06-15', undefined), false);
+  });
+
+  it('fails safe (false) when the invoice date is missing or unparsable', () => {
+    assert.equal(isSifEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
+    assert.equal(isSifEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  });
+});
+
+describe('isTbaiEligibleByDate — now a thin wrapper over isSifEligibleByDate', () => {
+  it('delegates and returns the same result', () => {
+    assert.equal(
+      isTbaiEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'),
+      isSifEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'),
+    );
   });
 });
 

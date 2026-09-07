@@ -28,13 +28,28 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
 }));
 
+// ETP-5122: SII/TBAI/Verifactu adoption-date records default to "adopted long
+// ago" so pre-existing tests (written before the date gate) keep passing
+// without having to know about it. Tests that specifically exercise the gate
+// override these via useFiscalConfig.mockReturnValue(...).
+const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
+
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: null })),
+  useFiscalConfig: vi.fn(() => ({
+    profile: null,
+    siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+    tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+    verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+  })),
 }));
 
-vi.mock('@/windows/custom/shared/fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
-}));
+vi.mock('@/windows/custom/shared/fiscalTargets.js', async () => {
+  const actual = await vi.importActual('@/windows/custom/shared/fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
+  };
+});
 
 vi.mock('@/windows/custom/shared/FiscalStatusBadge.jsx', () => ({
   FiscalStatusBadge: ({ status }) => (
@@ -52,9 +67,13 @@ vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   ),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (d) => `date:${d}`,
-}));
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return {
+    ...actual,
+    formatCalendarDate: (d) => `date:${d}`,
+  };
+});
 
 vi.mock('@/lib/formatCurrency', () => ({
   formatCurrency: (currency, amount) => `${amount}:${currency}`,
@@ -87,6 +106,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: 'sent',
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 1 — ordinary AR invoice, settled → green "cobrada"
   {
@@ -97,6 +118,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 2 — ETP-4841 case A: Factura Rectificativa with a POSITIVE total (billed 3,
   // should have been 4). PAYABLE: amber badge "400:USD", never "Saldo a favor".
@@ -109,6 +132,8 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'Factura Rectificativa',
     arInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: 'CO',
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 3 — ETP-4841 case B: ordinary "Factura" with a NEGATIVE total. It IS a
   // credit ("Saldo a favor · 900:SEK"), never "Cobrada" — before the fix its
@@ -122,6 +147,8 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'ARInvoice',
     arInvoiceSubtype: 'FAC',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 4 — case C: negative invoice fully consumed → green fully-applied pill
   {
@@ -132,6 +159,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'GBP',
     'transactionDocument$_identifier': 'ARCreditMemo',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 5 — case D: positive invoice OVERPAID (outstanding < 0). Real dev data has
   // 7 such rows; they must read "cobrada", never "Saldo a favor".
@@ -143,6 +172,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'NOK',
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 6 — case E: not completed → em dash placeholder, no badge
   {
@@ -153,6 +184,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 7 — credit note mostly applied (ETP-4331 repro: -25.30 total, only -2.30
   // left unused). Must show the credit badge, never the pending one.
@@ -164,6 +197,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'ARCreditMemo',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
   // 8 — return, fully unapplied. Sibling of the ETP-4331 repro screenshot's
   // "Factura de devolución" row.
@@ -175,6 +210,8 @@ const MOCK_ROWS = [
     'currency$_identifier': 'CHF',
     'transactionDocument$_identifier': 'ARReturn',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   },
 ];
 
@@ -204,6 +241,7 @@ vi.mock('@/components/contract-ui', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import InvoiceHeaderTable from '../InvoiceHeaderTable.jsx';
 
 const BASE_PROPS = {
@@ -218,6 +256,8 @@ const AR_INVOICE_ROW = {
   'currency$_identifier': 'EUR',
   'transactionDocument$_identifier': 'ARInvoice',
   aeatsiiEstado: 'sent',
+  invoiceDate: '2026-01-01',
+  accountingDate: '2026-01-01',
 };
 
 describe('InvoiceHeaderTable (sales-invoice)', () => {
@@ -313,6 +353,75 @@ describe('InvoiceHeaderTable (sales-invoice)', () => {
   });
 });
 
+// ── ETP-5122: no fiscal status before the org's adoption date for that system ──
+// Each system's column is gated per-row: an invoice dated before the org's
+// adoption date for THAT system renders no badge, even while OTHER eligible
+// rows (or other systems) in the same grid still do.
+describe('InvoiceHeaderTable — ETP-5122 date-gated fiscal status columns', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: true });
+  });
+
+  it('SII: shows the badge for every row when all are dated on/after fechaAcogidaSII', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'sii',
+      siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+      verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    // All MOCK_ROWS carry accountingDate '2026-01-01', well after FAR_PAST_ADOPTION.
+    expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+      .toBe(9);
+  });
+
+  it('SII: hides the badge for a row dated before fechaAcogidaSII, using accountingDate not invoiceDate', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'sii',
+      siiRecord: { fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
+      tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+      verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    // All MOCK_ROWS carry accountingDate '2026-01-01' (< 2026-06-01 adoption) —
+    // SII must render nothing for any of them, while TBAI/Verifactu (adopted
+    // long ago, gated on invoiceDate) still render their badges normally.
+    expect(screen.queryByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length).toBe(0);
+    expect(screen.getByTestId('col-render-_tbaiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length).toBeGreaterThan(0);
+  });
+
+  it('TBAI: hides the badge for a row dated before tbaisystemdate', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'tbai',
+      siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      tbaiRecord: { tbaisystemdate: '2099-01-01T00:00:00.000Z' },
+      verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByTestId('col-render-_tbaiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length).toBe(0);
+  });
+
+  it('Verifactu: hides the badge for a row dated before inVfactuSystem', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'verifactu',
+      siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+      verifactuRecord: { inVfactuSystem: '2099-01-01T00:00:00.000Z' },
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByTestId('col-render-_vfStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length).toBe(0);
+  });
+
+  it('shows no badge at all for any system when the adoption record is missing (fail-safe)', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'sii+tbai', siiRecord: null, tbaiRecord: null, verifactuRecord: null,
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.queryByTestId('fiscal-status-badge')).toBeNull();
+  });
+});
+
 // ── ETP-4331: a credit with most of its balance already applied elsewhere ─────
 // (e.g. -25.30 total, -2.30 unused) must never regress to the amber pending
 // badge — it always represents money owed BACK to the counterparty.
@@ -359,6 +468,8 @@ describe('InvoiceHeaderTable — sign-driven payment badge (ETP-4841)', () => {
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: null,
+    invoiceDate: '2026-01-01',
+    accountingDate: '2026-01-01',
   };
 
   beforeEach(() => {

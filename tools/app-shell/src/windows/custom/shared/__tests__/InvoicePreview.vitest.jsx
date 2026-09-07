@@ -91,9 +91,13 @@ vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
-vi.mock('../fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
-}));
+vi.mock('../fiscalTargets.js', async () => {
+  const actual = await vi.importActual('../fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
+  };
+});
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
   const { mockUseDocumentCurrency } = await import('./testUtils/mockUseDocumentCurrency.js');

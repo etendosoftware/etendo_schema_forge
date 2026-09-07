@@ -11,7 +11,7 @@ import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
-import { getInvoiceFiscalTargets } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
 import PaymentsCard from './preview-cards/PaymentsCard.jsx';
@@ -102,9 +102,16 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, siiRecord, tbaiRecord, verifactuRecord, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
+  // ETP-5122: a single invoice this time (not a grid row), but the same rule —
+  // no status before the org's adoption date for that system. SII compares
+  // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI and
+  // VERI*FACTU compare invoice date.
+  const siiEligibleByDate = isSifEligibleByDate(invoice?.accountingDate, siiRecord?.fechaAcogidaSII);
+  const tbaiEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
+  const verifactuEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, verifactuRecord?.inVfactuSystem);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
     invoice?.id, specName, profile, apiBaseUrl, orgId,
   );
@@ -136,7 +143,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__cf88e6">
-        {fiscalTargets.showSii && (
+        {fiscalTargets.showSii && siiEligibleByDate && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.sii')}
             data-testid="InfoRow__cf88e6">
@@ -145,7 +152,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
               : <StatusPill estado={siiStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showTbai && (
+        {fiscalTargets.showTbai && tbaiEligibleByDate && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.tbai')}
             data-testid="InfoRow__cf88e6">
@@ -154,7 +161,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
               : <StatusPill estado={tbaiStatus ?? 'Pendiente'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showVerifactu && (
+        {fiscalTargets.showVerifactu && verifactuEligibleByDate && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.verifactu')}
             data-testid="InfoRow__cf88e6">
@@ -318,6 +325,9 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           token={token}
           orgId={p.orgId}
           profile={p.profile}
+          siiRecord={p.siiRecord}
+          tbaiRecord={p.tbaiRecord}
+          verifactuRecord={p.verifactuRecord}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}

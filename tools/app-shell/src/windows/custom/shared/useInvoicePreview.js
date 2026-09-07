@@ -23,7 +23,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const [showSifModal, setShowSifModal] = useState(false);
   const { token, selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord, tbaiRecord, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
   const jsonHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), []);
@@ -169,6 +169,9 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)
     orgId, profile,
+    // ETP-5122: adoption-date records, needed to gate each fiscal status InfoRow
+    // by whether THIS invoice is dated on/after the org's adoption date.
+    siiRecord, tbaiRecord, verifactuRecord,
     // payment modal
     showPaymentModal, setShowPaymentModal,
     // email modal

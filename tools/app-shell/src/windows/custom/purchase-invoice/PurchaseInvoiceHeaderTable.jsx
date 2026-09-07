@@ -10,7 +10,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
@@ -57,7 +57,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('purchase-invoice', profile), [profile]);
 
@@ -67,12 +67,21 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const columns = useMemo(() => {
     const fiscalCols = [];
+    // ETP-5122: SII books by accounting date, not invoice date (mirrors
+    // Classic's AEATSII_PreSII_Invoice auxiliary input, which compares
+    // DateAcct). A row dated before the org's SII adoption date shows no
+    // status at all — the column stays as long as the profile enables SII,
+    // since other rows may still be eligible.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => <FiscalStatusBadge
-          status={row.aeatsiiEstado ?? null}
-          data-testid="FiscalStatusBadge__6b7cdb" />,
+        render: (row) => (
+          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
+            ? <FiscalStatusBadge
+                status={row.aeatsiiEstado ?? null}
+                data-testid="FiscalStatusBadge__6b7cdb" />
+            : null
+        ),
       });
     }
 
@@ -228,7 +237,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel]);
+  }, [gl, ui, locale, targets, siiColLabel, siiRecord]);
 
   return (
     <>

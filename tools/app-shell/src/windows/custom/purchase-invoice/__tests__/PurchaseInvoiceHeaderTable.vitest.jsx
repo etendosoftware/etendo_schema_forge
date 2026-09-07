@@ -39,13 +39,22 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: authMock.selectedOrg, logout: vi.fn() }),
 }));
 
+// ETP-5122: default the SII adoption date to "long ago" so pre-existing tests
+// (written before the date gate) keep passing without knowing about it. Tests
+// that specifically exercise the gate override this via useFiscalConfig.mockReturnValue(...).
+const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
+
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: null })),
+  useFiscalConfig: vi.fn(() => ({ profile: null, siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION } })),
 }));
 
-vi.mock('@/windows/custom/shared/fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
-}));
+vi.mock('@/windows/custom/shared/fiscalTargets.js', async () => {
+  const actual = await vi.importActual('@/windows/custom/shared/fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
+  };
+});
 
 vi.mock('@/windows/custom/shared/FiscalStatusBadge.jsx', () => ({
   FiscalStatusBadge: ({ status }) => (
@@ -62,9 +71,13 @@ vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   ),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (d) => `date:${d}`,
-}));
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return {
+    ...actual,
+    formatCalendarDate: (d) => `date:${d}`,
+  };
+});
 
 vi.mock('@/lib/invoiceDueDate', () => ({
   getDueDateState: () => 'overdue',
@@ -96,6 +109,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: 'sent',
+    accountingDate: '2026-01-01',
   },
   // 1 — ordinary invoice, settled → green "pagada"
   {
@@ -106,6 +120,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 2 — ETP-4841 case A: Factura Rectificativa with a POSITIVE total (billed 3,
   // should have been 4). It is PAYABLE: amber pending badge "400:USD", never
@@ -119,6 +134,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'Factura Rectificativa',
     apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: 'CO',
+    accountingDate: '2026-01-01',
   },
   // 3 — ETP-4841 case B: ordinary "Factura" with a NEGATIVE total. It IS a
   // credit: "Saldo a favor · 900:SEK", never "pagada". Before the fix the
@@ -132,6 +148,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP Invoice',
     apInvoiceSubtype: 'FAC',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 4 — case C: negative invoice fully consumed → green "cpCreditFullyApplied"
   {
@@ -142,6 +159,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'USD',
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 5 — case D: positive invoice OVERPAID (outstanding < 0). Real dev data has
   // 7 such rows; they must read "pagada", never "Saldo a favor".
@@ -153,6 +171,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'NOK',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 6 — case E: not completed → em dash placeholder, no badge
   {
@@ -163,6 +182,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 7 — credit memo mostly applied (ETP-4331 repro ratio: -25.30 total, only
   // -2.30 left unused). Must show "Saldo a favor", never "Pendiente".
@@ -174,6 +194,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'GBP',
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 8 — return, fully unapplied (nothing applied yet).
   {
@@ -184,6 +205,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'CHF',
     'transactionDocument$_identifier': 'Return Material Purchase Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },,
   // 8 — ETP-4895: a rejected bank transfer. Applied, so the outstanding is 0 and this used to
   // render "pagada" for money that never moved.
@@ -255,6 +277,7 @@ const AP_INVOICE_ROW = {
   'currency$_identifier': 'EUR',
   'transactionDocument$_identifier': 'AP Invoice',
   aeatsiiEstado: 'sent',
+  accountingDate: '2026-01-01',
 };
 
 // Credit memo with a negative total and half its balance still unused.
@@ -407,6 +430,35 @@ describe('PurchaseInvoiceHeaderTable', () => {
     renderWithRow(AP_INVOICE_ROW);
     // Multiple rows render multiple badges — at least one should be present
     expect(screen.getAllByTestId('fiscal-status-badge').length).toBeGreaterThan(0);
+  });
+
+  // ── ETP-5122: no SII status before the org's adoption date ─────────────────
+  // SII books by accounting date, not invoice date (mirrors Classic's
+  // AEATSII_PreSII_Invoice auxiliary input, which compares DateAcct).
+  describe('ETP-5122 — SII column gated by fechaAcogidaSII (accountingDate)', () => {
+    it('shows the badge for every row when adopted long before all their accounting dates', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION } });
+      renderWithRow(AP_INVOICE_ROW);
+      // Every MOCK_ROWS entry carries accountingDate '2026-01-01', after FAR_PAST_ADOPTION.
+      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+        .toBe(9);
+    });
+
+    it('hides the badge for every row when adopted after all their accounting dates', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: '2099-01-01T00:00:00.000Z' } });
+      renderWithRow(AP_INVOICE_ROW);
+      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+        .toBe(0);
+    });
+
+    it('fails safe (no badge) when there is no SII adoption record at all', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: null });
+      renderWithRow(AP_INVOICE_ROW);
+      expect(screen.queryByTestId('fiscal-status-badge')).toBeNull();
+    });
   });
 
   it('does not show payment modal initially', () => {
@@ -656,6 +708,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     'transactionDocument$_identifier': 'Factura Rectificativa',
     apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   };
 
   const RECTIFICATIVA_ROW_APPLIED = {
@@ -672,6 +725,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     'transactionDocument$_identifier': 'AP Invoice',
     apInvoiceSubtype: 'FAC',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   };
 
   it('outstandingAmount — a NEGATIVE Factura Rectificativa shows the credit badge', () => {
