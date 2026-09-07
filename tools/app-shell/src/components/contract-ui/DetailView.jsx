@@ -115,7 +115,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -2026,21 +2026,20 @@ export function DetailView({
       });
       return;
     }
-    if (addingLine && primaryAddRowRef.current?.flush) {
-      await primaryAddRowRef.current.flush({ closeAfterSave: false });
-      // The outside-click handler (mousedown capture) fires before this click
-      // handler and may have already submitted the row with closeAfterSave:true,
-      // calling onCancel() and closing the form. Ensure the form is (re)opened
-      // for the next line regardless of which path flush took.
-      setAddingLine(true);
-      setEditingChild(null);
-      // Force the scroll-to-bottom effect to re-run — addingLine stayed true so
-      // React won't refire the effect on its own.
-      setAddLineScrollNonce(n => n + 1);
-      return;
-    }
-    setAddingLine(prev => !prev);
-    setEditingChild(null);
+    // ETP-5147: gates on a dirty header via maybeSaveBeforeAddLine before reopening;
+    // onReopen/onToggle keep the outside-click-flush vs. plain-toggle behavior unchanged.
+    await runPrimaryAddLineFlow({
+      isDirtyHeader: hook.isDirtyHeader, handleSave: hook.handleSave, addingLine, primaryAddRowRef,
+      onReopen: () => {
+        setAddingLine(true);
+        setEditingChild(null);
+        setAddLineScrollNonce(n => n + 1);
+      },
+      onToggle: () => {
+        setAddingLine(prev => !prev);
+        setEditingChild(null);
+      },
+    });
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
@@ -2062,37 +2061,23 @@ export function DetailView({
     return true;
   }, [isNew, hook, navigate, windowName]);
 
+  // ETP-5147: shared runSecondaryAddLineFlow saves-and-navigates for a brand-new
+  // requireSavedRecord tab, otherwise gates on a dirty header before onOpen.
   const handleSecondaryAddLineToggle = useCallback(async (tabKey) => {
-    const targetTab = secondaryTabs.find(st => st.key === tabKey);
-    if (!targetTab) return;
-    if (isNew && targetTab.requireSavedRecord) {
-      const saved = await hook.handleSave();
-      if (!saved?.id) return;
-      hook.primeSaved?.(saved);
-      navigate(`/${windowName}/${saved.id}`, {
-        replace: true,
-        state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
-      });
-      return;
-    }
-    setAddingSecondaryLine(prev => ({ ...prev, [tabKey]: !prev[tabKey] }));
-    setSelectedSecondaryLine(null);
+    await runSecondaryAddLineFlow({
+      tabKey, secondaryTabs, isNew, isDirtyHeader: hook.isDirtyHeader, hook, navigate, windowName,
+      onOpen: () => {
+        setAddingSecondaryLine(prev => ({ ...prev, [tabKey]: !prev[tabKey] }));
+        setSelectedSecondaryLine(null);
+      },
+    });
   }, [secondaryTabs, isNew, hook, navigate, windowName]);
 
   const handleCustomModalAddClick = useCallback(async (tabKey) => {
-    const targetTab = secondaryTabs.find(st => st.key === tabKey);
-    if (!targetTab) return;
-    if (isNew && targetTab.requireSavedRecord) {
-      const saved = await hook.handleSave();
-      if (!saved?.id) return;
-      hook.primeSaved?.(saved);
-      navigate(`/${windowName}/${saved.id}`, {
-        replace: true,
-        state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
-      });
-      return;
-    }
-    setCustomModalState({ key: tabKey, rowId: null });
+    await runSecondaryAddLineFlow({
+      tabKey, secondaryTabs, isNew, isDirtyHeader: hook.isDirtyHeader, hook, navigate, windowName,
+      onOpen: () => setCustomModalState({ key: tabKey, rowId: null }),
+    });
   }, [secondaryTabs, isNew, hook, navigate, windowName]);
 
   // Resolve $_identifier for default FK values.
