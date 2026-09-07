@@ -95,7 +95,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 2. Open `/purchase-order?filter=pendingDelivery` and confirm fully delivered orders are excluded while orders with remaining delivery progress stay visible.
 3. Verify the header now exposes `Warehouse` as a visible field in the second row of the header form (between Scheduled Delivery Date and Payment Method). The grid column remains hidden. Confirm it is editable on a draft order.
 4. Open a draft order at `/purchase-order/:recordId` and confirm the detail page allows line editing and exposes the draft top-bar actions for confirmation, deletion, and cloning — the Send/"Enviar" action must **not** be shown yet. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the order date), not a free-text search that returns "Sin resultados". Confirm the order and verify Send/"Enviar" now appears in the detail topbar and as a row quick action in the list.
-5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change.
+5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change. Confirm with **both** `Create receipt` and `Create invoice` left unchecked and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `confirmedTitle || poConfirmedTitle` ("Pedido de compra confirmado" / "Purchase order confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created document(s), when at least one of the two checkboxes is selected.
 6. Open a confirmed order with remaining receipt and/or invoice work and verify the top bar exposes the corresponding management action based on pending quantities or pending amount.
 7. Open a confirmed order that already has draft receipts or a draft invoice and verify the top-bar chips link the user toward those downstream documents.
 8. Open the Related Documents tab on an order with receipts, purchase invoices, or payments and verify each chip routes to the linked document window.
@@ -336,3 +336,38 @@ sufficient):
 Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
 checkboxes shows both the new Recibo and Factura chips in the "Documentos" row immediately,
 before even closing the success modal — no reload, no lag.
+
+## Printable — generic tax labels and document currency — ETP-5125
+
+This window's printable shares `DOCUMENT_TEMPLATE` with the other three commercial documents
+(`windows/custom/shared/documentPdf.js`), so both fixes below apply to all four at once, across all
+five entry points (preview, download, both email paths, print). Mechanism and decisions:
+`docs/document-printables.md` (D12–D14).
+
+- **Tax wording.** The lines-table tax column now reads **"Impuesto"** (was `IVA%`), and the Totals
+  rows read **"Impuestos"** and **"Subtotal (sin impuestos)"** (were `IVA` / `Subtotal (sin IVA)`).
+  The `%` was wrong because that column's cell prints the tax's *name* (`tax$_identifier`, e.g.
+  "IVA 21%"), not a rate; and the on-screen `DocumentTotalsPanel` already said "Impuesto", so the
+  PDF contradicted the screen. Changed values only, in the three source locales
+  (`src/locales/{es_ES,es_AR,en_US}.json` → `invoicePdfColTax` / `invoicePdfTax` /
+  `invoicePdfSubtotal`); `src/locales/generated/core.*.json` is gitignored build output.
+- **Document currency in the header.** The header meta block (below `N.º Pedido`) now shows
+  `Moneda: <ISO>` — new key `invoicePdfCurrency` plus `currencyCode` in the template data, resolved
+  by `resolveDocumentCurrencyCode(header)` from `header['currency$_identifier']` inside
+  `buildOrderData('purchase-order', ...)`. It is read from the header, **not** from the `currencyData` argument, which is
+  `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
+  When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
+
+Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
+`windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
+`documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.
