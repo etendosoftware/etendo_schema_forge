@@ -119,6 +119,9 @@ test-frontend: ## Run only frontend generator tests
 
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
+
+stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe account needed)
+	tools/stripe-webhook-simulate.sh --status $(ARGS)
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10
