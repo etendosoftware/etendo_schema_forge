@@ -392,6 +392,23 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       ['ZZZ', 'N', 'Custom Type', 'es_ES'],
       ['ZZZ', 'N', 'Custom Type', 'en_US'],
     ],
+    // ETP-5032: CSV cell serialization — spreadsheet formula neutralization
+    // followed by RFC 4180 quoting. Mirrors the canonical fixture table
+    // (com.etendoerp.go/docs/security/csv-neutralization-fixtures.md), which
+    // report-csv-formula-neutralization.test.js asserts the emitted helper
+    // against directly. Covers each trigger class, the skip-prefix cases, the
+    // values that must stay untouched, and the neutralize-then-quote ordering.
+    csvField: [
+      ['=1+1'], ['+SUM(A1:A2)'], ['-CMD'], ['@SUM(A1:A2)'],
+      ["+cmd|' /C calc'!A0"], ['=HYPERLINK("http://example.com","Click")'],
+      ['   =1+1'], ['\t=1+1'], ['\r=1+1'], ['\n=1+1'],
+      ['\tText'], ['\rText'], ['\nText'],
+      ['\uFEFF=1+1'], ['\u00A0=1+1'],
+      ['＝1+1'], ['＋SUM(A1:A2)'], ['－CMD'], ['＠SUM(A1:A2)'],
+      ["'=1+1"], ['-500.00'], ['Normal Value'], ['  Normal Value'],
+      ['Total = 1+1'], ['texto, con coma'], ['con "comillas"'], ['line\nbreak'],
+      ['=1+1,extra'], [''], [null], [undefined], [0], [42],
+    ],
   };
 
   it('covers every parity-checked helper with at least one case (no silently untested helper)', () => {
