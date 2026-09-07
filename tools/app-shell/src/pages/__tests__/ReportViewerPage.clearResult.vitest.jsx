@@ -30,12 +30,19 @@ vi.mock('@/i18n', () => ({
 
 let mockSelectedOrg = { id: 'org1', name: 'GOOrganization' };
 
+// ETP-5116 — ReportViewerPage now gates the finance category behind
+// useWindowAccess()/WindowAccessGuard; defaults to 'full' so the existing
+// suite's finance-category renders are unaffected.
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     selectedRole: { orgList: [] },
     get selectedOrg() { return mockSelectedOrg; },
   }),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: (props) => (
+    <div data-testid="window-access-guard" data-window-id={props.windowId} />
+  ),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({

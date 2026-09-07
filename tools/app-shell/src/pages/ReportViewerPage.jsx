@@ -4,7 +4,7 @@ import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, 
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -2138,6 +2138,23 @@ export default function ReportViewerPage() {
     params.delete('report');
     setSearchParams(params);
   };
+
+  // ETP-5116 — the Financial Reports page had zero real access control (any
+  // authenticated user, any role, could reach it by URL regardless of the
+  // menu). ReportViewerPage is shared across every report category, so the
+  // gate must apply ONLY when the finance category is selected — other
+  // categories sharing this same page are unaffected. Checked here, after
+  // every other hook, so hook order stays stable across renders regardless
+  // of the tier (mirrors custom/financial-account/index.jsx).
+  const financeWindowAccessTier = useWindowAccess('D647D118F5014D00AF47A636B2CD0DD3');
+  if (categoryFilter === 'finance' && financeWindowAccessTier === 'none') {
+    return (
+      <WindowAccessGuard
+        windowId="D647D118F5014D00AF47A636B2CD0DD3"
+        data-testid="WindowAccessGuard__report-viewer-finance"
+      />
+    );
+  }
 
   if (selectedReport) {
     return (
