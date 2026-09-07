@@ -1294,6 +1294,53 @@ forma rota — hay que revisar todo lo que un agente lee antes de llegar al bloq
 
 ---
 
+### 14.11 Tests de regresión y sus límites conocidos
+
+Los tres arreglos de §14 no tenían red. Se añadieron tres suites bajo `src-test/`, sin ningún cambio
+en `src/`:
+
+| fichero | tests | arreglo que protege |
+|---|---|---|
+| `schemaforge/CalloutRequestBuilderPrecedenceTest.java` | 9 | `4389f0f8` — precedencia de params del callout |
+| `schemaforge/NeoCrudHandlerBatchQualifierTest.java` | 8 | `8e0c5132` — NPE de `neo_batch` |
+| `mcp/McpLinePriceInjectorTest.java` | 37 | `69ddc1be` — inyector de precio |
+
+Cada arreglo se verificó **revirtiéndolo** en una copia fuera del repo: la precedencia invertida
+tumba 5 de 9, y restaurar `servlet.lookupHandler` tumba 5 de 8 con el NPE textual. Sobre el inyector
+se introdujeron 17 mutantes y mueren los 17.
+
+**Lo que la batería de mutantes encontró y una suite verde no habría delatado:** tres tests pasaban
+por la razón equivocada — abstenían por un guarda *posterior* al que decían probar. `injectIfMissing`
+está envuelto en un `catch (Exception)`, así que una abstención limpia y un NPE tragado dejan el body
+idéntico. Se separaron montando el fixture completo y verificando que la abstención **se reporta**
+en el log.
+
+**Límites conocidos**, por orden de cuánto importan:
+
+1. **El test de batch no llega a la escritura DAL.** `DefaultJsonDataService` no es mockeable en test
+   unitario (su inicializador estático necesita Weld). Se invoca `executePostCreate` con el servicio
+   a `null`: el create recorre el pipeline y muere en la última línea. No hay aserción sobre lo que
+   devuelve `jsonService.add`. Tenerla exigiría inyectar el servicio en vez de resolverlo
+   estáticamente — decisión abierta, no tomada.
+2. **`McpParentScope.forEntity` y `FinancialUtils.getProductPrice` están mockeados.** No se verifica
+   que core resuelva el precio correcto, solo que se le llama con los argumentos del padre; ni que
+   `forEntity` devuelva campo padre nulo para los cuatro `Kind` sin enlace — eso exige el diccionario
+   AD. Los cuatro `Kind` se cubren construyendo `Scope` por reflexión, así que un cambio de forma en
+   ese tipo rompe **en la reflexión, no en una aserción**, y a primera vista parecerá no relacionado.
+   El guarda `aNewKindMustBeClassifiedByThisSuite` existe para eso: falla en voz alta si aparece un
+   sexto `Kind` o si se renombra uno existente.
+3. **Cuatro tests dependen de substrings de mensajes de log.** El javadoc del inyector dice *"Logged
+   rather than silent, because the price will come out 0"*, así que el log es contrato — pero
+   reformular esos mensajes los tumba. Fallo ruidoso con arreglo obvio, no falso negativo.
+4. **La premisa de §14.4 no está demostrada en test.** `Utility.getDefault` está mockeado a un
+   centinela visible, así que no se prueba que `@M_Warehouse_ID@` resuelva a cadena vacía bajo NEO.
+   El centinela hace la aserción *más* estricta que producción, y la consecuencia funcional ya está
+   verificada en vivo en §14.7. Lo que falta es la prueba automatizada del *por qué*, no del *qué*.
+5. **El call site no está cubierto:** quién invoca `injectIfMissing` en `McpToolRouter#handleCreate` y
+   con qué snapshot. Es cableado, y pertenece a F4.
+
+---
+
 ## 15. Estado de implementación: F0–F3 y las configs (2026-09-07)
 
 ### Archivos nuevos
