@@ -200,8 +200,8 @@ describe('WarehouseProductsTab', () => {
     // tab must apply its own `qty !== 0` predicate — keeping negative-stock (shrinkage)
     // products visible while hiding rows that aggregate to exactly zero.
     const mixedProducts = [
-      { id: 'p1', label: 'Agua', uom: 'Each', valuation: -2020, qty: -202, cost: 10 },
-      { id: 'p2', label: 'Cerveza', uom: 'Each', valuation: -3000, qty: -300, cost: 10 },
+      { id: 'p1', label: 'Negative Stock Item A', uom: 'Each', valuation: -2020, qty: -202, cost: 10 },
+      { id: 'p2', label: 'Negative Stock Item B', uom: 'Each', valuation: -3000, qty: -300, cost: 10 },
       { id: 'p3', label: 'Zero Stock Item', uom: 'Each', valuation: 0, qty: 0, cost: 5 },
       { id: 'p4', label: 'Widget A', uom: 'Each', valuation: 1500, qty: 10, cost: 150 },
     ];
@@ -212,8 +212,8 @@ describe('WarehouseProductsTab', () => {
 
     it('renders negative-stock products (does not hide shrinkage/loss)', () => {
       render(<WarehouseProductsTab {...defaultProps} />);
-      expect(screen.getByText('Agua')).toBeInTheDocument();
-      expect(screen.getByText('Cerveza')).toBeInTheDocument();
+      expect(screen.getByText('Negative Stock Item A')).toBeInTheDocument();
+      expect(screen.getByText('Negative Stock Item B')).toBeInTheDocument();
     });
 
     it('does not render products whose qty aggregates to exactly 0', () => {

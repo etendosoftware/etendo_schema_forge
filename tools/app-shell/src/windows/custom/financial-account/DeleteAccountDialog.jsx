@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import {
   Dialog,
   DialogContent,
@@ -15,15 +16,15 @@ import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 /**
  * Confirmation dialog for permanently deleting a financial account (ETP-4871).
  *
- * Only ever opened for an account whose `deletable` flag is true (every FK into
- * `FIN_Financial_Account` is RESTRICT, so `deletable` means zero dependent records anywhere —
- * movements, statements, reconciliations, payments, payment proposals, journal lines, bank-file
- * exceptions, business partners defaulting to the account, or an active bank connection). The
- * backend re-validates on DELETE regardless and answers 409 with a human-readable `message` if a
- * dependency appeared between the list load and this confirm — same defense-in-depth shape as
- * {@link ArchiveAccountDialog}'s open-reconciliations guard, except the 409 message here comes
- * straight from the backend (already localized/human-readable) rather than a local conflict key,
- * so it is shown verbatim instead of mapped through `ui(...)`.
+ * Opened for ANY account since ETP-5111 — the row kebab no longer hides Eliminar when
+ * `account.deletable` is false, so this dialog is now the confirmation for an account that may
+ * well be refused. Every FK into `FIN_Financial_Account` is RESTRICT, so `deletable` means zero
+ * dependent records anywhere (movements, statements, reconciliations, payments, payment proposals,
+ * journal lines, bank-file exceptions, business partners defaulting to the account, or an active
+ * bank connection); the backend re-validates on DELETE and answers 409, which is what explains the
+ * refusal to the user. Same defense-in-depth shape as {@link ArchiveAccountDialog}'s
+ * open-reconciliations guard, but the 409's sentence is English and goes through
+ * `translateBackendError` rather than being shown verbatim.
  *
  * Deliberately a sibling of `ArchiveAccountDialog`, not a mode of it: deleting and archiving are
  * independent actions (a deletable account can still be archived instead, and vice versa is not
@@ -47,9 +48,12 @@ export function DeleteAccountDialog({ open, onClose, onDeleted, account }) {
       onDeleted?.();
       onClose?.();
     } catch (err) {
-      // 409 (a dependency appeared since the row was loaded) already carries a human-readable
-      // message from the backend — shown as-is, not mapped through a local conflict key.
-      toast.error(err.message || ui('financeAccountsDeleteError'));
+      // The 409 carries the backend's own sentence, which is ENGLISH — it was being shown
+      // verbatim, so this was the one account-delete surface that answered a Spanish-first UI in
+      // English (ETP-5111). Routed through the shared translator, exactly like the bulk path and
+      // the movements kebab, so all three read the same sentence. Falls back to the generic key
+      // when there was no message at all.
+      toast.error(translateBackendError(err?.message, ui) || ui('financeAccountsDeleteError'));
     } finally {
       setSubmitting(false);
     }
