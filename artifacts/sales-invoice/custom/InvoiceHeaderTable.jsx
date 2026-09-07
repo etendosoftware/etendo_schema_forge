@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -97,7 +97,9 @@ export default function InvoiceHeaderTable(props) {
       fiscalCols.push({
         key: '_vfStatus', type: 'custom', label: vfColLabel,
         render: (row) => (
-          isSifEligibleByDate(row.invoiceDate, verifactuRecord?.inVfactuSystem)
+          // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION
+          // timestamp (`created`), not `invoiceDate` — see fiscalTargets.js.
+          isVerifactuEligibleByDate(row.created, verifactuRecord?.inVfactuSystem)
             ? <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />
             : <span className="text-muted-foreground">—</span>
         ),

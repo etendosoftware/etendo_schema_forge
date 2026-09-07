@@ -108,6 +108,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: 'sent',
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 1 — ordinary AR invoice, settled → green "cobrada"
   {
@@ -120,6 +121,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 2 — ETP-4841 case A: Factura Rectificativa with a POSITIVE total (billed 3,
   // should have been 4). PAYABLE: amber badge "400:USD", never "Saldo a favor".
@@ -134,6 +136,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: 'CO',
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 3 — ETP-4841 case B: ordinary "Factura" with a NEGATIVE total. It IS a
   // credit ("Saldo a favor · 900:SEK"), never "Cobrada" — before the fix its
@@ -149,6 +152,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 4 — case C: negative invoice fully consumed → green fully-applied pill
   {
@@ -161,6 +165,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 5 — case D: positive invoice OVERPAID (outstanding < 0). Real dev data has
   // 7 such rows; they must read "cobrada", never "Saldo a favor".
@@ -174,6 +179,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 6 — case E: not completed → em dash placeholder, no badge
   {
@@ -186,6 +192,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 7 — credit note mostly applied (ETP-4331 repro: -25.30 total, only -2.30
   // left unused). Must show the credit badge, never the pending one.
@@ -199,6 +206,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
   // 8 — return, fully unapplied. Sibling of the ETP-4331 repro screenshot's
   // "Factura de devolución" row.
@@ -212,6 +220,7 @@ const MOCK_ROWS = [
     aeatsiiEstado: null,
     invoiceDate: '2026-01-01',
     accountingDate: '2026-01-01',
+    created: '2026-01-01T00:00:00.000Z',
   },
 ];
 
@@ -258,6 +267,7 @@ const AR_INVOICE_ROW = {
   aeatsiiEstado: 'sent',
   invoiceDate: '2026-01-01',
   accountingDate: '2026-01-01',
+  created: '2026-01-01T00:00:00.000Z',
 };
 
 describe('InvoiceHeaderTable (sales-invoice)', () => {
@@ -411,6 +421,48 @@ describe('InvoiceHeaderTable — ETP-5122 date-gated fiscal status columns', () 
     });
     render(<InvoiceHeaderTable {...BASE_PROPS} />);
     expect(screen.getByTestId('col-render-_vfStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length).toBe(0);
+  });
+
+  it('Verifactu: shows the badge for every row when all are dated on/after inVfactuSystem (gated on created)', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'verifactu',
+      siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+      verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+    });
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    // All MOCK_ROWS carry created '2026-01-01T00:00:00.000Z', well after FAR_PAST_ADOPTION.
+    expect(screen.getByTestId('col-render-_vfStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+      .toBe(9);
+  });
+
+  // ETP-5122 follow-up: the three systems compare INDEPENDENT reference dates.
+  // A row whose invoiceDate/accountingDate predate SII/TBAI adoption, but whose
+  // real creation timestamp postdates VERI*FACTU adoption, must show Verifactu
+  // while SII and TBAI stay hidden — proving the three gates are not
+  // accidentally sharing one date field.
+  it('Verifactu uses created (not invoiceDate) — diverges from SII/TBAI on the same row', () => {
+    useFiscalConfig.mockReturnValue({
+      profile: 'sii+tbai',
+      siiRecord: { fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
+      tbaiRecord: { tbaisystemdate: '2026-06-01T00:00:00.000Z' },
+      verifactuRecord: { inVfactuSystem: '2026-06-01T00:00:00.000Z' },
+    });
+    const divergentRow = {
+      ...AR_INVOICE_ROW,
+      invoiceDate: '2026-01-01', // before adoption -> SII/TBAI ineligible
+      accountingDate: '2026-01-01', // before adoption -> SII ineligible
+      created: '2026-07-01T00:00:00.000Z', // after adoption -> Verifactu eligible
+    };
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    const cols = capturedColumnsHolder.value;
+    const findCol = (key) => cols.find((c) => c.key === key);
+    const { container: siiContainer } = render(<div>{findCol('_siiStatus').render(divergentRow)}</div>);
+    const { container: tbaiContainer } = render(<div>{findCol('_tbaiStatus').render(divergentRow)}</div>);
+    const { container: vfContainer } = render(<div>{findCol('_vfStatus').render(divergentRow)}</div>);
+    expect(siiContainer.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
+    expect(tbaiContainer.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
+    expect(vfContainer.querySelector('[data-testid="fiscal-status-badge"]')).toBeInTheDocument();
   });
 
   it('shows no badge at all for any system when the adoption record is missing (fail-safe)', () => {

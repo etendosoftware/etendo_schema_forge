@@ -161,6 +161,7 @@ const defaultInvoice = {
   'businessPartner$_identifier': 'Acme Corp',
   businessPartner: 'bp-1',
   invoiceDate: '2024-01-01',
+  created: '2024-01-01T10:00:00.000Z',
   'currency$_identifier': 'EUR',
 };
 
@@ -346,6 +347,67 @@ describe('InvoicePreview', () => {
       }));
       renderInvoicePreview({ specName: 'purchase-invoice', invoice: newInvoice });
       expect(tbaiInfoRow()).toBeTruthy();
+    });
+  });
+
+  // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION timestamp
+  // (`created`), never `invoiceDate` — unlike TBAI/SII, which key off business
+  // dates. This proves the three gates are independent, not accidentally
+  // sharing one date field.
+  describe('VERI*FACTU date gate uses created, not invoiceDate (ETP-5122 follow-up)', () => {
+    function fiscalInfoRows() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      return (props.children || []).filter((el) => el?.props?.label);
+    }
+
+    function vfInfoRow() {
+      return fiscalInfoRows().find((el) => el.props.label === 'invoicePreview.fiscalStatus.verifactu');
+    }
+
+    it('hides the VERI*FACTU InfoRow for an invoice created before inVfactuSystem', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      const oldInvoice = { ...defaultInvoice, created: '1999-01-01T00:00:00.000Z' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: oldInvoice,
+        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: oldInvoice });
+      expect(vfInfoRow()).toBeUndefined();
+    });
+
+    it('shows the VERI*FACTU InfoRow for an invoice created after inVfactuSystem', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      const newInvoice = { ...defaultInvoice, created: '2026-07-01T00:00:00.000Z' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: newInvoice,
+        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: newInvoice });
+      expect(vfInfoRow()).toBeTruthy();
+    });
+
+    // The exact case ETP-5122 asked to demonstrate: SAME invoice, invoiceDate
+    // predates adoption for all three systems, but created postdates the
+    // VERI*FACTU adoption date — VERI*FACTU shows, SII/TBAI stay hidden.
+    it('shows VERI*FACTU but hides SII/TBAI on the same invoice when only created qualifies', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: true });
+      const divergentInvoice = {
+        ...defaultInvoice,
+        invoiceDate: '2026-01-01', // predates SII/TBAI adoption
+        accountingDate: '2026-01-01', // predates SII adoption
+        created: '2026-07-01T00:00:00.000Z', // postdates VERI*FACTU adoption
+      };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: divergentInvoice,
+        siiRecord: { fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
+        tbaiRecord: { tbaisystemdate: '2026-06-01T00:00:00.000Z' },
+        verifactuRecord: { inVfactuSystem: '2026-06-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: divergentInvoice });
+      const rows = fiscalInfoRows();
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.sii')).toBe(false);
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.tbai')).toBe(false);
+      expect(vfInfoRow()).toBeTruthy();
     });
   });
 

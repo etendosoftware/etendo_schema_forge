@@ -11,7 +11,7 @@ import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
-import { getInvoiceFiscalTargets, isSifEligibleByDate } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
 import PaymentsCard from './preview-cards/PaymentsCard.jsx';
@@ -107,11 +107,13 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5122: a single invoice this time (not a grid row), but the same rule —
   // no status before the org's adoption date for that system. SII compares
-  // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI and
-  // VERI*FACTU compare invoice date.
+  // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI
+  // compares invoice date. VERI*FACTU is its own gate (ETP-5122 follow-up):
+  // Classic compares the invoice's record CREATION timestamp, not invoiceDate
+  // — see isVerifactuEligibleByDate in fiscalTargets.js.
   const siiEligibleByDate = isSifEligibleByDate(invoice?.accountingDate, siiRecord?.fechaAcogidaSII);
   const tbaiEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
-  const verifactuEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, verifactuRecord?.inVfactuSystem);
+  const verifactuEligibleByDate = isVerifactuEligibleByDate(invoice?.created, verifactuRecord?.inVfactuSystem);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
     invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
   );

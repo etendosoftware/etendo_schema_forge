@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getInvoiceFiscalTargets, isTbaiEligibleByDate, isSifEligibleByDate } from '../fiscalTargets.js';
+import {
+  getInvoiceFiscalTargets,
+  isTbaiEligibleByDate,
+  isSifEligibleByDate,
+  isVerifactuEligibleByDate,
+} from '../fiscalTargets.js';
 
 // ---------------------------------------------------------------------------
 // ETP-5122 — invoice-date vs. TBAI adoption-date gate.
@@ -86,27 +91,56 @@ describe('isSifEligibleByDate — SII (accounting date vs. fechaAcogidaSII)', ()
   });
 });
 
-describe('isSifEligibleByDate — VERI*FACTU (invoice date vs. inVfactuSystem)', () => {
-  it('is eligible when the invoice date is after the adoption date', () => {
-    assert.equal(isSifEligibleByDate('2026-06-15', '2026-01-01T00:00:00.000Z'), true);
+// ---------------------------------------------------------------------------
+// ETP-5122 follow-up correction — VERI*FACTU does NOT use isSifEligibleByDate
+// (which truncates the reference side to a calendar day, correct for TBAI's
+// and SII's date-only business fields). Classic's
+// InvoiceSendingListener.invoiceMadeWithConfigPresent() compares the invoice's
+// record CREATION timestamp (getCreationDate()), not invoiceDate, and neither
+// side is a date-only value — so isVerifactuEligibleByDate compares two full
+// timestamps, truncating neither.
+// ---------------------------------------------------------------------------
+describe('isVerifactuEligibleByDate — VERI*FACTU (creation timestamp vs. inVfactuSystem)', () => {
+  it('is eligible when the creation timestamp is after the adoption date', () => {
+    assert.equal(isVerifactuEligibleByDate('2026-06-15T10:00:00.000Z', '2026-01-01T00:00:00.000Z'), true);
   });
 
-  it('is eligible when the invoice date exactly equals the adoption date (inclusive)', () => {
-    assert.equal(isSifEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+  it('is eligible when the creation timestamp exactly equals the adoption timestamp (inclusive)', () => {
+    assert.equal(isVerifactuEligibleByDate('2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'), true);
   });
 
-  it('is NOT eligible when the invoice date is before the adoption date', () => {
-    assert.equal(isSifEligibleByDate('2025-12-31', '2026-01-01T00:00:00.000Z'), false);
+  it('is NOT eligible when the creation timestamp is before the adoption timestamp', () => {
+    assert.equal(isVerifactuEligibleByDate('2025-12-31T23:59:59.000Z', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  it('is NOT eligible when created is on the same calendar day but before the exact adoption instant', () => {
+    // Unlike isSifEligibleByDate (which truncates the reference side to
+    // midnight), NEITHER side is truncated here — a creation timestamp earlier
+    // the same day the org adopted VERI*FACTU still fails, down to the second.
+    assert.equal(isVerifactuEligibleByDate('2026-01-01T08:00:00.000Z', '2026-01-01T14:30:00.000Z'), false);
   });
 
   it('fails safe (false) when there is no VERI*FACTU adoption date on file', () => {
-    assert.equal(isSifEligibleByDate('2026-06-15', null), false);
-    assert.equal(isSifEligibleByDate('2026-06-15', undefined), false);
+    assert.equal(isVerifactuEligibleByDate('2026-06-15T10:00:00.000Z', null), false);
+    assert.equal(isVerifactuEligibleByDate('2026-06-15T10:00:00.000Z', undefined), false);
   });
 
-  it('fails safe (false) when the invoice date is missing or unparsable', () => {
-    assert.equal(isSifEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
-    assert.equal(isSifEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  it('fails safe (false) when the creation timestamp is missing or unparsable', () => {
+    assert.equal(isVerifactuEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
+    assert.equal(isVerifactuEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  });
+
+  // The exact scenario ETP-5122 asked to prove: an invoice dated (business
+  // invoiceDate) BEFORE the adoption date, but CREATED after it, must still be
+  // VERI*FACTU-eligible — unlike TBAI/SII, which key off invoiceDate/accountingDate
+  // and would reject the very same invoice.
+  it('is eligible on an invoice whose business invoiceDate predates adoption but whose creation postdates it', () => {
+    const adoptionDate = '2026-06-01T00:00:00.000Z';
+    const invoiceDate = '2026-01-01'; // predates adoption
+    const createdTimestamp = '2026-07-01T09:00:00.000Z'; // postdates adoption
+
+    assert.equal(isSifEligibleByDate(invoiceDate, adoptionDate), false, 'TBAI/SII-style gate would reject it');
+    assert.equal(isVerifactuEligibleByDate(createdTimestamp, adoptionDate), true, 'VERI*FACTU gate accepts it');
   });
 });
 
