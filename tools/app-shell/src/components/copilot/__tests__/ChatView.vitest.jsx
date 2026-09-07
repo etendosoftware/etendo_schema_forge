@@ -73,6 +73,22 @@ describe('ChatView', () => {
     expect(screen.queryByText('copilotWelcome')).not.toBeInTheDocument();
   });
 
+  it('renders assistant markdown and rejects unsafe link protocols', () => {
+    const messages = [{
+      id: 'markdown',
+      role: 'copilot',
+      text: '# Resultado\n\n**Importante**: [documentación](https://example.com)\n\n- Uno\n- Dos\n\nClick [acá](javascript:alert(1))',
+    }];
+    const { container } = render(<ChatView messages={messages} />);
+
+    expect(container.querySelector('h3')).toHaveTextContent('Resultado');
+    expect(container.querySelector('strong')).toHaveTextContent('Importante');
+    expect(container.querySelector('a')).toHaveAttribute('href', 'https://example.com');
+    expect(container.querySelectorAll('ul li')).toHaveLength(2);
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+    expect(container).toHaveTextContent('[acá](javascript:alert(1))');
+  });
+
   it('renders the file list attached to a message', () => {
     const messages = [
       {

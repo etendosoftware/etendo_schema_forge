@@ -11,6 +11,7 @@ import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import TopBar from '@/components/layout/TopBar';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
+import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
@@ -163,8 +164,9 @@ export default function AppLayout({ menuGroups }) {
   }
 
   return (
-    <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
-      <CopilotProvider data-testid="CopilotProvider__488148">
+    <GlobalSearchProvider>
+      <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
+      <CopilotProvider menuGroups={filteredMenuGroups} data-testid="CopilotProvider__488148">
         <SupportChatProvider data-testid="SupportChatProvider__488148">
           <FavoritesProvider data-testid="FavoritesProvider__488148">
             <SidebarProvider data-testid="SidebarProvider__488148">
@@ -178,6 +180,7 @@ export default function AppLayout({ menuGroups }) {
           </FavoritesProvider>
         </SupportChatProvider>
       </CopilotProvider>
-    </CurrentWindowProvider>
+      </CurrentWindowProvider>
+    </GlobalSearchProvider>
   );
 }

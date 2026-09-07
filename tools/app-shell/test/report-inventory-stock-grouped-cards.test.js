@@ -69,11 +69,11 @@ describe('inventory-stock-report — grouped layout renders one card per group (
     assert.equal(theadOccurrences.length, 3, 'expected one <thead> per group, not one shared thead');
   });
 
-  it('the group name renders as the value, with a dimensionLabel chip alongside (matching report-general-ledger)', () => {
+  it('the group name renders as the value, with a dimensionLabel chip appearing FIRST (matching report-general-ledger, ETP-5128)', () => {
     const html = render({ dimensionField: 'product', dimensionLabel: 'Producto' }, rows);
-    assert.match(html, /<span class="value">Agua<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Cerveza<\/span><span class="chip">Producto<\/span>/);
-    assert.match(html, /<span class="value">Queso Sardo<\/span><span class="chip">Producto<\/span>/);
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Agua<\/span>/);
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Cerveza<\/span>/);
+    assert.match(html, /<span class="chip">Producto<\/span><span class="value">Queso Sardo<\/span>/);
   });
 
   it('no longer renders the old flat group-header row', () => {

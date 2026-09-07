@@ -39,6 +39,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -52,7 +53,8 @@ export const header = [
     "etgoTotalDiscount": 99.44,
     "eTGODueDate": "2026-01-15",
     "eTGODeliveryStatus": "DR",
-    "eTGOCurrencyRate": "USD"
+    "eTGOCurrencyRate": "USD",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-002",
@@ -92,6 +94,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -105,7 +108,8 @@ export const header = [
     "etgoTotalDiscount": 96.94,
     "eTGODueDate": "2026-01-16",
     "eTGODeliveryStatus": "CO",
-    "eTGOCurrencyRate": "EUR"
+    "eTGOCurrencyRate": "EUR",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-003",
@@ -145,6 +149,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -158,7 +163,8 @@ export const header = [
     "etgoTotalDiscount": 12.48,
     "eTGODueDate": "2026-01-17",
     "eTGODeliveryStatus": "VO",
-    "eTGOCurrencyRate": "GBP"
+    "eTGOCurrencyRate": "GBP",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-004",
@@ -198,6 +204,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -211,7 +218,8 @@ export const header = [
     "etgoTotalDiscount": 96.31,
     "eTGODueDate": "2026-01-18",
     "eTGODeliveryStatus": "IP",
-    "eTGOCurrencyRate": "USD"
+    "eTGOCurrencyRate": "USD",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-005",
@@ -251,6 +259,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -264,7 +273,8 @@ export const header = [
     "etgoTotalDiscount": 31.27,
     "eTGODueDate": "2026-01-19",
     "eTGODeliveryStatus": "DR",
-    "eTGOCurrencyRate": "EUR"
+    "eTGOCurrencyRate": "EUR",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-006",
@@ -304,6 +314,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -317,7 +328,8 @@ export const header = [
     "etgoTotalDiscount": 76.52,
     "eTGODueDate": "2026-01-20",
     "eTGODeliveryStatus": "CO",
-    "eTGOCurrencyRate": "GBP"
+    "eTGOCurrencyRate": "GBP",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-007",
@@ -357,6 +369,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -370,7 +383,8 @@ export const header = [
     "etgoTotalDiscount": 2.66,
     "eTGODueDate": "2026-01-21",
     "eTGODeliveryStatus": "VO",
-    "eTGOCurrencyRate": "USD"
+    "eTGOCurrencyRate": "USD",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-008",
@@ -410,6 +424,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -423,7 +438,8 @@ export const header = [
     "etgoTotalDiscount": 10.03,
     "eTGODueDate": "2026-01-22",
     "eTGODeliveryStatus": "IP",
-    "eTGOCurrencyRate": "EUR"
+    "eTGOCurrencyRate": "EUR",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-009",
@@ -463,6 +479,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -476,7 +493,8 @@ export const header = [
     "etgoTotalDiscount": 93.97,
     "eTGODueDate": "2026-01-23",
     "eTGODeliveryStatus": "DR",
-    "eTGOCurrencyRate": "GBP"
+    "eTGOCurrencyRate": "GBP",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-010",
@@ -516,6 +534,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -529,7 +548,8 @@ export const header = [
     "etgoTotalDiscount": 1.1,
     "eTGODueDate": "2026-01-24",
     "eTGODeliveryStatus": "CO",
-    "eTGOCurrencyRate": "USD"
+    "eTGOCurrencyRate": "USD",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-011",
@@ -569,6 +589,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -582,7 +603,8 @@ export const header = [
     "etgoTotalDiscount": 79.99,
     "eTGODueDate": "2026-01-25",
     "eTGODeliveryStatus": "VO",
-    "eTGOCurrencyRate": "EUR"
+    "eTGOCurrencyRate": "EUR",
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-012",
@@ -622,6 +644,7 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "tbaiIssent": "Sample tbaiIssent",
     "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
@@ -635,7 +658,8 @@ export const header = [
     "etgoTotalDiscount": 53.61,
     "eTGODueDate": "2026-01-26",
     "eTGODeliveryStatus": "IP",
-    "eTGOCurrencyRate": "GBP"
+    "eTGOCurrencyRate": "GBP",
+    "adOrgId": "Sample adOrgId"
   }
 ];
 
