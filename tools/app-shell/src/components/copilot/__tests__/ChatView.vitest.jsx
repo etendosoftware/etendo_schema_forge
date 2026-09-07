@@ -120,6 +120,25 @@ describe('ChatView', () => {
     expect(screen.getByTestId('Bot__61b427')).toBeInTheDocument();
   });
 
+  it('shows a visible error with retry and dismiss actions', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const onDismissError = vi.fn();
+    render(
+      <ChatView
+        messages={[{ id: '1', role: 'user', text: 'hello' }]}
+        error="The AI service is unavailable"
+        onRetry={onRetry}
+        onDismissError={onDismissError}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('The AI service is unavailable');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDismissError).toHaveBeenCalledTimes(1);
+  });
+
   it('renders AttachmentChips and forwards onRemoveAttachment', async () => {
     const user = userEvent.setup();
     const onRemoveAttachment = vi.fn();
