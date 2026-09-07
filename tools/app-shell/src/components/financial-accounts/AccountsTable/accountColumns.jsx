@@ -128,7 +128,7 @@ export function CurrencyCell({ account }) {
   if (!account.currencyIso) {
     return <span className="text-sm font-normal leading-5 text-[hsl(var(--muted-foreground))]">—</span>;
   }
-  return <Tag variant="neutral" label={account.currencyIso} />;
+  return <Tag variant="neutral" label={account.currencyIso} data-testid="Tag__dc050f" />;
 }
 
 export function BalanceCell({ account }) {
