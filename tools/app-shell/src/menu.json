@@ -360,6 +360,18 @@
           "favname": "Fiscal Models"
         },
         {
+          "name": "tax",
+          "label": "Tax",
+          "favname": "Tax",
+          "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
+        },
+        {
           "name": "report-viewer-finance",
           "label": "Reports",
           "favname": "Finance Reports",
@@ -401,18 +413,6 @@
           "label": "Payment Term",
           "favname": "Payment Term",
           "windowId": "141"
-        },
-        {
-          "name": "tax",
-          "label": "Tax",
-          "favname": "Tax",
-          "windowId": "137"
-        },
-        {
-          "name": "tax-category",
-          "label": "Tax Category",
-          "favname": "Tax Category",
-          "windowId": "138"
         },
         {
           "name": "business-partner-category",

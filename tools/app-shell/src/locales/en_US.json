@@ -12873,8 +12873,8 @@
       "description": "SII sending deadline"
     },
     "EM_Aeatsii_Declarable": {
-      "label": "SII declarable",
-      "description": "SII declarable"
+      "label": "SII Declarable",
+      "description": "SII Declarable"
     },
     "License_Name": {
       "label": "Nombre licencia",
