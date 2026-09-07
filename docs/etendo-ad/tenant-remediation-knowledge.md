@@ -2149,3 +2149,51 @@ as the immutability trigger for a data-fix `.sql` file.
   investigation rather than folding it back into an anchor-seeding fix. `C_ProjectIssue`-sourced
   transactions (`M_Transaction.c_projectissue_id`) are also deliberately out of scope for the same
   reason R28 never covered them — not one of the 5 document families this investigation traced.
+- **2026-09-07 — `P_InvoicePriceVariance_Acct` NULL fleet-wide, misdiagnosed via a PR review comment
+  as a business-partner config gap (ETP-5075, gap A8).** A `matched-purchase-invoices`
+  (`M_MatchInv`) record whose invoiced price differs from its receipt cost failed to post with
+  `Account could not be found. (Business Partner: <name>, BP Group: <group>)`; the reviewer checked
+  both and found them correctly configured. Two dead ends walked through before the real fix,
+  documented here so the next investigator doesn't repeat them:
+  - **Dead end 1 — "it needs a Purchase Order."** A receipt with a linked PO is usually valued at
+    the PO price, which usually equals the invoice price, so the difference is zero and the gap
+    never surfaces — but the PO itself plays no role in `DocMatchInv`'s posting decision at all.
+    Confirmed by reproducing the SAME failure on a brand-new match with NO PO on either side, and
+    by finding a Cerveza/Cerveza-Ale match on a completely different demo server that posted fine
+    WITHOUT any PO either — its invoice share and receipt cost simply happened to be numerically
+    equal (verified: `linenetamt * qty / qtyinvoiced` == the receipt's costed amount).
+  - **Dead end 2 — "run the Price Correction Background process."** This process (`org.openbravo.
+    costing.PriceDifferenceBackground`, flag `M_Transaction.checkpricedifference`) genuinely was
+    never scheduled for this client (only for a stale 2014 "QA Testing" client fleet-wide — 0
+    `M_CostAdjustment` rows existed anywhere before running it). Running it did correct the
+    receipt's COST (via a new `M_CostAdjustment`, `source_process='PDC'`) — but `DocMatchInv`
+    reads `MaterialTransaction.getTransactionCost()`, the DENORMALIZED `M_Transaction.
+    TransactionCost` column, which the cost-adjustment mechanism updates via a NEW
+    `M_Transaction_Cost` line but never writes back to that denormalized column. Measured:
+    202/205 clients fleet-wide had `M_Transaction.TransactionCost` mismatching the sum of their own
+    `M_Transaction_Cost` lines. Posting still failed afterward, unchanged.
+  - **The actual fix.** `ProductInfo.getAccount()` (`ProductInfo.java:99-162`) resolves
+    `ACCTTYPE_P_IPV` EXCLUSIVELY from `M_Product_Acct` for the line's own product+schema
+    (`ProductInfo_data.xsql`'s `selectProductAcct` — plain `WHERE M_Product_ID=? AND
+    C_AcctSchema_ID=?`, no fallback whatsoever) — confirmed live: setting `C_ACCTSCHEMA_DEFAULT.
+    P_InvoicePriceVariance_Acct` via Classic's own "Defaults" tab UI did NOT unblock posting,
+    because the product's own `M_Product_Acct` row already existed with this column NULL and
+    nothing re-syncs it from the schema after creation.
+  - **Which account.** GOClient's own `P_Expense_Acct` across all 3 levels already resolves to
+    `60000000 - Compras de mercaderías`. Confirmed via the "Pérdidas y Ganancias" (P&L) report for
+    both charts that GOClient's Spanish-PGC-style chart has NO dedicated price-variance account at
+    all (its "Aprovisionamientos" group only ever shows `600`/`610`) — unlike the F&B International
+    Group US-Dollar demo chart (Anglo-Saxon-style), whose P&L shows a full COGS breakdown including
+    a dedicated `5610 - Invoice price variance` sibling of `5360 - Product Expense`; that schema is
+    the ONLY one of 205 fleet-wide with this column genuinely configured. Live-verified: wiring
+    `P_InvoicePriceVariance_Acct` to the SAME account as `P_Expense_Acct` produced a balanced
+    3-line entry, the variance landing as a third line in that very same account.
+  - **`P_PurchasePriceVariance_Acct`** (sibling column, `ProductInfo.ACCTTYPE_P_PPV`) deliberately
+    left untouched: its Classic UI field on this same tab is `isactive='N'` (Etendo turned it off),
+    confirmed via `ad_field`, and `grep ACCTTYPE_P_PPV` across `org.openbravo.erpCommon.ad_forms`
+    shows no purchasing document class ever requests it.
+  - See `onboarding-gaps.md` §A8 and `onboarding-and-datafixes-map.md`'s `A8` row for the full
+    write-up; fix shipped as `R34-invoice-price-variance-backfill.sql` (corrective, all 3 levels)
+    + `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (preventive,
+    schema-level only — sufficient because the existing product/category copy-down inserts source
+    from that same column).

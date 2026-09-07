@@ -18,6 +18,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2d | Accounting | 24 of F&B International Group's 26 `c_acctschema` rows have NO `c_acctschema_default` row at all — a prerequisite gap that blocks R22 (and any other `*_acct` fix keyed on `c_acctschema_default`) from ever reaching those schemas | Not yet fixed — discovered as a side-effect of QA'ing R22; flagged for follow-up, not in scope for ETP-4743 | — (follow-up, found during ETP-4743 QA) |
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
+| A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -819,6 +820,78 @@ whoever merges both the preventive dataset branch and this corrective `.sql`:** 
 `ONBOARDING_PROVISIONED_THROUGH` to this fix's own timestamp (`2026-08-30T12:00:00Z`) ONLY once
 both are confirmed merged, or defer to whoever next legitimately re-verifies the whole unbumped
 chain.
+
+---
+
+### A8 — `P_InvoicePriceVariance_Acct` NULL at three levels, misdiagnosed as a business-partner gap (ETP-5075, 2026-09-07)
+
+**Symptom:** posting a `matched-purchase-invoices` (`M_MatchInv`, "Relación albarán-factura", ETP-5075
+window) record whose invoiced price differs from its receipt cost fails with
+`Account could not be found. (Business Partner: <name>, BP Group: <group>)` — a PR reviewer read
+this as "the contact's/contact category's accounts are missing", checked both, and found them
+correctly configured. They were right that nothing was wrong with the contact.
+
+**Root cause:** `DocMatchInv.createFact`
+(`org.openbravo.erpCommon.ad_forms.DocMatchInv.java:411-434`) requests `ProductInfo.ACCTTYPE_P_IPV`
+("Invoice Price Variance") ONLY when the invoiced amount differs from the receipt's costed amount
+(`bdDifference.signum() != 0`) — most matches never hit this, which is exactly why the gap went
+unnoticed until a real price difference occurred. The Business Partner/BP Group in the error
+message is added by `com.etendoerp.go`'s own `DocumentPostingService#enrichWithFailingEntity` for
+ANY document that hits core's generic `STATUS_InvalidAccount` fallback (`AcctServer.java:864-866`,
+which resolves the bare `@InvalidAccount@` message with no parameters) — it is document CONTEXT,
+never the account that is actually missing, for any table/account-type combination this enrichment
+fires for.
+
+**Three-level gap, not a schema-only one (unlike A3b's siblings):**
+`ProductInfo.getAccount()` (`ProductInfo.java:99-162`) resolves `ACCTTYPE_P_IPV` EXCLUSIVELY from
+`M_Product_Acct` for the line's own product+schema (`ProductInfo_data.xsql`'s `selectProductAcct`,
+a plain `WHERE M_Product_ID=? AND C_AcctSchema_ID=?`, no JOIN, no COALESCE) — once a product has
+its own `M_Product_Acct` row, there is NO fallback to product-category or schema defaults
+whatsoever. `getAccountDefault()` (which DOES read `C_ACCTSCHEMA_DEFAULT`/category via
+`selectDefaultAcct`'s COALESCE chain) is reached ONLY when the transaction line carries no product
+at all — never true for `DocMatchInv`. Live-verified: setting `C_ACCTSCHEMA_DEFAULT.
+P_InvoicePriceVariance_Acct` in Classic's own "Defaults" tab UI did NOT unblock posting a failing
+GOClient record, because its product's `M_Product_Acct` row already existed with this column NULL.
+
+**Fleet-wide measurement (this environment, 2026-09-07):** 202 of 205 `C_ACCTSCHEMA_DEFAULT` rows,
+every `M_Product_Category_Acct` row, and every `M_Product_Acct` row had `P_InvoicePriceVariance_Acct`
+NULL. `P_Expense_Acct` (the column this fix copies from) was populated on all 205/692/1531 rows at
+all three levels, fleet-wide — a safe copy source. The sole schema NOT affected, F&B International
+Group's US-Dollar ledger, is a genuinely different (Anglo-Saxon-style) chart of accounts with a
+dedicated `5610 - Invoice price variance` account as a sibling of `5360 - Product Expense` in its
+own Cost-of-Goods-Sold P&L breakdown — confirmed via the "Pérdidas y Ganancias"/"Profit & Loss"
+report for both charts: GOClient's Spanish-PGC-style chart ("Árbol de cuentas GO") has no such
+account at all, its whole "Aprovisionamientos" group only ever showing `600 - Compras de
+mercaderías`/`610 - Variación de existencias`. There is no dedicated account to create for this
+chart family; the difference is meant to land in the same purchases account.
+
+**Fix:** `cli/src/data-fixes/sql/20260907T180000Z__R34-invoice-price-variance-backfill.sql` — three
+independent, idempotent `UPDATE`s (one per level: `C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`,
+`M_Product_Acct`), each copying that SAME row's own `P_Expense_Acct` into
+`P_InvoicePriceVariance_Acct` when the latter is NULL and the former is not. Deliberately does NOT
+touch `P_PurchasePriceVariance_Acct` (the sibling column for `ProductInfo.ACCTTYPE_P_PPV`): its
+Classic UI field on this same tab is `isactive='N'` (Etendo turned it off), and no purchasing
+document class in core ever requests `ACCTTYPE_P_PPV` — wiring a column nothing reads and the UI
+does not even expose would be unexplained noise. Live-validated: `DRY_RUN` then real apply for
+GOClient (`APPLIED (6 rows)`, all 6 products + 3 categories + the schema default), re-run confirms
+idempotency (`SKIPPED_NOT_NEEDED`), full fleet run → 202/202 tenants `APPLIED`, 0 failed, 0 rows
+left NULL at any of the three levels fleet-wide afterward. The two originally-failing GOClient
+records (a Fernet match at a period-boundary price change, an Agua match valued at average cost
+with no purchase order) both posted successfully afterward with a balanced 3-line entry — the usual
+2 lines plus the variance amount landing as a third line in the very same `Compras de mercaderías`
+account.
+
+**Preventive:** `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` — a new step
+at the very start of `provisionEntityPostingAccounts`, backfilling `C_ACCTSCHEMA_DEFAULT.
+P_InvoicePriceVariance_Acct` from that same row's `P_Expense_Acct` BEFORE the existing
+`PRODUCT_CATEGORY_ACCT_SQL`/`PRODUCT_ACCT_SQL` inserts run (those two already copy
+`d.p_invoicepricevariance_acct` from `C_ACCTSCHEMA_DEFAULT` into every new product/category at
+creation time — fixing the source first is sufficient to cover all three levels for a brand-new
+tenant, with no change needed to those two existing INSERTs). `ONBOARDING_PROVISIONED_THROUGH` was
+deliberately NOT bumped by this change — same reasoning as A7's caveat: the current CUT
+(`2026-09-01T14:00:00Z` at authoring time) already sits behind several other unbumped, individually
+unverified intervening fixes (`R32`/`R33`), and bumping past them on this fix's say-so risks
+silently skipping one of theirs for a brand-new tenant.
 
 ---
 
