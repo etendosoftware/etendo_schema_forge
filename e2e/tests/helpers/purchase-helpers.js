@@ -8,6 +8,7 @@
 import { expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -68,10 +69,18 @@ export async function safeReload(page) {
 /**
  * Dismiss the "Cerrar" success modal if it appears after a confirmation action.
  * Waits for the page to settle after dismissal.
+ *
+ * ETP-5063 replaced the modal with an auto-dismissing toast for confirmations
+ * that create no related document (receipt/invoice) — that path has nothing
+ * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
   const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-  await expect(closeBtn).toBeVisible({ timeout: 30_000 });
+  try {
+    await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
+  } catch {
+    return; // ETP-5063: toast-only path, no modal to dismiss.
+  }
   await closeBtn.click();
   await slow(page);
 }
@@ -533,18 +542,27 @@ async function ensureVendorAddress(page, bpId) {
     await firstInput.fill(VENDOR_FIXTURE_ADDRESS_LINE);
   }
 
-  // Select País — button opens a search dialog with country list
-  const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+  // Select País — button opens a search dialog with country list.
+  // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+  // asterisk inside the same element, so its textContent is "País*" and Playwright
+  // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+  const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
   await paisButton.click();
 
   const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
   await expect(countrySearch).toBeVisible({ timeout: 5_000 });
   await countrySearch.fill('spa');
 
-  const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-    .or(page.getByRole('button', { name: /^spain$/i }))
-    .or(page.locator('button').filter({ hasText: /^España$/ }))
-    .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+  // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+  // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+  // on create), so an unscoped "España" button locator resolves to the FIELD button,
+  // which sits behind the picker overlay — the click then times out on intercepted
+  // pointer events instead of selecting the option.
+  const countryPicker = page.locator('div[style*="z-index: 160"]');
+  const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+    .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+    .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+    .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
   await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
   await countryOption.first().click();
 
@@ -574,6 +592,24 @@ async function ensureVendorAddress(page, bpId) {
  * doc comment) — it just never needs the UI to do so on the common path.
  */
 export async function ensureVendorSetup(page, { navigateTo }) {
+  // ETP-5079: `ensureVendorPaymentFieldsSet` below needs the "PO Payment Method"
+  // selector to offer something, and the AD validation rule behind that field
+  // (`FIN_PaymentMethodsWithAccountIsReceiptControl`) is an EXISTS over
+  // FIN_FINACC_PAYMENTMETHOD, not over the payment-method masters. ETP-5079
+  // emptied the onboarding dataset's financial accounts AND their payment-method
+  // links, so on a fresh tenant that selector is empty and the step below fails
+  // with "element(s) not found" on `option-pOPaymentMethod-*`.
+  //
+  // It only ever worked because `financial-account-cash-close` ("f") runs before
+  // the purchase specs ("p") under `workers: 1` and left an account behind — an
+  // implicit cross-spec dependency, not a real precondition. Provision it here so
+  // every caller works on a genuinely fresh tenant, in any order, in isolation.
+  //
+  // API-only and navigation-free (see financial-account-helpers.js), and it must
+  // run BEFORE the Contacts window loads: the selector's options are fetched by
+  // the form, so creating the link afterwards would not be picked up.
+  await ensureFinancialAccountSetup(page);
+
   await navigateTo(page, 'contacts');
   await slow(page);
 
@@ -782,12 +818,25 @@ export async function saveDraft(page) {
 
 /**
  * Add a product line using the inline-add row.
+ *
+ * Prefer `productName` (a `PRODUCT_FIXTURE_*.name` from product-helpers.js,
+ * ensured by `ensureProductSetup()`) over `productIndex`. ETP-5079 emptied the
+ * onboarding dataset's product list, so on a fresh tenant "the product at index
+ * N" is nothing at all; and on a long-lived dev tenant it is whatever leftover
+ * data a previous run created, which quietly binds the caller's assertions to
+ * an arbitrary record. `productIndex` is kept for callers that genuinely do not
+ * care which product they get (e.g. financial-account-cash-close, which only
+ * needs *a* priced line to collect).
+ *
  * @param {Object} opts
- * @param {number} [opts.productIndex=0] - Which product to pick from the drawer (0-based)
+ * @param {string} [opts.productName] - Exact fixture name to search for and pick
+ *   in the drawer. Takes precedence over `productIndex`.
+ * @param {number} [opts.productIndex=0] - Which product to pick from the drawer
+ *   (0-based). Only used when `productName` is not given.
  * @param {string} [opts.quantity] - Optional quantity to set
  * @param {boolean} [opts.isFirst=false] - True if this is the first line (uses empty-state button)
  */
-export async function addProductLine(page, { productIndex = 0, quantity, isFirst = false } = {}) {
+export async function addProductLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
   // Click add-line button — retry the whole click→inline-add-row sequence
   if (isFirst) {
     const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
@@ -823,22 +872,38 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   }).toPass({ timeout: 20_000 });
   await slow(page);
 
-  // Select the product by index — fall back to first if nth doesn't exist.
+  // Narrow the drawer to the requested fixture BEFORE resolving options, so the
+  // list the index/first-match runs against is already the filtered one. Typing
+  // into the search box re-queries the backend, so the `hasText` filter below is
+  // a second, client-side guarantee rather than the only one.
+  if (productName) {
+    const searchInput = page.getByTestId('product-search-input');
+    await expect(searchInput).toBeVisible({ timeout: 10_000 });
+    await searchInput.fill(productName);
+  }
+
+  // Select the product by name when one was given, otherwise by index — falling
+  // back to first if nth doesn't exist.
   // Retry the whole click sequence if the element detaches from the DOM mid-click
   // (the ProductSearchDrawer re-renders its entire list when waterfall/pagination
   // fetches complete, which can replace the <button> between locator resolution
   // and the actual pointer event — see ETP-4567 QA flaky-test investigation).
-  const allProducts = page.locator('[data-testid^="product-search-option-"]');
+  const optionLocator = page.locator('[data-testid^="product-search-option-"]');
+  const allProducts = productName ? optionLocator.filter({ hasText: productName }) : optionLocator;
   // Two different async events, not one: the drawer opening (checked above) and
   // its product list finishing its OWN fetch. 20s covered the drawer; under a
   // slower environment the list can still be mid-fetch when that budget was
   // built, so this needs its own separate wait rather than sharing the first.
-  await expect(allProducts.first()).toBeVisible({ timeout: 30_000 });
+  await expect(allProducts.first(),
+    productName
+      ? `Product "${productName}" should appear in the search drawer — is ensureProductSetup() called for it?`
+      : 'The product search drawer should offer at least one product — is ensureProductSetup() called?',
+  ).toBeVisible({ timeout: 30_000 });
 
   let productCalloutResponse;
   await expect(async () => {
     const count = await allProducts.count();
-    const product = allProducts.nth(Math.min(productIndex, count - 1));
+    const product = productName ? allProducts.first() : allProducts.nth(Math.min(productIndex, count - 1));
 
     // Start listening for callout (price/tax fill) BEFORE clicking the product
     productCalloutResponse = page.waitForResponse(
@@ -1048,14 +1113,34 @@ export async function openDraftRow(page, { label = 'draft row' } = {}) {
  * Click the confirm button (action-save) on a draft document.
  * In draft mode, action-save is the "Confirmar" button.
  */
-export async function clickConfirmButton(page) {
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {RegExp|string} [expectedModalText] - optional text that should become visible
+ *   right after the click (e.g. the confirm modal's title). When given, the click is
+ *   retried until that text appears — this class of flake showed up under a loaded CI
+ *   agent as the click landing but the modal not mounting within a single flat wait,
+ *   same environment-tail-latency shape as the lines-count and product-search waits
+ *   fixed elsewhere in this file. Safe to retry here: by this point in every caller's
+ *   flow the record is already persisted, so runDraftModeConfirm's own pre-checks
+ *   (flushPendingLines / maybeSaveBeforeConfirm) are no-ops — this click only opens a
+ *   client-side modal, it does not resubmit anything.
+ */
+export async function clickConfirmButton(page, expectedModalText) {
   const confirmBtn = page.getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
   // Wait for enabled — the button stays disabled while a save is in-flight
   // or while BP callouts are still propagating derived fields.
   await expect(confirmBtn).toBeEnabled({ timeout: 15_000 });
-  await confirmBtn.click();
-  // Caller is responsible for waiting on the modal/response that follows
+
+  if (expectedModalText) {
+    await expect(async () => {
+      await confirmBtn.click({ timeout: 3_000 });
+      await expect(page.getByText(expectedModalText).first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+  } else {
+    await confirmBtn.click();
+  }
+  // Caller is responsible for waiting on any other modal/response that follows
   await slow(page);
 }
 

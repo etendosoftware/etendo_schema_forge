@@ -92,7 +92,7 @@ const BUG_LINE = {
   id: 'mock-so-line-bug-001',
   lineNo: 10,
   product: 'prod-1',
-  'product$_identifier': 'Cerveza',
+  'product$_identifier': 'Test Product',
   orderedQuantity: 1,
   listPrice: 44,
   discount: 10,
@@ -122,7 +122,7 @@ const CLEAN_LINE = {
   id: 'mock-so-line-clean-001',
   lineNo: 10,
   product: 'prod-1',
-  'product$_identifier': 'Cerveza',
+  'product$_identifier': 'Test Product',
   orderedQuantity: 2,
   listPrice: 100,
   discount: 0,
@@ -227,14 +227,21 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     // panel's arithmetic is unaffected by Task 3 and still matches ETP-4017's
     // decomposition. Tax, however, is derived from the RAW grandTotalAmount
     // (43.56 − 37.22ish), so it lands on 6.34, not the decomposed 3.72.
-    const subtotal = parseAmount(
-      (await page.getByTestId('totals-row-subtotal-value').textContent()) || '',
-    );
-    const tax = parseAmount(
-      (await page.getByTestId('totals-row-tax-value').textContent()) || '',
-    );
-    expect(subtotal).toBeCloseTo(37.22, 2);
-    expect(tax).toBeCloseTo(6.34, 2);
+    // Read + assert as a retry loop, not a one-shot read: the panel can
+    // briefly render an intermediate live-recomputed value before settling
+    // on the ETP-4777 Task 3 persisted-verbatim figures asserted below —
+    // same render-race shape `pollAmount` above guards against for `total`,
+    // just with a non-zero-but-wrong value instead of an empty one.
+    await expect(async () => {
+      const subtotal = parseAmount(
+        (await page.getByTestId('totals-row-subtotal-value').textContent()) || '',
+      );
+      const tax = parseAmount(
+        (await page.getByTestId('totals-row-tax-value').textContent()) || '',
+      );
+      expect(subtotal).toBeCloseTo(37.22, 2);
+      expect(tax).toBeCloseTo(6.34, 2);
+    }).toPass({ timeout: 10_000 });
   });
 
   test('invariant: displayed subtotal + tax === displayed total (ETP-4017 case)', async ({ page }) => {

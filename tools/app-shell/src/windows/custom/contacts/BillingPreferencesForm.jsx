@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { extractApiErrorMessage } from '@/lib/apiError';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
@@ -71,6 +73,53 @@ function DiscountSelect({ value, options, onChange, loading }) {
         data-testid="ChevronDown__7f0756" />
     </div>
   );
+}
+
+// ─── Discount change helpers ─────────────────────────────────────────────────
+// Each branch of handleDiscountChange (delete/update/create) is extracted into
+// its own helper to keep the dispatcher's cognitive complexity low. Behavior
+// (requests, bodies, success/error toasts, state updates) is unchanged.
+
+async function deleteDiscount(discountRecord, apiFetch, ui, setDiscountRecord) {
+  try {
+    const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDiscountRecord(null);
+      toast.success(ui('discountDeleteSuccess'));
+    } else {
+      toast.error(await extractApiErrorMessage(res));
+    }
+  } catch (err) {
+    toast.error(err.message || ui('discountDeleteError'));
+  }
+}
+
+async function updateDiscount(discountRecord, newDiscountId, apiFetch, setDiscountRecord) {
+  const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ discount: newDiscountId }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    setDiscountRecord(d?.response?.data?.[0] ?? { ...discountRecord, discount: newDiscountId });
+  }
+}
+
+async function createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRecord) {
+  const res = await apiFetch(`/basicDiscount?parentId=${bpId}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      discount: newDiscountId,
+      lineNo: 10,
+      applyInOrder: 'Y',
+      customer: data?.customer ? 'Y' : 'N',
+      vendor: data?.vendor ? 'Y' : 'N',
+    }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    setDiscountRecord(d?.response?.data?.[0] ?? null);
+  }
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
@@ -196,34 +245,13 @@ export default function BillingPreferencesForm(props) {
     try {
       if (!newDiscountId && discountRecord?.id) {
         // Clear: delete existing record
-        await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
-        setDiscountRecord(null);
+        await deleteDiscount(discountRecord, apiFetch, ui, setDiscountRecord);
       } else if (discountRecord?.id) {
         // Update existing record
-        const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ discount: newDiscountId }),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setDiscountRecord(d?.response?.data?.[0] ?? { ...discountRecord, discount: newDiscountId });
-        }
+        await updateDiscount(discountRecord, newDiscountId, apiFetch, setDiscountRecord);
       } else if (newDiscountId) {
         // Create new record with required auto-flags
-        const res = await apiFetch(`/basicDiscount?parentId=${bpId}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            discount: newDiscountId,
-            lineNo: 10,
-            applyInOrder: 'Y',
-            customer: data?.customer ? 'Y' : 'N',
-            vendor: data?.vendor ? 'Y' : 'N',
-          }),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setDiscountRecord(d?.response?.data?.[0] ?? null);
-        }
+        await createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRecord);
       }
     } finally {
       setSaving(false);

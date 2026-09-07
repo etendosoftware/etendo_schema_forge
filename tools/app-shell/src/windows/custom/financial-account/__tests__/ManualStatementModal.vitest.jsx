@@ -99,6 +99,14 @@ vi.mock('@/hooks/useMovementLookups', () => ({
 }));
 
 import { ManualStatementModal } from '../ManualStatementModal.jsx';
+// PSD-23 — the line inputs cap their length from this single source of truth (transcribed
+// from the contract's bankStatementLines maxLengths), so assert against the constants, not
+// only against the literal numbers.
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS } from '../fieldLengthValidation.js';
+// The locked row renders its amounts through the same canonical money formatter the modal
+// uses (makeMoneyFormatter -> formatCurrency), so assert against its real output instead of
+// a hand-written '100,00 EUR' that would also pass with the wrong locale/grouping.
+import { formatCurrency } from '@/lib/formatCurrency';
 
 function renderModal(overrides = {}) {
   const props = {
@@ -312,6 +320,68 @@ describe('ManualStatementModal', () => {
     expect(payload.lines[0].description).toBe('Comisión banco');
   });
 
+  /**
+   * PSD-23 — the per-line Reference No / Description cells write AD columns with a hard
+   * database length (30 / 2000). Before the fix an over-long paste travelled to the backend
+   * and came back as a 400 from Core's StringPropertyValidator.
+   *
+   * Unlike the other three Cuenta Financiera modals, these two do NOT show an inline error:
+   * the cells live in a dense grid with no room for error text, and this modal already
+   * reports its validation as a submit-time toast (onProcess). They use the native
+   * `maxLength` attribute instead — the same pattern AccountFormStep and EditAccountModal
+   * already use in this window — so the browser truncates on typing AND on paste and the
+   * invalid value never comes into existence.
+   *
+   * Both the literal number and the shared constant are asserted: the literal catches an
+   * eyeballed edit of the limit, the constant catches the input silently drifting away from
+   * the contract-derived source of truth.
+   */
+  describe('PSD-23 line length limits', () => {
+    it('caps the Reference No cell at the statementLineReference length (30)', () => {
+      renderModal();
+      const ref = within(firstEditRow()).getByTestId('manual-line-ref');
+
+      expect(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference).toBe(30);
+      // Reflected DOM property (a number) and the rendered attribute (a string): the second
+      // is what a paste is actually truncated against.
+      expect(ref.maxLength).toBe(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference);
+      expect(ref).toHaveAttribute(
+        'maxlength', String(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference),
+      );
+      expect(ref).toHaveAttribute('maxlength', '30');
+    });
+
+    it('caps the Description cell at the statementLineDescription length (2000)', () => {
+      renderModal();
+      const desc = within(firstEditRow()).getByTestId('manual-line-description');
+
+      expect(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription).toBe(2000);
+      expect(desc.maxLength).toBe(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription);
+      expect(desc).toHaveAttribute(
+        'maxlength', String(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription),
+      );
+      expect(desc).toHaveAttribute('maxlength', '2000');
+    });
+
+    // The cap is a property of the row template, not of the seeded starter row: an added
+    // line writes the very same AD columns, so it must carry the very same limits.
+    it('applies the same caps to a row added with "Add line"', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.click(screen.getByTestId('action-add-line'));
+
+      const rows = screen.getAllByTestId('manual-line-editrow');
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        const cells = within(row);
+        expect(cells.getByTestId('manual-line-ref').maxLength)
+          .toBe(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference);
+        expect(cells.getByTestId('manual-line-description').maxLength)
+          .toBe(FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription);
+      }
+    });
+  });
+
   it('saves as a draft (process=false) from the split menu', async () => {
     const user = userEvent.setup();
     renderModal();
@@ -506,6 +576,73 @@ describe('ManualStatementModal', () => {
 
         expect(updateStatement).not.toHaveBeenCalled();
         expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorLines');
+      });
+
+      /**
+       * ETP-5121 / CP-2 — the exact reported scenario: a PROCESSED statement with two lines, one
+       * of them already reconciled, is reactivated back to Borrador. The reconciled line must stay
+       * locked even though its parent is now a draft, and it must offer no editable control at
+       * all: core's APRM_FIN_BNKSTM_LINE_CHECK_TRG rejects any update/delete of a line whose
+       * FIN_FinAcc_Transaction_ID is set, for every caller, independently of the parent
+       * statement's Processed flag. This already works — this is the regression net for it, next
+       * to the backend-side fix that stops the same line from vanishing off the reconciliation
+       * panel.
+       */
+      it('keeps a reconciled line locked and control-free on a statement reactivated to draft', async () => {
+        linesRef.value = [MATCHED_LINE, FREE_LINE];
+        // Explicitly the post-reactivation state, so the fixture states the scenario rather than
+        // relying on edit mode implying "draft".
+        renderModal({ statement: { ...STATEMENT, processed: false, status: 'DRAFT' } });
+
+        await waitFor(() => expect(screen.getAllByTestId(/^manual-line-matched-/)).toHaveLength(1));
+        const locked = screen.getAllByTestId(/^manual-line-matched-/)[0];
+
+        // Not a styling detail: there is nothing in the row the user could type into or click.
+        expect(within(locked).queryAllByRole('textbox')).toHaveLength(0);
+        expect(within(locked).queryAllByRole('combobox')).toHaveLength(0);
+        expect(within(locked).queryAllByRole('button')).toHaveLength(0);
+        expect(within(locked).queryByTestId('manual-line-date')).not.toBeInTheDocument();
+        expect(within(locked).queryByTestId('manual-line-description')).not.toBeInTheDocument();
+        expect(within(locked).queryByTestId('manual-line-in')).not.toBeInTheDocument();
+        expect(within(locked).queryByTestId('manual-line-out')).not.toBeInTheDocument();
+        expect(within(locked).queryByTestId('manual-line-remove')).not.toBeInTheDocument();
+
+        // Read-only, not hidden: the user still sees what is reconciled, amount included.
+        expect(locked).toHaveTextContent('Ya conciliada');
+        expect(locked).toHaveTextContent('REFM');
+        // Read the raw textContent: toHaveTextContent() whitespace-normalises the received
+        // text, which would not match the non-breaking space formatCurrency puts before the
+        // symbol.
+        expect(locked.textContent).toContain(formatCurrency('EUR', 100));
+
+        // Its unmatched sibling on the same draft stays fully editable — reactivation is useful
+        // precisely because the free lines can still be fixed.
+        expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
+        expect(screen.getByTestId('manual-line-description')).toBeInTheDocument();
+      });
+
+      /**
+       * ETP-5121 / CP-2, save side: editing the free line of a reactivated statement must send
+       * ONLY that line. A payload carrying the reconciled one would be asking the backend to
+       * rewrite a row the trigger forbids touching, and the whole save would fail.
+       */
+      it('saves only the free line when editing a statement reactivated to draft', async () => {
+        linesRef.value = [MATCHED_LINE, FREE_LINE];
+        const user = userEvent.setup();
+        renderModal({ statement: { ...STATEMENT, processed: false, status: 'DRAFT' } });
+
+        await waitFor(() => expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1));
+        await user.clear(screen.getByTestId('manual-line-description'));
+        await user.type(screen.getByTestId('manual-line-description'), 'Libre editada');
+        await user.click(screen.getByTestId('manual-statement-save'));
+
+        await waitFor(() => expect(updateStatement).toHaveBeenCalledTimes(1));
+        const payload = updateStatement.mock.calls[0][0];
+        expect(payload.lines).toHaveLength(1);
+        expect(payload.lines[0].reference).toBe('REFF');
+        expect(payload.lines[0].description).toBe('Libre editada');
+        expect(payload.lines.some((l) => l.reference === 'REFM')).toBe(false);
+        expect(toastError).not.toHaveBeenCalled();
       });
     });
 

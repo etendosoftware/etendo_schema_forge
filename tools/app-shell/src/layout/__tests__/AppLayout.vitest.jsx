@@ -17,9 +17,15 @@ vi.mock('@/auth/useLogout.js', () => ({
 // Mock react-router-dom. useSearchParams is a vi.fn() (not a plain arrow) so
 // the embedded-mode test below can override it for a single render via
 // mockReturnValueOnce, the same pattern already used for useRoleMenu.
+// ETP-5144: useNavigate is stubbed too, because AppLayout now mounts
+// WalkthroughProvider (which navigates on the user's behalf between the steps
+// of a guided flow). A module-level fn keeps its identity stable across
+// renders, matching what a real router hands out.
+const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useLocation: () => ({ pathname: '/sales-order/123' }),
+  useNavigate: () => navigateMock,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
 }));
 
@@ -103,6 +109,10 @@ vi.mock('@/components/support/SupportChatContext.jsx', () => ({
 
 vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
   SupportChatWidget: () => <div data-testid="support-chat-widget">SupportChatWidget</div>,
+}));
+
+vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
+  WebMcpEtendoGoTools: () => <div data-testid="webmcp-agent-tools" />,
 }));
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
