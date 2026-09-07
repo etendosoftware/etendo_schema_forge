@@ -176,12 +176,22 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
       );
     });
 
+    it('normalizes resolvedActions to an array before the read-only branch', () => {
+      // ETP-5116 (Sonar S3358): the array-normalization ternary was extracted out
+      // of visibleActions' own ternary to avoid nesting — it must still run, and
+      // still fall back to [] for a non-array resolvedActions.
+      assert.match(
+        iife,
+        /const\s+normalizedActions\s*=\s*Array\.isArray\(resolvedActions\)\s*\?\s*resolvedActions\s*:\s*\[\]/,
+      );
+    });
+
     it('computes visibleActions by filtering out visible === false entries (non-read-only branch)', () => {
-      // ETP-5116 wrapped the original expression in a `windowReadOnly ? [] : ...`
+      // ETP-5116 wraps the normalized list in a `windowReadOnly ? [] : ...`
       // ternary — the filter itself must still run, verbatim, on the else branch.
       assert.match(
         iife,
-        /const\s+visibleActions\s*=\s*windowReadOnly\s*\?\s*\[\]\s*:\s*\(Array\.isArray\(resolvedActions\)\s*\?\s*resolvedActions\s*:\s*\[\]\)\s*\.filter\(a\s*=>\s*a\.visible\s*!==\s*false\)/,
+        /const\s+visibleActions\s*=\s*windowReadOnly\s*\?\s*\[\]\s*:\s*normalizedActions\s*\.filter\(a\s*=>\s*a\.visible\s*!==\s*false\)/,
       );
     });
 

@@ -67,10 +67,10 @@ export function DetailMoreActionsMenu({
   // action through the kebab menu — filter the whole list out, mirroring the
   // same "!windowReadOnly && ..." pattern DetailView.jsx already applies to
   // renderSaveActions/processes/detailProcesses (see ETP-5116 sibling commit).
+  const normalizedActions = Array.isArray(resolvedActions) ? resolvedActions : [];
   const visibleActions = windowReadOnly
     ? []
-    : (Array.isArray(resolvedActions) ? resolvedActions : [])
-      .filter(a => a.visible !== false);
+    : normalizedActions.filter(a => a.visible !== false);
   // Every existing customMenuContent implementation (GoodsShipmentMoreMenu,
   // InventoryMenuContent, InternalConsumptionActions) fires a write action
   // (post/void/update quantities) on click, so it must be gated the same way
