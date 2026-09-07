@@ -38,7 +38,9 @@
           "visibility": "editable"
         },
         "redeme": {
-          "visibility": "editable"
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "defaultValue": "N"
         },
         "monitordate": {
           "visibility": "editable"

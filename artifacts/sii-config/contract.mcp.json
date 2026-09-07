@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-26T18:48:57.280Z",
-  "contractChecksum": "7f77fb968cbbd34c",
+  "updatedAt": "2026-09-07T11:22:14.638Z",
+  "contractChecksum": "2a1828f6c1572919",
   "apiPrediction": {
     "specName": "sii-config",
     "baseUrl": "/sws/neo/sii-config",
@@ -175,10 +175,6 @@
             "required": true,
             "defaultValue": "N"
           },
-          "redeme": {
-            "required": true,
-            "defaultValue": "N"
-          },
           "monitordate": {
             "defaultValue": "01-01-2017"
           },
@@ -244,7 +240,6 @@
         "entornoDeProduccin",
         "adjuntarArchivosXML",
         "recc",
-        "redeme",
         "postedInvoices",
         "validHash"
       ],
@@ -272,7 +267,6 @@
           "entornoDeProduccin",
           "adjuntarArchivosXML",
           "recc",
-          "redeme",
           "postedInvoices",
           "validHash"
         ]
@@ -282,5 +276,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "d376ad22ee99bb7e"
+  "checksum": "b7600df07638855f"
 }

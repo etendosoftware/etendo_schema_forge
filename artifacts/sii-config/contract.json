@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-08-13T18:59:30.492Z",
-  "checksum": "7f77fb968cbbd34c",
+  "updatedAt": "2026-09-07T11:22:14.638Z",
+  "checksum": "2a1828f6c1572919",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -214,28 +214,6 @@
             "displayLogic": {
               "raw": "@Insiisystem@ & @Taxtype@='IVA'",
               "evaluable": true
-            }
-          },
-          {
-            "name": "redeme",
-            "apiKey": "redeme",
-            "column": "Redeme",
-            "label": "Subject in REDEME",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "validation": {
-              "required": true,
-              "maxLength": 1
             }
           },
           {
@@ -592,13 +570,6 @@
             }
           },
           {
-            "name": "redeme",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
             "name": "monitordate",
             "derivation": {
               "type": "computed",
@@ -777,7 +748,7 @@
             "apiKey": "redeme",
             "column": "Redeme",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1339,14 +1310,6 @@
         "description": "Default value for 'recc' in siiConfiguration should be a string"
       },
       {
-        "id": "t-default-value-type-siiConfiguration-redeme",
-        "category": "default-value-type",
-        "entity": "siiConfiguration",
-        "field": "redeme",
-        "runner": "node",
-        "description": "Default value for 'redeme' in siiConfiguration should be a string"
-      },
-      {
         "id": "t-default-value-type-siiConfiguration-sinceJanuary2017",
         "category": "default-value-type",
         "entity": "siiConfiguration",
@@ -1659,14 +1622,6 @@
         "description": "Field 'recc' should be present in siiConfiguration"
       },
       {
-        "id": "t-field-presence-siiConfiguration-redeme",
-        "category": "field-presence",
-        "entity": "siiConfiguration",
-        "field": "redeme",
-        "runner": "node",
-        "description": "Field 'redeme' should be present in siiConfiguration"
-      },
-      {
         "id": "t-field-presence-siiConfiguration-sinceJanuary2017",
         "category": "field-presence",
         "entity": "siiConfiguration",
@@ -1833,14 +1788,6 @@
         "field": "recc",
         "runner": "node",
         "description": "Field 'recc' should have type 'boolean' in siiConfiguration"
-      },
-      {
-        "id": "t-field-type-siiConfiguration-redeme",
-        "category": "field-type",
-        "entity": "siiConfiguration",
-        "field": "redeme",
-        "runner": "node",
-        "description": "Field 'redeme' should have type 'boolean' in siiConfiguration"
       },
       {
         "id": "t-field-type-siiConfiguration-sinceJanuary2017",
@@ -2115,6 +2062,14 @@
         "description": "System field 'organization' should exist in backend but not frontend for siiConfiguration"
       },
       {
+        "id": "t-system-field-siiConfiguration-redeme",
+        "category": "system-field",
+        "entity": "siiConfiguration",
+        "field": "redeme",
+        "runner": "node",
+        "description": "System field 'redeme' should exist in backend but not frontend for siiConfiguration"
+      },
+      {
         "id": "t-system-field-siiConfiguration-taxtype",
         "category": "system-field",
         "entity": "siiConfiguration",
@@ -2162,21 +2117,21 @@
       }
     ],
     "summary": {
-      "total": 121,
+      "total": 119,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 13,
+        "default-value-type": 12,
         "displaylogic-evaluable": 9,
         "displaylogic-valid": 9,
-        "field-presence": 22,
-        "field-type": 22,
+        "field-presence": 21,
+        "field-type": 21,
         "rule-declared": 16,
-        "system-field": 22,
+        "system-field": 23,
         "visibility": 2
       },
       "byRunner": {
-        "node": 121,
+        "node": 119,
         "junit": 0
       }
     }
