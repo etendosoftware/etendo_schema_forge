@@ -18230,6 +18230,7 @@
     "cpPisSubtitle": "Confirm the details before authorizing the operation with your bank.",
     "cpPisTemplateLabel": "Payment template",
     "cpPisIbanLabel": "Destination IBAN",
+    "cpPisIbanPlaceholder": "Search or enter destination IBAN...",
     "cpPisIbanUseTyped": "Use «{iban}»",
     "cpPisBbanLabel": "Creditor BBAN",
     "cpPisBbanPlaceholder": "BBAN account number",
