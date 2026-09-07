@@ -2116,14 +2116,28 @@ export default function ReportViewerPage() {
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
 
+  // ETP-5116 — computed before the effect below so the effect can short-circuit
+  // the catalog fetch (and any other finance-only side effect added later)
+  // whenever finance access is denied, instead of only blocking the render.
+  // useWindowAccess fails closed to 'none' while windowAccess is still loading,
+  // so an authorized user briefly sees the guard too until it resolves, then
+  // the effect below re-fires once financeAccessDenied flips to false.
+  const financeWindowAccessTier = useWindowAccess('D647D118F5014D00AF47A636B2CD0DD3');
+  const financeAccessDenied = categoryFilter === 'finance' && financeWindowAccessTier === 'none';
+
   useEffect(() => {
+    if (financeAccessDenied) {
+      setReports([]);
+      setLoading(false);
+      return;
+    }
     // raw-fetch-ok: dev-server report catalogue (vite-plugins/report-api.js), no token expected
     fetch('/api/reports')
       .then(r => r.json())
       .then(setReports)
       .catch(() => setReports([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [financeAccessDenied]);
 
   const selectedReport = reportId ? reports.find(r => r.id === reportId) : null;
 
@@ -2143,11 +2157,10 @@ export default function ReportViewerPage() {
   // authenticated user, any role, could reach it by URL regardless of the
   // menu). ReportViewerPage is shared across every report category, so the
   // gate must apply ONLY when the finance category is selected — other
-  // categories sharing this same page are unaffected. Checked here, after
-  // every other hook, so hook order stays stable across renders regardless
-  // of the tier (mirrors custom/financial-account/index.jsx).
-  const financeWindowAccessTier = useWindowAccess('D647D118F5014D00AF47A636B2CD0DD3');
-  if (categoryFilter === 'finance' && financeWindowAccessTier === 'none') {
+  // categories sharing this same page are unaffected. financeAccessDenied is
+  // computed above (before the fetch effect) so both the effect and this
+  // render guard stay in lock-step.
+  if (financeAccessDenied) {
     return (
       <WindowAccessGuard
         windowId="D647D118F5014D00AF47A636B2CD0DD3"
