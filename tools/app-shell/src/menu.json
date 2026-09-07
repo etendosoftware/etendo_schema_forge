@@ -201,7 +201,8 @@
           "name": "report-viewer-inventory",
           "label": "Reports",
           "favname": "Inventory Reports",
-          "path": "report-viewer?category=inventory"
+          "path": "report-viewer?category=inventory",
+          "windowId": "6346B88619F948F9A42224BDB0B239FA"
         },
         {
           "name": "warehouse-storage-bins",
