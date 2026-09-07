@@ -324,13 +324,24 @@ Renders one or more additional status pills next to the standard document-status
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. |
+| `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. A field on the AD **posting-status** domain (`Posted`) is resolved by `lib/postedStatus.js` first — see *Posting-status fields* below. |
 | `trueKey` | string | i18n key (resolved through `useUI()`) shown when the field is truthy. Renders with `tone: "success"`. |
 | `falseKey` | string | i18n key shown when the field is falsy. Renders with `tone: "warning"`. Omit for a **one-sided pill** that only appears in the truthy state — `DetailView` guards against rendering the generator's literal `'undefined'` fallback and hides the pill instead when the current value's key is missing. |
 | `visibleWhenCapability` | string | Optional. Same capability gate as the field-level property of the same name (see `visibleWhenCapability` under Grid cell flags below) — the pill is omitted entirely (not just disabled) when the named capability resolves `false` for the current role. |
 | `_note` | string | Optional free-text comment, ignored at runtime. Useful for documenting *why* the pill exists inline in `decisions.json`. |
 
 **Mechanics:** the generator resolves this array into an `extraBadges` array of `{ key: field, type: 'statusPill', trueKey, falseKey, visibleWhenCapability }` entries, emitted inside an `@sf-generated-start extraBadges:{Window}` marker and passed to `<DetailView extraBadges={extraBadges} />`. `DetailView.jsx` renders each `statusPill` entry as a `DocumentStatusPill` when the field's value is non-null and a resolvable i18n key exists for its current state. (`extraBadges` also accepts an older plain-badge shape — `{ key, label, style, hideWhenStatus, when }` — predating the `statusPill` type; new windows should always go through the `statusPills` decision above, which emits `type: 'statusPill'` entries, not the legacy shape directly.)
+
+**Posting-status fields are not two-state (ETP-5075).** The AD `Posted` column is a
+17-code domain (`Y`, `N`, `E`, `i`, `p`, `T`, `D`, `b`, `c`, `C`, `L`, `NC`, `AD`, `DT`,
+`NO`, `y`, `d`); only `Y`/`N` mean posted/not-posted and every other code is the REASON a
+posting attempt failed. `tools/app-shell/src/lib/postedStatus.js` is the single registry
+that maps those codes to a label and a tone, and **both** the detail pill and the grid
+badge resolve through it, so they can never disagree on the same raw value again — before
+it existed, each renderer had its own hardcoded `'Y'`/`'N'` allowlist and the same record
+showed a bare `—` in the list while the pill claimed "Not posted". `trueKey`/`falseKey`
+still drive `Y`/`N` exactly as documented above; the registry only covers the other codes,
+which is what keeps already-shipped windows unchanged.
 
 **Real example — `posted` on `purchase-invoice`/`sales-invoice` (ETP-4520) and `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707, 3rd window on the pattern):** shown above. Pair with the field-level `badge`/`badgeLabels`/`badgeVariants` properties (see Grid cell flags below) to show the same true/false state as both a grid-column pill and a form-header pill, driven by one `posted` field.
 

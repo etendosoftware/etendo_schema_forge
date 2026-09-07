@@ -88,6 +88,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { resolveStatusPill } from '@/lib/postedStatus.js';
 import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
@@ -2709,26 +2710,17 @@ export function DetailView({
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
   // extraBadges rendering — split by type to keep each path simple.
-  // statusPill: a DocumentStatusPill from i18n keys. One-sided badges (only a
-  // trueKey declared) hide on the false value — the generator emits the missing
-  // side as the literal string 'undefined', which must never reach the screen.
+  // statusPill: a DocumentStatusPill whose label/tone come from resolveStatusPill,
+  // shared with the grid so both can never disagree on the same raw value (ETP-5075).
   const renderStatusPillBadge = (b) => {
     // ETP-4520 — omit the pill entirely when gated by a capability the current
     // role doesn't hold (e.g. `posted` on sales-invoice/purchase-invoice).
     if (!isCapabilityVisible(capabilities, b.visibleWhenCapability)) return null;
     const val = data[b.key];
     if (val == null) return null;
-    const isTrue = val === true || val === 'Y' || val === 'true';
-    const labelKey = isTrue ? b.trueKey : b.falseKey;
-    if (!labelKey || labelKey === 'undefined') return null;
-    return (
-      <DocumentStatusPill
-        key={b.key}
-        status={isTrue ? 'Y' : 'N'}
-        label={ui(labelKey)}
-        tone={isTrue ? 'success' : 'warning'}
-        data-testid={`DocumentStatusPill__${b.key}`} />
-    );
+    const pill = resolveStatusPill(b, val, ui);
+    if (!pill) return null;
+    return <DocumentStatusPill key={b.key} {...pill} data-testid={`DocumentStatusPill__${b.key}`} />;
   };
   const renderLegacyBadge = (b) => {
     const when = b.when !== undefined ? b.when : true;
