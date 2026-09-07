@@ -139,7 +139,9 @@
           "searchable": true,
           "seq": 30,
           "dot": false,
-          "section": "principal"
+          "section": "principal",
+          "required": true,
+          "_note": "ETP-4976: force required so the date-conditional filter (AdvancedFilterBuilder.getOperatorsForColumn) hides isNull/isNotNull, matching accountingDate's 4-operator set. Safe: /amortization has no manual create — the only entry path is generating from /assets, which always fills StartDate. Field remains visibility: readOnly."
         },
         "totalAmortization": {
           "visibility": "readOnly",

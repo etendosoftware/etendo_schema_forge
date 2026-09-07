@@ -100,7 +100,25 @@ React SPA -> /sws/neo/email-contracts/{contractName}/send
   -> External email provider
 ```
 
-The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads. See [transactional-email-framework.md](transactional-email-framework.md), [email-contracts.md](email-contracts.md), and [ops/transactional-email-security.md](ops/transactional-email-security.md).
+The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads.
+
+Reading back what was sent is a separate, read-only leg (ETP-5069):
+
+```
+React SPA (EmailsCard) -> GET /sws/neo/documentemailhistory?recordId={id}
+  -> SFDocumentEmailHistory (NEO pseudo-spec bridge)
+  -> ETGO_EMAIL_SEND_LOG (client-level; DAL readable-client/org filtering IS the access rule)
+```
+
+The two legs write and read **different** tables on purpose: `ETGO_Email_Safety` stays the
+client-0 anti-abuse ledger with hashed recipients and no copy, while `ETGO_EMAIL_SEND_LOG` is the
+per-tenant readable history (recipients, subject, operator message in clear) that only the six
+document-send contracts opt into. That split is an explicit privacy decision — see
+[ops/transactional-email-security.md](ops/transactional-email-security.md) → *Email Audit Redaction
+& Storage Policy* before changing either. See also
+[transactional-email-framework.md](transactional-email-framework.md),
+[email-contracts.md](email-contracts.md), and
+[email-inventory.md](email-inventory.md) §5.
 
 ## Optional Global Semantic Search
 
@@ -390,6 +408,10 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `SFUpsertEntity` | `...webhooks` | Webhook: create/update entity |
 | `SFUpsertField` | `...webhooks` | Webhook: create/update field |
 | `SFPopulateSpec` | `...webhooks` | Webhook: populate from AD |
+| `SFDocumentEmailHistory` | `...webhooks` | Webhook: one document's readable email send history (ETP-5069). Reached only via the NEO pseudo-spec bridge; no admin mode, no role gate — DAL's readable-client/org filtering is the access rule. |
+| `TransactionalEmailService` | `...schemaforge.email` | Executes email contracts; single choke point that writes both the audit row and the history row |
+| `DalEmailSendLogStore` | same | Writes `ETGO_EMAIL_SEND_LOG` rows, without admin mode, so the row carries the real tenant and sender |
+| `DalEmailSafetyStore` | same | Writes the client-0 anti-abuse ledger `ETGO_Email_Safety` (hashed recipients, no copy) |
 
 ### Database Tables
 
@@ -398,6 +420,8 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `ETGO_SF_SPEC` | 1 per window/process/report | Top-level spec: name, type (W/P/R), linked AD_Window or AD_Process |
 | `ETGO_SF_ENTITY` | 1 per exposed tab | Entity: HTTP method flags, CDI hook qualifier, sequence |
 | `ETGO_SF_FIELD` | 1 per exposed column | Field: included/excluded, read-only, default value |
+| `ETGO_EMAIL_SEND_LOG` | 1 per send attempt, for the six document-send email contracts only | Readable per-document email history: recipients, subject, operator message, download link, status, sender — **in clear**. Client/Organization level (`ACCESSLEVEL` 3). Backoffice window: *Email Send History* (read-only). Indexed on `RECORD_ID` and `SENT_AT`. |
+| `ETGO_Email_Safety` | 1 per send attempt, every contract, plus throttle and kill-switch rows | Anti-abuse ledger, discriminated by `RECORD_TYPE`. Client 0; recipients SHA-256 hashed; no subject, no body. Not a readable history — see `ops/transactional-email-security.md`. |
 
 ### API Endpoints
 
@@ -413,6 +437,8 @@ All URLs relative to `/sws/neo`:
 | `/{spec}/{entity}/{id}/action/{col}` | POST | Execute button action |
 | `/{spec}` | GET, POST | Process spec: describe / execute |
 | `/{spec}` | GET, POST | Report spec: describe / generateReport (binary file response) |
+| `/email-contracts/{contractName}/send` | POST | Execute a transactional email contract |
+| `/documentemailhistory?recordId=<id>[&specName=<spec>]` | GET | One document's email send history, newest first. Envelope `{"result": "<JSON string>"}` — `result` is a STRING the caller parses — or `{"error": "<message>"}` (HTTP 500). Row shape: `modules/com.etendoerp.go/docs/neo-headless.md` §8j |
 
 ---
 
