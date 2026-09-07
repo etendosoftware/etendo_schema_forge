@@ -18457,6 +18457,7 @@
     "financeAccountsBankConnectionImportFrom": "Import from",
     "financeAccountsBankConnectionImportTo": "Import to",
     "financeAccountsBankConnectionImportRangeInvalid": "The \"Import from\" date cannot be later than the \"Import to\" date.",
+    "financeAccountsBankConnectionImportBeyondFetchInterval": "This bank only provides the last {days} days of transactions. Earlier dates will not be imported.",
     "financeAccountsBankConnectionGrouping": "Statement grouping",
     "financeAccountsBankConnectionGroupingNone": "Default",
     "financeAccountsBankConnectionGroupingPlaceholder": "Select grouping…",

@@ -206,6 +206,57 @@ Field editability in the top section:
   `processProviderTransactions` and re-wrapped into
   `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
   the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **Provider max fetch interval** (ETP-5181). PSD2 providers publish a `max_fetch_interval` — the
+  most days of history they will serve (90 under the regulation's baseline, more for some banks) —
+  stored on `PSD2_PROVIDER.MAX_FETCH_INTERVAL` and browsable in the AD window **Bank Provider**.
+  `GET status` now exposes it as `maxFetchInterval`, an **int**, resolved by
+  `FinancialAccountBankConnectionSupport.maxFetchIntervalOf(connection)` from the active
+  connection's `providerCode` — deliberately NOT from the `FIN_FinancialAccount.psd2Provider` FK,
+  which is provider *memory*: it is written when an account is created offline with a bank chosen
+  and survives a reconnect to a different bank until the account is relinked, so reading it would
+  let the field advisory name a different number than the sync warning. The providerCode route
+  reproduces `SaltEdgeConnectionHelper.findProviderMaxFetchInterval` exactly, so the two cannot
+  disagree. The key sits **inside** the `connection != null` block (an account with no active
+  connection cannot sync at all — `fetchAccountTransactions` throws
+  `PSD2_NoActiveConnectionForAccount` before the interval check) and is **omitted**, never
+  defaulted, when the provider declares no limit or stores 0.
+
+  The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the top of the
+  panel, above the date grid**, mirroring the re-authorization banner's shape (same
+  `--status-warning-bg` / `--status-warning-fg` tokens, same `AlertTriangle`) minus the action
+  button — there is nothing to click, the fix is to edit the date right below. It started life as
+  one line of small print under the grid and was simply not read, sitting next to the far louder
+  reauth banner. Warning tokens rather than `text-destructive`: nothing is wrong with the value
+  and Save stays enabled. It shows whenever
+  `importFromDate < today − N`. **Strict `<`, on ISO strings, with the bound from
+  `calendarISODaysAgo` in `lib/dateOnly.js`** — the local-time `Date` constructor, so month/year
+  roll over and DST cannot shift it, and never `toISOString().slice(0,10)`, which reads yesterday
+  west of UTC. Strict is not a style choice: the module computes
+  `daysDiff = (now − importFromDate) / 86400000` with integer division and warns on
+  `daysDiff > maxInterval`, so `today − 90` against a limit of 90 does NOT warn and `today − 91`
+  does. `<=` would advise a full day earlier than the sync ever warns. Derived from `form`, not
+  `initial`, so it shows on open for an already-saved out-of-range date and tracks edits live.
+
+  The advisory is **advisory**: it does not clamp the date, does not feed `saveBlocked`, and does
+  not block the sync. That is deliberate, and the reason is structural — **the date range is never
+  sent to Salt Edge.** `BankIntegrationUtils.buildSaltEdgeTransactionsEndpoint` sends only
+  `connection_id` and `account_id` (its own javadoc records that Salt Edge ignores
+  `from_date`/`to_date`); the window is applied client-side in
+  `BankStatementHelper.shouldIncludeTransaction`. So an over-long range loses nothing inside the
+  period that IS available, and clamping it would only destroy user intent for the day the
+  provider's history deepens. The sync-side warning needed no new code: the module already
+  downgrades `SUCCESS` to `WARNING` and appends `PSD2_ImportDateBeyondMaxInterval`, which
+  `lib/backendErrors.js` already translates — ETP-5181 only changed the toast **type** from
+  `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab`, since a
+  WARNING is something the user has to act on. Known gap: the same branch in
+  `AccountsHeaderTable.jsx` is being rewritten on the ETP-5140 branch and was left untouched here
+  to avoid a conflict.
+
+  Caveat worth knowing: `fetchAndRegisterProvider` upserts a **hard-coded 90** when the Salt Edge
+  provider-details call fails, so the advisory can confidently cite 90 for a bank that actually
+  offers more. Pre-existing, and shared with `AisConnectionCallback` in the PSD2 module, so both
+  connect paths agree — fixing it means making the fallback `null` on both sides, which is a
+  separate change.
 - **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
   `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
   calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced

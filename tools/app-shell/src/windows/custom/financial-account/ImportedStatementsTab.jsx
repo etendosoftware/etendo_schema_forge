@@ -184,7 +184,10 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
       if (res?.status === 'ERROR') {
         toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
       } else if (res?.status === 'WARNING') {
-        toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
+        // ETP-5181: same reasoning as EditAccountModal's notifySyncResult — a WARNING means the
+        // sync completed but something needs the user's attention (typically an import range
+        // reaching past the provider's max fetch interval), which toast.info under-sells.
+        toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
       } else {
         toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
       }

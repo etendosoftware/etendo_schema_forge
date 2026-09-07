@@ -18693,6 +18693,7 @@
     "financeAccountsBankConnectionImportFrom": "Importar desde",
     "financeAccountsBankConnectionImportTo": "Importar hasta",
     "financeAccountsBankConnectionImportRangeInvalid": "La fecha «Importar desde» no puede ser posterior a «Importar hasta».",
+    "financeAccountsBankConnectionImportBeyondFetchInterval": "Este banco sólo proporciona los últimos {days} días de movimientos. Las fechas anteriores no se importarán.",
     "financeAccountsBankConnectionGrouping": "Agrupación de extractos",
     "financeAccountsBankConnectionGroupingNone": "Por defecto",
     "financeAccountsBankConnectionGroupingPlaceholder": "Seleccionar agrupación…",
