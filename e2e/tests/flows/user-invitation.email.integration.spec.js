@@ -300,6 +300,36 @@ async function createInvitationAsAdmin(request, sessionToken, email) {
   return invitationBody;
 }
 
+/**
+ * The app-relative path for an invitation link, dropping the origin the BACKEND
+ * baked into it.
+ *
+ * The link is built server-side from `etendo.go.app.baseUrl`, which does NOT
+ * have to match the E2E `BASE_URL` -- locally it is :3100 while the run serves
+ * the app on the Playwright preview port. And `page.goto()` with an ABSOLUTE
+ * url ignores the context's `baseURL`, so navigating the raw link silently
+ * lands on an origin with no app on it and every testid then times out. That
+ * is exactly how this spec failed: `expectInvitationResolves` passed against
+ * the backend one line earlier, so the invitation was fine all along.
+ *
+ * This is the same reasoning `verificationTokenFromEmail` documents for the
+ * onboarding welcome mail (and why `onboarding-register.integration.spec.js`
+ * navigates `/onboarding?verifyToken=...` relatively), and the same one
+ * `expectInvitationResolves` already applies by keeping only the token.
+ *
+ * Kept local rather than added to `helpers/email-sink.js`: that module's job is
+ * reading the sink, and the assertions on the mail's absolute link (it must
+ * contain `/invite?token=` and appear in the body) still want
+ * `invitationLinkFromEmail` untouched.
+ */
+function invitePathFromLink(inviteLink) {
+  const token = new URL(inviteLink).searchParams.get('token');
+  if (!token) {
+    throw new Error(`invitation link carried no token: ${inviteLink}`);
+  }
+  return `/invite?token=${encodeURIComponent(token)}`;
+}
+
 async function acceptExistingInvitation(browser, inviteLink, email, password, {
   evidenceStem = 'ETP-4894-existing-account',
   afterDashboard = null,
@@ -316,7 +346,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     }
   });
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-shared-login')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#login-email')).toHaveValue(email);
     await expect(page.locator('#login-email')).toBeDisabled();
@@ -348,7 +378,7 @@ async function verifyAcceptedLinkIsIdempotent(browser, inviteLink, evidencePath)
   const context = await browser.newContext({ baseURL: process.env.BASE_URL });
   const page = await context.newPage();
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
     await captureScreenshot(page, { path: evidencePath, fullPage: true });
   } finally {
@@ -360,7 +390,7 @@ async function acceptNewInvitation(browser, inviteLink, email) {
   const context = await browser.newContext({ baseURL: process.env.BASE_URL });
   const page = await context.newPage();
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-new-account')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#reg-email')).toHaveValue(email);
     await expect(page.locator('#reg-email')).toBeDisabled();

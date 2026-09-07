@@ -59,7 +59,7 @@ const ui = (key) => key; // identity translator
 const ACCOUNTS = [
   {
     id: 'a1',
-    name: 'Cuenta de Banco',
+    name: 'Cuenta bancaria de prueba',
     type: 'B',
     iban: 'ES1212340000000000000001',
     currencyIso: 'EUR',
@@ -72,7 +72,7 @@ const ACCOUNTS = [
   },
   {
     id: 'a2',
-    name: 'Caja',
+    name: 'Caja de prueba',
     type: 'C',
     currencyIso: 'EUR',
     // No countryName: `countryLabel` has to fall back to the ISO code, exactly as the cell does.
@@ -476,11 +476,17 @@ describe('withDerivedFields', () => {
     expect(withDerivedFields({ countryName: '', countryIso: '' }).countryLabel).toBe('');
   });
 
+  // Asserted against the fixture itself rather than against three cherry-picked literals.
+  // This test's subject is that the projection is ADDITIVE — the specific values are
+  // irrelevant to it, and hardcoding them made a develop-side fixture rename break the test
+  // twice (`'Cuenta de Banco'` → `'Cuenta bancaria de prueba'` most recently). Spreading the
+  // whole row also strengthens it: EVERY property must survive, not just the three named.
   it('keeps every original property and does not mutate the input row', () => {
     const row = { ...ACCOUNTS[0] };
     const projected = withDerivedFields(row);
 
-    expect(projected).toMatchObject({ id: 'a1', name: 'Cuenta de Banco', currencyIso: 'EUR' });
+    expect(projected).toMatchObject(ACCOUNTS[0]);
+    expect(Object.keys(projected)).toEqual([...Object.keys(ACCOUNTS[0]), 'countryLabel']);
     expect(projected).not.toBe(row);
     expect(row.countryLabel).toBeUndefined();
   });

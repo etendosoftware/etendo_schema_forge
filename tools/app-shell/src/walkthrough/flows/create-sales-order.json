@@ -1,0 +1,139 @@
+{
+  "id": "create-sales-order",
+  "schemaVersion": 1,
+  "revision": 1,
+  "titleKey": "walkthroughSalesOrderTitle",
+  "descriptionKey": "walkthroughSalesOrderDescription",
+  "icon": "ShoppingCart",
+  "navPathSpeedMs": 3000,
+  "steps": [
+    {
+      "id": "open-new",
+      "route": "/sales-order",
+      "navTimeoutMs": 15000,
+      "navPath": [
+        {
+          "targetTestId": "sidebar-expand",
+          "optional": true,
+          "timeoutMs": 800
+        },
+        {
+          "targetTestId": "menu-group-sales",
+          "skipIf": {
+            "targetTestId": "menu-item-sales-order"
+          }
+        },
+        {
+          "targetTestId": "menu-item-sales-order"
+        }
+      ],
+      "targetTestId": "action-new",
+      "titleKey": "walkthroughSalesOrderStepNewTitle",
+      "bodyKey": "walkthroughSalesOrderStepNewBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "partner",
+      "targetTestId": "field-businessPartner",
+      "titleKey": "walkthroughSalesOrderStepPartnerTitle",
+      "bodyKey": "walkthroughSalesOrderStepPartnerBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "price-list",
+      "targetTestId": "field-priceList",
+      "titleKey": "walkthroughSalesOrderStepPriceListTitle",
+      "bodyKey": "walkthroughSalesOrderStepPriceListBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "save-header",
+      "targetTestId": "action-save-draft",
+      "titleKey": "walkthroughSalesOrderStepSaveHeaderTitle",
+      "bodyKey": "walkthroughSalesOrderStepSaveHeaderBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "add-line",
+      "target": "[data-testid=\"action-add-lines-empty-state\"], [data-testid=\"action-add-line\"]",
+      "titleKey": "walkthroughSalesOrderStepAddLineTitle",
+      "bodyKey": "walkthroughSalesOrderStepAddLineBody",
+      "placement": "top",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "line-product",
+      "targetTestId": "inline-add-field-product",
+      "titleKey": "walkthroughSalesOrderStepLineProductTitle",
+      "bodyKey": "walkthroughSalesOrderStepLineProductBody",
+      "placement": "top",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "line-quantity",
+      "targetTestId": "inline-add-field-orderedQuantity",
+      "titleKey": "walkthroughSalesOrderStepLineQuantityTitle",
+      "bodyKey": "walkthroughSalesOrderStepLineQuantityBody",
+      "placement": "top",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "save-lines",
+      "targetTestId": "action-save-draft",
+      "titleKey": "walkthroughSalesOrderStepSaveLinesTitle",
+      "bodyKey": "walkthroughSalesOrderStepSaveLinesBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "confirm-open",
+      "targetTestId": "action-save",
+      "titleKey": "walkthroughSalesOrderStepConfirmTitle",
+      "bodyKey": "walkthroughSalesOrderStepConfirmBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "confirm-submit",
+      "targetTestId": "sales-order-confirm-submit",
+      "titleKey": "walkthroughSalesOrderStepConfirmSubmitTitle",
+      "bodyKey": "walkthroughSalesOrderStepConfirmSubmitBody",
+      "placement": "top",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "confirmed-ack",
+      "targetTestId": "action-confirm-result-close",
+      "titleKey": "walkthroughSalesOrderStepConfirmedTitle",
+      "bodyKey": "walkthroughSalesOrderStepConfirmedBody",
+      "placement": "top",
+      "advance": {
+        "on": "targetClick"
+      }
+    }
+  ]
+}
