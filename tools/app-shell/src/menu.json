@@ -378,7 +378,8 @@
           "name": "report-viewer-finance",
           "label": "Reports",
           "favname": "Finance Reports",
-          "path": "report-viewer?category=finance"
+          "path": "report-viewer?category=finance",
+          "windowId": "D647D118F5014D00AF47A636B2CD0DD3"
         }
       ]
     },
@@ -439,7 +440,8 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "hidden": true
+          "hidden": true,
+          "windowId": "33705E0F52874D91B0BB2FF8BB648B8E"
         },
         {
           "name": "oauth2-clients",
