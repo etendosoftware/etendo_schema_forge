@@ -1239,7 +1239,7 @@ Tampoco está **verificado en vivo**: falta deployar y re-probar el batch contra
 
 ---
 
-## 14. Estado de implementación de F1 (2026-09-07)
+## 15. Estado de implementación: F0–F3 y las configs (2026-09-07)
 
 ### Archivos nuevos
 
@@ -1284,7 +1284,7 @@ lo invoca antes de parsear. Idempotente, y después de la primera llamada es una
 La base sigue sin conocer la semántica de ninguna sección: conoce esta clase y que llamarla deja el
 registro completo. Agregar una sección es una línea acá más su propia clase.
 
-### Tests: 41/41 verdes
+### Tests: 67/67 verdes
 
 21 de F0 + 20 nuevos. Los de F1 cubren la declaración de la sección, los payloads válidos, y sobre
 todo **que `optionalFor` no pueda relajar escrituras**: `create`/`update`/`delete` rechazados, un
@@ -1340,6 +1340,103 @@ mismo bloque en `neo_schema`.
   así que tocarlas cambia comportamiento fuera del MCP — merece su propio paso con tests propios.
 - Tests de `McpParentScope` contra un `AD_Tab` real: la clasificación en 4 categorías necesita DAL
   y `KernelUtils`, así que va como test de integración, no unitario.
+
+
+### Lo que quedó commiteado
+
+`1047cc55` — *Feature ETP-5184: Require the parent key on MCP child entities*, 24 archivos,
++3455 −54. Cubre F0, F1, F2, F3 y las 16 configs. **F4 y F5 no están ahí.**
+
+HEAD verificado compilando desde `git archive HEAD src/com/etendoerp/go/mcp` a un
+directorio limpio (39 archivos, nada del working tree), javac 17. La rama tenía **dos**
+breaks antes de este commit, los dos introducidos por `69ddc1be`, que commiteó código de
+esta sesión sin sus dependencias: `McpParentScope` sin trackear, y el call site de 5
+argumentos de `resolveParentFK` sin su callee. Los dos los cierra `1047cc55`.
+
+Los tests (`src-test/`) no los compila `smartbuild` — sólo `src`. Los cubre
+`.githooks/pre-push:412`, que corre `./gradlew test --tests "com.etendoerp.go.*"` con el
+classpath real y agrega los conteos desde `build/test-results/test`. Está gateado por
+relevancia (`RELEVANCE_RE_JUNIT` incluye `^src/`, `^src-test/` y `^src-db/`), no por
+cambio de archivo, así que un push que toque sólo el sourcedata de `MCP_CONFIG` igual
+corre el suite. El 67/67 local es evidencia de consistencia interna con classpath armado
+a mano, **no** de que compile bajo el real; eso lo dice el push.
+
+### Corrección al censo de §12
+
+El `replace(columnname,'_ID','')` de las consultas de §12 era **case-sensitive**, y varias
+FK terminan en `_Id`. Eso reportó como "sin FK al padre" a tres entidades que sí la
+tienen y resuelven solas: `purchase-order/paymentDetails`,
+`return-from-customer/paymentInDetails`, `return-to-vendor/paymentOutDetails`. El número
+real es **8**, no 11. Usar `regexp_replace(columnname,'_ID$','','i')`.
+
+### `parent.path` se descartó; entró `mode: "unparented"`
+
+Se evaluó un `parent.path` (cadena de FKs de dos saltos) para las hijas GET-only sin
+vínculo. **No servía para ninguna.** En `sii-monitor` la cabecera es `aeatsii_config`
+—config de SII por organización— y las hijas son `C_Invoice`: no hay FK en ninguna
+dirección, no hay path de dos saltos, y las pestañas no tienen `whereclause` ni
+`linkcolumn`, así que el scoping lo hace la UI fuera del diccionario. `Fact_Acct` apunta a
+su documento con `Record_ID` + `AD_Table_ID`, un puntero polimórfico en texto.
+
+Entró `mode: "unparented"`: declara que no hay vínculo y que las lecturas son globales,
+con `reason` obligatoria. Sólo por declaración —inferirlo destruiría el gate, porque *"no
+encontré el vínculo"* tiene que retener la entidad— y **rechaza la entidad si anuncia
+escritura**, porque un registro que no puede nombrar a su padre no se puede crear sin
+generar un huérfano. Ese chequeo se auto-repara: los flags viven en `ETGO_SF_ENTITY`, cuyo
+cambio invalida el scope cacheado.
+
+### El nombre de la propiedad DAL no es `mcpConfig`
+
+El generador pone en mayúsculas el acrónimo inicial: `MCP_Config` → **`mCPConfig`**.
+Leerlo mal es el único fallo que este código no puede reportar, porque una propiedad
+inexistente es indistinguible de un registro sin configurar: todos los payloads se
+ignoraban en silencio. La constante sale de `SFEntity.PROPERTY_MCPCONFIG`, así que un
+rename futuro rompe el build en vez de vaciar la configuración.
+
+### Restricciones para F4, medidas y no argumentadas
+
+1. **`neo_batch` necesita respuesta propia.** El FK todavía es `$ref:<opId>` durante el
+   pre-pass y `BatchService` despacha cada op al camino de create compartido sin pasar por
+   `handleCreate`. Un gate escrito sólo ahí o se saltea batch entero, o rechaza todos los
+   hijos batcheados legítimos. Va donde se resuelve el ref, no en el borde del tool.
+   *(ETP-5184-sales-order-issues)*
+
+2. **El rechazo tiene que ser un envelope explícito, nunca un 200 sin `url`.** ETP-5200
+   devuelve el link del registro al final de `handleCreate`; un gate que rechaza antes del
+   insert no llega ahí, lo cual es correcto —no se creó nada— pero un agente que recibe un
+   éxito sin `url` concluye que el deployment no tiene app base URL configurada y **deja de
+   pedir links**. `ERROR_PARENT_REQUIRED` ya lo cubre; queda anotado para que siga siendo
+   deliberado. *(ETP-5184-images)*
+
+3. **Las dos mitades de D-7 fallan por separado y ahora son medibles.** Diferencial de
+   `C_GetTax`, mismo tenant, producto, cliente y fecha:
+
+   | `shipTo` | resultado |
+   |---|---|
+   | dirección | `Entregas IVA 21%` |
+   | `NULL` | `Arrendamientos 21% -19%R` |
+
+   La mitad de los callouts cerró con `4389f0f8`. La de los defaults persistidos
+   —`businessPartner`, `partnerAddress`, `warehouse`, `orderDate`— es de F4, y se verifica
+   contra este diferencial en vez de contra un argumento general.
+   *(ETP-5184-sales-order-issues)*
+
+4. **Conflicto cross-ticket en `docs`, y F4 no puede salir sin resolverlo.** `ddf2994`
+   (ETP-4918, ya commiteado) documenta que en `neo_create` hay que mandar **el FK del
+   padre**, no `parentId`. Eso es correcto hoy y **queda mal el día que entre F4**. El
+   arreglo es quirúrgico, no una revisión de la sección entera: la otra mitad de `ddf2994`
+   —que `neo_defaults` necesita `parentId`— no sólo sigue siendo verdad, ahora está
+   **obligada por código** (el gate de `handleDefaults`). O sea que hay que cambiar la
+   guidance de `neo_create` y dejar la de `neo_defaults` intacta.
+
+### Las 4 entidades de escritura sin FK al padre
+
+`payment-in/finPaymentScheduleDetail`, `payment-out/lines`,
+`product/transactionAdjustments`, `return-from-customer/relatedServices`. Decisión del
+usuario: dejarlas como están. Consecuencia asumida: **F4 las retiene**, resuelven a
+`UNRESOLVABLE`, y `neo_discover` las lista con `configError` diciendo por qué, en vez de
+seguir ofreciendo un `create` que produce huérfanos. La decisión se toma cuando el gate
+las saque a la luz, con el motivo escrito.
 
 
 ---
