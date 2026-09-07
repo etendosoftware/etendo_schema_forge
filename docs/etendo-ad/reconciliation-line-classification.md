@@ -16,6 +16,29 @@ appears both under Pendientes and under Con sugerencia. See `reconciliationStatu
 (`STATUS_MEMBERS`) for the filter→states mapping, and the "Left-panel state filter" bullet in
 `docs/generated-custom-windows/financial-account.md` for the UI-facing summary.
 
+## 0. Which lines enter the chain at all
+
+The classification below only ever runs on the lines `PENDING_LINES_SQL`
+(`ReconciliationHandler`) returns, and that query has a precondition the five states do not
+express: **the line's bank statement must be processed** (`bs.processed = 'Y'`). A draft statement
+is not reconcilable yet, so its lines are deliberately absent from the left panel.
+
+**The exception: an already reconciled line (ETP-5121).** Reactivating a bank statement flips only
+`FIN_BankStatement.PROCESSED`; it does not revert reconciliations. A line that was reconciled
+before the reactivation therefore keeps its `FIN_Finacc_Transaction_ID`, that transaction keeps a
+PROCESSED `FIN_Reconciliation`, and Core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` keeps the line
+immutable. Such a line stays listed, and stays in state `reconciled`:
+
+```sql
+AND (bs.processed = 'Y'
+     OR (bsl.fin_finacc_transaction_id IS NOT NULL
+         AND COALESCE(rec.processed, 'N') = 'Y'))
+```
+
+The exception repeats the exact predicate that defines `line_status = 'reconciled'`, so it can
+never pull a line back in whose reconciliation has been returned to DRAFT — that line still falls
+through to the pending pool and gets classified by the cascade below.
+
 ## 1. The classification chain
 
 `AutoMatchSupport.classifyPendingLine(account, line, rules, dateTolDays, amtTolPct)` decides the
