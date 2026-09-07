@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
+import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import SifSendingModal from './SifSendingModal.jsx';
 
 export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) {
@@ -12,12 +13,17 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
   const updateEventName = `${specName}:invoice-updated`;
 
+  // ETP-5087: fiscal config must be keyed by the INVOICE's own org (data.adOrgId),
+  // not the top-nav org selector — the selector can point at a different org than
+  // the invoice being viewed, silently fetching the wrong TBAI/SII config (and
+  // territory) or none at all. See resolveInvoiceOrgId.js.
   const { selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id ?? null;
+  const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
 
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
-  const pendingTargets = getPendingSifTargets(specName, profile, data);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const territory = tbaiRecord?.etsgSifTerritory ?? null;
+  const pendingTargets = getPendingSifTargets(specName, profile, data, territory);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
 
   if (status !== 'CO' || !hasPendingTargets) return null;
@@ -35,7 +41,7 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
       {modalOpen && (
         <SifSendingModal
           pendingTargets={pendingTargets}
-          bodyKey={getSifBodyKey(pendingTargets)}
+          bodyKey={getSifBodyKey(specName, pendingTargets)}
           base={base}
           specName={specName}
           recordId={recordId}

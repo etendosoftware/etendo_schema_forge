@@ -4,7 +4,9 @@ import { EntityForm } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
 import CheckboxGroup, { isCheckedYN } from '@/windows/custom/shared/CheckboxGroup';
 
-const PRODUCT_TYPE_SERVICE = 'S';
+// ETP-5091: Expense (E, "Gasto") and Resource (R, "Recurso") have no physical
+// existence either — same rule as Service (S, ETP-4943).
+const NON_STOCKABLE_PRODUCT_TYPES = new Set(['S', 'E', 'R']);
 
 function WeightStepper({ label, value, readOnly, onChange }) {
   const [local, setLocal] = useState(String(value ?? ''));
@@ -53,18 +55,19 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
   const t = useLabel();
 
   const readOnly = !editing;
-  const isService = data?.productType === PRODUCT_TYPE_SERVICE;
+  const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType);
 
-  // ETP-4943: a Service product has no physical existence, so the Logistics
-  // section (weight/UOM, "Almacenable"/Returnable) does not apply to it — force
-  // both stock-management flags off as soon as the type becomes Service, the
+  // ETP-4943 / ETP-5091: Service, Expense and Resource products have no
+  // physical existence, so the Logistics section (weight/UOM,
+  // "Almacenable"/Returnable) does not apply to them — force both
+  // stock-management flags off as soon as the type becomes one of those, the
   // same rule ProductSidebar.jsx already applies to hide the stock widget
-  // (ETP-4606: `data?.productType === 'S'` → no stock UI at all).
+  // (ETP-4606 / ETP-5091: `NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType)` → no stock UI at all).
   useEffect(() => {
-    if (!editing || !isService) return;
+    if (!editing || !isNonStockable) return;
     if (isCheckedYN(data?.stocked)) onChange?.('stocked', false, 'IsStocked');
     if (isCheckedYN(data?.returnable)) onChange?.('returnable', false, 'Returnable');
-  }, [editing, isService, data?.stocked, data?.returnable, onChange]);
+  }, [editing, isNonStockable, data?.stocked, data?.returnable, onChange]);
 
   return (
     <div className="space-y-2 pb-6 [&_input]:bg-card">
@@ -102,7 +105,7 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
             data-testid="CheckboxGroup__fe05d5" />
         </div>
       </div>
-      {!isService && (
+      {!isNonStockable && (
         <>
           <hr className="border-t border-[hsl(var(--border-subtle))] mx-5" />
           <div className="flex flex-row items-start p-2 gap-5">

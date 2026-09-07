@@ -357,3 +357,38 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Printable — generic tax labels and document currency — ETP-5125
+
+The quotation's printable shares `DOCUMENT_TEMPLATE` with sales-order, sales-invoice and
+purchase-order (`windows/custom/shared/documentPdf.js`), so both fixes below apply to all four at
+once, across all five entry points (preview, download, both email paths, print). Mechanism and
+decisions: `docs/document-printables.md` (D12–D14).
+
+- **Tax wording.** The lines-table tax column now reads **"Impuesto"** (was `IVA%`), and the Totals
+  rows read **"Impuestos"** and **"Subtotal (sin impuestos)"** (were `IVA` / `Subtotal (sin IVA)`).
+  The `%` was wrong because that column's cell prints the tax's *name* (`tax$_identifier`, e.g.
+  "IVA 21%"), not a rate; and the on-screen `DocumentTotalsPanel` already said "Impuesto", so the
+  PDF contradicted the screen. Changed values only, in the three source locales
+  (`src/locales/{es_ES,es_AR,en_US}.json` → `invoicePdfColTax` / `invoicePdfTax` /
+  `invoicePdfSubtotal`); `src/locales/generated/core.*.json` is gitignored build output.
+- **Document currency in the header.** The header meta block (below `N.º Presupuesto`) now shows
+  `Moneda: <ISO>` — new key `invoicePdfCurrency` plus `currencyCode` in the template data, resolved
+  by `resolveDocumentCurrencyCode(header)` from `header['currency$_identifier']` inside
+  `buildQuotationData`. It is read from the header, **not** from the `currencyData` argument, which
+  is `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
+  When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
+
+Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
+`windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
+`documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.

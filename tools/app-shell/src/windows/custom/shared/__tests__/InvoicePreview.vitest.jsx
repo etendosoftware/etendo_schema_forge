@@ -91,8 +91,9 @@ vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
+const getInvoiceFiscalTargetsMock = vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false }));
 vi.mock('../fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
+  getInvoiceFiscalTargets: (...args) => getInvoiceFiscalTargetsMock(...args),
 }));
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
@@ -254,6 +255,38 @@ describe('InvoicePreview', () => {
       buttons.forEach((btn) => {
         expect(btn.textContent.trim().length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  // ── ETP-5027: purchase-invoice TBAI is always Batuz, never generic TicketBAI ──
+  // The TBAI InfoRow's label key must switch on specName. SummaryCard is a plain
+  // vi.fn() mock that renders nothing of its own, so the InfoRow element (passed
+  // as a `children` prop) is inspected directly off the last call instead of
+  // querying rendered DOM — the mock never mounts it.
+  describe('TBAI status label is doc-type aware (ETP-5027)', () => {
+    beforeEach(() => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+    });
+
+    function tbaiInfoRow() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      const rows = (props.children || []).filter(Boolean);
+      return rows.find((el) => el?.props?.label);
+    }
+
+    it('purchase invoice shows the Batuz-specific label, never the generic TicketBAI one', () => {
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbaiPurchase');
+    });
+
+    it('sales invoice keeps the generic TicketBAI label, unchanged', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbai');
     });
   });
 
