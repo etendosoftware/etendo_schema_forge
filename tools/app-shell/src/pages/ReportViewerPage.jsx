@@ -39,6 +39,15 @@ function buildReportFilename(reportId, format, suffix = '') {
   return `${reportId}${suffix}-${dd}-${mm}-${yyyy}.${format}`;
 }
 
+// ETP-5116 — report categories with a real permission-anchor AD_Window (see
+// menu.json's matching windowId for each). A category not listed here (e.g.
+// "purchases") is intentionally NOT gated by window access — it's kept
+// menu-hidden only, a deliberate decision made earlier in this same ticket.
+const REPORT_CATEGORY_WINDOW_IDS = {
+  finance: 'D647D118F5014D00AF47A636B2CD0DD3',
+  inventory: '6346B88619F948F9A42224BDB0B239FA',
+};
+
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
 const SKELETON_ROWS = Array.from({ length: 8 }, (_, r) => ({ id: r }));
@@ -2117,27 +2126,37 @@ export default function ReportViewerPage() {
   const reportId = searchParams.get('report');
 
   // ETP-5116 — computed before the effect below so the effect can short-circuit
-  // the catalog fetch (and any other finance-only side effect added later)
-  // whenever finance access is denied, instead of only blocking the render.
+  // the catalog fetch (and any other gated side effect added later) whenever
+  // the selected category's access is denied, instead of only blocking the
+  // render. Categories below map to the pseudo-window created as their real
+  // permission anchor; a category absent from this map (e.g. "purchases",
+  // deliberately still menu-hidden only, per this ticket's own decision) is
+  // never gated here — useWindowAccess(null) already fails closed to 'none',
+  // so categoryWindowId must be checked as well, not just the tier.
   // useWindowAccess fails closed to 'none' while windowAccess is still loading,
   // so an authorized user briefly sees the guard too until it resolves, then
-  // the effect below re-fires once financeAccessDenied flips to false.
-  const financeWindowAccessTier = useWindowAccess('D647D118F5014D00AF47A636B2CD0DD3');
-  const financeAccessDenied = categoryFilter === 'finance' && financeWindowAccessTier === 'none';
+  // the effect below re-fires once categoryAccessDenied flips to false.
+  const categoryWindowId = REPORT_CATEGORY_WINDOW_IDS[categoryFilter] ?? null;
+  const categoryWindowAccessTier = useWindowAccess(categoryWindowId);
+  const categoryAccessDenied = Boolean(categoryWindowId) && categoryWindowAccessTier === 'none';
 
   useEffect(() => {
-    if (financeAccessDenied) {
+    if (categoryAccessDenied) {
       setReports([]);
       setLoading(false);
       return;
     }
+    // Reset to true on every (re-)fetch — categoryAccessDenied flipping from
+    // true to false (access resolves, or the user switches category) must not
+    // render a stale "no results" state while the new request is in flight.
+    setLoading(true);
     // raw-fetch-ok: dev-server report catalogue (vite-plugins/report-api.js), no token expected
     fetch('/api/reports')
       .then(r => r.json())
       .then(setReports)
       .catch(() => setReports([]))
       .finally(() => setLoading(false));
-  }, [financeAccessDenied]);
+  }, [categoryAccessDenied]);
 
   const selectedReport = reportId ? reports.find(r => r.id === reportId) : null;
 
@@ -2153,18 +2172,19 @@ export default function ReportViewerPage() {
     setSearchParams(params);
   };
 
-  // ETP-5116 — the Financial Reports page had zero real access control (any
-  // authenticated user, any role, could reach it by URL regardless of the
-  // menu). ReportViewerPage is shared across every report category, so the
-  // gate must apply ONLY when the finance category is selected — other
-  // categories sharing this same page are unaffected. financeAccessDenied is
-  // computed above (before the fetch effect) so both the effect and this
+  // ETP-5116 — the Financial Reports and Informes de inventario pages had zero
+  // real access control (any authenticated user, any role, could reach either
+  // by URL regardless of the menu). ReportViewerPage is shared across every
+  // report category, so the gate must apply ONLY to categories with a real
+  // permission-anchor window (REPORT_CATEGORY_WINDOW_IDS) — other categories
+  // sharing this same page (e.g. "purchases") are unaffected. categoryAccessDenied
+  // is computed above (before the fetch effect) so both the effect and this
   // render guard stay in lock-step.
-  if (financeAccessDenied) {
+  if (categoryAccessDenied) {
     return (
       <WindowAccessGuard
-        windowId="D647D118F5014D00AF47A636B2CD0DD3"
-        data-testid="WindowAccessGuard__report-viewer-finance"
+        windowId={categoryWindowId}
+        data-testid={`WindowAccessGuard__report-viewer-${categoryFilter}`}
       />
     );
   }

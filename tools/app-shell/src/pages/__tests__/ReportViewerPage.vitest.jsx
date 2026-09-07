@@ -553,6 +553,61 @@ describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
     });
     expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
   });
+
+  // Review follow-up (ETP-5116): the gate generalizes to every category with a
+  // real permission-anchor window, not just finance — "Informes de inventario"
+  // now has a windowId in menu.json (6346B88619F948F9A42224BDB0B239FA) too, and
+  // the frontend gate must cover it the same way, or the page stays reachable
+  // by URL despite the backend enforcing it.
+  it('renders the WindowAccessGuard (windowId 6346B88619F948F9A42224BDB0B239FA) instead of the report list when category=inventory and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
+      'data-window-id',
+      '6346B88619F948F9A42224BDB0B239FA',
+    );
+  });
+
+  it('renders the report list normally when category=inventory and the access tier is full', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'full';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  // Review follow-up (ETP-5116): the fetch effect re-fires when access
+  // resolves (or a denied user switches category), but must reset loading to
+  // true first — otherwise a stale "no results" state (left over from the
+  // denied branch's setReports([])/setLoading(false)) briefly renders while
+  // the new request is still in flight.
+  it('shows the loading spinner, not a stale "no results" flash, while the fetch re-fires after access resolves', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    let resolveFetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise((resolve) => { resolveFetch = resolve; }),
+    );
+
+    const { rerender } = render(<ReportViewerPage />);
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+
+    mockFinanceWindowAccessTier = 'full';
+    rerender(<ReportViewerPage />);
+
+    expect(screen.getByTestId('Loader2__3c998a')).toBeInTheDocument();
+    expect(screen.queryByText('noResults')).not.toBeInTheDocument();
+
+    resolveFetch({ ok: true, json: () => Promise.resolve([]) });
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+  });
 });
 
 // -------------------------------------------------------------------
