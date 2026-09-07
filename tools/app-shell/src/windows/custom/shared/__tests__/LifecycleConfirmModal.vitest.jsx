@@ -31,7 +31,128 @@ const BASE_PROPS = {
   itemAsiento: ['Asiento title', 'Asiento desc'],
 };
 
-// --- Tests ---
+/**
+ * ETP-5111 — the conditional body. `warning` became optional (`warning?: string`) so a
+ * confirmation for a record with NOTHING to undo can omit the yellow box; the items list is
+ * guarded independently; and the padded body wrapper itself is guarded too, because with both
+ * halves hidden it still left ~24px of dead space between the subtitle and the footer.
+ *
+ * This is a SHARED/platform surface — `ReconciliationSplitPanel`, `BankConnectionDeleteConfirmModal`
+ * and `PaymentLifecycleConfirmModal` all render through it — so the "no other dialog changed"
+ * claim is asserted here rather than left resting on a manual read.
+ *
+ * The body wrapper's presence is asserted STRUCTURALLY (how many blocks the card contains) rather
+ * than by matching inline styles: the card holds header + [body] + footer, so "no third block" is
+ * exactly the dead-space fix and nothing else.
+ */
+describe('LifecycleConfirmModal — conditional body (ETP-5111)', () => {
+  const NO_ITEM_PROPS = {
+    title: 'T', sub: 'S', confirmLabel: 'OK', cancelLabel: 'No',
+  };
+
+  /** header + optional body + footer. */
+  function cardBlockCount() {
+    return screen.getByTestId('lifecycle-confirm-modal').firstElementChild.children.length;
+  }
+
+  it('omits the yellow warning box when no warning is given', () => {
+    render(
+      <LifecycleConfirmModal
+        {...NO_ITEM_PROPS}
+        reconciled={false}
+        posted={false}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    // The subtitle and the buttons still render — only the warning is gone.
+    expect(screen.getByText('S')).toBeInTheDocument();
+    expect(screen.getByText('OK')).toBeInTheDocument();
+    expect(screen.queryByText('Be careful')).not.toBeInTheDocument();
+  });
+
+  it('drops the padded body wrapper entirely when there is neither an item nor a warning', () => {
+    render(
+      <LifecycleConfirmModal
+        {...NO_ITEM_PROPS}
+        reconciled={false}
+        posted={false}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    // Header + footer only. A surviving empty wrapper is the ~24px dead space this guards.
+    expect(cardBlockCount()).toBe(2);
+  });
+
+  it('keeps the body when there is a warning but no items', () => {
+    render(
+      <LifecycleConfirmModal
+        {...NO_ITEM_PROPS}
+        warning="Be careful"
+        reconciled={false}
+        posted={false}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Be careful')).toBeInTheDocument();
+    expect(cardBlockCount()).toBe(3);
+  });
+
+  it('keeps the body when there are items but no warning', () => {
+    render(
+      <LifecycleConfirmModal
+        {...NO_ITEM_PROPS}
+        itemAsiento={['Asiento title', 'Asiento desc']}
+        reconciled={false}
+        posted
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Asiento title.')).toBeInTheDocument();
+    expect(screen.queryByText('Be careful')).not.toBeInTheDocument();
+    expect(cardBlockCount()).toBe(3);
+  });
+
+  /**
+   * The regression guard for every EXISTING consumer. All three pass a real warning string and at
+   * least one item, which is the pre-ETP-5111 shape — so the dialog they render must be byte-for-
+   * byte what it was: both halves present, inside one body block. If someone later inverts a guard
+   * (`!warning`, or `items.length === 0`), this fails even though the new draft case still works.
+   */
+  it('regression: a consumer passing both a warning and items renders exactly as before', () => {
+    render(
+      <LifecycleConfirmModal
+        {...BASE_PROPS}
+        reconciled
+        posted
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Conciliación title.')).toBeInTheDocument();
+    expect(screen.getByText('Asiento title.')).toBeInTheDocument();
+    expect(screen.getByText('Be careful')).toBeInTheDocument();
+    expect(cardBlockCount()).toBe(3);
+  });
+
+  // `explicitItems` is the other way in (ReconciliationSplitPanel uses it), and it must satisfy the
+  // items guard the same way the flag-derived list does.
+  it('counts an explicit items list towards the body guard', () => {
+    render(
+      <LifecycleConfirmModal
+        {...NO_ITEM_PROPS}
+        items={[['Explicit title', 'Explicit desc']]}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Explicit title.')).toBeInTheDocument();
+    expect(cardBlockCount()).toBe(3);
+  });
+});
 
 describe('LifecycleConfirmModal', () => {
   it('renders the given title, sub, warning and labels', () => {

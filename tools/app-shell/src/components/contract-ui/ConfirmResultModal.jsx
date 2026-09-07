@@ -84,7 +84,12 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
   else if (docs.length > 1) subtitle = ui('confirmResultModal.subtitleMany', { count: docs.length });
 
   return (
-    <div data-testid="confirm-result-modal" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
+    // zIndex 50 = the app's modal tier. It was 9999, which put this notice above
+    // EVERY global tool -- including the walkthrough overlay at z-70, whose step
+    // card it covered completely while a tour pointed at this very modal.
+    // Nothing needs to sit above a confirmation result except toasts, which are
+    // already higher.
+    <div data-testid="confirm-result-modal" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
       {/*
         ETP-5108: no `fontFamily` here on purpose. The design system declares the
         family in exactly one place — `body` in the core's styles.css — and every
@@ -132,6 +137,10 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
           <button
             type="button"
             onClick={onClose}
+            // Targeted by the create-sales-order walkthrough's final step
+            // (`confirmed-ack`). Renaming it breaks a shipped tour -- see
+            // docs/walkthrough-flows.md.
+            data-testid="action-confirm-result-close"
             style={{ fontSize: 13, padding: '8px 16px', borderRadius: 8, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}

@@ -22,7 +22,7 @@ const QUOTATION_SPECS = [
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   // Pass the DB-sourced status dictionary (same one DataTable.jsx uses via
   // useLocale()) so this preview resolves the exact same "Bajo evaluación"
@@ -47,7 +47,12 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__7eb018" />
-      <EmailsCard onSend={onSend} data-testid="EmailsCard__7eb018" />
+      <EmailsCard
+        onSend={onSend}
+        documentId={quotation.id}
+        apiBaseUrl={apiBaseUrl}
+        refreshSignal={emailsRefreshSignal}
+        data-testid="EmailsCard__7eb018" />
       <RelatedDocumentsCard
         documentId={quotation.id}
         token={token}
@@ -66,6 +71,9 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const modalRef = useRef(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-5069 — see OrderPreview.jsx: bumped on a successful send so the
+  // email-history card refetches instead of showing its pre-send state.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
   // (GET /preview-file) resolves ahead of the jsreport regeneration below;
   // capturing it here lets Download gate on whichever source resolves first.
@@ -195,6 +203,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
+        emailsRefreshSignal={emailsRefreshSignal}
         data-testid="QuotationGeneralTab__7eb018" />,
     },
   ];
@@ -243,6 +252,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
           pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__7eb018" />
       )}
     </>
