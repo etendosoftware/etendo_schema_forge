@@ -14,6 +14,7 @@ import { X, Check, ChevronDown, Wallet, Percent, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useCreatePayment } from '@/hooks/useCreateMovement';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from '../fieldLengthValidation.js';
 import { useDimensionValues } from '@/hooks/useDimensionValues';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
 import {
@@ -41,6 +42,13 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
   const ui = useUI();
   const visibleDims = DIM_ORDER.filter((k) => dimensions.includes(k) && DIM_META[k]);
   const setDim = (key, v) => set({ dims: { ...form.dims, [key]: v } });
+  // PSD-23: the movement lands in FIN_Finacc_Transaction.Description (255 chars).
+  // Derived from `form` in both scopes rather than threaded through props — it is a pure
+  // function of the same state, so there is nothing to keep in sync.
+  const descriptionError = getMaxLengthError(
+    form.description,
+    FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription,
+  );
   // Cobro (BPD) → deposit editable; Pago (BPW) → withdrawal editable.
   const depositEditable = form.trxType !== 'BPW';
   return (
@@ -75,7 +83,21 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
             placeholder={ui('financeAccountMovementsWizardDescriptionPlaceholder')}
             value={form.description}
             onChange={(e) => set({ description: e.target.value })}
+            data-testid="wizard-description"
           />
+          <div className="mt-1 flex items-baseline justify-between gap-2">
+            {descriptionError ? (
+              <p className="text-sm text-[hsl(var(--destructive))]" data-testid="wizard-description-error">
+                {ui(descriptionError.key, descriptionError.params)}
+              </p>
+            ) : <span />}
+            <span
+              className={`text-xs tabular-nums ${descriptionError ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}`}
+              data-testid="wizard-description-counter"
+            >
+              {`${(form.description || '').length}/${FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}`}
+            </span>
+          </div>
         </Field>
       </div>
       <SectionLabel data-testid="SectionLabel__e2e571">{ui('financeAccountMovementsWizardAmounts')}</SectionLabel>
@@ -286,6 +308,13 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
   }, [open, optionsByDim, defaultOrgId, form.dims.organization]);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  // PSD-23: the movement lands in FIN_Finacc_Transaction.Description (255 chars).
+  // Derived from `form` in both scopes rather than threaded through props — it is a pure
+  // function of the same state, so there is nothing to keep in sync.
+  const descriptionError = getMaxLengthError(
+    form.description,
+    FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription,
+  );
   const movementAmount = useMemo(
     () => (form.trxType !== 'BPW' ? parseAmount(form.deposit) : parseAmount(form.withdrawal)),
     [form.trxType, form.deposit, form.withdrawal],
@@ -501,7 +530,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
             <>
               <span className="mr-auto text-xs leading-4 text-[hsl(var(--muted-foreground))]">{ui('financeAccountMovementsWizardStep1Footer')}</span>
               <button type="button" className={BTN_GHOST} onClick={onClose}>{ui('financeAccountMovementsNewCancel')}</button>
-              <button type="button" className={BTN_PRIMARY} onClick={() => setStage(2)}>{ui('financeAccountMovementsWizardNext')} <ChevronDown
+              <button type="button" className={BTN_PRIMARY} disabled={!!descriptionError} onClick={() => setStage(2)}>{ui('financeAccountMovementsWizardNext')} <ChevronDown
                 className="h-[15px] w-[15px] -rotate-90"
                 data-testid="ChevronDown__e2e571" /></button>
             </>
