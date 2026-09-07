@@ -90,6 +90,57 @@ function expectDeleteResponse(page) {
 }
 
 /**
+ * Start listening for a list-load GET response BEFORE triggering it (e.g.
+ * scrolling to trigger `useEntity`'s `loadMore()`).
+ */
+function expectListResponse(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'GET' && resp.status() < 500,
+    { timeout: 6_000 },
+  ).catch(() => {});
+}
+
+/**
+ * Find a row in the Contacts list by its visible text, scrolling the list's
+ * `ScrollPane` to trigger incremental server-side pagination
+ * (`BATCH_SIZE = 75` in `useEntity.js`) until the row appears or the backend
+ * has no more rows to give.
+ *
+ * Needed since ETP-5182 (`decisions.json → listSortBy: "name asc"`, commit
+ * 8d74d3c0c) made the Contacts list default-sort alphabetically by
+ * commercial name instead of by recency (`creationDate desc`). A freshly
+ * created "E2E Contact ..." row used to be guaranteed a spot on the FIRST
+ * loaded batch just by being the newest record; under name-ascending sort
+ * its position depends on how many existing business partners sort before
+ * it alphabetically, so a plain `rows.filter(...).toBeVisible()` on the
+ * initially loaded page can no longer be trusted.
+ */
+async function findRowByText(page, text, { maxScrolls = 15 } = {}) {
+  const rows = page.locator('tbody tr');
+  const target = rows.filter({ hasText: text }).first();
+  const scrollPane = page.getByTestId('ScrollPane__620cbc');
+
+  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
+    if (await target.isVisible({ timeout: attempt === 0 ? 3_000 : 500 }).catch(() => false)) {
+      return target;
+    }
+    const countBefore = await rows.count();
+    const listLoadP = expectListResponse(page);
+    await scrollPane.evaluate((el) => { el.scrollTop = el.scrollHeight; }).catch(() => {});
+    await listLoadP;
+    const countAfter = await rows.count();
+    // No new rows arrived — the backend has nothing more to give for the
+    // current filter/sort, so further scrolling would just spin forever.
+    if (countAfter <= countBefore) break;
+  }
+
+  // Final locator, whether or not it resolved — the caller's own assertion
+  // reports the real failure (missing row vs. something else) instead of an
+  // opaque "helper returned nothing".
+  return target;
+}
+
+/**
  * Ensure the required "Clave NIF País Residencia" combobox ends up with a value.
  *
  * The backend supplies a default for this field asynchronously. When it lands,
@@ -629,8 +680,9 @@ test.describe('Contacts Integration — Full journey', () => {
     const rows = page.locator('tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 15_000 });
 
-    // Contact B should be visible (recently created, at top of list)
-    const rowB = rows.filter({ hasText: CONTACT_B }).first();
+    // Contact B should be somewhere in the list (position depends on the
+    // active sort/pagination — see findRowByText's docblock).
+    const rowB = await findRowByText(page, CONTACT_B);
     await expect(rowB).toBeVisible({ timeout: 15_000 });
 
     // Verify key column headers exist by name
@@ -650,15 +702,17 @@ test.describe('Contacts Integration — Full journey', () => {
 
     // Empresas filter — Contact B is Empresa, should be visible
     await empresasBtn.first().click();
-    await expect(rows.filter({ hasText: CONTACT_B }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
 
-    // Personas filter — Contact B (Empresa) should not appear
+    // Personas filter — Contact B (Empresa) should not appear. No scrolling
+    // needed here: this asserts absence under the current (possibly small)
+    // loaded batch, which is exactly what "not shown under this filter" means.
     await personasBtn.first().click();
     await expect(rows.filter({ hasText: CONTACT_B })).toHaveCount(0, { timeout: 10_000 });
 
     // Todos restores full list
     await todosBtn.first().click();
-    await expect(rows.filter({ hasText: CONTACT_B }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 8: Bulk delete — select both created contacts, delete, verify
@@ -669,12 +723,15 @@ test.describe('Contacts Integration — Full journey', () => {
     // input itself — the input is visually sr-only, so Playwright's click
     // lands on the underlying decorative box and the sr-only input "intercepts
     // pointer events" in reverse, causing flaky click timeouts.
-    const rowBFinal = page.locator('tbody tr').filter({ hasText: CONTACT_B }).first();
+    // Use findRowByText (not a plain filter) since Contact B's row may sit
+    // past the first loaded batch under the name-ascending sort.
+    const rowBFinal = await findRowByText(page, CONTACT_B);
+    await expect(rowBFinal).toBeVisible({ timeout: 15_000 });
     await rowBFinal.getByTestId('Checkbox__eb5261').first().click();
 
     // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
     // Contact A may have a different name after toggle — find by email which has the timestamp
-    const rowAByEmail = page.locator('tbody tr').filter({ hasText: CONTACT_A_EMAIL }).first();
+    const rowAByEmail = await findRowByText(page, CONTACT_A_EMAIL);
     if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
     }
@@ -683,13 +740,33 @@ test.describe('Contacts Integration — Full journey', () => {
     const selectionText = page.locator('text=/\\d+.*seleccionado|\\d+.*selected/i');
     await expect(selectionText.first()).toBeVisible({ timeout: 5_000 });
 
-    // Click bulk delete
-    const bulkTrashBtn = page.locator('button').filter({
-      has: page.locator('svg.lucide-trash-2, svg[class*="trash"]'),
-    });
-    const selectionBar = page.locator('div').filter({ hasText: /seleccionado|selected/i }).first().locator('..');
-    const trashInBar = selectionBar.locator('button').filter({ has: page.locator('svg') }).first();
-    const bulkBtn = await bulkTrashBtn.count() > 0 ? bulkTrashBtn.first() : trashInBar;
+    // Click bulk delete.
+    //
+    // The Contacts window renders its OWN bulk-delete button via
+    // `selectionBarRightActions` (tools/app-shell/src/windows/custom/contacts/index.jsx)
+    // and opts out of ListView's generic "Delete selected" toolbar action
+    // (`listViewOptions.hideBulkDelete: true`), so the generic
+    // `bulk-delete-selected` testid is never rendered for this window — the
+    // button itself carries no stable testid, only its icon does
+    // (`Trash2__ef097c`).
+    //
+    // A page-wide "any button containing a trash icon" search (the previous
+    // approach here) is unsafe regardless of sort order: Contacts also
+    // renders a per-row LEGACY delete button with its own Trash2 icon
+    // (`Trash2__eb5261`, see `ContactsTable.jsx` → `DataTable.jsx`'s
+    // `legacyDeleteEnabled`) for every visible row, and those per-row icons
+    // sit earlier in DOM order than the SelectionToolbar (rendered through a
+    // `document.body` portal, appended after the app's own render tree). A
+    // `.first()` match on a broad selector therefore resolves to whichever
+    // row's own single-row delete button happens to be first in the DOM —
+    // NOT the multi-select bulk-delete action — silently deleting an
+    // unrelated row instead of the two rows actually checked above. Under
+    // the old creationDate-desc sort this went unnoticed because the
+    // just-created Contact B always WAS that first row, so the wrong click
+    // still deleted the right record by coincidence; the name-ascending sort
+    // broke that coincidence, surfacing the pre-existing bug.
+    const bulkBtn = page.getByTestId('Trash2__ef097c').locator('..');
+    await expect(bulkBtn).toBeVisible({ timeout: 5_000 });
     await bulkBtn.click();
 
     // Confirm bulk delete dialog
