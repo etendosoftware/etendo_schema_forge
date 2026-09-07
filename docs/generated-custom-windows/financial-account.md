@@ -935,6 +935,51 @@ it; these three were the stragglers. Backend counterpart and the full write-up:
 
 **Layout note:** the modal's body wrapper (`<div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">`, right below the header) carries `min-w-0`. `DialogContent` renders as `display: grid`, and grid items default to `min-width: auto` — without this, an extremely long value anywhere deep inside (e.g. `transfer-receive-amount` computing a huge product) inflates this whole column past the dialog's own `max-w-[600px]`, and only the rightmost sliver gets clipped, cropping every row uniformly instead of just the offending field. Confirmed live via Playwright (`getBoundingClientRect()` before/after) — do not remove this class when touching this wrapper.
 
+### Free-text length limits (PSD-23 · ETP-5140)
+
+**Every free-text field in this window reports its AD column length before the request leaves the
+browser.** Previously an over-long description travelled to the backend, where Core's
+`StringPropertyValidator` rejected it and the user learned about a limit the UI already knew — as an
+HTTP 400.
+
+Limits live in one place, `windows/custom/financial-account/fieldLengthValidation.js`, transcribed
+from `artifacts/financial-account/contract.json` → `validation.maxLength`. Never hardcode a length at
+a call site: the contract is what the backend enforces, so an invented number either rejects valid
+input or lets an invalid value through.
+
+| Field | Entity · column | Limit | How it is enforced |
+|---|---|---|---|
+| Transferir fondos → Descripción | `transaction.description` | 255 | inline error + counter, submit blocked |
+| Nuevo movimiento → Descripción | `transaction.description` | 255 | inline error + counter, gates Guardar **and** Confirmar |
+| Wizard de movimiento → Descripción | `transaction.description` | 255 | inline error + counter, gates Siguiente (stage 1) |
+| Extracto manual → Referencia | `bankStatementLines.referenceNo` | 30 | hard `maxLength` attribute |
+| Extracto manual → Descripción | `bankStatementLines.description` | 2000 | hard `maxLength` attribute |
+
+`getMaxLengthError(value, limit)` returns the same `{ key, params } | null` descriptor as its two
+siblings `getNumericFieldError` (`lib/numericValidation.js`) and `getContactsTextFieldError`
+(`components/contract-ui/contactsFieldValidation.js`), rendered by the caller as
+`ui(err.key, err.params)` against the existing `fieldMaxLengthError` key. Unlike
+`contactsFieldValidation` it carries no window gate — the caller passes the limit explicitly, so the
+module can only do what a call site asks for.
+
+**Why the manual-statement rows differ:** they are dense grid cells with no room for error text, and
+this modal already reports its own validation as a submit-time toast rather than inline. The hard
+`maxLength` attribute is the pattern `AccountFormStep.jsx` and `EditAccountModal.jsx` already use in
+this same window; the browser truncates on typing and on paste, so the invalid value never exists.
+
+**The counter is always visible**, not only once exceeded — the limit has to be visible while typing,
+which is too late if it only appears on failure. It turns destructive past the limit.
+
+New testids: `transfer-description-error` / `-counter`, `tx-description-error` / `-counter`,
+`wizard-description` / `-error` / `-counter`.
+
+**Related fix in the same change** — `useCreateMovement.js`'s `postAction` synthesizes
+`HTTP <status>` as the error message when the 400 body carries no `message`. That is a truthy string
+`translateBackendError` passes through untouched, which defeated the
+`translate(...) || friendlyFallback` chain in `FundsTransferModal` and put a raw HTTP code on screen.
+The error now carries `hasBackendMessage`, and callers translate only when it is set. Any new caller
+of `postAction` that shows an error must check that flag rather than testing the message string.
+
 ### Conditional tabs (ETP-4795)
 
 **The tab set depends on the account type.** `DetailTabs.jsx` no longer hardcodes its triggers: it declares a `TAB_DEFS` array and exports `getVisibleTabs(isCash)`, which `index.jsx` uses for both its content switch and its guard — one list, three consumers, so they cannot drift.

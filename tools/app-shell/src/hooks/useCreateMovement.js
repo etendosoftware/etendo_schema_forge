@@ -22,6 +22,12 @@ async function postAction(apiFetch, action, payload) {
     const raw = await parseBackendErrorMessage(res);
     const error = new Error(raw || `HTTP ${res.status}`);
     error.status = res.status;
+    // Whether `message` is something the backend actually said, or the synthesized
+    // `HTTP <status>` placeholder. Callers cannot tell them apart from the string alone,
+    // and translateBackendError passes the placeholder through as a truthy value, so a
+    // `translate(...) || friendlyFallback` chain would silently show the HTTP code
+    // instead of the fallback (PSD-23).
+    error.hasBackendMessage = Boolean(raw);
     throw error;
   }
   const json = await res.json();

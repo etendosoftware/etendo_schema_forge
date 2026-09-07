@@ -18,11 +18,30 @@
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+/**
+ * ui() echoes the key for every label EXCEPT the one entry below, and that exception is
+ * load-bearing — do NOT "simplify" it back to a plain identity function.
+ *
+ * `translateBackendError` (lib/backendErrors.js, `translateSingleMessage`) guards its own
+ * result with `translated !== key`: when t() hands back the key it reads that as a MISSING
+ * translation and returns the ORIGINAL backend message untouched. Under a pure identity ui()
+ * a translated sync toast and an untranslated one therefore produce the exact same string,
+ * so the "the backend message is translated" test below would assert nothing.
+ *
+ * Only `backendError.psd2NoActiveConnection` is overridden (with the real es_ES copy) so the
+ * six pre-existing tests can keep asserting raw keys like
+ * `financeAccountsBankConnectionSyncDone`.
+ */
+const UI_OVERRIDES = {
+  'backendError.psd2NoActiveConnection':
+    'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+};
+
 vi.mock('@/i18n', () => ({
   // ListSortPopover (rendered in the toolbar since ETP-4921) resolves each menu entry
   // through resolveColumnLabel, which needs the AD dictionary translator.
   useLabel: () => (key) => key,
-  useUI: () => (key) => key,
+  useUI: () => (key) => UI_OVERRIDES[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
@@ -296,6 +315,48 @@ describe('AccountsHeaderTable — bank connection sync action', () => {
     fireEvent.click(await screen.findByTestId('account-row-menu-sync-acc-1'));
 
     await waitFor(() => expect(mockSync).toHaveBeenCalledWith('acc-1'));
+  });
+
+  /**
+   * The sync-result message comes from com.etendoerp.psd2's AD_MESSAGE catalog, whose es_ES
+   * rows resolve to the English text unless the translation pack was imported, so the toast
+   * has to run it through `translateBackendError` — exactly like the two sibling entry points
+   * onto the same bridge already do (EditAccountModal's sync action and ImportedStatementsTab's
+   * "Sincronizar extractos"). Reproduced live on a PSD2 account with no active connection: the
+   * list-row sync toast rendered the raw English verbatim.
+   *
+   * The literal below is the exact string backendErrors.js maps to
+   * `backendError.psd2NoActiveConnection`; the odd, uninterpolated `%s` is genuinely what
+   * reaches the frontend (see the comment on that entry) and must be kept verbatim or the
+   * exact-match lookup misses.
+   */
+  it('translates the backend sync message instead of showing the raw English', async () => {
+    mockSync.mockResolvedValue({
+      status: 'ERROR',
+      message: 'No active bank connection found for financial account %s. Connect the account first.',
+    });
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+      'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+    ));
+  });
+
+  /**
+   * `useBankConnectionActions` turns its AbortController timeout into a sentinel
+   * `Error('BANK_CONNECTION_TIMEOUT')`, which is a protocol token and not user-facing copy.
+   * Surfacing `err.message` unfiltered puts that token in the toast. The `reconnect` branch of
+   * this very handler — and EditAccountModal's sync — already map it to the timeout label.
+   */
+  it('maps a BANK_CONNECTION_TIMEOUT sync failure to the timeout label', async () => {
+    mockSync.mockRejectedValue(new Error('BANK_CONNECTION_TIMEOUT'));
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('account-row-refresh-acc-1'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountsBankConnectionTimeout'));
   });
 });
 
