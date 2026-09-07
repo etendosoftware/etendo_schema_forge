@@ -664,6 +664,62 @@ native app-shell UI; only the bank login is an external popup.
   rewording one on the Java side silently un-translates the toast — and because the helper can
   append several messages into one newline-joined buffer, `translateBackendError` resolves the
   string **line by line**.
+- **An empty account list explains itself with a CODE, not a sentence (ETP-5179).** Connecting a USD
+  Financial Account to a bank that only exposes EUR accounts used to raise the very same generic
+  toast ("No se encontraron cuentas bancarias compatibles para esta conexión") as a wrong account
+  type or an account already linked elsewhere, so the user had no way to learn that the currency was
+  the cause. The connection *was* correctly refused — what was missing was the why.
+  `handleAccounts` had chained its three filters (`filterAccountsByFAType` →
+  `filterUnlinkedAccounts` → `filterAccountsByCurrency`) by reassigning one variable, so by the time
+  the list came out empty the stage that emptied it was unrecoverable. Each stage now keeps its own
+  array (`fromBank` → `typeFiltered` → `unlinked` → the currency-filtered result), and when the
+  final list is empty `putEmptyDiagnosis` adds a machine-readable `emptyReason` to the payload —
+  plus `accountCurrency` for the one reason that carries a parameter:
+
+  | The list was emptied by | `emptyReason` | `accountCurrency` |
+  |---|---|---|
+  | the bank returned nothing at all | `noAccounts` | absent |
+  | the Financial Account **type** filter | `typeMismatch` | absent |
+  | the **already-linked** filter | `allLinked` | absent |
+  | the **currency** filter | `currencyMismatch` | the FA's ISO code, e.g. `USD` |
+
+  **Cascade rule:** the FIRST stage that emptied the list wins — `emptyReasonOf` tests
+  `fromBank` → `typeFiltered` → `unlinked` in that order and falls through to `currencyMismatch`
+  as the last resort (the currency filter only runs in case 1, where the FA already exists and
+  therefore already has a currency). Note the bridge's order is type → already-linked → currency,
+  which is *not* Classic's order (type → currency → already-linked), so a list that both the
+  currency and the already-linked filter would have emptied is reported here as `allLinked`.
+  Neither key appears when the list is non-empty — that branch resolves `providerName` /
+  `providerLogoUrl` instead. The status code is unchanged in every case: still **HTTP 200 with
+  `{accounts: []}`**, never an error.
+
+  **Why a code and not an English message.** The obvious alternative was an `AD_MESSAGE` from
+  `com.etendoerp.psd2.bank.integration`, which is what Etendo Classic does — `AisConnectionCallback`
+  (lines 141-168) resolves `PSD2_NoAccountsFoundForType`, `PSD2_NoAccountsFoundForCurrency` and
+  `PSD2_AllAccountsAlreadyLinked` and redirects to its own HTML error page. The bridge deliberately
+  does **not**, for two independent reasons: those rows ship with `istranslated='N'`, so Core
+  resolves them to their English text unless the environment happened to import the `.es_es`
+  translation pack (the same trap the sync-message bullet above documents); and their `%s`
+  templates never interpolate, because `OBMessageUtils.getI18NMessage` substitutes `%0` only —
+  Classic works around this with a manual `msg.replace("%s", currencyCode)`. A code, by contrast,
+  is translated by the SPA in all three shipped locales, with its parameter, independently of how
+  Core was provisioned. And unlike the sync strings above, `emptyReason` is explicitly **not** a
+  de facto wire contract of English prose: it is a stable, language-independent identifier, chosen
+  precisely so this class of problem does not recur.
+
+  **Frontend side.** `useBankConnectionActions.fetchAccounts` passes both fields through
+  *without* defaulting them to `''` — the bridge omits them when there is nothing to explain, so
+  `undefined` is semantic and an empty string would read as "a reason is present but unknown".
+  `useBankConnectionFlow` maps them in `NO_ACCOUNTS_REASON_KEYS` /
+  `noAccountsMessage(emptyReason, accountCurrency, ui)` to
+  `financeAccountsBankConnectionNoAccountsCurrency` / `…Type` / `…AllLinked`, added to `en_US.json`,
+  `es_ES.json` and `es_AR.json`. Two deliberate fall-backs to the generic
+  `financeAccountsBankConnectionNoAccounts` label: `noAccounts` is **not** in the table (the generic
+  wording already says exactly that), and a `currencyMismatch` that arrives without an
+  `accountCurrency` also degrades to it, mirroring the `isNotBlank` guard on the Java side — a
+  correct generic message beats a specific one rendering "cuentas en undefined". The same
+  fall-through covers an unknown or absent reason, so the SPA keeps working against a backend that
+  predates ETP-5179.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
   a sync icon, both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
