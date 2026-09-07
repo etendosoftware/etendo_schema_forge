@@ -120,13 +120,13 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
     });
   }
 
-  // Also new in this ticket: the two action-specific failure titles for the un-reconcile split
-  // button. The total-failure branch used to reuse `financeReconcileToastError` ("Error al
-  // conciliar") — the wrong action for both Desconciliar and Reactivar. Each now names its own
-  // action, and the backend-supplied cause rides underneath as the toast description.
+  // Also new in this ticket: the action-specific failure title for the un-reconcile action. The
+  // total-failure branch used to reuse `financeReconcileToastError` ("Error al conciliar") — the
+  // wrong action entirely. It now names Desconciliar, and the backend-supplied cause rides
+  // underneath as the toast description. (ETP-4965 shipped a Reactivar twin of this key; ETP-5135
+  // removed the action, and with it the key — see REMOVED_REACTIVATE_KEYS below.)
   const FAILURE_TITLE_KEYS = [
     'financeReconcileToastOperationRemoveError',
-    'financeReconcileToastOperationReactivateError',
   ];
 
   for (const key of FAILURE_TITLE_KEYS) {
@@ -142,15 +142,39 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
     });
   }
 
-  it('keeps each failure title distinct from the generic reconcile error and from each other', () => {
+  it('keeps the failure title distinct from the generic reconcile error', () => {
     for (const [name, dictionary] of Object.entries({ en_US: enUS, es_ES: esES, es_AR: esAR })) {
       const g = dictionary.genericLabels;
-      const [removeKey, reactivateKey] = FAILURE_TITLE_KEYS;
-      // Collapsing either into the generic copy is exactly the bug this ticket fixed.
+      const [removeKey] = FAILURE_TITLE_KEYS;
+      // Collapsing it into the generic copy is exactly the bug ETP-4965 fixed.
       expect(g[removeKey], `${name}`).not.toBe(g.financeReconcileToastError);
-      expect(g[reactivateKey], `${name}`).not.toBe(g.financeReconcileToastError);
-      // Desconciliar and Reactivar are different actions and must read differently.
-      expect(g[removeKey], `${name}`).not.toBe(g[reactivateKey]);
+    }
+  });
+
+  // ETP-5135 — "Reactivar" was removed from the reconciliation tab: a processed reconciliation is a
+  // final state and Desconciliar is the only way out. These keys have no call site left, so they
+  // must not reappear in any locale (a stray re-add is how dead copy creeps back into translation
+  // files and, eventually, back into the UI).
+  const REMOVED_REACTIVATE_KEYS = [
+    'financeReconcileActionReactivateSelected',
+    'financeReconcileConfirmReactivateTitle',
+    'financeReconcileConfirmReactivateOneBody',
+    'financeReconcileConfirmReactivateManyBody',
+    'financeReconcileConfirmReactivateWarning',
+    'financeReconcileConfirmItemReactivateDesc',
+    'financeReconcileToastOperationReactivated',
+    'financeReconcileToastOperationReactivateError',
+    'financeReconcileReactivateOtherDraftWarning',
+    'financeReconcileConfirmItemOtherDraftTitle',
+    'financeReconcileConfirmItemOtherDraftDesc',
+    'financeReconcileToastReactivated',
+  ];
+
+  it('no longer ships any of the removed Reactivar keys in any locale', () => {
+    for (const [name, dictionary] of Object.entries({ en_US: enUS, es_ES: esES, es_AR: esAR })) {
+      const g = dictionary.genericLabels ?? {};
+      const stillThere = REMOVED_REACTIVATE_KEYS.filter((k) => k in g);
+      expect(stillThere, `${name} still ships: ${stillThere.join(', ')}`).toEqual([]);
     }
   });
 
