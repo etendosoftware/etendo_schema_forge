@@ -111814,7 +111814,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "814a87bc4436f496bb8526c1dfdc4cdfcc4d43039c4c789c5607f64b2ca73e8d",
+      "checksum": "fbe5ea22af28e6ed06e98161addea8bbc856f31e1ddef3343e044f254a626663",
       "params": [
         "183"
       ],
@@ -117753,7 +117753,7 @@
           "computation_function": null,
           "computation_mode": null,
           "defaultvalue": null,
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "em_obuiapp_process_id": "BE2486102F2C41779B760609FD69A225",

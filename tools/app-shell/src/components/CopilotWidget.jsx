@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ArrowLeft, Bot, History, Maximize2, Minimize2, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Bot, History, Loader2, Maximize2, Minimize2, Sparkles, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useCopilot } from './CopilotContext';
 import { useCurrentWindowContext } from './CurrentWindowContext';
@@ -8,17 +8,102 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.j
 import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
+import { PAGE_HELP_SUGGESTIONS, useFeatureFlag } from '@/lib/flags';
 import { AssistantSelector } from './copilot/AssistantSelector.jsx';
 import { ConversationSidebar } from './copilot/ConversationSidebar.jsx';
 import { ChatView } from './copilot/ChatView.jsx';
 
 const LEFT_SIDE_ROUTES = ['/quick-sales-order', '/quick-purchase-order'];
 
+function CopilotBody({ state, maximized, showSidebar, actions, sidebarProps, chatProps, onSelectAssistant, welcomeMessage }) {
+  if (!state.selectedAssistant) {
+    return (
+      <AssistantSelector
+        assistants={state.assistants}
+        filter={state.filter}
+        onFilterChange={actions.setFilter}
+        onSelect={onSelectAssistant}
+        isLoading={state.isLoadingAssistants}
+        welcomeMessage={welcomeMessage}
+        error={state.error}
+        data-testid="AssistantSelector__bbc4ba" />
+    );
+  }
+  if (maximized) {
+    return (
+      <div className="flex flex-1 min-h-0">
+        <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
+          <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />
+        </div>
+        <div className="flex flex-1 flex-col min-w-0">
+          <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />
+        </div>
+      </div>
+    );
+  }
+  if (showSidebar) return <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />;
+  return <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />;
+}
+
+function pageHelpCopy(state) {
+  if (state.pageHelpError) {
+    return {
+      heading: 'No pude analizar esta pantalla',
+      detail: state.pageHelpError,
+    };
+  }
+  if (state.pageHelpLoading) {
+    return {
+      heading: 'Analizando esta pantalla…',
+      detail: 'Revisando la información visible para encontrar algo útil.',
+    };
+  }
+  return {
+    heading: 'Ayuda con esta página',
+    detail: state.pageHelpSuggestion,
+  };
+}
+
+function PageHelpCallout({ state, actions }) {
+  const copy = pageHelpCopy(state);
+  const handleClick = state.pageHelpError ? actions.requestPageHelp : actions.showPageHelp;
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="fixed bottom-24 left-20 z-70 max-w-xs rounded-xl border border-primary/20 bg-card px-3 py-2 text-left text-sm text-foreground shadow-xl"
+      aria-label="Open page help in Copilot"
+      disabled={state.pageHelpLoading}
+      data-testid="PageHelpCallout__bbc4ba">
+      <span className="font-medium">{copy.heading}</span>
+      <span className="mt-1 block line-clamp-3 text-muted-foreground">{copy.detail}</span>
+    </button>
+  );
+}
+
+function PageHelpButton({ isLoading, onClick }) {
+  const icon = isLoading
+    ? <Loader2 className="h-4 w-4 animate-spin" data-testid="PageHelpLoading__bbc4ba" />
+    : <Sparkles className="h-4 w-4" data-testid="PageHelpSparkles__bbc4ba" />;
+  return (
+    <Button
+      onClick={onClick}
+      size="icon"
+      className="fixed bottom-24 left-6 z-70 h-10 w-10 rounded-full shadow-lg"
+      aria-label="Get help with this page"
+      title="Get help with this page"
+      data-testid="PageHelpButton__bbc4ba">
+      {icon}
+    </Button>
+  );
+}
+
 export function CopilotWidget({ hideTrigger = false }) {
   const { isOpen: open, close: closePanel, toggle, state, actions } = useCopilot();
   const { current: currentWindow } = useCurrentWindowContext();
   const location = useLocation();
   const ui = useUI();
+  const pageHelpEnabled = useFeatureFlag(PAGE_HELP_SUGGESTIONS);
   const isLeftSide = LEFT_SIDE_ROUTES.includes(location.pathname);
   const dockShift = isLeftSide ? '0px' : 'calc(100vw - 100% - 3rem)';
 
@@ -28,6 +113,7 @@ export function CopilotWidget({ hideTrigger = false }) {
   // Stable ref for actions — avoids re-render loops in effects.
   const actionsRef = React.useRef(actions);
   actionsRef.current = actions;
+  const pageHelpCooldownRef = React.useRef(0);
 
   const welcomeMessage = state.labels.ETCOP_Welcome_Message || ui('copilotWelcome');
   const inputPlaceholder = state.labels.ETCOP_Message_Placeholder || ui('askSomething');
@@ -77,6 +163,41 @@ export function CopilotWidget({ hideTrigger = false }) {
       actionsRef.current.loadArchivedConversations();
     }
   }, [maximized, assistantAppId, conversationId]);
+
+  // Proactive page guidance is intentionally throttled: route changes and
+  // meaningful UI clicks can trigger a single DOM inspection, but typing in a
+  // field or repeatedly clicking a control must not create an AI request loop.
+  React.useEffect(() => {
+    if (!pageHelpEnabled || !actionsRef.current.requestPageHelp || location.pathname === '/dashboard') return undefined;
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      if (now < pageHelpCooldownRef.current) return;
+      pageHelpCooldownRef.current = now + 10000;
+      actionsRef.current.requestPageHelp();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.search, pageHelpEnabled]);
+
+  React.useEffect(() => {
+    if (!pageHelpEnabled || !actionsRef.current.requestPageHelp) return undefined;
+    let timer;
+    const handleInteraction = (event) => {
+      if (event.target.closest('[data-testid="CopilotWidget__bbc4ba"], [data-testid="PageHelpButton__bbc4ba"], input, textarea, [contenteditable="true"]')) return;
+      if (!event.target.closest('button, a, [role="button"], [role="tab"], [role="menuitem"]')) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const now = Date.now();
+        if (now < pageHelpCooldownRef.current) return;
+        pageHelpCooldownRef.current = now + 10000;
+        actionsRef.current.requestPageHelp();
+      }, 1000);
+    };
+    document.addEventListener('click', handleInteraction, true);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('click', handleInteraction, true);
+    };
+  }, [pageHelpEnabled]);
 
   // Escape key: un-maximize first, then close
   React.useEffect(() => {
@@ -179,46 +300,6 @@ export function CopilotWidget({ hideTrigger = false }) {
     inputPlaceholder,
   };
 
-  // --- Render body based on mode ---
-
-  function renderBody() {
-    // Assistant selector (same in both modes)
-    if (!state.selectedAssistant) {
-      return (
-        <AssistantSelector
-          assistants={state.assistants}
-          filter={state.filter}
-          onFilterChange={actions.setFilter}
-          onSelect={handleSelectAssistant}
-          isLoading={state.isLoadingAssistants}
-          welcomeMessage={welcomeMessage}
-          error={state.error}
-          data-testid="AssistantSelector__bbc4ba" />
-      );
-    }
-
-    // Maximized: sidebar always visible on the left, chat on the right
-    if (maximized) {
-      return (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
-            <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />
-          </div>
-          <div className="flex flex-1 flex-col min-w-0">
-            <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />
-          </div>
-        </div>
-      );
-    }
-
-    // Compact: toggle between sidebar view and chat view
-    if (showSidebar) {
-      return <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />;
-    }
-
-    return <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />;
-  }
-
   return (
     <>
       {/* Panel */}
@@ -304,10 +385,28 @@ export function CopilotWidget({ hideTrigger = false }) {
           <CardContent
             className="flex flex-1 min-h-0 flex-col p-0"
             data-testid="CardContent__bbc4ba">
-            {renderBody()}
+            <CopilotBody
+              state={state}
+              maximized={maximized}
+              showSidebar={showSidebar}
+              actions={actions}
+              sidebarProps={sidebarProps}
+              chatProps={chatProps}
+              onSelectAssistant={handleSelectAssistant}
+              welcomeMessage={welcomeMessage}
+              data-testid="CopilotBody__bbc4ba" />
           </CardContent>
         </Card>
       </div>
+      {pageHelpEnabled && (state.pageHelpSuggestion || state.pageHelpLoading || state.pageHelpError) && !open && actions.showPageHelp && (
+        <PageHelpCallout state={state} actions={actions} data-testid="PageHelpCallout__bbc4ba" />
+      )}
+      {pageHelpEnabled && actions.requestPageHelp && (
+        <PageHelpButton
+          isLoading={state.pageHelpLoading}
+          onClick={actions.requestPageHelp}
+          data-testid="PageHelpButton__bbc4ba" />
+      )}
       {/* FAB button */}
       {!hideTrigger && <Button
         onClick={toggle}

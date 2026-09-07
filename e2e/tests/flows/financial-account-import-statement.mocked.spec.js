@@ -137,7 +137,7 @@ async function installMocks(page, { preview, importResult } = {}) {
 async function gotoReviewStep(page) {
   await page.getByTestId('detail-tab-statements').click();
   await page.getByTestId('statements-import-button').click();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.getByTestId('import-statement-file-input').setInputFiles({
     name: 'extracto-prueba.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(

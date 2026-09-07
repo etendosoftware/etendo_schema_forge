@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-31T17:56:47.501Z",
-  "checksum": "7c8084d663b32794",
+  "updatedAt": "2026-09-03T23:56:25.177Z",
+  "checksum": "22c7cb75fe65e836",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -73,6 +73,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
@@ -2507,6 +2510,9 @@
         }
       ],
       "layoutType": "gallery",
+      "vectorSearch": {
+        "target": "product"
+      },
       "import": {
         "enabled": true,
         "spec": "product",
