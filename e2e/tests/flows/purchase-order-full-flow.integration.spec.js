@@ -221,13 +221,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Confirm PO — check only "Create receipt" (no invoice)', async () => {
-      await clickConfirmButton(page);
-
-      // Wait for the confirm modal to appear
-      const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-      await expect(confirmModal,
-        'Confirm modal should appear with order summary',
-      ).toBeVisible({ timeout: 10_000 });
+      await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
       // Check only the "Create receipt" checkbox — invoice will be created from the receipt
       const receiptCheckbox = page.getByText(/crear albarán|crear recibo|create receipt/i).first();
@@ -274,9 +268,8 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await expectStatusPill(page, /borrador|draft/i,
         '[Plan 14.1] Receipt should be in Draft status');
 
-      await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-        '[Plan 6.3] Receipt should have 2 lines inherited from the PO',
-      ).toBeVisible({ timeout: 10_000 });
+      await waitForLinesSettled(page, 2,
+        '[Plan 6.3] Receipt should have 2 lines inherited from the PO');
 
       // Click "Confirmar" in the topbar
       await clickConfirmButton(page);
@@ -559,9 +552,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await addProductLine(page, { productIndex: 1, quantity: '-2' });
 
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'PO should have 2 lines (baseline + negative)',
-    ).toBeVisible({ timeout: 10_000 });
+    await waitForLinesSettled(page, 2, 'PO should have 2 lines (baseline + negative)');
 
     // [Checks #1 & #2] Locate the negative line by its actual quantity cell
     // value and verify it — and its gross amount — stayed negative.
@@ -644,12 +635,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // STEP 5: Confirm PO — "Create receipt" only
     // ═══════════════════════════════════════════════════════════════════════
 
-    await clickConfirmButton(page);
-
-    const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-    await expect(confirmModal,
-      'Confirm modal should appear with order summary',
-    ).toBeVisible({ timeout: 10_000 });
+    await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
     const receiptCheckbox = page.getByText(/crear albarán|crear recibo|create receipt/i).first();
     await expect(receiptCheckbox).toBeVisible({ timeout: 5_000 });
@@ -1115,12 +1101,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // negative amount, never the hardcoded '0,00' fallback.
     // ═══════════════════════════════════════════════════════════════════════
 
-    await clickConfirmButton(page);
+    await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
     const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-    await expect(confirmModal,
-      'Confirm modal should appear with order summary',
-    ).toBeVisible({ timeout: 10_000 });
     const confirmCard = confirmModal.locator('xpath=ancestor::div[contains(@style,"width")][1]');
 
     // [ETP-4567 frontend fix] The literal '0,00' fallback text must be gone —

@@ -313,7 +313,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        hidePrintWhen={true}
+        hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}

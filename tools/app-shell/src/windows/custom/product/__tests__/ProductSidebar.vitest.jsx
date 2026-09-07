@@ -213,3 +213,30 @@ describe('ProductSidebar', () => {
     expect(screen.getByText('last3Months')).toBeInTheDocument();
   });
 });
+
+// ETP-4606 / ETP-5091 — Service, Expense ("Gasto") and Resource ("Recurso")
+// products have no physical existence, so the stock sidebar (period selector,
+// availability widget, stock movement chart) does not apply to them and must
+// not render at all. Mirrors the equivalent rule in
+// `ProductAdditionalInfoPanel.jsx` for the Logistics section.
+describe.each([
+  ['Service', 'S'],
+  ['Expense', 'E'],
+  ['Resource', 'R'],
+])('ProductSidebar — hidden for %s-type products (ETP-4606 / ETP-5091)', (_label, productType) => {
+  it(`renders nothing when productType is ${productType}`, () => {
+    mockFetchResponses();
+    const { container } = render(
+      <ProductSidebar {...defaultProps} data={{ productType }} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('ProductSidebar — stays visible for stockable types', () => {
+  it('renders normally for a stockable type (Article)', () => {
+    mockFetchResponses();
+    render(<ProductSidebar {...defaultProps} data={{ productType: 'I' }} />);
+    expect(screen.getByText('last3Months')).toBeInTheDocument();
+  });
+});

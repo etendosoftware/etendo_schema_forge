@@ -4,6 +4,7 @@ import { render } from '@testing-library/react';
 // ── i18n stub: return the key as-is ──────────────────────────────────────────
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLabel: () => (key) => key,
 }));
 
 // EntityForm is stubbed to a capture harness: it records, per render, the `onChange`
