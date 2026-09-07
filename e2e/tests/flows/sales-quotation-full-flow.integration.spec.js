@@ -861,9 +861,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await addLine(page, { isFirst: true, productIndex: 0, quantity: '-2' });
     await addLine(page, { productIndex: 1, quantity: '-3' });
 
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'Quotation should have 2 lines, both negative',
-    ).toBeVisible({ timeout: 10_000 });
+    await waitForLinesSettled(page, 2, 'Quotation should have 2 lines, both negative');
 
     const quotRows = page.locator('[data-testid^="line-row-"]');
     const quotRowCount = await quotRows.count();
