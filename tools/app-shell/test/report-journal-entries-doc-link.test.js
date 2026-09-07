@@ -84,9 +84,19 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
     assert.ok(DOC_WINDOW_CASE.trim().length > 0, 'doc_window CASE expression not found in the SQL');
   });
 
-  it('branches on exactly the three source tables that have a Schema Forge window', () => {
+  it('branches on exactly the source tables that have a Schema Forge window', () => {
+    // M_MATCHINV -> matched-purchase-invoices and A_AMORTIZATION -> amortization
+    // added in the ETP-5013 follow-up: both post fact_acct rows whose
+    // `record_id` IS the target window's primaryEntity PK (M_MatchInv_ID /
+    // A_Amortization_ID — verified against the real DB, 1530/1530 and 2/2
+    // rows resolve), so they reuse the generic navigate-invoice mechanism
+    // untouched. FIN_FINACC_TRANSACTION is the one case whose record_id is NOT
+    // what the URL navigates to: it's a transaction id, while the
+    // `financial-account` window's own primaryEntity is the ACCOUNT — hence
+    // the separate `doc_record_id` (account to open) and `doc_query`
+    // (`txn=<id>`, so the window deep-links to the right movement) columns.
     const tables = [...DOC_WINDOW_CASE.matchAll(/UPPER\(adt\.tablename\)\s*=\s*'([A-Z_]+)'/gi)].map((m) => m[1]);
-    assert.deepEqual(tables, ['C_INVOICE', 'M_INOUT', 'M_INVENTORY']);
+    assert.deepEqual(tables, ['C_INVOICE', 'M_INOUT', 'M_INVENTORY', 'M_MATCHINV', 'A_AMORTIZATION', 'FIN_FINACC_TRANSACTION']);
   });
 
   it('normalises the table name with UPPER() (ad_table.tablename casing is not guaranteed)', () => {
@@ -183,8 +193,19 @@ describe('report-journal-entries — entry number link markup (ETP-5013)', () =>
     assert.match(ENTRY_NO_LINE, /type:'navigate-invoice'/);
   });
 
-  it("carries the row's record_id as the target document id", () => {
-    assert.match(ENTRY_NO_LINE, /invoiceId:'\{\{lookup this 'record_id'\}\}'/);
+  it('carries doc_record_id as the target document id', () => {
+    // doc_record_id, not record_id (ETP-5013 follow-up): they are the same
+    // value for every window except financial-account, whose row points at a
+    // transaction while the URL must open its PARENT account.
+    assert.match(ENTRY_NO_LINE, /invoiceId:'\{\{lookup this 'doc_record_id'\}\}'/);
+  });
+
+  it('carries the optional deep-link key and value for windows that need one', () => {
+    // Key and value stay SEPARATE all the way to the shell — see the
+    // applyPlaceholders regression test below for why the '=' must not
+    // appear next to a quote inside the report's SQL.
+    assert.match(ENTRY_NO_LINE, /docQueryKey:'\{\{lookup this 'doc_query_key'\}\}'/);
+    assert.match(ENTRY_NO_LINE, /docQueryValue:'\{\{lookup this 'record_id'\}\}'/);
   });
 
   it('carries the resolved doc_window so the shell knows which window to open', () => {
@@ -202,7 +223,7 @@ describe('report-journal-entries — entry number link markup (ETP-5013)', () =>
   });
 });
 
-// ── Part 4: real render, all seven windows + the null case ─────────────────
+// ── Part 4: real render, all nine windows + the null case ──────────────────
 
 const WINDOW_CASES = [
   { doc_window: 'sales-invoice', document_type: 'AR Invoice' },
@@ -212,6 +233,19 @@ const WINDOW_CASES = [
   { doc_window: 'return-material-receipt', document_type: 'MM Return Material Receipt' },
   { doc_window: 'return-to-vendor-shipment', document_type: 'MM Return to Vendor Shipment' },
   { doc_window: 'physical-inventory', document_type: 'MM Physical Inventory' },
+  // ETP-5013 follow-up. "Amortization" reaches the report labelled 'Journal'
+  // (document_type's own COALESCE falls through to that literal for
+  // A_Amortization rows, which have no c_doctype name) — the LINK is driven
+  // by doc_window, never by the label, so it links while still reading
+  // "Journal", exactly as Classic does.
+  { doc_window: 'matched-purchase-invoices', document_type: 'Match Invoice' },
+  { doc_window: 'amortization', document_type: 'Journal' },
+  {
+    doc_window: 'financial-account',
+    document_type: 'Financial Account Transaction',
+    doc_record_id: 'ACCT0000000000000000000000000',
+    doc_query_key: 'txnAny',
+  },
   { doc_window: null, document_type: 'Journal' },
 ];
 
@@ -227,6 +261,11 @@ const ROWS = WINDOW_CASES.map((c, i) => ({
   costcentername: null,
   fact_acct_group_id: `group-${i + 1}`,
   record_id: `REC${String(i + 1).padStart(29, '0')}`,
+  // doc_record_id is what the URL path uses — same as record_id for every
+  // window except financial-account, which navigates to the PARENT account
+  // and carries the transaction in doc_query instead.
+  doc_record_id: c.doc_record_id ?? `REC${String(i + 1).padStart(29, '0')}`,
+  doc_query_key: c.doc_query_key ?? null,
   ad_table_id: '318',
   account_no: '43000',
   account_name: 'Clientes',
@@ -270,7 +309,9 @@ describe('report-journal-entries — rendered entry link output (ETP-5013)', () 
       const cell = CELLS[i];
       const expected =
         `<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',` +
-        `invoiceId:'${ROWS[i].record_id}',docWindow:'${c.doc_window}'},'*')">${ROWS[i].entry_no}</span>`;
+        `invoiceId:'${ROWS[i].doc_record_id}',docWindow:'${c.doc_window}',` +
+        `docQueryKey:'${ROWS[i].doc_query_key ?? ''}',` +
+        `docQueryValue:'${ROWS[i].record_id}'},'*')">${ROWS[i].entry_no}</span>`;
       assert.equal(cell, expected);
     });
   }

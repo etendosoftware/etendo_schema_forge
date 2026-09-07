@@ -8,6 +8,7 @@
 
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
 
 // jsdom does not implement IntersectionObserver — SelectorPopup's infinite
 // scroll sentinel needs a stub so the component can mount.
@@ -243,7 +244,7 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     });
   });
 
-  it('shows a validation error when a required popup-single param is empty on submit', async () => {
+  it('disables every report action while a required popup-single param is empty', async () => {
     const reqReport = {
       ...BASE_REPORT,
       parameters: [
@@ -257,19 +258,17 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(reqReport));
       return Promise.resolve(makeSelectorResponse([]));
     });
-    const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
-    // The sidebar's own "Generate Report" button is now disabled while a
-    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
-    // longer be used to trigger validateRequired() here. The top-bar PDF
-    // button still calls validateRequired() unconditionally (only gated by
-    // `loading`), so it remains a reachable path to the same error state.
-    expect(screen.getByText('runReport')).toBeDisabled();
-    await user.click(screen.getByText('PDF'));
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    // ETP-4900: the sidebar's own "Generate Report" button AND the top-bar
+    // PDF/Excel/CSV/Print actions all share the same hasAllRequiredFilled
+    // gate now, so with the required popup-single param empty none of them
+    // is a reachable path to trigger a render — they're simply disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
   });
 
   it('passes dependsOn extraParams (account schema) when opening a dependent popup with a resolved dependency', async () => {
@@ -790,6 +789,71 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     expect(target).toBe('_blank');
 
     expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+
+    window.open = originalOpen;
+  });
+
+  // ETP-5013 follow-up: a Financial Account Transaction has no window of its
+  // own — the report sends the PARENT account as invoiceId plus a docQuery
+  // (`txnAny=<transaction id>`) so the financial-account window can deep-link to
+  // the exact movement. The handler stays data-driven: it appends whatever
+  // query the report supplies, never a window-specific param name.
+  it('appends the report-supplied deep-link key/value to the opened URL', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice',
+        invoiceId: 'acct-1',
+        docWindow: 'financial-account',
+        docQueryKey: 'txnAny',
+        docQueryValue: 'txn-7',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/financial-account\/acct-1\?txnAny=txn-7$/);
+
+    window.open = originalOpen;
+  });
+
+  it('opens a clean URL with no trailing "?" when the report supplies no deep-link', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+
+    // An empty string is what Handlebars renders for a null doc_query_key — it
+    // must be treated as "no query", not as a bare "?".
+    window.dispatchEvent(new MessageEvent('message', {
+      data: {
+        type: 'navigate-invoice', invoiceId: 'inv-77', docWindow: 'sales-invoice',
+        docQueryKey: '', docQueryValue: 'REC1',
+      },
+    }));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    const [url] = openSpy.mock.calls[0];
+    expect(url).toMatch(/\/sales-invoice\/inv-77$/);
+    expect(url).not.toContain('?');
 
     window.open = originalOpen;
   });

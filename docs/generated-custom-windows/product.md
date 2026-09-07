@@ -14,6 +14,7 @@ identity of separate data series and is not a UI status or theme role.
 
 ## What this window should allow
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
+- Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.
 - Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
@@ -46,7 +47,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - **Master/child dependency:** the selected product drives price, stock, and transaction loading through `parentId=<productId>`.
 - **Gallery/detail dependency:** selecting a product card in the gallery navigates into that product's detail route.
 - **Additional Info grouping:** the `Additional Info` tab is a custom panel rendered as two-column row sections. Each row section has a left column (148 px wide) containing a section title and description, and a right column (`flex-1`) holding an `EntityForm`. The `Commercial` row groups `Tax Category`, `Sale`, and `Purchase`; an HR divider separates it from the `Logistics` row, which groups `Almacenable` ("Stocked"/`IsStocked` — relabeled from "Almacenado" in ETP-4943), `Returnable`, `Weight`, and `UOM for Weight`. The outer wrapper applies `[&_input]:bg-white` so all input fields, including `Weight`, render on a white background.
-- **Logistics hidden for Service products (ETP-4943):** the entire `Logistics` row (divider included) does not render when `productType === 'S'` — a Service product has no physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for Service products (ETP-4606). While editing, switching the type to Service also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so a Service product can never be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
+- **Logistics hidden for Service/Expense/Resource products (ETP-4943, extended in ETP-5091):** the entire `Logistics` row (divider included) does not render when `productType` is `'S'` (Service), `'E'` (Expense/"Gasto") or `'R'` (Resource/"Recurso") — none of these have a physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for the same three types (ETP-4606, extended in ETP-5091). While editing, switching the type to one of these also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so none of these product types can ever be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
 - **Selector dependencies:** the current evidence shows selector-backed maintenance for category, tax category, UOM, UOM for weight, attribute set, brand, lifecycle status, warehouse, currency, characteristic, characteristic subset, storage bin, and price-list-version references where relevant.
 - **Pricing tab states:**
   - When the product has not been saved yet, the `Price` tab shows a save-first message and blocks pricing maintenance.
@@ -81,6 +82,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 
 ## Manual verification
 1. Open `/product` and confirm the list is a gallery of product cards rather than a flat table.
+1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
 4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
@@ -103,7 +105,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - Shared shell/route behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`, especially the generated/custom window loading flow and the shared entity list/detail flow.
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
-  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType === 'S'`
+  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943, extended in ETP-5091) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType` is `'S'`, `'E'` or `'R'`
   - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
@@ -119,6 +121,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.test.js` verifies that `ProductSidebar` uses the shared `formatDashboardAxisTick` utility for Y-axis labels and does not define a local formatting function. Beyond that, automated evidence in this repo is structural and contract-backed rather than end-to-end proof of the full product workflow.
 
 ## Pipeline regeneration — ETP-4402
@@ -198,7 +201,7 @@ Updated on 2026-06-08 as part of the feature/ETP-4190 branch. Significant change
 
 ## ETP-4447 — CSV/TXT import
 
-**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
+**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "product"`, `entity: "product"`, `formats: ["csv", "txt", "xlsx"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
 
 **Composite descriptor — 4 columns, product + price in one batch (ETP-4669).** ⚠️ **Superseded by ETP-4995:** the import now has eight columns (adding `productType`, `uOM`, and splitting `price` into `salesPrice`/`purchasePrice`); see the ETP-4995 section at the end. Historically the import supported exactly four CSV columns: `searchKey` (aliases `codigo`/`código`/`sku`), `name` (alias `nombre`), `description` (aliases `descripcion`/`descripción`), and `price` (alias `precio`). `productImportDescriptor.js` (registered as `product`, wired via `windows/custom/product/index.jsx`) builds a `product` create op from searchKey/name/description, plus — only when the row has a price — a second `price` op (`M_ProductPrice`) `parentRef`-linked to the product in the same `/batch` call, mirroring how `contactsImportDescriptor.js` links its child records. The single CSV `price` is written as `standardPrice`/`listPrice`/`priceLimit` against the org's default **sales** price list version, resolved ONCE per import run from `/price/selectors/M_PriceList_Version_ID` (the same version `ProductPriceBar.jsx`'s add-tariff flow lands on). A non-empty, non-numeric price fails that row with a friendly error; a priced row in an environment with no sales price list also fails clearly rather than guessing.
 
@@ -505,3 +508,95 @@ Regression coverage: `importRowValidators.vitest.js`, the extended
 `importTemplateRoundTrip.vitest.js` (which now also asserts the shipped sample row validates),
 and in app-shell-core `existingRecordLookup.test.js`, `parseImportNumber.test.js`,
 `rowValidators.test.js` plus the ETP-4996 block in `ImportDialog.test.jsx`.
+
+## ETP-4997 — CSV and Excel export from the list
+
+**Export button beside Import.** The list toolbar (`ListView.jsx`) gained an Export action on the
+same `window.import.enabled` gate, streaming the current list as CSV through the backend's
+generic `export=csv` flag (`NeoCsvExportService`, com.etendoerp.go) via the `useCsvExport` hook.
+The full mechanism — why the query is re-run instead of exporting the rows already in memory, and
+why the headers come out of app-shell-core's `resolveTemplateHeaders` rather than being
+re-derived — is documented once in the [Contacts guide](contacts.md#etp-4997--csv-export-from-the-list).
+
+**Products is the clean case: all eight columns carry data.** Unlike Contacts, no import field is
+`headerScope`-scoped, so every column of the template exports with a value. Three need a
+source-key override in `productImportDescriptor.js` (`registerExportHints`) because the list row
+spells them differently from the import target:
+
+| Import target | List-row key | Why |
+|---|---|---|
+| `category` | `productCategory$_identifier` | different name; the `$_identifier` half is the label the import can resolve back |
+| `salesPrice` | `eTGOSalePrice` | the import writes M_ProductPrice rows, which are not on a product row; the list exposes the Etendo GO convenience column |
+| `purchasePrice` | `eTGOPurchasePrice` | same |
+
+`uOM` needs no entry — its `matchEntity` already marks it as a foreign key, so it resolves to
+`uOM$_identifier` by the generic rule. `productType` exports as the word (`Articulo`, `Servicio`,
+`Gasto`) rather than the stored `I`/`S`/`E`, via a `valueLabels` table inverted from
+`PRODUCT_TYPE_VALUES` with `codeLabels()`; see the [Contacts
+guide](contacts.md#etp-4997--csv-export-from-the-list) for why the labels come from the synonym
+table instead of the AD reference list.
+
+**Excel (.xlsx) on both ends.** Import accepts `.xlsx` too, and the template and export each
+offer CSV or Excel. Product needs no window-specific work for it: the xlsx reader
+(`parseXlsx`, app-shell-core) returns exactly what `parseDelimited` returns, so this window's
+`registerExportHints` source keys, its `productType` value labels and its numeric price/stock
+validation all apply unchanged whichever format the file arrives in. The only per-window change is
+`window.import.formats` gaining `"xlsx"` — which is also what makes that key stop being dead
+config. `txt` stays: it is input-only, and the export never writes one.
+
+The behaviour and the reasoning are identical to Contacts and documented once there, in
+`docs/generated-custom-windows/contacts.md` — in particular why every written cell is a text cell,
+why the CSV formula apostrophe must not reach a workbook, and why a date cell has to be read with
+UTC getters. Full design: `docs/plans/2026-08-31-xlsx-import-export-support.md`.
+
+Regression coverage: the product cases in `importExportColumns.vitest.js`, which pin every one of
+the eight source keys and assert header parity plus a full re-import round trip against
+`buildTemplateCsv`/`mapColumns` in both a Spanish and an English session.
+
+**A skipped row now shows its data.** A product skipped because it already exists rendered in the
+review queue as `Omitida` with every data column blank — the row's values were present in the
+entry all along, but `ImportReviewQueue` replaced them with one cell spanning the grid that
+repeated the status label. Fixed generically in app-shell-core (one `RowDataCells` renderer shared
+with the OK branch, plus the skip *reason* in the space the duplicated label used to occupy), so it
+applies to every window with an import, not just this one. Reasoning and coverage in the
+[Contacts guide](contacts.md#a-skipped-row-showed-no-data--etp-4997).
+
+## Logistics hidden for Expense/Resource products too — ETP-5091
+
+Twin bug of ETP-4943, reported separately: `productType` values `'E'` (Expense/"Gasto") and `'R'`
+(Resource/"Recurso")  — like `'S'` (Service) — have no physical existence in inventory, but the
+Logistics section and the stock sidebar only checked for `'S'`, so Gasto/Recurso products still
+showed and could still be saved with `Almacenable`/`Retornable` set. Same three surfaces as
+ETP-4943, all generalized from a single `'S'` check to a `NON_STOCKABLE_PRODUCT_TYPES` set/list of
+`'S'`/`'E'`/`'R'` — no new mechanism introduced:
+
+- **`ProductAdditionalInfoPanel.jsx`** — `isService` (`=== 'S'`) replaced by `isNonStockable`
+  (`NON_STOCKABLE_PRODUCT_TYPES.has(productType)`), gating both the `Logistics` row's
+  `{!isNonStockable && (...)}` wrapper and the force-false `useEffect`.
+- **`ProductSidebar.jsx`** — `data?.productType === 'S'` replaced by
+  `['S', 'E', 'R'].includes(data?.productType)`.
+- **`com.etendoerp.go`'s `ProductDefaultsHandler.java`** — `enforceServiceProductNotStockable`
+  renamed to `enforceNonStockableProductTypes`, `PRODUCT_TYPE_SERVICE` replaced by a
+  `NON_STOCKABLE_PRODUCT_TYPES` `Set.of("S", "E", "R")`. Same authoritative-server-side reasoning
+  as ETP-4943 applies unchanged: the frontend `useEffect` only fires while `Additional Info` is
+  mounted, so the server guard is what actually guarantees a Gasto/Recurso product can never
+  persist as stocked/returnable when saved straight from `General`.
+- **`'Online'` (`'O'`) was deliberately left out** — the ticket's own reported/expected cases only
+  named Gasto and Recurso; Online was not requested and is not touched by this change.
+
+**Reproduced live** with Playwright against a running instance before the fix: created a product,
+set `Tipo` to `Gasto` (then `Recurso`), confirmed the `Logistics` row and the stock sidebar both
+stayed visible/editable — matching the ticket's steps exactly. Post-fix live re-verification is
+tracked in the ticket.
+
+Coverage:
+- `e2e/tests/flows/product-logistics-nonstockable-types.mocked.spec.js` — end-to-end mocked repro
+  of the reported bug: Logistics section and stock sidebar hidden for Gasto/Recurso, control case
+  (Artículo) still shows both.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductAdditionalInfoPanel.vitest.jsx` —
+  the ETP-4943 Service cases parametrized (`describe.each`) across Service/Expense/Resource.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.vitest.jsx` — new coverage
+  (none existed before ETP-5091) asserting the sidebar renders nothing for Service/Expense/Resource
+  and renders normally for Article.
+- `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` — the ETP-4943 Service POST/PATCH/absent-flags
+  cases mirrored for Expense and Resource.

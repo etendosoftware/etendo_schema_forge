@@ -45,7 +45,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['name', 'accountingDate', 'currency'];
+const requiredHeaderFields = ['name', 'accountingDate', 'startingDate', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -316,6 +316,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{"hideDeleteButton":true}}
+      listSortBy="accountingDate desc"
       {...props} window={effectiveWindow}
     />
   );

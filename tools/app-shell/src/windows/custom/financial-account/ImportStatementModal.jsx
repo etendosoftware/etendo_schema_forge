@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { AlertTriangle, ArrowRight, Check, ChevronDown, FileText, UploadCloud, X } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useStatementImport } from '@/hooks/useStatementImport';
@@ -17,15 +18,6 @@ function formatBytes(bytes) {
   const kb = bytes / 1024;
   if (kb < 1024) return `${Math.round(kb)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
-}
-
-function formatDate(iso, bcpLocale) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(bcpLocale, {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(d);
 }
 
 function formatMoney(amount, currency) {
@@ -155,8 +147,8 @@ const ERROR_CODE_TO_KEY = {
 };
 
 function formatPeriod(from, to, bcpLocale) {
-  if (from === to) return formatDate(from, bcpLocale);
-  return `${formatDate(from, bcpLocale)} – ${formatDate(to, bcpLocale)}`;
+  if (from === to) return formatCalendarDate(from, bcpLocale);
+  return `${formatCalendarDate(from, bcpLocale)} – ${formatCalendarDate(to, bcpLocale)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,7 +376,7 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
                 key={lineKeyOf(l)}
                 className={cn(PREV_GRID, 'border-b border-[hsl(var(--border-subtle))] py-2 last:border-0')}
               >
-                <span className="text-sm text-[hsl(var(--foreground))]">{formatDate(l.date, bcpLocale)}</span>
+                <span className="text-sm text-[hsl(var(--foreground))]">{formatCalendarDate(l.date, bcpLocale)}</span>
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{l.description || '—'}</span>
                   {l.bpartnerName ? (
@@ -443,6 +435,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
       <input
         ref={inputRef}
         type="file"
+        data-testid="import-statement-file-input"
         accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}
@@ -488,6 +481,7 @@ function SelectedFileBody({
       <input
         ref={inputRef}
         type="file"
+        data-testid="import-statement-file-input"
         accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}

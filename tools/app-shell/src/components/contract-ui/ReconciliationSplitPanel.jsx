@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, RotateCcw, SearchX } from 'lucide-react';
+import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, Unlink, SearchX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 // Same cartel Movimientos and Cobros/Pagos use for their reactivate/delete confirmations, so every
 // lifecycle confirmation in the app looks identical (DetailView.jsx imports its payment sibling the
 // same way).
@@ -17,12 +11,17 @@ import {
   WriteoffBreakdown, WriteoffToggleRow, writeoffState,
 } from './WriteoffAdjustment.jsx';
 import {
-  DifferenceBanner, DifferenceModal, differenceState,
+  DifferenceBanner, DifferenceModal, GlItemSetupDialog, differenceState,
 } from './ReconciliationDifference.jsx';
+import { useAccountMutations } from '@/hooks/useAccountMutations.js';
+import {
+  STATUS_CODES, countForStatus, matchesStatus,
+} from './reconciliationStatusFilter.js';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { ListProgressBar } from './ListProgressBar.jsx';
+import { StatusBadge } from './reconciliationBadges.jsx';
 import {
   Table,
   TableHeader,
@@ -52,7 +51,6 @@ import {
   useCandidateOperations,
   useReconcileGroup,
   useRemoveOperation,
-  useReactivateSelected,
   useReconcileDifference,
 } from '@/hooks/useReconciliation';
 
@@ -64,7 +62,6 @@ const SKELETON_CELL_KEYS = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5'];
 // Elevation shadow shared by the selected row in both panels.
 const ELEVATED_SHADOW =
   'shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]';
-const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
 // i18n label key per status code, shared by the filter and the row badges.
 const STATUS_LABEL_KEY = {
   pending: 'financeReconcileFilterStatusPending',
@@ -74,26 +71,8 @@ const STATUS_LABEL_KEY = {
   reconciled: 'financeReconcileFilterStatusReconciled',
 };
 
-/** Pill badge for line/candidate status. Suggested → blue, reconciled → green, else grey. */
-function StatusBadge({ kind }) {
-  const ui = useUI();
-  // Figma badge palette: grey / blue / amber / red / green (all full pills).
-  const map = {
-    suggested: { labelKey: 'financeReconcileBadgeSuggested', cls: 'bg-[var(--status-info-bg)] text-[var(--status-info-fg)]' },
-    byRule: { labelKey: 'financeReconcileBadgeByRule', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-    difference: { labelKey: 'financeReconcileBadgeDifference', cls: 'bg-[var(--status-destructive-bg)] text-[hsl(var(--destructive))]' },
-    reconciled: { labelKey: 'financeReconcileBadgeReconciled', cls: 'bg-[var(--status-success-bg)] text-[var(--status-success-fg)]' },
-    pending: { labelKey: 'financeReconcileBadgePending', cls: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]' },
-    invoice: { labelKey: 'financeReconcileBadgeInvoice', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-    partial: { labelKey: 'financeReconcileBadgePartial', cls: 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]' },
-  };
-  const cfg = map[kind] ?? map.pending;
-  return (
-    <span className={cn('inline-flex h-6 items-center rounded-full px-2 py-0.5 text-xs font-normal', cfg.cls)}>
-      {ui(cfg.labelKey)}
-    </span>
-  );
-}
+/* StatusBadge moved to ./reconciliationBadges.jsx (ETP-4965 QA round) so the automatch modal renders
+   the very same pill: same palette, same labels, one place to change them. */
 
 /**
  * Badge kind for a candidate row: reconciled (read-only) → invoice → near match → suggested →
@@ -130,7 +109,9 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
 
 function ReconciliationStatusFilter({ value, onChange, counts = {} }) {
   const ui = useUI();
-  const countFor = (code) => counts[code] ?? 0;
+  // Summed over the states each code covers, not read straight off `counts` — the "Pendiente" entry
+  // is a superset, so its own bucket would under-report the rows it shows (ETP-5033).
+  const countFor = (code) => countForStatus(counts, code);
   return (
     <DistinctValuesFilter
       value={value}
@@ -160,11 +141,9 @@ function ReconciliationSourceFilter({ value, onChange, counts = {} }) {
   return (
     <DistinctValuesFilter
       value={value}
-      // Always keep a concrete selection — ignore the "clear" (all) action.
-      onChange={(v) => onChange(v || value)}
+      onChange={onChange}
       codes={SOURCE_CODES}
       labelFor={(code) => `${ui(SOURCE_META[code]?.labelKey ?? code)} (${counts[code] ?? 0})`}
-      allLabel={ui('financeReconcileSourceLabel')}
       searchPlaceholder={ui('financeReconcileSourceLabel')}
       popoverWidth="w-64"
       data-testid="recon-source-filter" />
@@ -477,7 +456,7 @@ function StatementLinesPanel({
         <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
       </button>
       <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} data-testid="ReconciliationStatusFilter__d0f4d5" />
-      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('financeReconcileFilterDate')} data-testid="DateRangePopover__d0f4d5" />
+      <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />
     </ToolbarShell>
   );
 
@@ -767,7 +746,7 @@ function CandidateOperationsPanel({
       <DateRangePopover
         value={dateRange}
         onChange={onDateRangeChange}
-        placeholder={ui('financeReconcileFilterDate')}
+        placeholder={ui('dateRangeAnyTime')}
         data-testid="DateRangePopover__d0f4d5" />
       </ToolbarShell>
     </>
@@ -798,7 +777,7 @@ function CandidateOperationsPanel({
 /** Bottom action bar with the running totals and the reconcile / placeholder buttons. */
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
-  busy, onCancel, onReconcile, onReactivate, differenceNotice = null,
+  busy, onCancel, onReconcile, differenceNotice = null,
 }) {
   const ui = useUI();
   return (
@@ -844,57 +823,24 @@ function ReconciliationActionBar({
           <X className="h-4 w-4" data-testid="X__d0f4d5" />
           {ui('financeReconcileActionCancel')}
         </button>
-        {/* On a reconciled line the primary action ("Desconciliar (N)") gets a chevron exposing the
-            lighter alternative, "Reactivar": same checked selection, but the reconciliation is kept
-            in draft (transactions stay linked) instead of being deleted, so it can be re-processed
-            as-is later. A pending line keeps the plain "Conciliar" button. */}
-        <div className="inline-flex items-stretch overflow-hidden rounded-full">
-          <button
-            type="button"
-            onClick={onReconcile}
-            // A reconciled line shows "Desconciliar (N)" acting on the checked documents (N = checked
-            // count, disabled when none); a pending line gates "Conciliar" on a balanced selection.
-            disabled={busy || (isReconciledLine ? removeCount === 0 : !canReconcile)}
-            data-testid="recon-action-reconcile"
-            className={cn(
-              'inline-flex h-8 items-center gap-1.5 bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground',
-              isReconciledLine && onReactivate ? 'rounded-l-full' : 'rounded-full',
-            )}
-          >
-            <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
-            {isReconciledLine
-              ? ui('financeReconcileActionRemoveCount', { count: removeCount })
-              : ui('financeReconcileActionReconcileCount', { count: reconcileCount })}
-          </button>
-          {isReconciledLine && onReactivate && (
-            <>
-              <div className="w-px bg-primary-foreground/20" />
-              <DropdownMenu data-testid="DropdownMenu__d0f4d5">
-                <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__d0f4d5">
-                  <button
-                    type="button"
-                    disabled={busy || removeCount === 0}
-                    data-testid="recon-action-reconcile-more"
-                    aria-label={ui('financeReconcileActionReactivateSelected')}
-                    className="inline-flex h-8 items-center rounded-r-full bg-[hsl(var(--foreground))] px-2 text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown-more__d0f4d5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" data-testid="DropdownMenuContent__d0f4d5">
-                  <DropdownMenuItem
-                    onClick={onReactivate}
-                    className="gap-2"
-                    data-testid="recon-action-reactivate"
-                  >
-                    <RotateCcw className="h-4 w-4" data-testid="RotateCcw__d0f4d5" />
-                    {ui('financeReconcileActionReactivateSelected')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          )}
-        </div>
+        {/* ETP-5135: a processed reconciliation is a FINAL state. The only way out from the UI is
+            "Desconciliar (N)", which really breaks the link and returns the amount to the pending
+            balance. The former "Reactivar" alternative (kept the reconciliation in draft with the
+            transactions still linked) left the user with a half-undone state and was removed. */}
+        <button
+          type="button"
+          onClick={onReconcile}
+          // A reconciled line shows "Desconciliar (N)" acting on the checked documents (N = checked
+          // count, disabled when none); a pending line gates "Conciliar" on a balanced selection.
+          disabled={busy || (isReconciledLine ? removeCount === 0 : !canReconcile)}
+          data-testid="recon-action-reconcile"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
+        >
+          <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
+          {isReconciledLine
+            ? ui('financeReconcileActionRemoveCount', { count: removeCount })
+            : ui('financeReconcileActionReconcileCount', { count: reconcileCount })}
+        </button>
       </div>
     </div>
   );
@@ -902,74 +848,40 @@ function ReconciliationActionBar({
 
 
 /*
- * ── Copy matrix for the un-reconcile cartel ────────────────────────────────────────────────────
- * The two un-reconcile actions (Desconciliar / the lighter Reactivar) share one cartel and differ
- * only in wording, so every string is resolved from a lookup keyed by the action instead of being
- * branched inline — the same pattern `MovementLifecycleConfirmModal` uses for its own two actions
- * (`SUB_KEY_BY_ACTION` / `TITLE_KEY_BY_ACTION`). Keeps {@link RemoveOperationConfirmDialog} a thin
- * render with no copy logic in it.
+ * ── Copy for the un-reconcile cartel ───────────────────────────────────────────────────────────
+ * Until ETP-5135 this was a matrix: the cartel served two actions (Desconciliar and the lighter
+ * Reactivar) that differed only in wording, so every string came from a lookup keyed by the action.
+ * Reactivar is gone and Desconciliar is the only un-reconcile there is, so the lookups collapsed to
+ * plain constants — the indirection had no second case left to justify it.
  */
-
-/** `reactivate` (a boolean prop, for the caller's convenience) → the key used by every map below. */
-const REMOVE_ACTION = { reactivate: 'reactivate', remove: 'remove' };
 
 /** Bulk selections name the count; a single document doesn't. */
-const SUB_KEY_BY_ACTION = {
-  reactivate: {
-    one: 'financeReconcileConfirmReactivateOneBody',
-    many: 'financeReconcileConfirmReactivateManyBody',
-  },
-  remove: {
-    one: 'financeReconcileConfirmRemoveOneBody',
-    many: 'financeReconcileConfirmRemoveManyBody',
-  },
+const SUB_KEY = {
+  one: 'financeReconcileConfirmRemoveOneBody',
+  many: 'financeReconcileConfirmRemoveManyBody',
 };
 
-const TITLE_KEY_BY_ACTION = {
-  reactivate: 'financeReconcileConfirmReactivateTitle',
-  remove: 'financeReconcileConfirmRemoveOneTitle',
-};
+const TITLE_KEY = 'financeReconcileConfirmRemoveOneTitle';
 
-const CONFIRM_LABEL_KEY_BY_ACTION = {
-  reactivate: 'financeReconcileActionReactivateSelected',
-  remove: 'financeReconcileActionRemoveOne',
-};
+const CONFIRM_LABEL_KEY = 'financeReconcileActionRemoveOne';
 
-/** First bullet is always the reconciliation itself — only its description changes per action. */
-const ITEM_RECONCILIATION_DESC_KEY_BY_ACTION = {
-  reactivate: 'financeReconcileConfirmItemReactivateDesc',
-  remove: 'financeReconcileConfirmItemRemoveDesc',
-};
+/** First bullet is always the reconciliation itself. */
+const ITEM_RECONCILIATION_DESC_KEY = 'financeReconcileConfirmItemRemoveDesc';
 
 /**
- * Only Reactivar's warning varies with another draft being open — Desconciliar has a single wording
- * (it never confirms the other draft), so both of its entries deliberately point at the same key.
+ * Desconciliar has a single wording: unlike the former Reactivar it never confirms a reconciliation
+ * left in draft, so an open draft elsewhere does not change what this cartel has to say.
  */
-const WARNING_KEY_BY_ACTION = {
-  reactivate: {
-    otherDraft: 'financeReconcileReactivateOtherDraftWarning',
-    default: 'financeReconcileConfirmReactivateWarning',
-  },
-  remove: {
-    otherDraft: 'financeReconcileConfirmRemoveWarning',
-    default: 'financeReconcileConfirmRemoveWarning',
-  },
-};
-
-/** Icon + its testid travel together so the rendered markup is identical for either action. */
-const CONFIRM_ICON_BY_ACTION = {
-  reactivate: { Icon: RotateCcw, testId: 'RotateCcw__recon-remove' },
-  remove: { Icon: Minus, testId: 'Minus__recon-remove' },
-};
+const WARNING_KEY = 'financeReconcileConfirmRemoveWarning';
 
 /** Stable no-op used to swallow the confirm while a request is already in flight. */
 const NOOP = () => {};
 
 /** One bullet per effect that actually applies to this selection. Order is part of the contract. */
-function resolveUnreconcileItems(ui, action, { hasAuto, reactivate, warnOtherDraft }) {
+function resolveUnreconcileItems(ui, { hasAuto }) {
   const items = [[
     ui('reactivarItem1Title'),
-    ui(ITEM_RECONCILIATION_DESC_KEY_BY_ACTION[action]),
+    ui(ITEM_RECONCILIATION_DESC_KEY),
   ]];
   if (hasAuto) {
     items.push([
@@ -977,42 +889,30 @@ function resolveUnreconcileItems(ui, action, { hasAuto, reactivate, warnOtherDra
       ui('financeReconcileConfirmItemPaymentDesc'),
     ]);
   }
-  // Core allows only ONE editable reconciliation per account, so reactivating this one will first
-  // CONFIRM the draft already open — i.e. a line left pending by an earlier "Reactivar" goes back to
-  // reconciled. Surfaced BEFORE confirming, not after.
-  if (reactivate && warnOtherDraft) {
-    items.push([
-      ui('financeReconcileConfirmItemOtherDraftTitle'),
-      ui('financeReconcileConfirmItemOtherDraftDesc'),
-    ]);
-  }
   return items;
 }
 
 /**
- * Resolves every string the un-reconcile cartel shows, for one action × selection.
+ * Resolves every string the un-reconcile cartel shows for one selection.
  *
  * @param {(key: string, params?: object) => string} ui translator from `useUI()`
- * @param {{ count: number, hasAuto: boolean, reactivate: boolean, warnOtherDraft: boolean }} state
+ * @param {{ count: number, hasAuto: boolean }} state
  * @returns {{ title: string, sub: string, items: Array<[string, string]>, warning: string,
- *   confirmLabel: string, confirmIcon: { Icon: Function, testId: string } }}
+ *   confirmLabel: string }}
  */
-function resolveUnreconcileDialogCopy(ui, { count, hasAuto, reactivate, warnOtherDraft }) {
-  const action = reactivate ? REMOVE_ACTION.reactivate : REMOVE_ACTION.remove;
-  const subKeys = SUB_KEY_BY_ACTION[action];
+function resolveUnreconcileDialogCopy(ui, { count, hasAuto }) {
   return {
-    title: ui(TITLE_KEY_BY_ACTION[action]),
-    sub: count > 1 ? ui(subKeys.many, { count }) : ui(subKeys.one),
-    items: resolveUnreconcileItems(ui, action, { hasAuto, reactivate, warnOtherDraft }),
-    warning: ui(WARNING_KEY_BY_ACTION[action][warnOtherDraft ? 'otherDraft' : 'default']),
-    confirmLabel: ui(CONFIRM_LABEL_KEY_BY_ACTION[action]),
-    confirmIcon: CONFIRM_ICON_BY_ACTION[action],
+    title: ui(TITLE_KEY),
+    sub: count > 1 ? ui(SUB_KEY.many, { count }) : ui(SUB_KEY.one),
+    items: resolveUnreconcileItems(ui, { hasAuto }),
+    warning: ui(WARNING_KEY),
+    confirmLabel: ui(CONFIRM_LABEL_KEY),
   };
 }
 
 /**
- * Confirmation for un-reconciling documents — one row or the bulk selection, Desconciliar or the
- * lighter Reactivar. Always shown (per product decision) because both are destructive to some degree.
+ * Confirmation for un-reconciling documents — one row or the bulk selection. Always shown (per
+ * product decision) because Desconciliar is destructive.
  *
  * <p>Reuses the SAME cartel Movimientos and Cobros/Pagos already show for their reactivate/delete
  * actions ({@link LifecycleConfirmModal}), so every lifecycle confirmation across the app looks
@@ -1022,14 +922,13 @@ function resolveUnreconcileDialogCopy(ui, { count, hasAuto, reactivate, warnOthe
  * from {@link resolveUnreconcileDialogCopy}.
  */
 function RemoveOperationConfirmDialog({
-  open, count, hasAuto, reactivate, warnOtherDraft, busy, onConfirm, onClose,
+  open, count, hasAuto, busy, onConfirm, onClose,
 }) {
   const ui = useUI();
   if (!open) return null;
 
-  const { title, sub, items, warning, confirmLabel, confirmIcon } =
-    resolveUnreconcileDialogCopy(ui, { count, hasAuto, reactivate, warnOtherDraft });
-  const { Icon: ConfirmIcon, testId: confirmIconTestId } = confirmIcon;
+  const { title, sub, items, warning, confirmLabel } =
+    resolveUnreconcileDialogCopy(ui, { count, hasAuto });
 
   return (
     <LifecycleConfirmModal
@@ -1039,11 +938,15 @@ function RemoveOperationConfirmDialog({
       warning={warning}
       confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
-      confirmIcon={<ConfirmIcon
+      // Unlink, not a bare Minus: the cartel's whole point is that the link to the statement line
+      // is broken, and a lone dash reads as a stray rule next to the label. This is the variant
+      // with the burst marks — the sibling `Unlink2` used by AccountRowMenu / EditAccountModal is a
+      // single gapped stroke that turns to mush at the 15px these confirm icons render at.
+      confirmIcon={<Unlink
         width={15}
         height={15}
         strokeWidth={2.2}
-        data-testid={confirmIconTestId} />}
+        data-testid="Unlink__recon-remove" />}
       onConfirm={busy ? NOOP : onConfirm}
       onClose={onClose}
       testIdPrefix="recon-remove"
@@ -1229,6 +1132,9 @@ export function ReconciliationSplitPanel({
   // The account's configured difference concept ({id, name}), used to preselect the modal's picker.
   // Absent → the banner renders with its action disabled and an explanation.
   glItemDifference = null,
+  // The account's record version, echoed back when the setup dialog stores the difference account
+  // (ETP-5073's optimistic-locking guard). Threaded from the host with glItemDifference.
+  accountUpdated = null,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1237,10 +1143,17 @@ export function ReconciliationSplitPanel({
   const [leftStatus, setLeftStatus] = useState('pending');
   // Last 12 months, not 30 days: a statement line often has to be matched against an
   // invoice or payment months older than itself, and the 30-day window hid those
-  // candidates by default. It also makes the picker's own trigger honest — the
-  // `financeReconcileFilterDate` placeholder already read "Últimos 12 meses" while the
-  // state said last30. `last12m` is a preset dateRangeBounds and DateRangePopover both
-  // already support, so nothing else changes.
+  // candidates by default. `last12m` is a preset dateRangeBounds and DateRangePopover
+  // both already support, so nothing else changes.
+  //
+  // The trigger text comes from this preset, NOT from the placeholder. It used to
+  // be the other way round: the placeholder was `financeReconcileFilterDate`,
+  // whose es_ES value happens to read the same as `dateRangeLast12Months`. The
+  // all-time option (`dateRangeAllTime`) is encoded as a `null` value, which is
+  // indistinguishable from "nothing chosen", so computeTriggerLabel fell through
+  // to the placeholder and the button kept naming a 12-month window even though
+  // the filter had widened (ETP-4956). The placeholder is now
+  // `dateRangeAnyTime`, matching every other DateRangePopover call site.
   const [leftDateRange, setLeftDateRange] = useState({ presetId: 'last12m' });
   const [leftSearch, setLeftSearch] = useState('');
   const [rightSource, setRightSource] = useState('receipts');
@@ -1263,7 +1176,7 @@ export function ReconciliationSplitPanel({
   const rightBounds = useMemo(() => getDateBounds(rightDateRange), [rightDateRange]);
 
   const {
-    lines, counts: statusCounts, draftReconciliationCount, loading: linesLoading,
+    lines, counts: statusCounts, loading: linesLoading,
     reload: reloadLines,
   } = usePendingStatementLines(accountId, {
     dateFrom: toDateParam(leftBounds.from),
@@ -1289,7 +1202,7 @@ export function ReconciliationSplitPanel({
     // table's own status predicate (`visibleLines` below), including its null/empty = "Todos" case.
     // Search is deliberately NOT mirrored: typing to look something up is a transient view change,
     // not the line moving.
-    if (leftStatus && (live.state || 'pending') !== leftStatus) {
+    if (!matchesStatus(live.state, leftStatus)) {
       return null;
     }
     return live;
@@ -1302,8 +1215,9 @@ export function ReconciliationSplitPanel({
     invoiceMode ? 'invoices' : null,
     toDateParam(rightBounds.from), toDateParam(rightBounds.to));
   const { reconcile, loading: reconciling } = useReconcileGroup();
+  // Only ever used to store the account's difference GL item from the setup dialog below.
+  const { updateAccount } = useAccountMutations();
   const { removeOperation, loading: removing } = useRemoveOperation();
-  const { reactivateSelected, loading: reactivating } = useReactivateSelected();
   const { reconcileDifference, loading: postingDifference } = useReconcileDifference();
   // Whether the remainder of the selected line may be posted to an accounting concept. Recomputed
   // (and re-validated) server-side on confirm — this only decides what to offer.
@@ -1317,8 +1231,7 @@ export function ReconciliationSplitPanel({
   useEffect(() => {
     setDiffDismissed(false);
   }, [selectedLine?.id]);
-  // Pending un-reconcile request (single row OR the bulk selection):
-  // { ids, hasAuto, count, mode }. `mode: 'reactivate'` picks the lighter draft-preserving action.
+  // Pending un-reconcile request (single row OR the bulk selection): { ids, hasAuto, count }.
   const [removeRequest, setRemoveRequest] = useState(null);
 
   const selectLine = (line) => {
@@ -1351,7 +1264,8 @@ export function ReconciliationSplitPanel({
     const q = leftSearch.trim().toLowerCase();
     return lines.filter((l) => {
       // Client-side state filter (null/empty = "Todos"); the backend already computed l.state.
-      if (leftStatus && (l.state || 'pending') !== leftStatus) return false;
+      // Membership, not equality: "Pendiente" covers every non-reconciled state (ETP-5033).
+      if (!matchesStatus(l.state, leftStatus)) return false;
       if (!q) return true;
       return [l.description, l.partnerName, l.referenceNo]
         .some((v) => (v || '').toLowerCase().includes(q));
@@ -1478,7 +1392,7 @@ export function ReconciliationSplitPanel({
    * `AutoMatchSupport.differenceTolerance` applies server-side. Only advisory: the server recomputes
    * this and is the boundary.
    */
-  const differenceNotice = useMemo(() => {
+  const postableDifference = useMemo(() => {
     const pct = Number(amountTolerance) || 0;
     if (invoiceMode || isReconciledLine || pct <= 0) return null;
     if (!selectedLine || selectedOpIds.size === 0) return null;
@@ -1487,19 +1401,33 @@ export function ReconciliationSplitPanel({
     // Over-coverage stays an error: out of scope, and the reconcile button is disabled anyway.
     if (Math.sign(remaining) !== Math.sign(lineAmount)) return null;
     if (gap > Math.abs(lineAmount) * pct / 100) return null;
-    const amount = formatCurrency(currency, gap);
+    return remaining; // signed, as the modal's breakdown expects
+  }, [amountTolerance, invoiceMode, isReconciledLine, selectedLine, selectedOpIds, remaining,
+      lineAmount]);
+
+  const differenceNotice = useMemo(() => {
+    if (postableDifference == null) return null;
+    const amount = formatCurrency(currency, Math.abs(postableDifference));
     return glItemDifference?.name
       ? ui('financeReconcileBarDifferenceNotice', { amount, concept: glItemDifference.name })
       : ui('financeReconcileBarDifferenceNoticeNoConcept', { amount });
-  }, [amountTolerance, invoiceMode, isReconciledLine, selectedLine, selectedOpIds, remaining,
-      lineAmount, currency, glItemDifference, ui]);
+  }, [postableDifference, currency, glItemDifference, ui]);
 
   // Set when the backend answers GL_ITEM_REQUIRED: the match carries a postable difference but the
   // account has no concept configured, so the user picks one and we resubmit. Shape matches
   // `differenceState` so DifferenceModal renders unchanged.
   const [glItemPrompt, setGlItemPrompt] = useState(null);
+  // The pre-reconcile setup dialog: shown when a postable difference has nowhere to go yet.
+  const [glItemSetupOpen, setGlItemSetupOpen] = useState(false);
+  const [savingGlItem, setSavingGlItem] = useState(false);
 
-  const submitReconcile = async (methodId, glItemId) => {
+  /**
+   * @param {string|null} methodId payment method, invoice path only
+   * @param {string} [description] free text for the difference movement, from the read-only
+   *   confirmation modal. No `glItemId` counterpart: the accounting account is the financial
+   *   account's own setting and the backend resolves it (`effectiveGlItemId`).
+   */
+  const submitReconcile = async (methodId, description) => {
     try {
       const payload = {
         // For a PARTIAL line, reconcile the remainder against its pending sub-line
@@ -1522,7 +1450,9 @@ export function ReconciliationSplitPanel({
         // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
       }
-      if (glItemId) payload.glItemId = glItemId;
+      // Names the difference movement in Movimientos; without it the backend falls back to
+      // `defaultDifferenceDescription`. Dropping it silently is what the read-only modal did.
+      if (description) payload.description = description;
       await reconcile(payload);
       toast.success(ui('financeReconcileToastSuccess'));
       setSelectedLineSel(null);
@@ -1533,16 +1463,14 @@ export function ReconciliationSplitPanel({
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
-      // The match leaves a postable difference and the account has no concept configured. Ask for
-      // one and resubmit rather than dead-ending on a toast — the reconcile is one field away.
+      // The account lost its accounting account between loading the panel and pressing Conciliar
+      // (or the difference only became postable server-side). handleReconcile normally catches this
+      // first; this is the race. Same remedy as the proactive path — configure the account — rather
+      // than the read-only confirmation, which would offer a field the user cannot fill.
       if (err?.code === 'GL_ITEM_REQUIRED') {
         setMethodModalOpen(false);
-        setGlItemPrompt({
-          methodId: methodId ?? null,
-          remainder: Number(err?.body?.differenceAmount ?? remaining) || remaining,
-          lineTotal: lineAmount,
-          reconciled: selectedSum,
-        });
+        setGlItemPrompt(null);
+        setGlItemSetupOpen(true);
         return;
       }
       // A 409 on the group head names the pending sub-line the caller should have targeted; retarget
@@ -1571,7 +1499,51 @@ export function ReconciliationSplitPanel({
       setMethodModalOpen(true);
       return;
     }
+    // A difference is an accounting entry, so it is always confirmed before it is booked. With no
+    // accounting account on the financial account there is nothing to confirm yet: that is set up
+    // first, in its own dialog, and reconciling stays a separate deliberate click afterwards.
+    if (postableDifference != null) {
+      if (!glItemDifference?.id) {
+        setGlItemSetupOpen(true);
+        return;
+      }
+      setGlItemPrompt({
+        methodId: null,
+        remainder: postableDifference,
+        lineTotal: lineAmount,
+        reconciled: selectedSum,
+      });
+      return;
+    }
     submitReconcile(null);
+  };
+
+  /**
+   * Stores the chosen accounting account on the FINANCIAL ACCOUNT, then closes. Deliberately does
+   * not chain into the reconciliation: the user confirms that separately, now seeing the read-only
+   * destination in the difference modal.
+   */
+  const confirmGlItemSetup = async (glItem) => {
+    if (!glItem?.id) return;
+    setSavingGlItem(true);
+    try {
+      // `updated` is the record version this panel was loaded with — mandatory since ETP-5073, or
+      // the PUT comes back 400 `missing_updated`.
+      await updateAccount(accountId, {
+        glItemDifferenceId: glItem.id,
+        updated: accountUpdated,
+      });
+      setGlItemSetupOpen(false);
+      // The panel reads glItemDifference from its host, so the account has to be re-read for the
+      // next click to see it. This is the panel's only "refresh the account" channel; it also
+      // reloads movements, which is a cheap price for not threading a second callback for one call.
+      onReconcileSuccess?.();
+      toast.success(ui('financeReconcileGlItemSetupToastSaved'));
+    } catch (err) {
+      toast.error(err?.message || ui('financeReconcileToastError'));
+    } finally {
+      setSavingGlItem(false);
+    }
   };
 
   const confirmMethodAndReconcile = () => {
@@ -1624,36 +1596,17 @@ export function ReconciliationSplitPanel({
     setRemoveRequest({ ids, hasAuto: anyAutoCreated(ids), count: ids.length });
   };
 
-  /**
-   * "Reactivar" — the lighter alternative behind the primary button's chevron. Same checked
-   * selection as Desconciliar; only the confirm copy and the endpoint differ. Only reachable from
-   * the `recon-action-reactivate` dropdown item, which only exists once a line is selected and its
-   * trigger is disabled whenever `selectedOpIds` is empty — so `selectedLine` and a non-empty `ids`
-   * are already guaranteed here.
-   */
-  const requestReactivateSelected = () => {
-    const ids = Array.from(selectedOpIds);
-    setRemoveRequest({
-      ids, hasAuto: anyAutoCreated(ids), count: ids.length, mode: 'reactivate',
-    });
-  };
-
   // Only wired to RemoveOperationConfirmDialog's confirm button, itself only rendered while
   // `open={!!removeRequest}` — so `removeRequest` (and, transitively, `selectedLine`, which every
   // setter of it already required) is already guaranteed non-null here.
   const confirmRemove = async () => {
-    // Named for the ACTION being confirmed — distinct from the outer `reactivating` (its request is
-    // in flight), which would otherwise be shadowed here.
-    const isReactivateAction = removeRequest.mode === 'reactivate';
     try {
       const payload = {
         financialAccountId: accountId,
         statementLineId: selectedLine.id,
         transactionIds: removeRequest.ids,
       };
-      const result = isReactivateAction
-        ? await reactivateSelected(payload)
-        : await removeOperation(payload);
+      const result = await removeOperation(payload);
       setRemoveRequest(null);
       // Core's own removal utilities commit mid-flow, so a batch of several ids can genuinely
       // partially succeed — the backend reports the real per-transaction outcome (never an
@@ -1672,14 +1625,10 @@ export function ReconciliationSplitPanel({
           failed: failedCount,
         }), reason ? { description: reason } : undefined);
       } else if (failedCount > 0) {
-        toast.error(ui(isReactivateAction
-          ? 'financeReconcileToastOperationReactivateError'
-          : 'financeReconcileToastOperationRemoveError'),
-        reason ? { description: reason } : undefined);
+        toast.error(ui('financeReconcileToastOperationRemoveError'),
+          reason ? { description: reason } : undefined);
       } else {
-        toast.success(ui(isReactivateAction
-          ? 'financeReconcileToastOperationReactivated'
-          : 'financeReconcileToastOperationRemoved'));
+        toast.success(ui('financeReconcileToastOperationRemoved'));
       }
       setSelectedOpIds(new Set());
       // Keep the line selected (selectedLine re-resolves from the reloaded `lines` by match group).
@@ -1753,10 +1702,9 @@ export function ReconciliationSplitPanel({
               isReconciledLine={isReconciledLine}
               reconcileCount={selectedOpIds.size}
               removeCount={selectedOpIds.size}
-              busy={reconciling || removing || reactivating}
+              busy={reconciling || removing}
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? requestRemoveSelected : handleReconcile}
-              onReactivate={isReconciledLine ? requestReactivateSelected : undefined}
               differenceNotice={differenceNotice}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
@@ -1772,16 +1720,23 @@ export function ReconciliationSplitPanel({
         currency={currency}
         defaultGlItem={glItemDifference}
         busy={reconciling}
-        onConfirm={({ glItemId }) => submitReconcile(glItemPrompt?.methodId ?? null, glItemId)}
+        // The destination is the financial account's own setting, so it is shown, not chosen. No
+        // glItemId is sent either: the backend resolves it from the account (effectiveGlItemId).
+        readOnlyGlItem
+        onConfirm={({ description }) => submitReconcile(glItemPrompt?.methodId ?? null, description)}
         onClose={() => setGlItemPrompt(null)}
         data-testid="DifferenceModal__gl-item-required" />
+      <GlItemSetupDialog
+        open={glItemSetupOpen}
+        busy={savingGlItem}
+        onConfirm={confirmGlItemSetup}
+        onClose={() => setGlItemSetupOpen(false)}
+        data-testid="GlItemSetupDialog__d0f4d5" />
       <RemoveOperationConfirmDialog
         open={!!removeRequest}
         count={removeRequest?.count ?? 0}
         hasAuto={!!removeRequest?.hasAuto}
-        reactivate={removeRequest?.mode === 'reactivate'}
-        warnOtherDraft={draftReconciliationCount > 0}
-        busy={removing || reactivating}
+        busy={removing}
         onConfirm={confirmRemove}
         onClose={() => setRemoveRequest(null)}
         data-testid="RemoveOperationConfirmDialog__d0f4d5" />

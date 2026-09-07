@@ -424,4 +424,75 @@ describe('buildLineSelectorContext', () => {
       IsSOTrx: 'Y',
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // ETP-5148 R2: eTGOCurrencyRate → priceCurrencyRate. Sentinels for "no override"
+  // are exactly 0, null, undefined, and NaN — a genuine 1:1 rate must survive
+  // (ETP-4836 regression guard: a rate of 1 is not "no rate").
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('priceCurrencyRate (ETP-5148)', () => {
+    it('parses a string rate from the backend into a number', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: '1.47' },
+      });
+      expect(result.priceCurrencyRate).toBe(1.47);
+    });
+
+    it('accepts a numeric rate as-is', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: 1.47 },
+      });
+      expect(result.priceCurrencyRate).toBe(1.47);
+    });
+
+    it('keeps a genuine 1:1 rate (string "1") — ETP-4836 guard, 1 is not "no rate"', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: '1' },
+      });
+      expect(result.priceCurrencyRate).toBe(1);
+    });
+
+    it('drops the sentinel string "0" (no override)', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: '0' },
+      });
+      expect(result).not.toHaveProperty('priceCurrencyRate');
+    });
+
+    it('drops the sentinel number 0 (no override)', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: 0 },
+      });
+      expect(result).not.toHaveProperty('priceCurrencyRate');
+    });
+
+    it('drops null (no override)', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: null },
+      });
+      expect(result).not.toHaveProperty('priceCurrencyRate');
+    });
+
+    it('drops undefined / absent field (no override)', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: undefined },
+      });
+      expect(result).not.toHaveProperty('priceCurrencyRate');
+    });
+
+    it('drops a non-numeric string ("abc" parses to NaN)', () => {
+      const result = buildLineSelectorContext({
+        windowCategory: 'sales',
+        headerRecord: { eTGOCurrencyRate: 'abc' },
+      });
+      expect(result).not.toHaveProperty('priceCurrencyRate');
+    });
+  });
 });

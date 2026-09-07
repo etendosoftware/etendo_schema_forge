@@ -141,12 +141,12 @@ export function getReturnToVendorPdfLabels(ui) {
 export async function generateReturnToVendorPdf(recordId, apiBaseUrl, token, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const data = await buildReturnToVendorData(recordId, base, token);
-  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+  return renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels });
 }
 
 /** HTML twin of generateReturnToVendorPdf, for the list view's multi-document print. */
 export async function generateReturnToVendorHtml(recordId, apiBaseUrl, token, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const data = await buildReturnToVendorData(recordId, base, token);
-  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels });
 }

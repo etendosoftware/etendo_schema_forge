@@ -6697,7 +6697,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "5a73097d105c05f5415151f3c25f206ae05f31b2b42fe4ff1635780f876cb682",
+      "checksum": "50ddfd693d05e69cba23fb46c798310469b27f7c4f85cdf3db18bbc6a6d21835",
       "params": [
         "183"
       ],
@@ -7461,7 +7461,7 @@
         {
           "column_id": "67A5B95304E546F68639F62C4E45761F",
           "columnname": "EM_Tbai_Xmlgenerator",
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "field_id": "89AFFB9B66F54EA3AEAA3FEBA6432028",
           "name": "Registrar Factura en Batuz",
           "readonlylogic": null,
@@ -22241,6 +22241,38 @@
         "82922976BB524D1BAA3CF8462B9219FE"
       ],
       "rows": []
+    },
+    "f24b576bdb7d04fb296f50cbd4db119ef42027696d641e54b927e50a4ae81ae0": {
+      "checksum": "2df3635c5f6693a97ae747eb553ea8457f7fe256fabe6e3fc6df236d7c482f02",
+      "params": [
+        "107"
+      ],
+      "rows": [
+        {
+          "column_id": "6512",
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "field_id": "5359",
+          "name": "Posted",
+          "readonlylogic": null,
+          "tab_id": "408",
+          "tab_name": "Matched Invoice",
+          "table_id": "472",
+          "table_name": "M_MatchInv"
+        },
+        {
+          "column_id": "6F87191F4E2B4F52B9D0AA27EF93C1DA",
+          "columnname": "EM_Etblkp_Bulkposting",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "field_id": "CC91E2751DDC4EE9ADD60DED18B17CDC",
+          "name": "Bulk Posting",
+          "readonlylogic": null,
+          "tab_id": "408",
+          "tab_name": "Matched Invoice",
+          "table_id": "472",
+          "table_name": "M_MatchInv"
+        }
+      ]
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",

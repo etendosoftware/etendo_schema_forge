@@ -4,7 +4,9 @@ import { X } from 'lucide-react';
  * Figma chip used by FK pickers (Contacto, Tarifa, Dirección, etc.) when a
  * value is selected. Gray pill (`hsl(var(--muted))`) with the display label and an
  * inline X to clear. Click on the body switches the host picker back to
- * typing mode.
+ * typing mode. The label carries a native `title` (ETP-4924), so a value too
+ * long for the pill's `truncate` still reads in full on hover — same pattern
+ * already used for the Descripción/Nombre del contacto cells nearby.
  *
  * Lives in its own file so SearchInput (`EntityForm.jsx`) and
  * CreatableSearchSelect can share the markup without Sonar flagging the
@@ -36,7 +38,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
       data-testid={testId}
       className="flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm text-[hsl(var(--muted-foreground))] cursor-text bg-transparent"
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>{label}</span>
       {clearable && (
         <span
           role="button"

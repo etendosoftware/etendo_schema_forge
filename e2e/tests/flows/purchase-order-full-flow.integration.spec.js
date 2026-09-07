@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
-import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
+import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
+import { ensureSecondaryWarehouse } from '../helpers/warehouse-helpers.js';
+import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
@@ -159,6 +163,13 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await ensureVendorSetup(page, { navigateTo });
     });
 
+    // ETP-5079: the onboarding dataset no longer seeds any visible product, so
+    // the two lines below have nothing to pick unless the suite provisions its
+    // own fixtures first. See e2e/tests/helpers/product-helpers.js.
+    await test.step('Ensure product fixtures', async () => {
+      await ensureProductFixtures(page);
+    });
+
     let poTotals;
     let invoiceId;
 
@@ -208,8 +219,8 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Add two product lines', async () => {
-      await addProductLine(page, { isFirst: true, productIndex: 0 });
-      await addProductLine(page, { productIndex: 1, quantity: '3' });
+      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+      await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '3' });
 
       await expect(page.locator('tbody tr'),
         'PO should have 2 lines',
@@ -221,13 +232,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Confirm PO — check only "Create receipt" (no invoice)', async () => {
-      await clickConfirmButton(page);
-
-      // Wait for the confirm modal to appear
-      const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-      await expect(confirmModal,
-        'Confirm modal should appear with order summary',
-      ).toBeVisible({ timeout: 10_000 });
+      await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
       // Check only the "Create receipt" checkbox — invoice will be created from the receipt
       const receiptCheckbox = page.getByText(/crear albarán|crear recibo|create receipt/i).first();
@@ -274,9 +279,8 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await expectStatusPill(page, /borrador|draft/i,
         '[Plan 14.1] Receipt should be in Draft status');
 
-      await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-        '[Plan 6.3] Receipt should have 2 lines inherited from the PO',
-      ).toBeVisible({ timeout: 10_000 });
+      await waitForLinesSettled(page, 2,
+        '[Plan 6.3] Receipt should have 2 lines inherited from the PO');
 
       // Click "Confirmar" in the topbar
       await clickConfirmButton(page);
@@ -509,6 +513,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await ensureVendorSetup(page, { navigateTo });
 
+    // ETP-5079: no product is seeded on a fresh tenant — provision the two
+    // fixtures this test puts on the PO before opening the document.
+    await ensureProductFixtures(page);
+
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 2: Create PO, save as draft
     // ═══════════════════════════════════════════════════════════════════════
@@ -535,7 +543,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // negative line is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addProductLine(page, { isFirst: true, productIndex: 0 });
+    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -557,11 +565,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // callout) — models a return/credit adjustment on an otherwise regular PO
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addProductLine(page, { productIndex: 1, quantity: '-2' });
+    await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-2' });
 
-    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-      'PO should have 2 lines (baseline + negative)',
-    ).toBeVisible({ timeout: 10_000 });
+    await waitForLinesSettled(page, 2, 'PO should have 2 lines (baseline + negative)');
 
     // [Checks #1 & #2] Locate the negative line by its actual quantity cell
     // value and verify it — and its gross amount — stayed negative.
@@ -621,22 +627,22 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4.5: Ensure enough stock on hand for the negative line's ACTUAL
-    // product (read back from the row itself — never assume which product
-    // productIndex: 1 landed on). Confirming the PO into a receipt inverts
-    // the normal stock-movement direction for a negative-quantity line, so
-    // Etendo's core M_CHECK_STOCK validation correctly rejects the confirm
-    // when on-hand is too low. This suite was observed draining shared
-    // dev-DB stock for whatever product landed at that index — "Cerveza",
-    // then "Queso Sardo" (warehouse "Almacen GO" / locator "AG-0-0-0") — down
-    // toward zero on 2026-08-17 from repeated runs. Provisioned via a real,
-    // audited Physical Inventory count (ensureStockOnHand) — never a raw SQL
-    // UPDATE. minQty=200 is a generous buffer meant to survive several
-    // repeated runs of this suite in a single day.
+    // product. Still read back from the row itself rather than reusing
+    // PRODUCT_FIXTURE_BETA.name: the cell renders the persisted identifier,
+    // which is what ensureStockOnHand's own product selector has to match.
+    // Confirming the PO into a receipt inverts the normal stock-movement
+    // direction for a negative-quantity line, so Etendo's core M_CHECK_STOCK
+    // validation correctly rejects the confirm when on-hand is too low. This
+    // suite was observed draining shared dev-DB stock down toward zero on
+    // 2026-08-17 from repeated runs. Provisioned via a real, audited Physical
+    // Inventory count (ensureStockOnHand) — never a raw SQL UPDATE. minQty=200
+    // is a generous buffer meant to survive several repeated runs of this suite
+    // in a single day.
     // ═══════════════════════════════════════════════════════════════════════
     const negPoProductName = (await negPoRow.locator('[data-cell-key="product"]').textContent())?.trim();
     await ensureStockOnHand(page, {
       productName: negPoProductName,
-      warehouseName: 'Almacen GO',
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
 
@@ -644,12 +650,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // STEP 5: Confirm PO — "Create receipt" only
     // ═══════════════════════════════════════════════════════════════════════
 
-    await clickConfirmButton(page);
-
-    const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-    await expect(confirmModal,
-      'Confirm modal should appear with order summary',
-    ).toBeVisible({ timeout: 10_000 });
+    await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
     const receiptCheckbox = page.getByText(/crear albarán|crear recibo|create receipt/i).first();
     await expect(receiptCheckbox).toBeVisible({ timeout: 5_000 });
@@ -874,6 +875,13 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await ensureVendorSetup(page, { navigateTo });
 
+    // ETP-5079: the onboarding dataset now seeds a SINGLE warehouse, which makes
+    // the "pick a DIFFERENT warehouse" step below impossible and the whole guard
+    // vacuous. Provision the second one instead of skipping or relaxing the hard
+    // precondition further down. API-only, so it cannot disturb the page or the
+    // `recordServerWarehouseDefaults` listener installed right after this.
+    await ensureSecondaryWarehouse(page);
+
     // Must be installed BEFORE the new-record form opens — it reads the very
     // first `/header/defaults` and `/header/callout` payloads.
     const serverDefaults = recordServerWarehouseDefaults(page);
@@ -1058,6 +1066,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await ensureVendorSetup(page, { navigateTo });
 
+    // ETP-5079: no product is seeded on a fresh tenant — provision the two
+    // fixtures the negative lines below are built from.
+    await ensureProductFixtures(page);
+
     await navigateTo(page, 'purchase-order');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await slow(page);
@@ -1077,8 +1089,8 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     // Two NEGATIVE-quantity lines — every line negative, so the document
     // total itself goes fully negative (unlike the mixed-sign case above).
-    await addProductLine(page, { isFirst: true, productIndex: 0, quantity: '-2' });
-    await addProductLine(page, { productIndex: 1, quantity: '-3' });
+    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '-2' });
+    await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-3' });
 
     await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
       'PO should have 2 lines, both negative',
@@ -1106,7 +1118,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // actual products (read back from the rows, never assumed by index).
     for (let i = 0; i < poRowCount; i++) {
       const productName = (await poRows.nth(i).locator('[data-cell-key="product"]').textContent())?.trim();
-      await ensureStockOnHand(page, { productName, warehouseName: 'Almacen GO', minQty: 200 });
+      await ensureStockOnHand(page, { productName, warehouseName: DEFAULT_WAREHOUSE_NAME, minQty: 200 });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1115,12 +1127,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // negative amount, never the hardcoded '0,00' fallback.
     // ═══════════════════════════════════════════════════════════════════════
 
-    await clickConfirmButton(page);
+    await clickConfirmButton(page, /confirmar pedido|confirm order/i);
 
     const confirmModal = page.getByText(/confirmar pedido|confirm order/i).first();
-    await expect(confirmModal,
-      'Confirm modal should appear with order summary',
-    ).toBeVisible({ timeout: 10_000 });
     const confirmCard = confirmModal.locator('xpath=ancestor::div[contains(@style,"width")][1]');
 
     // [ETP-4567 frontend fix] The literal '0,00' fallback text must be gone —

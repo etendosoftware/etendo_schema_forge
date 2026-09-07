@@ -4,7 +4,18 @@ import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
 
-export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
+/**
+ * ETP-5088 — `canCreatePurchase`/`canCreateSale` gate the two creation buttons in the empty state.
+ * They are creation actions like the quick actions, so they need the WRITE tier on their target
+ * window, not mere visibility: a role holding purchase-invoice read-only must not be offered
+ * "new purchase" and then land on a form it cannot submit.
+ *
+ * Both default to `true` so every existing caller and test keeps its behaviour; `DashboardPage`
+ * passes the resolved values.
+ */
+export function FinancialSummaryCard({
+  kpis = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true,
+}) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -92,6 +103,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               </p>
             </div>
             <div className="flex flex-row items-center" style={{ gap: '12px' }}>
+              {canCreatePurchase && (
               <button
                 type="button"
                 onClick={() => navigate('/purchase-invoice/new')}
@@ -105,6 +117,8 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                   {ui('newPurchase')}
                 </span>
               </button>
+              )}
+              {canCreateSale && (
               <button
                 type="button"
                 onClick={() => navigate('/sales-invoice/new')}
@@ -118,6 +132,7 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                   {ui('newSale')}
                 </span>
               </button>
+              )}
             </div>
           </div>
         </div>

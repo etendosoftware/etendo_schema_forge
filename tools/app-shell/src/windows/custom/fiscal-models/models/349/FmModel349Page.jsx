@@ -949,7 +949,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             data-testid="MoreOptionsMenu__346dd5" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
-          Tesorería / Declaraciones / Modelo 349 - {periodLabel}
+          {ui('finance')} / {ui('fm.breadcrumb.section')} / Modelo 349 - {periodLabel}
         </div>
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}

@@ -60,14 +60,9 @@ vi.mock('../NewPaymentEntryModal.jsx', () => ({
   ),
 }));
 
+import { SendDocumentModalMock } from './testUtils/sendDocumentModalMock.jsx';
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
-  default: ({ onClose, documentNo }) => (
-    <div data-testid="send-modal" data-docno={documentNo}>
-      <button data-testid="send-modal-close" onClick={onClose}>
-        Close Send
-      </button>
-    </div>
-  ),
+  default: SendDocumentModalMock,
 }));
 
 vi.mock('../SifSendingModal.jsx', () => ({
@@ -91,8 +86,9 @@ vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
+const getInvoiceFiscalTargetsMock = vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false }));
 vi.mock('../fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: () => ({ showSii: false, showTbai: false, showVerifactu: false }),
+  getInvoiceFiscalTargets: (...args) => getInvoiceFiscalTargetsMock(...args),
 }));
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
@@ -254,6 +250,38 @@ describe('InvoicePreview', () => {
       buttons.forEach((btn) => {
         expect(btn.textContent.trim().length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  // ── ETP-5027: purchase-invoice TBAI is always Batuz, never generic TicketBAI ──
+  // The TBAI InfoRow's label key must switch on specName. SummaryCard is a plain
+  // vi.fn() mock that renders nothing of its own, so the InfoRow element (passed
+  // as a `children` prop) is inspected directly off the last call instead of
+  // querying rendered DOM — the mock never mounts it.
+  describe('TBAI status label is doc-type aware (ETP-5027)', () => {
+    beforeEach(() => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+    });
+
+    function tbaiInfoRow() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      const rows = (props.children || []).filter(Boolean);
+      return rows.find((el) => el?.props?.label);
+    }
+
+    it('purchase invoice shows the Batuz-specific label, never the generic TicketBAI one', () => {
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbaiPurchase');
+    });
+
+    it('sales invoice keeps the generic TicketBAI label, unchanged', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: defaultInvoice });
+      const row = tbaiInfoRow();
+      expect(row).toBeTruthy();
+      expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbai');
     });
   });
 
@@ -707,5 +735,63 @@ describe('InvoicePreview', () => {
 
       expect(screen.queryByTestId('Download__cf88e6')).not.toBeInTheDocument();
     });
+  });
+});
+
+// ── ETP-5069: the EMAILS card now reads the document's real send history ─────
+// The card needs the invoice id and the API base to issue that request, plus a
+// `refreshSignal` the panel bumps once a send succeeds — otherwise the card would keep
+// showing the state it had BEFORE the email went out. (EmailsCard is only rendered for
+// sales invoices; purchase-invoice has no send flow.)
+describe('InvoicePreview — email history wiring (ETP-5069)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+    useDocumentCurrency.mockReturnValue({
+      orgCurrencyCode: null,
+      exchangeRate: null,
+      isSameCurrency: true,
+      loading: false,
+      convertAmount: (amount) => amount,
+    });
+  });
+
+  function lastEmailsCardProps() {
+    return vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+  }
+
+  function renderSalesInvoiceWithOpenSendModal() {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true, showSendModal: true }));
+    return renderInvoicePreview({ specName: 'sales-invoice', windowName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+  }
+
+  it('passes the invoice id and the API base down to EmailsCard', () => {
+    renderInvoicePreview({ specName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+    const props = lastEmailsCardProps();
+    expect(props.documentId).toBe('inv-1');
+    expect(props.apiBaseUrl).toBe('/api/sales-invoice');
+  });
+
+  it('starts EmailsCard with a defined refreshSignal', () => {
+    renderInvoicePreview({ specName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+    expect(lastEmailsCardProps().refreshSignal).toBeDefined();
+  });
+
+  it('bumps refreshSignal on EmailsCard when the send modal reports a successful send', () => {
+    renderSalesInvoiceWithOpenSendModal();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('send-modal-sent'));
+
+    expect(lastEmailsCardProps().refreshSignal).not.toBe(before);
+  });
+
+  it('leaves refreshSignal untouched when the send modal is merely closed', () => {
+    renderSalesInvoiceWithOpenSendModal();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('send-modal-close'));
+
+    expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });

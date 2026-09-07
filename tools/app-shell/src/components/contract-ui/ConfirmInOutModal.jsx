@@ -130,12 +130,18 @@ export default function ConfirmInOutModal({
       onKeyDown={e => e.key === 'Escape' && onClose()}
       style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / .45)' }}
     >
+      {/*
+        ETP-5108: no `fontFamily` here on purpose — same fix as ConfirmResultModal,
+        which this modal hands off to. The family is declared once, on `body` in the
+        core's styles.css, and inherited; overriding it here took the whole modal off
+        Inter and onto the OS sans, so the two steps of one flow disagreed visually.
+      */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
           width: 468, borderRadius: 16, background: 'hsl(var(--card))',
           boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .32), 0 8px 24px -8px hsl(var(--foreground) / .18)',
-          overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif',
+          overflow: 'hidden',
         }}
       >
         {/* Header */}

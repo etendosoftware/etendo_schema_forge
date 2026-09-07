@@ -1,12 +1,43 @@
 # Reconciliation line classification — how a statement line lands in each filter
 
-How a pending `FIN_BankStatementLine` is classified into the left-panel filters of the
-Conciliación tab (**Pendiente**, **Sugerido**, **Por regla**, **Diferencias**, **Conciliadas**),
-what the standard matching algorithm's three flags actually change, and why **Diferencias** is
-unreachable under the configuration currently shipped to every client.
+How a pending `FIN_BankStatementLine` is classified into one of five **states** (`pending`,
+`suggested`, `byRule`, `difference`, `reconciled` — the five rows of the table below), what the
+standard matching algorithm's three flags actually change, and why **Diferencias** is unreachable
+under the configuration currently shipped to every client.
 
 This is general Etendo behaviour (Core's `StandardMatchingAlgorithm` plus our classifier), not
 specific to any one window or feature.
+
+**A state is not the same thing as a filter (ETP-5033).** The classification below still puts
+exactly one state on a line, but the left-panel **Pendientes** filter is a *superset*: it shows
+every line whose state is not `reconciled` (i.e. `pending` + `suggested` + `byRule` + `difference`).
+**Con sugerencia**, **Por regla** and **Diferencias** are strict subsets of it — a suggested line
+appears both under Pendientes and under Con sugerencia. See `reconciliationStatusFilter.js`
+(`STATUS_MEMBERS`) for the filter→states mapping, and the "Left-panel state filter" bullet in
+`docs/generated-custom-windows/financial-account.md` for the UI-facing summary.
+
+## 0. Which lines enter the chain at all
+
+The classification below only ever runs on the lines `PENDING_LINES_SQL`
+(`ReconciliationHandler`) returns, and that query has a precondition the five states do not
+express: **the line's bank statement must be processed** (`bs.processed = 'Y'`). A draft statement
+is not reconcilable yet, so its lines are deliberately absent from the left panel.
+
+**The exception: an already reconciled line (ETP-5121).** Reactivating a bank statement flips only
+`FIN_BankStatement.PROCESSED`; it does not revert reconciliations. A line that was reconciled
+before the reactivation therefore keeps its `FIN_Finacc_Transaction_ID`, that transaction keeps a
+PROCESSED `FIN_Reconciliation`, and Core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` keeps the line
+immutable. Such a line stays listed, and stays in state `reconciled`:
+
+```sql
+AND (bs.processed = 'Y'
+     OR (bsl.fin_finacc_transaction_id IS NOT NULL
+         AND COALESCE(rec.processed, 'N') = 'Y'))
+```
+
+The exception repeats the exact predicate that defines `line_status = 'reconciled'`, so it can
+never pull a line back in whose reconciliation has been returned to DRAFT — that line still falls
+through to the pending pool and gets classified by the cascade below.
 
 ## 1. The classification chain
 
@@ -150,7 +181,8 @@ the Diferencias filter is *theoretically* reachable today, not a case worth rely
 | The queries behind each pass | `modules_core/org.openbravo.advpaymentmngt/.../dao/MatchTransactionDao.java` |
 | Flag storage | `FIN_MATCHING_ALGORITHM` table, per financial account |
 | Our classifier + date window | `AutoMatchSupport.classifyPendingLine` / `standardMatchLevel` (com.etendoerp.go) |
-| Filter chips and badges | `ReconciliationSplitPanel.jsx` — `STATUS_CODES`, `STATUS_LABEL_KEYS` |
+| Filter membership (which states each filter code shows) | `reconciliationStatusFilter.js` — `STATUS_CODES`, `STATUS_MEMBERS`, `matchesStatus` |
+| Filter chips and row badges | `ReconciliationSplitPanel.jsx` — `STATUS_LABEL_KEY` |
 
 ## 6. Consuming candidates across a batch (ETP-4971)
 

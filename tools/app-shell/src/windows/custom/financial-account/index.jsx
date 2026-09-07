@@ -126,7 +126,14 @@ export function FinancialAccountDetail({ recordId }) {
   );
   const [autoMatchOpen, setAutoMatchOpen] = useState(false);
   // Transaction to highlight in the Movements tab (deep-link from the reconciled-txns modal arrow).
-  const [highlightTxnId, setHighlightTxnId] = useState(() => searchParams.get('txn') || null);
+  // `txnAny` is the same deep-link with one extra promise: the target may be OLDER than the
+  // Movements tab's 30-day default, so that tab must open its date filter unbounded or the row
+  // would not be loaded at all. Kept as a separate param (ETP-5013 follow-up) so the four
+  // in-app `?txn=` callers, which always point at a recent movement, keep their default view.
+  const [highlightTxnId, setHighlightTxnId] = useState(
+    () => searchParams.get('txn') || searchParams.get('txnAny') || null,
+  );
+  const [txnUnbounded, setTxnUnbounded] = useState(() => Boolean(searchParams.get('txnAny')));
   // Auto-open the New-movement modal (deep-link from the accounts-grid row kebab).
   const [autoOpenNewMovement, setAutoOpenNewMovement] = useState(
     () => searchParams.get('newMovement') === 'true',
@@ -137,21 +144,24 @@ export function FinancialAccountDetail({ recordId }) {
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     setHighlightTxnId(null);
+    setTxnUnbounded(false);
     setAutoMatchArmed(tab === 'reconciliation');
   }, []);
 
-  // Apply deep-link params (tab / autoMatch / txn / newMovement / edit) and clear them. Reacts to searchParams changes
+  // Apply deep-link params (tab / autoMatch / txn / txnAny / newMovement / edit) and clear them. Reacts to searchParams changes
   // — not just mount — because navigating within the SAME account (e.g. from the reconciled-txns
   // modal to the Movements tab) updates the URL without remounting this window.
   useEffect(() => {
     const tab = searchParams.get('tab');
     const txn = searchParams.get('txn');
+    const txnAny = searchParams.get('txnAny');
     const autoMatch = searchParams.get('autoMatch');
     const newMovement = searchParams.get('newMovement');
     const edit = searchParams.get('edit');
-    if (!tab && !txn && !autoMatch && !newMovement && !edit) return;
+    if (!tab && !txn && !txnAny && !autoMatch && !newMovement && !edit) return;
     if (tab) setActiveTab(tab);
-    if (txn) setHighlightTxnId(txn);
+    if (txn || txnAny) setHighlightTxnId(txn || txnAny);
+    if (txnAny) setTxnUnbounded(true);
     if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchArmed(true);
     if (newMovement === 'true') setAutoOpenNewMovement(true);
     if (edit === 'true') setEditOpen(true);
@@ -430,6 +440,7 @@ export function FinancialAccountDetail({ recordId }) {
               loading={movementsLoading}
               onReload={reloadMovements}
               highlightTxnId={highlightTxnId}
+              txnUnbounded={txnUnbounded}
               autoOpenNewMovement={autoOpenNewMovement}
               data-testid="MovementsTab__f7dbb3" />
           )}
@@ -477,13 +488,22 @@ export function FinancialAccountDetail({ recordId }) {
         open={autoMatchOpen && !isCashAccount}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
-        onEditAccount={() => setEditOpen(true)}
+        // Same shape ReconciliationTab hands the split panel — the modal names the accounting
+        // account a near-match difference will be posted to.
+        glItemDifference={account?.glItemDifferenceId
+          ? { id: account.glItemDifferenceId, name: account.glItemDifferenceName || '' }
+          : null}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
         open={editOpen}
         account={account}
         onClose={() => setEditOpen(false)}
-        onSaved={reloadAccount}
+        // The SAME full reload the header's refresh button performs, not just the account. Editing
+        // an account changes automatch INPUTS — the amount/date tolerances and the difference
+        // account — so reloading only the account left the previously fetched suggestions in place:
+        // after configuring the accounting account the modal still opened empty, and pressing
+        // refresh by hand was the only way to see the matches that configuration had just enabled.
+        onSaved={handleReconciliationRefresh}
         onArchive={(acc) => { setEditOpen(false); setArchiveTarget(acc); }}
         onDelete={(acc) => { setEditOpen(false); setDeleteTarget(acc); }}
         onConnect={(acc) => { setEditOpen(false); bankConnectionFlow.startConnect(acc); }}
@@ -544,11 +564,11 @@ export default function FinancialAccountWindow(props) {
       // rows — which the padding would inset from both edges. The slot handles its own
       // inner spacing instead.
       tablePaddingX=""
-      // ETP-4871 — gates ListView's own bulk-delete button (the multi-select "Eliminar
-      // seleccionados" bar) so it disables whenever the selection includes an account that
-      // still has dependent records anywhere. The per-row "Eliminar cuenta" kebab item
-      // (AccountRowMenu) reads `row.deletable` directly and needs no wiring through ListView.
-      isRowDeletable={(row) => row.deletable !== false}
+      // ETP-5111 — no `isRowDeletable` here any more (the prop is gone from ListView): the
+      // unified delete rule is "let the user try, then explain the failure", so the bulk-delete
+      // button stays enabled even when the selection includes an account with dependent
+      // records. The per-row "Eliminar cuenta" kebab item (AccountRowMenu) still reads
+      // `row.deletable` directly and is unaffected.
       listViewOptions={{
         ...(props.listViewOptions || {}),
         // Drops the IDLE list bar only. ListView's SELECTION bar still renders on top of

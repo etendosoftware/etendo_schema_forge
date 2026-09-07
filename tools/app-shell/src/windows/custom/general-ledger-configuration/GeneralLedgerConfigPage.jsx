@@ -16,7 +16,7 @@ const REQUIRED_GENERAL = ['name', 'currency'];
 const REQUIRED_DEFAULTS = DEFAULTS_GROUPS.flatMap((g) => g.fields.filter((f) => f.required).map((f) => f.key));
 
 /**
- * General Ledger Configuration (AD window 125, "Configuración contable").
+ * General Ledger Configuration (AD window 125, "Esquema contable").
  * layoutType: custom — fiscal-config pattern. 4 tabs: General · Valores por
  * defecto · Dimensiones · Cuentas generales.
  *
@@ -41,7 +41,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
 
   useSetPageMeta({
     title: ui('glc.title'),
-    breadcrumb: `${ui('glc.breadcrumbRoot')} / ${ui('glc.title')}`,
+    breadcrumb: `${ui('finance')} / ${ui('glc.title')}`,
   });
 
   function validate() {

@@ -7,6 +7,7 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/sales-invoice' }),
 }));
 
 // Controlled menu fixture: one visible group with a visible and a hidden item,
@@ -36,8 +37,8 @@ vi.mock('../../menu.json', () => ({
   },
 }));
 
-// Stub cmdk primitives with simple passthrough divs/inputs
-vi.mock('@/components/ui/command.jsx', () => ({
+// Stub global-search primitives with simple passthrough elements
+vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
   CommandDialog: ({ open, children }) =>
     open ? <div data-testid="cmd-dialog">{children}</div> : null,
   CommandInput: (props) => <input data-testid="cmd-input" {...props} />,
@@ -51,13 +52,34 @@ vi.mock('@/components/ui/command.jsx', () => ({
       {children}
     </div>
   ),
+  GlobalSearchDialog: ({ open, children }) =>
+    open ? <div data-testid="cmd-dialog">{children}</div> : null,
+  GlobalSearchInput: (props) => <input data-testid="cmd-input" {...props} />,
+  GlobalSearchList: ({ children }) => <div data-testid="cmd-list">{children}</div>,
+  GlobalSearchEmpty: ({ children }) => <div data-testid="cmd-empty">{children}</div>,
+  GlobalSearchGroup: ({ heading, children }) => (
+    <div data-testid={`cmd-group-${heading}`}>{children}</div>
+  ),
+  GlobalSearchItem: ({ value, children, onSelect, ...props }) => (
+    <div {...props} data-testid={props['data-search-kind'] === 'recent' ? props['data-testid'] : `cmd-item-${value}`} onClick={onSelect}>
+      {children}
+    </div>
+  ),
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
+import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 
 function openPalette() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+}
+
+function SetSearchQuery({ value }) {
+  const { setQuery } = useGlobalSearch();
+  useEffect(() => setQuery(value), [setQuery, value]);
+  return null;
 }
 
 describe('CommandPalette', () => {
@@ -76,6 +98,13 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
+  it('closes on Escape from the shared search input handler', () => {
+    render(<CommandPalette />);
+    openPalette();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('cmd-dialog')).not.toBeInTheDocument();
+  });
+
   it('visible (non-hidden) item is rendered after opening', () => {
     render(<CommandPalette />);
     openPalette();
@@ -83,6 +112,21 @@ describe('CommandPalette', () => {
     // translatedLabel = 'translated:Sales Order', label = 'Sales Order', name = 'sales-order'
     const expectedValue = 'translated:Sales Order Sales Order sales-order';
     expect(screen.getByTestId(`cmd-item-${expectedValue}`)).toBeInTheDocument();
+  });
+
+  it('highlights the matching text in textual search results', async () => {
+    render(
+      <GlobalSearchProvider>
+        <SetSearchQuery value="sales" />
+        <CommandPalette />
+      </GlobalSearchProvider>,
+    );
+    openPalette();
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('search-text-highlight').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByTestId('search-text-highlight')[0]).toHaveTextContent(/sales/i);
   });
 
   it('hidden items are not rendered after opening', () => {
@@ -119,5 +163,72 @@ describe('CommandPalette', () => {
     openPalette();
     // The CommandGroup heading for 'Sales' becomes 'translated:Sales'
     expect(screen.getByTestId('cmd-group-translated:Sales')).toBeInTheDocument();
+  });
+
+  it('defaults vector search to the current window target and lets the user clear that scope', async () => {
+    render(<CommandPalette />);
+    openPalette();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vector-search-scope')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('vector-search-scope'));
+    expect(screen.getByTestId('vector-search-scope')).toHaveTextContent('allWindows');
+  });
+
+  it('treats a cleared top-bar scope as all targets, not an empty search', async () => {
+    render(<CommandPalette />);
+    openPalette();
+    await waitFor(() => expect(screen.getByTestId('vector-search-scope')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('vector-search-target-picker-trigger'));
+
+    document.dispatchEvent(new CustomEvent('schema-forge:vector-search-scope', {
+      detail: { pathname: '/sales-invoice', vectorSearchTarget: null },
+    }));
+
+    await waitFor(() => {
+      const options = screen.getAllByTestId('vector-search-target-option');
+      expect(options.length).toBeGreaterThan(0);
+      expect(options.every((option) => option.checked)).toBe(true);
+    });
+  });
+
+  it('keeps the dropdown open when a recent search is confirmed with the keyboard', async () => {
+    localStorage.setItem('schema-forge:recent-searches', JSON.stringify([
+      { query: 'blanquiceleste', targets: [], timestamp: 1 },
+    ]));
+    render(
+      <GlobalSearchProvider>
+        <CommandPalette />
+      </GlobalSearchProvider>,
+    );
+    openPalette();
+    await waitFor(() => expect(screen.getByTestId('recent-search-item')).toBeInTheDocument());
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    fireEvent.keyDown(document, { key: 'Enter' });
+
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+  });
+
+  it('returns the keep-open decision to the top-bar keyboard bridge', () => {
+    function KeyboardBridge() {
+      const { open, setOpen, handleKeyDown, registerKeyboardHandler } = useGlobalSearch();
+      useEffect(() => registerKeyboardHandler(() => ({ keepOpen: true })), [registerKeyboardHandler]);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>open</button>
+          <input data-testid="bridge-input" onKeyDown={(event) => {
+            const result = handleKeyDown(event);
+            if (event.key === 'Enter' && !result?.keepOpen) setOpen(false);
+          }} />
+          <span data-testid="bridge-state">{String(open)}</span>
+        </>
+      );
+    }
+    render(<GlobalSearchProvider><KeyboardBridge /></GlobalSearchProvider>);
+    fireEvent.click(screen.getByText('open'));
+    fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+    expect(screen.getByTestId('bridge-state')).toHaveTextContent('true');
   });
 });

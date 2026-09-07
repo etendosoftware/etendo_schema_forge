@@ -22,6 +22,12 @@ async function postAction(apiFetch, action, payload) {
     const raw = await parseBackendErrorMessage(res);
     const error = new Error(raw || `HTTP ${res.status}`);
     error.status = res.status;
+    // Whether `message` is something the backend actually said, or the synthesized
+    // `HTTP <status>` placeholder. Callers cannot tell them apart from the string alone,
+    // and translateBackendError passes the placeholder through as a truthy value, so a
+    // `translate(...) || friendlyFallback` chain would silently show the HTTP code
+    // instead of the fallback (PSD-23).
+    error.hasBackendMessage = Boolean(raw);
     throw error;
   }
   const json = await res.json();
@@ -82,6 +88,49 @@ export function useCreateMovement() {
 export function useUpdateMovement() {
   const { run, busy, error } = usePostAction('update');
   return { updateMovement: run, updating: busy, error };
+}
+
+/**
+ * Builds a full `update` payload for a dimension-only inline edit (ETP-5101 — the
+ * "Más información" row-expand panel's Project/Cost center/Product fields). The `update`
+ * action has no partial-patch support (see the doc block above): every call must resend
+ * the movement's own current amount/type/currency/etc. unchanged, with only the ONE
+ * dimension actually being edited differing. Deliberately NOT shared with
+ * NewTransactionModal's own `formFromMovement`/`handleSave` — that full edit form owns
+ * its own direction-toggle/validation concerns this narrower, single-field path doesn't
+ * need, so keeping them separate avoids coupling two different editing surfaces.
+ *
+ * `process: false` matches what the modal's own "Guardar" button already sends when
+ * editing an already-Processed movement (its "Confirmar" is hidden in that case) — this
+ * is the proven-safe idempotent value, it does not revert a Processed/Posted movement.
+ *
+ * @param {object} movement - a row as returned by GET .../financial-account-transactions
+ *   (`{ id, trxType, date, depositAmount, withdrawalAmount, description, glItemId,
+ *   bpartnerId, costcenterId, projectId, productId, ... }`)
+ * @param {string} accountCurrencyId - the account's currency id. Movement rows carry only
+ *   `currencyIso` (display), never the id — a movement is always in its account's
+ *   currency, so the account's own id is always correct here.
+ * @param {{ costcenterId?: string|null, projectId?: string|null, productId?: string|null }} overrides
+ *   the dimension field(s) actually changing; the other two pass through unchanged.
+ */
+export function buildDimensionUpdatePayload(movement, accountCurrencyId, overrides) {
+  return {
+    id: movement.id,
+    trxType: movement.trxType,
+    transactionDate: movement.date,
+    accountingDate: movement.date,
+    depositAmount: movement.depositAmount ?? 0,
+    paymentAmount: movement.withdrawalAmount ?? 0,
+    currencyId: accountCurrencyId,
+    description: movement.description ?? '',
+    glItemId: movement.glItemId || null,
+    bpartnerId: movement.bpartnerId || null,
+    costcenterId: movement.costcenterId || null,
+    projectId: movement.projectId || null,
+    productId: movement.productId || null,
+    process: false,
+    ...overrides,
+  };
 }
 
 /**

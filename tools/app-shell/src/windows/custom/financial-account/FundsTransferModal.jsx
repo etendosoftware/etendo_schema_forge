@@ -12,8 +12,14 @@ import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLengthValidation.js';
+import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
+import { getApiBase } from '@/hooks/useNeoResource';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { useConversionRate } from '../shared/useConversionRate.js';
 
 /** Parses a user-typed amount ("1.234,56" or "1234.56") into a Number, or NaN. */
 function parseAmount(raw) {
@@ -311,6 +317,38 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   const dest = useMemo(() => accounts.find((a) => a.id === destId) ?? null, [accounts, destId]);
   const multiCurrency = !!(source && dest && dest.currencyIso !== source.currencyIso);
 
+  // ── conversion-rate prefill ─────────────────────────────────────────────────
+  // One `rateDate` drives BOTH the rate lookup and the payload's `transferDate` (see
+  // handleConfirm), so the day a transfer is booked on and the day its rate was in force
+  // for cannot drift apart. todayCalendarISO (not toISOString) keeps the calendar day
+  // correct under a negative UTC offset.
+  // useAuthOptional, not useAuth: this modal must still render (rate simply not
+  // prefilled) outside an AuthProvider — useAuth throws there, per docs/request-policy.md.
+  const token = useAuthOptional()?.token;
+  const rateDate = todayCalendarISO();
+  // useConversionRate strips the LAST path segment off apiBaseUrl, because
+  // validate-exchange-rate hangs off /sws/neo with no entity segment (adding one
+  // 404s). Feeding it this modal's own endpoint leaves exactly /sws/neo.
+  const conversion = useConversionRate({
+    fromCode: source?.currencyIso,
+    toCode: dest?.currencyIso,
+    date: rateDate,
+    apiBaseUrl: `${getApiBase()}/sws/neo/financial-account-transactions`,
+    token,
+  });
+  // Seed the (editable) rate from the system rate, and RE-SEED it whenever the currency
+  // pair changes. The clear matters as much as the prefill: without it a EUR→USD rate the
+  // user typed by hand would survive a switch of destination to GBP and book one pair with
+  // another pair's rate (the ETP-4504 W1 failure, replayed here). A manual edit calls
+  // setConversionRate without touching these deps, so it stands until the pair does change.
+  useEffect(() => {
+    if (!multiCurrency) {
+      setConversionRate('');
+      return;
+    }
+    setConversionRate(conversion.rate != null ? String(conversion.rate) : '');
+  }, [multiCurrency, source?.currencyIso, dest?.currencyIso, conversion.rate]);
+
   const amountNum = parseAmount(amount);
   // Available balance is shown for context only — Classic allows transferring more than the
   // source balance (it never blocks on balance), so we deliberately do not gate on it.
@@ -322,10 +360,18 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
     && Number.isFinite(rateNum) && rateNum > 0
     ? amountNum * rateNum
     : null;
+  // PSD-23: the description is the only free-text field here, and FIN_Finacc_Transaction
+  // .Description is 255 chars. Blocking submit is what keeps the over-long value from
+  // travelling to the backend just to come back as a 400.
+  const descriptionError = getMaxLengthError(
+    description,
+    FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription,
+  );
   const canSubmit = !!destId
     && !!glItem
     && Number.isFinite(amountNum) && amountNum > 0
     && (!multiCurrency || (Number.isFinite(rateNum) && rateNum > 0))
+    && !descriptionError
     && !transferring;
 
   const handleConfirm = async () => {
@@ -338,6 +384,15 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
       sourceAccountId,
       destinationAccountId: destId,
       amount: String(amountNum),
+      // Send the day explicitly so the backend stores local MIDNIGHT (parseLocalDate).
+      // Omitting it let Classic date the transfer with now(), i.e. a wall-clock time in a
+      // column the AD declares as `Date` — the time is not a datum there, and every other
+      // flow in the app sends a date-only value. It also broke the movements list, which
+      // orders by `statementdate DESC, line DESC`: a transfer stamped 23:11 sorted above a
+      // manual movement created later the same day at 00:00. With every row on the same
+      // day tying, `line DESC` decides and newest-first holds again.
+      // Same day the rate was prefilled for, now by contract rather than by coincidence.
+      transferDate: rateDate,
       description,
       bankFee,
     };
@@ -355,7 +410,12 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
     } catch (err) {
       // The hook throws the backend's own business message (ETP-5085) — translate it before
       // showing it, or the user reads it in English.
-      setError(translateBackendError(err?.message, ui) || ui('financeAccountTransferError'));
+      // `postAction` synthesizes `HTTP <status>` when the 400 body carried no message.
+      // That is a truthy string translateBackendError passes through untouched, so it used
+      // to defeat the `||` fallback below and put a raw HTTP code on screen (PSD-23). The
+      // flag says whether there is a real backend message worth showing at all.
+      const backendMessage = err?.hasBackendMessage ? translateBackendError(err.message, ui) : null;
+      setError(backendMessage || ui('financeAccountTransferError'));
     }
   };
 
@@ -471,6 +531,19 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                     <span className="min-w-0 truncate">{formatCurrency(dest?.currencyIso, receiveAmount)}</span>
                   </div>
                 </div>
+                {/* No rate on file for this pair — say so instead of leaving the user to
+                    wonder why it prefilled last time and not now. Not a blocker: Confirm
+                    already requires a positive rate, so they just type it. */}
+                {!conversion.loading && !conversion.hasRate ? (
+                  <p
+                    className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+                    data-testid="transfer-rate-missing"
+                  >
+                    {ui('financeAccountTransferRateMissing', {
+                      from: source?.currencyIso, to: dest?.currencyIso,
+                    })}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -527,12 +600,24 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
 
           {/* Description */}
           <div className="flex flex-col gap-1.5">
-            <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
+            <div className="flex items-baseline justify-between">
+              <Label data-testid="Label__7ff08b">{ui('financeAccountTransferDescription')}</Label>
+              <FieldLengthCounter
+                value={description}
+                limit={FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}
+                error={descriptionError}
+                testId="transfer-description"
+                data-testid="FieldLengthCounter__7ff08b" />
+            </div>
             <input
               className={`${PLAIN_FIELD_CLS} w-full bg-card px-3 text-sm leading-5 text-[hsl(var(--foreground))]`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               data-testid="transfer-description" />
+            <FieldLengthError
+              error={descriptionError}
+              testId="transfer-description"
+              data-testid="FieldLengthError__7ff08b" />
           </div>
 
           {error ? (

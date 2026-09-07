@@ -15,6 +15,7 @@ import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -99,6 +100,32 @@ export function runAddLineAction(st, { handleCustomModalAddClick, handleSecondar
   return run.catch((err) => {
     console.error(`Add line action failed for tab '${st.key}':`, err);
   });
+}
+
+/**
+ * Resolve a secondary tab's "add" button text (ETP-5021).
+ *
+ * `addLineLabelKey`, when set, is a full i18n key that REPLACES the generic
+ * "Añadir {label}" (`addEntity`) composition entirely — needed when a tab's
+ * add action must match a standardized CTA used elsewhere in the app (verb +
+ * "+" prefix + casing) rather than the generic tab-name-derived phrasing.
+ * E.g. `locationAddress` sets `addLineLabelKey: "addAddress"` so its button
+ * reads the same "+ Añadir dirección" as the document-header
+ * PartnerAddressPicker, instead of the generic "Añadir Dirección".
+ * Falls back to `st.labelKey` (label-only override) or `tMenu(st.label)`.
+ *
+ * The result feeds `AddLineButton`, which always renders its own leading
+ * Plus icon (`add-line-button.jsx`) — unlike `PartnerAddressPicker`'s plain-text
+ * `createLabel`, which has no icon and needs the literal "+" baked into the
+ * string. A key like `addAddress` ("+ Añadir dirección") is shared between both
+ * call sites, so its leading "+" is stripped here to avoid a double plus sign
+ * on the icon button; the generic `addEntity` composition never carries one.
+ */
+export function resolveAddLineLabel(st, ui, tMenu) {
+  const label = st.addLineLabelKey
+    ? ui(st.addLineLabelKey)
+    : ui('addEntity', { label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label) });
+  return label.replace(/^\+\s*/, '');
 }
 
 export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
@@ -376,7 +403,7 @@ export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
       {canAdd && (
         <>
           <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-          <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+          <button type="button" onClick={onAddLineClick} data-testid="secondary-tab-empty-state-add" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
             + {addLineLabel}
           </button>
         </>
@@ -907,8 +934,33 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
   );
 }
 
-export function resolveHeaderContent(headerContent, data) {
-  return typeof headerContent === 'function' ? headerContent(data) : headerContent;
+// ETP-5024: `bpBanner`, when passed, renders the persistent credit-limit/BP-on-hold
+// inline warning (BlockingBpBanner.jsx) above the resolved header content. Optional
+// so every call site that has nothing to report (no BP-related callout/process
+// wiring in scope) keeps behaving exactly as before.
+//
+// `currencyCode` is derived from `data['currency$_identifier']` here. A REVIEW pass
+// (ETP-5024) found the original "the header endpoint always returns
+// currency$_identifier, no session-level fallback needed" assumption WRONG for the
+// credit-limit callout's actual firing point: it fires while creating a NEW,
+// unsaved document, where `data` is `hook.editing` (DetailView.jsx) — never a
+// header GET response — so `currency$_identifier` genuinely isn't there yet. Rather
+// than thread DetailView.jsx's `sessionCurrencyCode` through this call (DetailView.jsx
+// is a governed God Component — `.claude/hooks/check-detailview-growth.mjs` blocks it
+// from growing, and this branch is already over its line budget), BlockingBpBanner
+// itself calls `useCurrency()` as the session-level fallback — see that component.
+export function resolveHeaderContent(headerContent, data, bpBanner) {
+  const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
+  if (!bpBanner) return resolvedHeader;
+  return (
+    <>
+      <BlockingBpBanner
+        {...bpBanner}
+        currencyCode={data?.['currency$_identifier'] ?? null}
+        data-testid="BlockingBpBanner__dfc406" />
+      {resolvedHeader}
+    </>
+  );
 }
 
 export function isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) {

@@ -56,10 +56,32 @@ function resolveRenderProfile(addingComplementary, effectiveProfile) {
   return addingComplementary ? 'sii+tbai' : effectiveProfile;
 }
 
+/**
+ * Saves two sections one after the other — never both at once (ETP-5112).
+ *
+ * Each section's `save()` issues a PUT carrying the record's `updated` token, and core parses that
+ * token through a `private final static SimpleDateFormat` (`JsonToDataConverter` line 129) which is
+ * not thread-safe. Two writes landing together corrupt each other's parse, and the concurrency
+ * check then refuses one with "the record has already been changed by another user" against a
+ * record nobody touched. Reproduced on the Organization screen with exactly this two-write shape.
+ *
+ * Both sections are still attempted even when the first fails, which is what `allSettled` gave us
+ * and what the combined error below depends on — hence the explicit try/catch per save rather than
+ * a bare sequential await, which would skip the second on the first failure.
+ */
 async function saveTwoRefs(ref1, ref2) {
-  const [r0, r1] = await Promise.allSettled([ref1?.save(), ref2?.save()]);
-  if (r0.status === 'rejected' || r1.status === 'rejected') {
-    throw new Error(r0.reason?.message ?? r1.reason?.message ?? 'Error saving');
+  const outcomes = [];
+  for (const ref of [ref1, ref2]) {
+    try {
+      await ref?.save();
+      outcomes.push(null);
+    } catch (err) {
+      outcomes.push(err);
+    }
+  }
+  const firstError = outcomes.find(Boolean);
+  if (firstError) {
+    throw new Error(firstError.message ?? 'Error saving');
   }
 }
 

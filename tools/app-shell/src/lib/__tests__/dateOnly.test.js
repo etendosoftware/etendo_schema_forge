@@ -2,9 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   formatCalendarDate,
+  formatCalendarMonthYear,
   getCalendarDateRelation,
   parseCalendarDate,
   todayCalendarISO,
+  tomorrowCalendarISO,
 } from '../dateOnly.js';
 
 describe('dateOnly helpers', () => {
@@ -39,6 +41,21 @@ describe('dateOnly helpers', () => {
 
     it('returns an em dash when the input is empty', () => {
       assert.equal(formatCalendarDate(null), '—');
+    });
+  });
+
+  describe('formatCalendarMonthYear', () => {
+    it('expands persisted English period names to a full localized month and two-digit year', () => {
+      assert.equal(formatCalendarMonthYear('2027-01-01', 'en_US'), 'January 27');
+    });
+
+    it('expands persisted Spanish period names to a full localized month and two-digit year', () => {
+      assert.equal(formatCalendarMonthYear('2027-01-01', 'es_ES'), 'Enero 27');
+    });
+
+    it('uses the starting date year for fiscal years that cross from July through June', () => {
+      assert.equal(formatCalendarMonthYear('2028-06-01', 'en_US'), 'June 28');
+      assert.equal(formatCalendarMonthYear('2028-06-01', 'es_ES'), 'Junio 28');
     });
   });
 
@@ -77,6 +94,33 @@ describe('dateOnly helpers', () => {
 
     it('does not shift to the previous UTC day for an early local morning', () => {
       assert.equal(todayCalendarISO(new Date(2026, 7, 25, 0, 30, 0)), '2026-08-25');
+    });
+  });
+
+  // ETP-5017: introduced alongside the "payments due" card, which needs "on or
+  // before today" expressed as `< tomorrow` since date-mode filters have no
+  // `lessOrEqual` operator.
+  describe('tomorrowCalendarISO', () => {
+    it('formats the day after a normal reference date', () => {
+      assert.equal(tomorrowCalendarISO(new Date(2026, 7, 5, 12, 0, 0)), '2026-08-06');
+    });
+
+    it('rolls over the month at the end of January', () => {
+      assert.equal(tomorrowCalendarISO(new Date(2026, 0, 31, 12, 0, 0)), '2026-02-01');
+    });
+
+    it('rolls over the year at the end of December', () => {
+      assert.equal(tomorrowCalendarISO(new Date(2026, 11, 31, 12, 0, 0)), '2027-01-01');
+    });
+
+    it('handles the leap-day rollover in a leap year (2028-02-28 → 2028-02-29)', () => {
+      assert.equal(tomorrowCalendarISO(new Date(2028, 1, 28, 12, 0, 0)), '2028-02-29');
+    });
+
+    it('does not drift to the UTC day for a late local evening', () => {
+      // 2026-08-25 23:30 local is already 2026-08-26 in UTC; "tomorrow" from the
+      // local calendar day must still be the 26th, not the 27th.
+      assert.equal(tomorrowCalendarISO(new Date(2026, 7, 25, 23, 30, 0)), '2026-08-26');
     });
   });
 });

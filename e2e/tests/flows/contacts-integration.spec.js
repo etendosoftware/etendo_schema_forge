@@ -152,6 +152,23 @@ async function fillNewContactForm(page, { name, email }) {
   }
 }
 
+/**
+ * Fill the "NIF" field in the "Nuevo contacto" modal (CreateContactModal.jsx /
+ * EntityCreationModal.jsx — renamed from "CIF/NIF", ETP-4992).
+ *
+ * Anchored to a <label> and matched exactly so it does not also match the
+ * "NIF" <option> inside the sibling "Clave NIF país residencia" select. The
+ * field is required, so EntityCreationModal.jsx appends a trailing "*" span
+ * to the label's own textContent ("NIF*", no space) — tolerate that (and
+ * incidental whitespace) without loosening the anchor enough to match "NIF"
+ * inside unrelated longer labels.
+ */
+async function fillNifField(page, value) {
+  const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
+  const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
+  await taxIdInput.fill(value);
+}
+
 
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
@@ -498,8 +515,11 @@ test.describe('Contacts Integration — Full journey', () => {
       await firstInput.fill(`E2E Address ${ts}`);
     }
 
-    // Select País — button opens a search dialog with country list
-    const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+    // Select País — button opens a search dialog with country list.
+    // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+    // asterisk inside the same element, so its textContent is "País*" and Playwright
+    // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+    const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
     await paisButton.click();
 
     // The country picker dialog has a search input "Buscar país..."
@@ -507,11 +527,17 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(countrySearch).toBeVisible({ timeout: 5_000 });
     await countrySearch.fill(COUNTRY_SEARCH_TERM);
 
-    // Wait for search results to filter — country name depends on locale (España / Spain)
-    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-      .or(page.getByRole('button', { name: /^spain$/i }))
-      .or(page.locator('button').filter({ hasText: /^España$/ }))
-      .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+    // Wait for search results to filter — country name depends on locale (España / Spain).
+    // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+    // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+    // on create), so an unscoped "España" button locator resolves to the FIELD button,
+    // which sits behind the picker overlay — the click then times out on intercepted
+    // pointer events instead of selecting the option.
+    const countryPicker = page.locator('div[style*="z-index: 160"]');
+    const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+      .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+      .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
     await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
     await countryOption.first().click();
 
@@ -744,10 +770,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // CIF/NIF
-    const taxIdLabel = page.getByText(/^cif\/nif/i);
-    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
-    await taxIdInput.fill(TAX_ID);
+    // NIF (see fillNifField's own doc comment for the anchoring rationale)
+    await fillNifField(page, TAX_ID);
 
     // País — opens a search dialog (Dirección tab, active by default).
     // Unlike the Contacts window's own address modal, country IS required here
@@ -861,10 +885,8 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
     await taxIdTypeSelect.selectOption({ index: 1 });
 
-    // CIF/NIF
-    const taxIdLabel = page.getByText(/^cif\/nif/i);
-    const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
-    await taxIdInput.fill(TAX_ID);
+    // NIF (see fillNifField's own doc comment for the anchoring rationale)
+    await fillNifField(page, TAX_ID);
 
     // País
     const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');

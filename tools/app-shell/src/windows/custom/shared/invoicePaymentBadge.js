@@ -1,4 +1,4 @@
-// Single source of truth for the "Pendiente de pago" badge state of an invoice
+// Single source of truth for the "Saldo pendiente" badge state of an invoice
 // (list grid + detail topbar, AR and AP alike).
 //
 // ETP-4841 — the state is decided by the SIGN OF THE TOTAL, never by the document

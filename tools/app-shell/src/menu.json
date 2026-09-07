@@ -142,6 +142,12 @@
           "windowId": "273673D2ED914C399A6C51DB758BE0F9"
         },
         {
+          "name": "matched-purchase-invoices",
+          "label": "Receipt-Invoice Link",
+          "favname": "Receipt-Invoice Link",
+          "windowId": "107"
+        },
+        {
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
@@ -310,8 +316,8 @@
         },
         {
           "name": "asset-group",
-          "label": "Asset Category",
-          "favname": "Asset Category",
+          "label": "Asset Group",
+          "favname": "Asset Group",
           "windowId": "252"
         },
         {
@@ -323,7 +329,8 @@
         {
           "name": "not-posted-documents",
           "label": "Not Posted Documents",
-          "favname": "Not Posted Documents"
+          "favname": "Not Posted Documents",
+          "obuiappProcessId": "D6AB95CE52D34E1599590526115E26C6"
         },
         {
           "name": "simple-g-l-journal",
@@ -340,7 +347,8 @@
         {
           "name": "fiscal-monitor",
           "label": "Fiscal Monitor",
-          "favname": "Fiscal Monitor"
+          "favname": "Fiscal Monitor",
+          "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C"
         },
         {
           "name": "conversion-rates",
@@ -351,7 +359,20 @@
         {
           "name": "fiscal-models",
           "label": "Fiscal Models",
-          "favname": "Fiscal Models"
+          "favname": "Fiscal Models",
+          "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8"
+        },
+        {
+          "name": "tax",
+          "label": "Tax",
+          "favname": "Tax",
+          "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
         },
         {
           "name": "report-viewer-finance",
@@ -395,18 +416,6 @@
           "label": "Payment Term",
           "favname": "Payment Term",
           "windowId": "141"
-        },
-        {
-          "name": "tax",
-          "label": "Tax",
-          "favname": "Tax",
-          "windowId": "137"
-        },
-        {
-          "name": "tax-category",
-          "label": "Tax Category",
-          "favname": "Tax Category",
-          "windowId": "138"
         },
         {
           "name": "business-partner-category",

@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help
 
 export SF_ROOT := $(CURDIR)
 
@@ -537,12 +537,29 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
-dev: ensure-locale ## Start app-shell dev server
+dev: ensure-locale ## Start app-shell and AI BFF dev servers
+	@$(MAKE) -s ai-bff-install
+	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
+	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && npm run dev
+
+ai-bff-install:
+	@test -d tools/ai-bff/node_modules || npm install --prefix tools/ai-bff
 
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
 	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
+	@for port in 3100 3400; do \
+		pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo ">> Stopping process(es) on port $$port: $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+			while lsof -tiTCP:$$port -sTCP:LISTEN >/dev/null 2>&1; do sleep 1; done; \
+		fi; \
+	done
+	@$(MAKE) -s ai-bff-install
+	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
+	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
 dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
@@ -566,6 +583,80 @@ uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
 	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
 	@./scripts/merge-block-check.sh $(TASK)
+
+# --- CI parity -------------------------------------------------------------
+# These variable names are shared with unrelated targets earlier in this file
+# (DRY_RUN ?= 0 for data-fixes, PROFILE ?= for regen-check). A plain `?=` here
+# would LOSE to those in-file defaults — which for DRY_RUN would silently flip
+# ci-parity from dry run to LIVE. So each value is taken only from an explicit
+# command-line or environment assignment; an in-file default from another
+# target can never reach ci-parity.
+ci_parity_var = $(if $(filter command\ line environment,$(origin $(1))),$($(1)),$(2))
+
+CI_PARITY_DEFAULT_PHASES := verify,align,db,install
+CI_PARITY_PHASES    = $(call ci_parity_var,PHASES,$(CI_PARITY_DEFAULT_PHASES))
+CI_PARITY_DRY_RUN   = $(call ci_parity_var,DRY_RUN,1)
+CI_PARITY_PROFILE   = $(call ci_parity_var,PROFILE,union)
+CI_PARITY_SID       = $(call ci_parity_var,BBDD_SID,etendo_ci)
+CI_PARITY_ALLOW_SID = $(call ci_parity_var,ALLOW_LOCAL_SID,)
+CI_PARITY_JSON      = $(call ci_parity_var,JSON,)
+CI_PARITY_NO_FETCH  = $(call ci_parity_var,NO_FETCH,)
+
+ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + install (DRY RUN by default; HELP=1 or `make ci-parity-help` for options)
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s ci-parity-help; exit 0; fi; \
+	PHASES_ARG="$(CI_PARITY_PHASES)"; \
+	PARITY_ARGS="--phases $${PHASES_ARG:-verify,align,db,install}"; \
+	PARITY_ARGS="$$PARITY_ARGS --profile $(or $(CI_PARITY_PROFILE),union)"; \
+	PARITY_ARGS="$$PARITY_ARGS --bbdd-sid $(or $(CI_PARITY_SID),etendo_ci)"; \
+	PARITY_ARGS="$$PARITY_ARGS --dry-run $(or $(CI_PARITY_DRY_RUN),1)"; \
+	if [ "$(CI_PARITY_ALLOW_SID)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --allow-local-sid"; fi; \
+	if [ "$(CI_PARITY_NO_FETCH)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --no-fetch"; fi; \
+	if [ "$(CI_PARITY_JSON)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --json"; fi; \
+	node cli/src/ci-parity.js $$PARITY_ARGS
+
+ci-parity-help: ## Show usage and examples for `make ci-parity`
+	@echo "Usage: make ci-parity [VAR=value ...]"
+	@echo ""
+	@echo "Brings the LOCAL Etendo checkout into parity with what CI installs, then"
+	@echo "optionally drops an isolated database and runs CI's four gradle commands."
+	@echo "DRY RUN IS THE DEFAULT — nothing executes unless you pass DRY_RUN=0."
+	@echo ""
+	@echo "Variables:"
+	@echo "  PHASES=<list>       Comma-separated subset of verify,align,db,install (default: all four)"
+	@echo "  DRY_RUN=0           ACTUALLY EXECUTE (default 1 = plan only)"
+	@echo "  PROFILE=<name>      union | schema-forge-ci | go (default: union)"
+	@echo "  BBDD_SID=<sid>      Target database (default: etendo_ci)"
+	@echo "  ALLOW_LOCAL_SID=1   Permit a target sid equal to your local dev sid (DESTROYS it)"
+	@echo "  NO_FETCH=1          Use cached remote refs; freshness can be stale (offline mode)"
+	@echo "  JSON=1              Machine-readable report (secrets redacted)"
+	@echo ""
+	@echo "Phases:"
+	@echo "  verify   Fetch refs, then classify every dir under <core>/modules; traffic-light table."
+	@echo "  align    Clone missing modules, checkout expected branches, PARK extras (move, never delete)."
+	@echo "  db       DROP the target database so install recreates it (mirrors CI's empty postgres sidecar)."
+	@echo "  install  prepareConfig -> setup -> expandModules -> install, with gradle.properties restored after."
+	@echo ""
+	@echo "Examples:"
+	@echo "  make ci-parity                                  # dry run, all phases, union profile"
+	@echo "  make ci-parity PHASES=verify                    # just the drift report"
+	@echo "  make ci-parity PHASES=verify JSON=1             # same, machine-readable"
+	@echo "  make ci-parity PROFILE=schema-forge-ci          # only what THIS repo's CI clones"
+	@echo "  make ci-parity PHASES=align DRY_RUN=0           # actually align the modules"
+	@echo "  make ci-parity DRY_RUN=0                        # full parity run against etendo_ci"
+	@echo ""
+	@echo "Notes:"
+	@echo "  - Never pushes, never deletes, never runs git clean. Extras are moved to <core>/.modules-disabled/."
+	@echo "  - Refuses db/install when BBDD_SID equals the sid in etendo_core/gradle.properties."
+	@echo "  - Exit 1 when verify finds a blocker (source-dirty worktree or stray dir); 2 on a usage error."
+	@echo "  - DIRTY-BUILD is a WARN, not a blocker: dirt confined to tracked gradle output under build/."
+	@echo "  - Modules can report UNPINNED (present as required, but no grounded expected branch, so align"
+	@echo "    leaves them alone). Which ones, and whether align touches them, is set PER PROFILE by"
+	@echo "    unpinnedPolicy in pipelines/ci-parity-profiles.json - not by a make variable, because"
+	@echo "    flipping it is a considered decision that deserves a reviewable diff. Read the work-loss"
+	@echo "    warning in the doc before flipping it: develop-then-branch would move modules off branches"
+	@echo "    that are ahead of develop (psd2 +162, db.extended +11 = the pgvector work), dropping that"
+	@echo "    work from the INSTALL even though the commits stay on the branch."
+	@echo "  - Full reference: docs/ci-parity-install.md"
 
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
@@ -649,21 +740,44 @@ report-server-verify: report-server-image ## Build, boot the image and assert th
 # it does not leave you a service. This is the one that leaves it running.
 REPORT_SERVER_NAME ?= report-server-local
 REPORT_SERVER_PORT ?= 3001
-GRADLE_PROPS       := ../gradle.properties
-gradle_prop         = $(shell awk -F= '/^bbdd\.$(1)[ \t]*=/{gsub(/[ \t\r]/,"",$$2); print $$2}' $(GRADLE_PROPS))
+# Layout-aware: core is a SUBDIR locally (schema-forge/etendo_core) but the
+# PARENT in CI (etendo_core/etendo_schema_forge). Probing both keeps
+# report-server-up from exporting empty BBDD_* values on a dev machine.
+# The `export` directive at line 672 marks ALL variables for export, so make
+# expands this recursive variable to build the child environment of EVERY
+# recipe — hence the 2>/dev/null: without it a missing file printed an awk
+# error before the output of every single `make` target.
+REPORT_SERVER_ENVFILE ?= $(CURDIR)/tmp/report-server.env
+# Layout-aware: core is a SUBDIR locally (schema-forge/etendo_core) but the
+# PARENT in CI (etendo_core/etendo_schema_forge). Probing both keeps
+# report-server-up from exporting empty BBDD_* values on a dev machine.
+GRADLE_PROPS       := $(firstword $(wildcard etendo_core/gradle.properties ../gradle.properties))
+gradle_prop         = $(if $(GRADLE_PROPS),$(shell awk -F= '/^bbdd\.$(1)[ \t]*=/{gsub(/[ \t\r]/,"",$$2); print $$2}' $(GRADLE_PROPS)))
+# `export` at the top of the Deploy section marks ALL variables for export, so
+# make would otherwise expand this recursive variable — running its $(shell awk)
+# — to build the child environment of EVERY recipe in this file. unexport is the
+# surgical fix: gradle_prop is a helper, never an environment variable.
+unexport gradle_prop
 
 report-server-up: report-server-image ## Rebuild and (re)start the report-server on :3001 — the one-command refresh
 	@docker rm -f $(REPORT_SERVER_NAME) >/dev/null 2>&1 || true
+	@mkdir -p $(dir $(REPORT_SERVER_ENVFILE))
+	@# BBDD_PASSWORD is a real secret. Passing it with `docker run -e` puts it in
+	@# the docker client's argv (visible in `ps`) and stores it on the container,
+	@# where `docker inspect` prints it back. An --env-file keeps it out of argv.
+	@umask 077 && printf '%s\n' \
+	  'JSREPORT_URL=http://host.docker.internal:5488' \
+	  'ETENDO_URL=http://host.docker.internal:8080/etendo' \
+	  'BBDD_HOST=host.docker.internal' \
+	  'BBDD_PORT=$(call gradle_prop,port)' \
+	  'BBDD_USER=$(call gradle_prop,user)' \
+	  'BBDD_PASSWORD=$(call gradle_prop,password)' \
+	  'BBDD_SID=$(call gradle_prop,sid)' > $(REPORT_SERVER_ENVFILE)
 	@docker run -d --name $(REPORT_SERVER_NAME) \
 	  -p $(REPORT_SERVER_PORT):3001 \
-	  -e JSREPORT_URL=http://host.docker.internal:5488 \
-	  -e ETENDO_URL=http://host.docker.internal:8080/etendo \
-	  -e BBDD_HOST=host.docker.internal \
-	  -e BBDD_PORT=$(call gradle_prop,port) \
-	  -e BBDD_USER=$(call gradle_prop,user) \
-	  -e BBDD_PASSWORD=$(call gradle_prop,password) \
-	  -e BBDD_SID=$(call gradle_prop,sid) \
+	  --env-file $(REPORT_SERVER_ENVFILE) \
 	  $(or $(TAG),report-server:local) >/dev/null
+	@rm -f $(REPORT_SERVER_ENVFILE)
 	@for i in $$(seq 1 30); do \
 	  curl -sf http://localhost:$(REPORT_SERVER_PORT)/api/reports >/dev/null 2>&1 && break || sleep 1; \
 	done

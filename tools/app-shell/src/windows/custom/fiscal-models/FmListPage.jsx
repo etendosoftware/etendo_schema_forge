@@ -795,7 +795,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             data-testid="MoreOptionsMenu__cb728e" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-          Tesorería / {t('fm.list.title') ?? 'Declaraciones'}
+          {ui('finance')} / {ui('fm.breadcrumb.section')}
         </div>
       </div>
       {/* ── Toolbar ──────────────────────────────────────────────── */}

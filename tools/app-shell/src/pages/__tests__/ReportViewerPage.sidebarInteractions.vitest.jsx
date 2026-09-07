@@ -6,7 +6,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
+import { assertAllActionsDisabledWhileRequiredEmpty, waitForAllActionsEnabled } from './reportViewerTestHelpers';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -248,9 +248,8 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     expect(checkbox).toBeChecked();
   });
 
-  it('changes a date field value and clears the required error on change', async () => {
+  it('changes a date field value and re-enables the report actions (ETP-4900)', async () => {
     mockSearchParams = new URLSearchParams({ report: 'report-date' });
-    const user = userEvent.setup();
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse([DATE_REPORT]));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
@@ -259,15 +258,16 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Date From')).toBeInTheDocument());
 
-    await assertGenerateDisabledThenPdfTriggersRequired(user);
+    // While the required date is empty, every action that could trigger a
+    // render (sidebar submit + all four top-bar buttons) is disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
 
-    // Setting a value should clear the error (handleChange clears errors[name] when value is truthy)
+    // Setting a value should re-enable them (handleChange clears errors[name]
+    // when the value is truthy, and hasAllRequiredFilled recomputes on params change)
     const dateField = screen.getByTestId('date-field');
-    await user.type(dateField, '2024-01-15');
+    await userEvent.setup().type(dateField, '2024-01-15');
 
-    await waitFor(() => {
-      expect(screen.queryByText('required')).not.toBeInTheDocument();
-    });
+    await waitForAllActionsEnabled();
   });
 });
 
@@ -327,8 +327,9 @@ describe('ReportViewerPage — ReportSidebar conditional required (requiredIf, E
     const dateLabel = screen.getByText('From Reference Date');
     expect(dateLabel.closest('label')).not.toHaveTextContent('*');
 
-    // Now submitting with referenceYearId empty must show the required error.
-    await assertGenerateDisabledThenPdfTriggersRequired(user);
+    // With referenceYearId now required and empty, every render-triggering
+    // action (sidebar submit + all four top-bar buttons) stays disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
   });
 
   it('toggling the gate back off re-hides both visibleIf-gated params and clears the requirement', async () => {

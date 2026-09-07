@@ -79,7 +79,13 @@ function GrowthStatusIcon({ isNegative }) {
   );
 }
 
-export function FinancialTrendChart({ labels = [], values = [], expenseValues = [], currencyLabel = '' }) {
+/**
+ * ETP-5088 — `canCreatePurchase`/`canCreateSale` gate the empty state's creation CTAs (including "create with Copilot", whose
+ * only purpose here is to create that same record). Creation actions need the WRITE tier on the
+ * target window, not mere visibility. Default `true` so existing callers and tests keep their
+ * behaviour; `DashboardPage` passes the resolved values.
+ */
+export function FinancialTrendChart({ labels = [], values = [], expenseValues = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -308,6 +314,7 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
               </p>
             </div>
             <div className="flex flex-row items-center" style={{ gap: '12px' }}>
+              {canCreatePurchase && (
               <button
                 type="button"
                 onClick={() => navigate('/purchase-invoice/new')}
@@ -321,6 +328,8 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                   {ui('newPurchase')}
                 </span>
               </button>
+              )}
+              {canCreateSale && (
               <button
                 type="button"
                 onClick={() => navigate('/sales-invoice/new')}
@@ -334,6 +343,7 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                   {ui('newSale')}
                 </span>
               </button>
+              )}
             </div>
           </div>
         </div>

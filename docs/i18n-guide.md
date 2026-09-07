@@ -279,14 +279,40 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
    ReDoS/DoS hotspot (`javascript:S5852`); linear-time slicing has no backtracking surface at all.
    `t(key, { param: captured })` then re-interpolates the extracted parts through the frontend's own
    i18n, the same way `ui('linkedToInvoice', { number })` would. See `matchAccountNotFound` (ETP-4706,
-   Account-not-found enrichment) and `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
-   `ETGO_InvoiceLineAlreadyInvoiced`) in `backendErrors.js` for the pattern: order matters — try the
-   more specific matcher before the more general one, and add a code comment linking the matcher back
-   to the server-side `AD_MESSAGE` entry it mirrors.
+   Account-not-found enrichment), `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
+   `ETGO_InvoiceLineAlreadyInvoiced`), and `matchFieldTooLong` (ETP-4984, the Hibernate
+   `StringPropertyValidator` "Value too long" message → `backendError.fieldTooLong`) in
+   `backendErrors.js` for the pattern: order matters — try the more specific matcher before the more
+   general one, and add a code comment linking the matcher back to the server-side `AD_MESSAGE` entry
+   (or, for `matchFieldTooLong`, the core validator) it mirrors. Note `matchFieldTooLong` is
+   deliberately repo-wide — it fires for this backend message on any entity/field, not just the window
+   that first added the field-level `maxLength` prevention (see `docs/generated-custom-windows/assets.md`
+   § ETP-4984 for the paired client-side cap).
 
 `translateBackendError` tries the exact-match map first, then falls through to the parameterized
 matchers, and returns the original (untranslated) message if neither matches — never throws and
 never silently swallows an unrecognized backend error.
+
+**Multi-line messages (ETP-5109).** Some backends accumulate several result messages into one
+newline-joined buffer before returning it — `SaltEdgeAccountLinkHelper.fetchAccountTransactions`
+appends its max-fetch-interval warning immediately before the connection-inactive one, so two
+individually translatable messages arrive as a single string that matches no skeleton as a whole.
+When the message as a whole resolves to nothing and contains a newline, `translateBackendError`
+retries **line by line**: every line that matches is translated, every line that does not is kept
+verbatim, and if no line resolves the original message is returned untouched. A new matcher gets
+this for free — it needs no awareness of the multi-line case.
+
+**Two traps when writing the locale string:**
+
+1. **`useUI` interpolation is not global.** It is `text.replace(`{${p}}`, params[p])`
+   (`app-shell-core/src/i18n/useUI.js`), and `String.replace` with a *string* pattern substitutes
+   only the FIRST occurrence. A literal that mentions the same placeholder twice renders the second
+   one as raw `{param}` in the UI. Reword so each placeholder appears once
+   (see `backendError.psd2ImportDateBeyondMaxInterval`, whose English original repeats its `%0`).
+2. **A backend template written with `%s` never interpolates.** `OBMessageUtils.getI18NMessage`
+   substitutes `%0` only, so an `AD_MESSAGE` authored with `%s` reaches the user with the literal
+   `%s` in it. That makes the string constant, i.e. an exact-match entry rather than a matcher —
+   `PSD2_NoActiveConnectionForAccount` is the live example.
 
 ## Shared RelatedDocuments Components
 

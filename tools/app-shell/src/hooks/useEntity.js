@@ -16,9 +16,11 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
-import { getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
+import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
+import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
+import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
@@ -577,12 +579,53 @@ export function getInvalidPhoneFields(fields, editing) {
 // Returns { key, errorKey, errorParams } for the first violating field, or null
 // when clean. `errorParams` carries the i18n interpolation values (e.g. { min })
 // so the toast can render "Value must be at least 1" rather than a generic text.
+// Silent safety-net clamp for numeric fields with a declared `max` (e.g. Annual
+// Depreciation % <= 100). EntityForm's onBlur already clamps this on the input, but
+// that only fires if the user left the field before saving — clicking Save directly
+// (e.g. right after typing, or a programmatic save) reaches performSave with the raw,
+// unclamped value still in `editing`. Clamp it here, on the object used to build the
+// payload, so an over-limit value is never persisted. Silent: never blocks save, no
+// toast, no field error — unlike getNumericFieldViolation below (min/integer). ETP-4887.
+// Returns `editing` unchanged (same reference) when nothing needed clamping, so
+// callers can cheaply detect "did anything change" via a reference check.
+export function clampNumericFieldsForSave(editing, fields) {
+    let clamped = editing;
+    for (const f of fields) {
+        if (f?.max == null) continue;
+        const clampedValue = clampNumericFieldMax(f, editing?.[f.key]);
+        if (clampedValue !== editing?.[f.key]) {
+            if (clamped === editing) clamped = { ...editing };
+            clamped[f.key] = clampedValue;
+        }
+    }
+    return clamped;
+}
+
 export function getNumericFieldViolation(fields, editing) {
     const isReadOnly = getReadOnly(editing);
     const isVisible = getVisible(editing);
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getNumericFieldError(f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-5031 — Contacts-only text-field hard save-block (length + unsafe chars),
+// mirroring getNumericFieldViolation's shape/contract. A no-op for every window
+// other than 'contacts' — getContactsTextFieldError gates on `windowName` as its
+// first check, so this never affects any other window's save path. Unlike the
+// numeric check, the caller passes only the fields the user changed THIS
+// session (same scoping as the email/website/phone checks) — a pre-existing
+// over-limit value on an untouched legacy field must never block an unrelated
+// edit.
+export function getContactsTextFieldViolation(windowName, fields, editing) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTextFieldError(windowName, f, editing?.[f.key]);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -899,6 +942,20 @@ export function useEntity(entity, childEntity, {
     // are empty (either client-side or via backend MISSING_REQUIRED_FIELDS) so EntityForm
     // can highlight each input. Cleared on successful save and on field change.
     const [fieldErrors, setFieldErrors] = useState({});
+    // ETP-5024: `{ kind: 'creditLimit' | 'onHold', text } | null` — set when a process
+    // (handleProcess) or a "Save & Complete" (handleSaveAndProcess) action fails with one
+    // of the two Business-Partner blocking conditions (see lib/blockingBpConditions.js).
+    // When set, the failing action does NOT toast — DetailView renders a persistent inline
+    // banner from this instead. Cleared here whenever a completion action later succeeds;
+    // consumers also watch `completionSignal` below to clear a banner that came from the
+    // OTHER source (useCallout's calloutResult), which this hook has no reference to.
+    const [blockingCondition, setBlockingCondition] = useState(null);
+    // ETP-5024: bumped every time a completion-type action succeeds (Complete via
+    // handleProcess, or the draft-mode Complete flow in handleSaveAndProcess). DetailView
+    // watches this to clear ANY currently-shown blocking banner — including one raised by
+    // useCallout's BP-select-time message, which this hook cannot reach directly — on the
+    // "document completed successfully" trigger.
+    const [completionSignal, setCompletionSignal] = useState(0);
     const [sortColumn, setSortColumn] = useState(initialSortColumn);
     const [sortDirection, setSortDirection] = useState(initialSortDirection);
     const startRowRef = useRef(0);
@@ -946,6 +1003,24 @@ export function useEntity(entity, childEntity, {
             ([key, val]) => key !== 'id' && val !== selected[key]
         );
     }, [editing, selected]);
+
+    /**
+     * The list query minus its row window: the sort plus every filter layer, composed exactly
+     * as `refresh` composes it.
+     *
+     * Exposed (ETP-4997) so a feature that must re-run the SAME server-side query the grid is
+     * showing — the CSV export — reuses this composition instead of re-deriving it. The grid
+     * is filtered and paginated server-side, so exporting `items` would silently export only
+     * the pages the user happened to scroll; and `applyFilterParams` is module-private, so
+     * without this there is no way to reproduce the criteria from outside.
+     */
+    const buildListQuery = useCallback(() => {
+        const colDef = columnDefs[sortColumn] || { key: sortColumn };
+        const queryParams = new URLSearchParams();
+        queryParams.append('_sortBy', resolveBackendSort(colDef, sortDirection));
+        applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
+        return queryParams;
+    }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
 
     const refresh = useCallback(() => {
         startRowRef.current = 0;
@@ -1229,6 +1304,10 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        // ETP-5024: a Complete-time blocking condition belongs to the record that raised
+        // it — switching to a different one (or reselecting the same row after a refresh)
+        // must not leak a stale banner forward.
+        setBlockingCondition(null);
         setSelected(row);
         setEditing(row ? { ...row } : null);
         fetchChildren(row?.id);
@@ -1238,6 +1317,8 @@ export function useEntity(entity, childEntity, {
         backendDefaultKeysRef.current = new Set();
         userChangedKeysRef.current = new Set();
         setFieldErrors({});
+        // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
+        setBlockingCondition(null);
         setSelected(null);
         setEditing({}); // Start with empty so UI is responsive
 
@@ -1412,7 +1493,13 @@ export function useEntity(entity, childEntity, {
         // the toast becomes purely cosmetic. No-op for every window whose fields declare
         // neither `min` nor `integer`. ETP-4542.
         const allFormFields = [...formFieldsRef.current.values()].flat();
-        const numericViolation = getNumericFieldViolation(allFormFields, editing);
+        // ETP-4887: silently clamp any field with a declared `max` before it reaches
+        // the save gate/payload — see clampNumericFieldsForSave for the full rationale.
+        const clampedEditing = clampNumericFieldsForSave(editing, allFormFields);
+        if (clampedEditing !== editing) {
+            setEditing(clampedEditing);
+        }
+        const numericViolation = getNumericFieldViolation(allFormFields, clampedEditing);
         if (numericViolation) {
             // Same id as EntityForm's on-blur toast for this field (ETP-4542):
             // when Save is clicked without leaving the input first, blur fires
@@ -1435,25 +1522,41 @@ export function useEntity(entity, childEntity, {
         const changedFormFields = [...formFieldsRef.current.values()]
             .flat()
             .filter(f => userChangedKeysRef.current.has(f.key));
-        const invalidEmails = getInvalidEmailFields(changedFormFields, editing);
+        // ETP-5031: Contacts-only text-field hard save-block (length + unsafe
+        // chars). No-op for every other window — see getContactsTextFieldViolation.
+        // Scoped to `changedFormFields`, same as the email/website/phone checks
+        // below — never untouched legacy values on an existing record, so a
+        // pre-existing over-limit value never blocks an unrelated edit.
+        const contactsViolation = getContactsTextFieldViolation(specName, changedFormFields, editing);
+        if (contactsViolation) {
+            return reportInvalidFormatField(
+                contactsViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsViolation.key}`,
+                contactsViolation.errorParams,
+            );
+        }
+        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
         }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, editing);
+        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
         if (invalidWebsites.length > 0) {
             return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
         }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, editing);
+        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
         }
-        const url = getUrl(isNew, apiBaseUrl, entity, editing);
+        const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
         const method = getMethod(isNew);
         const payload = buildSavePayload({
             isNew,
             selected,
-            editing,
+            editing: clampedEditing,
             entity,
             apiBaseUrl,
             backendDefaultKeysRef,
@@ -1474,8 +1577,17 @@ export function useEntity(entity, childEntity, {
                     apiFetch,
                     refetchAfterSave,
                 });
-                setSelected(resolvedSaved);
-                setEditing({ ...resolvedSaved });
+                // ETP-5101: a write response only echoes back the fields the backend actually
+                // wrote (buildSavePayload sends a DIFF, not the full record) plus a handful of
+                // identity/audit columns — it is not guaranteed to carry every field the record
+                // has. A full replace here silently drops any field the response omitted (still
+                // correct in the DB, just missing from this response) from both `selected` and
+                // `editing`, even though nothing about it changed. Merge onto the prior state
+                // instead, so an omitted field keeps its last-known value; any field the response
+                // DOES include (explicit `null` too) still overwrites, so a genuine server-side
+                // change is never masked.
+                setSelected(prev => ({ ...prev, ...resolvedSaved }));
+                setEditing(prev => ({ ...prev, ...resolvedSaved }));
                 setSaveError(null);
                 setFieldErrors({});
                 // Refresh children after every save, not just create: a header field
@@ -1723,7 +1835,14 @@ export function useEntity(entity, childEntity, {
         });
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
-            toast.error(msg);
+            // ETP-5024: same routing as handleProcess above — a BP-on-hold refusal of the
+            // draft-mode Complete flow becomes a persistent banner, not a toast.
+            const condition = detectBlockingBpCondition(msg);
+            if (condition) {
+                setBlockingCondition(condition);
+            } else {
+                toast.error(msg);
+            }
             // A refused process may still have bumped `updated` — see refreshRecordVersion.
             await refreshRecordVersion(saved.id);
             return null;
@@ -1736,6 +1855,10 @@ export function useEntity(entity, childEntity, {
             source: 'detail_view',
             operation: 'complete',
         });
+        // ETP-5024: this whole function IS the "Save & Complete" flow, so a successful
+        // response always means the document just completed — clear any blocking banner.
+        setBlockingCondition(null);
+        setCompletionSignal(c => c + 1);
         if (isInvoiceSpec(specName)) {
             incrementSurveyCounter('invoicing');
             emitSurveyTrigger();
@@ -1758,6 +1881,58 @@ export function useEntity(entity, childEntity, {
         return saved;
     }, [handleSave, entity, specName, refresh, ui, apiFetch]);
 
+    // Extracted from handleProcess (SonarQube javascript:S3776 — cognitive
+    // complexity) so the success path's own branching (isCompletionProcess) is
+    // scored against this small function instead of nesting inside the outer
+    // try/if. Behavior is unchanged — this is the verbatim `if (res.ok)` body.
+    const handleProcessSuccess = useCallback((process) => {
+        const specificKey = `${process.columnName ?? process.name}Completed`;
+        const specificMsg = ui(specificKey);
+        const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
+        toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
+        window.dispatchEvent(new CustomEvent('neo:processSuccess', {
+            detail: {
+                process,
+                entity,
+                recordId: selected?.id
+            }
+        }));
+        if (isCompletionProcess(process)) {
+            trackDocumentCompleted({
+                entity,
+                specName,
+                source: 'process_action',
+                operation: 'complete',
+            });
+            // ETP-5024: a document that just completed successfully can no longer be
+            // blocked by the condition that may have been shown before (credit limit /
+            // BP on hold) — clear it and signal DetailView so it drops the banner even
+            // when the banner came from useCallout, which this hook cannot reach.
+            setBlockingCondition(null);
+            setCompletionSignal(c => c + 1);
+        }
+        fetchById(selected?.id);
+        refresh();
+    }, [entity, specName, selected, fetchById, refresh, ui]);
+
+    // Extracted alongside handleProcessSuccess above, same rationale — the verbatim
+    // `else` body of handleProcess's `if (res.ok)`.
+    const handleProcessFailure = useCallback(async (res) => {
+        const msg = await extractErrorMessage(res, ui);
+        // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
+        // inline banner instead of an auto-dismissing toast — skip the toast for it and
+        // let DetailView pick it up via `blockingCondition`. Every other process error
+        // keeps the existing toast.
+        const condition = detectBlockingBpCondition(msg);
+        if (condition) {
+            setBlockingCondition(condition);
+        } else {
+            toast.error(msg);
+        }
+        // A refused process may still have bumped `updated` — see refreshRecordVersion.
+        await refreshRecordVersion(selected?.id);
+    }, [ui, selected, refreshRecordVersion]);
+
     const handleProcess = useCallback(async (process, paramValues = {}) => {
         if (!selected?.id) return;
         // ETP-4542: mark this process as running so consumers (DetailView) can show a
@@ -1778,39 +1953,16 @@ export function useEntity(entity, childEntity, {
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
-                const specificKey = `${process.columnName ?? process.name}Completed`;
-                const specificMsg = ui(specificKey);
-                const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
-                toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
-                window.dispatchEvent(new CustomEvent('neo:processSuccess', {
-                    detail: {
-                        process,
-                        entity,
-                        recordId: selected.id
-                    }
-                }));
-                if (isCompletionProcess(process)) {
-                    trackDocumentCompleted({
-                        entity,
-                        specName,
-                        source: 'process_action',
-                        operation: 'complete',
-                    });
-                }
-                fetchById(selected.id);
-                refresh();
+                handleProcessSuccess(process);
             } else {
-                const msg = await extractErrorMessage(res, ui);
-                toast.error(msg);
-                // A refused process may still have bumped `updated` — see refreshRecordVersion.
-                await refreshRecordVersion(selected.id);
+                await handleProcessFailure(res);
             }
         } catch (err) {
             toast.error(err?.message || 'Network error');
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, specName, refresh, fetchById, ui, apiFetch]);
+    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST
@@ -1867,12 +2019,14 @@ export function useEntity(entity, childEntity, {
     return {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
+        blockingCondition, completionSignal,
         isDirtyHeader,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }

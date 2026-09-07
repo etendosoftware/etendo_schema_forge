@@ -1,3 +1,139 @@
+# Financial Account — Unified delete rule (ETP-5111)
+
+> The "Regla unificada de borrado" the ticket asked for, kept as the **first** section of this file
+> on purpose: it is the single statement of how deletion behaves across **all three** surfaces of
+> this window, so the next ticket reads it here instead of re-deriving it from three places. Before
+> ETP-5111 those three places had drifted into three different criteria — ETP-4871 on the Cuentas
+> list, ETP-4921 + PSD2 on Extractos importados, ETP-5085 on Movimientos. Two of them said "don't
+> let the user touch the trash can"; one said "let them try, and explain the failure". ETP-5111
+> settles on the second, everywhere.
+
+## The rule
+
+1. **The trash button is always enabled** — on the Cuentas list, on Movimientos and on Extractos
+   importados alike. Nothing pre-disables it from what happens to be selected: `ListView`'s
+   `isRowDeletable` prop, `BulkDeleteSelectionBar`'s `disabledReason` prop,
+   `ImportedStatementsTab`'s `resolveBulkDeleteBlock` and the `bulkDeleteBlockedTooltip` key are all
+   gone. The button is disabled only while a delete is actually in flight.
+2. **One selected record means Payment Removal; more than one means a classic delete.** The
+   Movimientos bulk delete sends `paymentRemoval: true` for a single row (the backend unreconciles,
+   unposts and reactivates before removing) and `paymentRemoval: false` from two rows up, where a
+   processed row is rejected with a 409.
+3. **The reason is explained only when exactly one record is selected.** For a single row the
+   backend's own sentence *replaces* the counter message; from two rows up the toast reports
+   counters only (`bulkDeletePartialFailure` / `bulkDeleteAllFailed`). The `…WithReason` toast
+   variants and their locale keys no longer exist — one sentence hoisted out of a multi-row batch
+   implied it explained every failure, and the user could not tell which row it belonged to.
+
+   This holds on all three surfaces, but it is worth knowing *why* it takes work to hold, because
+   the mechanism is **opt-in per call site**: `toastBatchDeleteOutcome` names a reason only if the
+   caller passes `errors` **and** each rejection carries a numeric 4xx `status`. The two detail tabs
+   get it from `useBatchDeleteDialog`. Cuentas goes through the generic `useBulkRowDelete`, which
+   until ETP-5111 threw a bare `new Error(extractErrorMessage(...))` and called the toast without
+   `errors` — so a single undeletable account degraded to the counter message and the server's 409
+   was discarded. It now attaches `err.status = res.status` and forwards `errors`, the same shape
+   `useCreateMovement.postAction` and `useStatementActions.post` use. A new bulk-delete surface has
+   to do both or it silently falls back to counters; see `docs/ui-customization.md` §9c.
+4. **The kebab always offers Eliminar, always confirms, and explains the block itself.** In
+   Movimientos the item is rendered for every movement, including a payment-linked one and a
+   funds-transfer leg, both previously hidden. **Every** row opens a confirmation — blocked ones
+   included — and a blocked row's red toast fires only *after* the user confirms, from
+   `runConfirmed`; `deleteMovement` is never called, so there is still no request and no 409
+   round-trip. Which confirmation appears depends on what is at stake: a row with real consequences
+   to enumerate (posted and/or reconciled) gets the lifecycle cartel, and everything else — a plain
+   draft, and any blocked row *including a blocked posted one* — gets the same generic
+   `DeleteConfirmDialog` the bulk trash shows. `needsConfirm` still exists but now only gates
+   Reactivar, and picks the dialog for Eliminar.
+
+   The pre-check returns a **key**, never a formatted string, and every branch returns one of the
+   same `backendError.*` keys the server's 409 literals map to — so the kebab and the bulk / REST /
+   MCP paths read byte-identically *by construction*. Nothing is interpolated: the payment's
+   document number was deliberately dropped from the message, which is what allows that guarantee
+   (only the client knows the number, so naming it would have made the two paths permanently
+   divergent). The one thing the message does distinguish is **pago vs cobro**, off
+   `paymentIsReceipt` client-side and `FIN_Payment.isReceipt()` server-side, both treating
+   absent/unset as *pago*.
+5. **A per-row affordance may pre-check; a shared button may not.** That is the line the rule draws,
+   and it is what keeps rules 1 and 4 from contradicting each other. A row kebab knows exactly which
+   record it is refusing, so it can answer with a specific sentence. A bulk trash button covers a
+   heterogeneous selection, so pre-blocking it either denies a legitimate partial delete or explains
+   one row's problem as though it were the batch's.
+
+## Why the database forces rule 2
+
+`APRM_FIN_FINACC_TRAN_CHECK_TRG` (`modules_core/org.openbravo.advpaymentmngt`,
+`src-db/database/model/triggers/`) ends with:
+
+```plsql
+IF(DELETING) THEN
+ IF(:OLD.PROCESSED='Y') THEN
+   RAISE_APPLICATION_ERROR(-20000, '@20501@');
+ END IF;
+END IF;
+```
+
+`@20501@` resolves to `AD_MESSAGE` record **`800042`** (`VALUE = 20501`,
+`MSGTEXT = Document posted/processed`). Where that record lives is worth writing down, because the
+obvious guess is wrong: it sits in the **core root**, at
+`src-db/database/sourcedata/AD_MESSAGE.xml:7429-7439` — one tree *up* from the trigger, and nowhere
+under `modules_core/`. Grepping `modules_core` for the token finds nothing, which reads as "this
+message is undefined". It is defined; the search was in the wrong tree.
+
+A plain DELETE of a processed movement is therefore impossible **at the database level**. That is
+why Classic offers two different buttons — the toolbar trash can (plain DELETE, which hits exactly
+that error) and REMOVE TRANSACTION (Payment Removal, which unreconciles, unposts and runs
+`FIN_TransactionProcess("R")`, leaving `PROCESSED='N'`, *before* deleting). Rule 2 is that pair of
+buttons expressed as one button whose meaning depends on the size of the selection, which is what
+makes it parity with Classic rather than a new invention.
+
+One nuance worth keeping, because it is counter-intuitive: the trigger is **not** the safety net of
+the current happy path. `TransactionRemovalUtil.reactivateAndRemove` leaves `PROCESSED='N'` before
+the `remove()`, so the `DELETING` branch never fires on that route. It can only fire on the
+`paymentRemoval: false` route this ticket introduced — and letting it fire would produce a JDBC
+error rather than an `OBException`, which escapes `runMutation`'s business branch and comes out as
+an opaque **500**; a 500 does not pass `isBusinessRejection`, so the reason would be lost even for a
+single-record selection. Hence the handler pre-checks `isProcessed` and returns the 409 itself.
+Full detail in the `action=delete` section further down.
+
+## What changed, per surface
+
+| Surface | Before | After |
+|---|---|---|
+| **Cuentas** (the list — generic `ListView` + `AccountsHeaderTable` slot) | trash disabled whenever the selection held a row with `deletable === false` (ETP-4871, via `isRowDeletable`); the slot's own toolbar unmounted while a selection was active | trash always enabled — an undeletable account comes back as a 409 per-row failure; the toolbar stays mounted |
+| **Movimientos** | trash always enabled (ETP-5085), with the shared reason appended to any failure toast; the kebab's Eliminar hidden for a payment-linked movement and for a funds-transfer leg | trash always enabled; 1 row = Payment Removal, N rows = classic delete; reason only for 1 row; the kebab always shows Eliminar — toasting the reason on a blocked row, confirming first on every other |
+| **Extractos importados** | trash disabled for a processed statement or on a bank-connected account (ETP-4921 + PSD2, via `resolveBulkDeleteBlock` → `disabledReason`) | trash always enabled — the backend answers 400 (`requireDraft`) or 409 (bank-connected); the per-row hover trash icon is still hidden for a processed statement |
+
+## Two backend guards came with it
+
+Both close holes that "always-enabled trash" would otherwise widen, and both are data-integrity
+fixes rather than UX:
+
+- **A movement carrying a `FIN_Payment` is now rejected with 409**
+  (`FinancialAccountTransactionsHandler.handleDelete`). It was previously deletable over REST, MCP
+  and the bulk path with **no validation at all**, orphaning the payment.
+- **A statement belonging to a PSD2 bank-connected account is now rejected with 409**
+  (`BankStatementsHandler.handleDelete`). Previously enforced in the frontend only.
+
+## Accepted consequence
+
+Bulk-deleting **processed** movements used to work — `useBatchDeleteDialog` ran one Payment Removal
+per selected row. It now fails for the processed rows, by design. This is a user-visible functional
+change, not only a UX change, and it is the price of parity with Classic's toolbar trash button. A
+user who needs a processed movement gone selects it on its own, or uses the row kebab.
+
+## How the rule is enforced mechanically
+
+`isRowDeletable`'s own regression test (`ListView.isRowDeletable.vitest.jsx` — whose header called
+its first case "the single highest-value case", the guard against another window regressing) was not
+simply deleted with the prop. It was replaced by a sentinel in `ListView.bulkDelete.vitest.jsx` that
+asserts the new rule **in the positive**: with rows carrying `deletable: false` selected, the
+bulk-delete button stays enabled and keeps its plain `delete` title. The sentinel changed sign
+rather than disappearing, so reintroducing a pre-blocking prop breaks a test instead of passing in
+silence. The same reasoning — and the retirement of `isRowDeletable` and `disabledReason` — is
+recorded generically in `docs/ui-customization.md` §9c.
+
+---
+
 # Financial Account — Account Management (ETP-4096)
 
 > This section covers the **create / edit / archive** flows introduced in ETP-4096. The detail view (movements, reconciliation, statements) is documented below.
@@ -184,11 +320,45 @@ Field editability in the top section:
 - **Connection block** (General tab, non-cash only): connected → live bank connection panel (provider, Sync
   now, Import from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer
   button; not connected → a single "Connect bank" button.
+- **Import date range** (ETP-5104). `Importar desde` / `Importar hasta` are validated as a pair by
+  `isImportRangeInvalid`, which compares the ISO `yyyy-mm-dd` strings `DateInput` emits — in that
+  format lexicographic order is chronological order, so the check is exact and timezone-free and
+  deliberately does NOT build a `Date` (the ETP-4850 date-only shift cannot occur here). An empty
+  box means "no bound" and never invalidates. An inverted range renders
+  `bank-connection-import-range-error` under the three fields, disables Save, and makes
+  "Sincronizar ahora" refuse to run. The bridge repeats the check in
+  `handleImportSettings` (400, `The import from date cannot be later than the import to date`) for
+  callers that skip the form; it validates the *resulting* pair before touching the entity, since a
+  body may carry only one bound and a managed instance would be flushed at commit even after a
+  rejection. That 400 is deliberately NOT mapped in `lib/backendErrors.js`: the modal is the only
+  caller of `import-settings` and it refuses the range before the request fires, so the message
+  cannot reach a toast — and every addition to that map lands inside a pre-existing CPD block
+  (~150 homogeneous `'string': 'key'` lines, 20.8% duplication), which fails the Sonar new-code
+  gate. Map it only once a surface exists that can actually surface it.
+
+  Why it is worth guarding twice: nothing downstream catches an inverted range usefully. The PSD2
+  module validates it only at synchronization time
+  (`SaltEdgeConnectionHelper.validateDateRange`), and the `OBException` it throws is swallowed by
+  `processProviderTransactions` and re-wrapped into
+  `PSD2_ErrorRetrievingRransactionsForTheAccount` — so the user got an untranslated toast carrying
+  the Salt Edge connection id and raw Java timestamps, far away from the field that caused it.
+- **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
+  `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
+  calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
+  straight away: the bridge reads the date range from the DB, so an unsaved range was silently
+  ignored, and the `refresh()` that follows a sync rewrites both `form` and `initial` from the
+  server, overwriting whatever the user had typed ("los campos se restablecen"). Wiring note: the
+  save step reaches `useBankConnection` as a **ref** (`beforeSyncRef`), because that hook is
+  declared before the hooks holding the rest of the form. If the form cannot be saved (blank name,
+  invalid IBAN/tolerance/range) the sync is aborted rather than run against stale values, and a
+  failure is reported once — `runSync` skips its own toast for an error flagged `handled`.
 - **Save** persists every changed field across both tabs in one call: account fields via
   `updateAccount(id, payload)`, bank import settings via the bridge `import-settings` action, and
   (ETP-4530, extended ETP-4872) the accounting configuration via `saveAccountingConfiguration`.
-  Enabled purely on `dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid &&
-  !recon.amountToleranceInvalid` — **no accounting field can block Save** (ETP-4872 dropped the
+  Enabled purely on `dirty && !saving && !saveBlocked`, where `saveBlocked` is
+  `fields.name.trim() === '' || fields.ibanInvalid || recon.amountToleranceInvalid ||
+  bankConnection.rangeInvalid` (ETP-5104 added the last term and split the predicate out so the
+  sync path can reuse it) — **no accounting field can block Save** (ETP-4872 dropped the
   old `fINAssetAcct`-required check). The former `accounting.assetAcctMissing` state, the
   field-level error inside `AccountingConfigurationSection`, and the cross-tab summary line
   (`edit-account-accounting-error-summary`, QA BUG-1) were all removed with it — see "Accounting
@@ -480,6 +650,20 @@ native app-shell UI; only the bank login is an external popup.
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
   "Sincronizar extractos" button that replaces the manual import/create split-button.
+- **Sync result messages are translated in the frontend, not by Core (ETP-4891, ETP-5109).** The
+  bridge returns HTTP 200 with `{status, message}`, where `message` is the raw `AD_MESSAGE` text
+  built by `SaltEdgeAccountLinkHelper.fetchAccountTransactions`. `com.etendoerp.psd2.bank.integration`
+  ships its es_ES text in a separate `.es_es` translation module, so an environment that never
+  imported that pack resolves `AD_MESSAGE_TRL` to the English string with `istranslated = 'N'` — and
+  the toast reads English on a Spanish UI. The SPA therefore maps these strings itself in
+  `tools/app-shell/src/lib/backendErrors.js` (`translateBackendError`), covering
+  `PSD2_TransactionsObtained`, `PSD2_NoNewTransactionsFound`, the bank-error wrapper,
+  `PSD2_ConnectionWentInactive`, `PSD2_ConsentExpiredReconnect`,
+  `PSD2_ImportDateBeyondMaxInterval` and `PSD2_NoActiveConnectionForAccount`. Two consequences worth
+  knowing before touching either side: those English strings are a **de facto wire contract** —
+  rewording one on the Java side silently un-translates the toast — and because the helper can
+  append several messages into one newline-joined buffer, `translateBackendError` resolves the
+  string **line by line**.
 - **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
   a sync icon, both with tooltips.
 - **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
@@ -536,6 +720,44 @@ Bridge actions: `connect` (optional `financialAccountId` → provider preselect)
 Frontend: `hooks/useBankConnectionActions.js`, `hooks/useBankConnectionFlow.js`,
 `pages/BankConnectionCallbackPage.jsx`, `windows/custom/financial-account/BankConnectionFlowUI.jsx`,
 `windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+
+### Widget language and the waiting overlay (ETP-5102)
+
+**The Salt Edge widget opens in the language of whoever asked.** It used to always open in
+Spanish: the `attempt.locale` sent when creating the Salt Edge session was the literal `"es"` in
+all three payload builders of the PSD2 module — `BankIntegrationUtils.buildAndConnect` (connect),
+`BankIntegrationUtils.reconnectSaltEdgeConnection` (reconnect) and
+`GenerateBankPayment.processPayment` (PIS). They now call
+`SaltEdgeLocaleResolver.resolve()` (`com.etendoerp.psd2.bank.integration`), which reads
+`OBContext.getOBContext().getLanguage()` and maps the Etendo code onto the widget's own locale
+(`es_ES → es`, `en_US`/`en_GB` → `en`, keeping the region only where Salt Edge distinguishes it:
+`es_MX → es-MX`, `pt_BR → pt-BR`, `zh_CN`, `zh_TW`). An unknown or missing language falls back to
+`es`, the previous behaviour.
+
+No frontend change and no new bridge parameter were needed: the GO locale already reaches the
+`OBContext` on every NEO request, because `NeoAuthenticator.authenticateJwt` applies the SPA's
+`Accept-Language` header to it (`NeoAuthenticator.java:109-111` → `NeoLanguage.applyToContext`).
+Verified live: with GO in Spanish and the Classic user in *English (USA)*,
+`GET /sws/neo/listmenu` carries `Accept-Language: es_ES`. **The fix therefore reaches Etendo
+Classic too** — the PSD2 module is shared and depends only on Core, so it cannot tell which front
+end is calling; in the AD window the widget now follows the user's AD language. Deliberate
+consequence, not a side effect: it is the same bug on both sides.
+
+> Anyone touching `SaltEdgeLocaleResolver` must keep it on Core APIs only. PSD2 declares
+> dependencies on Core and the Openbravo Framework and has zero references to
+> `com.etendoerp.go` — the dependency runs GO → PSD2. Reaching for GO's `NeoLanguage` helper
+> would invert it and break every Classic-only installation.
+
+**The "Conectando con tu banco…" overlay has no close button, on purpose.** `DialogContent`
+(app-shell-core) always renders a Radix close X and offers no prop to suppress it, while
+`BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
+the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
+now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
+`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
+picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
+created or linked and the user can retry without reloading. Wiring the X instead would have
+required an external abort handle that `launchSaltEdgePopup` does not expose.
 
 ### Bank logo (ETP-4764 follow-up)
 
@@ -675,7 +897,7 @@ All keys added to both `en_US.json` and `es_ES.json`.
 | `financeAccountsArchive*` / `financeAccountsUnarchive*` | Confirmation dialog copy, button labels, success/error toasts including the 409 open-reconciliation message |
 | `financeAccountsDelete*` (ETP-4871) | Delete dialog copy (`financeAccountsDeleteConfirmTitle`/`...Message`/`...Confirm`), success/error toasts. The backend's 409 message is shown verbatim (no local conflict key) |
 | `financeAccountsMenu*` | Row kebab actions (`financeAccountsMenuEdit`, `financeAccountsMenuArchive`, `financeAccountsMenuUnarchive`, `financeAccountsMenuDelete`) |
-| `bulkDeleteBlockedTooltip` (generic, ETP-4871, not `financeAccounts*`-scoped) | ListView's disabled-bulk-delete tooltip when the selection includes an undeletable row — entity-agnostic, shared by every window that passes `isRowDeletable` |
+| ~~`bulkDeleteBlockedTooltip`~~ (generic, ETP-4871) | **Retired in ETP-5111**, together with `ListView`'s `isRowDeletable` prop. It was the tooltip on a bulk-delete button *disabled* because the selection included an undeletable row; that button is never disabled by row eligibility any more, so there is nothing left for it to explain. Removed from `en_US.json` / `es_ES.json` and from `generated/core.*`. See "Unified delete rule" at the top of this file |
 | `financeAccountTransfer*` | Funds transfer modal (ETP-4272): action/title, source/destination, amount, currency-from/to, conversion rate, bank fee, description, confirm/cancel, success + validation errors |
 | `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, section titles (`...SectionPaymentIn`/`...SectionPaymentOut`, plus the reused `financeAccountsEditTabGeneral` for Banco's General sub-section), the 9 field labels (`...BankRevaluationGain`/`...Loss`, `...BankFee`, `...InTransitIn`, `...Deposit`, `...ClearedIn`, `...InTransitOut`, `...Withdrawal`, `...ClearedOut`, ETP-4872), empty-ledger message. The retired `fINAssetAcct`/`fINTransitoryAcct` keys (`...BankAsset`, `...Transitory`, `...BankAssetRequired[Summary]`) are left in both locale files, unused, since nothing renders them anymore — pending confirmation the "no field required" behavior (ETP-4872) is final before deleting them |
 | `financeAccountsNewFieldCountry` / `financeAccountsBankConnectionFieldCountry` (ETP-4896) | Country field label — New Account form and Edit modal respectively (kept separate from `financeAccountsNewBankCountry`, the unrelated BankPicker flag-dropdown `aria-label`) |
@@ -759,10 +981,48 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - Movements toolbar: back arrow `←`, type filter (BPD/BPW, search-enabled), date range filter (preset list + dual calendar, same picker as grid views), advanced "by conditions" filter (`AdvancedFilterButton`, applied client-side), search input, and a **split button** (`MovementsSplitButton`, same pattern as the Imported-statements `ImportSplitButton`): the primary action is **`Nuevo movimiento`** (opens the accounting-account modal — see "Nuevo movimiento (accounting account)" below), and the ▾ dropdown holds **`Transferir fondos`** (ETP-4272, opens `FundsTransferModal.jsx`). (The older 2-step `NewMovementWizard` is superseded and no longer wired.)
 - Movements table: Expand chevron | Checkbox | Date | Payment | Contact | Description | Status (`MovementStatusBadge` — **two states only**: Conciliado / Sin conciliar) | Type (with `PostingStatusDot` sub-label) | Cuenta contable | Amount | Balance | kebab.
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
-- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). Each of the three fields renders read-only as label + value (empty when the transaction has no value), in a responsive grid. The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+- **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
+  - **Editable in place, ETP-5101.** Each of the three fields is a live `ChipSelect` picker (same primitive the Editar modal uses, `useDimensionLookup`-backed) whenever `canEditDimensions(movement)` — `!movement.paymentId && movement.posted !== 'Y'` — mirrors `MovementRowKebab.jsx`'s own `canEdit` exactly: a manual G/L transaction that is Draft or Processed-but-not-yet-posted. Picking a value (or clearing one) auto-saves immediately via `action=update`, reusing `buildDimensionUpdatePayload()` (`hooks/useCreateMovement.js`) to reconstruct the full payload the `update` action requires (that action has no partial-patch support — every call resends the movement's own current amount/type/currency unchanged, only the one edited dimension differs; `process` is always sent `false`, matching what the Editar modal's own "Guardar" already does for a Processed movement — proven safe, never reverts processed/posted state). On save failure the row keeps its prior value and a toast shows the backend's own message (translated) or the generic `financeAccountTxRowDimensionUpdateError` fallback.
+  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
-- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (Draft removed directly; Processed reactivated+removed via Payment Removal). Reactivar/Eliminar show the confirmation cartel (`MovementConfirmModal`) only when there is something to undo (posted and/or reconciled). Payment-linked movements hide the accounting-account actions (managed from the Payments module) but still expose Descontabilizar when posted. No role gating. **Eliminar carries one further exclusion (ETP-5085): it is hidden for a funds-transfer leg** — `isTransferLeg = Boolean(movement.transferTxnId) && movement.trxType !== 'BF'`. The two legs of a transfer reference each other through RESTRICT self-FKs, so the removal could only ever fail, and it failed as an opaque HTTP 500; the backend now rejects it with a 409 and the action is hidden rather than disabled, like every other inapplicable item in this menu. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
+- Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (offered on *every* row since ETP-5111, and always confirming first — see below; a Draft is then removed directly, a Processed one reactivated+removed via Payment Removal). Payment-linked movements hide **Editar / Procesar / Reactivar** (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
+
+  **Eliminar is the exception since ETP-5111: it is rendered unconditionally** — for a payment-linked movement and for a funds-transfer leg alike, both of which used to hide it (the ETP-5085 `canDelete = isGlTransaction && !isTransferLeg` predicate and its early-return are gone, and so is the "nothing to offer" early return that used to hide the whole kebab on a payment-linked draft — precisely the row whose refusal now needs explaining). Because Eliminar is the only unconditional item, its leading `DropdownMenuSeparator` is gated on `hasActionsAboveDelete`, or it renders as a stray divider on exactly that row.
+
+  Whether the attempt may even be made moved out of the component into the pure module `movementActionEligibility.js` — `resolveMovementDeleteBlock(movement)` returns `null` when a delete may be attempted, or `{ key }` naming the reason when it may not — in the same "decide outside React, test without a renderer" style as the sibling `statementStatus.js` and `movementStatusConfig.js`. **Every branch returns one of the `backendError.*` keys `BACKEND_ERROR_MAP` maps the server's own 409 literals to, and none of them interpolates anything**, so the kebab and the bulk/REST/MCP paths are byte-identical *by construction* rather than by coincidence — that is the whole reason the function returns a key instead of a formatted string. Its precedence mirrors the backend's guards: a payment-linked movement (`movement.paymentId`) → `backendError.receiptMovementNotDeletable` when `movement.paymentIsReceipt === 'Y'` (a cobro) else `backendError.paymentMovementNotDeletable` (a pago) — the same test `MovementsTable.openPayment` uses to route to `payment-in` vs `payment-out`; then a funds-transfer leg (`movement.transferTxnId && movement.trxType !== 'BF'`) → `backendError.transferMovementNotDeletable`; otherwise `null`. A **processed or posted** movement is deliberately NOT blocked here: deleting it one at a time runs Payment Removal server-side, which reactivates it first. A destination-side **bank fee (`BF`) carries the same `transferTxnId` but nothing references IT, so it stays deletable** — hence the `trxType` half of the predicate.
+
+  **The pago/cobro split (ETP-5111) and the two null conventions that have to agree.** The message names which side the movement belongs to, because "go delete it from the payment" is useless advice if the record is a receipt. The frontend picks off the grid's `paymentIsReceipt`, the backend off `FIN_Payment.isReceipt()` — and `isReceipt()` is a **boxed** `Boolean` that is `null` on a payment whose flag was never set. Both sides therefore treat absent/unset as **pago**: `Boolean.TRUE.equals(trx.getFinPayment().isReceipt())` server-side, `paymentIsReceipt === 'Y'` client-side. That agreement is deliberate and is the one place these two paths could have diverged into two different sentences for the same row.
+
+  **The document number is deliberately NOT named.** An earlier iteration interpolated the payment's `documentNo` into the sentence and carried a second `…NoRef` variant for when the grid's `COALESCE(fp.documentno, '')` came back empty. Both keys (`financeAccountTxRowDeletePaymentLinked` / `…NoRef`) are **deleted from all three locales**: the number changed nothing the user could act on differently, while costing a longer sentence, a second variant, an interpolation and — since only the client knows the number — a permanent guarantee that the kebab and the 409 could never read the same. Dropping it is what makes "identical by construction" true.
+
+  **Clicking Eliminar always confirms first — with no exception, blocked or not (ETP-5111).** `handleDeleteClick` does nothing but `setConfirm('delete')`. The eligibility check moved into `runConfirmed`: the user confirms, and only then learns the delete cannot proceed (`toast.error(ui(deleteBlock.key))`, with `deleteMovement` deliberately **not** called, so there is still no request and no 409 round-trip). This took three passes to settle, and each intermediate state was the same bug in a new place: first the kebab deleted a draft on a single click while the bulk trash confirmed every selection; then the kebab skipped the dialog for a *blocked* row while the bulk trash still showed one for that same record. Both were user-reported, and both were "the same act on the same row is protected differently depending on which control you reach for" — the very complaint this ticket exists to remove.
+
+  **Which dialog you get depends on what is actually at stake** (`showCartel`):
+
+  ```js
+  const showCartel = confirm === 'reactivate' || (confirm === 'delete' && !deleteBlock && needsConfirm);
+  ```
+
+  | Row / action | Dialog |
+  |---|---|
+  | **Reactivar**, any row | the cartel (`MovementLifecycleConfirmModal`) |
+  | **Eliminar**, blocked — *including blocked **and** posted* | the generic `DeleteConfirmDialog` |
+  | **Eliminar**, plain draft | the generic `DeleteConfirmDialog` |
+  | **Eliminar**, posted and/or reconciled | the cartel, unchanged |
+
+  **The principle is not visual uniformity — it is that the cartel earns its place only when it has real consequences to enumerate.** The user compared the two dialogs side by side and asked for the common one; then, shown the posted-state cartel with its *"Se eliminará el asiento generado"* bullet and its yellow warning, kept that one — *"porque acá sí hay que advertir que se va a eliminar"*. So the most destructive thing this menu can do keeps its two-step warning, and everything else shows the plain "¿Estás seguro de que deseas eliminar 1 registro(s)?" that the bulk trash shows. **The blocked-and-posted row is what makes this more than cosmetics:** it is posted, so the old routing would have given it the cartel promising to reverse an accounting entry — for a delete that never happens at all.
+
+  `needsConfirm` (`isPosted || isReconciled`) survives, but its two jobs are now different: it still gates **whether** Reactivar confirms, and for Eliminar it only picks **which** dialog. Do not read it as the shared delete/reactivate gate it once was.
+
+  **Making the dialog honest about a draft needed a fourth state, and a change to the shared modal.** `MovementLifecycleConfirmModal`'s `resolveStateKey(reconciled, posted)` used to have three branches — `both`, `reconciled`, and a final `return 'posted'` that in practice caught *everything else*. That was sound by contract rather than by luck: the dialog could only open when `isPosted || isReconciled`, so "neither" was genuinely unreachable, and the function's JSDoc said exactly that. Always-confirm invalidated the contract from three files away, and the fallthrough started rendering **posted** copy for a plain draft: *"Al eliminarlo se deshará el asiento contable asociado."* and *"Esta acción deshará la contabilización del movimiento."* — both false for a row with no accounting entry — over an empty effects list, under an *"Eliminar de todos modos"* button overriding a warning that was never shown.
+
+  The wrapper resolves a real fourth state: `resolveStateKey` gained `if (!posted) return 'neither';` **before** the `'posted'` return, `SUB_KEY_BY_ACTION.delete.neither` is `financeAccountTxConfirmDeleteSubNeither` (it says only that the delete is permanent, the one true thing left to say), `WARNING_KEY_BY_STATE.neither` is **`null`**, and `resolveConfirmLabelKey` swaps the button to a plain `Eliminar` (`financeAccountTxConfirmDeleteBtnPlain`) for `delete` + `'neither'` only — the three warning-bearing states keep *"Eliminar de todos modos"*, which only means anything as an override of the yellow box. **`reactivate` deliberately has no `neither` subtitle:** Reactivar is offered only on a Processed movement and still carries its own `needsConfirm` gate, so the state cannot occur; if that gate is ever removed the subtitle renders **empty**, chosen as the safe direction to fail over repeating the posted-state lie.
+
+  > **The `'neither'` tier is now deliberate dead code — do not delete it as an oversight.** The routing above superseded it: an effect-less delete never reaches this cartel any more, it goes to `DeleteConfirmDialog`. The branch is kept anyway, because it is not really about the draft case — it is about `resolveStateKey`'s **final `return 'posted'`**, which is a catch-all wearing a specific state's name. Remove `if (!posted) return 'neither';` and any future caller arriving with neither flag set is silently reported as posted, and the dialog promises to reverse an accounting entry that does not exist. A wrong answer is worse than an empty one, so the tier stays as the safe landing, with its two locale keys, and the source says so at both the branch and the component's JSDoc. Two things follow: this is the *second* protection against the same fallthrough (the routing is the first), and a coverage report will show this branch unreached — that is expected, not a gap to close.
+
+  That `null` warning is why this touched **shared** code. `warning` reaches `windows/custom/shared/LifecycleConfirmModal.jsx` as a **pre-resolved string** from each domain wrapper, and the shared component rendered the yellow box unconditionally — so "no warning" was not expressible. Three things there are now conditional: the warning box, the items list, and **the padded body wrapper itself** (`items.length > 0 || warning`), because with both halves hidden it left ~24px of dead space between subtitle and buttons — the same empty-container bug one level up. Each half is guarded separately, so a caller with only one of the two still looks right. No existing dialog loses or gains content: the other consumers all pass a real `warning` string — `ReconciliationSplitPanel.jsx:1043` (in `components/contract-ui/`), `BankConnectionDeleteConfirmModal.jsx:41`, and `PaymentLifecycleConfirmModal.jsx:142` (itself reached from `PaymentHeaderTableBase`). There is exactly one **cosmetic** delta, and it is an improvement: the items `<div>` carried `marginBottom: 16`, so a caller producing an *empty* items list used to pay 16px of dead space above its warning box — `PaymentLifecycleConfirmModal` on a **draft** payment is that case (`reconciled`/`hasTransaction`/`posted` all false → `items = []`, with a truthy generic `paymentConfirmWarning`), so its warning box now sits 16px higher. Because the file is shared, this lands in the PR's `platform-change` domain — see `docs/plans/ETP-5111-cross-domain.md`. The component's own contract is documented in `docs/ui-customization.md` §9f.
+
 - **Status column** shows three states derived from the transaction status code (`movementStatusConfig.js`): **Borrador** (grey — `RPAP`/`RPAE`, not yet processed), **Sin conciliar** (processed, not cleared), **Conciliado** (`RPPC`, cleared against a bank statement).
 - Back arrow in the toolbar runs `navigate(-1)`.
 - The action bar's primary button is **`Nuevo movimiento`** (opens the accounting-account modal), with **`Transferir fondos`** (ETP-4272) inside its ▾ dropdown. The **accounts grid** row kebab (`AccountRowMenu.jsx`) also offers **`Nuevo movimiento`**, which deep-links to that account's Movements tab with the modal auto-opened (`?tab=movements&newMovement=true` → `index.jsx` sets `autoOpenNewMovement` on `MovementsTab`).
@@ -785,7 +1045,7 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 **Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
-**Reactivar (kebab) and the Reconciliación tab's un-reconcile actions overlap in scope but are separate code paths.** A movement matched to a bank statement can be reactivated from either surface — the Reconciliación split panel's Desconciliar/Reactivar (`ReconciliationHandler`, see above), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
+**Reactivar (kebab) and the Reconciliación tab's un-reconcile action overlap in scope but are separate code paths.** A movement matched to a bank statement can be un-done from either surface — the Reconciliación split panel's Desconciliar (`ReconciliationHandler`, see above; its sibling Reactivar was removed by ETP-5135, see below), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
 
 **Investigated but NOT fixed here (documented root cause, no reported repro):** a task originally reported `HTTP 400 {"error":{"message":"Document already Posted.: <docNo>"}}` from this same kebab action when the matched transaction's reconciliation was already posted (`FIN_Reconciliation.Posted='Y'`). Root cause: `ReconciliationRemovalUtil.removeTransactionFromReconciliation` (in `com.etendoerp.payment.removal`) calls `processReconciliation("R", reconciliation)` without first calling `Utilities.unPostReconciliation(reconciliation)` — its sibling `ReconciliationRemovalUtil.reactivate(rec)` does that unpost step; this method doesn't, so `FIN_ReconciliationProcess`'s `"R"` branch rejects with `@PostedDocument@` whenever the reconciliation is posted. Not reproducible in this environment (local reconciliations sit at `posted='D'`, not `'Y'` — no accounting run here), so left undone; the one-line fix (`if ("Y".equals(reconciliation.getPosted())) { Utilities.unPostReconciliation(reconciliation); }` before the `processReconciliation("R", …)` call) is ready to apply the moment it reproduces.
 
@@ -793,14 +1053,104 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 "Transfer funds" moves money between two financial accounts of the organization. Two entry points:
 
-- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source.
+- **Accounts list** → the row kebab (⋮) gains a **Transferir fondos** item (`AccountRowMenu.jsx`), opening the modal with that row's account as the (read-only) source. Both mount sites must pass the modal's **`onSuccess`** callback to refresh their own data: this one passed `onDone` until ETP-5100, and since React silently drops an unknown prop, a transfer launched from here went through correctly but left the grid showing stale balances — which reads as "nothing happened" and invites a duplicate transfer. Guarded by `tools/app-shell/test/funds-transfer-props.test.js`.
 - **Account detail** → the **Transferir fondos** item inside the Movements toolbar split-button (▾ next to "Nuevo movimiento"), with the current account as source.
 
 Both render `windows/custom/financial-account/FundsTransferModal.jsx` — a single-step modal (shared `@/components/ui/dialog`, with inline searchable dropdowns so wheel/touchpad scrolling works inside the modal). Fields: source account (pre-filled, read-only, with available balance), destination account (searchable; other org accounts), **accounting item / GL (required, searchable)**, amount (currency symbol via the shared `formatCurrency`), currency-conversion block (shown only when the destination currency differs — multi-currency; the "Tasa de conversión" rate field with the source→destination currency badges alongside its label, no separate "Conversión de divisa" heading — plus, inline next to the rate input, a compact read-only "≈ {amount}" box, `data-testid="transfer-receive-amount"`, previewing `amount × rate` in the destination currency via `formatCurrency`; shows "—" until both amount and rate are valid positive numbers), Bank Fee checkbox (reveals two fee fields — source and destination — mirroring Classic), description (default "Funds Transfer Transaction"). Client guards: destination + accounting item required, amount > 0, amount ≤ source balance; the backend re-validates and rejects same-account / over-balance / cross-org transfers. On confirm it calls `useFundsTransfer()` → `POST …financial-account-transactions?action=transfer`; the backend delegates to Etendo Classic's `FundsTransferActionHandler.createTransfer(...)`, creating the paired withdrawal (source) + deposit (destination) — plus optional bank-fee expenses on the source and/or destination — left **Pending** (`PWNC` / `RDNC`) until reconciled.
 
-**A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable: the movements kebab hides **Eliminar** for both, and `?action=delete` answers 409 with a translated message. To undo a transfer, register the compensating movement — there is no un-transfer action.
+**The conversion rate is prefilled, not typed blind.** When the two accounts hold different currencies the rate field seeds itself from the system rate for the pair, via the shared `useConversionRate` hook (`windows/custom/shared/useConversionRate.js`, written for the Cobros/Pagos modal in ETP-4504) → `GET /sws/neo/validate-exchange-rate`. Three things about that call are load-bearing:
+
+- **The date is today** (`todayCalendarISO()`, not `toISOString()`, per the date-only policy). The transfer payload carries no `transferDate`, so Classic dates the document today — asking for any other day's rate would book a document at a rate that was never in force for it.
+- **`apiBaseUrl` is `${getApiBase()}/sws/neo/financial-account-transactions`.** The hook strips the LAST path segment, and `validate-exchange-rate` hangs off `/sws/neo` with no entity segment — `/sws/neo/<spec>/validate-exchange-rate` is a 404. Passing this modal's own endpoint leaves exactly `/sws/neo`.
+- **The token comes from `useAuthOptional()`, never `useAuth()`.** `useAuth` throws outside an `AuthProvider`, which would take the whole modal down in any context that lacks one (the existing test suite included); without a token the hook simply returns no rate and the field stays manual. See `docs/request-policy.md`.
+
+The seeding effect keys on `[multiCurrency, source.currencyIso, dest.currencyIso, conversion.rate]`, so **a manual edit stands until the currency pair itself changes** (the field is still fully editable — a user who wants a different rate just types it). The clear on a pair change matters as much as the prefill: without it a hand-typed EUR→USD rate would survive a switch of destination to GBP and book one pair at another pair's rate — the ETP-4504 W1 failure, which would otherwise replay here verbatim. Moving to a same-currency destination empties the field and drops `conversionRate` from the payload entirely.
+
+When the pair has **no rate on file** (`hasRate: false`, after loading settles) the field stays empty and a hint renders below it — `data-testid="transfer-rate-missing"`, i18n key `financeAccountTransferRateMissing` with `{from}`/`{to}`. It is deliberately not a blocker: Confirm already requires a positive rate, so the user types it and continues. The point is to explain why it prefilled last time and not this time. Note the endpoint already falls back to the **inverse** direction (`TO→FROM`, returning `1/rate`, `NeoExchangeRateService:107`), so this hint means neither direction is configured. Unlike the Cobros/Pagos modal there is **no `rateIsOne` guard** here — `FinancialAccountTransactionsSupport.resolveConversionRate` passes the user's value straight through to Classic rather than 400-ing on 1.0, so adding one would be a new business rule, not parity.
+
+**The movements list orders by the CALENDAR DAY, not the raw timestamp** (ETP-5100):
+`ORDER BY TO_CHAR(ft.statementdate,'YYYY-MM-DD') DESC, ft.line DESC`, and the running-balance
+window uses the same key so the Saldo column keeps matching the order it is displayed against.
+`statementdate` is declared `Date` in the AD, so a time-of-day in it is noise and must not
+participate in the sort. Sorting on the raw value let any row that happened to carry a wall-clock
+time float above movements created LATER the same day at 00:00 — a transfer stamped 23:11 sat
+above a manual movement created at 23:15, and the newest row was not on top. Truncating in the
+query fixes the rows already stored that way as well, so no data migration was needed. `TO_CHAR`
+rather than a cast: it truncates identically on PostgreSQL and Oracle (an Oracle `DATE` keeps
+seconds), and `'YYYY-MM-DD'` sorts lexicographically the same as chronologically.
+
+**The transfer is dated with a date-only value** (`transferDate: todayCalendarISO()`), so the
+backend stores local midnight. Omitting it let Classic stamp `now()` — a wall-clock time in a
+column the Application Dictionary declares as type **`Date`**, where the time is not a datum.
+Two things broke because of it: (a) the movements list orders by `statementdate DESC, line DESC`,
+so a transfer stamped 23:11 sorted *above* a manual movement created later the same day at 00:00,
+and the newest row was not on top; (b) it was the only flow producing an evening timestamp, which
+is what exposed the UTC-rendering bug below. Every other flow in the app already sends a date-only
+value. It also makes the document date and the date the conversion rate was looked up for the same
+day by contract instead of by coincidence.
+
+**Business dates are rendered through `formatCalendarDate`, never in UTC** (ETP-5100). Three
+helpers here — `MovementsTable.formatDate`, `StatementLinesInline.formatDate` and the shared
+`lib/formatSigned.formatDate` (used by the reconciliation panel, cash close, `ReconciledTxnsModal`,
+`ClearedItemsInline` and `ReconciliationListTable`) — used to do `new Date(iso)` +
+`Intl.DateTimeFormat(..., timeZone: 'UTC')`, on the premise that the backend always sent UTC
+midnight. That premise held only while the backend was ALSO formatting in UTC; the two errors
+cancelled for midnight values and both surfaced for anything else. A movement created at 22:59
+local (UTC-3) displayed as the next day and was filtered out of "Últimos 30 días" entirely — the
+row was in the database and in the balance, but not in the list. `formatCalendarDate`
+(`lib/dateOnly.js`) reads the leading `yyyy-MM-dd` and builds the Date with the local-time
+constructor, so it is correct for either wire shape. The `AutoMatchSuggestionModal` already used
+it; these three were the stragglers. Backend counterpart and the full write-up:
+`com.etendoerp.go/docs/neo-headless.md` §4.3.1.
+
+**A transfer cannot be deleted** (ETP-5085). Its two legs reference each other through RESTRICT self-FKs (`EM_APRM_FINACC_TRANS_ORIGIN` + the `EM_ETGO_FINACC_TRANS_DEST` mirror), so neither leg is removable, and `?action=delete` answers 409 with a translated message. **What changed in ETP-5111 is only how the UI says so:** the movements kebab used to *hide* **Eliminar** on a transfer leg (`canDelete = isGlTransaction && !isTransferLeg`); both that predicate and its early-return are gone, the item now renders unconditionally, and clicking it on a leg opens the generic delete confirmation like any other row — the toast carrying that same sentence fires once the user confirms. `movementActionEligibility.js` pre-checks it client-side against `backendError.transferMovementNotDeletable`, the very key the 409 maps to, so both paths read identically and no request is ever sent. The refusal itself is unchanged; only the hiding is. To undo a transfer, register the compensating movement — there is no un-transfer action.
 
 **Layout note:** the modal's body wrapper (`<div className="flex min-w-0 flex-col gap-4 px-6 pb-2 pt-1.5">`, right below the header) carries `min-w-0`. `DialogContent` renders as `display: grid`, and grid items default to `min-width: auto` — without this, an extremely long value anywhere deep inside (e.g. `transfer-receive-amount` computing a huge product) inflates this whole column past the dialog's own `max-w-[600px]`, and only the rightmost sliver gets clipped, cropping every row uniformly instead of just the offending field. Confirmed live via Playwright (`getBoundingClientRect()` before/after) — do not remove this class when touching this wrapper.
+
+### Free-text length limits (PSD-23 · ETP-5140)
+
+**Every free-text field in this window reports its AD column length before the request leaves the
+browser.** Previously an over-long description travelled to the backend, where Core's
+`StringPropertyValidator` rejected it and the user learned about a limit the UI already knew — as an
+HTTP 400.
+
+Limits live in one place, `windows/custom/financial-account/fieldLengthValidation.js`, transcribed
+from `artifacts/financial-account/contract.json` → `validation.maxLength`. Never hardcode a length at
+a call site: the contract is what the backend enforces, so an invented number either rejects valid
+input or lets an invalid value through.
+
+| Field | Entity · column | Limit | How it is enforced |
+|---|---|---|---|
+| Transferir fondos → Descripción | `transaction.description` | 255 | inline error + counter, submit blocked |
+| Nuevo movimiento → Descripción | `transaction.description` | 255 | inline error + counter, gates Guardar **and** Confirmar |
+| Wizard de movimiento → Descripción | `transaction.description` | 255 | inline error + counter, gates Siguiente (stage 1) |
+| Extracto manual → Referencia | `bankStatementLines.referenceNo` | 30 | hard `maxLength` attribute |
+| Extracto manual → Descripción | `bankStatementLines.description` | 2000 | hard `maxLength` attribute |
+
+`getMaxLengthError(value, limit)` returns the same `{ key, params } | null` descriptor as its two
+siblings `getNumericFieldError` (`lib/numericValidation.js`) and `getContactsTextFieldError`
+(`components/contract-ui/contactsFieldValidation.js`), rendered by the caller as
+`ui(err.key, err.params)` against the existing `fieldMaxLengthError` key. Unlike
+`contactsFieldValidation` it carries no window gate — the caller passes the limit explicitly, so the
+module can only do what a call site asks for.
+
+**Why the manual-statement rows differ:** they are dense grid cells with no room for error text, and
+this modal already reports its own validation as a submit-time toast rather than inline. The hard
+`maxLength` attribute is the pattern `AccountFormStep.jsx` and `EditAccountModal.jsx` already use in
+this same window; the browser truncates on typing and on paste, so the invalid value never exists.
+
+**The counter is always visible**, not only once exceeded — the limit has to be visible while typing,
+which is too late if it only appears on failure. It turns destructive past the limit.
+
+New testids: `transfer-description-error` / `-counter`, `tx-description-error` / `-counter`,
+`wizard-description` / `-error` / `-counter`.
+
+**Related fix in the same change** — `useCreateMovement.js`'s `postAction` synthesizes
+`HTTP <status>` as the error message when the 400 body carries no `message`. That is a truthy string
+`translateBackendError` passes through untouched, which defeated the
+`translate(...) || friendlyFallback` chain in `FundsTransferModal` and put a raw HTTP code on screen.
+The error now carries `hasBackendMessage`, and callers translate only when it is set. Any new caller
+of `postAction` that shows an error must check that flag rather than testing the message string.
 
 ### Conditional tabs (ETP-4795)
 
@@ -931,7 +1281,7 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - **Left panel — pending statement lines** (`usePendingStatementLines(accountId, filters)`): a movements-style toolbar with **back arrow** + status dropdown + date-range picker + search. The current T6 backend only exposes pending lines, so the status dropdown is wired but currently contains `Pendiente (N)` only. Below it, a table with **radio single-select** rows (Fecha · Descripción + status badge · Importe with sign tone) and a `Total: X,XX €` footer.
 - **Right panel — candidate operations** (`useCandidateOperations(accountId, lineId, docType)` — does NOT fetch while no line is selected): an empty state (`Selecciona un movimiento` / hint) until a line is picked, then a `SelectedLineHeader` (line metadata + amount in red/green), a real docType/date/search toolbar, and a table with **checkbox multi-select** rows (Fecha · Información = documentNo + partnerName + badge · Saldo pendiente · Importe). Backend-suggested candidates carry a blue **"Con sugerencia"** badge (ETP-4923, shared label with the left panel's status filter chip); the rest "Pendiente".
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
-- When a **reconciled** line is selected, the `Conciliar` button label switches to `Reactivar`. On success, the backend undoes the reconciliation as a unit and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel.
+- When a **reconciled** line is selected, the `Conciliar` button becomes `Desconciliar (N)`, acting on the checked documents. On success, the backend undoes the reconciliation and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel. Since ETP-5135 that is the **only** action offered there — see "ETP-5135" below.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
 
 #### Match with a difference — detection and automatic posting (ETP-4965)
@@ -1080,8 +1430,8 @@ exactly the failure a user can resolve, and exactly the one they could not see.
   documento en un periodo cerrado` and nothing else.
 - `ReconciliationSplitPanel.confirmRemove` shows it as the toast description, and no longer reuses
   `financeReconcileToastError` — whose copy reads "Error al conciliar", the wrong action for an
-  un-reconcile. The un-reconcile and reactivate paths have their own keys
-  (`financeReconcileToastOperationRemoveError` / `…ReactivateError`).
+  un-reconcile. The un-reconcile path has its own key (`financeReconcileToastOperationRemoveError`).
+  Its reactivate twin (`…ReactivateError`) went away with ETP-5135.
 
 **One path still reports nothing: the whole-line `reactivate`.** It calls `detachSelected` directly
 and discards the accumulator, because unlike `removeOperation` / `reactivateSelected` it never
@@ -1413,11 +1763,16 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
     top block (no checkboxes/bulk). The bottom bar stays "Conciliar" for the remainder.
   - `removeOperation` accepts `transactionIds[]` and branches on whether the selection covers the
     whole reconciliation.
-  - **"Reactivar" — the lightweight alternative** (action `reactivateSelected`): the "Desconciliar
-    (N)" button is a **split button** (chevron → `recon-action-reactivate`, `RotateCcw` icon, same
-    checked selection).
-    - **Reimplemented (this task) as plain detach + reprocess — no more DRAFT-persisting state.**
-      ETP-4502 iteration 6 originally left the `FIN_Reconciliation` in `DR` so the line came back
+  - **"Reactivar" — REMOVED FROM THE UI BY ETP-5135.** It used to be the lightweight alternative
+    (action `reactivateSelected`) behind a chevron on the "Desconciliar (N)" split button
+    (`recon-action-reactivate`, `RotateCcw` icon, same checked selection). A processed reconciliation
+    is now a **final state**: Desconciliar is the only way out from the interface. See the ETP-5135
+    entry at the end of this section for what was deleted and what deliberately stayed. The history
+    below is kept because the backend action still exists and the reasoning still explains its
+    semantics.
+    - **Reimplemented (ETP-4502 iteration 7) as plain detach + reprocess — no more DRAFT-persisting
+      state.**
+      Iteration 6 originally left the `FIN_Reconciliation` in `DR` so the line came back
       pending with its own transactions pre-selected, editable before re-confirming. That relied on
       Core creating **one reconciliation per statement-line group**; once a single automatch batch
       started sharing ONE reconciliation across many lines (see "Cardinality" under "Automatch
@@ -1479,18 +1834,127 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - All new UI uses semantic theme tokens (bar fill `--foreground`, track `--border`, tooltip/primary
   `--text-primary`, "Factura" tag `--status-warning-*`) — no color literals.
 
+### Reactivar removed — a processed reconciliation is final (ETP-5135)
+
+Reactivar left the user in a half-undone state: the transactions lost their visual link to the
+statement line but were not really detached, so the reconciliation looked undone while the data said
+otherwise. It was also redundant — after the ETP-4502 iteration-7 rewrite documented above, it ran
+*the same mechanics* as Desconciliar (detach + re-confirm, no persistent draft), so the two actions
+had converged on everything except their wording. Offering both only invited the user to pick the one
+whose copy promised a lighter undo that no longer existed.
+
+**Removed from `ReconciliationSplitPanel.jsx`:** the chevron split button
+(`recon-action-reconcile-more`) and its `recon-action-reactivate` item, the `onReactivate` prop,
+`requestReactivateSelected`, the `useReactivateSelected` hook call, and the `mode: 'reactivate'`
+discriminator on `removeRequest`. `recon-action-reconcile` is now a plain `rounded-full` button.
+
+**The confirm cartel's copy matrix collapsed to constants.** The six action-keyed lookups
+(`SUB_KEY_BY_ACTION`, `TITLE_KEY_BY_ACTION`, `CONFIRM_LABEL_KEY_BY_ACTION`,
+`ITEM_RECONCILIATION_DESC_KEY_BY_ACTION`, `WARNING_KEY_BY_ACTION`, `CONFIRM_ICON_BY_ACTION`) existed
+only to differentiate two actions; with one left they became `SUB_KEY` / `TITLE_KEY` /
+`CONFIRM_LABEL_KEY` / `ITEM_RECONCILIATION_DESC_KEY` / `WARNING_KEY` and a hardcoded `Minus` icon.
+Note `WARNING_KEY_BY_ACTION.remove` already pointed both of its entries at the same key, so
+Desconciliar's warning never varied — the collapse changed no rendered string.
+
+**The "otra conciliación en borrador" bullet is gone.** Its guard was `reactivate && warnOtherDraft`,
+so it was unreachable without Reactivar. `draftReconciliationCount` is consequently no longer
+destructured from `usePendingStatementLines` — the hook still maps the field, and per the note above
+it has reported zero since iteration 7 anyway.
+
+**Twelve i18n keys deleted** from `en_US.json`, `es_ES.json` and `es_AR.json`:
+`financeReconcileActionReactivateSelected`, `financeReconcileConfirmReactivateTitle`,
+`financeReconcileConfirmReactivate{One,Many}Body`, `financeReconcileConfirmReactivateWarning`,
+`financeReconcileConfirmItemReactivateDesc`, `financeReconcileToastOperationReactivated`,
+`financeReconcileToastOperationReactivateError`, `financeReconcileReactivateOtherDraftWarning`,
+`financeReconcileConfirmItemOtherDraft{Title,Desc}`, and the already-dead
+`financeReconcileToastReactivated`. `reactivarItem1Title` **stays** despite its name — other
+components use it.
+
+**Deliberately NOT touched:**
+- The **Movimientos** kebab's Reactivar (`MovementRowKebab.jsx`, `movement-row-reactivate`) — that
+  reactivates a *movement*, a different operation, which ETP-5111 had just widened on purpose.
+- The **Extractos importados** kebab's Reactivar (`StatementRowKebab.jsx`) — reactivates a *statement*.
+- The backend. `ReconciliationHandler.reactivateSelected()` and `reactivate()` still exist and still
+  work; the ticket scoped the change to the interface. `reactivateSelected` now has **no frontend
+  consumer** — a REST or MCP caller can still reach it. Closing that would be a 409 guard in the
+  handler, following the precedent ETP-5111 set for `handleReactivate`.
+
 ### Automatch engine (T7)
 
 The Reconciliation surface gained the automatic matching engine (backend `MatchRuleEngine` + `AutoMatchSupport` inside `ReconciliationHandler`, `@Named("bankReconciliation")`):
 
+> **Rules are tenant-scoped (ETP-4950 QA round).** `MatchRuleEngine.loadRules` loads through the DAL, so only rules of the current client and of a readable organization are ever evaluated. It previously used raw JDBC with no `ad_client_id` filter, which made every tenant's account-less rules apply to every other tenant — see `match-rule.md` → "Engine integration".
+
 - **Automatch modal** (`components/contract-ui/AutoMatchSuggestionModal.jsx`, opened from the `Automatch` header action and from the Cuentas-list `Conciliar (N)` pill): runs the engine in preview (GET `?action=autoMatch`) and shows the suggested groups (statement line + its N operations) with per-group include/exclude checkboxes. Rule-origin groups carry a yellow **"Por regla {nombre}"** badge; candidates that would create a new payment carry a blue **"Nueva"** badge. Applying (POST `?action=applySuggestions`) reconciles only the ticked groups, creating payments for rule matches and incrementing each matched rule's count. On success the panel/list refresh. The 1:N signal matcher first tries the whole same-partner / same-reference block and, if that over-shoots, can now choose an exact subset inside that same signal block (for example two 13,20 receipts balancing a 26,40 statement line).
   - **Cardinality: ONE `FIN_Reconciliation` per apply, not one per line.** Earlier, `applySuggestions` called `compose` per accepted group, so confirming N suggestions created N separate reconciliation documents — noisy (Classic's own "Match Statement" produces one per statement) and quadratic (`processReconciliation`'s `updateReconciliations` recomputes every later reconciliation's balance on each call). `ReconciliationHandler.applySuggestions` now runs two passes: `prepareGroup` validates every group first (an invalid group is reported in `results[]` without touching any reconciliation), then every valid group is matched via `matchInto` into ONE reconciliation obtained from `getOrCreateDraftReconciliation` (reuses the account's open draft — the same lookup Classic's `MatchStatementActionHandler` does — or creates one), which is processed once at the end. Not atomic across groups: Core's matching services commit mid-flow, so a failure on group *k* does not roll back groups `1..k-1` already matched into the shared document — the frontend surfaces this via a partial-success toast (`financeReconcileAutomatchToastPartial`) read off `results[]`, since the old code silently reported full success as long as the batch-level POST returned 2xx regardless of individual failures. The manual **`reconcileGroup`** path (single line, one click) is unaffected — it still creates its own dedicated reconciliation per call.
-- **Rule dimensions (ETP-4950)**: a rule-origin group carries the rule's Producto / Proyecto / Centro de costos through `createPayment` (`projectId` / `costcenterId` / `productId`) and `ReconciliationHandler.createTransactionForRule` assigns them to the generated `FIN_FinaccTransaction`, skipping any dimension that is not active at the `FAT` header level for the tenant (`AccountingDimensionsSupport`). Before this they were loaded by the engine and then dropped, so the movement never carried them. The rule's *transaction type* is still not propagated — there is no column for it on the transaction (the movement's type is `TRXTYPE` BPD/BPW, derived from the amount sign); see `match-rule.md` → "Dimension propagation + gating (ETP-4950)".
+- **A group states its type, and a near match previews the movement it will create (ETP-4965, QA round).** Until this round only rule groups were labelled, so an exact suggestion and a within-tolerance one looked identical even though the second posts an accounting entry; and the difference movement itself was invisible until it appeared in Movimientos.
+  - **Backend.** `AutoMatchSupport.matchFallback` tags the near-match group with **`nearMatch: true`** (`AutoMatchSupport.KEY_NEAR_MATCH`, the same wire name the candidates payload already used — `ReconciliationHandler` now references that one constant). The flag exists **instead of testing `difference != 0`**: `buildMultiGroup` also emits a non-zero `difference` for the rounding slack `signalGroupTolerance` allows on a 1:N group, which is not a near match. The same branch now returns `{1, 1}` rather than `{1, 0}`, so the `willCreate` KPI counts the GL-item movement the apply will create. Failure entries in `applySuggestions`' `results[]` gained **`statementLineId`** (successes always had it): the array is not aligned with the submitted groups — failures are appended in pass 1, successes in pass 2 — so without it a client can count failures but cannot say which suggestion failed.
+  - **Frontend.** `StatusBadge` moved out of `ReconciliationSplitPanel.jsx` into `components/contract-ui/reconciliationBadges.jsx` and is now rendered by the automatch modal too, so a line the left panel calls "Con diferencia" reads and looks the same when the modal proposes it — one palette, one set of labels (`automatchBadgeKind` maps a group to its kind: near match outranks rule origin). A near-match group appends a synthetic operation row naming the **accounting account** the leftover goes to, taken from the account's `glItemDifference` (threaded from `index.jsx`, the same `{id, name}` shape `ReconciliationTab` already hands the panel); with no account configured that row says so, in destructive tone and **without** the "Nueva" chip — promising a movement and then failing on apply is the behaviour this round removes. The footer's "se crearán N movimiento(s)" counts near-match groups (it previously promised one movement while the apply created two), and the KPI strip finally renders `willCreate` under "A crear", a key that was translated in all three locales and never shown.
+  - **Error copy.** `applySuggestions` answers **201 even when every group is rejected** — the reason travels inside `results[]` — so the modal's `catch` never runs and its old two-counter reduction produced a bare "Error al aplicar la conciliación". It now reports the backend's own `results[].error.message`.
+  - **An amount deviation is not proposed at all when the account has no accounting account.** `ReconciliationHandler.buildAutoMatch` resolves `ReconciliationDifferenceSupport.effectiveGlItemId(null, account)` once and passes the answer to `AutoMatchSupport.matchFallback` as `canPostDifferences`; when false, the near-match search runs with a `null` tolerance, which is `findNearMatch`'s own "exact amount only". That narrowing — rather than dropping the group afterwards — is deliberate: `findNearMatch` claims the transaction in `usedTxnIds`/`excludedTxns` as it returns it, so discarding the group later would consume a candidate out of the reach of every following line. A **date-only** near match posts nothing and is therefore still offered on an unconfigured account. Because the engine no longer emits a group the user could not accept, the modal's "no accounting account" warning row, its dedicated toast and its "Editar cuenta" button were removed; the backend's `GL_ITEM_REQUIRED` 400 stays as the last line of defence for the race where the account loses its setting between preview and apply.
+
+#### An exact candidate no longer loses to a date-deviating one
+
+`NearMatchSupport.isReportableDeviation` used to end with `gap.signum() != 0 || dateDistance != 0` — it deliberately skipped a candidate matching **exactly** (same amount, same day), on the assumption that pass 1 (Core's standard algorithm) had already claimed it. Core's criteria are narrower, and when it does not match, that assumption hid the best candidate: a 14,52 statement line of 04/09 was proposed against a 14,52 movement of **01/09** while two 14,52 movements of 04/09 sat unused.
+
+The gate is now `isEligibleCandidate(gap, maxGap)` — tolerance only — and ranking decides: smallest amount gap, then closest date, then **oldest transaction**. That last tie-break replaces pool order, which made the winner between two identical same-day movements unstable across runs, and matches how the rest of the reconciliation allocates (invoices oldest first).
+
+Because the search can now return an exact hit, the callers label it by the deviation it actually has, via the new `AutoMatchSupport.deviatesFrom`: no deviation → a plain suggestion (`STRONG`, **no** `nearMatch` key, no red badge, no difference row, delta `{1, 0}`); a deviation → as before. `classifyPendingLine` applies the same rule, or the left panel's badge would contradict the automatch modal for the same line.
+
+**Design consequence worth knowing:** this makes Etendo GO's own search overlap pass 1 rather than strictly follow it. It acts as a net under Core, which is the point, but the GO engine now carries more of the decision than the standard algorithm does.
+
+#### Suggestion rows name the movement, not just its number
+
+`txnToJson` emitted `id`, `date`, `documentNo` and `amount`. A payment number alone ("1000181") identifies nothing to whoever approves a batch, so it now also carries the movement's `description` — its own, falling back to the payment's, which is where a payment-backed transaction usually keeps it — and `partnerName`, resolved with the same precedence `partnerKey` uses for grouping so a row cannot be grouped under one partner and labelled with another. The modal renders the description under the contact, mirroring the Movimientos list.
+
+#### Saving the account refreshes the automatch, not just the account
+
+`EditAccountModal`'s `onSaved` reloaded only the account. But an account edit changes automatch INPUTS — the amount/date tolerances and the difference account — and the suggestions are a separate `useAutoMatch` resource, so the previously fetched (empty) preview stayed in place: after configuring the accounting account the modal still opened with nothing, and pressing the header's refresh button by hand was the only way to see the matches that configuration had just enabled. `onSaved` now runs `handleReconciliationRefresh`, the very callback that button uses.
+
+#### The `updated` token must carry its timezone offset
+
+The first version of the `updated` column formatted the timestamp through `NeoDateFormat.toCanonical`, which **deliberately drops the offset**. Core's reader is `JsonUtils.createDateTimeFormat()` — `yyyy-MM-dd'T'HH:mm:ssZZZZZ`, offset mandatory — and its repair step appends `+0000` to a token without one ("make them utc, the timezone must be there"). A local-time string with no offset was therefore read as UTC, so on a UTC-3 server every write looked three hours old and was refused as `stale_record`: `caller sent '2026-09-06T12:23:16'`. The value is now produced by core's own writer, the counterpart of the reader that has to accept it back.
+
+Two consequences worth carrying forward. The list path never had the bug — there `updated` comes from the DAL with its offset — which is why editing from Cuentas worked while editing from the account detail did not. And **`ChartOfAccountsHandler` still formats its own `updated` with `toCanonical`**, so it carries the same latent defect for any client that echoes the value back.
+
+#### A 409 no longer means "duplicate name"
+
+`EditAccountModal.reportSaveError` mapped every 409 to `financeAccountsNewNameExists`. Since ETP-5073 a concurrent edit answers 409 too, so a stale record was reported as a name clash — a complaint about a field the user had not touched, with no hint that reloading is the way out. It now branches on the machine-readable `code`.
+
+That needed a fix one level down: `financialAccountHttp.throwHttpError` only understood the nested `{ error: { message } }` shape, while the ETP-5073 errors are flat (`{ status, error: "stale_record", message, detail, hint }`). It read neither the message nor the discriminator, so these arrived as a bare "HTTP 409". It now reads both shapes and hangs `code` and `body` off the thrown error.
+
+#### The difference account was invisible from the Cuentas list
+
+Same modal, two sources. The account DETAIL still reads the `financial-accounts-page` R spec, which emits the flat `glItemDifferenceId` / `glItemDifferenceName`; the Cuentas LIST stopped using that spec and now takes its rows from ListView's `useEntity` fetch of the `account` W entity, enriched by `FinancialAccountHandler.injectDerivedFields`. That enrichment copied `bankConnected`, `currencyIso`, the country trio, `isDefault`, `maskedPan` and `active` — but not the difference account, and the W record carries only the raw DAL property (`aprmGlitemDiff`). So "Editar cuenta" from the list rendered an empty "Cuenta contable" for an account that had one, while the very same modal from the detail page showed it.
+
+`enrichRecord` now injects both flat names, so the two payloads agree. The tolerances never had this problem: they are real columns whose DAL property names (`eTGODateTolerance` / `eTGOAmountTolerance`) `EditAccountModal.readTolerances` already dual-reads.
+
+#### The account payload carries `updated`, or nothing can be saved (ETP-5073 fallout)
+
+ETP-5073/DOC-04 made `updated` — the record version as it was read — **mandatory on every PUT/PATCH** (`NeoCrudHandler#validateUpdateRequest`), and `ACCOUNTS_SQL` did not select it. The edit modal reads its record from this R spec from BOTH the Cuentas list and the account detail page, so it had nothing to echo back and every save returned `400 missing_updated` — the same hole `ChartOfAccountsHandler` had already hit and fixed on its own bypass-the-generic-service path.
+
+`FinancialAccountsPageHandler` now selects `fa.updated` (appended at the END, like every column added since ETP-4896, because `loadAccounts` and its test read positionally), formats it through `NeoDateFormat.toCanonical` — a native-SQL `Timestamp` prints in the raw Postgres shape, and `NeoRecordVersion` parses ISO on the way back — and emits it as `updated`. `useAccountMutations.toDalBody` forwards it, and both `EditAccountModal` and the reconciliation panel's setup dialog send it.
+
+**The value sent is the one the form/panel was opened with, never a fresh re-read.** Re-reading immediately before writing would make the check pass every time and defeat the point of optimistic locking.
+
+#### Configuring the accounting account from the reconciliation itself (ETP-4965, QA round)
+
+A postable difference is an accounting entry, so the manual flow now **always confirms it** — and, when the account has nowhere to post it, sets that up first instead of failing.
+
+`ReconciliationSplitPanel.handleReconcile` branches on the new `postableDifference` memo (the signed gap, or null; same predicate that drives the action-bar notice) **before** posting anything:
+
+- **No accounting account configured** → opens `GlItemSetupDialog` (`ReconciliationDifference.jsx`) and reconciles nothing. Confirming it calls `useAccountMutations().updateAccount(accountId, { glItemDifferenceId })` — the same partial PUT `EditAccountModal` uses — and closes. The choice is stored on the **financial account**, not on this reconciliation, so the dialog's copy says so; every later difference on that account lands there too. It deliberately does not chain into the reconciliation: confirming that is a separate, deliberate second click.
+- **Accounting account configured** → opens `DifferenceModal` with `readOnlyGlItem`, showing the destination as static text rather than a picker, because the entry always goes to the account's setting and a picker would promise a per-line choice that no longer exists. Its confirm submits **without** `glItemId` — the backend resolves it from the account — but **does** carry the modal's optional `description`, which names the resulting movement in Movimientos (`applyInlineDifference` reads it and otherwise falls back to `defaultDifferenceDescription`). `submitReconcile`'s dead `glItemId` parameter went away with the picker.
+
+The `GL_ITEM_REQUIRED` catch in `submitReconcile` now opens the same setup dialog rather than the old picker-and-retry modal — with the field read-only, that modal would have offered something the user cannot fill. It is only reachable as a race.
+- **Rule dimensions (ETP-4950)**: a rule-origin group carries the rule's Producto / Proyecto / Centro de costos through `createPayment` (`projectId` / `costcenterId` / `productId`) and `ReconciliationHandler.createTransactionForRule` assigns them to the generated `FIN_FinaccTransaction`, skipping any dimension the tenant has switched off in the Esquema Contable (`AccountingDimensionsSupport.flatActiveDimensionsForAccount`). Before this they were loaded by the engine and then dropped, so the movement never carried them. **ETP-4950 QA round:** this originally read the `FAT` *header-level* set, which subtracts `AD_Client_AcctDimension.Show_In_Header='N'` — a row the shipped reference data sets for Product and that Etendo GO exposes no screen for. The effect was that Producto kept being discarded here on every real tenant even after the rule stored it, i.e. the propagation half of this feature was silently broken too. The chart of accounts is now the single gate for the rule form, the New Movement wizard and this propagation. The rule's *transaction type* is still not propagated — there is no column for it on the transaction (the movement's type is `TRXTYPE` BPD/BPW, derived from the amount sign); see `match-rule.md` → "Dimension propagation + gating (ETP-4950)".
 - **Same-amount lines each get their own suggestion in one run (ETP-4971).** `buildAutoMatch` threads a single growing `excludedTxns` list through every pending line's call into Core's standard algorithm (`AutoMatchSupport.standardMatch`), mirroring Classic's own `runAutoMatchingAlgorithm` accumulator. Before this fix, Core's `FIN_MatchingTransaction.match(line, excluded)` was always called with an empty `excluded` list, so N pending lines of the identical amount all got offered the SAME transaction and only the first one ended up with a suggestion — the rest required a second Automatch run after accepting the first. `ReconciliationHandlerSupport.summarizePendingLines` shares the same accumulator across the left-panel's `suggested` classification, so its per-state counts match what an actual Automatch run produces (a line whose only same-amount candidate was already claimed by an earlier line now counts as `pending`, not `suggested`).
 - **Conditional auto-open (ETP-4922).** Entering the Reconciliation tab (tab click, `?tab=reconciliation` deep link, or the Cuentas-list `Conciliar (N)` pill's `?autoMatch=true`) no longer pops the modal unconditionally — it *arms* an `autoMatchArmed` flag in `index.jsx` and queries `useAutoMatch` for as long as that tab stays active. The modal only opens once a fresh response confirms `groups.length > 0`; an empty result never opens it (previously it always opened, showing an empty state). The **manual** `Automatch` header button is unaffected — it still calls `setAutoMatchOpen(true)` directly and always opens, empty state included. Leaving the tab disarms the flag, so returning to it re-evaluates from scratch (a stale response from the prior visit is never treated as fresh: `useNeoResource` doesn't clear `data` when its `path` goes back to `null`, so the code tracks readiness with an `autoMatchFetchedRef` ref instead of trusting `loading` alone).
 - **No date prefilter on suggestions (ETP-4922).** The automatch GET carries only `accountId` — no `dateFrom`/`dateTo` — and `ReconciliationHandler.loadPendingLines` has no date clause in its HQL, so the modal proposes every pending statement line regardless of age, even ones older than the Reconciliation panel's own `last30` default window (`ReconciliationSplitPanel.jsx`, unrelated component). This is intentional and distinct from the **date tolerance** (`EM_ETGO_Date_Tolerance`, see "Account configuration" above), which still governs whether a same-amount candidate within N days counts as a match — that tolerance was not touched by ETP-4922.
 - **1:N (and single-partial) reconciliation** is done by Etendo core (`APRM_MatchingUtility.matchBankStatementLine` splits the line into sub-lines sharing `EM_ETGO_Match_Group_ID`, tagged by `ReconciliationHandler.willSplitLine`). The panel and the imported-statements view **collapse those sub-lines back into a single display line** (`BankStatementsSupport.mergeMatchGroups`), so a split group shows as one entry, not N — see "Partial-match display" below for what that collapsed row looks like when the group isn't fully covered yet.
+- **Which lines reach the panel at all — and the reconciled-line exception (ETP-5121)**: `PENDING_LINES_SQL` lists only lines of a **processed** bank statement, because a draft statement is not reconcilable yet. An **already reconciled** line is exempt: `AND (bs.processed = 'Y' OR (bsl.fin_finacc_transaction_id IS NOT NULL AND COALESCE(rec.processed, 'N') = 'Y'))`. Reactivating a statement (`BankStatementsHandler.handleReactivate`) only flips `processed` — it deliberately does not revert reconciliations — so the line keeps its `FIN_Finacc_Transaction_ID` and that transaction keeps a PROCESSED `FIN_Reconciliation`. Before the exception, reactivating a statement dropped **every** line of it from `?action=pendingLines`, so a genuinely reconciled line vanished from the "Conciliadas" filter — and from every other filter — while Core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` still made it immutable. That was a dead end, not just a display bug: the line could no longer be un-reconciled from here, and the statement could not be deleted either while it still held a matched line (`handleDelete`). The exception repeats the exact predicate behind `line_status = 'reconciled'` above, so a line whose reconciliation is back in DRAFT keeps falling into the pending pool instead of being dragged in by this clause. A reconciled line of a reactivated statement stays fully actionable: selecting it goes through `ReconciliationSupport.linkedTransactionsIfReconciled`, scoped by line and account only, so the right panel shows its linked movements read-only and "Desconciliar"/"Reactivar" behave as they do on a processed statement.
 - **Left-panel state filter**: `pendingLines` returns a fine-grained `state` per line (`pending | suggested | byRule | difference | reconciled`) plus per-state counts. `suggested` covers a Classic strong `1:1` match, a Core WEAK match and an exact `1:N` signal-group match; `difference` means one thing only — a real amount and/or date deviation inside the account's tolerances (ETP-4965) — so the left badge stays aligned with the automatch modal and with the right-panel preselection behavior.
+- **"Pendientes" is a superset, not a fifth exclusive bucket (ETP-5033)**: the backend classification stays exclusive (one `state` per line), but the dropdown's `pending` entry maps to the SET `{pending, suggested, byRule, difference}` — everything not `reconciled` — via `matchesStatus`/`STATUS_MEMBERS` in the new `reconciliationStatusFilter.js` (`ReconciliationSplitPanel.jsx`, which used to filter with strict equality, hiding suggested/byRule/difference lines behind their own chips even though `pending` is the panel's default filter). `Con sugerencia`, `Por regla` and `Diferencias` stay strict single-state subsets, so a suggested line shows under both its own chip and Pendientes. The chip's count follows the same mapping (`countForStatus`, summed over the covered states) so the number on "Pendientes" always matches the row count it produces.
 - i18n keys: `financeReconcile*` in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`. `es_AR` was missing 15 of them (the 14 `financeReconcileDiff*` plus `financeReconcileAutomatchToastPartial`), which rendered raw key names for that locale — the resolver does not fall back to English (`useUI.js`: `dictionary?.genericLabels?.[key] ?? key`). Backfilled and covered by a parity test (ETP-4965).
 - Hooks: `tools/app-shell/src/hooks/useReconciliation.js` — `usePendingStatementLines`, `useCandidateOperations`, `useReconcileGroup` (all over `useNeoResource` / the shared auth+fetch pattern). The reconcile POST surfaces the backend `{ error: { message } }` text on the thrown Error so it shows in the error toast, and since ETP-4965 also hangs the whole parsed body off it (`err.body`, `err.code`) so callers can act on structured failures such as `GL_ITEM_REQUIRED` or a 409's `remainderLineId`.
 
@@ -1513,7 +1977,7 @@ The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post act
 ## Not implemented yet
 
 - The older 2-step `NewMovementWizard` (Cobro/Pago + pay-vs-GL) is superseded by the single-view `NewTransactionModal` (accounting account only) and is no longer wired.
-- `Reactivar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above.
+- `Desconciliar` is implemented for reconciled lines created from the ETGO reconciliation flow; it undoes the reconciliation and restores split 1:N groups back to a single pending line. Non-ETGO / Classic-only edge cases still rely on the runtime guards described above. (Its former `Reactivar` sibling was removed from the UI by ETP-5135.)
 - `Transferir` / `Nuevo documento` real actions — render but show a "próximamente" toast.
 - Unreconcile row action — visible but disabled, with tooltip. (Post/Unpost are implemented — see ETP-4505 below — and the accounting-account lifecycle actions Confirmar / Reactivar / Eliminar are enabled.)
 - Real bank logos (Santander, BBVA, etc.) — uses the generic `AccountLogoAvatar` for all accounts.
@@ -1540,7 +2004,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         AdvancedFilterButton       — generic "Filtro por condicionales" (status filter now lives here: 2 options — Conciliado / Sin conciliar)
       AccountSummaryStrip.jsx      — avatar, IBAN (chunked + copy), 3 KPI values
       MovementsTable.jsx           — header + rows / skeleton / empty-state; renderBody helper
-        DimensionsPanel (inline)   — expandable read-only grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto)
+        DimensionsPanel (inline)   — expandable grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto); editable ChipSelect when canEditDimensions (ETP-5101), else read-only
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
@@ -1549,7 +2013,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
-      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
+      advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree, shared by movements and statements. Three operator tables (`DATE_OPERATORS` / `NUMBER_OPERATORS` / `OPERATORS`) dispatched by the column's declared `type` via `applyConditions`'s `columnsByKey` argument — see "The advanced ("by conditions") filter evaluates by declared column type"
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
@@ -1557,9 +2021,9 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
       ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved. Contacto and Cuenta contable are `ChipSelect` (ETP-4924 follow-up — see below), matching every other FK picker in the app.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
-      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog and ManualStatementModal.
+      LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog, NewMovementWizard and PaymentForm. No longer used by `ManualStatementModal` (ETP-4924 follow-up — switched to `ChipSelect`, see below).
 ```
 
 ## Shared primitives introduced or used
@@ -1568,7 +2032,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 |-----------|------|-------|
 | `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent` | `components/ui/tabs.jsx` | Manual implementation (no Radix react-tabs). Underline-style active indicator in `#121217`. Accepts `icon` and `badge` on `TabsTrigger`. Context value memoized via `useMemo`. |
 | `MoneyAmount` | `components/ui/money-amount.jsx` | Props: `value`, `currency`, `tone` (`auto`/`positive`/`negative`/`neutral`), `compact`. Locale: `es-ES`. `tone='auto'` colors positive green (`#1E874C`), negative red (`#D50B3E`), zero neutral. Sign prefix `+`/`-` applied automatically. |
-| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). |
+| `DateRangePopover` / `DateRangePopoverContent` | `components/ui/date-range-popover.jsx` | Canonical date range picker — same UX as the grid views (Sales Order, etc.). Presets list (Hoy / Ayer / Últimos 7/30 días / Últimos 12 meses / Todo el tiempo / Personalizado) + dual-month calendar with year selector. Value shape: `null \| { presetId } \| { from, to }`. `DateRangePopoverContent` is the inner panel — use it when you need a custom trigger button (as `ListFilterBar.jsx` does). **`placeholder` must be the "no constraint" label** (`ui('dateRangeAnyTime')` — "Cualquier fecha"), never the name of a preset: "Todo el tiempo" is encoded as `value === null`, indistinguishable from "nothing chosen", so `computeTriggerLabel` falls through to `placeholder`. Conciliación used to pass `ui('financeReconcileFilterDate')`, whose literal value is "Últimos 12 meses", so picking "Todo el tiempo" applied the wider filter but left the button still reading "Últimos 12 meses" (ETP-4956). The default label still comes from the initial `{ presetId: 'last12m' }` state, not from the placeholder. |
 | `DistinctValuesFilter` | `components/ui/distinct-values-filter.jsx` | Reusable Popover-wrapped `DistinctValuesList` for in-memory fixed code lists (no backend pagination). Used by `StatusFilter` and `TypeFilter`. |
 | `ProgressRing` | `components/ui/progress-ring.jsx` | SVG circular progress ring. Props: `value` (0–100), `size` (default 32), `strokeWidth` (default 3). Track is `#E8EAEF`, fill is `#26A95F`. |
 
@@ -1595,36 +2059,115 @@ GET  /sws/neo/financial-account-transactions?...&export=csv&columns=...&ids=... 
 POST /sws/neo/financial-account-transactions?action=create                       → create one FIN_Finacc_Transaction
 POST /sws/neo/financial-account-transactions?action=create-payment               → register a payment (Classic "Add Payment")
 POST /sws/neo/financial-account-transactions?action=transfer                     → funds transfer between accounts (ETP-4272)
-POST /sws/neo/financial-account-transactions?action=delete                       → delete one movement (409 on a transfer leg)
+POST /sws/neo/financial-account-transactions?action=delete                       → delete one movement (409 on a transfer leg, on a payment-linked movement, or on a processed movement when paymentRemoval:false)
 ```
 
 **`action=transfer`** (ETP-4272) — body `{ sourceAccountId, destinationAccountId, amount, glItemId?, transferDate?, conversionRate?, bankFee?, bankFeeFrom?, bankFeeTo?, description? }`. Validates (source ≠ destination, amount > 0, destination in the source's org tree, amount ≤ source `currentBalance`) and **delegates to Etendo Classic `FundsTransferActionHandler.createTransfer(...)`** (`org.openbravo.advpaymentmngt`) — it never reimplements the transfer. That creates the source withdrawal (`BPW`) + destination deposit (`BPD`), optional bank-fee (`BF`) transactions on the source and/or destination, conversion-rate docs (multi-currency), processes them (→ `PWNC` / `RDNC`, Pending until reconciled) and runs the module's post-hooks. The handler exposes `loadAccount` / `availableBalance` / `sameOrgScope` / `doTransfer` as package-private test seams.
 
-**`action=delete`** (ETP-5085) — body `{ id }`. A Draft is removed directly; a Processed movement is reactivated and
-removed through `TransactionRemovalUtil.reactivateAndRemove`. **A leg of a funds transfer is rejected up-front with a
-409** and the message `Movements generated by a funds transfer cannot be deleted.` — deleting a transfer is not allowed
-by design. The check is `FinancialAccountTransactionsSupport.isTransferCounterpart(trx)`, two `OBCriteria` probes asking
+**`action=delete`** (ETP-5085 · rewritten in ETP-5111) — body `{ id, paymentRemoval? }`.
+`paymentRemoval` defaults to **`true`**, so every pre-existing caller (the row kebab, the REST API,
+MCP) keeps the behaviour it had; only the bulk-delete path ever sends `false`, and only when more
+than one row is selected. `handleDelete` applies four guards, in this order:
+
+| # | Guard | Answer |
+|---|---|---|
+| 1 | the id resolves to no transaction | 404 · `MSG_TRANSACTION_NOT_FOUND` |
+| 2 | `trx.getFinPayment() != null` (`handleDelete:839`) — the movement belongs to a payment or a receipt (**new in ETP-5111**) | 409 · `Boolean.TRUE.equals(…isReceipt())` picks `MSG_RECEIPT_LINKED_NOT_DELETABLE` → `backendError.receiptMovementNotDeletable`, else `MSG_PAYMENT_LINKED_NOT_DELETABLE` → `backendError.paymentMovementNotDeletable` |
+| 3 | `FinancialAccountTransactionsSupport.isTransferCounterpart(trx)` — a funds-transfer leg | 409 · `MSG_TRANSFER_NOT_DELETABLE` → `backendError.transferMovementNotDeletable` |
+| 4 | the movement is processed **and** `paymentRemoval` is `false` (**new in ETP-5111**) | 409 · `MSG_PROCESSED_NOT_DELETABLE` → `backendError.movementProcessedNotDeletable` |
+
+Past the guards: a processed movement with `paymentRemoval: true` goes through
+`TransactionRemovalUtil.reactivateAndRemove` (Payment Removal — unreconcile, unpost,
+`FIN_TransactionProcess("R")`, then delete); anything else is a plain `OBDal.remove` + `flush`.
+
+**Guard 2 closes a real data-integrity hole, not a UX gap.** Before ETP-5111 the transfer guard was
+the only one, so a movement carrying a `FIN_PAYMENT_ID` could be deleted over REST, MCP or the bulk
+path **with no validation whatsoever**, leaving the `FIN_Payment` without its bank transaction. The
+correct direction is payment → transaction, which the modules themselves confirm:
+`PaymentRemovalUtil.reactivate` calls into `TransactionRemovalUtil`, while `TransactionRemovalUtil`
+holds **zero** references back to `PaymentRemovalUtil`. Removing a payment-linked movement is
+therefore a Payments-module operation, and this endpoint refuses it rather than half-performing it.
+Which of the two sentences it refuses with is chosen off `FIN_Payment.isReceipt()` — a **boxed**
+`Boolean` that is `null` when the flag was never set, so the guard unwraps it with
+`Boolean.TRUE.equals(...)` (the same convention `isProcessed()` gets two guards below) and an unset
+flag reads as *pago*. The frontend's `paymentIsReceipt === 'Y'` agrees by construction, which is the
+point: this is the one branch where the two paths could have produced different sentences for the
+same row.
+
+**Guard 4 mirrors a database trigger instead of letting it fire.**
+`APRM_FIN_FINACC_TRAN_CHECK_TRG` (`org.openbravo.advpaymentmngt`) ends with
+`IF(DELETING) THEN IF(:OLD.PROCESSED='Y') THEN RAISE_APPLICATION_ERROR(-20000, '@20501@')`, so a
+plain DELETE of a processed movement is impossible at the DB level (`@20501@` is
+`AD_MESSAGE.VALUE = 20501`, record id `800042`, *"Document posted/processed"* — see the note on
+locating that record in "Why the database forces rule 2" at the top of this file) — which is exactly why Classic
+ships two separate buttons (the toolbar trash can, and REMOVE TRANSACTION). Letting the trigger fire
+would surface as a **JDBC** error, not an `OBException`, so it would escape
+`FinancialAccountTransactionsSupport.runMutation`'s business branch (`OBException` → 400 carrying
+the message; everything else → **500 with fixed text**) — and a 500 does not pass
+`isBusinessRejection` in `lib/batchDelete.js`, which only accepts a 4xx, so the reason would be lost
+even for a single-record selection. That is the exact trap ETP-5085 fell into. Note that the trigger
+is **not** the safety net of the happy path: `reactivateAndRemove` leaves `PROCESSED='N'` before the
+`remove()`, so the `DELETING` branch never fires on that route. It can only fire on the new
+`paymentRemoval: false` route — which is precisely why the guard has to exist.
+
+**Guard 3 is unchanged from ETP-5085.** `isTransferCounterpart` runs two `OBCriteria` probes asking
 the FK's own question — *does any other transaction point at me?* — over
 `FIN_FinaccTransaction.PROPERTY_APRMFINACCTRANSORIGIN` (Classic, destination → source) and
-`PROPERTY_ETGOFINACCTRANSDEST` (the mirror half written by `FundsTransferDestinationHook`, source → destination). Both
-columns are **RESTRICT**, so before this guard the removal reached `OBDal.flush()` and died there with a
-`ConstraintViolationException` — which is not an `OBException`, so it escaped `runMutation`'s business-error branch and
-surfaced as an opaque **HTTP 500** (`Could not delete the movement. Please check logs for details.`) with the FK
-violation only visible in the Tomcat log.
+`PROPERTY_ETGOFINACCTRANSDEST` (the mirror half written by `FundsTransferDestinationHook`, source →
+destination). Both columns are **RESTRICT**, so before this guard the removal reached
+`OBDal.flush()` and died there with a `ConstraintViolationException` — the same 500 trap described
+above, with the FK violation visible only in the Tomcat log. Two deliberate properties of the
+predicate: it is shaped like the FK rather than reading the transaction's own outgoing links, so a
+destination-side **bank fee (`BF`) stays deletable** (it carries an origin, but nothing references
+it), and it also covers transfers created **before the mirror column existed**, where only the
+Classic half is set.
 
-Two deliberate properties of that predicate: it is shaped like the FK rather than reading the transaction's own outgoing
-links, so a destination-side **bank fee (`BF`) stays deletable** (it carries an origin, but nothing references it), and it
-also covers transfers created **before the mirror column existed**, where only the Classic half is set. The frontend
-hides the kebab's Eliminar for those rows, so this guard is the server-side enforcement for the bulk-delete path, the
-REST API and MCP.
+> **Careful — these Java literals are a de-facto wire contract.** `BACKEND_ERROR_MAP`
+> (`tools/app-shell/src/lib/backendErrors.js`) recognises them by exact text after `.trim()`, so
+> rewording one without updating the map silently returns the user to English. A new literal needs
+> its map entry **and** its `backendError.*` key in all three locale files, in the same change.
 
-**Bulk delete surfaces the reason too.** `MovementsTab.jsx` → `useBatchDeleteDialog` still does **not** pre-filter the
-selection — the same deliberate choice already made for payment-linked movements — so a selected transfer leg comes back
-as a per-row failure. What changed is that the 3-outcome toast no longer reports bare counters: because `postAction`
-rejects with the backend's message and a `status` of 409, `toastBatchDeleteOutcome` names the reason, and for a single
-selected row it shows that sentence alone instead of "No se pudo eliminar ninguno de los 1 registros seleccionados". The
-generic contract (only a 4xx counts, opaque status-code messages are discarded, several distinct reasons fall back to the
-counter) is documented in `docs/ui-customization.md` §9c.
+**So here are the exact bytes.** This table is the mitigation, not a convenience: the wire contract
+has silently dropped users back to English more than once in this repo's history, and it fails
+*silently* — the untranslated English sentence is a perfectly valid-looking toast. Rewording any
+cell below without editing `BACKEND_ERROR_MAP` in the same commit is a regression.
+
+| Constant (Java) | Exact literal — the bytes that are matched | → i18n key |
+|---|---|---|
+| `MSG_TRANSACTION_NOT_FOUND` | `Transaction not found` | *(404, not a business rejection — deliberately no map entry)* |
+| `MSG_TRANSFER_NOT_DELETABLE` (ETP-5085) | `Movements generated by a funds transfer cannot be deleted.` | `backendError.transferMovementNotDeletable` |
+| `MSG_PAYMENT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a payment. Delete it from the payment instead.` | `backendError.paymentMovementNotDeletable` |
+| `MSG_RECEIPT_LINKED_NOT_DELETABLE` (ETP-5111) | `This movement belongs to a receipt. Delete it from the receipt instead.` | `backendError.receiptMovementNotDeletable` |
+| `MSG_PROCESSED_NOT_DELETABLE` (ETP-5111) | `The movement is already processed or posted. Select it on its own to delete it.` | `backendError.movementProcessedNotDeletable` |
+| `MSG_STATEMENT_BANK_CONNECTED` (ETP-5111 — declared in `BankStatementsHandler`, not this one) | `Statements from a bank-connected account cannot be deleted.` | `backendError.statementBankConnectedNotDeletable` |
+
+All six are ASCII-only, single-line, and carry no leading or trailing whitespace. The **trailing
+period is part of the matched text** for the five that have one; `Transaction not found` has none.
+The payment/receipt pair differs in exactly two words each — `payment`/`receipt` — so a
+copy-paste-and-edit of one row is the likeliest way to break the other.
+The map entries live in `tools/app-shell/src/lib/backendErrors.js` (each with a comment tying it to
+the method that raises it), and every `backendError.*` key must exist in `en_US.json`, `es_ES.json`
+**and** `es_AR.json`.
+
+**Bulk delete: one selected row means Payment Removal, two or more mean a plain delete
+(ETP-5111).** `MovementsTab.jsx` → `useBatchDeleteDialog` still does **not** pre-filter the
+selection, and the trash button is never disabled by row eligibility. What the selection size
+decides is the *request*: `requestDelete` captures `ids.length === 1` into a `paymentRemovalRef` at
+click time — a ref rather than a closure over `selectedIds`, because `useBatchDeleteDialog` holds
+`deleteOneFn` across the confirm dialog and would otherwise read a stale closure — and `deleteOneFn`
+sends it as `paymentRemoval`. So a single processed movement is removed through Payment Removal,
+while the very same movement inside a 3-row selection is refused by guard 4.
+
+**That is a user-visible functional regression, accepted deliberately for parity with Classic's
+toolbar trash button:** bulk-deleting processed movements used to work (one Payment Removal per
+row) and now fails for the processed rows. The reason is reported only for a one-row selection;
+from two rows up the toast is counters-only (`bulkDeletePartialFailure` / `bulkDeleteAllFailed`)
+and the failed rows stay checked for retry. Worth knowing when reading that: `MovementsTable`'s
+`handleSelectAll` selects *every* filtered movement with no eligibility guard, so "N rows" can be a
+selection made with one click. The generic toast contract — only a 4xx counts as a reason, a message
+that is just a status code is discarded, several distinct reasons collapse — is documented in
+`docs/ui-customization.md` §9c. The window-wide statement of the rule is "Unified delete rule" at
+the top of this file.
 
 Implemented by `com.etendoerp.go.schemaforge.FinancialAccountTransactionsHandler` (CDI bean registered via `@Named("financial-account-transactions")`). The handler:
 
@@ -1688,12 +2231,35 @@ POST /sws/neo/bank-statements?action=create                          → manual 
                        glItemId, in, out }] }
 POST /sws/neo/bank-statements?action=process   body: { id }            → process a draft
 POST /sws/neo/bank-statements?action=update    body: { id, ...create }  → edit a draft (replaces all lines)
-POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines)
+POST /sws/neo/bank-statements?action=delete    body: { id }            → delete a draft (+ its lines); 409 on a bank-connected account
 ```
 
 The manual-create handler builds the `FIN_BankStatement` (name, dates, `fileName`, `notes`), one `FIN_BankStatementLine` per non-blank line (`in`→`cramount`, `out`→`dramount`, `bpartnerName`→`bpartnername`, `bpartnerId`→`businessPartner` FK, `glItemId`→`gLItem` FK, blank `reference` defaults to `**` — Reference No is optional in BOTH flows). A non-blank line whose `in` and `out` are both 0 is rejected with a 400 ("Every line must have an amount in either Deposit or Withdrawal") rather than silently dropped: the manual flow has a user who can fix it. The `process` flag (default `true`) drives the save modal's split button: **Save and process** (`true`) runs the same `processStatement` as import so the lines become reconcilable; **Save as draft** (`false`) just persists the statement with `processed='N'`. Mirrors Classic's manual bank-statement header + line fields.
 
 **Draft row actions** (`process` / `update` / `delete`) are guarded by `requireDraft(id)`, which 400s when the id is missing, the statement does not exist, or it has already been processed (`isProcessed()`). So only drafts can be processed, edited or deleted; processed statements are immutable. `update` re-applies the editable header and **rebuilds only the unmatched lines** (see the reactivation section below), optionally processing afterwards when `process=true`. `delete` removes the lines then the statement.
+
+**ETP-5111 adds one more guard to `delete`, applied after `requireDraft`:** a statement whose
+account is **PSD2 bank-connected** (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`, the
+Salt Edge status `"CO"`) is rejected with a **409**. The literal is
+`MSG_STATEMENT_BANK_CONNECTED` = `Statements from a bank-connected account cannot be deleted.`,
+mapped to `backendError.statementBankConnectedNotDeletable` — exact text, trailing period included;
+see the wire-contract table in the `action=delete` section above for why that matters. The statements of a connected account
+come from the bank, so they must not be hand-deleted — a rule this window already enforced by
+disabling its own affordances, and which now holds for REST, MCP and the bulk-delete path too.
+Before this, `BankStatementsHandler` had **zero** references to PSD2. The constant lives in a
+**third** module (`com.etendoerp.psd2.bank.integration`), reachable because
+`com.etendoerp.go` declares it as a **Gradle** dependency
+(`modules/com.etendoerp.go/build.gradle:72`, `implementation('com.etendoerp:psd2.bank.integration:[2.0.0,)')`).
+Note it is **not** an AD module dependency: `com.etendoerp.go`'s own
+`src-db/database/sourcedata/AD_MODULE_DEPENDENCY.xml` declares only Core and "OpenAPI
+Implementation", so there is no AD-level dependency record to add or maintain for this. Its other
+real call sites —
+`PaymentRegistrationService`, `PisPaymentService`, `FinancialAccountBankConnectionHandler` — must
+stay in lockstep with it. (`FinancialAccountsPageHandler` is *not* one of them: it compares
+`"CO"` inline against a `ResultSet` column, a hardcoded duplicate of the constant and a small debt
+of its own.) Accepted consequence, already owned by the PSD2 ticket: an old **manual** statement
+sitting on an account that is connected today is no longer deletable either — it is one that could
+no longer be created there in the first place.
 
 #### Reactivating a partially reconciled statement (ETP-4921)
 
@@ -1755,6 +2321,90 @@ arrow stays on the column's outer edge):
 | `ReconciliationSplitPanel` (both panels) | Importe / Saldo pendiente — these carried an explicit `text-left` |
 
 Deliberately NOT changed: Estado (a pill), Progreso (a bar, not a figure), and every text column.
+
+**Follow-up (ETP-4924): `ManualStatementModal`'s own editable-lines header had the same gap.** This
+grid is also hand-rolled (it predates and doesn't go through `DataTable`), so it wasn't in scope for
+the original ETP-4921 sweep above — its "Salida"/"Entrada" `ColHead`s sat flush left while the
+amount cells beneath (`EditRow`'s inputs and `MatchedRow`'s read-only spans) were already
+`text-right tabular-nums`. Fixed the same way: `className="text-right"` on those two `ColHead`
+calls in `LinesHeader`.
+
+#### Editable Descripción / Nombre del contacto lack a hover tooltip for long values (ETP-4924)
+
+`MatchedRow` (the read-only rendering for matched lines) already carries `title={row.description}`
+on its description `<span>` — a native browser tooltip so a value wider than the cell can still be
+read on hover — but the equivalent inputs in `EditRow` (the always-editable row every unmatched line
+uses) never had it: a long description or counterparty name typed into those cells just scrolls
+inside the `<input>`, with no way to see the full value without focusing it. Added the same native
+`title={row.description}` / `title={row.contactName}` to `EditRow`'s description and Nombre del
+contacto inputs, matching the existing `MatchedRow` precedent exactly (no new component — Reference
+No wasn't included at first, on the assumption that column stays short, `REF-####`; broadened below).
+
+#### Eighth follow-up: reopening the same edit modal showed the pre-edit line values (ETP-4924)
+
+Reported sequence: edit a line's date, save as draft, close the modal, reopen "Editar extracto" on
+the SAME statement immediately — the line shows the OLD date, not the one just saved. The
+list/accordion view (`StatementLinesInline.jsx`) already shows the new value right after saving (its
+own ETP-4921 `refreshToken` mechanism is correctly wired); only the reopened EDIT MODAL was stale.
+Pressing the toolbar refresh button before reopening "fixed" it — a strong clue this was a client-side
+timing issue, not a backend persistence bug (a real persistence failure wouldn't self-correct via an
+unrelated header refresh).
+
+**Root cause: a stale-closure race between two `useEffect`s in the same passive-effect flush, not
+browser HTTP caching.** `useBankStatementLines(statementId)` → `useNeoResource({path, deps})` only
+sets `loading` to `true` INSIDE the effect that starts a fetch (fired when `path` flips null→url,
+i.e. every time the modal reopens). `ManualStatementModal`'s own hydration effect is a SEPARATE
+`useEffect` in the same component, and both effects fire in the SAME commit's effect flush when
+`open` changes. React batches all effects from one commit before re-rendering, so the hydration
+effect's closure can still read the STALE `linesLoading === false` (left over from the PREVIOUS
+successful fetch, before this reopen) and the STALE `loadedLines` (the old rows) for that one pass —
+it hydrates `rows` from that stale snapshot and immediately sets `hydratedRef.current = true`,
+locking it in. By the time the real fetch's `loading: true` (and eventually the fresh data) actually
+lands, the hydration effect no longer runs again (`hydratedRef.current` is already `true`), so the
+stale rows are never replaced. A ruled-out alternative worth naming: `useNeoResource`'s own
+`fetchNeoPayload`/`apiFetch` call sets no `cache` option on `fetch()` at all, which was the first
+suspect (an uncontrolled browser HTTP cache) — but the list/accordion's OWN refetch (via the same
+`useBankStatementLines`/`useNeoResource`, just with a bumped `refreshToken`) genuinely returns fresh
+data every time, which rules out a caching layer blocking repeat GETs to this exact URL; the bug is
+purely in `ManualStatementModal`'s own hydration-effect timing, not the fetch layer.
+
+This ONLY reproduces on a REOPEN of an already-mounted `ManualStatementModal` instance for the same
+statement — a first-ever open of a fresh instance is never affected, because `useNeoResource`'s
+`loading` starts at `true` via `useState(true)`, so there is no stale `false` to misread on that
+first pass.
+
+**Fix, scoped entirely to `ManualStatementModal.jsx`** (not the shared `useNeoResource` hook — see
+"Considered but not done" below): a new `seenFreshLoadRef` (`useRef(false)`), reset alongside
+`hydratedRef.current = false` whenever the modal closes. In the hydration effect: a `linesLoading ===
+true` reading marks `seenFreshLoadRef.current = true` and returns without hydrating (confirms a
+genuine fetch cycle has started for this open); a `linesLoading === false` reading is only trusted —
+and hydration proceeds — once `seenFreshLoadRef.current` is already `true`, i.e. once a `true` pulse
+has actually been observed first. A `false` reading before that point is ambiguous (stale-old vs.
+genuinely-idle-with-fresh-data) and is treated as "not yet safe to hydrate from" rather than assumed
+correct.
+
+**Considered but not done: fixing this at the source, in `useNeoResource` itself.** The more thorough
+fix would have `useNeoResource` synchronously reset `loading` to `true` (and clear `data`) the moment
+`path` changes to a new non-null value — using the React-documented "adjust state during render when
+a dependency changes" pattern, rather than waiting for an effect to notice. That would close this
+entire CLASS of bug for every consumer that does `path: id ? url : null` and toggles it (a documented,
+widely-used pattern per the hook's own comment — `useFinancialAccount`, `useAccountMovements`, and
+presumably others across the app), not just this one call site. Not done here: `useNeoResource` is a
+foundational, broadly-shared hook, and a change to it needs its own scoping/regression pass across
+every consumer, not a drive-by edit bundled into a single-window bug fix. If the same symptom
+("reopening/toggling a `path: id ? url : null` hook shows stale data for one paint") is ever reported
+somewhere else, this is the place to make that deeper fix.
+
+#### Ninth follow-up: tooltip coverage completed for the remaining truncatable cells (ETP-4924)
+
+The earlier tooltip follow-up (chip label, then Descripción/Nombre del contacto) skipped **Nº de
+referencia, Salida, Entrada** in `EditRow` on the assumption Reference No stays short (`REF-####`)
+and without considering the amount cells at all — both can still overflow in practice, and amounts
+truncate the same way any overflowing `<input>` does (no visible ellipsis, no way to read the rest).
+Added `title={row.reference}` to the reference input and `title={row[field]}` inside `amountCell`
+(the shared helper both Salida and Entrada render through). `MatchedRow` (the read-only counterpart)
+got the matching `title` on its own reference and amount spans, so both variants of the same table
+stay consistent — description was the only field it already had.
 
 #### The expanded row and the header row refresh together (ETP-4921)
 
@@ -1843,28 +2493,43 @@ either. The known consequence, accepted knowingly: a legacy MANUAL statement sit
 now-connected account also becomes non-reactivable — it is one that could no longer be created
 there in the first place.
 
-Three entry points are closed, all from the same flag threaded
-`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`:
+Two entry points are closed, both fed by the same flag threaded
+`ImportedStatementsTab` → `StatementsTable` → `renderBody` → `StatementRow`. A third — the
+bulk-delete trigger — was closed the same way until ETP-5111 moved that enforcement to the
+backend:
 
 | Entry point | Behaviour |
 |---|---|
 | `StatementRowKebab` Reactivar | disabled, tooltip `financeAccountStatementsRowBankSyncedTooltip` |
 | `RowActions` inline Edit + Delete | not rendered at all, even for a draft — same as they already do for a processed statement |
-| Bulk-delete trigger | disabled with the same reason, via `resolveBulkDeleteBlock` |
+| Bulk-delete trigger | **no longer gated in the frontend (ETP-5111)** — the trash button stays enabled and `BankStatementsHandler.handleDelete` answers 409 instead (see below) |
 
 Procesar is deliberately NOT gated: completing a draft is not editing its content.
 
-`resolveBulkDeleteBlock` (exported from `ImportedStatementsTab`, unit-tested directly) states the
-precedence between the two block reasons: the connected-account one wins over "the selection
-contains a processed statement", because it is unconditional. Reporting "processed statements
-cannot be modified" on a connected account would point the user at a state they could try to
-change, when nothing in this window unblocks it. That is also why the copy is a new key rather
-than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+`resolveBulkDeleteBlock` used to live here (exported from `ImportedStatementsTab` and unit-tested
+directly) and stated the precedence between the two block reasons: the connected-account one won
+over "the selection contains a processed statement", because it is unconditional. Reporting
+"processed statements cannot be modified" on a connected account would point the user at a state
+they could try to change, when nothing in this window unblocks it — which is also why the copy is
+its own key rather than a reuse of `financeAccountStatementsRowProcessedTooltip`.
+
+**ETP-5111 removed the function together with the whole pre-blocking approach**, and moved the
+connected-account rule to where it belonged all along — the server.
+`BankStatementsHandler.handleDelete` now reads the account's PSD2 connection status itself and
+answers **409** (`MSG_STATEMENT_BANK_CONNECTED`, translated through
+`backendError.statementBankConnectedNotDeletable` — exact literal in the wire-contract table of the
+`action=delete` section above). Until then this was a **frontend-only** gate:
+the same delete was still reachable over REST, MCP and the bulk path with no server-side validation
+at all. The precedence question disappears with the function — a single-statement delete surfaces
+whichever reason the server actually returned — and the two tooltips that survive
+(`financeAccountStatementsRowBankSyncedTooltip` on Reactivar,
+`financeAccountStatementsRowProcessedTooltip` on Procesar and on the inline row actions) each
+explain one specific control that is still genuinely disabled.
 
 Follow-up worth having: if the PSD2 module ever marks the statements it creates, this gate should
 move to that per-statement flag — it would then also leave legacy manual statements editable.
 
-#### Bulk delete cannot attempt a processed statement, and failures explain why (ETP-4921)
+#### Bulk delete may attempt a processed statement, and the backend rejects it (ETP-4921, criterion inverted by ETP-5111)
 
 The per-row hover trash icon (`StatementsTable`'s `RowActions`) was already hidden for a processed
 statement — `isDraftStatement(s)` (now `statementStatus.js`, a plain `.js` module so both
@@ -1877,15 +2542,26 @@ delete the backend was guaranteed to reject — surfacing only the generic
 `toastBatchDeleteOutcome` count message ("None of the 1 selected could be deleted"), with no hint
 that the reason was the statement being processed.
 
-Fixed at the trigger, not the checkbox: `ImportedStatementsTab` computes
-`selectionHasNonDraft` (any selected id whose statement fails `isDraftStatement`) and passes it to
-`BulkDeleteSelectionBar` as `disabledReason` — a new, additive prop (`MovementsTab`'s own bulk-bar
-usage is unaffected, since it doesn't pass it). The trigger disables itself and its
-`title`/`aria-label` become the reason, reusing the exact same
-`financeAccountStatementsRowProcessedTooltip` copy `StatementRowKebab` already shows for its own
+That was fixed at the trigger, not the checkbox: `ImportedStatementsTab` computed
+`selectionHasNonDraft` (any selected id whose statement fails `isDraftStatement`) and passed it to
+`BulkDeleteSelectionBar` as `disabledReason` — a new, additive prop. The trigger disabled itself and
+its `title`/`aria-label` became the reason, reusing the exact same
+`financeAccountStatementsRowProcessedTooltip` copy `StatementRowKebab` already showed for its own
 gated Procesar item — "don't let them touch the trash can", not "let them try and fail". Selecting
-even one processed statement blocks the WHOLE batch (not just that item), matching the
-per-row hover behavior it mirrors.
+even one processed statement blocked the WHOLE batch, matching the per-row hover behaviour it
+mirrored.
+
+**ETP-5111 reverses exactly that half.** The unified rule for this window is "let them try, and
+explain the refusal", so the trash button is no longer disabled by what is selected:
+`resolveBulkDeleteBlock`, `selectionHasNonDraft`, `bulkDeleteDisabledReason` and the
+`disabledReason` prop on `BulkDeleteSelectionBar` itself are all removed — `MovementsTab` never
+passed it and neither did `ListModalWindow`, so once this tab stopped passing it the prop had no
+consumer left. A processed statement now goes out, `requireDraft` answers 400, and it surfaces as a
+per-row failure: with exactly one statement selected the reason is spelled out (which is what the
+`error.status` fix below makes possible), and from two statements up the toast reports counters
+only. What was **not** reversed is ETP-4921's other half — `RowActions`' per-row hover trash icon is
+still hidden for a processed statement, because a per-row affordance knows which row it is refusing
+and a shared button does not.
 
 The single-row delete confirm (`ImportedStatementsTab.runConfirm`, shared by the Process /
 Reactivate / Delete confirm dialog) also stopped discarding the backend's actual rejection reason:
@@ -1896,9 +2572,332 @@ per-variant generic toast. Two new `BACKEND_ERROR_MAP` entries in `backendErrors
 `BankStatementsHandler`'s `requireDraft`/`requireProcessed` guard messages:
 `backendError.statementNotDraft` / `backendError.statementNotProcessed`.
 
+**ETP-5111 completed that plumbing: `useStatementActions.post()` also attaches
+`error.status = res.status`**, the way `useCreateMovement.postAction` in `src/hooks/` already did.
+Parsing the message was only half of it — `lib/batchDelete.js`'s `isBusinessRejection` accepts a
+rejection only when it carries a numeric 4xx `status`, so without it the parsed reason was
+discarded before it could be shown and even a **single**-statement delete fell back to the counter
+message. Note that `useStatementActions` lives in `src/hooks/`, not
+`windows/custom/financial-account/hooks/`: it is a **global** hook, so this is a platform change and
+every consumer now receives the status alongside the message.
+
 **Status derivation** — `EM_ETGO_STATUS` (Etendo Go-only extension column) is a real STORED value, not computed on read: the list reads it straight off the row and only falls back to a live `BankStatementsSupport.deriveStatementStatus(processed, lineCount, matchedCount)` call when the column is blank (legacy rows predating it). The formula itself: not processed → `DRAFT`; otherwise `PENDING` (no matched lines) / `PARTIAL` / `RECONCILED` (all matched). The list also returns `notes`, and `?action=lines` returns each line's `bpartnerId`/`glItemId` (+ joined `bpartnerFkName`/`glItemName`) and separate `in`/`out` so the edit modal can hydrate the FK pickers.
 
 Because it is stored, `EM_ETGO_STATUS` must be kept in sync by SOMETHING every time `Processed` or the match counts change — `BankStatementHeaderStatusHandler` (`FIN_BankStatement` NEW/UPDATE observer, same `event.setCurrentState` technique as `BankStatementLinePendingAmountHandler`) does that unconditionally on every header write, whichever code path caused it (ETP-4891 follow-up). Before this handler existed, a statement imported through the PSD2 bank-connection sync (external `com.etendoerp.psd2` module, never touches this module's own handlers) could get stuck reading "Borrador" forever after being marked processed: its lines get counted correctly by the per-line observer at insert time, but `Processed` is still `false` then, so the status computed at THAT instant is correctly `DRAFT` — and nothing re-derives it once the sync flips `Processed` to `true` on the header alone, since no line event fires for that. The SPA's own "Procesar" action then 400s with "Only draft (unprocessed) statements can be modified" — a correct rejection (the real flag already says processed) that reads as a contradiction next to a "Borrador" label. `R25-bankstatement-stale-status` repairs statements already stuck from before the handler existed.
+
+#### The line date picker was unusable inside the modal (ETP-4924)
+
+Clicking a day in a line's `DateField` calendar did nothing — the popover appeared to close
+without applying the date, in manual creation, manual edit and CSV-import edit alike. Only
+typing the date worked. The header's own `DateField`s (`Fecha transacción` / `Fecha importación`)
+were never affected, which is what pointed away from `DateField` itself and at something specific
+to the lines table.
+
+**Root cause: React portals bubble through the React tree, not the DOM, and a DOM-only "did focus
+leave" check gets fooled by that.** `DateField`'s calendar is a Radix Popover portalled to
+`document.body` — a DOM sibling of the row, not a descendant — but its focus/blur/key events still
+propagate up through the row's position in the *React* tree. The editable row wrapper used
+`e.currentTarget.contains(e.relatedTarget)` (a DOM containment check) to decide whether focus had
+left the row, which is always `false` for a portalled node. So opening the calendar read as "the
+row lost focus", which toggled `focusedId` and — because the per-row `LineEditHint` ("Enter o
+clic fuera para guardar") used to mount/unmount *inside* the centered `DialogContent`
+(`top-[50%] translate-y-[-50%]`) — that ~25px height change re-centered the whole dialog by a few
+pixels mid-click, moving the calendar's anchor out from under the cursor between `mousedown` and
+`mouseup` so the day button's `click` never fired. The same DOM-only check made the row's own
+`Enter`/`Escape` handling hijack keys meant for the calendar (`preventDefault()` + `blur()` on a
+day button's `Enter`), so keyboard selection was broken too.
+
+**Fix, two parts, both in `ManualStatementModal.jsx`:**
+
+The row wrapper's `onFocusCapture` / `onBlurCapture` / `onKeyDown` now call
+`isInPortalLayer(target)` (new shared helper, `lib/portalLayers.js`) and no-op when the event
+originates inside a portalled layer: `[data-radix-popper-content-wrapper]` (the `DateField`
+calendar), `[data-lookup-dropdown]` (`LookupPicker`'s results list), or `[role="listbox"]`. This is
+the same class of fix `DataTable.jsx`'s `INLINE_ADD_IGNORED_PORTAL_SELECTORS` already applies to its
+own inline-add row — `portalLayers.js` generalizes that selector list into a reusable helper rather
+than duplicating it, but with two changes that are NOT interchangeable copy-paste from that source,
+both caught only by exercising the real components in a test (not by reading the code):
+
+- **No `[role="dialog"]` in the selector list.** `DataTable`'s row lives on a plain page, so
+  `[role="dialog"]` correctly flags "something else opened a dialog on top of me". Here the row
+  itself lives *inside* `ManualStatementModal`'s own `DialogContent`, which carries `role="dialog"`
+  — so `target.closest('[role="dialog"]')` matched on literally every element in the row (its own
+  ancestor), making `isInPortalLayer` return `true` unconditionally and silently swallowing every
+  `setFocusedId`, including the totally ordinary click on the `DateField`'s own calendar-icon
+  trigger (which isn't portalled at all).
+- **No `document.body.style.pointerEvents === 'none'` fallback.** `DataTable.jsx`'s version adds
+  that check because a *pointer* event's `target` can resolve to an ancestor like `<html>` when
+  Radix disables body pointer events for a click-blocking layer elsewhere on the page. Focus/blur
+  events don't have that problem — their target is always the real node that received focus. And a
+  row inside a modal `Dialog` sits behind `body { pointer-events: none }` for the *entire* time the
+  dialog is open (that's how Radix's modal Dialog always behaves, from the very first render), so
+  reusing the check here made it `true` unconditionally too, for the same reason as above.
+
+Both defaults independently made `isInPortalLayer` return `true` for absolutely everything the
+whole time the modal was open — so the fix looked complete by inspection (no more spurious
+`onBlurCapture`) while actually regressing further: `focusedId` could never be set at all, by
+anything, including a plain click on the trigger. Only running the real Popover/Dialog interaction
+(not the mocked spec) surfaced it.
+
+With both removed, interacting with a cell's calendar or lookup dropdown no longer toggles
+`focusedId`, so `LineEditHint` — hoisted to render **once** below the lines list instead of once
+per row, but still a plain conditional mount (`focusedId != null`) — never unmounts
+mid-interaction either; an earlier version of this fix also made the hint permanently reserve its
+height (mounted at all times, `visible`/`invisible` toggle) as a second line of defense, but that
+left a persistent empty gap between the last line and "Añadir línea" whenever no row was being
+edited, for no remaining benefit once the handlers were portal-aware — reverted in favor of the
+plain conditional mount.
+
+**General rule for any future inline-editable row inside a centered `Dialog`:** a host element's
+"focus/click left me" check must be portal-aware (`isInPortalLayer`) — that alone is what prevents
+a popover/dropdown interaction from being misread as the user leaving the row, which is what was
+shifting the dialog (and the popover's anchor with it) mid-click. Reserving layout height for a
+hint/badge that toggles near an open popover is unnecessary once that check is in place, and costs
+a permanent visual gap — prefer it only if a future case still toggles visibility on a *legitimate,
+frequent* focus change that isn't already covered by a portal exemption. And a "which selectors
+count as a portal layer" list is context-dependent, not a drop-in constant: a selector that
+correctly flags "something else opened on top of me" for a page-level row (`[role="dialog"]`,
+`document.body.style.pointerEvents === 'none'`) can instead match the row's own ancestors once
+that row lives inside a Dialog — re-derive the list for the actual DOM context, don't copy it
+verbatim from a different one, and verify against the real rendered components (a mocked spec
+would not have caught either mistake here).
+`AmortizationLinesTable.jsx` closes its edit mode on an un-exempted `document` `mousedown` and
+carries the same latent bug class; it wasn't touched here (out of scope for this fix) but is a
+candidate for the same treatment.
+
+#### Follow-up: the calendar needed two clicks when the line was at the bottom of the scroll (ETP-4924)
+
+After the fix above, a second, distinct symptom surfaced: clicking a line's date-field calendar
+trigger did nothing on the FIRST click — no calendar, no console error, nothing mounted in the
+DOM — when that row sat at the bottom edge of the scrollable lines list (`max-h-[62vh]
+overflow-y-auto` in `ManualStatementModal.jsx`). A second click, once the list had settled, worked
+normally. Confirmed via manual reproduction (DOM inspection showed `PopoverContent` genuinely never
+mounted after the failing click, ruling out a mispositioned-but-present popover) that this
+correlates specifically with scroll position, not with which line or session-first-focus.
+
+**Root cause:** the browser auto-scrolls a newly-focused element into view when it is only
+partially visible in a scrollable ancestor. That auto-scroll is triggered by the DEFAULT action of
+the `mousedown` that also moves focus to the trigger button — i.e. it can happen BETWEEN
+`mousedown` and `mouseup`. If the scroll shifts the row under the cursor before `mouseup`, the
+resulting native `click` event no longer lands on the trigger, so Radix's Popover never receives
+its open-toggle click — nothing opens, and nothing about it is visible in React state or the
+console, since the click was lost at the browser/DOM level, upstream of any of our code.
+
+**Fix, scoped to this modal only** (the correct general fix belongs in `DateField` itself, in
+`schema_forge_core` — out of scope here by explicit decision, since this instance is contained to
+the statements editor): the row wrapper in `EditableLines` now has an `onMouseDown` that detects a
+mousedown on the date-field's calendar trigger (`e.target.closest('[data-testid=
+"PopoverTrigger__d56af3"]')` — DateField's trigger button's stable test id, not the translated
+`aria-label`, which would be a fragile, locale-dependent selector), calls `e.preventDefault()` to
+suppress the browser's default mousedown-focus (the thing that triggers the auto-scroll), and
+focuses the trigger manually via `trigger.focus({ preventScroll: true })`. This keeps the
+trigger's position — and the whole click gesture — stable through mousedown→mouseup, without
+disabling focus or losing the subsequent `click` (which Radix still receives normally, since
+`preventDefault()` on `mousedown` does not cancel the following `click` event).
+
+**Known limitation:** jsdom does not implement the browser's native scroll-into-view-on-focus
+behavior at all, so the ORIGINAL failure cannot be reproduced by an automated test in this repo —
+only the code path (mousedown is prevented, `focus({preventScroll:true})` is called, and only when
+the target is the date-field trigger, not some other cell in the row) is unit-tested. A real
+reproduction of the browser-level race would need a Playwright/real-browser test.
+
+If this pattern recurs elsewhere (any interactive trigger inside a tall scrollable list, not just
+this modal's date field), the durable fix is in `DateField` itself, not a per-caller workaround.
+
+#### Second follow-up: Contacto / Cuenta contable switched from `LookupPicker` to `ChipSelect` (ETP-4924)
+
+The line-level "Contacto" and "Cuenta contable" fields used a bespoke `LookupPicker`
+(`windows/custom/financial-account/LookupPicker.jsx`): a plain `<input>` with a hand-rolled
+portalled results list and no visible way to clear a selected value — typing over the text was the
+only way to change it, and there was no affordance signaling a value could be cleared at all. Every
+other FK picker in the app (the "Impuesto" column in Sales Invoice/Purchase Invoice lines, "Cuenta
+contable" in Editar cuenta, the accounting-item pickers in Transferencias and Conciliación) shows a
+chip with the selected label and a hover-revealed **X** to clear.
+
+`ManualStatementModal.jsx`'s `EditRow` now uses **`ChipSelect`** (`@/components/forms/fields.jsx`)
+for both fields instead. This was a straight swap, not a new integration: `ChipSelect` already
+accepts a `useLookup(query) => { results, loading }` hook — the exact same shape
+`useBPartnerLookup`/`useGLItemLookup` (`hooks/useMovementLookups.js`) already provide, and that
+`LookupPicker` itself was built around — so no adapter, no new endpoint and no backend work was
+needed. Prop mapping: `LookupPicker`'s `onSelect(item)` + separate `onClear()` collapse into
+`ChipSelect`'s single `onChange(itemOrNull)` (already exactly what `setVal(field)` in `EditRow`
+expects — it just forwards whatever value it receives onto the row). The `search` prop
+(leading magnifier icon) has no `ChipSelect` equivalent — it renders a trailing chevron instead,
+matching the reference/target UI (Editar cuenta's own "Cuenta contable" field, which is itself a
+`ChipSelect`), not a search-box look.
+
+**Explicitly NOT done, by request:** `ChipSelect` renders its own fixed bordered/shadowed box
+(`FIELD_HEIGHT`, `rounded-lg`, `border-input`, `shadow`) — the same box used everywhere else it
+appears. The row's OTHER cells (Referencia, Descripción, amounts) use a borderless-until-focus
+"spreadsheet" look (`cellInput`, transparent border until `:focus`). Reusing `ChipSelect` as-is
+means Contacto/Cuenta contable now look visually distinct from their row neighbors (always-boxed
+vs. borderless-until-focus) — decided to leave it, for consistency with the OTHER modals that use
+`ChipSelect` (Editar cuenta, Transferencias, Conciliación), rather than add a `className` override
+prop to `ChipSelect` (which does not currently accept one) for this one caller.
+
+**Considered but rejected as broader in scope:** `InlineSearchCombo`
+(`components/contract-ui/InlineSearchCombo.jsx`) is the OTHER generic FK-cell component in the app
+— the one actually backing the Sales Invoice "Impuesto" column that prompted this change — but it
+is hard-coupled to the AD-metadata selector-endpoint convention (`GET
+{apiBaseUrl}/{entity}/selectors/{column}`, paginated, `decisions.json`-shaped `field` object) with
+no pluggable-hook escape hatch. Swapping to it would have meant either generalizing a
+widely-shared component (used by Sales Invoice, Purchase Invoice, Amortization, Price List and
+every generic `DataTable`/`InlineLinesPanel` add-row/edit-cell) to accept an arbitrary fetch hook,
+or building a new backend selector endpoint for BPartner/GLItem lookups and modeling bank-statement
+lines as a real AD/contract entity (they are hand-built, not decisions.json-driven, today). `ChipSelect`
+already existed, already used the exact same hook contract, and already delivered the actual thing
+asked for (the chip + clear-X), so it was the correct-scoped choice — `InlineSearchCombo` remains a
+follow-up worth having only if bank-statement lines are ever migrated onto the generic
+contract-ui/AD-metadata pipeline.
+
+**Residual, unverified risk (not addressed here):** `ChipSelect`'s clickable surface for an
+ALREADY-selected value (the chip) opens its Radix Popover via a `<div onClick={startEditing}>`, the
+same click-toggle mechanism that `DateField`'s trigger used before the scroll-edge fix above. If a
+row with a pre-filled Contacto/Cuenta contable sits at the bottom edge of the lines list's scroll,
+the SAME auto-scroll-swallows-the-click mechanism could in principle recur here too — this has not
+been reported or reproduced, and `ChipSelect` is shared by several other modals, so a preventive fix
+was intentionally left out of this change (would need its own scoping conversation, most likely in
+`ChipSelect` itself rather than per-caller, given it's a shared component).
+
+#### Third follow-up: `ChipSelect` gained arrow-key navigation (ETP-4924)
+
+`ChipSelect` had zero keyboard handling before this — its option list (`PopoverContent`) only
+responded to mouse clicks. Every OTHER generic FK selector in the app (e.g. "Método de pago" on the
+Sales Invoice header, rendered via `CreatableSearchSelect`) already lets the user move through
+results with the arrow keys, highlight one, and commit it with Enter. Requested so `ChipSelect`
+(and therefore Contacto/Cuenta contable in this modal, plus its 6 other call sites — Reconciliation
+Split Panel, Reconciliation Difference, New Transaction, Editar cuenta) matches that baseline.
+
+Ported the exact pattern from `CreatableSearchSelect.jsx`'s `handleInputKeyDown` (the reference
+implementation `InlineSearchCombo.jsx` also mirrors, per its own in-line comment) rather than
+inventing a new one — **no shared hook exists for this** (`activeIndex` + arrow/Home/End/Enter/
+Escape + scroll-into-view is duplicated across both existing components by convention/comments, not
+factored out), so `ChipSelect` is now a third hand-copied instance of the same logic. Added to
+`components/forms/fields.jsx`: an `activeIndex` state (reset on `open`/`query` change), a
+`handleInputKeyDown` wired to the search `<input>`'s `onKeyDown`, `data-option-index`/
+`aria-selected` on each option button (reusing the existing selected-value highlight class rather
+than adding a second one), and a `dropdownRef` on `PopoverContent` so the highlighted option can be
+scrolled into view.
+
+**Matches `CreatableSearchSelect`'s stricter Enter behavior, not `InlineSearchCombo`'s more lenient
+one:** Enter only commits when `activeIndex >= 0` — no fallback to the first result when nothing has
+been arrow-key-highlighted yet (typing a query and hitting Enter without ever pressing an arrow key
+does nothing). `InlineSearchCombo` deliberately diverges from `CreatableSearchSelect` on this exact
+point (documented in its own source) because a grid cell's Enter has a competing "commit the cell"
+meaning; `ChipSelect` doesn't share that constraint (it isn't embedded in a keyboard-navigable
+grid), so there was no reason to adopt the lenient variant.
+
+**Not done:** factoring the three now-duplicated implementations (`CreatableSearchSelect`,
+`InlineSearchCombo`, `ChipSelect`) into one shared hook. Out of scope for this change — each one has
+small, deliberate divergences (see above) suited to its own host (header field vs. grid cell vs.
+chip picker), and unifying them is a separate refactor with its own risk profile, not a prerequisite
+for giving `ChipSelect` the missing behavior.
+
+#### Fourth follow-up: the mouse wheel didn't scroll `ChipSelect`'s option list (ETP-4924)
+
+With a real, longer BPartner result list (the swap surfaced this — `LookupPicker` never showed
+enough short-named results at once to notice it was missing), the wheel didn't scroll `ChipSelect`'s
+dropdown at all despite `overflow-auto` and a real `max-h-64` being set. **This is a known,
+already-solved issue in this exact codebase** — `LookupPicker.jsx` and `CreatableSearchSelect.jsx`
+both carry the identical fix with an identical root cause already documented in their own comments:
+Radix Dialog's page-scroll lock (`react-remove-scroll`) intercepts the wheel event at the capture
+phase and blocks the browser's native scroll on ANY body-portalled scrollable content underneath it,
+even though the CSS itself is entirely correct — confirmed live in `CreatableSearchSelect.jsx`'s own
+comment: "`scrollTop` stayed `0` after a wheel event, but a direct `el.scrollTop = x` assignment
+worked fine — only the NATIVE scroll mechanism is blocked." `ChipSelect` simply never had this
+`onWheel` workaround because none of its earlier, shorter-lookup consumers surfaced the gap.
+
+Ported `CreatableSearchSelect`'s more defensive variant, not `LookupPicker`'s simpler one: only
+manually add `e.deltaY` to `scrollTop` when `e.defaultPrevented` is already `true` on the wheel event
+(react-remove-scroll's capture-phase listener runs first, so that flag tells us whether native
+scroll was actually blocked). `LookupPicker` gets away with unconditionally adding `deltaY` because
+it is ONLY ever used inside a Dialog; `ChipSelect` has 8 call sites across 5 files, and while all of
+them happen to be inside a Dialog today too, the conditional check means a future non-Dialog
+`ChipSelect` wouldn't silently double-scroll (native scroll working normally, plus the manual
+adjustment stacked on top) the way an unconditional version would.
+
+**Known related gap, not fixed here:** `components/forms/fields.jsx` also defines its OWN,
+differently-implemented `LookupPicker` (a Radix-Popover-based one, distinct from
+`windows/custom/financial-account/LookupPicker.jsx`) with the identical `PopoverContent` +
+`results.map` shape and no `onWheel` handler either — same latent gap, not reported, not fixed as
+part of this change (out of scope; nobody has hit it there yet).
+
+#### Fifth follow-up: the "Cuenta contable" placeholder was cropping mid-word (ETP-4924)
+
+`financeAccountStatementsManualGlItemPlaceholder` ("Buscar cuenta contable…") is longer than the
+"Cuenta contable" column (`minmax(140px, 1.2fr)` — the same width class as "Contacto", whose own
+placeholder "Buscar contacto…" is noticeably shorter). A plain `<input>` doesn't add an ellipsis
+when its value/placeholder overflows — it just clips mid-character with no visual signal that
+anything is missing, which is what made it read as broken rather than merely narrow.
+
+Two independent fixes, not one:
+
+1. **Shortened the placeholder itself**, in all three locale files that carry this key
+   (`es_ES.json`, `en_US.json`, `es_AR.json` — this key has no other call site, so it was safe to
+   edit directly): `"Buscar cuenta contable…"` → `"Buscar cuenta…"` (es_ES), `"Search accounting
+   account…"` → `"Search account…"` (en_US), `"Buscar concepto contable…"` → `"Buscar concepto…"`
+   (es_AR) — each now matches the `"Buscar contacto…"` / `"Search contact…"` sibling's length, so it
+   fits the same column width without relying on truncation in the common case.
+2. **Added real CSS truncation to `ChipSelect`'s search `<input>`** (`overflow-hidden text-ellipsis
+   whitespace-nowrap`) regardless — so ANY future long placeholder, typed query, or narrower host
+   column crops with a visible "…" instead of an abrupt raw cut, matching `SelectorChip`'s own
+   `truncate` treatment of the selected-value chip label. This is the durable fix; #1 just means the
+   common case no longer needs to rely on it.
+
+Not touched: `locales/generated/core.*.json` — gitignored build artifacts the "slice-labels" Vite
+plugin regenerates from the plain `locales/*.json` files (see `App.jsx`'s `coreLoaders` comment);
+editing them directly would just be overwritten on the next regen.
+
+#### Sixth follow-up: a long BPartner/GL-item name wrapped onto multiple lines in `ChipSelect`'s dropdown (ETP-4924)
+
+`ChipSelect`'s `PopoverContent` was pinned to `width: var(--radix-popover-trigger-width)` — exactly
+the trigger cell's own (narrow, ~140px) width — and its option buttons had no `whitespace-nowrap`,
+so a long result (a BPartner or accounting-account name that doesn't fit) wrapped onto two or three
+lines inside that fixed-width panel instead of the panel widening to show it on one line. The
+"Impuesto" selector on Sales Invoice/Purchase Invoice lines (`InlineSearchCombo`, ETP-4600) already
+solves exactly this for its own dropdown — its own doc comment calls it an "auto-width,
+non-truncating panel": the trigger cell stays its own fixed width, but the dropdown grows to fit its
+longest option.
+
+Ported the same idea to `ChipSelect`, adapted to Radix Popover rather than `InlineSearchCombo`'s
+hand-rolled `createPortal` positioning:
+
+- `PopoverContent`'s `style` changed from a fixed `width` to `minWidth: 'var(--radix-popover-trigger-width)'`
+  (never narrower than the trigger) + `width: 'max-content'` (grows to fit its content) + `maxWidth:
+  'min(420px, 90vw)'` (caps an extreme outlier so it can't blow past the viewport).
+- Each option button gained `overflow-hidden text-ellipsis whitespace-nowrap`, so within that
+  auto-width panel a name renders on one line — and in the rare case a single name still exceeds the
+  420px/90vw cap, it truncates with a visible "…" rather than wrapping or overflowing.
+
+**Why `InlineSearchCombo`'s own hand-rolled horizontal-anchor-flip logic
+(`shouldAnchorDropdownRight`, measuring each option's `scrollWidth`) wasn't needed here:**
+`InlineSearchCombo` has to compute its own collision/anchoring because it portals via a raw
+`createPortal` with manually-computed `position: fixed` coordinates — nothing else is watching for
+"did this dropdown just grow past the right edge of the screen". `ChipSelect` is built on Radix
+`Popover`/`Popper`, which already does collision-aware positioning (`avoidCollisions`, on by default)
+for whatever width the content ends up being — growing the panel via CSS doesn't bypass that, so no
+extra positioning code was needed.
+
+**Already fine at the time, since revisited below:** `SelectorChip`'s own selected-value chip label
+(`<span className="truncate">`) already truncated correctly — this gap was specific to the
+still-searching dropdown LIST, not the committed value shown once something is picked. It was still
+missing a hover tooltip for the truncated case, though — see the next follow-up.
+
+#### Seventh follow-up: the committed chip value had no way to reveal a truncated name (ETP-4924)
+
+Once a long Contacto/Cuenta contable value is actually selected, `SelectorChip` shows it as a pill
+with `truncate` (correct, per the follow-up above) — but truncating alone means a name that doesn't
+fit is just gone with no way to read the rest; there was no hover affordance at all, unlike
+`EditRow`'s Descripción/Nombre del contacto inputs, which already got a native `title` tooltip in an
+earlier follow-up in this same thread.
+
+Added `title={label}` to `SelectorChip`'s label `<span>` — the same native-tooltip pattern, on the
+same shared component the "widen the dropdown" fix above already touched. Being a shared component
+(`components/contract-ui/SelectorChip.jsx`), every consumer gets the hover tooltip for free, not
+just this modal's Contacto/Cuenta contable — confirmed real consumers (not just the component's own
+doc comment): `ChipSelect` (`forms/fields.jsx`), `CreatableSearchSelect`, `InlineSearchCombo` (so the
+"Impuesto" chip itself, once a tax is picked, also gains the tooltip), `EntityForm.jsx`, and
+`FundsTransferModal.jsx`.
 
 The import handler:
 - Decodes base64 → `ByteArrayInputStream`
@@ -1934,6 +2933,70 @@ Two deliberate divergences from Classic, both documented in the tests:
   without failing an otherwise valid import;
 - **negative** amounts are kept. Classic's condition is "not both zero", not "positive", so
   rejecting negatives would be a new business rule rather than a consistency fix.
+
+#### The import preview showed every date one day early — only on a deployed server (ETP-4924)
+
+Reported: uploading a CSV whose first line's `Transaction Date` was `08/02/2026` showed `07/02/2026`
+in step 2 ("Revisar líneas") — every date in the preview, including the "Período" range, one day
+early. Reproduced only on a deployed ("experimental") server; never on local dev, same browser, same
+CSV. Two independent bugs, one per repo, both needed fixing (neither alone fixes the reported symptom).
+
+**Root cause 1 — backend (`modules/com.etendoerp.go`, a separate repo/module):**
+`BankStatementsSupport.formatDate(Timestamp)` (used for every date this handler serves — `datetrx`,
+`periodFrom`/`periodTo`, `importdate`, `statementdate`, both for `?action=preview` and the persisted
+grid/edit views) read the timestamp's raw epoch millis and unconditionally labelled the result as a
+UTC instant (`Instant.ofEpochMilli(ts.getTime())` formatted with `.withZone(ZoneOffset.UTC)`). But
+`datetrx`/`statementdate`/etc. are `timestamp without time zone` columns — `rs.getTimestamp(...)`
+reads that naive literal back via the JVM's default timezone (mirroring how Hibernate wrote it), so
+labelling the result "Z" is only correct when the server's default timezone happens to actually BE
+UTC. On a server whose default timezone has a POSITIVE UTC offset (e.g. `Europe/Madrid`, a plausible
+deployment default), the naive "00:00:00" literal reads back as an epoch instant that falls BEFORE
+UTC midnight of that day, so the UTC-labelled string prints the PREVIOUS calendar day. On a
+NEGATIVE-offset default (`America/Argentina/Buenos_Aires`, matching this task's own description of
+local dev) the same code reads an instant AFTER UTC midnight, so the bug was invisible there — the
+exact "wrong only on the deployed server" symptom, with zero code differences between environments.
+The write side (`BankStatementsSupport.parseIsoDate`, used by the manual create/update JSON path)
+already got this right — it explicitly re-anchors to `ZoneId.systemDefault()` on purpose, per its own
+long-standing comment describing the identical failure mode from the opposite direction. `formatDate`
+was the one place that never got the matching treatment on the READ side.
+
+Fixed by making `formatDate` read the SAME way the value was written — `ts.toLocalDateTime()`
+(which, like the JDBC read that produced `ts` in the first place, resolves via the JVM's default
+timezone) instead of `Instant.ofEpochMilli(ts.getTime())`, and dropping the formatter's
+`.withZone(ZoneOffset.UTC)` (formatting a zoneless `LocalDateTime` needs no zone at all — the quoted
+`'Z'` in the pattern is a literal character, not the offset field). The write-then-read round trip
+through the JVM's default timezone now cancels out algebraically, regardless of what that default
+timezone actually is — covered by `BankStatementsSupportTest` with the exact reported scenario
+(`Europe/Madrid` default, asserting the correct day) plus non-regression checks for the negative-offset
+and UTC cases. `GenericCsvBankStatementImporter`'s CSV-date `SimpleDateFormat` (no explicit
+`TimeZone`, JVM-default by default) did NOT need changing — it was already internally consistent
+with how Hibernate/JDBC round-trips a naive column through the SAME JVM default zone on write; the
+asymmetry was entirely in `formatDate`'s read-side UTC mislabelling.
+
+**Root cause 2 — frontend (`ImportStatementModal.jsx`, this repo), independent of the backend bug:**
+this window had its OWN local `formatDate(iso, bcpLocale)` — `new Date(iso)` (parses the ISO string
+as an absolute instant) followed by `Intl.DateTimeFormat(bcpLocale, {...}).format(d)` with no
+`timeZone` override, so the calendar day shown additionally depends on the BROWSER's own local
+timezone. This is exactly the class of bug this repo's CLAUDE.md documents as mandatory-fixed via
+`parseCalendarDate`/`formatCalendarDate` (`lib/dateOnly.js`) — already used by 10+ other windows, but
+never migrated here. Fixed by deleting the local `formatDate` and routing both the "Fecha" column and
+the "Período" range through `formatCalendarDate`, which extracts the `yyyy-MM-dd` PREFIX from the
+string via regex and builds the `Date` via the LOCAL-time constructor, deliberately ignoring any
+trailing time/zone suffix — immune to the browser's timezone by construction. Fixing backend root
+cause 1 alone would have made the STRING itself correct, but this frontend gap would still have let a
+future timezone-dependent glitch slip back in unnoticed (and stayed inconsistent with the rest of the
+window's date handling); fixing only the frontend, on its own, would NOT have fixed the reported
+symptom, since the backend was already sending the wrong day-prefix in the string.
+
+**Known related gap, not fixed here:** `StatementsTable.jsx` and `StatementLinesTable.jsx` carry the
+identical unsafe pattern (`new Date(iso)` + unforced `Intl.DateTimeFormat`) as the import preview did
+— not yet reported/triggered, likely because `StatementLinesInline.jsx` (the accordion/list view)
+already has an ad-hoc `timeZone: 'UTC'` override that happens to mask the symptom for THAT view (a
+workaround, not a fix — it only works because the backend's UTC-mislabelled string, pre-fix, was at
+least consistently reinterpreted as UTC on the way back out; post-fix, that ad-hoc override is now
+unnecessary but harmless, since the backend-fixed string's date-prefix is now correct regardless of
+the reader's zone assumption). None of these three were migrated to `parseCalendarDate`/
+`formatCalendarDate` as part of this fix — flagged, not fixed, since it wasn't reported.
 
 #### Cuaderno 43 lookup requirements (MANDATORY)
 
@@ -1985,6 +3048,58 @@ have no AD backing) and consumes real NEO endpoints directly.
 | Search | `string` | Case-insensitive substring over `documentNo + contact + description` |
 
 Selection is cleared whenever the filters object reference changes (every dropdown change creates a new filters object).
+
+### The advanced ("by conditions") filter evaluates by declared column type (ETP-4956)
+
+All three tabs — Movimientos, Extractos importados, Conciliación — fetch **unfiltered** and evaluate
+the `AdvancedFilterBuilder` condition tree in memory through `applyConditions`
+(`advancedFilterApply.js`). The backend criteria path (`gridQuery.js` → `ListView`) is **not**
+involved here, so a filter defect in this window is always a client-side one.
+
+`applyConditions(rows, filter, deriveRow, columnsByKey)` takes the filter-column metadata as its
+4th argument and dispatches operators through **three** tables:
+
+| Column `type` | Table | Notes |
+|---|---|---|
+| `date` | `DATE_OPERATORS` | all comparisons via `parseCalendarDate` (`lib/dateOnly.js`) |
+| `number` | `NUMBER_OPERATORS` | `equals`/`notEqual` compare numerically, not as strings |
+| everything else | `OPERATORS` | the historical string/enum predicates |
+
+The metadata maps are `MOVEMENT_FILTER_COLUMNS` and `STATEMENT_FILTER_COLUMNS`, derived from a
+label-free `COLUMN_SPEC` in each `*AdvancedFilter.js` so the types are available without a `ui`
+translator. Both files keep `buildXFilterColumns(ui)` for the builder UI, which decorates the same
+spec with translated labels.
+
+**Why the third table alone was not enough.** Before this change every operator went through
+`OPERATORS`, which meant:
+
+- **Dates never filtered.** `equals` string-compared the stored `"2026-09-01T00:00:00Z"` against the
+  picker's `"2026-09-01"` — never equal. Worse, `lessThan`/`greaterThan` ran both sides through
+  `parseFloat`, and `parseFloat('2026-09-01') === 2026`: **every** date collapsed to its year, so
+  "Antes de" / "Después de" could not discriminate between any two dates in the same year. Only
+  `between` had a date branch, and it guessed the type from the field's NAME (`/date/i`).
+- **`Saldo` "Es" compared strings.** A stored `1646.4867`, displayed as `1.646,49 €`, never matched a
+  typed `1646.49`. `numEquals` now rounds both sides to the precision the user typed (floored at 2
+  decimals, the display scale), so the filter agrees with what the grid shows.
+- **Text values were not trimmed.** `Contacto` → `Contiene` `" Ivan"` returned nothing. `lc()` now
+  trims both sides; the builder additionally trims at apply time (core, see below).
+
+**`emptyWhenZero`** is a per-column opt-in, set on `totalOut` / `totalIn` only. Those amounts arrive
+as `0` when absent, and `StatementsTable.jsx` renders `Number(totalOut) > 0 ? amount : '—'` — so 0
+and null look identical. With the flag, `isNull`/`isNotNull` use `!(Number(raw) > 0)`, matching
+exactly the rows that visibly show "—". Deliberately **not** set on `lineCount`, `amount` or
+`balance`, where 0 is a real value.
+
+`MovementsTab` hands the toolbar `movements.map(withDerivedFields)` rather than the raw array: the
+Estado filter column is the derived `statusFamily`, which no raw row carries, so the builder's enum
+picker had no in-memory values to seed its option list from.
+
+Companion fixes live in the shared builder (`@etendosoftware/app-shell-core`): the enum value picker
+is now multi-select and always offers the column's full declared `enumLabels` catalogue (it used to
+show only the already-selected option when re-editing), the `inSet` ("Es cualquiera de") operator is
+retired for enum columns in favour of that multi-select, and numeric inputs accept a locale decimal
+comma, normalised to dot-decimal on apply.
+
 
 ## Conciliación empty state (ETP-4921)
 
@@ -2079,6 +3194,14 @@ Related generic fix: `ListView.handleColumnSort`'s reset arm used to hardcode
 `creationDate desc`, so for any window declaring its own `listSortBy` the third click switched to
 a *different* order than the one the list opened in — and a slot keying off "is the sort at rest"
 could never get back to it. It now resets to `initialSortColumn` / `initialSortDirection`.
+
+**Companion generic fix (ETP-4979):** the same handler's click-cycle branch assumed the resting
+direction for the active sort column was always `asc`, so the first click on a column whose own
+`listSortBy` default is `desc` (e.g. amortization's `accountingDate desc`) tried to set the same
+direction it was already at — a same-value `setState` that never re-renders, so the click looked
+dead. Fixed by moving away from `initialSortDirection` explicitly when at rest on the default,
+instead of assuming `asc`. See `docs/generated-custom-windows/amortization.md` (ETP-4979) for the
+full writeup and manual verification steps.
 
 ### The Tipo column — two sortable segments
 
@@ -2314,16 +3437,17 @@ path** — no bespoke bulk-delete code in this window:
 | Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
 | Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
 
-**How the flow behaves.** Tick one or more row checkboxes → the slot's own
-`AccountsToolbar` unmounts (it reads `ListView`'s `selectedRows` prop; see the load-bearing
-note below) while `ListView`'s floating `SelectionToolbar` pill appears bottom-center of the
-viewport (ETP-4972 — a true `position: fixed` portal, not anchored to any scrolled element,
-so it does not occupy the slot's own layout the way the retired in-flow bar did) → the
-icon-only red trash button (no "(N)" count in the button itself anymore — the pill's own
-counter segment shows it) opens the shared confirm dialog → on confirm one DELETE per row
-goes out in parallel, then a single toast reports the outcome:
+**How the flow behaves.** Tick one or more row checkboxes → `ListView`'s floating
+`SelectionToolbar` pill appears bottom-center of the viewport (ETP-4972 — a true
+`position: fixed` portal, not anchored to any scrolled element, so it does not occupy the slot's
+own layout the way the retired in-flow bar did) while the slot's own `AccountsToolbar` **stays
+mounted** (ETP-5111 — it used to unmount so the selection bar read as its replacement, but once
+that bar became a floating pill the swap only took "Nueva cuenta", the filters and "Reglas de
+conciliación" away for no benefit) → the icon-only red trash button (no "(N)" count in the button
+itself anymore — the pill's own counter segment shows it) opens the shared confirm dialog → on
+confirm one DELETE per row goes out in parallel, then a single toast reports the outcome:
 
-- **all succeeded** → list refetches, selection clears, toolbar comes back.
+- **all succeeded** → list refetches, selection clears, the pill disappears.
 - **partial failure** → list refetches (the deleted rows disappear) and only the *failed*
   rows stay checked, so the user can retry exactly those. `ListView` keeps them checked in
   DataTable's internal Set via `deselectTrigger` + `deselectRowIds`.
@@ -2351,15 +3475,23 @@ had been missed in the original ETP-4972 floating-pill migration; it is now the 
 viewport-fixed floating pill as everywhere else, icon-only delete button, no separate X — see
 `docs/ui-customization.md` §9e.)
 
-**`isRowDeletable` (ETP-4871, generic `ListView` prop) gates the button itself for a mixed
-selection.** `windows/custom/financial-account/index.jsx` passes
-`isRowDeletable={(row) => row.deletable !== false}` to `AccountPage` (forwarded straight through
-to `ListView` via its `{...props}` spread). `ListView` computes, on every selection change, how
-many of the *currently selected* rows fail that predicate; if any do, the icon-only delete button
-disables and its tooltip switches to `bulkDeleteBlockedTooltip` (generic/entity-agnostic) naming how many
-are blocked, instead of letting the batch go out and resolving as a confusing partial failure. The
-prop is optional and defaults to "every row is deletable" — every other `ListView` window is
-unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
+**`isRowDeletable` is gone (ETP-5111) — the trash button is never pre-disabled.** Until
+ETP-5111 the wrapper (`windows/custom/financial-account/index.jsx`) passed
+`isRowDeletable={(row) => row.deletable !== false}` straight through to `ListView`, which counted
+how many of the *currently selected* rows failed that predicate and, if any did, disabled the
+icon-only delete button and switched its tooltip to `bulkDeleteBlockedTooltip`. The prop, its
+JSDoc, `ListView`'s `blockedDeleteCount` computation, the disabled/`title` branch on the button and
+the `bulkDeleteBlockedTooltip` key are all removed — from this window **and** from the generic
+component, since `financial-account` was its only production consumer.
+
+The button now stays enabled for any selection. An account with dependent records is *attempted*,
+`FinancialAccountHandler`'s DELETE branch re-validates `deletable` and answers 409, and the row
+lands in the "failed" bucket of the partial-failure branch above — exactly the path that already
+existed as defense-in-depth for a row whose state changed between selection and click. That path is
+now the only path. The per-row "Eliminar cuenta" kebab item (`AccountRowMenu`) is untouched and
+still reads `row.deletable` directly: a per-row affordance is allowed to pre-check, a shared button
+is not. See "Unified delete rule" at the top of this file, and `docs/ui-customization.md` §9c for
+the generic contract that replaced the retired §9d.
 
 **Two things were load-bearing to make this work, and both are easy to re-break:**
 
@@ -2373,11 +3505,15 @@ unaffected. See `docs/ui-customization.md` for the full generic-prop reference.
    reach the grid. The hover quick-actions overlay stays suppressed **separately** and
    declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
    the trailing `AccountRowActions` column — do not conflate the two.
-   The toolbar swap reads `ListView`'s `selectedRows` prop directly and **must not** mirror
-   it into slot-local state via `onSelectionChange`: `DataTable` empties its internal
-   selection `Set` silently from its `clearSelectionTrigger` / `deselectTrigger` effects
-   without calling `onSelectionChange`, so a mirror would still read "selected" after a
-   successful bulk delete or a cancel and the toolbar would never reappear.
+   `AccountsHeaderTable` still **destructures `selectedRows` out of the spread** even though
+   ETP-5111 removed the toolbar swap that consumed it: `selectedRows` is also the name of
+   `DataTable`'s own internal selection state, so forwarding a prop under that name reads as a
+   controlled-selection prop `DataTable` does not have. Keep the destructuring — that is the
+   whole of what it is load-bearing for now. (The generic rule it used to illustrate — a slot
+   that derives from `selectedRows` must never mirror it into local state via
+   `onSelectionChange`, because `DataTable` empties its internal selection `Set` silently from
+   its `clearSelectionTrigger` / `deselectTrigger` effects without calling it — still holds for
+   any slot that does swap; see `docs/ui-customization.md` §9c.)
 2. **`listViewOptions.hideListBar` gates only the IDLE list bar, not the selection bar** —
    see `docs/ui-customization.md` §9c. This window sets `hideListBar: true` (its slot draws
    the whole toolbar), and while that flag also suppressed the selection bar there was no
@@ -2394,9 +3530,12 @@ action in the bar besides its own built-in close button.
 `Checkbox__eb5261` inside it — DataTable does not emit a per-row select testid),
 `selection-count`, `bulk-delete-selected`, and the dialog's
 `DialogContent__bulk-delete` / `bulk-delete-confirm` / `Button__bulk-delete-cancel`.
-The toolbar's `cuentas-toolbar` genuinely **leaves the DOM** while a selection is active
-(it is unmounted, not hidden), so a `toHaveCount(0)` assertion is correct. Type filter and
-search text are held in `AccountsHeaderTable` state, so they survive that unmount.
+Since ETP-5111 the toolbar's `cuentas-toolbar` **stays in the DOM while a selection is
+active** — a `toHaveCount(0)` assertion on it during a selection is now wrong, and the
+suite that asserted the swap was inverted rather than deleted. (It used to be genuinely
+unmounted, which is why Type filter and search text being held in `AccountsHeaderTable`
+state mattered: they had to survive that unmount. They still live there; nothing unmounts
+them now.)
 
 ## Known deviations from the Figma frame
 
@@ -2413,7 +3552,7 @@ Centro de costo=**Por config**.
 | Field | State |
 | --- | --- |
 | `businessPartner` (Contacto) | **Siempre** (revised per REVIEW/user follow-up). Raw AD `displayLogic` is the compound `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''`. The initial pass set a blanket `displayLogic: null`, which correctly stripped `@ACCT_DIMENSION_DISPLAY@` (per scope decision #2) but also incidentally dropped the unrelated `@Trxtype@!=''` condition. Fixed: `decisions.json` now sets `displayLogic: "@Trxtype@!''"` + `displayLogicJs: "record['transactionType'] !== ''"` — only the accounting-dimension macro is stripped; the Trxtype condition survives as a plain client-evaluable function. Since it's `evaluable: true` with real `.js`, `generate-frontend.js` emits it as `displayLogic: (record) => record['transactionType'] !== ''` on the generated field — a function-based displayLogic that `EntityForm.jsx` always evaluates client-side, completely independent of the server evaluate-display / accounting-dimension config. Net effect: the field is immune to the global dimension toggle (true "Siempre") but still respects Trxtype. `Trxtype` (Transaction Type — BP Deposit / BP Withdrawal / Bank fee) is a mandatory column with a default value, so in practice this only hides the field for the brief instant before a type is set on a brand-new record. |
-| `product` | **Nunca** — already `visibility: "discarded"`, no change needed |
+| `product` | **Nunca** — already `visibility: "discarded"`, no change needed. **Scope note (ETP-4950 QA round):** this row is about the *generated* `transaction` form/grid, where the field is discarded at the contract level. It does **not** describe the custom **New Movement** modal (`NewTransactionModal.jsx`), which builds its own dimension selectors and gates them on the chart of accounts — there Producto DOES appear when the tenant has it active. Two different surfaces; do not "reconcile" them by re-hiding it in the modal. |
 | `project` | **Por config** — already correct: no override, raw `@ACCT_DIMENSION_DISPLAY@ & @Trxtype@!''` passes through as-is |
 | `costCenter` | **Por config** — same as `project`, already correct |
 

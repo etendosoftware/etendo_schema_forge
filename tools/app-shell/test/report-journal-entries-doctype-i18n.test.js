@@ -64,7 +64,7 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
     // back to a CASE on ad_table.tablename for exactly those three tables.
     assert.match(
       SQL,
-      /MAX\(COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+ELSE\s+NULL\s+END\)\)\s+AS\s+docbasetype/i,
+      /MAX\(COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)\)\s+AS\s+docbasetype/i,
     );
   });
 
@@ -84,6 +84,13 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
     assert.match(caseBlock, /WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'/i);
     assert.match(caseBlock, /WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'/i);
     assert.match(caseBlock, /WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'/i);
+    // ETP-5013 follow-up: A_Amortization posts fact_acct rows with no
+    // c_doctype at all, so document_type used to fall through to the
+    // literal 'Journal'. ad_ref_list reference 183 already ships an
+    // 'AMZ' -> "Amortization"/"Amortizacion" entry, so mapping the table
+    // here makes the existing rl/rlt joins resolve the real label (and
+    // its translation) for free — same mechanism as FAT/MXI/MMI.
+    assert.match(caseBlock, /WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'/i);
   });
 
   it('reuses the existing adt (ad_table) join already used by doc_window — no new join to ad_table added', () => {
@@ -119,7 +126,7 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
   it('joins ad_ref_list on the fixed DocBaseType reference (183), matching the same fallback-resolved docbasetype expression used for the docbasetype column', () => {
     assert.match(
       SQL,
-      /LEFT JOIN ad_ref_list rl\s+ON\s+rl\.ad_reference_id = '183'\s+AND\s+rl\.value = COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+ELSE\s+NULL\s+END\)/i,
+      /LEFT JOIN ad_ref_list rl\s+ON\s+rl\.ad_reference_id = '183'\s+AND\s+rl\.value = COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)/i,
     );
   });
 
@@ -168,6 +175,7 @@ const CASES = [
   ['FAT', null, 'Financial Account Transaction', 'Financial Account Transaction', 'Financial Account Transaction'],
   ['MXI', null, 'Match Invoice', 'Match Invoice', 'Match Invoice'],
   ['MMI', null, 'Material Physical Inventory', 'Material Physical Inventory', 'Material Physical Inventory'],
+  ['AMZ', null, 'Amortization', 'Amortization', 'Amortization'],
   [null, null, 'Journal', 'Journal', 'Journal'],
 ];
 
