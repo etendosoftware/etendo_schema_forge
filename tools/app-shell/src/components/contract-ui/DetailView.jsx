@@ -2972,7 +2972,7 @@ export function DetailView({
                 sqBtnSize={sqBtnSize}
                 statusField={statusField}
                 token={token}
-                ui={ui}
+                ui={ui} windowReadOnly={windowReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
