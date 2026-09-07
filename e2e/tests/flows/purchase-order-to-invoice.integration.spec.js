@@ -4,7 +4,7 @@ import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   dismissSuccessModal, safeReload, readDocumentTotals, verifyTotalsConsistency,
-  derivedFieldLocator,
+  derivedFieldLocator, waitForLinesSettled,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -165,10 +165,10 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         'PO status pill should show Completed after confirmation');
 
       // After a reload the lines count badge may briefly show "0" while the
-      // lines fetch is in-flight — allow enough time for the real count to land.
-      await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
-        'PO should still show 2 lines after completion',
-      ).toBeVisible({ timeout: 20_000 });
+      // lines fetch is in-flight, and — per waitForLinesSettled's own doc
+      // comment — can even flash the right count once and reset before it
+      // sticks. This is exactly the reload scenario that helper exists for.
+      await waitForLinesSettled(page, 2, 'PO should still show 2 lines after completion');
 
       // [Plan 9.4] Verify the PO is not editable after confirming
       const saveAfterConfirm = page.getByRole('button', { name: /guardar|save/i });

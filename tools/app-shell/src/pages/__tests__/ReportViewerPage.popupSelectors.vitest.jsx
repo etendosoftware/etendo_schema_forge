@@ -8,6 +8,7 @@
 
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
 
 // jsdom does not implement IntersectionObserver — SelectorPopup's infinite
 // scroll sentinel needs a stub so the component can mount.
@@ -243,7 +244,7 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     });
   });
 
-  it('shows a validation error when a required popup-single param is empty on submit', async () => {
+  it('disables every report action while a required popup-single param is empty', async () => {
     const reqReport = {
       ...BASE_REPORT,
       parameters: [
@@ -257,19 +258,17 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(reqReport));
       return Promise.resolve(makeSelectorResponse([]));
     });
-    const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
-    // The sidebar's own "Generate Report" button is now disabled while a
-    // required param is empty (ETP-5013, hasAllRequiredFilled), so it can no
-    // longer be used to trigger validateRequired() here. The top-bar PDF
-    // button still calls validateRequired() unconditionally (only gated by
-    // `loading`), so it remains a reachable path to the same error state.
-    expect(screen.getByText('runReport')).toBeDisabled();
-    await user.click(screen.getByText('PDF'));
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    // ETP-4900: the sidebar's own "Generate Report" button AND the top-bar
+    // PDF/Excel/CSV/Print actions all share the same hasAllRequiredFilled
+    // gate now, so with the required popup-single param empty none of them
+    // is a reachable path to trigger a render — they're simply disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
   });
 
   it('passes dependsOn extraParams (account schema) when opening a dependent popup with a resolved dependency', async () => {

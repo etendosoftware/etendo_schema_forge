@@ -798,6 +798,23 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const panelRef = useRef(null);
   const hasValidationErrorRef = useRef(false);
+  // ETP-5133 — horizontal-scroll sync between the sticky header strip and the
+  // body rows. See the two wrapper divs in the render below for why these are
+  // two independently-scrolled elements instead of one shared overflow-x-auto
+  // box: an `overflow-x` ancestor placed between the sticky header and its
+  // real scrolling ancestor (the detail-content pane several levels up)
+  // silences `position: sticky` entirely — the CSS overflow spec forces
+  // `overflow-y` to `auto` too whenever `overflow-x` isn't `visible`, and an
+  // auto-height box with a forced `overflow-y: auto` becomes the header's new
+  // (non-scrolling) sticky containing block, so `top: 0` stops tracking page
+  // scroll. Keeping the header's own scroll wrapper separate (and hidden,
+  // driven only by this handler) avoids that while still keeping columns
+  // pixel-aligned as the rows scroll.
+  const headerScrollRef = useRef(null);
+  const bodyScrollRef = useRef(null);
+  const handleBodyScroll = useCallback((e) => {
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+  }, []);
 
   // Close edit mode when the user clicks outside the editing row. Defers the state
   // update to the next tick so any focused input fires its onBlur first — that triggers
@@ -1160,52 +1177,69 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
       {/* Header strip — sticky at the top of the scroll container so column
           labels stay visible while rows scroll. The white background and z-10
-          keep it opaque above the scrolled content. */}
+          keep it opaque above the scrolled content.
+          ETP-5133 — this OUTER div carries `sticky`/`top-0` and deliberately
+          has NO overflow of its own (see `headerScrollRef` above for why).
+          The actual row of cells lives in the INNER div below, whose
+          `overflow-x-hidden` is driven programmatically by the body rows'
+          own scroll wrapper so column widths stay aligned without breaking
+          the header's stickiness. */}
       <div
-        className="flex items-stretch border-b sticky top-0 z-10 bg-card"
+        className="border-b sticky top-0 z-10 bg-card"
         style={{ borderColor: TOKENS.separator, height: TOKENS.rowHeight, ...headerStyle }}
       >
-        {/* ETP-4529 — leading expand-chevron placeholder, only when a
-            `dimensionsPanel` column is declared (keeps header cells aligned
-            with the body rows' own chevron column below). */}
-        {hasDimensionsPanel && (
-          <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
-        )}
-        <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
-          <Checkbox
-            aria-label={ui('selectAll')}
-            checked={allSelected}
-            indeterminate={someSelected}
-            onChange={() => toggleAll(!allSelected)}
-            disabled={isDocumentReadOnly}
-            data-testid="Checkbox__3b7ec2" />
-        </div>
-        {visibleColumns.map((col, idx) => (
-          <div
-            key={col.key}
-            data-testid={`column-header-${col.key}`}
-            className="flex items-center"
-            style={{
-              padding: `0 ${TOKENS.cellPaddingX}px`,
-              flex: columnFlex(col, idx),
-              justifyContent: NUMERIC_TYPES.has(col.type) ? 'flex-end' : 'flex-start',
-              textAlign: NUMERIC_TYPES.has(col.type) ? 'right' : 'left',
-              minWidth: 0,
-            }}
-          >
-            {resolveColumnLabel(col, locale, t)}
+        <div ref={headerScrollRef} className="flex items-stretch h-full overflow-x-hidden">
+          {/* ETP-4529 — leading expand-chevron placeholder, only when a
+              `dimensionsPanel` column is declared (keeps header cells aligned
+              with the body rows' own chevron column below). */}
+          {hasDimensionsPanel && (
+            <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+          )}
+          <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            <Checkbox
+              aria-label={ui('selectAll')}
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={() => toggleAll(!allSelected)}
+              disabled={isDocumentReadOnly}
+              data-testid="Checkbox__3b7ec2" />
           </div>
-        ))}
-        {/* Reserve the same 160 px slot the action strip will occupy so the
-            header columns align with the body rows even when hovering. */}
-        {reserveActionSlot && (
-          <div style={{ flex: '0 0 160px' }} aria-hidden="true" />
-        )}
-        {/* Right spacer — mirrors the Figma right margin without adding padding
-            to the root (which would clip the row border-b lines). */}
-        <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+          {visibleColumns.map((col, idx) => (
+            <div
+              key={col.key}
+              data-testid={`column-header-${col.key}`}
+              className="flex items-center"
+              style={{
+                padding: `0 ${TOKENS.cellPaddingX}px`,
+                flex: columnFlex(col, idx),
+                justifyContent: NUMERIC_TYPES.has(col.type) ? 'flex-end' : 'flex-start',
+                textAlign: NUMERIC_TYPES.has(col.type) ? 'right' : 'left',
+                minWidth: 0,
+              }}
+            >
+              {resolveColumnLabel(col, locale, t)}
+            </div>
+          ))}
+          {/* Reserve the same 160 px slot the action strip will occupy so the
+              header columns align with the body rows even when hovering. */}
+          {reserveActionSlot && (
+            <div style={{ flex: '0 0 160px' }} aria-hidden="true" />
+          )}
+          {/* Right spacer — mirrors the Figma right margin without adding padding
+              to the root (which would clip the row border-b lines). */}
+          <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+        </div>
       </div>
-      {/* Body rows */}
+      {/* Body rows — ETP-5133: scoped horizontal scroll so a wide column set
+          scrolls within the table instead of overflowing past the detail
+          pane into the sidebar (and, on windows with a right-side panel,
+          into that panel too). Mirrors the scoped `overflow-x-auto` wrapper
+          DataTable's classic (non-inlineEditable) path already uses around
+          its own `<Table>`. `pb-6` mirrors that same wrapper's bottom padding
+          — the CSS overflow spec forces this box's `overflow-y` to `auto`
+          too (see the header comment above), so without it a hovered last
+          row's shadow would get clipped instead of spilling past the row. */}
+      <div ref={bodyScrollRef} className="overflow-x-auto pb-6" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;
@@ -1317,6 +1351,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           </React.Fragment>
         );
       })}
+      </div>
     </div>
   );
 });

@@ -68,10 +68,18 @@ export async function safeReload(page) {
 /**
  * Dismiss the "Cerrar" success modal if it appears after a confirmation action.
  * Waits for the page to settle after dismissal.
+ *
+ * ETP-5063 replaced the modal with an auto-dismissing toast for confirmations
+ * that create no related document (receipt/invoice) — that path has nothing
+ * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
   const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-  await expect(closeBtn).toBeVisible({ timeout: 30_000 });
+  try {
+    await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
+  } catch {
+    return; // ETP-5063: toast-only path, no modal to dismiss.
+  }
   await closeBtn.click();
   await slow(page);
 }
@@ -125,9 +133,17 @@ export function waitForDocumentActionResponse(page, entityPath = 'purchase-order
 export async function waitForLinesSettled(page, count, message) {
   const linesPattern = new RegExp(`l[ií]neas\\s+${count}|lines\\s+${count}`, 'i');
   const linesBtn = page.getByRole('button', { name: linesPattern });
+
+  // Wait out any load-in-progress spinner BEFORE the first count check —
+  // otherwise a slow initial load (a fresh navigation, or a reload) eats into
+  // the same budget as the count check itself, and the two failures (still
+  // loading vs. genuinely wrong count) become indistinguishable in the error.
+  await page.getByText(/cargando|loading/i).first()
+    .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+
   await expect(linesBtn,
     message || `Lines count should reach ${count}`,
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: 30_000 });
 
   const spinner = page.getByText(/cargando|loading/i);
   await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
@@ -821,7 +837,11 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   // fetches complete, which can replace the <button> between locator resolution
   // and the actual pointer event — see ETP-4567 QA flaky-test investigation).
   const allProducts = page.locator('[data-testid^="product-search-option-"]');
-  await expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
+  // Two different async events, not one: the drawer opening (checked above) and
+  // its product list finishing its OWN fetch. 20s covered the drawer; under a
+  // slower environment the list can still be mid-fetch when that budget was
+  // built, so this needs its own separate wait rather than sharing the first.
+  await expect(allProducts.first()).toBeVisible({ timeout: 30_000 });
 
   let productCalloutResponse;
   await expect(async () => {
@@ -855,13 +875,23 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
 
   // Verify the line was saved: the inline-add-row must disappear (or be
   // replaced by the next empty row) and the saved line must appear in the
-  // table body. Without this gate the caller can race into a second
+  // grid. Without this gate the caller can race into a second
   // addProductLine() before the first line is committed to the DOM.
   await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
     .catch(() => {}); // OK if already gone or immediately replaced
-  await expect(page.locator('tbody tr').first(),
-    'Saved line should appear in the lines table',
-  ).toBeVisible({ timeout: 10_000 });
+
+  // Two different grid renderers share this helper: the classic <table> (real
+  // <tbody><tr> rows) and InlineLinesPanel.jsx (data-testid="line-row-<ID>"
+  // divs, used by e.g. the purchase-order/rectificativa windows). A bare
+  // 'tbody tr' silently matches on BOTH kinds of window, because every page
+  // also carries a hidden (display:none) attachments <table> — so on an
+  // InlineLinesPanel window this gate used to report the line saved by
+  // finding that unrelated hidden row, before the real one had rendered.
+  // ':visible' excludes that hidden table without needing to know which
+  // renderer this window uses.
+  await expect(page.locator('tbody tr:visible, [data-testid^="line-row-"]').first(),
+    'Saved line should appear in the lines grid',
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -1026,14 +1056,34 @@ export async function openDraftRow(page, { label = 'draft row' } = {}) {
  * Click the confirm button (action-save) on a draft document.
  * In draft mode, action-save is the "Confirmar" button.
  */
-export async function clickConfirmButton(page) {
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {RegExp|string} [expectedModalText] - optional text that should become visible
+ *   right after the click (e.g. the confirm modal's title). When given, the click is
+ *   retried until that text appears — this class of flake showed up under a loaded CI
+ *   agent as the click landing but the modal not mounting within a single flat wait,
+ *   same environment-tail-latency shape as the lines-count and product-search waits
+ *   fixed elsewhere in this file. Safe to retry here: by this point in every caller's
+ *   flow the record is already persisted, so runDraftModeConfirm's own pre-checks
+ *   (flushPendingLines / maybeSaveBeforeConfirm) are no-ops — this click only opens a
+ *   client-side modal, it does not resubmit anything.
+ */
+export async function clickConfirmButton(page, expectedModalText) {
   const confirmBtn = page.getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
   // Wait for enabled — the button stays disabled while a save is in-flight
   // or while BP callouts are still propagating derived fields.
   await expect(confirmBtn).toBeEnabled({ timeout: 15_000 });
-  await confirmBtn.click();
-  // Caller is responsible for waiting on the modal/response that follows
+
+  if (expectedModalText) {
+    await expect(async () => {
+      await confirmBtn.click({ timeout: 3_000 });
+      await expect(page.getByText(expectedModalText).first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+  } else {
+    await confirmBtn.click();
+  }
+  // Caller is responsible for waiting on any other modal/response that follows
   await slow(page);
 }
 
