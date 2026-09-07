@@ -2,7 +2,7 @@
   "version": "0.11.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
   "updatedAt": "2026-07-06T18:12:04.725Z",
-  "contractChecksum": "da73f53efb58144a",
+  "contractChecksum": "55b5bcd1fb32c6a1",
   "apiPrediction": {
     "specName": "verifactu-config",
     "baseUrl": "/sws/neo/verifactu-config",
