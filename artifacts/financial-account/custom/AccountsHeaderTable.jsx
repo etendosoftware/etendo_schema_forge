@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
 import {
   AccountsSidebar,
@@ -257,6 +258,22 @@ export default function AccountsHeaderTable({
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
 
+  // Every string these bank-action toasts show ORIGINATES IN THE BACKEND: com.etendoerp.psd2's
+  // AD_MESSAGE catalog, relayed verbatim by the NEO bridge. Its es_ES rows carry the ENGLISH text
+  // with istranslated='N' unless the separate .es_es pack was imported, so Core resolves English
+  // whatever the session locale is — which is why these have to go through the frontend
+  // translation map, exactly like the two sibling entry points onto this same bridge already do
+  // (EditAccountModal.jsx:193 and ImportedStatementsTab.jsx:183). ETP-4891 fixed those two and
+  // missed this one, so the list-row sync icon kept rendering the raw English.
+  //
+  // BANK_CONNECTION_TIMEOUT is NOT backend copy: it is the sentinel useBankConnectionActions.js:131
+  // throws when its AbortController fires. It is a protocol token, so it maps to our own label
+  // rather than being shown to the user verbatim.
+  const bankActionMessage = (raw) => {
+    if (raw === 'BANK_CONNECTION_TIMEOUT') return ui('financeAccountsBankConnectionTimeout');
+    return raw ? translateBackendError(raw, ui) : raw;
+  };
+
   const handleBankConnectionAction = async (action, account) => {
     if (action === 'connect') {
       bankConnectionFlow.startConnect(account);
@@ -266,7 +283,7 @@ export default function AccountsHeaderTable({
       try {
         const res = await sync(account.id);
         reload();
-        const msg = res?.message;
+        const msg = bankActionMessage(res?.message);
         if (res?.status === 'ERROR') {
           toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
         } else if (res?.status === 'WARNING') {
@@ -275,7 +292,7 @@ export default function AccountsHeaderTable({
           toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
         }
       } catch (err) {
-        toast.error(err.message || ui('financeAccountsBankConnectionSyncError'));
+        toast.error(bankActionMessage(err.message) || ui('financeAccountsBankConnectionSyncError'));
       }
       return;
     }
@@ -291,9 +308,7 @@ export default function AccountsHeaderTable({
         reload();
         toast.success(ui('financeAccountsBankConnectionReauthDone'));
       } catch (err) {
-        toast.error(err.message === 'BANK_CONNECTION_TIMEOUT'
-          ? ui('financeAccountsBankConnectionTimeout')
-          : err.message);
+        toast.error(bankActionMessage(err.message));
       }
       return;
     }
