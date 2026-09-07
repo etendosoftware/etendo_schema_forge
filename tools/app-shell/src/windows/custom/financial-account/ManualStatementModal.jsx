@@ -16,6 +16,7 @@ import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS } from './fieldLengthValidation.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -324,10 +325,18 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   return (
     <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[hsl(var(--muted))]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
-      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference} className={cellInput} data-testid="manual-line-ref" />
+      {/* PSD-23 — dense grid cells with no room for an inline error, and this modal reports
+          its own validation as a submit-time toast (see onProcess). The hard maxLength
+          attribute is the pattern AccountFormStep and EditAccountModal already use in this
+          same window: the browser truncates on typing AND on paste, so the over-long value
+          never exists to be sent. Lengths come from bankStatementLines in the contract. */}
+      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference}
+        maxLength={FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference}
+        className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
         placeholder={ui('financeAccountStatementsManualDescPlaceholder')}
         title={row.description}
+        maxLength={FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription}
         className={cellInput} data-testid="manual-line-description" />
       <input type="text" value={row.contactName} onChange={set('contactName')}
         placeholder={ui('financeAccountStatementsManualCounterpartyPlaceholder')}

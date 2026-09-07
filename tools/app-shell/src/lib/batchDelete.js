@@ -65,8 +65,22 @@ export function deleteSelectedChildRows({ selectedChildRows, api, detailEntity, 
 }
 
 /** A bare `HTTP 409` / `409 Conflict` tells the user nothing they can act on, so it never qualifies
- *  as a reason — the counter-only message is better than a status code. */
-const OPAQUE_REASON_RE = /^(HTTP\s*)?\d{3}\b/i;
+ *  as a reason — the counter-only message is better than a status code.
+ *
+ *  The second alternative covers the "one word plus the status" shape a message extractor emits
+ *  when it could not find a message at all: `extractErrorMessage` (useEntity.js) ends in
+ *  `` `${translate('error', 'Error')} ${res.status}` ``, i.e. literally "Error 404" for a 4xx with a
+ *  non-JSON body such as a container error page. That reads as a reason to this helper but says
+ *  nothing to the user, and — since no locale defines an `error` key — it is not even translated.
+ *  ETP-5111 made this reachable app-wide by wiring `errors` through `useBulkRowDelete`, so it is
+ *  screened here, once, rather than in each caller. A genuine business sentence never consists of a
+ *  single word followed by a three-digit number and nothing else.
+ *
+ *  Both alternatives are anchored independently — `^` binds inside each, not across the `|` — so
+ *  the second cannot match a status code buried mid-sentence. `/i` is needed only by the first
+ *  alternative's `HTTP` literal; the second is all character classes, which fold no case. No `g`
+ *  flag, deliberately: this is used with `.test()`, which would carry `lastIndex` between calls. */
+const OPAQUE_REASON_RE = /^(HTTP\s*)?\d{3}\b|^\S+\s+\d{3}$/i;
 
 /**
  * Is this rejection the backend REFUSING the delete for a stated business reason, as opposed to
@@ -114,12 +128,13 @@ function commonFailureReason(ui, errors) {
  *   - partial        -> warning (single combined message): "X of Y deleted. Z could not be deleted."
  *   - all failed     -> error: "None of the X selected could be deleted."
  *
- * ETP-5085 adds the missing half of the failure branches: **why**. When every failure reports the
- * same reason, it is appended to the message (or, for a single selected row, replaces it entirely —
- * "None of the 1 selected record(s) could be deleted" is a worse way of saying one sentence the
- * backend already wrote). Backends that answer with a status code and nothing else keep the old
- * counter-only wording. This is the surface ETP-4921 already flagged as opaque for processed
- * statements, so the fix is deliberately made once here rather than per consumer.
+ * ETP-5085 added the missing half of the failure branches: **why**. ETP-5111 then narrowed it to
+ * the only case where one sentence can honestly speak for the whole batch: a selection of exactly
+ * ONE record, where the backend's own reason REPLACES the counter message ("None of the 1 selected
+ * record(s) could be deleted" is a worse way of saying a sentence the backend already wrote).
+ * From two records up, the toast is counters-only — appending a single reason to a multi-row batch
+ * implied it explained every failure, and the user cannot tell which row it belonged to. Backends
+ * that answer with a status code and nothing else keep the counter-only wording either way.
  *
  * Reuses the exact same i18n keys everywhere this fires so every bulk-delete
  * surface in the app reads identically.
@@ -132,17 +147,14 @@ export function toastBatchDeleteOutcome(ui, { succeeded, failed, total, errors }
     toast.success(ui('bulkDeleteAllSucceeded', { count: succeeded.length }));
     return;
   }
-  const reason = commonFailureReason(ui, errors);
   if (succeeded.length === 0) {
-    if (reason) {
-      toast.error(total === 1 ? reason : ui('bulkDeleteAllFailedWithReason', { count: total, reason }));
-    } else {
-      toast.error(ui('bulkDeleteAllFailed', { count: total }));
-    }
+    // The reason is offered ONLY for a one-record selection (ETP-5111) — see the note above.
+    const reason = total === 1 ? commonFailureReason(ui, errors) : null;
+    toast.error(reason || ui('bulkDeleteAllFailed', { count: total }));
     return;
   }
-  const params = { succeeded: succeeded.length, total, failed: failed.length };
-  toast.warning(reason
-    ? ui('bulkDeletePartialFailureWithReason', { ...params, reason })
-    : ui('bulkDeletePartialFailure', params));
+  // A partial outcome implies at least two records, so it is always counters-only.
+  toast.warning(ui('bulkDeletePartialFailure', {
+    succeeded: succeeded.length, total, failed: failed.length,
+  }));
 }

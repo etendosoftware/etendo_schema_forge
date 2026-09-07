@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-09-02T13:42:24.876Z",
-  "checksum": "e5e67e686cd6f0dd",
+  "updatedAt": "2026-09-04T12:40:15.884Z",
+  "checksum": "328cf9a8ef5e23d4",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -190,13 +190,14 @@
             "type": "date",
             "tsType": "string",
             "visibility": "readOnly",
-            "required": false,
+            "required": true,
             "grid": true,
             "form": true,
             "section": "principal",
             "seq": 30,
             "dot": false,
             "validation": {
+              "required": true,
               "maxLength": 10
             },
             "readOnlyLogic": {
@@ -726,7 +727,7 @@
             "column": "StartDate",
             "type": "date",
             "visibility": "readOnly",
-            "required": false
+            "required": true
           },
           {
             "name": "totalAmortization",
