@@ -16,7 +16,7 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, deriveResultKind } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -405,6 +405,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
 
+  // ETP-5187 — `decl._hasDuplicatePeriod` is set by FmListPage.jsx when this declaration is a
+  // 2nd/Nth one for the same (model, year, period): another declaration already exists for that
+  // period, so AEAT requires this one to be marked "Autoliquidación rectificativa" (the checkbox
+  // already exists — see `identChecks.rectificativa`, wired through `CasillasTab` →
+  // `FmBoxes303` → the `resultado_final` nav section). The user must check it themselves (never
+  // auto-checked here) before the declaration can be marked "Presentado". Cleared once submitted:
+  // there is nothing left to gate on a declaration that already went through.
+  const requiresRectificativa = Boolean(decl._hasDuplicatePeriod) && !identChecks.rectificativa && !isSubmitted;
+
   // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
   // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
   // declaration is submitted (nothing is editable at that point) and on the very first render
@@ -433,7 +442,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
     : null;
   const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
-  const resultKind = decl.result?.kind ?? null;
+  // ETP-5187 — was `decl.result?.kind`, which the backend never populates (declToJson has no
+  // `result` field), so this always fell through to the generic "Resultado" label regardless of
+  // the real computed result shown just above it. Now derived from the same `summary` this KPI
+  // card already displays, via the single shared `deriveResultKind` also used by FmListPage.jsx,
+  // so both screens agree on the same label for the same declaration.
+  const sourcesForResult = liveSources ?? decl.sources ?? [];
+  const resultKind = deriveResultKind(summary, { hasInvoices: sourcesForResult.length > 0 });
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
@@ -545,13 +560,37 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           <button
             className="fm-toolbar__btn fm-toolbar__btn--primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowPresent(true)}
+            onClick={() => {
+              if (requiresRectificativa) {
+                toast.error(t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.');
+                return;
+              }
+              setShowPresent(true);
+            }}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
             {t('fm.action.submit') ?? "Marcar como 'Presentado'"}
           </button>
         )}
       </div>
+      {/* ── Duplicate-period warning (ETP-5187) ─────────────────────── */}
+      {requiresRectificativa && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: 'var(--status-warning-bg)',
+          border: '1px solid var(--status-warning-border)',
+          borderRadius: 8,
+          fontSize: 13,
+          color: 'var(--status-warning-fg)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__duplicatePeriod" />
+          {t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.'}
+        </div>
+      )}
       {/* ── KPI bar ──────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',

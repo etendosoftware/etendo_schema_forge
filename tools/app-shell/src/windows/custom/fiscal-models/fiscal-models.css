@@ -304,13 +304,29 @@
 .fm-dtable--plain td,
 .fm-dtable--plain td.strong,
 .fm-dtable--plain td.num.strong { color: hsl(var(--foreground)); font-size: 14px; }
-.fm-regime-pill {
-  display: inline-flex; align-items: center;
-  padding: 2px 8px; border-radius: 4px;
-  background: hsl(var(--muted)); color: hsl(var(--muted-foreground));
-  font: 400 14px/20px var(--fm-font-sans, system-ui);
-  white-space: nowrap;
+/* ─── Row hover actions (Edit/Delete — ETP-5187) ────────────────────── */
+/* Mirrors the reveal-on-row-hover pattern of the generic RowQuickActions
+   (`tools/app-shell/src/components/contract-ui/RowQuickActions.jsx`), adapted
+   to this window's plain-CSS table (no Tailwind `group/row` utilities here). */
+.fm-row-actions {
+  display: inline-flex; align-items: center; gap: 2px;
+  opacity: 0;
+  transition: opacity .12s ease;
 }
+.fm-table tbody tr:hover .fm-row-actions,
+.fm-row-actions:focus-within {
+  opacity: 1;
+}
+.fm-row-action-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: 999px;
+  background: transparent; color: hsl(var(--muted-foreground));
+  cursor: pointer; transition: background .1s, color .1s;
+}
+.fm-row-action-btn:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.fm-row-action-btn:disabled { opacity: .5; cursor: wait; }
+.fm-row-action-btn--danger { color: hsl(var(--destructive)); }
+.fm-row-action-btn--danger:hover { background: var(--status-destructive-bg); color: hsl(var(--destructive)); }
 
 /* ─── Status Pills ─────────────────────────────────────────────────── */
 /* Aligned with .fm-pill from fiscal-monitor */

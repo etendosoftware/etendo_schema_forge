@@ -446,19 +446,22 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
 // NewDeclModal — "Nueva declaración". `existingDeclarations` is optional (defaults
 // to none, matching every pre-existing caller/test): when provided (FmListPage
 // passes its `decls` array), periods that already have a declaration for the
-// selected model+year render grayed-out with a dot badge AND are disabled —
-// they cannot be selected or submitted. No message/tooltip explains why: this
-// is a deliberate simplification (see complementaria/rectificativa note below)
-// until the correction flow is designed properly, so no warning banner is
-// rendered here. The onConfirm contract (`{ model, year, period, status: 'draft' }`)
-// is unchanged from before this restyle.
+// selected model+year render with a small dot badge — an informational marker
+// only, never a blocker.
 //
-// Why disabled-with-no-message instead of "allow + warn": creating a second
-// declaration for the same model+year+period currently 500s server-side (a DB
-// unique-constraint violation) and the correct terminology/eligibility for a
-// correction ("complementaria" vs "rectificativa", and whether it's even valid)
-// depends on rules this modal doesn't model yet. Disabling the period keeps this
-// UI path from ever exercising that broken backend flow.
+// ETP-5187 — previously these periods were also `disabled`, since a 2nd
+// declaration for the same model+year+period used to 500 server-side (a DB
+// unique-constraint violation) and this modal had no room to explain the
+// complementaria/rectificativa distinction. Both are fixed now: the backend
+// (`FiscalDeclCrudHandler#resolveAvailableDeclType`) auto-assigns a free
+// DECL_TYPE slot so the create no longer collides, and the real warning + gate
+// for "you're filing a 2nd declaration for this period, mark it as
+// Autoliquidación rectificativa" lives on the newly created declaration's own
+// detail page (`FmModel303Page.jsx`) instead of being silently prevented here.
+// The user must be able to select an already-declared period — that's exactly
+// the rectificativa flow (filed early, more invoices arrived later for the same
+// period). The onConfirm contract (`{ model, year, period, status: 'draft' }`)
+// is unchanged.
 export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations }) {
   const ui = useUI();
   const t = ui;
@@ -484,8 +487,10 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const yearOptions = useMemo(() => [...SUPPORTED_YEARS].sort((a, b) => b - a), []);
 
   // Periods that already carry a declaration for the currently selected model+year.
-  // These render disabled in the grid below — never explained (see doc comment
-  // above): no warning banner, no tooltip.
+  // Rendered with a small dot badge in the grid below — informational only
+  // (ETP-5187): selecting one is allowed, it just means the created declaration
+  // will be a 2nd/Nth one for that period (the rectificativa flow), which
+  // `FmModel303Page.jsx` warns about and gates on its own detail page.
   const existingPeriods = useMemo(() => {
     const set = new Set();
     (existingDeclarations ?? []).forEach(d => {
@@ -495,22 +500,6 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
     });
     return set;
   }, [existingDeclarations, model, year]);
-
-  // Every period of the current frequency is already taken — nothing left to
-  // pick. The CTA goes inert in that case (still no message, per spec).
-  const allPeriodsTaken = periods.length > 0 && periods.every(p => existingPeriods.has(p));
-
-  // Keep the selection off a disabled period: on mount, and whenever the set of
-  // taken periods changes (model, year, or frequency switch), jump to the first
-  // still-available period for the current frequency. If every period is taken
-  // there's nothing to jump to — `allPeriodsTaken` above disables the CTA instead.
-  useEffect(() => {
-    if (!existingPeriods.has(period)) return;
-    const firstAvailable = periods.find(p => !existingPeriods.has(p));
-    if (firstAvailable) setPeriod(firstAvailable);
-    // `periods` is derived purely from `frequency`, already tracked below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingPeriods, frequency, period]);
 
   function selectFrequency(next) {
     setFrequency(next);
@@ -632,8 +621,8 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                     key={p}
                     type="button"
                     aria-pressed={isSelected}
-                    disabled={isExisting}
                     className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}`}
+                    title={isExisting ? (t('fm.new_decl.period_existing_hint') ?? undefined) : undefined}
                     onClick={() => setPeriod(p)}
                   >
                     {p}
@@ -653,8 +642,8 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>{t('fm.action.cancel')}</button>
             <button
-              className={`fm-btn fm-btn--save-pill${canCreate && !allPeriodsTaken ? ' fm-btn--save-pill--active' : ''}`}
-              disabled={!canCreate || allPeriodsTaken}
+              className={`fm-btn fm-btn--save-pill${canCreate ? ' fm-btn--save-pill--active' : ''}`}
+              disabled={!canCreate}
               onClick={handleCreate}
             >
               {t('fm.new_decl.create_cta')}

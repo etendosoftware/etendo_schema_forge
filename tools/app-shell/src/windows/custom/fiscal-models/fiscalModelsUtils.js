@@ -242,6 +242,31 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
 }
 
 /**
+ * Calls DELETE /fiscal303/declarations?id=... to remove a draft declaration (ETP-5187, row hover
+ * "delete" action in `FmListPage.jsx`). Despite the URL, this endpoint is generic across fiscal
+ * models — both 303 and 349 declarations live in the same backend table. The backend
+ * (`FiscalDeclCrudHandler#handleDeclDelete`) independently rejects (409) deleting anything but a
+ * draft declaration — this is defense in depth, not the only gate; the frontend must still only
+ * ever show this action for draft rows.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      baseUrl: '',
+      token,
+      method: 'DELETE',
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
  * Calls PUT /fiscal303/declarations?id=... to persist the manually-entered identification
  * checks + box-value overrides for a Modelo 303 declaration, so they survive a page refresh.
  * Mirrors persistDeclarationStatus's contract: { ok: true } on success, or
@@ -364,6 +389,37 @@ export function formatPercent(value) {
 
 export function fmtDecl(decl) {
   return `${decl.model} ${decl.year} ${formatPeriod(decl.period)}`;
+}
+
+/**
+ * Single source of truth for the Modelo 303 "Resultado" badge kind (ETP-5187), shared by the
+ * list page (`FmListPage.jsx`) and the detail page (`FmModel303Page.jsx`). Before this, the list
+ * page derived its own `getResultKind(r)` from the live-computed `summary.result` while the
+ * detail page read a separate, effectively never-populated `decl.result?.kind` (the backend never
+ * persists a `result.kind` on the declaration record) — the two screens could show a different
+ * "Resultado" label for the exact same declaration, and neither one distinguished a real zero
+ * result (a declaration with invoices whose boxes net to exactly 0.00) from a genuinely empty/new
+ * declaration.
+ *
+ * Business rules (fixed, not a nuance to refine further — deliberately do NOT try to disambiguate
+ * "a compensar" vs "a devolver" via `tipo_declaracion`; that's out of scope):
+ *   - `result < 0`             → `'C'`    ("A compensar/devolver" — one combined label)
+ *   - `result > 0`             → `'I'`    ("A ingresar" — unchanged)
+ *   - `result === 0`, has invoices  → `'zero'` ("Resultado cero" — a real declaration that nets to 0)
+ *   - `result === 0`, no invoices   → `'N'`    ("Sin resultado" — unchanged)
+ *
+ * @param {{result?: number}} summary — the computed summary (`computeBoxes303`'s `res.summary`,
+ *   `liveSummary`, or `liveBoxSummary`), read for its `.result` field.
+ * @param {{hasInvoices?: boolean}} [opts]
+ * @returns {'I'|'C'|'zero'|'N'|null} `null` when no finite result is available yet (nothing
+ *   computed) — callers should fall back to their own generic label in that case, same as before.
+ */
+export function deriveResultKind(summary, { hasInvoices = false } = {}) {
+  const amount = Number(summary?.result);
+  if (!Number.isFinite(amount)) return null;
+  if (amount > 0) return 'I';
+  if (amount < 0) return 'C';
+  return hasInvoices ? 'zero' : 'N';
 }
 
 function roundEur(n) {
