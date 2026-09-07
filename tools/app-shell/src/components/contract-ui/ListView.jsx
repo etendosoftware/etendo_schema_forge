@@ -979,6 +979,12 @@ export function ListView({
     if (hook.sortColumn !== colKey) {
       hook.setSortColumn(colKey);
       hook.setSortDirection('asc');
+    } else if (isDefaultSort) {
+      // At rest on this window's own default (which may be 'desc'). A plain
+      // 'asc' → 'desc' toggle here would be a same-value setState when the
+      // default direction is already 'desc' — no re-render, click looks dead.
+      // Move away from the resting direction instead of assuming it's 'asc'.
+      hook.setSortDirection(initialSortDirection === 'asc' ? 'desc' : 'asc');
     } else if (hook.sortDirection === 'asc') {
       hook.setSortDirection('desc');
     } else {
@@ -986,7 +992,7 @@ export function ListView({
       hook.setSortDirection(initialSortDirection);
     }
   }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection,
-    initialSortColumn, initialSortDirection]);
+    initialSortColumn, initialSortDirection, isDefaultSort]);
 
   const handleClearSort = useCallback(() => {
     hook.setSortColumn(initialSortColumn);

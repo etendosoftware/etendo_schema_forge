@@ -2731,6 +2731,14 @@ Related generic fix: `ListView.handleColumnSort`'s reset arm used to hardcode
 a *different* order than the one the list opened in — and a slot keying off "is the sort at rest"
 could never get back to it. It now resets to `initialSortColumn` / `initialSortDirection`.
 
+**Companion generic fix (ETP-4979):** the same handler's click-cycle branch assumed the resting
+direction for the active sort column was always `asc`, so the first click on a column whose own
+`listSortBy` default is `desc` (e.g. amortization's `accountingDate desc`) tried to set the same
+direction it was already at — a same-value `setState` that never re-renders, so the click looked
+dead. Fixed by moving away from `initialSortDirection` explicitly when at rest on the default,
+instead of assuming `asc`. See `docs/generated-custom-windows/amortization.md` (ETP-4979) for the
+full writeup and manual verification steps.
+
 ### The Tipo column — two sortable segments
 
 The Tipo cell shows **two** values (the account type, and the IBAN under it), so one header could
