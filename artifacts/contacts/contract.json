@@ -1,8 +1,8 @@
 {
   "version": "0.51.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-09-03T23:56:23.044Z",
-  "checksum": "7861811e19608940",
+  "updatedAt": "2026-09-07T16:02:11.961Z",
+  "checksum": "59dbf4c89c321fd5",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -86,6 +86,7 @@
       "detailEntity": null,
       "statusField": "none",
       "summaryFields": [],
+      "listSortBy": "name asc",
       "labelOverrides": {
         "en_US": {
           "Name": "Legal Name",
@@ -5327,6 +5328,7 @@
       "detailEntity": null,
       "statusField": "none",
       "summaryFields": [],
+      "listSortBy": "name asc",
       "labelOverrides": {
         "en_US": {
           "Name": "Legal Name",
