@@ -337,6 +337,14 @@ export const api = {
       "url": "/sws/neo/contacts/businessPartner/selectors/purchasePricelist"
     },
     {
+      "entity": "businessPartner",
+      "field": "eTGOLocation",
+      "column": "em_etgo_location",
+      "reference": "Location",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/businessPartner/selectors/eTGOLocation"
+    },
+    {
       "entity": "customer",
       "field": "priceList",
       "column": "M_PriceList_ID",
