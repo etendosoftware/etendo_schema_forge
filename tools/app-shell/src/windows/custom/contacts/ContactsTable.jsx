@@ -143,12 +143,22 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         // (a computed column has no access to the session language, so anything it
         // renders as text is frozen in the base language).
         //
-        // No `filterMode` on purpose: the AD column keeps ALLOWSORTING/ALLOWFILTERING
-        // at 'N' while it is a VIRTUAL computed column, because sorting or filtering
-        // on it would evaluate etgo_get_location() row by row over the whole table,
-        // with no index possible. Declaring a filter mode here would promise a filter
-        // the column does not offer. Add `filterMode: 'identifier'` together with the
-        // two AD flags when the column becomes stored.
+        // The column is now STORED (Computation_Mode 'S'), so it is a physical FK and
+        // the AD column has ALLOWSORTING/ALLOWFILTERING on. Both props below redirect
+        // the grid from the raw column (a UUID) to its resolved identifier.
+        //
+        // `filterMode` makes the advanced filter emit
+        //   {fieldName: 'eTGOLocation$_identifier', operator: 'iContains', ...}
+        // so typing "Madrid" matches the address text. Without it the same condition
+        // would run against the column, i.e. against UUIDs, and never match.
+        filterMode: 'identifier',
+        // `sortMode` does the same for ordering: inferSortMode() maps `type: 'string'`
+        // to 'raw', which sends `_sortBy=eTGOLocation` and orders by the UUID (this
+        // shipped broken once). 'identifier' makes resolveBackendSort send
+        // `eTGOLocation$_identifier`, and `-eTGOLocation$_identifier` for desc -- the
+        // minus prefix is required, a trailing ` desc` makes Openbravo miss the
+        // identifier path and answer 500.
+        sortMode: 'identifier',
         render: (row) => row['eTGOLocation$_identifier'] ?? '—',
       },
       {
