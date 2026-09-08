@@ -16,6 +16,7 @@ import {getCatalogOptions} from '@/lib/selectorCatalog.js';
 import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
+import { resolveOnSelectMappings } from './DataTable.jsx';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -301,6 +302,41 @@ export function applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue,
     localUpdate[fieldKey + '$_identifier'] = opts.identifier;
   }
   hook.handleUpdateChild?.(row.id, localUpdate);
+}
+
+/**
+ * Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
+ * priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
+ * the header's, so without this prune the callout would receive businessPartner=null and NEO
+ * returns listPrice=0. The addRow flow doesn't hit this because it starts from an empty values
+ * object, but existing rows include denormalized parent keys.
+ */
+export function pruneInheritedParentKeys(row, headerSnapshot) {
+  const cleanRow = { ...row };
+  for (const k of Object.keys(headerSnapshot)) {
+    const v = cleanRow[k];
+    if (v === null || v === undefined || v === '') {
+      delete cleanRow[k];
+    }
+  }
+  return cleanRow;
+}
+
+/**
+ * Applies declarative onSelectMappings (decisions.json) for the field just picked in a
+ * lookup — e.g. ETP-5037: selecting a product forces Cantidad to 0 — folding the mapping
+ * into both the PATCH body (fieldValues) and derivedUpdates (for the optimistic cache
+ * update in applyLocalChildRowUpdate above). No-op when the change didn't come from a
+ * lookup selection. Extracted out of DetailView's buildInlineRowUpdateHandler to keep
+ * that function's cognitive complexity under control (javascript:S3776).
+ */
+export function applySelectedItemMappings(fieldKey, selectedItem, fields, fieldValues, derivedUpdates, coerce) {
+  if (!selectedItem || typeof selectedItem !== 'object') return;
+  const fieldDef = fields?.find(f => f.key === fieldKey);
+  for (const { to, value } of resolveOnSelectMappings(fieldDef, selectedItem)) {
+    fieldValues[to] = coerce(value, to);
+    derivedUpdates[to] = value;
+  }
 }
 
 /**
