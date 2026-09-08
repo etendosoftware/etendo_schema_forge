@@ -57,6 +57,7 @@ Automatic filters rendered by `ListFilterBar` based on the *types* of the column
 The funnel button on the far right opens a **conditional-filter builder**. Each row is `<Donde|Y|O> <field> <operator> <value>` with a trash icon to remove it. `+ Añadir condición` adds more rows. The `Y/O` connector is a single global choice (either every row joins with AND, or every row joins with OR — no per-row nesting). `Aplicar` commits the draft; `Limpiar` wipes both the draft and the applied filter. `Guardar filtro` is visible but disabled (planned for a later phase).
 
 - Component: `AdvancedFilterBuilder.jsx` (popover body). Criteria translation: `buildAdvancedFilterCriteria(filter, columns)` in `lib/gridQuery.js`.
+- **Two hosts.** Generated windows get the funnel from `ListFilterBar` automatically. A window that draws its OWN toolbar mounts the shared `contract-ui/AdvancedFilterButton` instead (funnel + popover + active-condition badge) and evaluates the condition tree **client-side** through `applyConditions` (`windows/custom/financial-account/advancedFilterApply.js`) — the builder emits the tree but has no evaluator. Current consumers: the **Cuentas** list (ETP-5113) plus the financial-account detail's **Movimientos**, **Extractos importados** and **Conciliaciones** tabs. Each declares its filterable columns as a label-free `COLUMN_SPEC` in a `*AdvancedFilter.js` sibling, and MUST pass that spec's `key → { type }` map to `applyConditions` as `columnsByKey`, or every column silently degrades to the string operator table. `AdvancedFilterButton` takes an optional `className` for toolbars whose controls are not `h-9`.
 - State: **ephemeral** — lives in `ListView` `useState`. Refreshing the page clears it.
 - Precedence: subset → quick → document-type filters → advanced. All four always combine with AND, *except* the rows inside the advanced block which honor the `Y/O` connector (wrapped in a single `AdvancedCriteria` object when OR is selected).
 - Operators per column type:
@@ -91,6 +92,39 @@ Which operator set and which value input a column gets is decided by
 3. Otherwise, an AD **`col.column` ending in `_ID`** (e.g. `C_BPartner_ID`) is
    treated as a foreign key → `identifier`.
 4. Fallback: `text`.
+
+**A bounded-value column declared `string` gets a useless free-text box.** Step 4's `text`
+fallback offers only a free-text input, so the user must type the value exactly right with no
+hint of which ones exist. Any column whose values are a BOUNDED set the user picks from rather
+than types should be `selector` (→ `identifier`): "Is" / "Is not" then render the
+`IdentifierMultiPicker` checkbox list of the values actually present, while "Contains" /
+"Starts with" stay free text — a strict superset of the `enum` operator set, and it needs no
+declared catalogue, because the picker falls back to the in-memory rows when the column's list
+has no `entity`/`apiBaseUrl` behind it. Reserve `string` for genuinely free prose (a
+description, a note), where a picker would list one option per row. This shipped wrong twice:
+financial-account's Movimientos `documentNo`/`contact`/`glItem` (ETP-4956) and the Cuentas
+list's País (ETP-5113).
+
+**But `selector` is not the answer for every bounded set — the deciding question is whether a
+TEXT operator adds anything the picker cannot do.** `enum` (→ `enumLabel`) also gives a
+checkbox picker, and its operator set is only `equals / notEqual / isNull / isNotNull`, so an
+`enum` column marked `required` lands on exactly "Is" / "Is not". Both pickers
+(`DistinctEnumPicker` and `IdentifierMultiPicker`) ship their own search box, so "Contains" /
+"Starts with" usually buy nothing — and on a short code they invite nonsense ("contains EU"
+matching EUR). **Default to `enum` for any bounded set**, and reach for `selector` only when
+the filterable universe is bigger than the loaded rows and the backend `_distinct` endpoint is
+wired (`entity` + `apiBaseUrl` passed), where typing a fragment reaches values no picker page
+is showing yet.
+
+Mind `required` while you are there: it is what drops "Is empty" / "Is not empty". Set it only
+when the field really is mandatory — a nullable column's empty bucket is often the most useful
+filter on the list.
+
+The Cuentas list walked this whole path publicly (ETP-5113): País shipped as `string` (a bare
+text box, no hint of which countries exist), then both columns went to `selector`
+(over-applied consistency — meaningless text ops on a 3-char ISO), and both finally settled on
+`enum`, with `required` on Moneda only, because 248 of 448 accounts genuinely have no
+country.
 
 **`type: 'custom'` carries no filter semantics.** A custom cell has a bespoke
 `render`, so the underlying data type is invisible to the filter layer — it is

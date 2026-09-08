@@ -1245,8 +1245,21 @@ function oneIfTrue(bool) {
   return bool ? 1 : 0;
 }
 
-function getTableContainerStyle(hideHeader) {
-  return hideHeader ? { tableLayout: 'fixed', width: '100%' } : undefined;
+// ETP-5182 — column widths used to jump on every sort/re-fetch in normal
+// list-header mode (`hideHeader` false, e.g. Contacts): this returned
+// `undefined` for that mode, so the `<Table>` element got no `table-layout`
+// at all and the browser fell back to `table-layout: auto`, which recomputes
+// every column's width from ALL currently-rendered body-row content on every
+// re-render. Sorting re-fetches a different page of rows (backend-driven sort
+// via `onFilterChange`, see `filteredData` below), so the visible content per
+// column changed and every column width recalculated and visibly jumped.
+// `table-layout: fixed` derives column widths from the first row's cells
+// (here, the header row — `<TableHeader>` precedes `<TableBody>` in the DOM)
+// ONCE, and does not recompute them from body content afterward, so applying
+// it unconditionally (not just when hideHeader) stops the resize in both
+// modes. Exported so `DataTable.helpers.vitest.jsx` can assert this directly.
+export function getTableContainerStyle() {
+  return { tableLayout: 'fixed', width: '100%' };
 }
 
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
@@ -2254,7 +2267,7 @@ export function DataTable({
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
               widths — see renderLinesColgroup() above for the full rationale. */}
           {renderLinesColgroup({

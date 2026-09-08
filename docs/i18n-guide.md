@@ -314,6 +314,21 @@ this for free — it needs no awareness of the multi-line case.
    `%s` in it. That makes the string constant, i.e. an exact-match entry rather than a matcher —
    `PSD2_NoActiveConnectionForAccount` is the live example.
 
+**When NOT to use `backendErrors.js`: prefer a structured code (ETP-5179).** This module exists to
+rescue messages that already arrive as English text and that we cannot change — Core validators, the
+`AD_MESSAGE` catalog of a third-party module. It is a *recovery* mechanism, not the pattern to reach
+for in new code. When the backend is ours (the Etendo GO bridge handlers), have it return a
+**machine-readable code** and let the SPA own the wording: the `GET accounts` action of
+`FinancialAccountBankConnectionHandler` answers HTTP 200 with `{accounts: [], emptyReason:
+'currencyMismatch', accountCurrency: 'USD'}`, and `useBankConnectionFlow` maps the code to
+`financeAccountsBankConnectionNoAccountsCurrency` with `{ currency }`. Nothing passes through
+`translateBackendError`, because nothing English ever crosses the wire. Both traps above disappear
+with it — the SPA authors the placeholder, so there is no `%s` that never interpolates and no
+duplicated `{param}` inherited from a Core string — and the code is stable under rewording, unlike
+an English literal that silently un-translates its own toast the day someone edits it. Rule of
+thumb: **new** Etendo GO endpoint → return a code; message you inherited as English prose →
+`backendErrors.js`.
+
 ## Shared RelatedDocuments Components
 
 The `tools/app-shell/src/components/related-documents/` library provides i18n-ready building blocks:

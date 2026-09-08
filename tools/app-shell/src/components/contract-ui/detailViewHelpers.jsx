@@ -17,6 +17,7 @@ import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelet
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -744,16 +745,26 @@ function computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries) 
  * `Others` is appended later via pushOthers.
  */
 export function buildInitialTabs(p) {
-  const secondaryEntries = p.secondaryTabs.map((st, i) => {
-    const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
-    const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
-    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
-    return {
-      tab: { key: st.key, label, count: childCount },
-      weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
-      insertionIndex: i,
-    };
-  });
+  const secondaryEntries = p.secondaryTabs
+    .map((st, i) => {
+      // ETP-5116 — a capability-gated secondary tab (e.g. Accounting behind
+      // showAccountingFields) is filtered OUT of this derived, render-facing tab
+      // list only — `p.secondaryTabs` itself is left untouched so index-based
+      // (secondaryHooks[i]) and key-based (secondaryTabs.find) lookups elsewhere
+      // in DetailView keep working. A filtered-out tab never appears in the nav
+      // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
+      // for it (see the `openSecondaryTab` effect in DetailView.jsx).
+      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
+      const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
+      const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+      return {
+        tab: { key: st.key, label, count: childCount },
+        weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
+        insertionIndex: i,
+      };
+    })
+    .filter(Boolean);
 
   const entries = [...secondaryEntries];
 
@@ -1312,6 +1323,69 @@ export async function maybeSaveBeforeConfirm({ isDirty, handleSave }) {
   const saved = await handleSave?.({ silent: true });
   return !!saved?.id;
 }
+
+/**
+ * ETP-5147: unconditional (no per-window opt-in) "save before opening line UI" gate for an
+ * ALREADY-SAVED record (the `isNew` branch of each caller already saves unconditionally to
+ * mint the id needed for navigation, so this only guards the `else` path). Shared by the
+ * three line-creation triggers — the primary "Añadir línea" button (`handleAddLineClick`),
+ * a secondary tab's inline add row (`handleSecondaryAddLineToggle`), and a secondary tab's
+ * custom add modal (`handleCustomModalAddClick`) — all of which previously opened the line
+ * UI directly on an already-saved record with no save call, so a header edit made just
+ * before adding a line (e.g. changing the currency) was silently discarded: the line got
+ * created against the stale, previously-persisted header. No-op when there is nothing
+ * pending (`isDirtyHeader`, the header hook's own dirty signal — not any secondary-entity
+ * hook — the same one that drives the header Save button). On save failure, `handleSave`
+ * has already surfaced the error (toast / field errors) — this returns false so the caller
+ * aborts instead of opening the line UI on stale data.
+ *
+ * @returns {Promise<boolean>} true → proceed to open the line UI; false → abort silently.
+ */
+export async function maybeSaveBeforeAddLine({ isDirtyHeader, handleSave }) {
+  if (!isDirtyHeader) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
+/**
+ * ETP-5147: the already-saved-record branch of `handleAddLineClick` (the primary
+ * "Añadir línea" button). Gates on {@link maybeSaveBeforeAddLine}, then reuses the
+ * existing flush-in-flight-row-or-toggle logic via the two caller-supplied callbacks
+ * so DetailView.jsx keeps owning its own `addingLine`/`editingChild` state.
+ */
+export async function runPrimaryAddLineFlow({ isDirtyHeader, handleSave, addingLine, primaryAddRowRef, onReopen, onToggle }) {
+  if (!(await maybeSaveBeforeAddLine({ isDirtyHeader, handleSave }))) return;
+  if (addingLine && primaryAddRowRef.current?.flush) {
+    await primaryAddRowRef.current.flush({ closeAfterSave: false });
+    onReopen();
+    return;
+  }
+  onToggle();
+}
+
+/**
+ * ETP-5147: shared body of `handleSecondaryAddLineToggle` and `handleCustomModalAddClick` —
+ * both resolve the target tab, save-and-navigate unconditionally when creating a brand-new
+ * record whose tab `requireSavedRecord`, and otherwise gate on {@link maybeSaveBeforeAddLine}
+ * before running the caller's `onOpen` (inline add row vs. custom modal).
+ */
+export async function runSecondaryAddLineFlow({ tabKey, secondaryTabs, isNew, isDirtyHeader, hook, navigate, windowName, onOpen }) {
+  const targetTab = secondaryTabs.find(st => st.key === tabKey);
+  if (!targetTab) return;
+  if (isNew && targetTab.requireSavedRecord) {
+    const saved = await hook.handleSave();
+    if (!saved?.id) return;
+    hook.primeSaved?.(saved);
+    navigate(`/${windowName}/${saved.id}`, {
+      replace: true,
+      state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
+    });
+    return;
+  }
+  if (!(await maybeSaveBeforeAddLine({ isDirtyHeader, handleSave: hook.handleSave }))) return;
+  onOpen();
+}
+
 /**
  * ETP-4830 / ETP-5002 — keeps the `'new'` route's `editing` state honest.
  *

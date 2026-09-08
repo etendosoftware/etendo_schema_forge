@@ -76,6 +76,12 @@ const BACKEND_ERROR_MAP = {
   // deleted", with no hint that the reason was the statement being processed already.
   'Only draft (unprocessed) statements can be modified': 'backendError.statementNotDraft',
   'Only processed statements can be reactivated': 'backendError.statementNotProcessed',
+  // Reconciliation write guards (ETP-5121, QA round): reconcileGroup, prepareGroup and
+  // reconcileDifference all refuse a line whose statement is back in Borrador. The Automatch no
+  // longer proposes such a line, so the way a user reaches this is a STALE preview - the statement
+  // was reactivated in another tab between opening the suggestions and applying them.
+  'The bank statement is in draft; process it before reconciling its lines':
+    'backendError.statementDraftNotReconcilable',
   // Funds-transfer leg delete guard (FinancialAccountTransactionsHandler.handleDelete, ETP-5085).
   // The two legs of a transfer reference each other through RESTRICT self-FKs, so removing either
   // one is rejected with a 409 instead of the JDBC constraint violation that used to surface as an
