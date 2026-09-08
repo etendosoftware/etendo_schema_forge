@@ -376,9 +376,21 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `true` | Master toggle. Set to `false` for the same effect as `attachments: false`. |
-| `maxSizeMB` | number | `10` | Max file size enforced client-side before upload. The NEO servlet has its own hard limit of 10 MB (`MultipartConfig`); raising this beyond 10 will surface a server error. |
-| `allowedMimeTypes` | string[] | `undefined` (any) | MIME-type allow-list applied client-side. Supports wildcards like `"image/*"`, `"application/*"`. When omitted, every MIME type is accepted. |
+| `maxSizeMB` | number | from the server | Overrides the server-published max size for this window's dropzone. Omit it: the default now comes from `GET /sws/neo/attachments/config` (10 MB), and the NEO upload endpoint enforces the same number, so raising it here only produces a 400. |
+| `allowedMimeTypes` | string[] | from the server | **Narrows** the server-published allowlist for this window. Supports wildcards like `"image/*"`. Omit it unless the window genuinely accepts less than the rest of the app (the fiscal-model receipt tabs restrict theirs to `["application/pdf"]`). Setting it replaces the server's type rules wholesale for this dropzone — including the extension fallback — and it can only make the dropzone stricter: the backend still rejects anything outside its own list. |
+| `allowedExtensions` | string[] | from the server | Companion to `allowedMimeTypes`, used when the browser reports an empty `File.type`. Extensions are lower-case and without the dot (`["pdf"]`). Only meaningful alongside an override. |
 | `saveBeforeAttach` | boolean | `false` | ETP-4315 QA follow-up. On a brand-new (unsaved) record, `recordId` is the literal string `"new"` — truthy, so the dropzone stays enabled, but an upload against it fails server-side and the file is silently lost. When `true`, dropping a file on an unsaved record force-saves the header first (same `hook.handleSave()` → `primeSaved()` → navigate mechanism `secondaryTabs.requireSavedRecord` already uses), then uploads against the newly persisted id and lands on the saved record with this tab still open. When `false` (default), the tab keeps today's behavior — the underlying bug still exists on any window that hasn't opted in. Enabled today only on `purchase-invoice`, where attaching the supplier's original document before finishing data entry is the expected flow; other windows are a deliberately separate follow-up (see the ETP-4315 comment thread) rather than a blanket auto-save-on-attach for every window. |
+
+**Where the accepted types come from (ETP-5038).** The allowlist and the max size are owned by
+the BACKEND (`NeoAttachmentPolicy.java` in `com.etendoerp.go`) and served by
+`GET /sws/neo/attachments/config`; the Attachments tab fetches it once per session and builds its
+`accept` attribute, its client-side check and its "Supported formats" label from the response —
+the same list the upload endpoint enforces, so the UI cannot promise a format the API will reject.
+Accepted today: PDF, Word, Excel, PowerPoint, images, XML, ZIP and RTF. Plain text is **not**
+accepted (that was the reported bug: the label said one thing and `text/plain` sat in the list).
+The backend rejects with HTTP 400 on extension, magic bytes or size, so a spoofed `Content-Type`
+buys nothing. To change what the whole app accepts, edit `NeoAttachmentPolicy.java` — not a
+per-window `decisions.json`, which can only narrow.
 
 **Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
