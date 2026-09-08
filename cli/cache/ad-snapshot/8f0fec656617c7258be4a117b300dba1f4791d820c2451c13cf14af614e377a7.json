@@ -6988,7 +6988,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "24de5d37e92e16ef3d88c124f01dc9bda8cf8cecace327fef4be2ddb427c8085",
+      "checksum": "446aecaac4160c8b4f4b6ca8261019fe59ce73b1dc0977d93677c7904e2a5267",
       "params": [
         "167"
       ],
@@ -8366,6 +8366,12 @@
           "ad_table_id": "318",
           "columnname": "EM_Etvfac_Issued_Externally",
           "position": "231"
+        },
+        {
+          "ad_column_id": "F580979CD28F42B8BFD32B2BC9E65DAD",
+          "ad_table_id": "318",
+          "columnname": "EM_ETGO_Tbai_Status",
+          "position": "991"
         },
         {
           "ad_column_id": "0DE0E9401AFB4B869A754BF45B75278E",
@@ -11390,7 +11396,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "331fd87c9748cb13714049df1bc3e38ab053a7f6290f9d211f8496a8feeec748",
+      "checksum": "0e8a388f8b5f08a0df0b560a92fa776a8f4d4e75e16f46ffd2465bf00208199b",
       "params": [
         "183"
       ],
@@ -12768,6 +12774,12 @@
           "ad_table_id": "318",
           "columnname": "EM_Etvfac_Issued_Externally",
           "position": "231"
+        },
+        {
+          "ad_column_id": "F580979CD28F42B8BFD32B2BC9E65DAD",
+          "ad_table_id": "318",
+          "columnname": "EM_ETGO_Tbai_Status",
+          "position": "991"
         },
         {
           "ad_column_id": "0DE0E9401AFB4B869A754BF45B75278E",
@@ -16680,7 +16692,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
-      "checksum": "8b35d95b690d62db877dd19d0cec003ec6ed64f3d3a3d4ce636b9c4f120e2df5",
+      "checksum": "d059e300f7f993d5fed36b8f7d856053d9828016d9c0e4d2c052dd2b6fcd6ae7",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -17656,6 +17668,12 @@
           "ad_table_id": "318",
           "columnname": "EM_Etvfac_Issued_Externally",
           "position": "231"
+        },
+        {
+          "ad_column_id": "F580979CD28F42B8BFD32B2BC9E65DAD",
+          "ad_table_id": "318",
+          "columnname": "EM_ETGO_Tbai_Status",
+          "position": "991"
         },
         {
           "ad_column_id": "0DE0E9401AFB4B869A754BF45B75278E",

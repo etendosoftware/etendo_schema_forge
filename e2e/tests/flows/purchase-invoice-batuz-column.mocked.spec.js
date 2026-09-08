@@ -21,12 +21,15 @@ import {
  *     column is independent: a regression that coupled the two hid SII outside
  *     Bizkaia, so the non-Bizkaia case asserts SII is STILL there.
  *
- *  B. CONTENT — `row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')`.
- *     The real backend status wins over the boolean flag, which is what stops a
- *     `Rechazado` from ever being read as a cheerful "Enviada". The fallback goes
- *     through `isSent()` because NEO may deliver the AD flag as the character
- *     `'N'`, which is truthy in JS — a plain truthy test reports "Enviada" for an
- *     unsent invoice.
+ *  B. CONTENT — `row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')`.
+ *     `eTGOTbaiStatus` is the real backend status — since ETP-5216, backed by the
+ *     stored computed AD column `em_etgo_tbai_status` (previously the synthetic
+ *     `tbaiSyncEstado` field injected server-side by the now-deleted
+ *     TbaiSyncStatusInjector). It wins over the boolean flag, which is what stops
+ *     a `Rechazado` from ever being read as a cheerful "Enviada". The fallback
+ *     goes through `isSent()` because NEO may deliver the AD flag as the
+ *     character `'N'`, which is truthy in JS — a plain truthy test reports
+ *     "Enviada" for an unsent invoice.
  *
  * Locator notes:
  *  - Columns are addressed through DataTable's generic testids
@@ -39,6 +42,10 @@ import {
  *  - Cell text is asserted against the real i18n labels resolved by `t()` — note
  *    `Recibido` renders as "Aceptado" in es_ES, so a literal-string assertion
  *    would be wrong.
+ *  - The column `key` (and therefore its DataTable testid suffix) is
+ *    `eTGOTbaiStatus`, not the pre-ETP-5216 synthetic `_tbaiStatus` — this is
+ *    exactly what makes the column pass `isFilterableColumn` (it now carries a
+ *    real `column`), the defect this migration fixes.
  */
 
 const SPEC = 'purchase-invoice';
@@ -62,11 +69,12 @@ const BASE_ROW = {
  * key `FiscalStatusBadge` resolves for that row.
  */
 const ROWS = [
-  // tbaiSyncEstado wins over tbaiIssent — the CRITICAL case: a rejection must
-  // never be reported as "Enviada", even though the invoice WAS submitted.
-  { id: 'PI_REJECTED', orderReference: 'PI-REJECTED', tbaiSyncEstado: 'Rechazado', tbaiIssent: true, expected: 'fiscalMonitor.tbai.status.Rechazado' },
-  { id: 'PI_ACCEPTED', orderReference: 'PI-ACCEPTED', tbaiSyncEstado: 'Recibido', tbaiIssent: true, expected: 'fiscalMonitor.tbai.status.Recibido' },
-  { id: 'PI_ERROR', orderReference: 'PI-ERROR', tbaiSyncEstado: 'Error', tbaiIssent: 'Y', expected: 'fiscalMonitor.tbai.status.Error' },
+  // eTGOTbaiStatus (the real stored computed AD column, ETP-5216) wins over
+  // tbaiIssent — the CRITICAL case: a rejection must never be reported as
+  // "Enviada", even though the invoice WAS submitted.
+  { id: 'PI_REJECTED', orderReference: 'PI-REJECTED', eTGOTbaiStatus: 'Rechazado', tbaiIssent: true, expected: 'fiscalMonitor.tbai.status.Rechazado' },
+  { id: 'PI_ACCEPTED', orderReference: 'PI-ACCEPTED', eTGOTbaiStatus: 'Recibido', tbaiIssent: true, expected: 'fiscalMonitor.tbai.status.Recibido' },
+  { id: 'PI_ERROR', orderReference: 'PI-ERROR', eTGOTbaiStatus: 'Error', tbaiIssent: 'Y', expected: 'fiscalMonitor.tbai.status.Error' },
   // No sync row yet → fall back to the boolean flag, in both serialisations.
   { id: 'PI_SENT_BOOL', orderReference: 'PI-SENT-BOOL', tbaiIssent: true, expected: 'fiscalMonitor.tbai.status.Enviada' },
   { id: 'PI_SENT_CHAR', orderReference: 'PI-SENT-CHAR', tbaiIssent: 'Y', expected: 'fiscalMonitor.tbai.status.Enviada' },
@@ -116,7 +124,7 @@ async function openList(page, { profile, territory }) {
   await expect(page.getByTestId(`row-${ROWS[0].id}`)).toBeVisible({ timeout: 15_000 });
 }
 
-const tbaiHeader = (page) => page.getByTestId('column-header-_tbaiStatus');
+const tbaiHeader = (page) => page.getByTestId('column-header-eTGOTbaiStatus');
 const siiHeader = (page) => page.getByTestId('column-header-_siiStatus');
 
 test.describe('Purchase Invoice list — Estado Batuz column (ETP-5087)', () => {
@@ -152,13 +160,13 @@ test.describe('Purchase Invoice list — Estado Batuz column (ETP-5087)', () => 
     });
 
     for (const row of ROWS) {
-      test(`${row.id}: tbaiSyncEstado=${JSON.stringify(row.tbaiSyncEstado ?? null)} tbaiIssent=${JSON.stringify(row.tbaiIssent ?? null)} renders ${row.expected.split('.').pop()}`, async ({ page }) => {
-        await expect(page.getByTestId(`cell-${row.id}-_tbaiStatus`)).toHaveText(t(row.expected));
+      test(`${row.id}: eTGOTbaiStatus=${JSON.stringify(row.eTGOTbaiStatus ?? null)} tbaiIssent=${JSON.stringify(row.tbaiIssent ?? null)} renders ${row.expected.split('.').pop()}`, async ({ page }) => {
+        await expect(page.getByTestId(`cell-${row.id}-eTGOTbaiStatus`)).toHaveText(t(row.expected));
       });
     }
 
     test('a rejected invoice is never reported as sent, and its SII column is unaffected', async ({ page }) => {
-      const cell = page.getByTestId('cell-PI_REJECTED-_tbaiStatus');
+      const cell = page.getByTestId('cell-PI_REJECTED-eTGOTbaiStatus');
       await expect(cell).toHaveText(t('fiscalMonitor.tbai.status.Rechazado'));
       await expect(cell).not.toHaveText(t('fiscalMonitor.tbai.status.Enviada'));
 
