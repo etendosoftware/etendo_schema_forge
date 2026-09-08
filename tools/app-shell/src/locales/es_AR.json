@@ -19649,6 +19649,7 @@
     "backendError.statementNotDraft": "No es posible eliminar un extracto procesado. Reactivalo para poder eliminarlo.",
     "backendError.statementHasMatchedLines": "No es posible eliminar un extracto con líneas conciliadas. Deshacé la conciliación de esas líneas para poder eliminarlo.",
     "backendError.statementNotProcessed": "Solo los extractos procesados se pueden reactivar",
+    "backendError.statementDraftNotReconcilable": "El extracto está en borrador. Procesalo antes de conciliar sus líneas.",
     "backendError.ibanAutoFillFailed": "No se pudo establecer el IBAN automáticamente ({iban}). Ingresalo manualmente en la cuenta financiera.",
     "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
     "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
