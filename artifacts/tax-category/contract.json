@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-09-07T19:24:08.704Z",
-  "checksum": "59687d020ee293b3",
+  "updatedAt": "2026-09-08T11:40:48.141Z",
+  "checksum": "f27c7fe59acde6e4",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -57,7 +57,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 2,
+            "seq": 5,
             "validation": {
               "maxLength": 255
             }
@@ -75,7 +75,7 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 3,
+            "seq": 6,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -123,7 +123,7 @@
               }
             ],
             "section": "principal",
-            "seq": 5,
+            "seq": 2,
             "validation": {
               "maxLength": 60
             }
@@ -163,7 +163,7 @@
               }
             ],
             "section": "principal",
-            "seq": 6,
+            "seq": 3,
             "validation": {
               "maxLength": 60
             }
@@ -245,7 +245,7 @@
               }
             ],
             "section": "principal",
-            "seq": 7,
+            "seq": 4,
             "validation": {
               "maxLength": 60
             }
@@ -268,7 +268,7 @@
             },
             "defaultValue": "Y",
             "section": "principal",
-            "seq": 8,
+            "seq": 7,
             "validation": {
               "required": true,
               "maxLength": 1

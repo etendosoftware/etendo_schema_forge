@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
   "updatedAt": "2026-09-07T19:24:08.704Z",
-  "contractChecksum": "59687d020ee293b3",
+  "contractChecksum": "f27c7fe59acde6e4",
   "apiPrediction": {
     "specName": "tax-category",
     "baseUrl": "/sws/neo/tax-category",

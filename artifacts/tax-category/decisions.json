@@ -23,33 +23,33 @@
           "section": "principal",
           "seq": 1
         },
-        "description": {
-          "section": "principal",
-          "seq": 2
-        },
-        "default": {
-          "grid": true,
-          "section": "principal",
-          "seq": 3
-        },
         "asbom": {
           "visibility": "discarded"
         },
         "obsptiTaxtype": {
           "section": "principal",
-          "seq": 5
+          "seq": 2
         },
         "obsptiTransactiontype": {
           "section": "principal",
-          "seq": 6
+          "seq": 3
         },
         "obsptiRatetype": {
           "section": "principal",
-          "seq": 7
+          "seq": 4
+        },
+        "description": {
+          "section": "principal",
+          "seq": 5
+        },
+        "default": {
+          "grid": true,
+          "section": "principal",
+          "seq": 6
         },
         "aeatsiiDeclarable": {
           "section": "principal",
-          "seq": 8
+          "seq": 7
         }
       }
     },
