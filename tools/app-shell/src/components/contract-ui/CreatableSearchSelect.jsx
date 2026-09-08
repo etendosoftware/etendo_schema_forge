@@ -361,6 +361,15 @@ export function CreatableSearchSelect({
   const filterKey = field.dependsOn?.filterKey;
   const parentValue = formData?.[parentKey];
 
+  // Compare selectorContext by CONTENT, not by reference — mirrors SelectorInput.jsx's
+  // `contextKey`. Most callers pass an inline-built object (a new reference every render),
+  // which is fine to omit from a deps array as long as its VALUES never actually change
+  // across renders. BillingPreferencesForm.jsx is the exception: it deliberately rebuilds
+  // `selectorContext` keyed on the sibling Payment Method value (`Fin_Paymentmethod_ID` /
+  // `PO_Paymentmethod_ID`) so the Account list can be filtered by it. Without this key in
+  // the fetch effect's deps, that context change was silently ignored (ETP-5183).
+  const selectorContextKey = JSON.stringify(selectorContext ?? {});
+
   // Clears the visible search text. Cheap and synchronous-ish — safe to call from the
   // close/blur path (see the input's onBlur below).
   //
@@ -414,7 +423,7 @@ export function CreatableSearchSelect({
     }
     if (!selectorUrl || !token) return;
 
-    const cacheKey = `${parentValue ?? ''}:${refreshKey}`;
+    const cacheKey = `${parentValue ?? ''}:${refreshKey}:${selectorContextKey}`;
     if (loadedForRef.current === cacheKey) return;
     loadedForRef.current = cacheKey;
 
@@ -446,10 +455,12 @@ export function CreatableSearchSelect({
       })
       .catch(() => { setOptions([]); })
       .finally(() => setLoading(false));
-  // selectorContext intentionally omitted — it is memoized upstream and its reference
-  // is stable across renders for all current callers.
+  // selectorContext itself is intentionally NOT a dep (most callers pass a fresh object
+  // reference every render, which would re-fetch on every parent re-render). selectorContextKey
+  // — its JSON.stringify — IS a dep so a real CONTENT change (e.g. BillingPreferencesForm.jsx's
+  // Payment-Method-keyed context) still re-triggers the fetch (ETP-5183).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey, apiFetch]);
+  }, [serverSearch, parentValue, selectorUrl, token, filterKey, refreshKey, apiFetch, selectorContextKey]);
 
   // When options load and we still lack a display label for the current value, resolve
   // one locally so the chip is never blank while the caller catches up (ETP-4600 Gap B —

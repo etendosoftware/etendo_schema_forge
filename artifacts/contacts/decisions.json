@@ -399,7 +399,8 @@
           "visibility": "editable",
           "form": false,
           "reference": "FIN_Financial_Account",
-          "inputMode": "selector",
+          "inputMode": "dependent",
+          "dependsOn": { "field": "pOPaymentMethod", "filterKey": "PO_Paymentmethod_ID" },
           "section": "principal",
           "displayLogic": "record.vendor"
         },
@@ -444,7 +445,8 @@
           "visibility": "editable",
           "form": false,
           "reference": "FIN_Financial_Account",
-          "inputMode": "selector",
+          "inputMode": "dependent",
+          "dependsOn": { "field": "paymentMethod", "filterKey": "Fin_Paymentmethod_ID" },
           "section": "principal",
           "displayLogic": "record.customer"
         },

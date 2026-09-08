@@ -1,8 +1,8 @@
 {
-  "version": "0.51.0",
+  "version": "0.52.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-09-03T23:56:23.044Z",
-  "checksum": "7861811e19608940",
+  "updatedAt": "2026-09-08T18:30:59.892Z",
+  "checksum": "68c2acb4fcdf757d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1274,7 +1274,11 @@
             "grid": false,
             "form": false,
             "reference": "FIN_Financial_Account",
-            "inputMode": "selector",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "paymentMethod",
+              "filterKey": "Fin_Paymentmethod_ID"
+            },
             "section": "principal",
             "validation": {
               "maxLength": 32
@@ -1377,7 +1381,11 @@
             "grid": false,
             "form": false,
             "reference": "FIN_Financial_Account",
-            "inputMode": "selector",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "pOPaymentMethod",
+              "filterKey": "PO_Paymentmethod_ID"
+            },
             "section": "principal",
             "validation": {
               "maxLength": 32
@@ -11777,8 +11785,17 @@
         "field": "account",
         "column": "FIN_Financial_Account_ID",
         "reference": "FIN_Financial_Account",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/account"
+        "inputMode": "dependent",
+        "url": "/sws/neo/contacts/businessPartner/selectors/account",
+        "context": {
+          "required": [
+            {
+              "param": "Fin_Paymentmethod_ID",
+              "source": "field",
+              "field": "paymentMethod"
+            }
+          ]
+        }
       },
       {
         "entity": "businessPartner",
@@ -11801,7 +11818,7 @@
         "field": "pOFinancialAccount",
         "column": "PO_Financial_Account_ID",
         "reference": "FIN_Financial_Account",
-        "inputMode": "selector",
+        "inputMode": "dependent",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOFinancialAccount",
         "context": {
           "required": [
