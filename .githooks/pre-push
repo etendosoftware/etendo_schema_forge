@@ -649,11 +649,23 @@ run_e2e_suite() {
   local log="$REPO_DIR/tmp/pre-push/e2e-${suite}.log"
   mkdir -p "$REPO_DIR/tmp/pre-push"
 
+  # Integration specs share one live Etendo/Postgres tenant sequentially (workers:1,
+  # see playwright.config.js) — shared-state flakiness there is expected, and CI already
+  # gets 1 free retry (retries: process.env.CI ? 1 : 0). Local pre-push had 0, so a
+  # single flaky spec failed the whole push with no cushion. Mocked specs are fully
+  # isolated per-page fakes — a flake there is a real bug, so they keep the default (0
+  # locally). E2E_RETRIES, if already exported by the caller, always wins.
+  local retries="${E2E_RETRIES:-}"
+  if [ -z "$retries" ] && [ "$suite" = "integration" ]; then
+    retries=1
+  fi
+
   echo "==> Playwright E2E — ${label}..."
   start=$SECONDS
   set +e
   ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
       E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
+      E2E_RETRIES="${retries:-0}" \
       ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
   st=${PIPESTATUS[0]}
   set -e

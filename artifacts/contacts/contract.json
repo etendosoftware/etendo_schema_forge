@@ -1,7 +1,8 @@
 {
-  "version": "0.52.0",
-  "generatedAt": "2026-09-02T14:00:00.000Z",
-  "checksum": "ea7d24f53dd6dc01",
+  "version": "0.51.0",
+  "generatedAt": "2026-08-25T11:37:47.653Z",
+  "updatedAt": "2026-09-03T23:56:23.044Z",
+  "checksum": "7861811e19608940",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -139,6 +140,9 @@
       ],
       "layoutType": "default",
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",
@@ -5376,6 +5380,9 @@
         }
       ],
       "linesLayout": "inlineEditable",
+      "vectorSearch": {
+        "target": "business-partner"
+      },
       "import": {
         "enabled": true,
         "spec": "contacts",
@@ -10892,14 +10899,6 @@
             "required": false
           },
           {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "smfswsDefaultWsRole",
             "apiKey": "smfswsDefaultWsRole",
             "column": "EM_Smfsws_Default_Ws_Role_ID",
@@ -10952,6 +10951,14 @@
             "apiKey": "username",
             "column": "UserName",
             "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           }

@@ -22,30 +22,7 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
-import { isDraftStatement } from './statementStatus.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
-
-/**
- * Why the bulk-delete trigger is blocked, as a ready-to-show tooltip, or `null` when it is free
- * to fire. Two independent reasons, checked in order of how absolute they are (ETP-4921):
- *
- *  1. The account is connected to the bank (PSD2). Its statements come from the bank and are
- *     read-only, whatever their state — nothing the user does in this window unblocks it, so this
- *     wins over the per-statement reason below, which would otherwise point them at a state they
- *     could try to change.
- *  2. The selection contains a processed statement. That one IS state-dependent: reactivating it
- *     first makes it deletable.
- *
- * A plain function rather than inline ternaries so the precedence is stated once and testable.
- *
- * @param {{ ui: Function, bankConnectionSynced: boolean, selectionHasNonDraft: boolean }} args
- * @returns {string|null}
- */
-export function resolveBulkDeleteBlock({ ui, bankConnectionSynced, selectionHasNonDraft }) {
-  if (bankConnectionSynced) return ui('financeAccountStatementsRowBankSyncedTooltip');
-  if (selectionHasNonDraft) return ui('financeAccountStatementsRowProcessedTooltip');
-  return null;
-}
 
 /**
  * Imported Statements tab for the Financial Account detail view.
@@ -132,30 +109,12 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     setLinesRefreshToken((t) => t + 1);
   }, [reload]);
 
-  // ETP-4921 — a processed statement can never be deleted (Classic parity: once downloaded it's
-  // processed, and reversing that takes an explicit Reactivar first). The per-row hover trash
-  // was already hidden for those rows (StatementsTable's own isDraftStatement gate), but the
-  // SELECTION checkboxes have no such gate — they double as the source for the tab's Export
-  // button, so hiding them would break exporting a processed statement's lines. The bulk-delete
-  // trigger is what actually attempts the delete, so THAT is what gets blocked here: whenever the
-  // current selection includes a non-draft statement, the button disables with the same "cannot
-  // be modified while processed" tooltip StatementRowKebab already shows for Procesar — "don't
-  // let them touch the trash can", not "let them try and fail".
-  const selectionHasNonDraft = useMemo(
-    () => Array.from(selectedIds).some((id) => {
-      const s = statements.find((st) => st.id === id);
-      return s ? !isDraftStatement(s) : false;
-    }),
-    [selectedIds, statements],
-  );
-  // Two independent reasons the bulk trash refuses to fire. The connected-account one is checked
-  // FIRST because it is unconditional: on a PSD2 account no statement is deletable at all, so
-  // saying "processed statements cannot be modified" there would point the user at a state they
-  // could try to change, when nothing in this window unblocks it.
-  const bulkDeleteDisabledReason = resolveBulkDeleteBlock({
-    ui, bankConnectionSynced, selectionHasNonDraft,
-  });
-
+  // ETP-5111 — the bulk trash is no longer pre-disabled here. ETP-4921 blocked it up front for a
+  // processed statement or a bank-connected (PSD2) account ("don't let them touch the trash
+  // can"); the unified delete rule inverts that: the delete is attempted and the backend's own
+  // 409 reason is what the user reads (spelled out when a single statement was selected, and
+  // counters-only above that). The per-row hover trash keeps its own `isDraftStatement` gate —
+  // that surface is out of scope.
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteStatement(id),
     onOutcome: (succeeded, failed) => {
@@ -304,7 +263,6 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         deleting={bulkDeleting}
         onCancel={clearSelection}
         onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-        disabledReason={bulkDeleteDisabledReason}
         data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
       <StatementsToolbar
         search={search}

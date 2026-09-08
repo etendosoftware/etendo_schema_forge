@@ -100,7 +100,53 @@ React SPA -> /sws/neo/email-contracts/{contractName}/send
   -> External email provider
 ```
 
-The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads. See [transactional-email-framework.md](transactional-email-framework.md), [email-contracts.md](email-contracts.md), and [ops/transactional-email-security.md](ops/transactional-email-security.md).
+The SPA sends a contract command. It must not receive provider secrets or send arbitrary `to/template/data` provider payloads.
+
+Reading back what was sent is a separate, read-only leg (ETP-5069):
+
+```
+React SPA (EmailsCard) -> GET /sws/neo/documentemailhistory?recordId={id}
+  -> SFDocumentEmailHistory (NEO pseudo-spec bridge)
+  -> ETGO_EMAIL_SEND_LOG (client-level; DAL readable-client/org filtering IS the access rule)
+```
+
+The two legs write and read **different** tables on purpose: `ETGO_Email_Safety` stays the
+client-0 anti-abuse ledger with hashed recipients and no copy, while `ETGO_EMAIL_SEND_LOG` is the
+per-tenant readable history (recipients, subject, operator message in clear) that only the six
+document-send contracts opt into. That split is an explicit privacy decision — see
+[ops/transactional-email-security.md](ops/transactional-email-security.md) → *Email Audit Redaction
+& Storage Policy* before changing either. See also
+[transactional-email-framework.md](transactional-email-framework.md),
+[email-contracts.md](email-contracts.md), and
+[email-inventory.md](email-inventory.md) §5.
+
+## Optional Global Semantic Search
+
+Schema Forge's global command palette keeps its page search and can additionally show semantic
+matches for windows whose `decisions.json` declares `window.vectorSearch.target`. The pipeline
+copies that opt-in into each `frontendContract.window.vectorSearch`, and the SPA aggregates those
+contract targets before calling `GET /sws/neo/vectorsearch?query=...&targets=...`.
+`com.etendoerp.go` delegates the embedding and pgvector query to `com.etendoerp.db.extended`.
+
+Participation is absent by default: windows that do not declare `vectorSearch` need no explicit
+opt-out. Each declared target must match an active DB Extended search target and all selected sources
+must have compatible embedding profiles. DB Extended derives tenant scope from the authenticated
+`OBContext`, so the browser never supplies a client or organization identifier; Go additionally
+rejects targets whose source AD table is not readable by the current role. If no eligible
+contract is present, unavailable, or the vector capability is disabled, the command palette retains
+its normal page search and shows no semantic matches.
+When a user opens the palette from an opted-in window, a removable pill initially scopes semantic
+requests to that window's contract target. Removing it restores every eligible contract target.
+When semantic matches are available, their group is displayed before navigation results so the
+meaning-based result is the first result category shown to the user.
+While the semantic request is in flight, the command palette displays a localized visible
+searching status below the input. Each match shows the localized window name declared by its
+contract (for example, `Product`), so results from multiple entity types remain distinguishable.
+It is linked through the spec name that declared its target in the contract and opens that
+record's window route in edit mode.
+The endpoint returns a normalized `score` from 0 to 1 for every match and accepts inclusive
+`minScore` and `maxScore` parameters. Its default range is `0.60` to `1.00`, avoiding unrelated
+results when a caller does not explicitly supply a narrower range.
 
 ## Repository Structure
 
@@ -362,6 +408,10 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `SFUpsertEntity` | `...webhooks` | Webhook: create/update entity |
 | `SFUpsertField` | `...webhooks` | Webhook: create/update field |
 | `SFPopulateSpec` | `...webhooks` | Webhook: populate from AD |
+| `SFDocumentEmailHistory` | `...webhooks` | Webhook: one document's readable email send history (ETP-5069). Reached only via the NEO pseudo-spec bridge; no admin mode, no role gate — DAL's readable-client/org filtering is the access rule. |
+| `TransactionalEmailService` | `...schemaforge.email` | Executes email contracts; single choke point that writes both the audit row and the history row |
+| `DalEmailSendLogStore` | same | Writes `ETGO_EMAIL_SEND_LOG` rows, without admin mode, so the row carries the real tenant and sender |
+| `DalEmailSafetyStore` | same | Writes the client-0 anti-abuse ledger `ETGO_Email_Safety` (hashed recipients, no copy) |
 
 ### Database Tables
 
@@ -370,6 +420,8 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `ETGO_SF_SPEC` | 1 per window/process/report | Top-level spec: name, type (W/P/R), linked AD_Window or AD_Process |
 | `ETGO_SF_ENTITY` | 1 per exposed tab | Entity: HTTP method flags, CDI hook qualifier, sequence |
 | `ETGO_SF_FIELD` | 1 per exposed column | Field: included/excluded, read-only, default value |
+| `ETGO_EMAIL_SEND_LOG` | 1 per send attempt, for the six document-send email contracts only | Readable per-document email history: recipients, subject, operator message, download link, status, sender — **in clear**. Client/Organization level (`ACCESSLEVEL` 3). Backoffice window: *Email Send History* (read-only). Indexed on `RECORD_ID` and `SENT_AT`. |
+| `ETGO_Email_Safety` | 1 per send attempt, every contract, plus throttle and kill-switch rows | Anti-abuse ledger, discriminated by `RECORD_TYPE`. Client 0; recipients SHA-256 hashed; no subject, no body. Not a readable history — see `ops/transactional-email-security.md`. |
 
 ### API Endpoints
 
@@ -385,6 +437,8 @@ All URLs relative to `/sws/neo`:
 | `/{spec}/{entity}/{id}/action/{col}` | POST | Execute button action |
 | `/{spec}` | GET, POST | Process spec: describe / execute |
 | `/{spec}` | GET, POST | Report spec: describe / generateReport (binary file response) |
+| `/email-contracts/{contractName}/send` | POST | Execute a transactional email contract |
+| `/documentemailhistory?recordId=<id>[&specName=<spec>]` | GET | One document's email send history, newest first. Envelope `{"result": "<JSON string>"}` — `result` is a STRING the caller parses — or `{"error": "<message>"}` (HTTP 500). Row shape: `modules/com.etendoerp.go/docs/neo-headless.md` §8j |
 
 ---
 

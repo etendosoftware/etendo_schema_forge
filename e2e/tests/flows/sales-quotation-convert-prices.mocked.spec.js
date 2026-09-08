@@ -257,6 +257,21 @@ test.describe('Sales Quotation — convert to order with preserved prices (ETP-4
     // After success the modal transitions to a success state showing the new docNo
     // QuotationConfirmModal sets createdDoc.documentNo = order.documentNo from the
     // sales-order/header list response which returns NEW_ORDER (documentNo: 'SO-NEW-001')
-    await expect(page.getByText('SO-NEW-001')).toBeVisible({ timeout: 8_000 });
+    //
+    // Scoped to the modal's own success panel, not a bare page-wide getByText: the same
+    // POST also fires `sales-quotation:document-created`, which the underlying page's
+    // "Documentos" panel (RelatedDocuments.jsx) listens for — it refetches sales-order/header
+    // (this same mock) and renders its OWN chip for the new order (DocChip.jsx), using the
+    // identical `orderDoc: "Pedido #{number}"` translation as the modal. Both fetches race
+    // independently, so whether that panel's chip has rendered yet by the time this assertion
+    // polls is nondeterministic — occasionally BOTH are in the DOM together and a page-wide
+    // getByText('SO-NEW-001') hits a strict-mode violation (2 matching elements). This is a
+    // real, intentional UX overlap (ETP-4779), not a bug to fix in the app — the test just
+    // needs to look in the right place. "Pedido creado" (sqOrderCreated) and the docNo span
+    // are DIRECT SIBLINGS under the same wrapper div in QuotationConfirmModal.jsx, so going up
+    // exactly one level from the (unique-to-this-modal) label lands on that shared wrapper,
+    // regardless of how many divs enclose the modal further out.
+    const successPanel = page.getByText('Pedido creado').locator('xpath=..');
+    await expect(successPanel.getByText('SO-NEW-001')).toBeVisible({ timeout: 8_000 });
   });
 });
