@@ -1,8 +1,8 @@
 {
-  "version": "0.52.0",
+  "version": "0.53.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-09-08T18:02:55.097Z",
-  "checksum": "353495b774deed6d",
+  "updatedAt": "2026-09-08T18:27:41.417Z",
+  "checksum": "22c7e9ecd5f6cd7c",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1515,6 +1515,10 @@
             "form": false,
             "reference": "Location",
             "inputMode": "search",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
             "validation": {
               "maxLength": 32
             }
