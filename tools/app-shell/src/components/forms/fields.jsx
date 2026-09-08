@@ -365,7 +365,12 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
         sideOffset={6}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
+        // `z-[600]` overrides the shared PopoverContent's `z-50`. A dropdown has to paint above
+        // whatever opened it, and this one is used inside hosts that stack far higher than 50 â€”
+        // LifecycleConfirmModal's portal sits at 500 (it has to clear Radix dialogs), which left
+        // the option list rendering BEHIND the card, with only the part overflowing past its bottom
+        // edge visible. 600 clears that host while staying under the app's toast/overlay layers.
+        className="z-[600] max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
         // Auto-width, non-truncating panel (matches the "Impuesto" line-item selector,
         // InlineSearchCombo's ETP-4600 behavior): the field itself stays a fixed width,
         // but the dropdown grows to fit its longest option instead of wrapping a long

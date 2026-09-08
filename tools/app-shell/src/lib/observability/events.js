@@ -24,6 +24,7 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   ENTITY: 'entity',
   ERROR_CODE: 'errorCode',
   FLAG_KEY: 'flagKey',
+  FLOW_ID: 'flowId',
   HAS_COMMENT: 'hasComment',
   OPERATION: 'operation',
   POSITION: 'position',
@@ -34,9 +35,11 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   SCORE: 'score',
   SOURCE: 'source',
   TAGS: 'tags',
+  TOTAL: 'total',
   SPEC_NAME: 'specName',
   STATUS: 'status',
   STEP: 'step',
+  STEP_ID: 'stepId',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
   USERNAME: 'username',
@@ -86,6 +89,47 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.VARIANT,
       OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
       OBSERVABILITY_PROPERTY_KEYS.USERNAME,
+    ],
+  }),
+  // --- guided walkthroughs (ETP-5144) --------------------------------------
+  // Deliberately NOT one event per step: 15 steps times every user is noise,
+  // and `walkthrough_finished.step` already answers the only question worth
+  // asking of the data -- WHERE a tour loses people.
+  WALKTHROUGH_MENU_OPENED: defineEvent('walkthrough_menu_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      // `count`: tutorials still unannounced when the menu was opened, i.e.
+      // whether the dot was lit at the moment of the click.
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      // `total`: tutorials on offer, so `count` has a denominator.
+      OBSERVABILITY_PROPERTY_KEYS.TOTAL,
+    ],
+  }),
+  WALKTHROUGH_STARTED: defineEvent('walkthrough_started', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
+      // The status the flow held BEFORE this run, which separates a first-timer
+      // from a repeater from someone coming back to a revised tour.
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+      // `total`: steps in the flow.
+      OBSERVABILITY_PROPERTY_KEYS.TOTAL,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  WALKTHROUGH_FINISHED: defineEvent('walkthrough_finished', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
+      // 'completed' | 'abandoned' -- one event with an outcome rather than two
+      // events, so the funnel is a single step with a breakdown.
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+      // Where the run ended: `step` is the index (numeric-only per the payload
+      // policy) and `stepId` the authored id.
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.STEP_ID,
+      OBSERVABILITY_PROPERTY_KEYS.TOTAL,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
     ],
   }),
   WINDOW_OPENED: defineEvent('window_opened', {
