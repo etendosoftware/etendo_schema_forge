@@ -60,30 +60,31 @@ function getByPath(obj, path) {
 }
 
 /**
- * Apply a field's declarative `onSelectMappings` after a lookup selection.
- * Each mapping copies a value from the selected `item` into another field on
- * the row, optionally with a display label resolved from one of several keys.
- * Replaces window-specific branches like `if (entity === 'internalConsumptionLine')`
- * with metadata declared in the contract.
+ * Resolves a field's declarative `onSelectMappings` against a selected lookup
+ * item into a plain list of `{ to, value, label }` results — pure, no React
+ * side effects. Each mapping copies a value into another field on the row —
+ * either read from the selected `item` (`from`, a dot path) or a fixed
+ * literal (`value`, used as-is, no `item` lookup) — optionally with a display
+ * label resolved from one of several keys. Replaces window-specific branches
+ * like `if (entity === 'internalConsumptionLine')` with metadata declared in
+ * the contract.
  *
- * ETP-5039: every mapped target is reported through the optional `markTouched`
- * callback. A value the user selected in the lookup drawer is an explicit user
- * choice, so a callout fired by the same selection (e.g. the product callout
- * returning the default locator) must not overwrite it — see
- * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
- * companions.
+ * Shared by both places a lookup selection lands: the add-line form
+ * (`applyOnSelectMappings` below, which also updates local row state) and the
+ * persisted-line inline-edit PATCH (`DetailView.jsx`'s
+ * `buildInlineRowUpdateHandler`, which folds these into the write body).
  *
- * @param {object}   field        Field whose `onSelectMappings` are applied
- * @param {object}   item         Item selected in the lookup
- * @param {Function} handleChange (key, value) row-state setter
- * @param {Function} [markTouched] (key) called for every mapped target field
+ * @param {object} field Field whose `onSelectMappings` are applied
+ * @param {object} item  Item selected in the lookup
+ * @returns {Array<{to: string, value: unknown, label: unknown}>}
  */
-export function applyOnSelectMappings(field, item, handleChange, markTouched) {
+export function resolveOnSelectMappings(field, item) {
   const mappings = field?.onSelectMappings;
-  if (!Array.isArray(mappings) || mappings.length === 0) return;
+  if (!Array.isArray(mappings) || mappings.length === 0) return [];
+  const results = [];
   for (const m of mappings) {
-    if (!m?.from || !m.to) continue;
-    const value = getByPath(item, m.from);
+    if (!m?.to || (m.from == null && m.value === undefined)) continue;
+    const value = m.value !== undefined ? m.value : getByPath(item, m.from);
     if (value == null) continue;
     const labelKeys = getLabelArray(m);
     let label;
@@ -91,9 +92,37 @@ export function applyOnSelectMappings(field, item, handleChange, markTouched) {
       const v = getByPath(item, key);
       if (v != null && v !== '') { label = v; break; }
     }
-    handleChange(`${m.to}$_identifier`, label == null ? value : label);
-    handleChange(m.to, value);
-    markTouched?.(m.to);
+    results.push({ to: m.to, value, label });
+  }
+  return results;
+}
+
+/**
+ * Apply a field's declarative `onSelectMappings` after a lookup selection,
+ * updating the add-line form's local row state. See `resolveOnSelectMappings`
+ * for the resolution rules.
+ *
+ * ETP-5039: every mapped target is reported through the optional `markTouched`
+ * callback. A value the user selected in the lookup drawer is an explicit user
+ * choice, so a callout fired by the same selection (e.g. the product callout
+ * returning the default locator) must not overwrite it — see
+ * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
+ * companions. This is also what makes a `value` mapping (ETP-5037, Goods
+ * Movements: force Cantidad to `0` on every product selection) stick — the
+ * classic product callout separately returns the on-hand quantity at the
+ * auto-filled locator, but the touched-guard blocks it from overwriting the
+ * `0` this mapping just set.
+ *
+ * @param {object}   field        Field whose `onSelectMappings` are applied
+ * @param {object}   item         Item selected in the lookup
+ * @param {Function} handleChange (key, value) row-state setter
+ * @param {Function} [markTouched] (key) called for every mapped target field
+ */
+export function applyOnSelectMappings(field, item, handleChange, markTouched) {
+  for (const { to, value, label } of resolveOnSelectMappings(field, item)) {
+    handleChange(`${to}$_identifier`, label == null ? value : label);
+    handleChange(to, value);
+    markTouched?.(to);
   }
 }
 

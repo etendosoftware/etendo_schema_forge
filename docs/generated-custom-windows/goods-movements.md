@@ -42,6 +42,7 @@ Goods Movements should let an inventory user register a stock transfer from one 
 - Read-only behavior is status-driven. `decisions.json` keeps `READONLY_Processed_Header` and `READONLY_Processed_Lines` rules (both `Keep`), so all header fields and all line fields become read-only once the movement is processed. The locked banner also appears at that point.
 - Line numbering is defaulted from the parent context. The `lineNo` add-line entry computes the next number via `SELECT COALESCE(MAX(Line),0)+10 FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@`. The column is hidden from the grid (`grid: false`); users never interact with it directly.
 - Source bin auto-fill: selecting a product in the custom drawer writes `storageBin` from the `_aux._LOC` field of the chosen row. Users can then override it before saving the line.
+- Quantity reset on product selection (ETP-5037, DEV 5): selecting a product always forces Cantidad to `0`, overriding the classic `SL_Movement_Product` callout's own default (the on-hand quantity at the resolved locator). Applies on both the add-line form and changing an existing line's product.
 - Destination bin exclusion: after a source bin is selected, the destination bin selector (`newStorageBin`) hides that exact value from its option list. This happens reactively as the source bin value changes, in both the add-line form and inline edit.
 - Classic callouts for UOM conversion and product-to-UOM defaults are explicitly omitted (`decision: "Omit"` for all five callout rules). UOM is set by the backend on save; there is no immediate frontend reaction when the user changes product or quantity.
 - A backend fix in `SelectorQueryExecutor.java` (in `com.etendoerp.go`) guards selectors whose filter references an outer-query alias (`td0.`), returning an empty result instead of throwing — the fix prevents a Hibernate session corruption that previously rolled back the entire line insert.
@@ -49,7 +50,7 @@ Goods Movements should let an inventory user register a stock transfer from one 
 ## Gap assessment
 
 - The backend contract exposes action endpoints for `moveBetweenLocators` and `posted`. Both are intentionally discarded from the simplified UI (`decision: "Omit"`). `moveBetweenLocators` (bulk locator move) is not applicable; `posted` (accounting posting) is handled through the backend. If either is needed in future, it must be re-evaluated.
-- The on-hand quantity shown in the product picker drawer is informational. There is no inline stock-availability validation, negative-stock prevention, or quantity warnings in the SPA. Those remain backend-only.
+- ~~The on-hand quantity shown in the product picker drawer is informational. There is no inline stock-availability validation, negative-stock prevention, or quantity warnings in the SPA. Those remain backend-only.~~ **Closed by ETP-5037** — see "Design changes — ETP-5037" below. Descriptive stock validation now exists on line save/update and on "Procesar" (aggregate check across lines), gated per source locator by `M_InventoryStatus.overissue`. Deliberately **not** reactive: no check fires while the user is still editing a field (e.g. changing the source warehouse or typing a quantity) — only at save/PATCH/process time. A reactive variant was built and live-verified, then dropped (see the design-changes section) because it meant a backend round-trip per keystroke on the Cantidad field.
 - Classic callouts for UOM autofill and quantity conversion are omitted. Users who expect immediate UOM population after product selection should be informed that UOM is resolved on save by the backend, not on field change in the UI.
 - Hard destination-bin validation (bin cannot equal source bin) is enforced by Etendo at process time. The browser-side `excludeValueOf` mechanism is a UX aid that hides the offending option from the selector, but it does not guard against edge cases where the value was set programmatically before the exclusion was applied.
 
@@ -58,13 +59,16 @@ Goods Movements should let an inventory user register a stock transfer from one 
 1. Open `/goods-movements` and confirm the list shows movement headers with Name, Movement Date, Document No., and Status. Verify the Status badge reads "Draft" / "Borrador" for unprocessed records and "Processed" / "Procesado" for processed ones.
 2. Create a draft movement header. Confirm the form is flat (no card border or shadow), the principal section shows Name, Movement Date, and Document No. side-by-side, Document No. is read-only and auto-generated, and there is no "Description" field or "Others" tab.
 3. On a draft record, confirm the toolbar shows two buttons: a gray **Save** ("Guardar") and a black **Process** ("Procesar"). Verify that Process is disabled when no lines exist.
-4. Open the product picker ("Añadir línea"). Confirm the drawer shows a flat grid with product name, search key, bin/warehouse label, and on-hand quantity. Select a product that has stock in a known bin. Confirm the Source Warehouse field is auto-filled from the selected row.
+4. Open the product picker ("Añadir línea"). Confirm the drawer shows a flat grid with product name, search key, bin/warehouse label, and on-hand quantity. Select a product that has stock in a known bin. Confirm the Source Warehouse field is auto-filled from the selected row and Cantidad shows `0` (**not** the on-hand quantity shown in the drawer — ETP-5037, DEV 5).
 5. With a source bin selected, open the Destination Warehouse selector. Confirm the currently selected source bin does not appear as an option. Select a different bin and save the line.
 6. Confirm the lines grid columns appear in order: Product, UOM, Source Warehouse, Destination Warehouse, Quantity. Verify that Line No. is not visible in the grid and that the Quantity column is wide enough that its header does not wrap.
 6b. Before adding any line to a draft record, confirm the lines tab shows the "No lines yet" / "+ Add lines" empty state.
 7. Process the movement. Confirm: (a) header status changes to "Processed" / "Procesado"; (b) the gray locked banner appears above the principal fields with the lock icon, title, message, and underlined link; (c) all header and line fields are read-only; (d) the Save and Process buttons are gone.
 8. Click the locked banner link and confirm it navigates to `/physical-inventory/new`.
 9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+10. **(ETP-5037)** Add a line whose quantity exceeds the selected source warehouse's on-hand stock and try to save it. Confirm the save is rejected immediately (not only at "Procesar" time) with a descriptive message naming the product, the source warehouse, the available quantity, and the requested quantity. Confirm this is the ONLY point the check fires — changing the source warehouse or editing the quantity itself, without saving, triggers no request and no message.
+11. **(ETP-5037)** Add two lines moving the same product from the same source warehouse, each individually within stock but whose sum exceeds it, then click "Procesar". Confirm the action is rejected with one message listing every affected product/warehouse combination, not just a line number.
+12. **(ETP-5037, DEV 5)** On an already-saved line, change the product to a different one. Confirm Cantidad resets to `0` (not the new product's on-hand quantity at whatever locator gets auto-filled) — this path uses a different mechanism than step 4 above (persisted-line PATCH vs. add-line local state), so it needs its own check.
 
 ## Automated evidence
 
@@ -133,3 +137,65 @@ no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, m
 render in the secondary/collapsed area instead of the main visible form. Fixed by changing
 `section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
 `contract.json` (`section: "principal"`) and in the generated `MovementForm.jsx`.
+
+## Design changes — ETP-5037
+
+Closes the gap noted above. Most of ETP-5037 lives in hand-written `com.etendoerp.go` Java
+classes and a couple of new `backendErrors.js` matchers, outside the generic entity pipeline;
+the one exception is DEV 5 below, a one-line `decisions.json` addition using an existing,
+generic mechanism (`onSelectMappings`), extended (not window-specifically branched) to support
+it. Full design record: `docs/plans/ETP-5037-goods-movements-stock-validation-plan.md`.
+
+- **Line-level rejection (save/edit).** `StockAvailabilityGuard.rejectIfInsufficientStock`,
+  wired into `GoodsMovementLineHandler.validateWrite`, rejects any line
+  create/update whose quantity exceeds on-hand stock (`M_Storage_Detail`) at the
+  chosen source `storageBin`, unless that locator's `M_InventoryStatus.overissue = 'Y'`.
+  Returns a translated, parameterized message (`ETGO_InsufficientStockLine`) naming the
+  product, warehouse, available quantity, and requested quantity.
+- **Aggregate rejection before "Procesar".** `GoodsMovementProcessGuard`, called from
+  `GoodsMovementsHeaderHandler.handle()` before the classic process action runs, groups all
+  of the movement's lines by `(product, sourceLocator)`, sums requested quantity per group,
+  and rejects with one message (`ETGO_InsufficientStockProcess`) listing every offending
+  group if any group's sum exceeds on-hand stock. Classic `M_MOVEMENT_POST.xml` /
+  `M_CHECK_STOCK.xml` are untouched and remain the backstop for any path that bypasses this
+  action endpoint. **Named by product, not counted by group (DEV 6):** a single product can
+  span several offending lines summed into one group (e.g. two Fernet lines from the same
+  warehouse, individually valid, together over the limit) — the message names the offending
+  product(s) (comma-separated when more than one) instead of a group count that reads as if
+  only one line were at fault. Per-violation detail uses `"Producto (Almacén): pedido >
+  disponible"` (parentheses, not `"@"` — a locale-neutral separator so `details` still needs
+  no per-locale handling). The "Procesar" failure toast also carries a longer, fixed 8s
+  duration (`useEntity.js`'s `handleProcessFailure`) so a combined multi-product message has
+  time to be read.
+- **Pre-existing bug fixed as a byproduct:** `GoodsMovementLineHandler`'s `SPEC` constant did
+  not match its actual NEO spec name (`"goodsMovementLineHandler"` vs. the real
+  `"goods-movements"`), so `runWriteHook` never matched and **no write-hook logic had ever
+  executed for this entity** — including the pre-existing, unrelated ETP-4606 Service-product
+  guard. Fixed alongside DEV 1, since DEV 1 could not be verified working without it.
+- **Deliberately not reactive.** A reactive frontend layer was built and live-verified —
+  resetting the quantity to `0` when the source warehouse changed to one with less stock, and
+  separately clamping the Cantidad field itself down to the available quantity as the user
+  typed — then **fully reverted** after a design discussion between the user and Valeria. Root
+  cause for dropping it: NEO Headless fires a classic-callout request on every field edit
+  generically (a pre-existing platform quirk, not specific to this window), which for a
+  `<select>`-style field like the source warehouse is one request per selection, but for a
+  plain numeric field like Cantidad is **one request per keystroke** — confirmed live via
+  network capture. Building a live-clamp on top of that meant a backend round-trip and an
+  on-hand-stock query per digit typed, for a check that save time already performs once, for
+  free. The team decided the save/process-time checks above are sufficient on their own; no
+  reactive layer ships. Full history (what was built, the self-referential-field guard
+  problem it required, the bugs found and fixed along the way, and why they're gone now) is in
+  the plan doc's "Discarded: reactive frontend revalidation" section.
+- **Cantidad defaults to `0` on product selection, not the on-hand quantity (DEV 5).**
+  Selecting a product used to default Cantidad to the on-hand quantity at the auto-filled
+  locator (classic core's `SL_Movement_Product` callout echoing back the `_QTY` aux value the
+  frontend already sends) — Valeria asked for `0` instead, so the user always enters the
+  quantity explicitly. Fixed by adding a second `onSelectMappings` entry on the `product` field
+  (`{ "value": "0", "to": "movementQuantity" }`), a small, generic extension to the existing
+  mapping mechanism (previously `from`-only, now also accepts a fixed `value`) rather than a
+  window-specific branch. Applies to **both** the add-line form (`DataTable.jsx`) and the
+  persisted-line inline-edit PATCH (`DetailView.jsx`'s `buildInlineRowUpdateHandler`, which
+  didn't consult `onSelectMappings` at all before this — changing an existing line's product
+  still showed the stale on-hand-quantity default until this was extended to that path too).
+  Verified live end-to-end on both paths, with the persisted quantity confirmed at the database
+  row, not just the UI.

@@ -20323,6 +20323,8 @@
     "backendError.invalidAccountBpAndGroup": "No se pudo encontrar la cuenta. (Contacto: {bp}, Grupos de terceros: {group})",
     "backendError.invalidAccountBpOnly": "No se pudo encontrar la cuenta. (Contacto: {bp})",
     "backendError.invoiceLineAlreadyInvoiced": "El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.",
+    "backendError.insufficientStockLine": "La cantidad ingresada ({requested}) supera el stock disponible de {product} en {warehouse} ({available} unidades).",
+    "backendError.insufficientStockProcess": "Este movimiento no se puede procesar: Las línea(s) de {products} superan el stock disponible del almacén origen: {details}",
     "backendError.matchRuleNameRequired": "El nombre es obligatorio",
     "backendError.matchRuleNameTooLong": "El nombre es demasiado largo",
     "backendError.matchRuleTextConditionInvalid": "La condición debe ser Contiene, Empieza con o Expresión regular",

@@ -60,6 +60,7 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
 import { renderSaveActions, reportUnnavigableSave, buildSaveGate } from './saveActions.jsx';
+import { resolveOnSelectMappings } from './DataTable.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -71,7 +72,8 @@ import DetailSidePanel from './DetailSidePanel.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard,
+  resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -792,6 +794,20 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     }
     // 3. The user-changed field always wins (last-write).
     fieldValues[fieldKey] = payloadValue;
+    // 4. Declarative onSelectMappings for the field just picked in a lookup (e.g. ETP-5037:
+    // selecting a product forces Cantidad to 0) — must run AFTER the callout overlay above,
+    // since the classic callout for the same field change (e.g. SL_Movement_Product, which
+    // defaults movementQuantity to the on-hand quantity at the resolved locator) would
+    // otherwise win. Mirrors DataTable.jsx's `applyOnSelectMappings` for the add-line form;
+    // this is the persisted-line inline-edit counterpart, folding the mapping straight into
+    // the PATCH body instead of local row state.
+    if (selectedItem && typeof selectedItem === 'object') {
+      const fieldDef = fields?.find(f => f.key === fieldKey);
+      for (const { to, value } of resolveOnSelectMappings(fieldDef, selectedItem)) {
+        fieldValues[to] = coerce(value, to);
+        derivedUpdates[to] = value;
+      }
+    }
 
     // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
     // Without this the backend keeps the pre-discount PriceActual and
@@ -2451,7 +2467,7 @@ export function DetailView({
     } catch {
       // Callout is best-effort
     }
-  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch]);
+  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch, ui]);
 
   const data = transformRecord ? transformRecord(hook.editing || currentItem || {}) : (hook.editing || currentItem || {});
   // ETP-5052: display-only `data` + `hasLines` merge for HEADER `<Form>` calls only — see buildHeaderFormData in detailViewHelpers.jsx. Never persisted.

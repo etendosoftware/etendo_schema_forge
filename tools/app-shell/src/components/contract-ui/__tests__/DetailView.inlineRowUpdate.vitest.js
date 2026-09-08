@@ -234,6 +234,48 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     expect(body.price).toBe(50); // user-changed field wins last
   });
 
+  // ETP-5037 (Goods Movements, DEV 5): a `value`-based onSelectMappings entry on the
+  // edited field forces its target into the PATCH body, overriding whatever the callout
+  // (e.g. classic SL_Movement_Product, defaulting movementQuantity to the on-hand quantity)
+  // returned for it — the persisted-line counterpart to DataTable.jsx's add-line form fix.
+  describe('onSelectMappings override (ETP-5037, DEV 5)', () => {
+    const FIELDS = [
+      { key: 'product', column: 'M_Product_ID', onSelectMappings: [{ value: '0', to: 'movementQuantity' }] },
+      { key: 'movementQuantity', column: 'MovementQty' },
+    ];
+
+    it('forces the mapped field even when the callout returns a different value for it', async () => {
+      const handleLineFieldChange = vi.fn(async (fieldKey, value, snapshot, applyUpdates) => {
+        applyUpdates({ movementQuantity: 850, storageBin: 'LOC-1' });
+      });
+      const args = makeArgs({ handleLineFieldChange, fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'product', 'PROD-2', { selectedItem: { id: 'PROD-2' } });
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(0);
+      expect(body.storageBin).toBe('LOC-1'); // unrelated derived field unaffected
+    });
+
+    it('does nothing when no selectedItem is passed (e.g. a plain text-field edit)', async () => {
+      const args = makeArgs({ fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'product', 'PROD-2', {});
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(300); // untouched — no mapping applied
+    });
+
+    it('does nothing when the edited field has no onSelectMappings', async () => {
+      const args = makeArgs({ fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'movementQuantity', '75', { selectedItem: { id: 'X' } });
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(75); // the user's own edit, not forced to 0
+    });
+  });
+
   it('calls prepareLineForPost(fieldValues) before fetch with the field-values object', async () => {
     const order = [];
     const prepareLineForPost = vi.fn(() => order.push('prepare'));

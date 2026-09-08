@@ -277,6 +277,11 @@ const BATCH_SIZE = 75;
 // merges when it lands. See handleNew below.
 const DEFAULTS_TIMEOUT_MS = 4000;
 
+// ETP-5037 — a process-rejection message (e.g. Goods Movements' combined, multi-product
+// insufficient-stock message) can run considerably longer than sonner's default 4s toast
+// duration allows a user to read. See handleProcessFailure below.
+const PROCESS_FAILURE_TOAST_DURATION_MS = 8000;
+
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'priceList',
     'paymentMethod',
@@ -1841,7 +1846,9 @@ export function useEntity(entity, childEntity, {
             if (condition) {
                 setBlockingCondition(condition);
             } else {
-                toast.error(msg);
+                // ETP-5037: same rationale as handleProcessFailure above — a long
+                // process-rejection message needs more than sonner's default 4s.
+                toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
             }
             // A refused process may still have bumped `updated` — see refreshRecordVersion.
             await refreshRecordVersion(saved.id);
@@ -1927,7 +1934,11 @@ export function useEntity(entity, childEntity, {
         if (condition) {
             setBlockingCondition(condition);
         } else {
-            toast.error(msg);
+            // ETP-5037: a process-rejection message can be long (e.g. Goods Movements'
+            // combined multi-product insufficient-stock message) — the default sonner
+            // duration (4s) isn't enough to read it. Longer, fixed duration for every
+            // process-failure toast, not just this one message.
+            toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
         }
         // A refused process may still have bumped `updated` — see refreshRecordVersion.
         await refreshRecordVersion(selected?.id);

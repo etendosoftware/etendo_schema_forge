@@ -120,7 +120,8 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
     });
 
     expect(result.current.blockingCondition).toBeNull();
-    expect(toast.error).toHaveBeenCalledWith('Some other unrelated validation error');
+    // ETP-5037: process-failure toasts now carry an explicit, longer duration.
+    expect(toast.error).toHaveBeenCalledWith('Some other unrelated validation error', { duration: 8000 });
   });
 
   it('handleProcess: a successful completion process bumps completionSignal and clears blockingCondition', async () => {
@@ -222,7 +223,8 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
     });
 
     expect(result.current.blockingCondition).toBeNull();
-    expect(toast.error).toHaveBeenCalledWith('Process failed for another reason');
+    // ETP-5037: process-failure toasts now carry an explicit, longer duration.
+    expect(toast.error).toHaveBeenCalledWith('Process failed for another reason', { duration: 8000 });
   });
 
   it('handleSaveAndProcess: a successful completion bumps completionSignal and clears blockingCondition', async () => {

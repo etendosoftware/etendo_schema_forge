@@ -227,6 +227,67 @@ function matchInvoiceLineAlreadyInvoiced(msg) {
   return { docNo, invoiced, pending };
 }
 
+// StockAvailabilityGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockLine`
+// AD_MESSAGE — raised by GoodsMovementLineHandler when a Goods Movement line's quantity
+// exceeds on-hand stock at the selected source storage bin. en_US only, same no-translation-
+// pack root cause as the matchers above. Same plain-string-slicing rationale: product code
+// and warehouse name are admin-defined catalog data, not attacker input, but consistency with
+// the rest of the file keeps the no-regex argument uniform (SonarQube javascript:S5852).
+const INSUFFICIENT_STOCK_LINE_PREFIX = 'The entered quantity (';
+const INSUFFICIENT_STOCK_LINE_MID1 = ') exceeds the available stock of ';
+const INSUFFICIENT_STOCK_LINE_MID2 = ' in ';
+const INSUFFICIENT_STOCK_LINE_SUFFIX = ' units).';
+
+function matchInsufficientStockLine(msg) {
+  if (!msg.startsWith(INSUFFICIENT_STOCK_LINE_PREFIX) || !msg.endsWith(INSUFFICIENT_STOCK_LINE_SUFFIX)) {
+    return null;
+  }
+  const inner = msg.slice(
+    INSUFFICIENT_STOCK_LINE_PREFIX.length,
+    -INSUFFICIENT_STOCK_LINE_SUFFIX.length,
+  );
+  const mid1Idx = inner.indexOf(INSUFFICIENT_STOCK_LINE_MID1);
+  if (mid1Idx === -1) return null;
+  const requested = inner.slice(0, mid1Idx);
+  const afterMid1 = inner.slice(mid1Idx + INSUFFICIENT_STOCK_LINE_MID1.length);
+  const mid2Idx = afterMid1.indexOf(INSUFFICIENT_STOCK_LINE_MID2);
+  if (mid2Idx === -1) return null;
+  const product = afterMid1.slice(0, mid2Idx);
+  const afterMid2 = afterMid1.slice(mid2Idx + INSUFFICIENT_STOCK_LINE_MID2.length);
+  // The warehouse name may itself contain " (" in principle, so split on the LAST occurrence —
+  // the available quantity is always the final parenthesised token (mirrors
+  // matchIbanPrefixCountryMismatch's lastIndexOf(' (') below).
+  const parenIdx = afterMid2.lastIndexOf(' (');
+  if (parenIdx === -1) return null;
+  const warehouse = afterMid2.slice(0, parenIdx);
+  const available = afterMid2.slice(parenIdx + 2);
+  if (!requested || !product || !warehouse || !available) return null;
+  return { requested, product, warehouse, available };
+}
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockProcess`
+// AD_MESSAGE — raised when "Procesar" would complete a Goods Movement whose lines, summed per
+// (product, source locator), exceed on-hand stock (the cumulative case: each line individually
+// valid, but together over the limit). Named by product, not counted by group/line — a single
+// product can span several offending lines summed together, and a bare count reads as if only
+// one line were at fault. `details` is already a human-readable, semicolon-joined list of every
+// offending product/warehouse pair and is passed through untranslated — it is mostly product
+// codes, warehouse names and numbers, and re-parsing it further would only reintroduce the same
+// ReDoS-avoidance tradeoffs for no real translation gain.
+const INSUFFICIENT_STOCK_PROCESS_PREFIX = 'This movement cannot be processed: the line(s) of ';
+const INSUFFICIENT_STOCK_PROCESS_MID = ' exceed the available source-warehouse stock: ';
+
+function matchInsufficientStockProcess(msg) {
+  if (!msg.startsWith(INSUFFICIENT_STOCK_PROCESS_PREFIX)) return null;
+  const rest = msg.slice(INSUFFICIENT_STOCK_PROCESS_PREFIX.length);
+  const midIdx = rest.indexOf(INSUFFICIENT_STOCK_PROCESS_MID);
+  if (midIdx === -1) return null;
+  const products = rest.slice(0, midIdx);
+  const details = rest.slice(midIdx + INSUFFICIENT_STOCK_PROCESS_MID.length);
+  if (!products || !details) return null;
+  return { products, details };
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -558,6 +619,8 @@ function matchIbanCountryLengthMismatch(msg) {
  */
 const PARAMETERIZED_MATCHERS = [
   [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
+  [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
+  [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
