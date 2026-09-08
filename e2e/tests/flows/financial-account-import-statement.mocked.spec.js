@@ -24,7 +24,7 @@ const ACCOUNT_ID = 'acc-import';
 const ACCOUNTS = [
   {
     id: ACCOUNT_ID,
-    name: 'Cuenta de Banco',
+    name: 'Cuenta bancaria de prueba',
     type: 'B',
     currentBalance: 10000,
     currencyId: '102',

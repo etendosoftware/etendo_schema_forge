@@ -70,9 +70,6 @@ const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
 const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true }), loading: false };
-const reactivateSelectedState = {
-  reactivateSelected: vi.fn().mockResolvedValue({ reactivated: true }), loading: false,
-};
 // "Posting the remainder to a G/L item" — closes a PARTIALLY reconciled line by writing its
 // leftover amount off against an accounting concept.
 const reconcileDifferenceState = {
@@ -87,7 +84,6 @@ vi.mock('@/hooks/useReconciliation', () => ({
   }),
   useReconcileGroup: () => reconcileState,
   useRemoveOperation: () => removeState,
-  useReactivateSelected: () => reactivateSelectedState,
   useReconcileDifference: () => reconcileDifferenceState,
 }));
 
@@ -219,8 +215,6 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
     reconcileState.loading = false;
     removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
     removeState.loading = false;
-    reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({ reactivated: true });
-    reactivateSelectedState.loading = false;
   });
 
   describe('CurrencyBadge', () => {

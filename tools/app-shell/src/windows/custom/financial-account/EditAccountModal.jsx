@@ -235,7 +235,9 @@ async function persistAccountEdits({
   if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
   if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
   if (Object.keys(updates).length > 0) {
-    await updateAccount(account.id, updates);
+    // The version this form was opened on. Added alongside the changed fields, never instead of
+    // the emptiness gate above, so an untouched form still issues no PUT at all.
+    await updateAccount(account.id, { ...updates, updated: account.updated });
   }
   if (settings.dirty) {
     await saveImportSettings({ financialAccountId: account.id, ...settings.form });
@@ -1188,7 +1190,14 @@ export function EditAccountModal({
   };
 
   const reportSaveError = (err) => {
-    if (err.status === 409) {
+    // 409 stopped meaning one single thing when ETP-5073 added optimistic locking: a concurrent
+    // edit answers 409 too, with `error: "stale_record"`. Branching on the status alone told a user
+    // whose only problem was a stale record that the account NAME was taken — a message about a
+    // field they had not touched, and no hint that reloading is the way out. The code is the
+    // discriminator; the status is not.
+    if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
+      setError(ui('financeAccountsEditStaleRecord'));
+    } else if (err.status === 409) {
       setError(ui('financeAccountsNewNameExists'));
     } else {
       // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
