@@ -9,8 +9,15 @@ import { useStatementActions } from '../useStatementActions.js';
 // crosses the `useApiFetch` shim (it imports auth via the core package's own
 // relative path, which the `@/auth` alias does not intercept), so a real
 // AuthProvider seeded with a token is required instead.
+//
+// ETP-4576: `restoreSession={null}` opts out of the session restore. The credential mode now
+// defaults to `auto`, so a mounted AuthProvider probes `GET /sws/go/session` to find out whether
+// a cookie session exists — a second, unrelated call on `globalThis.fetch` that makes the
+// request-contract assertions below count one call too many.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>
+    {children}
+  </AuthProvider>
 );
 
 function setPathname(pathname) {

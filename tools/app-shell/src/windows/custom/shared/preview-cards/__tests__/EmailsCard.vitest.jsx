@@ -158,13 +158,17 @@ describe('EmailsCard', () => {
       expect(historyCalls()[0][0]).toBe('/api/documentemailhistory?recordId=a%20b%2Fc%26d');
     });
 
-    it('sends the request through the session-authenticated helper (bearer + locale headers)', async () => {
+    it('sends the request through the session-authenticated helper (locale header, no bearer)', async () => {
       await renderCardWithRows([]);
       const [, init] = historyCalls()[0];
+      // ETP-4576 — the locale header still has to travel (ETP-4685: without it the backend
+      // resolves *_Trl names in the AD language). The Authorization header does not: under the
+      // cookie session the client holds no bearer, and the helper is the single place that
+      // decides the credential. Asserting one here would re-freeze the pre-cookie contract.
       expect(init.headers).toEqual(expect.objectContaining({
-        Authorization: 'Bearer test-token',
         'Accept-Language': expect.any(String),
       }));
+      expect(init.headers.Authorization).toBeUndefined();
     });
   });
 
