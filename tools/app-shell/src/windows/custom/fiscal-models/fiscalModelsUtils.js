@@ -1,4 +1,5 @@
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { toast } from 'sonner';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -901,4 +902,39 @@ export function isUpcomingDeadline(decl, referenceDate = new Date()) {
  */
 export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
   return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
+}
+
+// ── IAE activity reminder (ETP-5187, adjacent scope) ──────────────────
+/**
+ * Proactive, non-blocking heads-up that the organization needs a default IAE ("Impuesto de
+ * Actividades Económicas") activity configured before Modelo 303 can be filed for the last
+ * period of the year — shown at the two points where the user commits to a path that will
+ * eventually hit that requirement:
+ *   - `FmCatalogPage.jsx` — activating (not deactivating) Modelo 303 in the catalog.
+ *   - `FmOverlays.jsx`'s `NewDeclModal` — selecting period T4 (quarterly) or 12 (monthly) in
+ *     "Nueva declaración".
+ *
+ * This is deliberately NOT the same mechanism as the ETP-4975 hard guard in
+ * `FmModel303Page.jsx`/`AeatSubmitFlow.jsx` (`isMissingDefaultIaeActivity` +
+ * `missingIaeGuard`), which blocks "Generar fichero"/"Marcar como Presentado" for the actual
+ * last-period declaration when no default IAE activity is configured, backed by a real
+ * `GET /sws/neo/organization/actividadesDelIae` check. That guard is authoritative and runs
+ * right before the backend call; this reminder is purely informational, fires earlier (at
+ * activation/selection time, with no backend check of its own), and never blocks anything —
+ * it exists only so the user isn't surprised later. Reuses the same
+ * `fm.aeat.action.go_to_organization` CTA label as that guard's own "Go to Organization"
+ * button. Navigates to `/organization` plain — `OrganizationPage.jsx` has no
+ * section-anchor/deep-link support yet to land scrolled at "Actividades del IAE" directly.
+ */
+export function showIaeActivityReminder(t, navigate) {
+  toast.warning(
+    t('fm.aeat.reminder.iaeActivity')
+      ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.',
+    {
+      action: {
+        label: t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización',
+        onClick: () => navigate('/organization'),
+      },
+    },
+  );
 }

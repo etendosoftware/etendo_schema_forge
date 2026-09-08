@@ -21554,6 +21554,7 @@
     "fm.aeat.error.nrcRequired": "Se necesita el NRC para presentar una declaración con resultado a ingresar.",
     "fm.aeat.error.missingDefaultIae": "Esta organización necesita al menos una actividad del IAE marcada como principal, con un código asignado, antes de presentar la declaración del último periodo.",
     "fm.aeat.action.go_to_organization": "Ir a Organización",
+    "fm.aeat.reminder.iaeActivity": "Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.",
     "fm.aeat.warnings.title": "Advertencias",
     "fm.action.back": "Volver",
     "fm.action.cancel": "Cancelar",

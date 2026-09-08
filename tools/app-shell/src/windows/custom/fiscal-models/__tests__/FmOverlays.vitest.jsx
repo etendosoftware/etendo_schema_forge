@@ -20,6 +20,10 @@ vi.mock('@/components/ui/checkbox', () => ({
     React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) })
   ),
 }));
+// ETP-5187 (adjacent scope) — NewDeclModal now calls useNavigate() (IAE-activity reminder on
+// T4/12 period selection), which throws outside a <Router> ancestor. No test here exercises
+// SPA navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
 

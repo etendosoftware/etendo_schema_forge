@@ -152,6 +152,12 @@ The same missing-default-IAE-activity condition is guarded on **both** entry poi
 Both guards share the identical shape: when `isLastPeriodOfYear(decl?.period)` (shared export in `fm303Layouts.js`, extracted from what used to be an inline check duplicated ad hoc) and an organization id is resolvable, each calls `GET /sws/neo/organization/actividadesDelIae?parentId=<orgId>` and runs the shared `isMissingDefaultIaeActivity(rows)` helper (exported from `AeatSubmitFlow.jsx`, imported by `FmModel303Page.jsx`) — same "default=true AND epiaeCode set" condition as above. If none qualifies, the action is blocked with a translated banner (`fm.aeat.error.missingDefaultIae`) plus a "Go to Organization" CTA (`fm.aeat.action.go_to_organization`) that navigates to `/organization`, instead of round-tripping to the backend for the raw `IndexOutOfBoundsException`. Both guards fail **open** on any fetch/network error (let the action proceed) rather than blocking an action that might otherwise succeed — the same reasoning `neo-headless.md` §5 documents for `NeoExchangeRateService.hasRate`.
 
 Both files read the organization id via `useAuth().selectedOrg?.id` (AuthContext), each wrapped in its own `try/catch` so the component still renders (guard simply skipped) when no `AuthProvider` is present — `AeatSubmitFlow.jsx` was previously 100%-provider-free and unit-tested that way, and `FmModel303Page.jsx`'s own `try { selectedOrg = useAuth().selectedOrg; } catch { selectedOrg = null; }` (next to its pre-existing `useNavigate()` guard, same pattern) preserves the same safety without adding a new required prop through `FiscalModelsPage.jsx` → `FmModel303Page.jsx` / `AeatSubmitFlow.jsx`.
+
+**Earlier, non-blocking reminder (ETP-5187, adjacent scope):** before either hard guard above can
+even be reached, `FmCatalogPage.jsx` (Modelo 303 catalog activation) and `FmOverlays.jsx`'s
+`NewDeclModal` (selecting period T4/12 in "Nueva declaración") show a `toast.warning` nudging the
+user to configure this same IAE activity, reusing the `fm.aeat.action.go_to_organization` CTA —
+see "IAE-activity activation reminder" in `docs/generated-custom-windows/fiscal-models.md`.
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
 Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,

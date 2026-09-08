@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
+import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 
 const CATALOG = [
   { id: '303', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
@@ -43,6 +45,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 
 export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
   const t = useUI();
+  const navigate = useNavigate();
   const [active, setActive] = useState(
     () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
   );
@@ -50,7 +53,15 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
 
   const handleClose = () => { onSave?.(active); onBack?.(); };
 
-  const toggleModel = (id) => setActive(prev => ({ ...prev, [id]: !prev[id] }));
+  // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
+  // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
+  // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of 303 itself —
+  // never on deactivation, never for any other model.
+  const toggleModel = (id) => setActive(prev => {
+    const next = { ...prev, [id]: !prev[id] };
+    if (id === '303' && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
+    return next;
+  });
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 

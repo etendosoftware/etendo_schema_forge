@@ -1052,6 +1052,38 @@ taller than its sibling.
 - **`catalogLoaded`** gates rendering while the initial `GET` is in flight. It starts `true` only when `token`/`apiBaseUrl` are missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
 - **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
+### IAE-activity activation reminder (ETP-5187, adjacent scope)
+
+A non-blocking heads-up toast reminds the user to configure the organization's default IAE
+("Impuesto de Actividades Económicas") activity — required by AEAT303's backend report code
+(`org.openbravo.module.aeat303.es`, `AEAT303_Utility.doPreviousChecks`) for the **last period**
+of the fiscal year (4T quarterly, or December monthly) — at the two moments the user commits to
+a path that will eventually need it, before they ever reach that period:
+
+1. **Activating Modelo 303 in the catalog** (`FmCatalogPage.jsx`'s `toggleModel`) — fires only on
+   the inactive → active transition of `303` specifically, never on deactivation and never for
+   `349` (which has no such requirement).
+2. **Selecting period T4 or 12 in "Nueva declaración"** (`FmOverlays.jsx`'s `NewDeclModal`, the
+   period-grid button `onClick`) — fires only when the currently selected model is `303` and the
+   clicked period is `T4` (quarterly) or `12` (monthly); it does not fire on `349`, on any other
+   period, or on every render/period-list rebuild — only on that specific button click.
+
+Both call the same shared helper, `showIaeActivityReminder(t, navigate)` (exported from
+`fiscalModelsUtils.js`), which shows a `sonner` `toast.warning` (`fm.aeat.reminder.iaeActivity`)
+with an action button (`fm.aeat.action.go_to_organization` — the same CTA label the ETP-4975 hard
+guard below uses) that navigates to `/organization`, plain — `OrganizationPage.jsx` has no
+section-anchor/deep-link support yet to land pre-scrolled at "Actividades del IAE" (see
+`docs/generated-custom-windows/organization.md`'s own "Actividades del IAE" section); that would be
+a follow-up, not implemented here.
+
+**This is deliberately a different mechanism from the ETP-4975 hard guard** described under
+"Generate error banner (`genError`)" below (`missingIaeGuard`, `isMissingDefaultIaeActivity`) —
+that one is authoritative, runs a real `GET /sws/neo/organization/actividadesDelIae` check right
+before "Generar fichero"/"Marcar como Presentado" for the actual last-period declaration, and
+blocks the action when nothing qualifies. This reminder never blocks anything and never checks the
+backend — it is purely an earlier, informational nudge so the user isn't surprised later by the
+hard guard.
+
 ### "Nueva declaración" respects the active catalog
 
 `NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model list from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the model picker and the "Crear declaración" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional picker. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.

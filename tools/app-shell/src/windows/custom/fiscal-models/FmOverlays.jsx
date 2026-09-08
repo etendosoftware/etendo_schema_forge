@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -465,6 +467,7 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
 export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations }) {
   const ui = useUI();
   const t = ui;
+  const navigate = useNavigate();
   const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
   const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   // Only offer models the user activated in the catalog. When no `activeModels`
@@ -623,7 +626,19 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                     aria-pressed={isSelected}
                     className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}`}
                     title={isExisting ? (t('fm.new_decl.period_existing_hint') ?? undefined) : undefined}
-                    onClick={() => setPeriod(p)}
+                    onClick={() => {
+                      setPeriod(p);
+                      // ETP-5187 (adjacent scope) — same IAE-activity reminder as
+                      // FmCatalogPage's Modelo 303 activation toggle, fired here on
+                      // selecting the last period of the year (T4 quarterly / 12
+                      // monthly) for Modelo 303 specifically — only that model's
+                      // year-end declaration hits the AEAT303 IAE requirement (see
+                      // `showIaeActivityReminder`'s doc comment). Selection only,
+                      // never on every render/period-list rebuild.
+                      if (model === '303' && (p === 'T4' || p === '12')) {
+                        showIaeActivityReminder(t, navigate);
+                      }
+                    }}
                   >
                     {p}
                     {isExisting && <span className="fm-newdecl-period-btn__dot" aria-hidden="true" />}

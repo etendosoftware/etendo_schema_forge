@@ -20601,6 +20601,7 @@
     "fm.action.download": "Descargar",
     "fm.action.submit": "Marcar presentado",
     "fm.duplicate_period.warning": "Ya existe otra declaración para este mismo período. Marca \"Autoliquidación rectificativa\" para poder marcar esta como presentada.",
+    "fm.aeat.reminder.iaeActivity": "Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.",
     "fm.validation.missing_required_generate": "Completá {fields} antes de generar el fichero.",
     "fm.validation.missing_required_present": "Completá {fields} antes de marcar la declaración como presentada.",
     "fm.validation.missing_required_banner": "Hay campos obligatorios sin completar: {fields}.",
