@@ -391,6 +391,10 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       [null, null, 'Journal', 'en_US'],
       ['ZZZ', 'N', 'Custom Type', 'es_ES'],
       ['ZZZ', 'N', 'Custom Type', 'en_US'],
+      // ETP-5128: MXI is unconditionally overridden regardless of the
+      // SQL-supplied name ("Match Invoice", the shared ad_ref_list value).
+      ['MXI', 'N', 'Match Invoice', 'en_US'],
+      ['MXI', 'N', 'Match Invoice', 'es_ES'],
     ],
     // ETP-5032: CSV cell serialization — spreadsheet formula neutralization
     // followed by RFC 4180 quoting. Mirrors the canonical fixture table
