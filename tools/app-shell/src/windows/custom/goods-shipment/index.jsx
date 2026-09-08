@@ -9,9 +9,9 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage';
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import { useMenuLabel } from '@/i18n';
+import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
 import { useShipmentPdf } from './useShipmentPdf';
@@ -37,6 +37,7 @@ function CustomGoodsShipmentTable(props) {
 }
 
 function GoodsShipmentBulkActions(props) {
+  const ui = useUI();
   return (
     <>
       <BulkInvoiceFromShipment {...props} data-testid="BulkInvoiceFromShipment__9851c7" />
@@ -46,6 +47,15 @@ function GoodsShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__9851c7" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={createPostRowFilter(ui)}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__9851c7" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -102,6 +112,18 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     onClone: (row) => setCloneTargets([row]),
     onEmail: onRowEmail,
     onDelete: requestDelete,
+    // ETP-5209 — Post reachable from the row-hover kebab, mirroring the same
+    // posted/processed gate as the form-view kebab (GoodsShipmentPage's
+    // decisions-derived menuActions) and the bulk Post action.
+    menuActions: ({ row }) => {
+      const isPosted = row?.posted === 'Y' || row?.posted === true;
+      const isProcessed = row?.processed === 'Y' || row?.processed === true;
+      if (isPosted || !isProcessed) return [];
+      return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
+    },
+    onMenuActionExecuted: (action) => {
+      if (action.neoAction) setRefreshKey(k => k + 1);
+    },
   }), [navigate, windowName, requestDelete, onRowEmail]);
 
   if (recordId) {

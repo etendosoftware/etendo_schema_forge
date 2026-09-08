@@ -16954,6 +16954,7 @@
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
     "bulkRowAlreadyPosted": "Ya está contabilizado",
     "bulkRowNotPosted": "No está contabilizado",
+    "bulkRowNotCompleted": "No está completado",
     "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "confirmBulk": "Confirmar",

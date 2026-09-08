@@ -1711,3 +1711,47 @@ reader no way to tell which half is current.**
 behind even when every line of logic is correct and every test is green, because no gate reads
 prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
 diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## `decisions.json` list-view props are dead code for hand-rolled window wrappers (ETP-5209)
+
+**Component:** `purchase-invoice`, `sales-invoice`, `goods-receipt`, `goods-shipment` — all four are
+registered in `tools/app-shell/src/windows/registry.js` pointing at a hand-written
+`tools/app-shell/src/windows/custom/<window>/index.jsx` wrapper, not directly at the generated
+`artifacts/<window>/generated/web/<window>/index.jsx`.
+
+**Symptom / trap:** Editing `artifacts/<window>/decisions.json → window.rowQuickActions.menuActions`
+or `window.customComponents.bulkActions`, then running `make regen`, produces a correctly compiled
+generated `HeaderPage.jsx`/`<Entity>Page.jsx` — but the change has **zero effect** on what the user
+actually sees for the list view of these four windows.
+
+**Root cause:** Each wrapper's list branch calls the generated `<ListView>`/`<GeneratedApp>` (or
+renders its own `<ListView>` directly) with explicit `rowQuickActions={...}` and `bulkActions={...}`
+props of its own. In every generated `<Entity>Page.jsx` the decisions-derived defaults for these
+props are emitted *before* `{...props}` in the JSX call (e.g. `rowQuickActions={{"actions":{...}}}
+... {...props}`), so any same-named prop the caller passes always wins — the decisions.json-declared
+version is never mounted. The generated form-view (`menuActions`) is NOT always shadowed the same
+way: it depends on whether the specific wrapper happens to pass its own `menuActions` prop into the
+detail branch (`goods-receipt` and `goods-shipment`'s wrappers differ from each other here — check
+each wrapper's `recordId` branch individually before assuming decisions.json's `window.menuActions`
+is or isn't live for a given window's form view).
+
+**Fix (for ETP-5209):** Reachability additions for these four windows' list-view row-kebab and bulk
+selection bar were made directly in the wrapper files and their shared helper
+(`tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`,
+`tools/app-shell/src/windows/custom/{purchase-invoice,sales-invoice,goods-receipt,goods-shipment}/index.jsx`),
+plus two new exports on the generic `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx`
+(`buildPostActions`, `createPostRowFilter`) reused across all four. `decisions.json` was
+deliberately left untouched for these four windows' list-view wiring — editing it would have been
+inert busywork requiring a `make regen` cycle for a config path the runtime never reads.
+
+**Lesson.** Before editing `decisions.json` for a window's list-view behavior (row-kebab menu
+actions, bulk actions, custom list components), check `tools/app-shell/src/windows/registry.js`
+first. If the registry entry points at `tools/app-shell/src/windows/custom/<window>/index.jsx`
+rather than `@generated/<window>/...`, read that wrapper's list branch for an explicit
+`rowQuickActions`/`bulkActions` prop before touching decisions.json — it likely shadows the
+generated default entirely, and the actual fix belongs in the wrapper (or a `shared/` helper it
+imports), not in the pipeline artifact. This same shadow pattern already applied to `topbarRight`
+for `sales-invoice` (see ETP-5027 comment in that window's `index.jsx`), so it is not new to this
+window family — just previously undocumented for `rowQuickActions`/`bulkActions` specifically.

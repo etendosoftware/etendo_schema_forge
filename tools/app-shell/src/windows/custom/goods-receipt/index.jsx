@@ -7,7 +7,7 @@ import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceip
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -56,6 +56,7 @@ function CustomHeaderTable(props) {
 }
 
 function GoodsReceiptBulkAction(props) {
+  const ui = useUI();
   return (
     <>
       <BulkDocumentAction
@@ -64,6 +65,15 @@ function GoodsReceiptBulkAction(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__bf4f23" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsReceipt"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={createPostRowFilter(ui)}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__bf4f23" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -123,6 +133,16 @@ export default function GoodsReceiptWindow(props) {
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
     onDelete: requestDelete,
+    // ETP-5209 — Post reachable from the row-hover kebab, mirroring menuActionsForForm's gate.
+    menuActions: ({ row }) => {
+      const isPosted = row?.posted === 'Y' || row?.posted === true;
+      const isProcessed = row?.processed === 'Y' || row?.processed === true;
+      if (isPosted || !isProcessed) return [];
+      return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
+    },
+    onMenuActionExecuted: (action) => {
+      if (action.neoAction) setRefreshKey(k => k + 1);
+    },
   }), [navigate, windowName, requestDelete]);
 
   return (

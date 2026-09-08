@@ -5,7 +5,7 @@ import { todayCalendarISO, tomorrowCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
-import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -102,12 +102,21 @@ const LABEL_OVERRIDES = {
 };
 
 function PurchaseInvoiceBulkAction(props) {
+  const ui = useUI();
   return (
     <>
       <BulkDocumentAction
         {...props}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__c20e53" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={createPostRowFilter(ui)}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__c20e53" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -154,7 +163,10 @@ export default function PurchaseInvoiceWindow(props) {
   });
 
   const rowQuickActions = useMemo(
-    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, { showEmail: false }),
+    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, {
+      showEmail: false,
+      onRefresh: () => setRefreshKey(k => k + 1),
+    }),
     [navigate, windowName, requestDelete],
   );
 

@@ -21,7 +21,7 @@ export function getInvoiceDraftMode(ui, options = {}) {
 }
 
 export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, setEmailRow, requestDelete, options = {}) {
-  const { showEmail = true } = options;
+  const { showEmail = true, onRefresh } = options;
   return {
     enabled: true,
     editMode: 'navigate',
@@ -37,6 +37,18 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     onClone: (row) => setCloneTargets([row]),
     onEmail: showEmail ? (row) => setEmailRow(row) : undefined,
     onDelete: requestDelete,
+    // ETP-5209 — Post reachable from the row-hover kebab, without a form-view
+    // detour. Mirrors the same posted/processed gate as the form-view kebab
+    // (decisions.json → window.menuActions) and the bulk Post action.
+    menuActions: ({ row }) => {
+      const isPosted = row?.posted === 'Y' || row?.posted === true;
+      const isProcessed = row?.processed === 'Y' || row?.processed === true;
+      if (isPosted || !isProcessed) return [];
+      return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
+    },
+    onMenuActionExecuted: (action) => {
+      if (action.neoAction) onRefresh?.();
+    },
   };
 }
 

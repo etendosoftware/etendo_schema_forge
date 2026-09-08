@@ -15,6 +15,25 @@ export const buildInOutActions = (rows) => {
   return hasDraft ? [{ value: 'CO', labelKey: 'book' }] : [];
 };
 
+// ETP-5209 — generic bulk "Contabilizar" (post) action, reused by
+// purchase-invoice/sales-invoice/goods-receipt/goods-shipment. Mirrors the same
+// posted/processed gate as the row-kebab and form-view Post menu action: a
+// document must be processed (completed) and not yet posted.
+const isRowPosted = (row) => row.posted === 'Y' || row.posted === true;
+const isRowProcessed = (row) => row.processed === 'Y' || row.processed === true;
+
+export const buildPostActions = (rows) =>
+  (rows.some((row) => !isRowPosted(row) && isRowProcessed(row)) ? [{ value: 'post', labelKey: 'post' }] : []);
+
+// Factory (not a plain function) because the rejection message must be
+// translated via the caller's `useUI()` — this module has no hook context.
+export const createPostRowFilter = (ui) => (row, action) => {
+  if (action !== 'post') return true;
+  if (isRowPosted(row)) return ui('bulkRowAlreadyPosted');
+  if (!isRowProcessed(row)) return ui('bulkRowNotCompleted');
+  return true;
+};
+
 export default function BulkDocumentAction({
   selectedRows, clearSelection, token, apiBaseUrl, windowName,
   entity = 'header',

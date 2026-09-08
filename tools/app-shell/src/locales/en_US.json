@@ -16724,6 +16724,7 @@
     "cannotReactivateLinkedDocs": "Cannot reactivate: order has linked documents",
     "bulkRowAlreadyPosted": "Already posted",
     "bulkRowNotPosted": "Not posted",
+    "bulkRowNotCompleted": "Not completed",
     "docTypeMatchedInvoices": "Receipt-Invoice Link",
     "bulkCompletion": "Bulk Completion",
     "confirmBulk": "Confirm",
