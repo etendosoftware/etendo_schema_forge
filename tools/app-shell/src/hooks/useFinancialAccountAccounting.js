@@ -24,6 +24,16 @@ import { throwHttpError } from '@/hooks/financialAccountHttp.js';
  *       inTransitPaymentAccountIN, depositAccount, clearedPaymentAccount,
  *       fINOutIntransitAcct, withdrawalAccount, clearedPaymentAccountOUT,
  *     })                                     → POST /sws/neo/financial-account/accountingConfiguration
+ *
+ * ETP-5207 — `clearedPaymentAccount`/`clearedPaymentAccountOUT` were removed from EditAccountModal's
+ * own field set: the window no longer shows or lets a user edit them, since core seeds them with a
+ * value on account creation that would otherwise let a reconciliation post. This function's body
+ * DELIBERATELY still lists all 9 keys with `|| null` defaults, unchanged — `fields.clearedPaymentAccount`
+ * is now always `undefined` from every real caller, so this keeps sending an explicit `null` for
+ * both on every save, reinforcing the empty state as a side effect rather than needing its own
+ * logic. Do not "clean up" this function by dropping the two keys — the request body would then
+ * omit them entirely, which the backend (`FinancialAccountAccountingHandler`) treats as "leave
+ * whatever is stored", not as "clear it".
  */
 
 const BASE_PATH = '/sws/neo/financial-account';

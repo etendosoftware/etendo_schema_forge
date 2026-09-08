@@ -54,9 +54,12 @@ vi.mock('@/hooks/useBankConnectionActions', () => ({
 
 // ETP-4530: Tab Contabilidad — mocked so existing suites (which don't exercise this tab) don't
 // need a real AuthProvider/network round-trip just to mount the modal.
-// ETP-4872 — the row shape now carries all 9 account-type-dependent fields (the old 2-field
+// ETP-4872 — the row shape now carries the account-type-dependent fields (the old 2-field
 // fINAssetAcct/fINTransitoryAcct set is retired); the neutral default resolves every field to
-// null/empty so any suite that never opens the Accounting tab is unaffected.
+// null/empty so any suite that never opens the Accounting tab is unaffected. ETP-5207 keeps
+// clearedPaymentAccount/clearedPaymentAccountOUT in this mock GET response as inert filler —
+// the component no longer reads either key into rendered state (see EditAccountModal.jsx's own
+// ETP-5207 doc comment on ACCOUNTING_FIELD_GROUPS).
 const fetchAccountingConfiguration = vi.fn().mockResolvedValue({
   id: null,
   fINBankrevaluationgainAcct: null,
@@ -1099,32 +1102,51 @@ describe('EditAccountModal', () => {
     );
   });
 
-  // ── ETP-4872: AccountingConfigurationSection field layout ─────────────────
-  // The old 2-field fINAssetAcct/fINTransitoryAcct set is replaced by 9 account-type-dependent
-  // fields grouped into up to 3 sub-sections. Banco gets all 3 (General, Payment IN, Payment
-  // OUT — 9 fields); Caja/Tarjeta omit "General" ENTIRELY (not just hide it) — 6 fields, 2
-  // sub-sections. No field is required (Global Constraints, ETP-4872 plan).
-  describe('AccountingConfigurationSection field layout (ETP-4872)', () => {
+  // ── ETP-4872 / ETP-5207: AccountingConfigurationSection field layout ──────
+  // The old 2-field fINAssetAcct/fINTransitoryAcct set was replaced (ETP-4872) by
+  // account-type-dependent fields grouped into up to 3 sub-sections. Banco gets all 3 (General,
+  // Payment IN, Payment OUT — 7 fields); Caja/Tarjeta omit "General" ENTIRELY (not just hide it)
+  // — 4 fields, 2 sub-sections. ETP-5207 then removed "Cleared Payment Account" (IN) and
+  // "Cleared Payment Account" (OUT) from Payment IN/OUT respectively (each group went from 3 to 2
+  // fields, so Banco went from 9 to 7 fields, Caja/Tarjeta from 6 to 4) — see the negative
+  // assertions in every test below, plus the dedicated ETP-5207 describe block right after this
+  // one. No field is required (Global Constraints, ETP-4872 plan).
+  describe('AccountingConfigurationSection field layout (ETP-4872 / ETP-5207)', () => {
     const GENERAL_FIELDS = ['fINBankrevaluationgainAcct', 'fINBankrevaluationlossAcct', 'fINBankfeeAcct'];
-    const PAYMENT_IN_FIELDS = ['inTransitPaymentAccountIN', 'depositAccount', 'clearedPaymentAccount'];
-    const PAYMENT_OUT_FIELDS = ['fINOutIntransitAcct', 'withdrawalAccount', 'clearedPaymentAccountOUT'];
-    const ALL_9_FIELDS = [...GENERAL_FIELDS, ...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS];
+    const PAYMENT_IN_FIELDS = ['inTransitPaymentAccountIN', 'depositAccount'];
+    const PAYMENT_OUT_FIELDS = ['fINOutIntransitAcct', 'withdrawalAccount'];
+    const ALL_RENDERED_FIELDS = [...GENERAL_FIELDS, ...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS];
+    // ETP-5207 — these must never render, for any account type, even though they used to be part
+    // of PAYMENT_IN_FIELDS/PAYMENT_OUT_FIELDS above.
+    const HIDDEN_CLEARED_FIELDS = ['clearedPaymentAccount', 'clearedPaymentAccountOUT'];
+    const HIDDEN_CLEARED_LABELS = ['financeAccountsAccountingClearedIn', 'financeAccountsAccountingClearedOut'];
 
     async function openAccountingTab(user) {
       await user.click(getTab('financeAccountsEditTabAccounting'));
       return screen.findByTestId('accounting-configuration-section');
     }
 
-    it('renders 9 fields in 3 sub-sections for a Bank account', async () => {
+    function expectClearedFieldsHidden(section) {
+      HIDDEN_CLEARED_FIELDS.forEach((key) => {
+        expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
+        expect(within(section).queryByTestId(`field-${key}-chip`)).not.toBeInTheDocument();
+      });
+      HIDDEN_CLEARED_LABELS.forEach((labelKey) => {
+        expect(within(section).queryByText(labelKey)).not.toBeInTheDocument();
+      });
+    }
+
+    it('renders 7 fields in 3 sub-sections for a Bank account, never the two ETP-5207 cleared fields', async () => {
       const user = userEvent.setup();
       renderModal({ account: BANK_ACCOUNT });
       const section = await openAccountingTab(user);
 
       // Every field's search-select input is present (all start empty — see default mock).
-      ALL_9_FIELDS.forEach((key) => {
+      ALL_RENDERED_FIELDS.forEach((key) => {
         expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(9);
+      expect(within(section).getAllByRole('combobox')).toHaveLength(7);
+      expectClearedFieldsHidden(section);
 
       // All 3 sub-section headings render, "General" included.
       expect(within(section).getByText('financeAccountsEditTabGeneral')).toBeInTheDocument();
@@ -1132,7 +1154,7 @@ describe('EditAccountModal', () => {
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
     });
 
-    it('renders 6 fields in 2 sub-sections for a Cash account, omitting General entirely', async () => {
+    it('renders 4 fields in 2 sub-sections for a Cash account, omitting General entirely and never the two ETP-5207 cleared fields', async () => {
       const user = userEvent.setup();
       renderModal({
         account: { id: 'acc-cash-acct', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
@@ -1145,7 +1167,8 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expectClearedFieldsHidden(section);
 
       // "General" is omitted, not merely hidden — the heading itself is absent.
       expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
@@ -1153,7 +1176,7 @@ describe('EditAccountModal', () => {
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
     });
 
-    it('renders 6 fields in 2 sub-sections for a Card account, omitting General entirely', async () => {
+    it('renders 4 fields in 2 sub-sections for a Card account, omitting General entirely and never the two ETP-5207 cleared fields', async () => {
       const user = userEvent.setup();
       renderModal({
         account: { id: 'acc-card-acct', name: 'Tarjeta', type: 'CA', currencyId: '102', bankConnected: false },
@@ -1166,18 +1189,136 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expectClearedFieldsHidden(section);
       expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
     });
   });
 
-  // ── ETP-4872: dirty-check / snapshot over the 9-field state map ───────────
+  // ── ETP-5207: Cleared Payment Account (IN) / (OUT) must never surface in the UI ───────────
+  // The backend already guarantees these two fields stay empty on creation (core trigger +
+  // FinancialAccountAccountingDefaultsSupport — see the backend data-fix work). This block
+  // encodes the NEW, independent requirement: the fields must be fully hidden from the
+  // Contabilidad tab, regardless of account type, and regardless of what the GET response
+  // returns for them — proving the omission is a deliberate UI decision, not a coincidence of
+  // the values happening to be empty. Feeding a non-null value here is exactly what would have
+  // rendered a populated field/chip before the ETP-5207 UI change (see git history on
+  // ACCOUNTING_FIELD_GROUPS in EditAccountModal.jsx), so this test would have failed pre-fix.
+  describe('ETP-5207: Cleared Payment Account IN/OUT never render, even when the backend returns a value', () => {
+    it.each([
+      { description: 'Bank', account: BANK_ACCOUNT },
+      {
+        description: 'Cash',
+        account: { id: 'acc-cash-etp5207', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
+      },
+      {
+        description: 'Card',
+        account: { id: 'acc-card-etp5207', name: 'Tarjeta', type: 'CA', currencyId: '102', bankConnected: false },
+      },
+    ])('$description account: hides Cleared Payment Account IN/OUT even with non-null backend values', async ({ account }) => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-etp5207',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: 'CLR-IN-1',
+        'clearedPaymentAccount$_identifier': 'Cleared In 1',
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: 'CLR-OUT-1',
+        'clearedPaymentAccountOUT$_identifier': 'Cleared Out 1',
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'CLR-IN-1', name: 'Cleared In 1' },
+            { id: 'CLR-OUT-1', name: 'Cleared Out 1' },
+          ],
+        },
+      });
+      renderModal({ account });
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      const section = await screen.findByTestId('accounting-configuration-section');
+
+      // Neither field's input/chip renders...
+      expect(within(section).queryByTestId('field-clearedPaymentAccount')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccount-chip')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT-chip')).not.toBeInTheDocument();
+      // ...nor does its label...
+      expect(within(section).queryByText('financeAccountsAccountingClearedIn')).not.toBeInTheDocument();
+      expect(within(section).queryByText('financeAccountsAccountingClearedOut')).not.toBeInTheDocument();
+      // ...nor the resolved value the backend returned for it (proves this isn't merely an
+      // empty-value coincidence — the value IS there server-side and is still not shown).
+      expect(within(section).queryByText('Cleared In 1')).not.toBeInTheDocument();
+      expect(within(section).queryByText('Cleared Out 1')).not.toBeInTheDocument();
+    });
+
+    it('saves an explicit null for both cleared fields on submit, even though the GET response returned a value for them', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-etp5207-save',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: 'FEE1',
+        'fINBankfeeAcct$_identifier': 'Fee 1',
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: 'CLR-IN-1',
+        'clearedPaymentAccount$_identifier': 'Cleared In 1',
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: 'CLR-OUT-1',
+        'clearedPaymentAccountOUT$_identifier': 'Cleared Out 1',
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'FEE1', name: 'Fee 1' },
+            { id: 'FEE2', name: 'Fee 2' },
+          ],
+        },
+      });
+      saveAccountingConfiguration.mockResolvedValue({ id: 'row-etp5207-save' });
+      renderModal({ account: BANK_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+
+      // Change an unrelated field so Save is enabled — the two cleared fields are never touched
+      // by the user because they are not even rendered.
+      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(saveAccountingConfiguration).toHaveBeenCalledTimes(1));
+      const [, payload] = saveAccountingConfiguration.mock.calls[0];
+      // This component never resolves either key from the GET response into `accounting.values`
+      // (ACCOUNTING_FIELDS no longer lists them), so the payload it hands to
+      // saveAccountingConfiguration carries no value for either key at all — the backend's
+      // non-null value is never round-tripped back. useFinancialAccountAccounting.js's own
+      // (unmocked-in-production) hook body then coerces this "absent" into an explicit `null` on
+      // every save (`fields.clearedPaymentAccount || null`, see that file's ETP-5207 doc comment)
+      // — covered by that hook's own suite, not this one, since the hook is mocked here.
+      expect(payload.clearedPaymentAccount).toBeFalsy();
+      expect(payload.clearedPaymentAccountOUT).toBeFalsy();
+      expect(Object.prototype.hasOwnProperty.call(payload, 'clearedPaymentAccount')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(payload, 'clearedPaymentAccountOUT')).toBe(false);
+    });
+  });
+
+  // ── ETP-4872: dirty-check / snapshot over the accounting field state map ──
   // Mirrors the old single-field `assetAcct !== snapshot.assetAcct` pattern, now over a map
-  // keyed by all 9 field names — each key must be tracked independently against its own
-  // snapshot slice, not collapsed into one shared dirty flag.
-  describe('Accounting dirty-check tracks the 9-field state map (ETP-4872)', () => {
+  // keyed by every rendered accounting field name (7 for Banco since ETP-5207 dropped the two
+  // cleared-payment-account fields; 4 for Caja/Tarjeta) — each key must be tracked independently
+  // against its own snapshot slice, not collapsed into one shared dirty flag.
+  describe('Accounting dirty-check tracks the accounting field state map (ETP-4872)', () => {
     it('tracks dirty state independently per field and clears only once every changed field is reverted', async () => {
       const user = userEvent.setup();
       fetchAccountingConfiguration.mockResolvedValueOnce({
@@ -1241,7 +1382,8 @@ describe('EditAccountModal', () => {
   // ── ETP-4872 QA regression: accounting field state across a mid-edit Type switch ──
   // AccountingConfigurationSection renders only the subset of ACCOUNTING_FIELDS that applies to
   // `accountType`, but `accounting.values` (the state map in useAccountingConfiguration) is keyed
-  // on ALL 9 fields regardless of type, and nothing resets/filters it when `fields.type` changes —
+  // on every field ACCOUNTING_FIELDS lists (7 fields since ETP-5207) regardless of type, and
+  // nothing resets/filters it when `fields.type` changes —
   // the hook's fetch effect is keyed on `[open, accountId]` only (EditAccountModal.jsx ~L840-876).
   // persistAccountEdits then builds its save payload by iterating the FULL ACCOUNTING_FIELDS list
   // unconditionally (~L223-229), reading straight from that unfiltered map.
@@ -1347,8 +1489,8 @@ describe('EditAccountModal', () => {
       await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeBank' }));
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
-      // Revert depositAccount to its snapshot too — every key in the 9-field map matches its
-      // snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
+      // Revert depositAccount to its snapshot too — every key in the accounting field state map
+      // matches its snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
       // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
@@ -1486,7 +1628,7 @@ describe('EditAccountModal', () => {
   // block: that regression tested the cross-tab `edit-account-accounting-error-summary`
   // banner driven by the now-retired required `fINAssetAcct` field. Neither the banner nor
   // any per-field required error exists anymore (Global Constraints, ETP-4872 plan — no field
-  // in the new 9-field set is required), so this block instead pins the broader guarantee the
+  // in the accounting field set is required), so this block instead pins the broader guarantee the
   // old one was protecting: an accounting field, however filled or cleared, must never be able
   // to disable Save — on the Contabilidad tab itself, or after switching away from it.
   describe('Save is never blocked by the Contabilidad tab regardless of tab (ETP-4872)', () => {

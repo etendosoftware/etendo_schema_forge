@@ -38,10 +38,21 @@ import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal
 const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
 
-// ETP-4872 — the 9 accounting fields, grouped the way the "Contabilidad" tab renders them.
-// Banco renders all 3 groups (9 fields); Caja/Tarjeta render only paymentIn/paymentOut (6 fields)
+// ETP-4872 — the accounting fields, grouped the way the "Contabilidad" tab renders them.
+// Banco renders all 3 groups (7 fields); Caja/Tarjeta render only paymentIn/paymentOut (4 fields)
 // — the "General" group is OMITTED for those types, not merely hidden (see
 // AccountingConfigurationSection). No field is required (Global Constraints, ETP-4872 plan).
+//
+// ETP-5207 — `clearedPaymentAccount` (Payment IN) / `clearedPaymentAccountOUT` (Payment OUT) are
+// deliberately ABSENT from paymentIn/paymentOut below, not merely hidden behind a flag: the
+// functional default for both is always empty (core's FIN_FINANCIAL_ACCOUNT_TRG seeds them with
+// the ledger asset account on creation, and FinancialAccountAccountingDefaultsSupport explicitly
+// clears them right after — see the backend). A non-null cleared account is what makes a
+// reconciliation post, so surfacing an editable field here would let a user re-introduce the very
+// bug ETP-5207 fixes. The two DAL properties themselves are NOT removed from the entity/handler —
+// only this window's UI stops exposing them. `saveAccountingConfiguration` (useFinancialAccountAccounting.js)
+// still sends both as an explicit `null` on every save, which reinforces the empty state as a
+// side effect of this omission rather than needing separate logic.
 const ACCOUNTING_FIELD_GROUPS = {
   general: [
     { key: 'fINBankrevaluationgainAcct', id: 'edit-account-bank-revaluation-gain-acct', labelKey: 'financeAccountsAccountingBankRevaluationGain' },
@@ -51,12 +62,10 @@ const ACCOUNTING_FIELD_GROUPS = {
   paymentIn: [
     { key: 'inTransitPaymentAccountIN', id: 'edit-account-in-transit-payment-in-acct', labelKey: 'financeAccountsAccountingInTransitIn' },
     { key: 'depositAccount', id: 'edit-account-deposit-acct', labelKey: 'financeAccountsAccountingDeposit' },
-    { key: 'clearedPaymentAccount', id: 'edit-account-cleared-payment-in-acct', labelKey: 'financeAccountsAccountingClearedIn' },
   ],
   paymentOut: [
     { key: 'fINOutIntransitAcct', id: 'edit-account-in-transit-payment-out-acct', labelKey: 'financeAccountsAccountingInTransitOut' },
     { key: 'withdrawalAccount', id: 'edit-account-withdrawal-acct', labelKey: 'financeAccountsAccountingWithdrawal' },
-    { key: 'clearedPaymentAccountOUT', id: 'edit-account-cleared-payment-out-acct', labelKey: 'financeAccountsAccountingClearedOut' },
   ],
 };
 
@@ -73,9 +82,16 @@ const ACCOUNTING_FIELDS_ALL_TYPES = [
   ...ACCOUNTING_FIELD_GROUPS.paymentOut,
 ].map((fieldMeta) => fieldMeta.key);
 
+// ETP-5207 — literal lookup, not a template-interpolated class name, so Tailwind's static scanner
+// can see every class. Keyed by field count because "General" (3 fields) and paymentIn/paymentOut
+// (2 fields each, since the "Cleared payment account" field was removed from both) no longer share
+// one fixed column count.
+const ACCOUNTING_GROUP_GRID_COLS = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' };
+
 /**
  * Accounting field keys that actually belong to `accountType`'s rendered layout (ETP-4872 BUG-1).
- * `accounting.values` is always keyed on all 9 fields regardless of type — the field state map
+ * `accounting.values` is always keyed on all fields this window renders, regardless of type — the
+ * field state map
  * itself is never reset when Type changes mid-edit, since a value picked while a since-hidden
  * group was still visible must not be silently thrown away if the user flips Type back before
  * Save. This helper is consulted only at save time (`persistAccountEdits`), so a value that
@@ -887,7 +903,7 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
-/** Builds an empty { [field]: { value: '', label: '' } } map for all 9 accounting fields. */
+/** Builds an empty { [field]: { value: '', label: '' } } map for every accounting field this window renders. */
 function emptyAccountingValues() {
   return ACCOUNTING_FIELDS.reduce((acc, field) => {
     acc[field] = { value: '', label: '' };
@@ -896,13 +912,18 @@ function emptyAccountingValues() {
 }
 
 /**
- * Loads and saves the account's accounting configuration (ETP-4872 — 9 account-type-dependent
+ * Loads and saves the account's accounting configuration (ETP-4872 — account-type-dependent
  * fields, replacing the old 2-field `fINAssetAcct`/`fINTransitoryAcct` set) used when generating
  * transaction journal entries. Backed by the `accountingConfiguration` entity, fully owned by
  * `FinancialAccountAccountingHandler`: GET resolves the account's ledger and finds-or-defaults
  * the row; save finds-or-creates it. The GET response also carries `catalogs.accounts` (active
  * accounting combinations for that ledger), used to populate every search select client-side
  * with no extra round-trip. No field is required (ETP-4872 plan, Global Constraints).
+ *
+ * ETP-5207 — the response's `clearedPaymentAccount`/`clearedPaymentAccountOUT` are read from the
+ * server but intentionally NOT included in `ACCOUNTING_FIELDS`, so they never enter `values`: this
+ * window no longer lets a user view or edit them (see `ACCOUNTING_FIELD_GROUPS`). The DAL
+ * properties and the handler both keep them — only this UI stops surfacing them.
  */
 function useAccountingConfiguration(open, account) {
   const { fetchAccountingConfiguration } = useFinancialAccountAccounting();
@@ -985,7 +1006,7 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
     );
   }
 
-  // Banco gets all 3 groups (9 fields); Caja/Tarjeta omit the "General" group entirely (not just
+  // Banco gets all 3 groups (7 fields); Caja/Tarjeta omit the "General" group entirely (not just
   // hide it) — it has no bank connection, so bank revaluation/fee accounts don't apply.
   const groups = accountType === ACCOUNT_TYPE.BANK
     ? [
@@ -1003,11 +1024,14 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
       {groups.map((group) => (
         <div key={group.titleKey} className="flex flex-col gap-3">
           <h4 className="text-sm font-medium text-foreground">{ui(group.titleKey)}</h4>
-          {/* ETP-4872 — every group is fixed at exactly 3 fields (see ACCOUNTING_FIELD_GROUPS),
-              so sm:grid-cols-3 fills the row instead of orphaning the 3rd field alone on a
-              half-empty row under sm:grid-cols-2. Same 3-column convention BankConnectionPanel
-              already uses above for its own fixed-3-item row. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* ETP-4872 — each group's column count matches its own field count (see
+              ACCOUNTING_FIELD_GROUPS), so the row fills exactly instead of leaving an orphaned gap
+              under a fixed sm:grid-cols-3. "General" still has 3 fields; paymentIn/paymentOut
+              dropped to 2 when ETP-5207 removed their "Cleared payment account" field. Literal
+              lookup, not a template-interpolated class name, so Tailwind's static scanner can see
+              every possible class. Same fixed-column convention BankConnectionPanel already uses
+              above for its own 3-item row. */}
+          <div className={`grid grid-cols-1 gap-4 ${ACCOUNTING_GROUP_GRID_COLS[group.fields.length]}`}>
             {group.fields.map((fieldMeta) => (
               <Field
                 key={fieldMeta.key}
@@ -1262,7 +1286,15 @@ export function EditAccountModal({
         // on DialogContent clipping nothing so its dropdown can render past the box edge (see that
         // component's own doc comment below) — `max-h` alone already bounds the visible layout via
         // flexbox without clipping that popover.
-        className="flex max-h-[90vh] flex-col max-w-[1020px] bg-card p-0"
+        // max-w bumped 1020px -> 1080px: at 1020px, in the Accounting tab's 3-column grid,
+        // "Cuenta de ganancia por revalorización bancaria" (financeAccountsAccountingBankRevaluationGain)
+        // wraps to 2 lines while its row siblings stay on 1, misaligning their controls — grid
+        // cells stretch to a shared row height, but each Field's own select still sits right below
+        // its OWN label, so a taller label pushes only that one control down. Measured against the
+        // real bundled Tailwind/font (not estimated): wraps up to 1035px, fits from 1040px; 1080px
+        // keeps a safety margin for font-rendering/zoom variance without widening the modal more
+        // than needed. Re-measure this if that label's translation changes.
+        className="flex max-h-[90vh] flex-col max-w-[1080px] bg-card p-0"
         onPointerDownOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onInteractOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onEscapeKeyDown={(e) => {
@@ -1286,8 +1318,8 @@ export function EditAccountModal({
         </DialogHeader>
 
         {/* ETP-4872 — the only scrollable region: header and footer stay pinned outside it (same
-            shape as ImportStatementModal's body wrapper) so the 9-field Accounting tab can grow
-            without pushing Cancel/Save out of view. */}
+            shape as ImportStatementModal's body wrapper) so the Accounting tab can grow without
+            pushing Cancel/Save out of view. */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
           <AccountFieldsGrid
             ui={ui}
