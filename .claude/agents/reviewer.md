@@ -193,6 +193,28 @@ Reject any PR that formats a monetary value with a hand-rolled `Intl.NumberForma
 
 This exact bug (dropped thousands separator, wrong decimal comma) shipped repeatedly across the codebase before ETP-4314 centralized it — treat a new duplicate formatter the same as any other regression, not a style nit.
 
+### Fictitious List Columns (BLOCKER)
+Reject any PR that adds a list column with `type: 'custom'` and **no** backing `column:` (AD column)
+and no `backendFilterKey`, unless the cell is purely presentational (action buttons, icons, an avatar
+composition). Such a column is dropped from the advanced filter **in silence** by `isFilterableColumn`
+(core `AdvancedFilterBuilder.jsx`) and cannot be sorted — the user simply never finds the field in
+"Filtro por condicionales" and nobody notices.
+
+Test to apply: **could a user plausibly want to filter or sort by this column?** If yes, it is not
+presentational and needs a real backing field:
+- value already in AD → add `column: '<AD_ColumnName>'` (a custom renderer and a real column coexist;
+  add `filterMode:` if the default widget is wrong — see `transactionDocument` in
+  `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`);
+- value derived/computed → **stored computed column** (`Computation_Mode = 'S'`,
+  `{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`), precedent
+  `em_etgo_delivery_status` on `c_invoice`;
+- visual recomposition of existing columns → the declarative `multiField` column type.
+
+Equally a BLOCKER: feeding a list column by injecting a synthetic field into the NEO response from a
+handler's `afterHandle()`. Unfilterable, unsortable, and silently fatal on failure —
+`TbaiSyncStatusInjector` was dead for months behind a swallowed `MappingException` while every invoice
+rendered a client-side `?? 'Pendiente'` fallback (ETP-4391).
+
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
 

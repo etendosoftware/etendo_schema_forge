@@ -1115,26 +1115,26 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
       renderWith('sii+tbai', 'BIZKAIA');
       // No waitFor / no act flush: the columns must exist synchronously.
       expect(getColumn('_siiStatus')).toBeTruthy();
-      expect(getColumn('_tbaiStatus')).toBeTruthy();
-      expect(getColumn('_tbaiStatus').label).toBe('Batuz Status');
+      expect(getColumn('eTGOTbaiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus').label).toBe('Batuz Status');
     });
 
     it('renders ONLY the SII column for a sii+tbai org outside Bizkaia (GIPUZKOA)', () => {
       renderWith('sii+tbai', 'GIPUZKOA');
       expect(getColumn('_siiStatus')).toBeTruthy();
-      expect(getColumn('_tbaiStatus')).toBeUndefined();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
     });
 
     it('renders ONLY the SII column for a plain sii profile (no TBAI at all)', () => {
       renderWith('sii', null);
       expect(getColumn('_siiStatus')).toBeTruthy();
-      expect(getColumn('_tbaiStatus')).toBeUndefined();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
     });
 
     it('renders neither column when the org has no fiscal profile', () => {
       renderWith(null, null);
       expect(getColumn('_siiStatus')).toBeUndefined();
-      expect(getColumn('_tbaiStatus')).toBeUndefined();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
     });
 
     it('derives visibility from the GLOBAL selected org, never from a row field', () => {
@@ -1146,7 +1146,7 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
         { ...AP_INVOICE_ROW, adOrgId: 'org-alava' },
       ]);
       expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', 'BIZKAIA');
-      expect(getColumn('_tbaiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus')).toBeTruthy();
     });
 
     it('uses the translated Batuz label when the dictionary provides it', () => {
@@ -1155,52 +1155,65 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
         statuses: {},
       };
       renderWith('sii+tbai', 'BIZKAIA');
-      expect(getColumn('_tbaiStatus').label).toBe('Estado Batuz');
+      expect(getColumn('eTGOTbaiStatus').label).toBe('Estado Batuz');
       i18nMock.dictionary = i18nMock.defaultDictionary;
+    });
+
+    // ETP-5216: the column used to be `{ key: '_tbaiStatus', type: 'custom' }`
+    // with no `column` and no `backendFilterKey` — dropped silently from the
+    // advanced filter builder's field list (isFilterableColumn), and unusable
+    // for backend sort/filter even if offered. Now it is backed by the real,
+    // stored computed AD column `em_etgo_tbai_status`.
+    it('binds the Batuz column to the real AD column em_etgo_tbai_status with a text filterMode', () => {
+      renderWith('sii+tbai', 'BIZKAIA');
+      const col = getColumn('eTGOTbaiStatus');
+      expect(col.column).toBe('em_etgo_tbai_status');
+      expect(col.type).toBe('custom');
+      expect(col.filterMode).toBe('text');
     });
   });
 
-  // ETP-5087: the Batuz cell reads `tbaiSyncEstado` FIRST — the real submission
-  // outcome injected by the backend's TbaiSyncStatusInjector (Recibido /
-  // Rechazado / Error), same as the sales-invoice list — and only falls back to
-  // the invoice's own `tbaiIssent` boolean (EM_Tbai_Issent, which NEO may
-  // serialise as `true`/`false` OR as the AD flag 'Y'/'N') when no sync row
-  // exists yet. Before the fix the cell read ONLY `tbaiSyncEstado`, which the
-  // purchase-side backend never populated, so `?? 'Pendiente'` painted a
-  // hardcoded "Pendiente" on every row.
-  describe('Batuz cell — tbaiSyncEstado primary, tbaiIssent fallback', () => {
+  // ETP-5087 + ETP-5216: the Batuz cell reads `eTGOTbaiStatus` FIRST — the real
+  // submission outcome, now backed by the stored computed AD column
+  // `em_etgo_tbai_status` (previously the synthetic `tbaiSyncEstado` field
+  // injected server-side by the now-deleted TbaiSyncStatusInjector) — and only
+  // falls back to the invoice's own `tbaiIssent` boolean (EM_Tbai_Issent,
+  // which NEO may serialise as `true`/`false` OR as the AD flag 'Y'/'N') when
+  // no sync row exists yet. Reading the flag first would let a rejection
+  // render as a cheerful "Enviada" — the whole reason the ordering matters.
+  describe('Batuz cell — eTGOTbaiStatus primary, tbaiIssent fallback', () => {
     function renderCell(row) {
       renderWith('sii+tbai', 'BIZKAIA', [row]);
-      return render(<>{getColumn('_tbaiStatus').render(row)}</>).container;
+      return render(<>{getColumn('eTGOTbaiStatus').render(row)}</>).container;
     }
 
     it('shows the real state "Recibido" even when tbaiIssent is false', () => {
-      // The injected state wins: the boolean is a weaker, staler signal.
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', tbaiIssent: false };
+      // The database-computed state wins: the boolean is a weaker, staler signal.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido', tbaiIssent: false };
       expect(renderCell(row).textContent).toBe('Recibido');
     });
 
     it('shows "Rechazado" for a rejected submission — a rejection is NEVER shown as "Enviada"', () => {
       // The critical case: the invoice WAS submitted (tbaiIssent true) but Batuz
       // rejected it. Reading the boolean first would report success.
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Rechazado', tbaiIssent: true };
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Rechazado', tbaiIssent: true };
       expect(renderCell(row).textContent).toBe('Rechazado');
     });
 
     it('shows "Error" for a failed submission, not the fallback', () => {
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Error', tbaiIssent: 'Y' };
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Error', tbaiIssent: 'Y' };
       expect(renderCell(row).textContent).toBe('Error');
     });
 
-    it('falls back to "Enviada" when there is no sync state and tbaiIssent is boolean true', () => {
+    it('falls back to "Enviada" when there is no computed status and tbaiIssent is boolean true', () => {
       expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: true }).textContent).toBe('Enviada');
     });
 
-    it('falls back to "Enviada" when there is no sync state and tbaiIssent is the AD flag "Y"', () => {
+    it('falls back to "Enviada" when there is no computed status and tbaiIssent is the AD flag "Y"', () => {
       expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: 'Y' }).textContent).toBe('Enviada');
     });
 
-    it('falls back to "Pendiente" when there is no sync state and tbaiIssent is boolean false', () => {
+    it('falls back to "Pendiente" when there is no computed status and tbaiIssent is boolean false', () => {
       expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: false }).textContent).toBe('Pendiente');
     });
 
@@ -1212,10 +1225,12 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
       expect(renderCell({ ...AP_INVOICE_ROW }).textContent).toBe('Pendiente');
     });
 
-    it('treats a null tbaiSyncEstado as absent and uses the fallback', () => {
-      // `??` (not `||`) is what makes this work — and an explicit null is what
-      // NEO sends for an invoice with no row in tbai_syncinvoice.
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: null, tbaiIssent: true };
+    it('treats a null eTGOTbaiStatus as absent and uses the fallback', () => {
+      // `??` (not `||`) is what makes this work. In practice the database
+      // function is total and always answers a non-null string (§5.8 of the
+      // migration plan), but a row fetched before the column was backfilled
+      // is exactly this shape.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: null, tbaiIssent: true };
       expect(renderCell(row).textContent).toBe('Enviada');
     });
   });

@@ -54,6 +54,8 @@ Schema Forge is now **two sibling repos + one runtime module**. Always know whic
 - Commit or work directly on the main branch — ALWAYS work on a feature branch in a worktree
 - Work outside my assigned worktree
 - Skip writing tests before delivery
+- Add a fictitious list column — a `type: 'custom'` cell with no backing AD `column`. It is silently unfilterable and unsortable. See `<list_columns>`
+- Inject a synthetic field into the NEO response from `afterHandle()` to feed a list column
 </what_i_never_do>
 
 <communication_style>
@@ -159,6 +161,43 @@ Changes to `tools/app-shell/src/components/contract-ui/` must be:
 - **Backwards-compatible** — new props must be optional with sensible defaults
 - Verify no existing window breaks: all new props must have default values or guard conditions
 </decisions_extension_points>
+
+<list_columns>
+## List Columns Must Be Real Columns (MANDATORY)
+
+The advanced-filter field list is **not** the window's field list — it is the table's column list
+(`ListView.jsx` `filterColumns` → `ListFilterBar` → `AdvancedFilterBuilder`). A column that is not
+backed by a real backend field cannot be filtered, and the core drops it **in silence**
+(`isFilterableColumn`: `type === 'custom' && !column && !backendFilterKey` → excluded, no warning).
+
+Decision tree before writing a `type: 'custom'` column with a `render:` callback:
+
+1. **Already an AD column?** → `column: '<AD_ColumnName>'`. Filter and sort come for free.
+2. **Derived from another table / computed?** → **stored computed column**
+   (`Computation_Mode = 'S'`, engine EPL-1807, `{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`).
+   A physical AD column: filterable, sortable, and it cannot fail silently. Precedent:
+   `em_etgo_delivery_status` on `c_invoice`.
+3. **Recomposing existing columns visually?** → the declarative `multiField` column type
+   (per-part sort + filter expansion), not hand-written JSX.
+4. **Only then** `type: 'custom'`: purely presentational cells — action buttons, icons, avatar
+   compositions. **Test: if a user could plausibly want to filter or sort by it, it is not
+   presentational.**
+
+**Never inject a synthetic field into the NEO response from `afterHandle()` to feed a list column.**
+It is invisible to the backend query (unfilterable, unsortable) and an injector failure is
+undetectable from the UI: `TbaiSyncStatusInjector` was dead for months behind a swallowed
+`MappingException` and every invoice rendered the client-side `?? 'Pendiente'` fallback while real
+data sat in `tbai_syncinvoice` (ETP-4391). `afterHandle()` injection is for genuinely per-request,
+non-queryable data only.
+
+A custom renderer and a real column are not mutually exclusive: keep `column:` and add `filterMode:`
+when the default filter widget is wrong (see `transactionDocument` in
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` — badge cell + `column: 'C_DocTypeTarget_ID'`
++ `filterMode: 'identifier'`).
+
+**When reviewing or extending a generic list component, treat a new unbacked `custom` column in a
+window as a bug to push back on, not a local style choice.**
+</list_columns>
 
 <diagnosis_workflow>
 ## Diagnosing a Generator Bug

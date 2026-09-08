@@ -62,6 +62,36 @@ describe('Sales InvoiceHeaderTable — columns', () => {
   });
 });
 
+// ── ETP-5216: TicketBAI status is a real stored computed AD column ───────────
+// Was `{ key: '_tbaiStatus', type: 'custom' }` with no `column` — dropped
+// silently from the advanced filter by isFilterableColumn (no error, no
+// warning), and the criteria fieldName would have been the synthetic key
+// `_tbaiStatus`, which does not exist in the DAL. See
+// docs/plans/2026-09-08-tbai-status-computed-column-migration.md §1, §8 Step 19.
+
+describe('Sales InvoiceHeaderTable — TBAI column is a real AD column (ETP-5216)', () => {
+  it('binds the TBAI column to the real AD column em_etgo_tbai_status', () => {
+    assert.match(
+      src,
+      /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',/,
+      'the column must carry `column` so isFilterableColumn does not drop it',
+    );
+  });
+
+  it('declares filterMode text on the TBAI column', () => {
+    assert.match(
+      src,
+      /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',\s*\n\s*filterMode: 'text'/,
+    );
+  });
+
+  it('does not fall back to a client-side isSent/tbaiIssent boolean (sales side never had that fallback)', () => {
+    const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)\;\s*\}/);
+    assert.ok(cell, 'expected the showTbai column-push block');
+    assert.match(cell[0], /row\.eTGOTbaiStatus \?\? 'Pendiente'/);
+  });
+});
+
 // ── ETP-4841: payment state follows the SIGN of the total ────────────────────
 // The grid used to call `isRectificativa(row)` (getArSubtype === 'RECTIFICATIVA')
 // to pick the credit branch. That mislabelled a POSITIVE Factura Rectificativa
@@ -191,9 +221,14 @@ describe('Sales InvoiceHeaderTable — fiscal status columns (ETP-4125)', () => 
       'SII status must come from the row field, not a separate fetch');
   });
 
-  it('reads TBAI status directly from row.tbaiSyncEstado', () => {
-    assert.match(src, /row\.tbaiSyncEstado/,
-      'TBAI status is injected server-side into the row by TbaiSyncStatusInjector');
+  it('reads TBAI status directly from row.eTGOTbaiStatus (ETP-5216: real stored computed column)', () => {
+    assert.match(src, /row\.eTGOTbaiStatus/,
+      'TBAI status must be read from the real AD column em_etgo_tbai_status, not a synthetic injected field');
+    assert.doesNotMatch(
+      src,
+      /tbaiSyncEstado/,
+      'tbaiSyncEstado was the synthetic field fed by the now-deleted TbaiSyncStatusInjector (ETP-5216)',
+    );
   });
 
   it('reads Verifactu status directly from row.etvfacInvoiceStatus', () => {

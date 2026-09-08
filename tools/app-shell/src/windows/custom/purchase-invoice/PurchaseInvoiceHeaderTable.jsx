@@ -100,20 +100,25 @@ export default function PurchaseInvoiceHeaderTable(props) {
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
-        // ETP-5087: `tbaiSyncEstado` is the PRIMARY source — the backend's
-        // TbaiSyncStatusInjector fills it from the `tbai_syncinvoice` row with the
-        // REAL outcome of the submission to Batuz (Recibido / Rechazado / Error),
-        // exactly as the sales-invoice list already does. `tbaiIssent`
-        // (AD column `EM_Tbai_Issent`) is only a FALLBACK, for when no sync row
-        // exists yet or the injector did not run (e.g. a backend not yet carrying
-        // the purchase-side wiring): it proves the invoice was submitted, nothing
-        // more. This ordering is what stops the column from ever hiding a
-        // rejection behind a cheerful "Enviada", while still never defaulting to a
-        // fabricated status. `isSent` is used rather than a plain truthy test
-        // because NEO may deliver the flag as the AD character `'N'`, truthy in JS.
+        // ETP-5216: backed by the stored computed AD column EM_ETGO_Tbai_Status,
+        // shared by AR and AP. It used to be key '_tbaiStatus' with no `column`,
+        // fed by TbaiSyncStatusInjector — which made isFilterableColumn drop it
+        // from the advanced filter in SILENCE, and is exactly how a dead injector
+        // went unnoticed for months (ETP-4391). `type: 'custom'` still drives the
+        // badge cell; `column` + `filterMode` give the filter and sort a real
+        // backend field, the same pairing `transactionDocument` uses below.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'text', label: tbaiColLabel,
+        // `eTGOTbaiStatus` stays the PRIMARY source: it carries the REAL outcome
+        // of the submission to Batuz (Recibido / Rechazado / Error), and it is the
+        // only source that can say *rejected*. `tbaiIssent` (AD column
+        // `EM_Tbai_Issent`) remains a FALLBACK for a row fetched before the column
+        // was backfilled: it proves the invoice was submitted, nothing more.
+        // Reading the flag first would let a rejection render as a cheerful
+        // "Enviada". `isSent` is used rather than a plain truthy test because NEO
+        // may deliver the flag as the AD character `'N'`, truthy in JS.
         render: (row) => <FiscalStatusBadge
-          status={row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
+          status={row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
           data-testid="FiscalStatusBadge__tbai_6b7cdb" />,
       });
     }

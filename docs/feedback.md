@@ -1711,3 +1711,62 @@ reader no way to tell which half is current.**
 behind even when every line of logic is correct and every test is green, because no gate reads
 prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
 diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## [2026-09-08] ETP-5216 — A list column that no backend query can see is unfilterable AND unfailable, and both halves are silent
+
+**Component:** the "Estado TicketBAI" / "Estado Batuz" list column —
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`,
+`com.etendoerp.go/src/com/etendoerp/go/schemaforge/TbaiSyncStatusInjector.java` (deleted).
+
+**Symptom:** users could not filter or sort the invoice list by TicketBAI status. Nothing in the UI
+said why — the field simply was not offered in "Filtro por condicionales".
+
+**Root cause.** The column was declared `{ key: '_tbaiStatus', type: 'custom' }` with no `column`
+and no `backendFilterKey`, rendering `row.tbaiSyncEstado` — a field that exists nowhere in the
+Application Dictionary, stamped onto each row at runtime by `TbaiSyncStatusInjector.afterHandle()`.
+`isFilterableColumn` (core `AdvancedFilterBuilder.jsx`) drops exactly that shape from the advanced
+filter, with no error, no warning and no log. Even had it been offered, the emitted criteria
+`fieldName` would have been `_tbaiStatus`, a name the DAL model does not know.
+
+**The second, worse half.** An injected field is invisible to the backend query, so an injector
+failure is undetectable from the UI. ETP-4391 is the proof: a swallowed `MappingException` killed
+this very injector for months while every invoice rendered the client-side `?? 'Pendiente'`
+fallback and real data sat unread in `tbai_syncinvoice`. The two failure modes share one cause — the
+value never existed as a queryable column — and they close together.
+
+**Fix.** The value is now the stored computed AD column `EM_ETGO_Tbai_Status` on `C_Invoice`
+(`Computation_Mode = 'S'`, `Refresh_Mode = 'S'`, function `ETGO_GET_TBAI_STATUS`, dependency on
+`TBAI_SyncInvoice` watching `Estado` with insert/update/delete all `Y`). A plain physical column:
+filterable, sortable, indexable, recomputed in the same transaction that writes the sync row, and
+incapable of failing silently. The columns keep their `FiscalStatusBadge` cell and pair it with
+`column: 'em_etgo_tbai_status'` + `filterMode: 'text'` — a custom renderer and a real column are not
+mutually exclusive. The injector, its two wirings and its two test classes are deleted.
+`'Pendiente'` now lives in the database, so the meaning is authored once instead of being invented
+by a `??` in two JSX files.
+
+**Lesson 1 — `afterHandle()` injection is not a cheap way to add a column; it is a way to add a
+column that cannot be filtered, cannot be sorted, and cannot report its own failure.** Reserve it
+for genuinely per-request, non-queryable data. If a user could plausibly want to filter or sort by a
+value, it must be an AD column — an existing one, or a stored computed one. `CLAUDE.md`'s
+"List Columns Must Be Real Columns" decision tree exists precisely to catch this before the JSX is
+written.
+
+**Lesson 2 — `UPDATE_EVENT = Y` is not boilerplate.** TicketBAI sets `ESTADO` on an
+already-inserted row (`SynchronizeUtils.java:382-390`), so the state transition
+`NULL → Recibido/Rechazado` is an UPDATE, not an INSERT. Had the dependency watched inserts only,
+every invoice would have frozen at `'Pendiente'` forever — the exact ETP-4391 failure shape,
+reproduced by a different mechanism. Verify after deployment with
+`SELECT ad_scd_check('<AD_Column_ID>');`, which must return `0`.
+
+**Lesson 3 — under `Refresh_Mode = 'S'` a computation error rolls back the business transaction, so
+the computation function must be total.** `ETGO_GET_TBAI_STATUS` uses a plain `SELECT … INTO` (never
+`INTO STRICT`, which raises `NO_DATA_FOUND` on zero rows), collapses multiple rows with `LIMIT 1`
+plus a deterministic `tbai_syncinvoice_id DESC` tiebreak, answers `'Pendiente'` for a null/blank
+estado, passes an unknown status through unchanged, and ends in a `WHEN OTHERS` catch. The tiebreak
+is not cosmetic: `ad_scd_recompute` writes unconditionally with no `IS DISTINCT FROM` guard, so a
+non-deterministic result would make the column flap and `ad_scd_check` report phantom drift forever.
+An invoice that cannot be saved because computing its fiscal *display status* failed is far worse
+than the filtering bug this ticket fixes.

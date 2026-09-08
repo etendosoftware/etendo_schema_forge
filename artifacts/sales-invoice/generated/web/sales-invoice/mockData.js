@@ -47,7 +47,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-15",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-15"
+    "eTGODueDate": "2026-01-15",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-002",
@@ -95,7 +96,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-16",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-16"
+    "eTGODueDate": "2026-01-16",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-003",
@@ -143,7 +145,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-17",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-17"
+    "eTGODueDate": "2026-01-17",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-004",
@@ -191,7 +194,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-18",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-18"
+    "eTGODueDate": "2026-01-18",
+    "eTGOTbaiStatus": "IP"
   },
   {
     "id": "mock-header-005",
@@ -239,7 +243,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-19",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-19"
+    "eTGODueDate": "2026-01-19",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-006",
@@ -287,7 +292,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-20",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-20"
+    "eTGODueDate": "2026-01-20",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-007",
@@ -335,7 +341,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-21",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-21"
+    "eTGODueDate": "2026-01-21",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-008",
@@ -383,7 +390,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-22",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-22"
+    "eTGODueDate": "2026-01-22",
+    "eTGOTbaiStatus": "IP"
   },
   {
     "id": "mock-header-009",
@@ -431,7 +439,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-23",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-23"
+    "eTGODueDate": "2026-01-23",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-010",
@@ -479,7 +488,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-24",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-24"
+    "eTGODueDate": "2026-01-24",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-011",
@@ -527,7 +537,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-25",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-25"
+    "eTGODueDate": "2026-01-25",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-012",
@@ -575,7 +586,8 @@ export const header = [
     "aeatsiiFechaRegCont": "2026-01-26",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-26"
+    "eTGODueDate": "2026-01-26",
+    "eTGOTbaiStatus": "IP"
   }
 ];
 

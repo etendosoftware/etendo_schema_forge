@@ -75,8 +75,18 @@ export default function InvoiceHeaderTable(props) {
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
-        render: (row) => <FiscalStatusBadge status={row.tbaiSyncEstado ?? 'Pendiente'} />,
+        // ETP-5216: backed by the stored computed AD column EM_ETGO_Tbai_Status.
+        // It used to be key '_tbaiStatus' with no `column`, fed by the response
+        // injector — which made isFilterableColumn drop it from the advanced
+        // filter in SILENCE, and hid a dead injector for months (ETP-4391).
+        // `type: 'custom'` still drives the badge cell; `column` + `filterMode`
+        // give the filter and the sort a real backend field to work with, the
+        // same pairing already used by `transactionDocument` below.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'text', label: tbaiColLabel,
+        // The database answers 'Pendiente' for "no resolved submission", so the
+        // ?? is only a guard for a row fetched before the column was backfilled.
+        render: (row) => <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />,
       });
     }
     if (targets.showVerifactu) {
