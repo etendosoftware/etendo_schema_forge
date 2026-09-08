@@ -80,6 +80,11 @@ function toDalBody(payload) {
     body.writeofflimit = (raw === '' || raw == null) ? null : Number(raw);
   }
   if ('glItemDifferenceId' in payload) body.aprmGlitemDiff = payload.glItemDifferenceId || null;
+  // The record version as it was READ, echoed back verbatim so NeoCrudHandler's optimistic-locking
+  // check (ETP-5073/DOC-04) can tell a concurrent edit from ours; without it every PUT is refused
+  // with `missing_updated`. Deliberately the caller's value and never a fresh re-read here: a
+  // re-read immediately before writing would always pass the check and defeat its purpose.
+  if ('updated' in payload) body.updated = payload.updated;
   return body;
 }
 
