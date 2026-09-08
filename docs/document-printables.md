@@ -148,9 +148,16 @@ exactly as it did before ETP-4787 rather than silently switching itself off. The
 strict, and both timestamps are truncated to whole seconds on the wire, so an edit landing in the
 same second as the upload reads as fresh.
 
-**Two windows deliberately opt out**: purchase-invoice and return-material-receipt. Their
-attachment slot holds the *counterparty's* own document (the OCR source, the customer's signed
-receipt), not a cache of something we rendered — no edit of ours can make it stale.
+**One window deliberately opts out**: purchase-invoice. Its attachment slot holds the
+*counterparty's* own document (the OCR source), not a cache of something we rendered — no edit
+of ours can make it stale.
+
+return-material-receipt used to opt out here too, for the same stated reason (its attachment
+slot held the customer's signed return receipt via `attachmentConfig`). ETP-5124 removed that
+upload slot from the preview panel entirely — see D18 — so the reason no longer applies, but the
+window still passes no `cacheConfig`/`recordUpdated` today; the fix reverted the panel to render
+the system PDF fresh on every open, same as before ETP-4315 ever shipped, deliberately without
+adopting the caching layer its sibling `return-to-vendor-shipment` already has. See D18 for why.
 
 The bug this closes:
 
@@ -197,6 +204,7 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D10 | `SendDocumentModal` falls back to the registry when no caller supplies a PDF | ETP-4912 | the generic modal in `ListView` has no hook, so it used to preview **and attach** the artifact. One fix covers every present and future consumer |
 | D11 | The PDF hook runs on demand, not on mount | ETP-4912 | `InvoiceTopbarExtra` rendered a full PDF just for opening a completed invoice in edit mode. Now the id is passed only once a consumer opens |
 | D12 | `ListView`'s multi-select `printDocuments()` excludes Draft (`documentStatus === 'DR'`) documents from the batch before rendering anything; if the whole selection is Draft, nothing is generated and an info toast (`printAllDraftExcluded`) is shown instead | ETP-5124 | generic, decisions-driven: the caller (`ListView`'s `toPrintableDocument`) forwards `documentStatus` only for rows that carry it — the same field every document window's `hidePrintWhen: { documentStatus: { notEquals: 'CO' } }` already reads — so a window without that grid field keeps printing everything unfiltered (fail-open) instead of breaking. Partial exclusion is silent by design (AC#6); only the all-Draft case needs a notice (AC#7). The single-document drawer print is unaffected — it is already gated at the button level by `hidePrintWhen` and never reaches this code path in a Draft state |
+| D18 | return-material-receipt's preview left panel reverted to the system-generated PDF (`leftPanel` + `PreviewPdfPanel`); the ETP-4408 customer-upload `attachmentConfig` slot is removed outright, not just hidden | ETP-5124 | PM (Valeria, with Emilio Polliotti) confirmed the original requirement was the Etendo-issued PDF, matching every other document window; QA (Isaías) rejected the ETP-4408 behavior. The customer's own return document is attached only via the generic Attachments tab now — it was never meant to *replace* the Etendo document, per the ticket. Deliberately did **not** adopt the `pdfCacheConfig`/`attachmentConfig` caching layer `return-to-vendor-shipment` uses for the same movement template: any record opened under the ETP-4408 code (2026-07-06 onward) may already carry a customer file marked as the main `M_InOut` attachment, and enabling the read-side cache today would serve that stale file back as a "cached PDF" — the same class of bug, through the cache path instead of the panel wiring. Revisit once a data check confirms no such attachments remain |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).

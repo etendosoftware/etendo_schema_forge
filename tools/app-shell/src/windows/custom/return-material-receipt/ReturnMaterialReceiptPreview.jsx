@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
-import { usePreviewSendModal, ReceiptSendModal } from '../shared/PreviewActionButtons.jsx';
+import { PreviewPdfPanel, usePreviewSendModal, ReceiptSendModal } from '../shared/PreviewActionButtons.jsx';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
@@ -15,9 +15,14 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
 
   const sendModal = usePreviewSendModal();
 
-  // Still generated for the "Enviar"/"Descargar PDF" actions (our own record of the
-  // receipt). The left panel itself no longer auto-shows it — see attachmentConfig below.
-  const { pdfUrl, pdfBlob } = useReturnReceiptPdf(
+  // ETP-5124 — PM-confirmed requirement (Valeria, with Emilio Polliotti): the preview's
+  // left panel must show the Etendo-generated PDF by default, the same as every other
+  // document window. ETP-4408 had replaced it with the customer's own uploaded receipt,
+  // which QA (Isaías) rejected — the customer document is not a substitute for the
+  // Etendo-issued proof of return, it is supplementary evidence attached for
+  // traceability via the generic Attachments tab instead (see decisions.json / the
+  // Attachments tab restored by commit 63204c7f4, unaffected by this change).
+  const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnReceiptPdf(
     receipt?.id ?? null,
     apiBaseUrl,
     token,
@@ -39,20 +44,24 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
     { key: 'returnInvoices', type: 'sales-invoice', fetch: async () => receipt?.returnInvoices ?? [] },
   ];
 
-  // Left panel is the customer-supplied return receipt (optional — the customer may
-  // not issue or provide one). Replaces the system-generated PDF that used to render
-  // here; that PDF is still available via the "Enviar"/"Descargar PDF" actions.
-  // ETP-4315 — real, marked Attachment (M_InOut is the physical table for this
-  // window), same pattern as purchase-invoice/goods-receipt.
-  const attachmentConfig = {
-    documentId: receipt.id,
-    tableName: 'M_InOut',
-    useMainAttachment: true,
-    storeCondition: true,
-    autoFetch: false,
-    token,
-    apiBaseUrl,
-  };
+  // ETP-5124 — restored: the left panel shows the system-generated PDF, same as
+  // sales-invoice/goods-shipment. NOTE: deliberately NOT wired to `attachmentConfig`
+  // (no auto-store of this rendered PDF as the record's marked M_InOut attachment,
+  // unlike the sibling `return-to-vendor-shipment`/`goods-shipment`). Under the
+  // ETP-4408 behavior being reverted here, that exact marked-attachment slot could
+  // have been populated with a customer-supplied file on any record touched since
+  // 2026-07-06 — enabling the read-side cache now would risk serving that stale
+  // customer document back as if it were a cached Etendo PDF. Revisit once a data
+  // check confirms no pre-existing customer uploads occupy that slot for this window.
+  const leftPanel = (
+    <PreviewPdfPanel
+      pdfLoading={pdfLoading}
+      pdfError={pdfError}
+      pdfUrl={pdfUrl}
+      generatingText={ui('returnReceiptPdfGenerating')}
+      errorText={ui('returnReceiptPdfError')}
+      data-testid="PreviewPdfPanel__178845" />
+  );
 
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: receipt, pdfBlob, handleDownload, modalRef,
@@ -65,7 +74,7 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
         ref={modalRef}
         title={`${windowLabel} ${receipt.documentNo}`}
         subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
-        attachmentConfig={attachmentConfig}
+        leftPanel={leftPanel}
         onClose={onClose}
         onEdit={() => onEdit?.(receipt.id)}
         tabs={tabs}
