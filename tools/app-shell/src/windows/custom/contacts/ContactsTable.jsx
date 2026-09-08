@@ -137,7 +137,19 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       },
       {
         key: 'eTGOLocation', column: 'EM_Etgo_Location', type: 'string', label: t('locationColumn'),
-        render: (row) => row.eTGOLocation ?? '—',
+        // ETP-5060: the computed column now yields the C_Location id, not a
+        // pre-rendered address. The text lives in the companion identifier key,
+        // which the DAL resolves per request and therefore translates the country
+        // (a computed column has no access to the session language, so anything it
+        // renders as text is frozen in the base language).
+        //
+        // No `filterMode` on purpose: the AD column keeps ALLOWSORTING/ALLOWFILTERING
+        // at 'N' while it is a VIRTUAL computed column, because sorting or filtering
+        // on it would evaluate etgo_get_location() row by row over the whole table,
+        // with no index possible. Declaring a filter mode here would promise a filter
+        // the column does not offer. Add `filterMode: 'identifier'` together with the
+        // two AD flags when the column becomes stored.
+        render: (row) => row['eTGOLocation$_identifier'] ?? '—',
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
