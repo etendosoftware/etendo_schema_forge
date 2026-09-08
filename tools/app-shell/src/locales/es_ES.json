@@ -18568,6 +18568,7 @@
     "financeAccountsColAccount": "Cuenta",
     "financeAccountsColType": "Tipo",
     "financeAccountsColIban": "IBAN",
+    "financeAccountsColCurrency": "Moneda",
     "financeAccountsColCountry": "País",
     "financeAccountsColBalance": "Saldo",
     "financeAccountsColPending": "Por conciliar",
