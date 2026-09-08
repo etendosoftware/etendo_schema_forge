@@ -2465,3 +2465,66 @@ as the immutability trigger for a data-fix `.sql` file.
   `contains(<name>)` assertion over the whole normalized dataset, grep that string across only the
   `INCLUDED_TABLES` files first — the chart of accounts alone is 4.8 MB of Spanish nouns and
   collides with a lot of plausible names.
+
+---
+
+## ETP-5207 — "Cleared payment account" (IN/OUT) pre-filled on Financial Account creation (A8, R34, 2026-09-08)
+
+Four reusable core/onboarding facts came out of this one. All four were verified by reading the
+code, not inferred.
+
+- **`FIN_FINANCIAL_ACCOUNT_ACCT` is NOT in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so
+  `GOClient/FIN_FINANCIAL_ACCOUNT_ACCT.xml` is never imported into a tenant.** `INCLUDED_TABLES`
+  carries `FIN_FINANCIAL_ACCOUNT` but not the `_ACCT` child; `OnboardingSourceFiles`'
+  classpath provider filters every bundled XML through `shouldIncludeTable`, so that file is inert.
+  The row a new tenant actually receives is written by
+  `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL`.
+  **Apply:** before "fixing" a value in any `referencedata/sampledata/GOClient/*.xml`, check that
+  its table is actually in `INCLUDED_TABLES`. If it is not, the XML edit is cosmetic and the real
+  preventive front is the corresponding `*_SQL` constant in `OnboardingAccountingWiringService`.
+  Edit the XML anyway for template consistency, but never *instead of* the Java.
+
+- **`APRM_FIN_FINACC_ACCT_CHECK_TRG` fires `BEFORE INSERT` *and `UPDATE`*.** It raises
+  `@APRM_GainLossFeeAccountsError@` whenever a `fin_financial_account_acct` row whose account
+  `type='B'` has any of `fin_bankfee_acct` / `fin_bankrevaluationgain_acct` /
+  `fin_bankrevaluationloss_acct` NULL. In PostgreSQL that aborts the whole transaction.
+  **Apply:** any data-fix that `UPDATE`s this table must exclude such rows, or a single malformed
+  Bank row (typically a tenant with an incomplete `c_acctschema_default`, i.e. gap A2d) turns the
+  fix into `FAILED` for the entire tenant. It is not enough that the fix does not *write* those
+  three columns — the trigger re-validates the row on any update.
+
+- **`DocFINReconciliation`'s posting gate and its fact-building loop are asymmetric.**
+  `getDocumentConfirmation` (`:1351-1390`) decides *whether the document posts at all* by adding
+  transactions to `transactionsToBePosted` only when the relevant account is non-null (empty set →
+  `STATUS_DocumentDisabled`, a clean no-post, not an error). But once the gate passes, `createFact`
+  (`:722-734`) iterates **every** `p_lines` entry, not `transactionsToBePosted` — and
+  `createFactFee` (`:772`) / `createFactGLItem` call `getClearOutAccount`/`getAccount`
+  unconditionally, where `:1609-1611` dereferences `getClearedPaymentAccount(OUT)().getId()` with
+  **no null check** (NPE → `IllegalStateException` → `@InvalidAccount@`).
+  **Apply:** nulling a `*_acct` column that the gate consults is safe only while *nothing* passes
+  the gate. If one line can pass while another line in the same document needs the nulled account,
+  posting fails hard instead of skipping. For the ETP-5207 seeded configuration this is
+  unreachable (only "Recibo" carries `INUPONCLEARINGUSE=CLE`, and `AcctServer:859-860` gates
+  `post()` on `getDocumentConfirmation`, with no `createfact` template in the GOClient sampledata to
+  trigger `disableDocumentConfirmation()`), but a tenant that hand-configures a method with
+  `INUponClearingUse`/`OUTUponClearingUse` in `INT`/`DEP`/`WIT` re-opens it. Cheap pre-check:
+  `SELECT name, upondeposituse, uponwithdrawaluse, inuponclearinguse, outuponclearinguse FROM
+  fin_paymentmethod WHERE ad_client_id = '<client_id>';`
+
+- **`FIN_FINACC_PAYMENTMETHOD.INUPONCLEARINGUSE`/`OUTUPONCLEARINGUSE` have no column default
+  (empty `<default/>`), and `FinancialAccountSupport#createLink` copies all four use-fields from
+  the payment-method master.** So a link's clearing-use is whatever the master says, or NULL. In
+  the GOClient sampledata only **"Recibo"** carries `CLE` on both — and it is auto-assigned to
+  Banco and Tarjeta accounts by `PAYMENT_METHODS_BY_TYPE`, which is why the bug manifested on
+  exactly those two types.
+  **Apply:** when reasoning about which reconciliation path a tenant actually exercises, read the
+  *link* row (`FIN_FINACC_PAYMENTMETHOD`), not the master — and remember `UPONDEPOSITUSE`/
+  `UPONWITHDRAWALUSE` (transaction-time) are different fields from `INUPONCLEARINGUSE`/
+  `OUTUPONCLEARINGUSE` (reconciliation-time). Confusing the two pairs makes the whole gate analysis
+  wrong.
+
+**Non-obvious consequence worth carrying forward:** emptying these two columns also stops GO's
+cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines from reaching the
+ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
+"reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
+implementation detail.

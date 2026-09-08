@@ -552,7 +552,65 @@ with PGC-España baseline defaults, resolved per account type by account **code*
 | `fINBankfeeAcct` | `62600000` | — | — |
 | `inTransitPaymentAccountIN` / `fINOutIntransitAcct` | `55500000` | same | same |
 | `depositAccount` / `withdrawalAccount` | `57200000` | `57001000` | `57210000` |
-| `clearedPaymentAccount` / `clearedPaymentAccountOUT` | always empty for every type — never set here | | |
+| `clearedPaymentAccount` / `clearedPaymentAccountOUT` | always empty for every type — **explicitly cleared** (ETP-5207) | | |
+
+**Why the cleared pair is `set…(null)` and not simply omitted (ETP-5207).** Core's `AFTER INSERT`
+trigger `FIN_FINANCIAL_ACCOUNT_TRG` (`src-db/database/model/triggers/`, lines 53-65) creates the
+`fin_financial_account_acct` row *before* this code runs and seeds **both** underlying columns
+(`FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT`) with the ledger's asset account — `B_Asset_Acct`, or
+`CB_Asset_Acct` for a Caja account, i.e. `57200000` on a PGC-España chart. Since `findOrCreateRow`
+*finds* that row, "not setting" the fields is **not** the same as "leaving them empty": the original
+ETP-4872 implementation only ever assigned, so the trigger's value survived. The trigger is core and
+must not be modified, so `applyDefaultsForType` now ends with an unconditional
+`row.setClearedPaymentAccount(null); row.setClearedPaymentAccountOUT(null);`.
+
+**Functional consequence, deliberate.** `DocFINReconciliation` queues a transaction for posting only
+when the relevant account is non-null (`#getDocumentConfirmation`), so with both columns empty a
+reconciliation is simply **not posted** (`STATUS_DocumentDisabled`) instead of generating the
+accounting entries that were distorting Sumas y Saldos and Libro Mayor. This covers the `CLE`
+upon-clearing path (the seeded **"Recibo"** method carries `INUPONCLEARINGUSE`/`OUTUPONCLEARINGUSE`
+= `CLE` and is auto-assigned to Banco and Tarjeta accounts) **and** the GL-item `BPD`/`BPW` and
+bank-fee `BF` paths — note that includes GO's own cash-close *difference* postings, which therefore
+no longer reach the ledger. Payments and transactions are unaffected: all four seeded payment
+methods use `UPONDEPOSITUSE=DEP` / `UPONWITHDRAWALUSE=WIT`, and that path reads the deposit/
+withdrawal accounts, which are still filled.
+
+Both fields stay **user-editable** in the Contabilidad tab (a different handler,
+`FinancialAccountAccountingHandler`, which writes whatever the user chose). Only the value they are
+*born* with changed — a tenant that genuinely runs a `CLE` payment method can still fill them
+deliberately. The two sibling fronts are `OnboardingAccountingWiringService`'s
+`FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (new tenants) and data-fix
+`R34-fin-account-cleared-payment-accounts` (already-provisioned tenants).
+
+### New-account provisioning: one seam, two creation paths
+
+**`FinancialAccountSupport.provisionNewAccount(account)` is THE single entry point for everything a
+newly created financial account must receive.** It does exactly two things today —
+`assignDefaultPaymentMethods` then `applyDefaultAccountingConfiguration` — and both creation flows
+call it and nothing else:
+
+| Path | Who inserts the record | Provisioning | Path-specific extra |
+|---|---|---|---|
+| Manual ("sin conexión") | generic NEO CRUD, from the request body | `provisionNewAccount` from `FinancialAccountHandler.afterHandle`'s POST branch | — |
+| Bank connection (CONNECT ACCOUNT / Salt Edge) | `FinancialAccountSupport.createAccount`, from the Salt Edge account node | `provisionNewAccount` from `FinancialAccountBankConnectionHandler.handleCreateAndLink` | Salt Edge linking (`linkAccount`), after provisioning |
+
+**Adding a new default? Put it in `provisionNewAccount` (or in the support class it delegates to) —
+never inline in a handler.** Anything every new account needs reaches both flows automatically from
+there. Path-specific work stays in its handler.
+
+> **Why the seam exists: this duplication drifted twice, and shipped both times.** ETP-4872 added
+> `applyDefaultAccountingConfiguration` to the manual path only. ETP-5207's first pass then fixed
+> the cleared-payment defect on the manual path only — and QA immediately found that an account
+> created through **CONNECT ACCOUNT** still came up with both cleared fields set to `57200000`,
+> because `handleCreateAndLink` built the account itself (its `flush` fires the trigger) and called
+> only `assignDefaultPaymentMethods`, under a comment claiming to "mirror the manual flow" while
+> being half a mirror. That same gap also left the trigger's cruder per-type mapping in force on
+> that path: the trigger uses `B_Asset_Acct` for anything that is not type `'C'`, so a **connected
+> Tarjeta** account was getting `57200000` for deposit/withdrawal instead of ETP-4872's `57210000`.
+> Both defects disappear once the path routes through the shared seam. Test layering that keeps this
+> honest: the two handler tests assert each handler calls `provisionNewAccount`, and
+> `FinancialAccountSupportTest` asserts `provisionNewAccount` performs both steps — neither level
+> alone is sufficient, which is exactly how the original bug hid.
 
 Same "never break account creation" contract as its sibling `assignDefaultPaymentMethods`,
 soft-degrading on both known failure modes: the account's org has no general ledger → the whole
