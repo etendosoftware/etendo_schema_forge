@@ -441,19 +441,32 @@ function WidgetKpi({ label, value, tone }) {
 }
 
 /** Step 2 summary strip: inline Líneas / Abonos / Cargos / Periodo. */
+/**
+ * A total with its direction sign — but never on zero, and never coloured on zero.
+ *
+ * The sign used to be hardcoded into the string (`+${…}` / `−${…}`), so a file with no
+ * withdrawals reported `−0,00 €` in red: a signed, alarming-looking nothing. Zero has no
+ * direction, so it renders bare and neutral. The statements grid behind the modal already shows
+ * a dash for the same case; a total is a figure rather than a cell, so `0,00 €` is the right
+ * rendering here, just without the decoration.
+ */
+function signedTotal(amount, sign, currency) {
+  return amount > 0 ? `${sign}${formatMoney(amount, currency)}` : formatMoney(amount, currency);
+}
+
 function SummaryWidget({ count, totalIn, totalOut, period, currency, ui }) {
   return (
     <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
       <WidgetKpi label={ui('financeAccountStatementsImportKpiLines')} value={count} data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiCredits')}
-        value={`+${formatMoney(totalIn, currency)}`}
-        tone="pos"
+        value={signedTotal(totalIn, '+', currency)}
+        tone={totalIn > 0 ? 'pos' : undefined}
         data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiDebits')}
-        value={`−${formatMoney(totalOut, currency)}`}
-        tone="neg"
+        value={signedTotal(totalOut, '−', currency)}
+        tone={totalOut > 0 ? 'neg' : undefined}
         data-testid="WidgetKpi__de9647" />
       <WidgetKpi
         label={ui('financeAccountStatementsImportKpiPeriod')}

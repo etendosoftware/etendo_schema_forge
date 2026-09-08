@@ -129,7 +129,8 @@ export function bankStatementFieldLabel(ui) {
 /**
  * The amount rule, as a row validator.
  *
- * A line is valid when it carries at least one amount above zero and NO amount below zero.
+ * A line is valid when it carries an amount above zero on EXACTLY ONE side: at least one
+ * amount above zero, no amount below zero, and never both sides filled.
  * Rejecting negatives outright is a deliberate divergence from Etendo Classic (ETP-4954):
  * money in belongs in Entrada and money out in Salida, and a sign never substitutes for the
  * column. Before this, a row with `Salida=-50 / Entrada=-20` imported silently and was then
@@ -181,6 +182,29 @@ export function validateBankStatementRow(row, ctx = {}) {
         message: t(
           'financeAccountStatementsImportErrorNegativeAmount',
           'Amounts cannot be negative: use Salida for money out and Entrada for money in.',
+        ),
+      });
+    }
+  }
+  // A line is an inflow OR an outflow, never both. Filling both sides does not describe a
+  // movement the bank reported: the read path collapses the pair to `cramount - dramount`, so
+  // `100 / 30` shows up as a −70 that appears in no statement, and `50 / 50` imports and then
+  // reads as 0,00 € — exactly what the zero-amount guard exists to prevent, arriving by
+  // another door.
+  //
+  // Not an invention: `ReactivationSupport.applyBankStatementAmounts` already refuses to leave
+  // both sides filled, netting them onto one side and calling it "Classic's sign
+  // normalization". Rejecting rather than netting is what separates the two flows —
+  // reactivation merges lines that were one movement to begin with, whereas an imported row
+  // with both sides filled is a file the user has to fix.
+  if (!hasAmountError && out > 0 && inn > 0) {
+    hasAmountError = true;
+    for (const target of ['out', 'in']) {
+      errors.push({
+        target,
+        message: t(
+          'financeAccountStatementsImportErrorBothAmounts',
+          'A line must carry an amount in Salida or in Entrada, not in both.',
         ),
       });
     }

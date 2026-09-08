@@ -334,6 +334,114 @@ describe('ManualStatementModal', () => {
     });
   });
 
+  /**
+   * ETP-4954 (product decision) — the third clause of `isLineComplete`: EXACTLY ONE SIDE.
+   *
+   *   a statement line is valid only if it has at least one amount > 0, no amount < 0,
+   *   and NEVER both sides filled.
+   *
+   * The "never both" clause landed with no coverage at all — the whole suite stayed green when
+   * it was added, which means nothing here had ever filled both Salida and Entrada on one row.
+   * Two regressions sat behind it, both reachable by simply typing in both cells:
+   *
+   *  - `Salida=100 / Entrada=30` saved, and the statement then DISPLAYED −70,00 €, because the
+   *    read path collapses the pair into `cramount - dramount`. A movement in no statement.
+   *  - `Salida=50 / Entrada=50` saved and read back as 0,00 € — exactly the state the
+   *    both-zero check three tests above rejects, arriving through another door.
+   *
+   * `ReactivationSupport.applyBankStatementAmounts` already refuses to leave both sides filled
+   * (it nets them onto one, "Classic's sign normalization"); this form rejects instead, because
+   * a line the USER is still typing is input to fix, not two records being merged.
+   *
+   * Every case asserts the *incomplete-line* toast specifically, not merely "did not save": a
+   * blank-name or no-usable-line failure would also leave `createStatement` uncalled.
+   */
+  describe('ETP-4954 a line filled on both sides is rejected', () => {
+    it('blocks saving a line with an amount in BOTH Salida and Entrada', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '100', in: '30' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    // The case that motivated the rule: two equal sides clear every other clause (both above
+    // zero, neither below it), so the line saved — and then read back as 0,00 €.
+    it('blocks two equal sides, which used to save and then read back as 0,00 €', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '50', in: '50' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    it('blocks both sides filled whichever side is the larger one', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '30', in: '100' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    // A second, VALID row must not be dragged down either — but it also must not carry the
+    // invalid one through: `handleSave` rejects the whole submission, nothing partial is sent.
+    it('blocks the whole save when one of two lines is filled on both sides', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', in: '100' });
+      await user.click(screen.getByTestId('action-add-line'));
+      const second = within(screen.getAllByTestId('manual-line-editrow')[1]);
+      await user.type(second.getByTestId('manual-line-ref'), 'REF-2');
+      await user.clear(second.getByTestId('manual-line-out'));
+      await user.type(second.getByTestId('manual-line-out'), '100');
+      await user.clear(second.getByTestId('manual-line-in'));
+      await user.type(second.getByTestId('manual-line-in'), '30');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    // ── The discriminator ─────────────────────────────────────────────────────
+    // Without this the rule could just as well read "reject a row whose two amount cells are
+    // both non-blank", which would reject an ordinary line typed with an explicit 0 on the
+    // unused side — the shape the import template itself ships (`150,00` out / `0,00` in).
+    it('still saves one side plus an EXPLICIT zero on the other — a zero is not an amount', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '150,00', in: '0,00' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+
+      await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
+      expect(toastError).not.toHaveBeenCalled();
+      const payload = createStatement.mock.calls[0][0];
+      expect(payload.lines).toHaveLength(1);
+      expect(payload.lines[0].out).toBe(150);
+      expect(payload.lines[0].in).toBe(0);
+    });
+
+    it('still saves an Entrada with an explicit zero Salida', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '0,00', in: '150,00' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+
+      await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
+      expect(toastError).not.toHaveBeenCalled();
+      const payload = createStatement.mock.calls[0][0];
+      expect(payload.lines[0].in).toBe(150);
+      expect(payload.lines[0].out).toBe(0);
+    });
+  });
+
   it('does not render the import-only "file name" header field', () => {
     renderModal();
     expect(screen.queryByTestId('manual-statement-filename')).not.toBeInTheDocument();

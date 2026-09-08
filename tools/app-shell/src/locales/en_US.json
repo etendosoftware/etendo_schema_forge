@@ -19152,6 +19152,7 @@
     "financeAccountStatementsImportErrorBody": "Invalid format. Only CSV, TXT and Excel (.xlsx) are accepted.",
     "financeAccountStatementsImportErrorXls": ".xls files (Excel 97-2003) are not supported. Open it in Excel and save it as .xlsx to import it.",
     "financeAccountStatementsImportErrorNegativeAmount": "Amounts cannot be negative: use Withdrawal for money out and Deposit for money in.",
+    "financeAccountStatementsImportErrorBothAmounts": "A line must carry an amount in Withdrawal or in Deposit, not in both.",
     "financeAccountStatementsImportErrorNoAmount": "The line needs a positive amount in either Withdrawal or Deposit.",
     "financeAccountStatementsImportErrorInvalidDate": "Not a valid date. Use the dd/mm/yyyy format, for example 01/08/2026.",
     "financeAccountStatementsImportTemplateLabel": "Download template:",

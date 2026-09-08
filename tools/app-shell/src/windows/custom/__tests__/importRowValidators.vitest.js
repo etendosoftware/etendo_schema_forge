@@ -156,6 +156,116 @@ describe('bank-statement row validator', () => {
 });
 
 /**
+ * ETP-4954 (product decision) — the third half of the amount rule: EXACTLY ONE SIDE.
+ *
+ * > A statement line must carry an amount on exactly one side: at least one amount above zero,
+ * > no amount below zero, and NEVER both sides filled.
+ *
+ * The "never both" clause is the one that had no coverage at all: the full suite passed with
+ * zero failures when it was added, which means nothing anywhere exercised a both-sides-positive
+ * line. Before it, `Salida=100 / Entrada=30` imported and was then displayed as −70,00 € — a
+ * movement that appears in no statement, because the read path collapses the pair into
+ * `cramount - dramount` — and `Salida=50 / Entrada=50` imported and read back as 0,00 €, which
+ * is exactly what the both-zero guard exists to prevent, arriving through another door.
+ *
+ * It is not an invention either: `ReactivationSupport.applyBankStatementAmounts` already
+ * refuses to leave both sides filled, netting them onto one side under "Classic's sign
+ * normalization". The import path rejects rather than nets, because an inbound row with both
+ * sides filled is bad input the user has to fix, not two records being merged.
+ */
+describe('bank-statement row validator — exactly one side', () => {
+  const targetsOf = (errors) => errors.map((e) => e.target);
+
+  it('rejects both sides filled, flagging BOTH cells — the user has to choose one', () => {
+    const errors = runImportRowValidator('bank-statement', { out: '100,00', in: '30,00' });
+    assert.deepEqual(targetsOf(errors), ['out', 'in']);
+    assert.match(errors[0].message, /not in both/i);
+    assert.match(errors[1].message, /not in both/i);
+  });
+
+  it('rejects both sides filled whichever side is the larger one', () => {
+    const errors = runImportRowValidator('bank-statement', { out: '30,00', in: '100,00' });
+    assert.deepEqual(targetsOf(errors), ['out', 'in']);
+    assert.match(errors[0].message, /not in both/i);
+  });
+
+  /**
+   * The case that MOTIVATED the rule. Two equal sides survive every other check — both amounts
+   * are above zero and neither is below it — so the line persisted, and the read path then
+   * collapsed it to `50 - 50 = 0`: a statement line displaying 0,00 €, the very state the
+   * both-zero guard rejects at the front door. Nothing else in this suite reaches it.
+   */
+  it('rejects two equal sides, which used to persist and then read back as 0,00 €', () => {
+    const errors = runImportRowValidator('bank-statement', { out: '50,00', in: '50,00' });
+    assert.deepEqual(targetsOf(errors), ['out', 'in']);
+    assert.match(errors[0].message, /not in both/i);
+  });
+
+  // ── The discriminators ──────────────────────────────────────────────────────
+  // Without these, the rule could just as well be "reject any two non-blank amount cells",
+  // which would reject the template's own sample row (`150,00` / `0,00`) and every ordinary
+  // line a bank exports with an explicit zero on the unused side.
+
+  it('accepts one side filled and the other blank, in both directions', () => {
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '100,00', in: '' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '', in: '100,00' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { in: '100,00' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '100,00' }), []);
+  });
+
+  it('accepts one side filled and an EXPLICIT zero on the other — a zero is not an amount', () => {
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '150,00', in: '0' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '150,00', in: '0,00' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '0', in: '150,00' }), []);
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '0,00', in: '150,00' }), []);
+    // `0.00` too: the parser reads a lone separator with two trailing digits as a decimal, so a
+    // template filled in by an English-convention spreadsheet must not trip the rule either.
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: '150.00', in: '0.00' }), []);
+  });
+
+  it('reports one cause, not two: a both-filled row never also says "needs a positive amount"', () => {
+    const errors = runImportRowValidator('bank-statement', { out: '100,00', in: '30,00' });
+    assert.equal(errors.length, 2, 'exactly one error per flagged cell, and nothing else');
+    for (const error of errors) {
+      assert.doesNotMatch(error.message, /positive amount/i);
+      assert.doesNotMatch(error.message, /negative/i);
+    }
+  });
+
+  it('lets the negative rule win when both sides are filled and one is negative', () => {
+    // One cause, and the actionable one: the sign is what the user has to fix first.
+    const errors = runImportRowValidator('bank-statement', { out: '100,00', in: '-30,00' });
+    assert.deepEqual(targetsOf(errors), ['in']);
+    assert.match(errors[0].message, /negative/i);
+  });
+
+  it('localizes the both-amounts message through the injected translate', () => {
+    const translate = (key) => (key === 'financeAccountStatementsImportErrorBothAmounts'
+      ? 'Una linea lleva importe en Salida o en Entrada, no en ambas.'
+      : key);
+    const errors = runImportRowValidator(
+      'bank-statement', { out: '100,00', in: '30,00' }, { translate },
+    );
+    assert.deepEqual(errors.map((e) => e.message), [
+      'Una linea lleva importe en Salida o en Entrada, no en ambas.',
+      'Una linea lleva importe en Salida o en Entrada, no en ambas.',
+    ]);
+  });
+
+  it('still reports the date error alongside a both-filled row', () => {
+    const errors = runImportRowValidator(
+      'bank-statement', { date: '31/02/2026', out: '100,00', in: '30,00' },
+    );
+    assert.deepEqual(targetsOf(errors), ['date', 'out', 'in']);
+  });
+
+  it('says nothing extra when a both-filled row also has a non-numeric cell', () => {
+    // The generic numeric check owns that cell; the amount rule bails out before it runs.
+    assert.deepEqual(runImportRowValidator('bank-statement', { out: 'abc', in: '30,00' }), []);
+  });
+});
+
+/**
  * ETP-4954 — the date half of the same validator.
  *
  * `validateRow`'s required check only asks whether a cell is BLANK, and `31/02/2026` is not

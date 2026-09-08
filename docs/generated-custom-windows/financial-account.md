@@ -3186,8 +3186,19 @@ Two deliberate divergences from Classic, both documented in the tests:
   "positive", so it accepts them — and that is exactly what QA reported: a CSV line reading
   `Salida=-50 / Entrada=-20` imported silently and then displayed as a nonsensical `Entrada
   +30,00`, because the read path collapses the pair to `cramount - dramount`. The rule is now
-  **at least one amount > 0 and no amount < 0**: money in belongs in Entrada, money out in
-  Salida, and a sign never substitutes for the column. Verified safe against the existing data
+  **an amount > 0 on exactly one side**: at least one amount > 0, no amount < 0, and never both
+  sides filled. Money in belongs in Entrada, money out in Salida; a sign never substitutes for
+  the column, and neither does filling both.
+
+  The "never both" half was added after the first pass, when a sample file showed what it
+  produced: `Salida=100 / Entrada=30` imported and displayed as **−70,00 €**, a movement in no
+  statement, and `50 / 50` imported and then read as **0,00 €** — which is exactly what the
+  both-zero rule exists to prevent, arriving by another door. Not a new invention either:
+  `ReactivationSupport.applyBankStatementAmounts` already refuses to leave a line in that state,
+  netting the two sides onto one and calling it Classic's sign normalization. The import and API
+  paths reject rather than net, because an inbound line with both sides filled is bad input, not
+  two records being merged. An explicit `0` on the other side stays valid — a zero is not an
+  amount, and the downloadable template's own example row relies on it. Verified safe against the existing data
   before the change — **0 of 2,965** `fin_bankstatementline` rows carry a negative amount, across
   manual, Cuaderno 43, PSD2-synced and CSV origins.
 
@@ -3196,10 +3207,10 @@ Two deliberate divergences from Classic, both documented in the tests:
 
   | Where | Covers | Behaviour |
   |---|---|---|
-  | `validateBankStatementRow` (`bankStatementImportFields.js`) | the CSV/Excel import UI | the row lands in the review queue's error tab with the offending cell flagged, so the user can fix or skip it |
+  | `validateBankStatementRow` (`bankStatementImportFields.js`) | the CSV/Excel import UI | the row lands in the review queue's error tab with the offending cell flagged (both cells, for a both-filled line), so the user can fix or skip it |
   | `isLineComplete` (`ManualStatementModal.jsx`) | the manual form | Save is refused with the incomplete-line toast |
   | `BankStatementsHandler.createLines` | `?action=create` — the API, and therefore MCP/REST | `400` |
-  | `BankStatementLinePruner` | `?action=import` / `?action=preview`, i.e. Cuaderno 43 | the line is pruned and counted in `discardedLines` |
+  | `BankStatementLinePruner` (`hasUnusableAmounts`) | `?action=import` / `?action=preview` — Cuaderno 43 and any CSV read there | the line is pruned and counted in `discardedLines`. Both-sides-filled is genuinely reachable here: `GenericCsvBankStatementImporter.saveLine` fills the two amounts from two independent columns |
 
   `isLineComplete` needed both halves asserted **separately**. The original predicate was a single
   disjunction (`out > 0 || in > 0`), so `Salida=50 / Entrada=-20` satisfied it on the left operand

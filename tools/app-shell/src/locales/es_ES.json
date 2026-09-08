@@ -19388,6 +19388,7 @@
     "financeAccountStatementsImportErrorBody": "Formato no válido. Solo se aceptan CSV, TXT y Excel (.xlsx).",
     "financeAccountStatementsImportErrorXls": "Los archivos .xls (Excel 97-2003) no son compatibles. Ábrelo en Excel y guárdalo como .xlsx para poder importarlo.",
     "financeAccountStatementsImportErrorNegativeAmount": "Los importes no pueden ser negativos: usa Salida para el dinero que sale y Entrada para el que entra.",
+    "financeAccountStatementsImportErrorBothAmounts": "La línea debe tener importe en Salida o en Entrada, no en las dos.",
     "financeAccountStatementsImportErrorNoAmount": "La línea necesita un importe positivo en Salida o en Entrada.",
     "financeAccountStatementsImportErrorInvalidDate": "La fecha no es válida. Usa el formato dd/mm/aaaa, por ejemplo 01/08/2026.",
     "financeAccountStatementsImportTemplateLabel": "Descargar plantilla:",

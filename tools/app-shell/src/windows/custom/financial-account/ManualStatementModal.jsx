@@ -96,8 +96,8 @@ function isBlankLine(r) {
 
 /**
  * A line is "complete" (committable / saveable) when it has its transaction date
- * and at least one amount entered (a statement line is an inflow OR an outflow,
- * so the other side is left empty = 0). Reference No, contact and G/L item are
+ * and an amount on EXACTLY ONE of the two sides — a statement line is an inflow
+ * OR an outflow, so the other side must be left empty. Reference No, contact and G/L item are
  * all optional — a blank reference is stored as `**`, exactly like the CSV
  * import does. Empty amount fields count as 0.
  */
@@ -116,6 +116,11 @@ function isLineComplete(r) {
   const inn = parseAmount(r.in);
   if (!r.date) return false;
   if (out < 0 || inn < 0) return false;
+  // Exactly one side. A line filled on both is not a movement the bank reported: the read path
+  // collapses the pair to `cramount - dramount`, so 100/30 displays as a −70 that is in no
+  // statement and 50/50 saves and then reads as 0,00 €. `ReactivationSupport` already refuses
+  // to leave both sides filled (it nets them onto one, "Classic's sign normalization").
+  if (out > 0 && inn > 0) return false;
   return out > 0 || inn > 0;
 }
 
