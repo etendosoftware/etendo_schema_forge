@@ -21685,7 +21685,7 @@
     "fm.new_decl.will_create_as": "Se creará como",
     "fm.new_decl.preview": "Modelo {model} · {period} {year}",
     "fm.new_decl.create_cta": "Crear declaración",
-    "fm.new_decl.period_existing_hint": "Ya existe una declaración para este período. Aun así puedes crear una nueva.",
+    "fm.new_decl.period_existing_hint": "Ya existe una declaración creada para este período. Asegúrese de marcar \"Autoliquidación rectificativa\" en la nueva declaración.",
     "fm.new_decl.no_active_models": "No hay modelos activos. Activa un modelo desde el catálogo para crear una declaración.",
     "fm.incidents.title": "Incidencias",
     "fm.incidents.blocking": "bloqueante(s)",

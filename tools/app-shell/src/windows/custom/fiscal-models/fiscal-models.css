@@ -888,7 +888,6 @@
   border-color: var(--fm-purple-600);
   box-shadow: 0 0 0 2px hsl(var(--primary) / .25);
 }
-.fm-newdecl-period-btn--existing { color: var(--fm-fg-4); background: var(--fm-bg-subtle); }
 .fm-newdecl-period-btn:disabled { cursor: not-allowed; }
 .fm-newdecl-period-btn:disabled:hover { background: var(--fm-bg-subtle); }
 .fm-newdecl-period-btn__dot {

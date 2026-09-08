@@ -21449,7 +21449,7 @@
     "fm.new_decl.will_create_as": "This will be created as",
     "fm.new_decl.preview": "Form {model} · {period} {year}",
     "fm.new_decl.create_cta": "Create declaration",
-    "fm.new_decl.period_existing_hint": "There is already a declaration for this period. You can still create a new one.",
+    "fm.new_decl.period_existing_hint": "A declaration already exists for this period. Make sure to check \"Rectifying self-assessment\" on the new declaration.",
     "fm.new_decl.no_active_models": "No active forms. Enable one from the catalog to create a declaration.",
     "fm.incidents.title": "Incidents",
     "fm.incidents.blocking": "blocking",
