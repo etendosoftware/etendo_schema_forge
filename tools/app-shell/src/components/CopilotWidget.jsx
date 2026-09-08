@@ -296,6 +296,9 @@ export function CopilotWidget({ hideTrigger = false }) {
     attachments: state.attachments,
     onRemoveAttachment: actions.removeAttachment,
     isSending: state.isSending,
+    error: state.error,
+    onRetry: actions.retry,
+    onDismissError: actions.dismissError,
     welcomeMessage,
     inputPlaceholder,
   };

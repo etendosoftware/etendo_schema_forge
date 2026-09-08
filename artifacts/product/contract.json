@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-09-03T23:56:25.177Z",
-  "checksum": "22c7cb75fe65e836",
+  "updatedAt": "2026-09-07T16:05:38.276Z",
+  "checksum": "b60ba2f38cc700e9",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -26,7 +26,8 @@
             "productCOGS"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,
@@ -2463,7 +2464,8 @@
             "productCOGS"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,

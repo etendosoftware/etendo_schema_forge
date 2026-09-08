@@ -1,8 +1,8 @@
 {
   "version": "0.44.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-08-24T16:47:21.989Z",
-  "checksum": "31fd92d903feb69c",
+  "updatedAt": "2026-09-07T16:05:37.885Z",
+  "checksum": "b4310b6d67ab2fcd",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -47,7 +47,8 @@
             "accumulatedDepreciation",
             "depreciation"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,
@@ -1118,7 +1119,8 @@
             "accumulatedDepreciation",
             "depreciation"
           ],
-          "requireSavedRecord": true
+          "requireSavedRecord": true,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,

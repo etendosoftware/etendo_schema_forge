@@ -8,7 +8,7 @@
  *
  * "Por conciliar" used to be the one exception — a runtime-injected
  * `entities.account.virtualFields[]` entry. It is now the `EM_ETGO_Pending_Count` stored
- * computed column, so all five columns are declared the same way and the two workarounds a
+ * computed column, so all six columns are declared the same way and the two workarounds a
  * virtual field needed (`VIRTUAL_FIELD_CELL_TYPES`, `window.labelOverrides`) are gone.
  *
  * This file is the pipeline-integrity half of that migration: it pins the DECLARATIONS and
@@ -47,10 +47,13 @@ const contractGridFields = contract.frontendContract.entities.account.fields
   .filter((f) => f.grid === true && f.gridOrder != null)
   .sort((a, b) => a.gridOrder - b.gridOrder);
 
-// The five columns the Cuentas list renders, in gridOrder, with the renderer each binds.
+// The six columns the Cuentas list renders, in gridOrder, with the renderer each binds:
+// Cuenta · Tipo & IBAN · Moneda · País · Saldo · Por conciliar.
 const EXPECTED_COLUMNS = [
   { name: 'name', gridLabelKey: 'financeAccountsColAccount', cellType: 'accountName' },
   { name: 'type', gridLabelKey: 'financeAccountsColType', cellType: 'accountType' },
+  // ETP-5113: inserted between Tipo & IBAN and País, bumping the three that follow to 4/5/6.
+  { name: 'currency', gridLabelKey: 'financeAccountsColCurrency', cellType: 'currencyChip' },
   // ETP-4896 follow-up: inserted right after Type.
   { name: 'country', gridLabelKey: 'financeAccountsColCountry', cellType: 'accountCountry' },
   { name: 'currentBalance', gridLabelKey: 'financeAccountsColBalance', cellType: 'accountBalance' },
@@ -69,10 +72,29 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
     assert.deepEqual(declared, [
       { name: 'name', gridOrder: 1 },
       { name: 'type', gridOrder: 2 },
-      { name: 'country', gridOrder: 3 },
-      { name: 'currentBalance', gridOrder: 4 },
-      { name: 'eTGOPendingCount', gridOrder: 5 },
+      { name: 'currency', gridOrder: 3 },
+      { name: 'country', gridOrder: 4 },
+      { name: 'currentBalance', gridOrder: 5 },
+      { name: 'eTGOPendingCount', gridOrder: 6 },
     ]);
+  });
+
+  // ETP-5113 — Moneda is declared on the real AD field (`C_Currency_ID`) rather than on the
+  // enriched `currencyIso` key, so the header sorts server-side through `_sortBy`; the cell
+  // body then paints `row.currencyIso`. Same split País already uses. Declaring it on the
+  // enriched key instead would emit a column NEO cannot order by.
+  it('declares the Moneda column on the AD currency field, not on the enriched key', () => {
+    const currency = accountDecisions.fields.currency;
+    assert.ok(currency, 'entities.account.fields must declare currency');
+    assert.equal(currency.grid, true);
+    assert.equal(currency.gridOrder, 3, 'Moneda sits between Tipo & IBAN and País');
+    assert.equal(currency.gridLabelKey, 'financeAccountsColCurrency');
+    assert.equal(currency.cellType, 'currencyChip');
+    assert.equal(
+      accountDecisions.fields.currencyIso,
+      undefined,
+      'the enriched ISO key is a row property, never a declared field',
+    );
   });
 
   it('declares the header i18n key and the cell renderer per grid field', () => {
@@ -98,7 +120,7 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
     assert.equal(pending.visibility, 'readOnly');
     assert.equal(pending.form, false, 'it is a list-only column, never a form field');
     assert.equal(pending.grid, true);
-    assert.equal(pending.gridOrder, 5, 'it must come last, after the four other columns');
+    assert.equal(pending.gridOrder, 6, 'it must come last, after the five other columns');
     assert.equal(pending.gridLabelKey, 'financeAccountsColPending');
     assert.equal(pending.cellType, 'reconcilePill');
   });
@@ -123,11 +145,21 @@ describe('Cuentas list — decisions.json declares the grid columns', () => {
 });
 
 describe('Cuentas list — the regen carried the declarations into contract.json', () => {
-  it('emits the five grid columns in the declared gridOrder', () => {
+  it('emits the six grid columns in the declared gridOrder', () => {
     assert.deepEqual(
       contractGridFields.map((f) => f.name),
       EXPECTED_COLUMNS.map((c) => c.name),
     );
+  });
+
+  // The header sorts server-side through `_sortBy`, so the column has to reach the contract
+  // with its AD column name. C_Currency's identifier IS the ISO code, so that order agrees
+  // with what the chip shows.
+  it('backs the Moneda column with the AD currency column', () => {
+    const currency = contractGridFields.find((f) => f.name === 'currency');
+
+    assert.equal(currency.column, 'C_Currency_ID');
+    assert.equal(currency.gridOrder, 3);
   });
 
   it('carries gridLabelKey and cellType through to the contract', () => {
