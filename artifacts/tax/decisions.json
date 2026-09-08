@@ -5,12 +5,13 @@
     "category": "settings",
     "name": "Tax Rate",
     "detailEntity": "accounting",
-    "breadcrumb": "Settings / Tax",
+    "breadcrumb": "Finance / Tax",
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideCreate": true,
     "hideDelete": true,
     "hideDeleteButton": true,
+    "noHeaderBorder": true,
     "maxDetailLines": 1,
     "labelOverrides": {
       "es_ES": {

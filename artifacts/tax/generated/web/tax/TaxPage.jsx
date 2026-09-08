@@ -11,7 +11,7 @@ import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Settings / Tax';
+const breadcrumb = 'Finance / Tax';
 
 
 // @sf-generated-start summary:tax
@@ -180,6 +180,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         hideDeleteButton
         hidePrint
         hideMoreMenu
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}

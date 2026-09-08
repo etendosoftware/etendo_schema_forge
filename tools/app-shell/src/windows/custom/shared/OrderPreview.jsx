@@ -39,7 +39,7 @@ async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, onSend }) {
+function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, onSend, emailsRefreshSignal }) {
   const ui = useUI();
   const isSalesOrder = specName === 'sales-order';
 
@@ -70,7 +70,12 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__90f59a" />
-      <EmailsCard onSend={onSend} data-testid="EmailsCard__90f59a" />
+      <EmailsCard
+        onSend={onSend}
+        documentId={order.id}
+        apiBaseUrl={apiBaseUrl}
+        refreshSignal={emailsRefreshSignal}
+        data-testid="EmailsCard__90f59a" />
       {isSalesOrder && (
         <RelatedDocumentsCard
           documentId={order.id}
@@ -92,6 +97,9 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const modalRef = useRef(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-5069 — bumped when a send succeeds, so the email-history card refetches
+  // instead of showing the state it had before the email went out.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   // ETP-4789 (reject-cycle fix): GenericPreviewModal's ManagedLeftPanel resolves
   // the cached attachment (GET /preview-file) much faster than the jsreport
   // regeneration below. Capturing it here lets the Download button gate on
@@ -191,6 +199,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         onSend={isSendable ? openEmailModal : undefined}
+        emailsRefreshSignal={emailsRefreshSignal}
         data-testid="OrderGeneralTab__90f59a" />,
     },
   ];
@@ -260,6 +269,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
           pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__90f59a" />
       )}
     </>

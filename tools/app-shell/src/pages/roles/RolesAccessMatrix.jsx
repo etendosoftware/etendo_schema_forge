@@ -5,35 +5,25 @@ import AccessTierPill from '@/components/AccessTierPill.jsx';
 import { buildRowKey } from './useRolesOverviewData.js';
 
 /**
- * The 3 hardcoded "General" rows (Inicio/Dashboard, Favoritos, Copilot),
- * always rendered ahead of the real `matrix.categories` groups. Confirmed by
- * the coordinator against the sibling `feature/ETP-4906` branch's
- * `UserRolesTab.jsx` (its own `GENERAL_ROWS` precedent): none of these 3 is a
- * real AD window — they're generic app-shell routes, not `ETGO_SF_SPEC`-backed
- * — so they will NEVER appear in `SFRolesOverview`'s `matrix.categories` and
- * must be overlaid client-side instead. Always full access ('full') for every
- * role/column, unconditionally, matching that same precedent. The 3
- * `labelKey`s (`userRolesTabDashboardRow`/`userRolesTabFavoritesRow`/
- * `userRolesTabCopilotRow`) are deliberately the SAME i18n keys
- * `feature/ETP-4906` uses for the identical labels — not a fresh set — so
- * they de-dupe cleanly instead of drifting into two parallel key sets once
- * that branch merges.
- */
-const GENERAL_ROWS = [
-  { id: 'dashboard', labelKey: 'userRolesTabDashboardRow' },
-  { id: 'favorites', labelKey: 'userRolesTabFavoritesRow' },
-  { id: 'copilot', labelKey: 'userRolesTabCopilotRow' },
-];
-
-/**
  * ETP-4907 — the full-width window x role access matrix below the summary
- * cards on "Configuración > Roles". Rows are grouped by category (`General`
- * — the hardcoded `GENERAL_ROWS` overlay above — then `Comercial`/Commercial,
- * `Ventas`/Sales, `Inventario`/Inventory, ... from the real `matrix.categories`),
- * translated via `useMenuLabel()` against the SAME literal English section
- * names `menu.json`'s groups already use (`Commercial`/`Sales`/`Inventory`/
- * `General`) — no new i18n keys needed for the category HEADERS, they already
- * resolve correctly in both locales.
+ * cards on "Configuración > Roles". Rows are grouped by category (`Comercial`/
+ * Commercial, `Ventas`/Sales, `Inventario`/Inventory, ... from
+ * `matrix.categories`, ETP-5071 category/name-corrected against `menu.json` —
+ * see `useRolesOverviewData.js`'s `adaptMatrix`/`buildMenuWindowIndex`),
+ * translated via `useMenuLabel()` against the SAME literal English group
+ * names `menu.json` already uses (`Commercial`/`Sales`/`Inventory`/...) — no
+ * new i18n keys needed for the category HEADERS, they already resolve
+ * correctly in both locales.
+ *
+ * ETP-5071 — the 3 hardcoded "General" rows (Inicio/Dashboard, Favoritos,
+ * Copilot) that used to be overlaid ahead of the real matrix were removed:
+ * none of the 3 is a real AD window (they're generic app-shell routes, not
+ * `ETGO_SF_SPEC`-backed) and they never appeared in the backend's own
+ * `matrix.categories` — the overlay was misleading extra rows, not real data.
+ * The i18n keys it used (`userRolesTabDashboardRow`/`userRolesTabFavoritesRow`/
+ * `userRolesTabCopilotRow`) are intentionally left untouched in the locale
+ * files — they're shared verbatim with `UserRolesTab.jsx`'s own separate
+ * `GENERAL_ROWS` overlay, out of scope for this ticket.
  *
  * Each row's React key AND `data-testid` use `buildRowKey(category, windowId)`
  * (`${category}::${windowId}`) — the backend's real per-window `id`, not its
@@ -78,29 +68,6 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          <Fragment key="general">
-            <tr className="bg-muted/30" data-testid="RolesAccessMatrix__category-General">
-              <th
-                colSpan={cards.length + 1}
-                className="py-1.5 pr-4 text-left text-xs font-medium text-muted-foreground"
-              >
-                {tMenu('General')}
-              </th>
-            </tr>
-            {GENERAL_ROWS.map((row) => {
-              const rowKey = buildRowKey('General', row.id);
-              return (
-                <tr key={rowKey} data-testid={`RolesAccessMatrix__row-${rowKey}`}>
-                  <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
-                  {cards.map((role) => (
-                    <td key={role.id} className="py-2.5 px-3 text-center">
-                      <AccessTierPill tier="full" data-testid={`RolesAccessMatrix__cell-${rowKey}-${role.id}`} />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </Fragment>
           {matrix.map((group) => (
             <Fragment key={group.category}>
               <tr className="bg-muted/30" data-testid={`RolesAccessMatrix__category-${group.category}`}>
