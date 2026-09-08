@@ -490,6 +490,48 @@ export function isLastPeriodOfYear(period) {
   return period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
 }
 
+// Evaluates a visibility condition object ({ field, in: [...] | equals: ... } or an
+// OR-of-conditions { anyOf: [...] }) against the current `identification` state. Single
+// source of truth for visibility matching — mirrored from FmBoxes303.jsx's own `matchesSvw`
+// (ETP-5187: extracted here so the required-field validation gate in FmModel303Page.jsx reads
+// the exact same visibility rules the asterisk/section rendering already uses, instead of
+// forking a second implementation). FmBoxes303.jsx re-exports its local `matchesSvw` as a thin
+// wrapper around this function — do not re-implement visibility matching anywhere else.
+export function matchesVisibility(svw, identification) {
+  if (Array.isArray(svw.anyOf)) return svw.anyOf.some(c => matchesVisibility(c, identification));
+  const val = identification?.[svw.field];
+  return svw.in ? svw.in.includes(val) : val === svw.equals;
+}
+
+/**
+ * Returns the currently-visible `identificacion`-family fields (across `identificacion` and
+ * `datos_bancarios`/meta sections) marked `required: true` in the resolved layout whose value is
+ * empty in `identification` — e.g. `tipo_declaracion` (always visible) and `bank_iban` (only
+ * required while `datos_bancarios`'s section is visible, i.e. tipo U/D/X or rectificativa).
+ *
+ * ETP-5187: drives the "Generar fichero"/"Marcar como Presentado" pre-flight validation gate in
+ * FmModel303Page.jsx. Reads the SAME `field.required` flags FmBoxes303 already uses for the red
+ * asterisk (`f.required && <span className="fm-aeat-required-mark">`), so a third field marked
+ * `required: true` in a future year's patch is automatically covered — no gate-side change needed.
+ * A field/section gated by its own `visibleWhen`/`sectionVisibleWhen` only counts as "required
+ * right now" when that condition currently matches; a hidden required field is never reported.
+ */
+export function getMissingRequiredFields(year, period, identification) {
+  const layout = getLayout303(year, period);
+  const missing = [];
+  for (const section of layout.sections) {
+    if (!Array.isArray(section.fields)) continue;
+    if (section.sectionVisibleWhen && !matchesVisibility(section.sectionVisibleWhen, identification)) continue;
+    for (const f of section.fields) {
+      if (!f.required) continue;
+      if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) continue;
+      const val = identification?.[f.id];
+      if (val === undefined || val === null || val === '') missing.push(f);
+    }
+  }
+  return missing;
+}
+
 export function getLayout303(year, period) {
   const ops =
     PATCHES[`${year}_${period}`] ??

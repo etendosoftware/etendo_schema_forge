@@ -1,14 +1,18 @@
 // Vitest tests for FmBoxes303.jsx's internal matchesSvw() helper — specifically
 // the `anyOf` (OR-of-conditions) shape added for ETP-4456 (datos_bancarios must
 // stay visible for a rectificativa filed under any tipo_declaracion, not just
-// U/D/X). matchesSvw is a closure inside the component, not exported, so it is
-// exercised indirectly by mocking fm303Layouts.js's getLayout303 to return a
-// controlled section whose sectionVisibleWhen carries the shapes under test,
-// then asserting whether FmBoxes303 renders that section.
+// U/D/X). matchesSvw is a thin closure inside the component wrapping
+// fm303Layouts.js's exported `matchesVisibility` (ETP-5187 extraction — see that
+// module), so it is exercised indirectly by mocking fm303Layouts.js's getLayout303
+// to return a controlled section whose sectionVisibleWhen carries the shapes
+// under test, then asserting whether FmBoxes303 renders that section.
 //
 // NOTE: mocking '../fm303Layouts.js' here is scoped to this file only — the
 // sibling FmBoxes303.vitest.jsx keeps using the real layout module for its
-// broader rendering suite.
+// broader rendering suite. The mock below must also provide a real
+// `matchesVisibility` (not just `getLayout303`) — FmBoxes303.jsx imports both, and
+// vi.mock replaces the ENTIRE module, so omitting it would leave FmBoxes303's
+// `matchesSvw` calling `undefined(...)`.
 
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
@@ -33,6 +37,13 @@ vi.mock('@/components/ui/checkbox', () => ({
 // One controlled section per shape under test — each gets its own id so a
 // single mocked layout can serve every test via sectionIds filtering.
 vi.mock('../fm303Layouts.js', () => ({
+  // Real implementation, mirrored from fm303Layouts.js's own `matchesVisibility` — kept in sync
+  // manually since this factory can't import the real module (vi.mock replaces it entirely).
+  matchesVisibility: function matchesVisibility(svw, identification) {
+    if (Array.isArray(svw.anyOf)) return svw.anyOf.some(c => matchesVisibility(c, identification));
+    const val = identification?.[svw.field];
+    return svw.in ? svw.in.includes(val) : val === svw.equals;
+  },
   getLayout303: () => ({
     sections: [
       {

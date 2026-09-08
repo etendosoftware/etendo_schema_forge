@@ -13,7 +13,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
 import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.jsx';
-import { isLastPeriodOfYear } from './fm303Layouts.js';
+import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, deriveResultKind } from '../../fiscalModelsUtils.js';
@@ -322,6 +322,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   }, [decl.id]);
 
   async function handleGenerate({ filename } = {}) {
+    // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above). Must run before
+    // any other guard/state change below: an unset `tipo_declaracion` (or, when visible, a blank
+    // `bank_iban`) must never reach the backend, which used to silently default a missing
+    // declaration type to "N" instead of rejecting it.
+    if (missingRequiredFields.length > 0) {
+      missingRequiredFieldsToast(
+        'fm.validation.missing_required_generate',
+        "Completá {fields} antes de generar el fichero.",
+      );
+      return;
+    }
     setGenError(null);
     setMissingIaeGuard(false);
     setGenerating(true);
@@ -376,6 +387,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   }
 
   function handlePresent({ status: newStatus, acuseFile }) {
+    // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all 3
+    // paths this function can take — including 'aeat_telematic' below, which only opens the
+    // AeatSubmitFlow but must not even get that far with an unset declaration type.
+    if (missingRequiredFields.length > 0) {
+      missingRequiredFieldsToast(
+        'fm.validation.missing_required_present',
+        "Completá {fields} antes de marcar la declaración como presentada.",
+      );
+      return;
+    }
     // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
     // real declaration status — it means "open the AEAT submission flow",
     // not "change the status directly" like the other 3 manual paths.
@@ -413,6 +434,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // auto-checked here) before the declaration can be marked "Presentado". Cleared once submitted:
   // there is nothing left to gate on a declaration that already went through.
   const requiresRectificativa = Boolean(decl._hasDuplicatePeriod) && !identChecks.rectificativa && !isSubmitted;
+
+  // ETP-5187 — generic required-field gate: `getMissingRequiredFields` reads the SAME
+  // `field.required` flags fm303Layouts.js declares for `identificacion`/`datos_bancarios`
+  // (the ones FmBoxes303 already renders a red asterisk for), respecting each field's own
+  // visibility — e.g. `bank_iban` only counts while `datos_bancarios`'s section is actually
+  // shown (tipo U/D/X, or rectificativa checked). A third field marked `required: true` in a
+  // future year's patch is automatically covered here, no gate-side change needed. Blocks both
+  // "Generar fichero 303" and "Marcar como Presentado" — see handleGenerate/handlePresent below
+  // and their button pre-checks — because the backend silently defaulted a missing/blank
+  // declaration type to "N" instead of rejecting it (Fiscal303BoxesHandler.resolveDeclType).
+  const missingRequiredFields = getMissingRequiredFields(decl?.year, decl?.period, identChecks);
+
+  function missingRequiredFieldsToast(actionKey, fallback) {
+    const fields = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
+    toast.error(t(actionKey, { fields }) ?? fallback.replace('{fields}', fields));
+  }
 
   // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
   // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
@@ -544,7 +581,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
         <button
           className="fm-btn"
-          onClick={() => setShowFilegen(true)}
+          onClick={() => {
+            // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
+            // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
+            if (missingRequiredFields.length > 0) {
+              missingRequiredFieldsToast(
+                'fm.validation.missing_required_generate',
+                "Completá {fields} antes de generar el fichero.",
+              );
+              return;
+            }
+            setShowFilegen(true);
+          }}
           disabled={generating}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
         >
@@ -561,6 +609,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             className="fm-toolbar__btn fm-toolbar__btn--primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => {
+              // ETP-5187 — same required-field gate handlePresent itself enforces; checked here
+              // too so the "Marcar como Presentado" modal never even opens on an unset declaration
+              // type (checked before requiresRectificativa: an unfilled tipo_declaracion is a more
+              // fundamental gap than a missing rectificativa checkbox).
+              if (missingRequiredFields.length > 0) {
+                missingRequiredFieldsToast(
+                  'fm.validation.missing_required_present',
+                  "Completá {fields} antes de marcar la declaración como presentada.",
+                );
+                return;
+              }
               if (requiresRectificativa) {
                 toast.error(t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.');
                 return;
@@ -589,6 +648,26 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         }}>
           <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__duplicatePeriod" />
           {t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.'}
+        </div>
+      )}
+      {/* ── Missing required field(s) warning (ETP-5187) ────────────── */}
+      {missingRequiredFields.length > 0 && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: 'var(--status-warning-bg)',
+          border: '1px solid var(--status-warning-border)',
+          borderRadius: 8,
+          fontSize: 13,
+          color: 'var(--status-warning-fg)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__missingRequired" />
+          {t('fm.validation.missing_required_banner', {
+            fields: missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', '),
+          }) ?? `Hay campos obligatorios sin completar: ${missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ')}.`}
         </div>
       )}
       {/* ── KPI bar ──────────────────────────────────────────────── */}

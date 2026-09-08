@@ -247,6 +247,60 @@ themselves were **not** rebuilt for this — they already exist and are reachabl
 "Resultado final" nav section (`fm303Layouts.js`'s `rectificativa` section, `CASILLAS_SECTIONS` in
 `FmModel303Page.jsx`); this fix only adds the warning + gate around the existing checkbox.
 
+### Required-field pre-flight gate (ETP-5187)
+
+`fm303Layouts.js` marks exactly 2 fields `required: true`: `tipo_declaracion` (always visible, in
+`identificacion`) and `bank_iban` (in `datos_bancarios`, only visible while that section's
+`sectionVisibleWhen` matches — tipo `U`/`D`/`X`, or `rectificativa` checked). Before this fix
+`required` was purely decorative — it only drove the red asterisk in `FmBoxes303.jsx` (3 call
+sites: `{f.required && <span className="fm-aeat-required-mark">`) — nothing checked whether a
+required field was actually filled before "Generar fichero 303"/"Marcar como 'Presentado'" hit the
+backend. You could leave "Tipo de declaración" on the placeholder and still generate + present.
+
+**Generic gate, not a hardcoded field check:** `fm303Layouts.js` exports `matchesVisibility(svw,
+identification)` (the single source of truth for visibility matching, extracted from
+`FmBoxes303.jsx`'s own `matchesSvw` — that component now wraps it instead of forking a second
+implementation) and `getMissingRequiredFields(year, period, identification)`, which walks the
+resolved layout's `identificacion`-family sections, applies `sectionVisibleWhen`/`visibleWhen`, and
+returns every `required: true` field that is currently visible AND empty. This reads the exact same
+`field.required` flags the asterisk already uses, so a third field marked `required: true` in a
+future year's patch is automatically covered by the gate — no gate-side change needed.
+
+`FmModel303Page.jsx` computes `missingRequiredFields = getMissingRequiredFields(decl.year,
+decl.period, identChecks)` and checks it — modeled the same way as `requiresRectificativa` above,
+a computed array + inline warning + toast-and-return-early on the actions:
+
+- **Inline banner** (same warning styling as the duplicate-period one) whenever
+  `missingRequiredFields.length > 0` — `fm.validation.missing_required_banner`.
+- **"Generar fichero 303"** — checked both at the button `onClick` (so `FileGenModal303` never
+  opens) and again at the top of `handleGenerate` (so a future direct call is still covered) —
+  `fm.validation.missing_required_generate`: *"Completá {fields} antes de generar el fichero."*
+  ("Complete {fields} before generating the file." in `en_US`).
+- **"Marcar como 'Presentado'"** — same double-check pattern on the button `onClick` (before the
+  existing `requiresRectificativa` check) and at the top of `handlePresent`, which also covers the
+  `'aeat_telematic'` sentinel path (opens `AeatSubmitFlow` instead of changing status directly) —
+  `fm.validation.missing_required_present`: *"Completá {fields} antes de marcar la declaración como
+  presentada."* All 3 new keys are in `en_US.json`/`es_ES.json`/`es_AR.json` (`es_AR` mirrors
+  `es_ES` verbatim, matching this `fm.*` family's existing precedent — see
+  `fm.duplicate_period.warning`).
+
+**Backend hardening (defense-in-depth, `com.etendoerp.go`):** `Fiscal303BoxesHandler.resolveDeclType`
+used to silently default ANY null/blank/unrecognized `tipo` to `"N"` instead of rejecting it —
+and "N" ("Resultado cero"/sin actividad) **is** a real, deliberately-selectable option in
+`TIPO_DECLARACION_FIELD.options`, not an internal-only fallback value, so a missing declaration
+type was indistinguishable from an explicit "Sin actividad" selection at this layer. This meant a
+direct/malformed API call (or any future UI regression bypassing the frontend gate above) was
+never rejected — it always looked like a valid zero-result declaration downstream, corrupting the
+generated `.303` file's declaration type silently. Fixed by making `N` an explicit member of
+`resolveDeclType`'s accepted-code set (alongside the pre-existing `C, D, I, U, V, X`, plus the
+legacy `G` alias kept for backward compatibility) and having anything else — null, blank, or an
+unrecognized string — throw `IllegalArgumentException` instead of falling through to `"N"`. Both
+call paths that reach `resolveDeclType` (`Fiscal303SubmissionSupport#handleGenerate` and
+`#handleSubmit`, which both funnel through the shared `generateElectronicFile`) now catch that
+specific exception and answer with a clean `400` (`INVALID_DECL_TYPE` for `handleSubmit`'s JSON
+error body) instead of the generic 500 the exception would otherwise bubble up to. Since the
+frontend gate above already blocks this path through the UI, this is defense-in-depth only.
+
 #### Troubleshooting — `CheckException: Property declSeq does not exist for entity ETGO_Fiscal_Decl` (ETP-5187)
 
 The backend counterpart of the rectificativa flow is a dedicated `decl_seq` DECIMAL(10,0) column on
