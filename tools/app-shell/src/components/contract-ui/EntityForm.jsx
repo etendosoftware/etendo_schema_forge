@@ -1385,7 +1385,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     if (f.customRenderer) {
       const Renderer = f.customRenderer;
       return (
-        <div key={f.key} className="space-y-1.5">
+        // The custom renderer is an opaque component, so the field anchor the
+        // Copilot's highlight_element resolves has to live on the wrapper.
+        <div key={f.key} data-testid={`field-${f.key}`} className="space-y-1.5">
           <Label
             htmlFor={f.key}
             className="text-sm text-foreground font-medium"

@@ -19397,6 +19397,8 @@
     "qpoScanAdded": "Scanned and added",
     "copilot": "Copilot",
     "closeCopilot": "Close Copilot",
+    "copilotHighlightNoteLabel": "Copilot explanation",
+    "copilotHighlightDismiss": "Dismiss highlight",
     "openCopilot": "Open Copilot",
     "copilotMaximize": "Maximize",
     "copilotMinimize": "Minimize",

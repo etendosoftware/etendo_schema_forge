@@ -28,6 +28,15 @@ interactive elements as temporary IDs, and subsequent interactions must use an
 ID from the latest inspection. The interaction surface is limited to click,
 fill, type, and key press operations; it does not expose arbitrary selectors,
 JavaScript execution, password values, or a second authorization mechanism.
+`highlight_element` is the tutorial half of that surface: it draws a ring
+around one element and shows the model's explanation next to it, and nothing
+else — it never clicks, focuses, types, or changes a value, and it refuses
+password fields. `inspect_page_dom` reports a stable `fieldKey` for every form
+field (read-only fields included), which the model should prefer over the
+positional `dom-N` id because it survives a re-render. One element is
+highlighted at a time: a second call replaces the first, which is how a
+sequence of atomic calls reads as a guided tour.
+
 The app-shell also provides a throttled floating page-help action that asks the
 model to inspect the current page after navigation or meaningful UI interaction
 and present a contextual suggestion in a floating callout. Clicking that callout

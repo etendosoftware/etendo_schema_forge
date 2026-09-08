@@ -5,6 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { authHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
 import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
+import { accessibleElementName, fieldAccessibleName, isVisibleElement } from './domVisibility.js';
+import { useHighlight } from './highlight/HighlightContext.jsx';
+import { resolveHighlightTarget } from './highlight/highlightTarget.js';
 
 /**
  * Guard the router against anything that is not an in-app path. This is the
@@ -51,31 +54,42 @@ const DOM_INTERACTIVE_SELECTOR = [
   '[role="checkbox"]', '[role="combobox"]',
 ].join(',');
 
-function isVisibleElement(element) {
-  const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  return style.display !== 'none' && style.visibility !== 'hidden'
-    && rect.width > 0 && rect.height > 0 && !element.closest('[aria-hidden="true"]');
-}
+/**
+ * Every form field carries `data-testid="field-<contract key>"`. Indexing them
+ * alongside the interactive elements is what lets `highlight_element` point at
+ * a READ-ONLY field: those are not focusable, not clickable, and therefore
+ * invisible to DOM_INTERACTIVE_SELECTOR — the model could not name them at all
+ * before.
+ */
+const DOM_FIELD_SELECTOR = '[data-testid^="field-"]';
 
-function accessibleElementName(element) {
-  const label = element.getAttribute('aria-label')
-    || element.getAttribute('placeholder')
-    || element.getAttribute('title');
-  if (label) return label.trim();
-  return (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+function fieldKeyOf(element) {
+  const testId = element.getAttribute?.('data-testid') || '';
+  return testId.startsWith('field-') ? testId.slice('field-'.length) : undefined;
 }
 
 export function inspectInteractiveDom(root = document, registry = new Map()) {
   registry.clear();
-  const elements = [...root.querySelectorAll(DOM_INTERACTIVE_SELECTOR)]
-    .filter(isVisibleElement)
+  // Interactive elements first so their positional dom-N ids stay stable for
+  // interact_with_page; fields are appended, de-duplicated by node.
+  const seen = new Set();
+  const candidates = [];
+  for (const element of [...root.querySelectorAll(DOM_INTERACTIVE_SELECTOR), ...root.querySelectorAll(DOM_FIELD_SELECTOR)]) {
+    if (seen.has(element) || !isVisibleElement(element)) continue;
+    seen.add(element);
+    candidates.push(element);
+  }
+  const elements = candidates
     .slice(0, 200)
     .map((element, index) => {
       const elementId = `dom-${index + 1}`;
       registry.set(elementId, element);
+      const fieldKey = fieldKeyOf(element);
       return {
         elementId,
+        // Prefer this over elementId when highlighting: a fieldKey survives a
+        // re-render, a dom-N does not.
+        ...(fieldKey ? { fieldKey, kind: 'field', label: fieldAccessibleName(element) } : {}),
         tag: element.tagName.toLowerCase(),
         role: element.getAttribute('role') || element.tagName.toLowerCase(),
         name: accessibleElementName(element),
@@ -175,6 +189,9 @@ function messageText(message) {
 export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
   const navigate = useNavigate();
   const menuLabel = useMenuLabel();
+  // No-op when no HighlightProvider is mounted (see HighlightContext.jsx), so
+  // the Copilot still works in previews and isolated tests.
+  const { highlight } = useHighlight();
   // filterMenuGroupsByAccess() returns a fresh array on every AppLayout
   // render, so memoize on what actually changes — which windows are reachable
   // — or the index (and the tool callback holding it) would be rebuilt each
@@ -249,6 +266,16 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
         case 'interact_with_page':
           result = interactWithDom(domRegistryRef.current, args);
           break;
+        case 'highlight_element': {
+          // Read-only by contract: this tool points, it never clicks, focuses
+          // or writes. Anything else belongs to interact_with_page.
+          const element = resolveHighlightTarget(args, domRegistryRef.current, document);
+          const fieldKey = args.fieldKey || fieldKeyOf(element);
+          const label = fieldAccessibleName(element);
+          highlight({ element, note: typeof args.note === 'string' ? args.note : '', durationMs: args.durationMs });
+          result = { ok: true, fieldKey, label };
+          break;
+        }
         default:
           traceToolCall('unsupported', { toolName: toolCall.toolName, args });
           return;
@@ -284,7 +311,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
       ...(errorText ? { state: 'output-error', errorText } : { output: result }),
     });
     pendingRef.current.push(outputPromise);
-  }, [location.hash, location.pathname, location.search, navigate, onOpenCopilot, windowRouteIndex]);
+  }, [highlight, location.hash, location.pathname, location.search, navigate, onOpenCopilot, windowRouteIndex]);
 
   const executeTool = useCallback(({ toolCall }) => executeToolCall({
     toolCall,

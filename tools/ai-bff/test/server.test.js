@@ -93,3 +93,27 @@ test('page interaction only allows the four supported actions', () => {
   assert.deepEqual(inputSchema.parse({ elementId: 'dom-1', action: 'click' }), { elementId: 'dom-1', action: 'click' });
   assert.throws(() => inputSchema.parse({ elementId: 'dom-1', action: 'evaluate' }));
 });
+
+/**
+ * ETP-5184 — the server half of `highlight_element`. The browser implements
+ * the tool, but the model can only call what is declared here: without this
+ * entry the client case is unreachable dead code.
+ */
+test('highlighting accepts either addressing mode and rejects a bad duration', () => {
+  const { inputSchema } = browserTools().highlight_element;
+
+  assert.deepEqual(inputSchema.parse({ fieldKey: 'businessPartner' }), { fieldKey: 'businessPartner' });
+  assert.deepEqual(inputSchema.parse({ elementId: 'dom-3' }), { elementId: 'dom-3' });
+  assert.deepEqual(
+    inputSchema.parse({ fieldKey: 'businessPartner', note: 'Pick the customer here', durationMs: 5000 }),
+    { fieldKey: 'businessPartner', note: 'Pick the customer here', durationMs: 5000 }
+  );
+  // Both optional at the schema level: the client raises the actionable
+  // "requires elementId or fieldKey" message the model needs to recover.
+  assert.deepEqual(inputSchema.parse({}), {});
+  assert.throws(() => inputSchema.parse({ fieldKey: '' }));
+  assert.throws(() => inputSchema.parse({ elementId: '' }));
+  assert.throws(() => inputSchema.parse({ fieldKey: 'x', durationMs: 0 }));
+  assert.throws(() => inputSchema.parse({ fieldKey: 'x', durationMs: -1 }));
+  assert.throws(() => inputSchema.parse({ fieldKey: 'x', durationMs: 1.5 }));
+});

@@ -19633,6 +19633,8 @@
     "qpoScanAdded": "Escaneado y agregado",
     "copilot": "Copilot",
     "closeCopilot": "Cerrar Copilot",
+    "copilotHighlightNoteLabel": "Explicación del Copilot",
+    "copilotHighlightDismiss": "Cerrar el resaltado",
     "openCopilot": "Abrir Copilot",
     "copilotMaximize": "Maximizar",
     "copilotMinimize": "Minimizar",
