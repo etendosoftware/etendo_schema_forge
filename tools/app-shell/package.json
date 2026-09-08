@@ -17,7 +17,7 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@ai-sdk/react": "^4.0.86",
+    "@ai-sdk/react": "^4.0.96",
     "@configcat/sdk": "^1.1.0",
     "@etendosoftware/app-shell-core": "0.3.46",
     "@etendosoftware/etendo-go-core": "0.3.46",
