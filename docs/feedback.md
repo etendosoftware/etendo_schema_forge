@@ -1711,3 +1711,38 @@ reader no way to tell which half is current.**
 behind even when every line of logic is correct and every test is green, because no gate reads
 prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
 diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## [2026-09-07] ETP-5233 — Kebab menu hid Post/Unpost on every statically read-only window, for every user, regardless of role access
+
+**Component:** `DetailView.jsx` — `windowReadOnly` derivation and its single `DetailMoreActionsMenu`
+render call site. Regression introduced by ETP-5116 (2026-09-07), surfaced the same day while
+manually testing an unrelated ticket (ETP-5175) after rebasing onto `develop`.
+
+**Symptom.** `matched-purchase-invoices` lost its documented, sanctioned kebab exception —
+Post/Unpost disappeared from the "more" menu for every user, including ones with full read-write
+role access. The window is statically read-only for CRUD (`decisions.json` `window.readOnly:
+true`) but was explicitly designed to keep Post/Unpost as a document action anyway (see
+`docs/generated-custom-windows/matched-purchase-invoices.md`).
+
+**Cause.** `windowReadOnly` is an intentional OR of two different concepts: a **static**
+`decisions.json` "this window's data is view-only by design" flag (`api?.window?.readOnly`) and a
+**runtime** ETP-4520 per-role access-tier flag ("this user's role only has read-only access",
+`windowProp?.readOnly`). ETP-5116 closed a real gap — `DetailMoreActionsMenu` wasn't gated by
+either — but wired the kebab to the *combined* flag, same as every other consumer (save, delete,
+add-line). Unlike those, the kebab is not supposed to inherit the static half: a window can be
+CRUD-read-only by design while still exposing a hand-picked document action in its menu.
+
+**Fix.** Added a second, narrower derivation — `menuActionsReadOnly = windowProp?.readOnly ===
+true` (role-tier signal only) — and passed *that* to `DetailMoreActionsMenu`'s one render call
+site instead of `windowReadOnly`. The combined flag is untouched everywhere else (save/delete
+gates, process buttons, field read-only) — those correctly still want the OR of both signals.
+
+**Lesson.** When a boolean is a deliberate OR of two distinct concepts (a static design-time
+declaration and a runtime access-tier check), wiring a *new* consumer straight to that combined
+flag is not automatically correct just because every existing consumer does. Check which half of
+the OR the new consumer actually needs — here the kebab needed only the role-tier half, and
+gating it on the union silently regressed a documented per-window exception. Full history:
+`docs/superpowers/specs/2026-07-15-window-readonly-capability-design.md` § "Correction
+(2026-09-08)".
