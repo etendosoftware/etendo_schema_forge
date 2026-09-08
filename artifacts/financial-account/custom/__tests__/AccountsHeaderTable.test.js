@@ -15,9 +15,9 @@
  *    too, i.e. no hardcoded label map and no hand-written column literal may come back;
  *  - the one hand-appended column (`_rowActions`) must keep swallowing its own clicks,
  *    otherwise the row navigation fires underneath it;
- *  - the ETP-4656 toolbar/selection-bar swap must stay wired: `selectedRows` read out of the
- *    slot props (never relayed into DataTable) and `selectionActive` gating the toolbar,
- *    since ListView renders its selection bar as a sibling and cannot do the swap itself.
+ *  - `selectedRows` must stay destructured out of the slot props so it never reaches DataTable,
+ *    even though ETP-5111 retired the toolbar/selection-bar swap that used to read it — and the
+ *    toolbar must stay ungated, so the retired swap cannot creep back in.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -177,13 +177,15 @@ describe('AccountsHeaderTable — row interaction guards', () => {
   });
 });
 
-// ETP-4656 — ListView renders its standardized selection bar as a SIBLING of this slot and
-// cannot reach inside it, so the "selection bar replaces the toolbar" swap is wired here and
-// would silently disappear on a re-run if nothing locked it. Behaviour (what the user sees at
-// each selection size) is covered in
+// ETP-4656 wired a "selection bar replaces the toolbar" swap here, because ListView renders its
+// selection bar as a SIBLING of this slot and cannot reach inside it. ETP-5111 RETIRED that swap:
+// with the bar reduced to a floating pill (ETP-4972) it replaced nothing and merely took the
+// toolbar's own actions away from a user who had ticked a checkbox. What this block locks now is
+// the retirement itself — the toolbar is unconditional — plus the one piece of the old wiring that
+// had to STAY. Behaviour is covered in
 // tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
-// ("toolbar / selection-bar swap"); this block only locks the two structural halves.
-describe('AccountsHeaderTable — selection-aware toolbar', () => {
+// ("toolbar stays mounted across selection changes").
+describe('AccountsHeaderTable — selection handling', () => {
   it('destructures selectedRows out of the rest element instead of relaying it to DataTable', () => {
     assert.ok(
       destructuredNames.includes('selectedRows'),
@@ -195,28 +197,49 @@ describe('AccountsHeaderTable — selection-aware toolbar', () => {
     assert.doesNotMatch(src, /selectedRows=\{/, 'selectedRows must not travel into DataTable');
   });
 
-  it('derives the toolbar gate from ListView selection rather than mirroring it locally', () => {
-    assert.match(src, /const selectionActive = \(selectedRows\?\.length \?\? 0\) > 0/);
-    // A local mirror fed by onSelectionChange goes stale: DataTable empties or prunes its
-    // internal Set from clearSelectionTrigger / deselectTrigger WITHOUT calling
-    // onSelectionChange, so after a bulk delete or a cancel the mirror still reads
-    // "selected" and the toolbar never comes back. Selection state stays ListView's, which
-    // is why neither name may appear in this slot's code. Both are named in comments here,
-    // so match on code only — same treatment as the retired-R-spec guard above.
+  /**
+   * The trap this pins. Since ETP-5111 nothing in the body READS `selectedRows` — so it now looks
+   * exactly like a leftover a tidy-up would delete, and deleting it is a silent bug: the prop falls
+   * back into `...props`, reaches DataTable, and starts reading as a controlled-selection API that
+   * DataTable does not implement. It is load-bearing precisely BECAUSE it is unused, which is what
+   * the eslint-disable directive above it records. Keep the directive and the name together.
+   */
+  it('keeps the deliberately-unused selectedRows destructuring, marked as intentional', () => {
+    assert.match(
+      src,
+      /eslint-disable-next-line no-unused-vars\s*\n\s*selectedRows,/,
+      'selectedRows must stay destructured, with the directive that says the absence of a reader is intentional',
+    );
+  });
+
+  it('keeps no local mirror of the selection', () => {
+    // Selection state is ListView's. A local mirror fed by onSelectionChange goes stale anyway:
+    // DataTable empties or prunes its internal Set from clearSelectionTrigger / deselectTrigger
+    // WITHOUT calling onSelectionChange. Both names are mentioned in comments here, so match on
+    // code only — same treatment as the retired-R-spec guard above.
     const code = src.replace(/^\s*\/\/.*$/gm, '');
     assert.doesNotMatch(code, /onSelectionChange/);
     assert.doesNotMatch(code, /setSelectedRows/);
   });
 
-  it('unmounts the toolbar inside that gate, so it leaves the DOM rather than hiding', () => {
-    // `&& (` is the unmount: `cuentas-toolbar` has to genuinely leave the DOM for
-    // ListView's bar above to read as its replacement. The nested pattern also pins the
-    // toolbar INSIDE the branch — no `)}` may close it before AccountsToolbar renders.
-    assert.match(
-      src,
-      /\{!selectionActive && \((?:(?!\)\})[\s\S])*?<AccountsToolbar/,
-      'AccountsToolbar must render inside the !selectionActive branch',
-    );
+  it('renders AccountsToolbar unconditionally, with no selection gate left', () => {
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    // The retired gate by name, so a straight revert of the JSX fails here.
+    assert.doesNotMatch(code, /selectionActive/, 'the selection gate on the toolbar was retired');
+
+    // And structurally, for any gate spelled differently: whatever immediately precedes
+    // `<AccountsToolbar` must be a plain element open tag, never a condition. `&&` / `?` / `:`
+    // in the JSX right above it is exactly what a re-introduced gate looks like.
+    const at = code.indexOf('<AccountsToolbar');
+    assert.ok(at > 0, 'the slot must render AccountsToolbar');
+    const justBefore = code.slice(Math.max(0, at - 200), at);
+    assert.match(justBefore, /<\w[^>]*>\s*$/, 'AccountsToolbar must be a direct child of an element');
+    for (const gate of ['&&', '?', ' : ']) {
+      assert.ok(
+        !justBefore.includes(gate),
+        `no conditional (${gate}) may gate AccountsToolbar, got: ${JSON.stringify(justBefore.slice(-120))}`,
+      );
+    }
   });
 });
 

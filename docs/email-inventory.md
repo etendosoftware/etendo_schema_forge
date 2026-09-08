@@ -296,22 +296,36 @@ signature); the layout decides how it looks.
 
 ## 5. Is there a delivery history in the database?
 
-Yes for Stack A, but it is an **anti-abuse ledger, not a readable history** — the distinction
-matters the moment someone asks for "show me what we sent this customer".
+Yes for Stack A, and since ETP-5069 there are **two separate tables**, on purpose. Getting the two
+straight is the whole answer to "show me what we sent this customer".
 
-Everything lives in one table, `ETGO_Email_Safety`, discriminated by `RECORD_TYPE`
-(`AUDIT`, `THROTTLE`, `KILL_SWITCH`). `DalEmailSafetyStore.recordAudit` writes one `AUDIT` row per
-send attempt; `TransactionalEmailService` uses `InMemoryEmailSafetyStore` only in tests.
+| | `ETGO_Email_Safety` | `ETGO_Email_Send_Log` |
+|---|---|---|
+| Purpose | Anti-abuse ledger | Readable per-document history |
+| Ownership | `AD_CLIENT_ID = '0'` (System), tenant in the `TENANT_ID` varchar | Client/Organization (`ACCESSLEVEL` 3) — the row carries the real tenant |
+| Recipients | SHA-256 hashes, domain in clear | **In clear** |
+| Subject / body | Not stored | Subject and the operator's own message, **in clear** |
+| Written for | Every contract | Only contracts that opt in (`logsSendHistory()`) |
+| How to read it | SQL only | AD window *Email Send History*, or `GET /sws/neo/documentemailhistory` |
+
+### 5.1 `ETGO_Email_Safety` — the anti-abuse ledger (unchanged)
+
+One table discriminated by `RECORD_TYPE` (`AUDIT`, `THROTTLE`, `KILL_SWITCH`).
+`DalEmailSafetyStore.recordAudit` writes one `AUDIT` row per send attempt;
+`TransactionalEmailService` uses `InMemoryEmailSafetyStore` only in tests.
 
 **What a row gives you:** `RECORD_TYPE`, `CONTRACT_NAME`, `STATUS` (`SENT` / `DUPLICATE` / a failure),
 `AUDIT_TIME`, `IDEMPOTENCY_KEY`, `TENANT_ID`, and a JSON `PAYLOAD` carrying `recordId`,
 `recipientHash`, `recipientDomain`, `httpStatus`, `providerStatus` and `duplicate`.
 
-**What it does not give you, and this is the part that surprises people:**
+**What it deliberately does not give you — and ETP-5069 did not relax any of it:**
 
 - **The recipient is not readable.** `payload.recipientHash` is SHA-256 of the lowercased address.
   You can *verify* that a known address was written to (hash it and compare) but you cannot list who
-  was mailed. Only `recipientDomain` is in clear.
+  was mailed. Only `recipientDomain` is in clear. This is a **tested invariant**:
+  `DalEmailSafetyStoreTest` (`modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/email/DalEmailSafetyStoreTest.java:130`)
+  asserts the raw address never reaches the row. Do not "improve" the ledger by adding clear
+  recipients — that is what the second table is for.
 - **Neither the subject nor the body is stored,** and neither is the attached PDF or its link.
 - **`payload.userId` is null in practice** — verified against a local instance, 24 of 24 audit rows.
   The sender is recoverable only from Etendo's own `CREATEDBY` audit column, which does hold the
@@ -319,15 +333,63 @@ send attempt; `TransactionalEmailService` uses `InMemoryEmailSafetyStore` only i
 - **Rows are written with `AD_CLIENT_ID = '0'`** (System), because the write happens under admin mode
   against a client-0 record. The tenant is in the separate `TENANT_ID` varchar column, so **a
   per-client report must filter on `TENANT_ID`, not `AD_CLIENT_ID`.**
-- **There is no AD window over the table** — confirmed by query: it has no `AD_Tab`. Today the only
-  way in is SQL.
+- **There is no AD window over the table.** SQL is still the only way in.
 
-Stack B leaves no trace here at all: the Core SMTP path never reaches `TransactionalEmailService`.
+### 5.2 `ETGO_Email_Send_Log` — the readable history (ETP-5069)
 
-Consequence for anyone asked to build "sent history" on a document: the `recordId` → `AUDIT_TIME`
-link already exists and is enough for *whether and when*. Showing **to whom** and **what was said**
-needs new columns — the audit deliberately hashes the address, so this is a privacy decision to make
-explicitly, not an oversight to patch.
+The privacy decision this document used to flag as "to be made explicitly" **has been made**:
+recipients, subject, the operator's message and the signed download link are stored **in clear**,
+**per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
+in view — an operator must be able to prove to their own customer what was sent, to whom and when,
+and a hash cannot do that. The scope is correspondingly narrow: only the six document-send
+contracts opt in.
+
+- **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
+  `DefaultDocumentSendEmailContract` overrides it to `true`, so the six document-send contracts
+  (`sales-invoice-send` and siblings) opt in automatically. The **account/auth family**
+  (`company-invitation`, `reset-password`, `password-changed`, `verify-email`, `login-alert`,
+  `organization-joined`) inherits `false` and **never reaches the table** — those recipients are the
+  platform's own users and that copy carries single-use links.
+- **Write path:** `TransactionalEmailService#recordAudit` writes the history row immediately
+  *before* the safety-store audit row, so both land in the same transaction and can never disagree.
+  `DalEmailSendLogStore` writes **without** admin mode, which is what makes `AD_CLIENT_ID` /
+  `AD_ORG_ID` / `CREATEDBY` the caller's real values — and incidentally closes the
+  null-`userId` gap §5.1 complains about, for these six contracts.
+- **`MESSAGE_BODY` is the operator's text, not the rendered email.** What is stored is
+  `EmailMessageEdits#getMessage()`, pre-escape. A send that used the catalog's default copy stores
+  `null` there and keeps its `SUBJECT`.
+- **Read path:** the AD window **Email Send History** (module `com.etendoerp.go`, read-only,
+  client-scoped), or `GET /sws/neo/documentemailhistory?recordId=<id>[&specName=<spec>]`, which the
+  app-shell's `EmailsCard` calls from the preview panel of Sales Order, Purchase Order, Sales
+  Quotation, Sales Invoice and Goods Shipment. Note the asymmetry: **six contracts record, five
+  windows display.** `return-to-vendor-send` opts in like its five siblings, but has no preview
+  card yet — its rows are readable only through the backoffice window and the endpoint. Adding the
+  card later needs no backend change. Reads go through `OBQuery`'s default
+  `filterOnReadableClients` / `filterOnReadableOrganizations` — **not** `OBContext.setAdminMode()` —
+  so DAL's own client/org filtering *is* the access rule. Row shape and rationale:
+  `modules/com.etendoerp.go/docs/neo-headless.md` §8j.
+
+**Two accepted gaps, both real:**
+
+1. **Pre-context rejections leave no row — in either table.** No audit row exists until the
+   `EmailSendContext` is built (`TransactionalEmailService.java:236`), so the rejection paths that
+   answer before it — bad JSON, unknown contract, forbidden provider field, failed authorization,
+   unresolved recipient, malformed `messageEdits`, document not found — write neither an audit row
+   nor a history row. Every failure status a user can *act* on (`PROVIDER_FAILED`, `THROTTLED`,
+   `SUPPRESSED`, `DUPLICATE`) is post-context and does get recorded, so the card is not misleading;
+   but "nothing in the history" is not proof that nothing was attempted.
+2. **No retention or purge process.** Deliberately deferred — see
+   `docs/ops/transactional-email-security.md` → *History Retention* for the sizing that justified
+   deferring it and the trigger for revisiting.
+
+**There is no `DELIVERY_FAILED` status.** The vocabulary is exactly the eight `STATUS_*` constants
+in `TransactionalEmailService.java:49-56` — `SENT`, `VALIDATION_FAILED`, `PROVIDER_FAILED`,
+`UNAUTHORIZED`, `DUPLICATE`, `THROTTLED`, `SUPPRESSED`, `NO_RECIPIENT` — mirrored in the
+`ETGO_EmailSendStatus` AD reference list. `DELIVERY_FAILED` belongs to
+`ETGO_INVITATION.STATUS`, a different subsystem; the two are routinely confused.
+
+Stack B leaves no trace in either table: the Core SMTP path never reaches
+`TransactionalEmailService`.
 
 ---
 

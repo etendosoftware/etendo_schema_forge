@@ -2,14 +2,12 @@ export const READINESS_ENDPOINTS = {
   session: '/sws/neo/session',
   defaults: '/sws/neo/sales-invoice/header/defaults',
   paymentTerms: '/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0',
-  customers: '/sws/neo/sales-invoice/header/selectors/C_BPartner_ID?isSOTrx=Y&isCustomer=Y&limit=50&offset=0',
 };
 
 export const READINESS_FAILURE_KEYS = {
   session: 'onboardingReadinessSession',
   defaults: 'onboardingReadinessDefaults',
   paymentTerms: 'onboardingReadinessPaymentTerms',
-  customers: 'onboardingReadinessCustomers',
   documentType: 'onboardingReadinessDocumentType',
 };
 
@@ -46,14 +44,21 @@ function readDocumentType(defaultsBody) {
 }
 
 /**
- * One pass of the four probes. Split out so the caller can retry it.
+ * One pass of the three probes. Split out so the caller can retry it.
+ *
+ * ETP-5079: there is deliberately NO "has at least one customer" leg here any more. Onboarding used
+ * to seed a synthetic "Default Customer" business partner; it no longer does, so a freshly
+ * provisioned tenant legitimately has zero business partners. Keeping the check would make
+ * `ready` false forever for every new tenant, and SetupProgressStep refuses to redirect into the
+ * app on `!ready` — onboarding would finish provisioning and then lock the user out. The remaining
+ * legs all assert real configuration (a live session, a resolvable document type, payment terms),
+ * none of which is sample data.
  */
 async function probeOnce(fetchImpl, baseUrl) {
-  const [session, defaults, paymentTerms, customers] = await Promise.all([
+  const [session, defaults, paymentTerms] = await Promise.all([
     fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.session, 'session'),
     fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.defaults, 'sales invoice defaults'),
     fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.paymentTerms, 'payment terms'),
-    fetchJson(fetchImpl, baseUrl, READINESS_ENDPOINTS.customers, 'customers'),
   ]);
 
   const failures = [];
@@ -62,9 +67,6 @@ async function probeOnce(fetchImpl, baseUrl) {
   if (!defaults.ok) failures.push({ key: READINESS_FAILURE_KEYS.defaults, status: defaults.status });
   if (!paymentTerms.ok || !hasUsableSelectorItem(paymentTerms.body)) {
     failures.push({ key: READINESS_FAILURE_KEYS.paymentTerms, status: paymentTerms.status });
-  }
-  if (!customers.ok || !hasUsableSelectorItem(customers.body)) {
-    failures.push({ key: READINESS_FAILURE_KEYS.customers, status: customers.status });
   }
 
   const documentType = readDocumentType(defaults.body);
@@ -75,7 +77,7 @@ async function probeOnce(fetchImpl, baseUrl) {
   return {
     ready: failures.length === 0,
     failures,
-    checks: { session, defaults, paymentTerms, customers },
+    checks: { session, defaults, paymentTerms },
   };
 }
 
@@ -90,7 +92,7 @@ const delay = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
  *
  * The distinction is the point: a tenant with no payment terms fails ONE probe and
  * must keep failing, because that is a real provisioning gap the user has to see. A
- * session the backend does not accept yet fails EVERY probe at once, since all four
+ * session the backend does not accept yet fails EVERY probe at once, since all three
  * are plain GETs that differ only in path.
  */
 function looksLikeAnUnsettledSession(failures) {
@@ -103,13 +105,13 @@ function looksLikeAnUnsettledSession(failures) {
  *
  * Retries once when the first pass fails as a whole on 401/403. This is called
  * immediately after `POST /sws/go/session/environment`, which ROTATES the session
- * cookie and hands back a new CSRF token — and the four probes go out in parallel
+ * cookie and hands back a new CSRF token — and the three probes go out in parallel
  * right behind it. Under load that read can land before the rotated cookie is in
- * play, and the backend rejects the superseded one on all four at once. The screen
+ * play, and the backend rejects the superseded one on all three at once. The screen
  * then tells the user their brand-new environment "is not ready to invoice", naming
- * five things that are all present: verified by hand against a tenant this check had
- * just rejected, where every probe answered 200 with real payment terms and
- * customers moments later.
+ * things that are all present: verified by hand against a tenant this check had
+ * just rejected, where every probe answered 200 with real payment terms
+ * moments later.
  *
  * Deliberately NOT a blanket retry: a genuine gap fails one or two probes and is
  * reported on the first pass, at no extra cost. Only the all-or-nothing shape —

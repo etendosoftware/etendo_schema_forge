@@ -73,6 +73,7 @@ A user should be able to:
   - **Currency filter — ETP-4029:** `ImportFromOrderModal.jsx` fetches the invoice's own header (`GET sales-invoice/header/{id}`) alongside the candidate orders and keeps only orders whose `currency` matches the invoice's current currency (orders carry `currency` directly, no order lookup needed). Empty-state message when candidates exist but none match: `noSalesOrdersMatchCurrency`.
 - Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
 - Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`.
+- Email history card (ETP-5069): the `EmailsCard` in the preview panel's General tab is no longer a static placeholder. It reads the document's real send history from `GET /sws/neo/documentemailhistory?recordId=<documentId>` (payload `{ result: "<JSON string>" }` — `result` is a STRING the client parses — or `{ error: "<message>" }`), through `useApiFetch` like every other request. Rows are listed newest first with the send timestamp (locale-aware `toLocaleString`), the To recipients, the subject and a `StatusTag`; clicking a row expands CC, sender, message body, the error message and a Download attachment link. Only `SENT` and `DUPLICATE` count as successful (there is no `DELIVERY_FAILED`); every other status renders in the destructive tone and is never presented as sent. `previewCardNoEmailHistory` is kept for the genuinely-empty case and a separate `previewCardEmailHistoryError` copy covers a transport/backend failure, so "nothing was ever sent" and "we could not find out" no longer look alike. A successful send in the panel's own `SendDocumentModal` fires the new optional `onSent` callback (success only, unlike `onClose`, which a plain cancel also triggers) and the panel bumps `refreshSignal`, so the card refetches instead of showing its pre-send state. The `onSend` link keeps its fail-closed contract: with no `onSend` the card exposes no clickable send trigger at all.
 - Send status gating (ETP-4717): `InvoiceTopbarExtra.jsx` renders nothing for the Send action while `documentStatus === 'DR'` (the earlier `isDraft` branch used to render an unconditional `SendDocumentButton` there, which was the bug); once the invoice is `CO`, the button is further gated by `isCompleted` before it renders. This matches the grid row quick-action's `rowQuickActions.actions.email.visibleWhen: "@DocumentStatus@='CO'"` in `decisions.json`, so "Enviar" shows or hides consistently between the list and the detail topbar.
 - Download PDF status gating (ETP-4789): the preview-panel Download PDF button — the local `InvoiceActionButtons` component inside `InvoicePreview.jsx`, only rendered for sales invoices (`isSalesInvoice`) — reuses the same `isSendable` variable already computed for Send (`specName !== 'purchase-invoice' && documentStatus === 'CO'`) — previously it was gated only by `hasPdf`, so a draft sales invoice with an already-generated preview PDF could still be downloaded. `InvoiceActionButtons` was fixed to mirror the shared `PreviewActionButtons.jsx` pattern: the Download button now also disables whenever `onDownloadPdf` itself is falsy, not just when `hasPdf` is false. Locked in by `tools/app-shell/src/windows/custom/shared/__tests__/InvoicePreview.vitest.jsx` (`Download PDF gating by documentStatus (ETP-4789)`). Follow-up reject-cycle fix (still ETP-4789): `hasPdf` is now `!!p.pdfUrl || !!cachedAttachment`, where `cachedAttachment` is captured via the `onFileChange` callback wired into `ManagedLeftPanel`'s cache-fetch options. The cached attachment (fetched via `GET /preview-file`) normally resolves well ahead of the slower jsreport regeneration behind `p.pdfUrl`, so the button now enables as soon as whichever source resolves first — closing the perceptible gap QA reported between the PDF becoming visible in the preview panel and the Download button becoming clickable. `handleDownloadPdf` downloads the cached blob directly when it is available, falling back to the jsreport-generated `pdfUrl` otherwise. The `isSendable`/`documentStatus` gate described above is unchanged. Locked in by the `Download PDF gated by cached attachment (ETP-4789 reject-cycle fix)` describe block in `InvoicePreview.vitest.jsx`.
 - Preview behavior: list preview for sales invoices uses a shared invoice preview modal with `General`, `Messages`, and `History` tabs. The General tab is evidence-backed and includes payment-plan plus payment-history fetching; the embedded PDF preview now expands the billing contact location using the full location record when available (`address1`, `address2`, `postal code + city`, `region + country`) instead of relying only on the summarized address identifier string. Messages and History currently remain placeholder states. The preview shell is now `GenericPreviewModal` (replacing the old `InvoicePreviewModal`), orchestrated by `InvoicePreview` and `useInvoicePreview`. For completed invoices the PDF is auto-cached on first open via `POST /sws/neo/preview-file` and served from `ETGO_PREVIEW_FILE` on subsequent opens (`autoFetch=true`, `storeCondition=isCompleted`). Draft invoices always regenerate the PDF from jsreport and never write to the cache (`storeCondition=false`). The embedded PDF now includes conditional discount breakdown rows when applicable: a `Subtotal without discount` row and `Discount per product` row appear when at least one line carries a non-zero discount (`grossAmount > netAmount`); a `Total discount (X%)` row appears when `etgoTotalDiscount > 0` on the header. These rows render in a muted smaller style (`.row.discount`) and are hidden when no discounts exist — documents with flat pricing show the original 3-row totals (subtotal, tax, grand total) unchanged. The price column in the PDF is labeled `Precio tarifa` / `List Price` (shared i18n key `invoicePdfColUnitPrice`) to match the form view column label.
@@ -268,11 +269,11 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - **ETP-3908 — `ImportLinesModal` generic endpoint**: `tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` no longer hardcodes `${base}/sales-invoice/lines` as the POST target. The endpoint is now a required `linesEndpoint` prop. Both `ImportFromShipmentModal` and `ImportFromOrderModal` pass `linesEndpoint="sales-invoice/lines"` explicitly, preserving existing behavior while enabling reuse from purchase-invoice and future windows.
 - **ETP-3908 — `onRefresh` header reload**: `DetailView.jsx` — the `onRefresh` callback passed to `LinesEmptyState` and `DetailExtraActions` now calls both `hook.fetchChildren` (to show imported lines) and `hook.fetchById` (to reload the header) so `etgoTotalDiscount` applied by `afterImport` is immediately reflected in `DocumentTotalsPanel` after import.
 - The generated `HeaderPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `C_Invoice` AD table.
-- **ETP-3995 — SIF tab**: The generated `HeaderPage.jsx` now also includes `SifTab` in `customTabs` with `placement: 'tab'`, declared via `decisions.json → window.extraTabs`. The tab key is `sif`; the label is driven by `labelKey: 'sifDataTabs.sectionTitle'`. `tools/app-shell/src/windows/custom/shared/SifTab.jsx` implements the shared SIF tab component used by both sales-invoice and purchase-invoice. `tools/app-shell/src/windows/custom/shared/fiscalTargets.js` — pure function `getInvoiceFiscalTargets(specName, profile)` decides which panels are visible based on org fiscal config profile; for sales-invoice, SII is active on `sii` and `sii-navarra` profiles, TBAI on `tbai` and `sii+tbai`, and Verifactu on `verifactu`. `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `TAB_ICONS` map extended with `'custom:sif': Shield` so the SIF tab strip button renders a shield icon. `artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx` — `SifDataTabs` import and `notesExtra={SifDataTabs}` prop removed; SIF data is now shown in the primary SIF tab instead. `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` — `customTabs` prop removed from the `<HeaderPage>` call so the generated `customTabs` (including the SIF tab) is not overridden. Unit tests: `tools/app-shell/src/windows/custom/shared/__tests__/SifTab.vitest.jsx` (49 tests covering empty state, SII/TBAI/Verifactu panels, rail switching, PATCH on blur, status badges, and edge cases). Source-reading tests: `cli/test/generate-frontend-extra-tabs.test.js` (18 tests covering `decisions.json` declarations, generated import and customTabs entries, generator source patterns, and wrapper integrity). E2E: `e2e/tests/flows/sif-tab.mocked.spec.js` — mocked Playwright spec for both invoice windows verifying the SIF tab button appears in the detail tab strip.
+- **ETP-3995 — SIF tab**: The generated `HeaderPage.jsx` now also includes `SifTab` in `customTabs` with `placement: 'tab'`, declared via `decisions.json → window.extraTabs`. The tab key is `sif`; the label is driven by `labelKey: 'sifDataTabs.sectionTitle'`. `tools/app-shell/src/windows/custom/shared/SifTab.jsx` implements the shared SIF tab component used by both sales-invoice and purchase-invoice. `tools/app-shell/src/windows/custom/shared/fiscalTargets.js` — pure function `getInvoiceFiscalTargets(specName, profile, territory)` decides which panels are visible based on org fiscal config profile (and, for purchase invoices, TBAI territory — see `purchase-invoice.md` §"TBAI territory gating for purchase invoices (Batuz) — ETP-5087"); for sales-invoice, SII is active on `sii` and `sii-navarra` profiles, TBAI on `tbai` and `sii+tbai` unconditionally, and Verifactu on `verifactu`. `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `TAB_ICONS` map extended with `'custom:sif': Shield` so the SIF tab strip button renders a shield icon. `artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx` — `SifDataTabs` import and `notesExtra={SifDataTabs}` prop removed; SIF data is now shown in the primary SIF tab instead. `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` — `customTabs` prop removed from the `<HeaderPage>` call so the generated `customTabs` (including the SIF tab) is not overridden. Unit tests: `tools/app-shell/src/windows/custom/shared/__tests__/SifTab.vitest.jsx` (49 tests covering empty state, SII/TBAI/Verifactu panels, rail switching, PATCH on blur, status badges, and edge cases). Source-reading tests: `cli/test/generate-frontend-extra-tabs.test.js` (18 tests covering `decisions.json` declarations, generated import and customTabs entries, generator source patterns, and wrapper integrity). E2E: `e2e/tests/flows/sif-tab.mocked.spec.js` — mocked Playwright spec for both invoice windows verifying the SIF tab button appears in the detail tab strip.
 - **ETP-3995 — Related Documents tab i18n**: The generated `HeaderPage.jsx` now uses `labelKey: 'relatedDocuments'` instead of the hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language.
 - `e2e/tests/flows/invoice-preview-modal.spec.js` — 5 Playwright tests for `GenericPreviewModal` lifecycle in mock mode using a purchase invoice row: row click opens the modal, X button dismisses it, backdrop click dismisses it, tabs render and switching works, Edit navigates to the detail URL.
 - `e2e/tests/flows/invoice-preview-persistence.spec.js` — 7 Playwright tests covering completed and draft sales invoice cases in mock mode: completed invoice fires `GET /sws/neo/preview-file` with `specName=sales-invoice`, draft invoice does NOT fire the GET (storeCondition=false).
-- **ETP-4125 — Fiscal status inline in list (nginx URL-length fix)**: Eliminated the `useInvoiceListFiscalStatus` batch-fetch hook that was making large GET requests with many invoice IDs in the `inSet` query parameter, causing HTTP 403 errors on lists of 53+ invoices (nginx URL-length limit). SII (`aeatsiiEstado`) and Verifactu (`etvfacInvoiceStatus`) statuses now come from the list API response as inline fields. TBAI (`tbaiSyncEstado`) is injected server-side by `TbaiSyncStatusInjector.inject()` called from `SalesInvoiceHeaderHandler.afterHandle()` using a single `ROW_NUMBER() OVER (PARTITION BY c_invoice_id ORDER BY created DESC)` query (Oracle + PostgreSQL portable). `FiscalStatusBadge` was extended with BA and NR SII codes and the `vf_pending` Verifactu entry; `normalizeVerifactuStatus()` was exported to map raw Verifactu short codes (AC/AE/ER/IN/PE) to badge config keys. Normalized SII and TBAI i18n labels (CO→Aceptado, IN→Rechazado, etc.) were aligned across both locales. Fiscal status badges are sales-only for TBAI and Verifactu; purchase invoices only show an SII badge.
+- **ETP-4125 — Fiscal status inline in list (nginx URL-length fix)**: Eliminated the `useInvoiceListFiscalStatus` batch-fetch hook that was making large GET requests with many invoice IDs in the `inSet` query parameter, causing HTTP 403 errors on lists of 53+ invoices (nginx URL-length limit). SII (`aeatsiiEstado`) and Verifactu (`etvfacInvoiceStatus`) statuses now come from the list API response as inline fields. TBAI (`tbaiSyncEstado`) is injected server-side by `TbaiSyncStatusInjector.inject()` called from `SalesInvoiceHeaderHandler.afterHandle()` using a single `ROW_NUMBER() OVER (PARTITION BY c_invoice_id ORDER BY created DESC)` query (Oracle + PostgreSQL portable). `FiscalStatusBadge` was extended with BA and NR SII codes and the `vf_pending` Verifactu entry; `normalizeVerifactuStatus()` was exported to map raw Verifactu short codes (AC/AE/ER/IN/PE) to badge config keys. Normalized SII and TBAI i18n labels (CO→Aceptado, IN→Rechazado, etc.) were aligned across both locales. At the time of ETP-4125, fiscal status badges were sales-only for both TBAI and Verifactu, and purchase invoices only showed an SII badge. **Verifactu is still sales-only, but TBAI no longer is:** ETP-5087 added a Bizkaia-gated **Batuz Status** column to the purchase-invoice list (shown only when the active TBAI config's `etsgSifTerritory` is `BIZKAIA`) and wired `TbaiSyncStatusInjector.inject()` into `PurchaseInvoiceHeaderHandler.afterHandle()` as well, so `tbaiSyncEstado` is now injected for purchase rows too — see [`purchase-invoice.md` — "List Batuz column — real sync state with a send-flag fallback, synchronous global visibility (ETP-5087)"](purchase-invoice.md#list-batuz-column--real-sync-state-with-a-send-flag-fallback-synchronous-global-visibility-etp-5087).
 - **ETP-4391 — Fix `tbaiSyncEstado` never injected (`TbaiSyncStatusInjector` Hibernate misuse)**: Since ETP-4125, `TbaiSyncStatusInjector.fetchLatestByInvoice()` called `session.createNativeQuery(sql, Object[].class)`. In Hibernate 5.6 that two-argument overload is JPA-style and treats the `Class` argument as an *entity* to map results onto (`addEntity(alias, resultClass.getName())` under the hood) — `Object[]` is not a mapped entity, so every call threw a `MappingException`, silently swallowed by `inject()`'s generic `catch (Exception e)`. Net effect: `tbaiSyncEstado` was never added to ANY GET response (list or detail), for ANY invoice, regardless of real data in `tbai_syncinvoice` — the TicketBAI status column always fell back to "Pendiente" client-side, even for invoices actually sent and accepted. Fixed by switching to the single-argument `createNativeQuery(sql)` idiom already used by every other multi-column native query in `com.etendoerp.go.schemaforge`. Regression coverage added in `TbaiSyncStatusInjectorIntegrationTest` (DB-backed, exercises the real `tbai_syncinvoice` table via `OBBaseTest`) alongside the existing DB-free `TbaiSyncStatusInjectorTest`. This is unrelated to (and shipped alongside) the client-side fix in `useFiscalStatus.js` that refetches fiscal status after a successful "Enviar a SIF" send within the same session.
 - **ETP-4007 — Discount display fixes in PDF and server-side totals**: `tools/app-shell/src/windows/custom/shared/useInvoicePdf.js` was corrected to read `l.etgoDiscount` (not `l.discount`) for the DESC.% column, `l.listPrice ?? l.unitPrice` for P. UNITARIO (list price before discount, not net price), and `l.grossAmount ?? l.lineNetAmount` for TOTAL (gross amount including tax). The tax amount in the totals section now uses `adjustedGrand − netAmount` instead of the previous `bruto × factor` formula. Discount breakdown rows ("Subtotal sin descuento", "Descuento por producto −X", "Descuento total Y% −Z") were added to the PDF totals section with conditional rendering and the `.inv-totals .row.discount` CSS style. `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesInvoiceHeaderHandler.java` was extended with an `afterHandle()` implementation that adjusts `grandTotalAmount` and `outstandingAmount` in GET responses for **draft** invoices with `etgoTotalDiscount > 0`, so the list view and side panel show the discounted total before DB confirmation. Confirmed invoices (where `TotalDiscountService` already created negative ETGO_DTO lines at completion time) are left untouched.
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `tools/app-shell/src/windows/custom/sales-invoice/SalesInvoiceTopbar.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
@@ -942,8 +943,10 @@ hand-written topbar override wired via `topbarRight={SalesInvoiceTopbar}` in thi
 `index.jsx`) now renders `SendToSifButton` (`../shared/SendToSifButton.jsx`) alongside
 `CloneButton`/`CopyRecordLinkButton`/`InvoiceTopbarExtra`, the same way `PurchaseInvoiceTopbar.jsx`
 already did. `SendToSifButton` derives `specName` from `apiBaseUrl` (so the shared
-`getInvoiceFiscalTargets(specName, profile)` correctly gates TBAI in addition to SII for the sales
-side, unlike purchase which is SII-only), only renders once `status === 'CO'` and at least one
+`getInvoiceFiscalTargets(specName, profile, territory)` correctly gates TBAI in addition to SII for
+the sales side, unconditionally; purchase invoices only become TBAI-eligible when the org's active
+TBAI config territory is Bizkaia — see `purchase-invoice.md` §"TBAI territory gating for purchase
+invoices (Batuz) — ETP-5087"), only renders once `status === 'CO'` and at least one
 fiscal target is still pending (`getPendingSifTargets`), and on click opens `SifSendingModal.jsx`,
 which calls the same `SiiSendHandler` backend action (`POST .../action/Em_aeatsii_send`,
 `EM_Aeatsii_Send`, and `aeatsiiSend` are all accepted aliases) that the reverted kebab entry used.
@@ -1029,3 +1032,125 @@ Three constraints worth knowing:
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
 different endpoint (`AddPaymentService`), and this modal never used it.
+
+## Product-selector price currency — ETP-5148
+
+The product-selector drawer opened from **Add line** used to label the catalog price with the
+**document** currency instead of the currency the price list is expressed in. On a sales invoice switched to
+USD (rate 1.47) against a EUR organization, the drawer rendered `$5,00` — the *number* was the
+untouched EUR catalog price (the backend never converts it; the same request returns `5,00` for a EUR
+and a USD header alike), only the symbol was wrong. A user reading `$5,00` reasonably concludes the
+catalog is priced in dollars.
+
+### Cause
+
+`window.selectorPriceCurrency` was absent from `artifacts/sales-invoice/decisions.json`. The resolution
+chain has no conditional branch that can avoid the wrong symbol once the flag is missing:
+
+```
+no flag  ->  DetailView.jsx        priceCurrency = null
+         ->  ProductSearchDrawer   currency = selectorContext.priceCurrency
+                                            ?? selectorContext.currency   <-- document currency
+                                            ?? sessionCurrency ?? 'USD'
+         ->  formatCurrency('USD', 5)  ->  "$5,00"
+```
+
+`sales-order`, `purchase-order` and `sales-quotation` already declared `selectorPriceCurrency: "org"`
+and showed `5,00 €` correctly in both cases — they were the working reference, not a second bug.
+
+### Fix
+
+`window.selectorPriceCurrency: "org"` in `artifacts/sales-invoice/decisions.json`, which makes
+`DetailView` set `selectorContext.priceCurrency` to the organization/session currency so it wins the
+`??` chain ahead of the document currency. Configuration only — no generator or component change.
+See the `selectorPriceCurrency` row in `docs/decisions-reference.md` for the full contract.
+
+Scope note: only `sales-invoice` and `purchase-invoice` were affected. `amortization` and
+`return-to-vendor-shipment` have `addLineFields` but no `product` field, and the windows on the
+`product-stock` drawer (`lookupDrawers.js`) render no price at all.
+
+### Converted price as secondary information
+
+ETP-5148's second requirement — the document-currency equivalent shown beside the catalog price,
+in smaller type, as secondary information — is implemented generically in `ProductSearchDrawer.jsx`.
+No new `decisions.json` key was added; the behavior activates automatically wherever
+`window.selectorPriceCurrency: "org"` is already set (the primary-price fix above) AND the header
+carries a usable `eTGOCurrencyRate`.
+
+The rate flows through the same `selectorContext` used for the primary price:
+`DetailView.jsx`'s `buildLineSelectorContext` (in `tools/app-shell/src/lib/selectorContext.js`)
+parses `headerRecord.eTGOCurrencyRate` and adds it as `selectorContext.priceCurrencyRate` whenever
+it is finite and non-zero — the same ETP-4836 sentinel rule as
+`useDocumentCurrency.js`'s `resolveDualCurrencyDisplay`: `0`/`null`/`undefined`/`NaN` mean "no
+override", a genuine rate of exactly `1` must NOT be treated as absent. `eTGOCurrencyRate` is the
+org→doc multiplier (e.g. `1.47` = "1 EUR = 1.47 USD") and is used directly, never inverted:
+`converted = catalogPrice * eTGOCurrencyRate`.
+
+`ProductSearchDrawer.jsx` renders the secondary line only when all of the following hold:
+- `selectorContext.priceCurrency` is set (the window opted in via `selectorPriceCurrency: "org"`)
+- `selectorContext.currency` (the document currency) differs from `priceCurrency`
+- `selectorContext.priceCurrencyRate` resolved to a usable number
+- the item's catalog price itself is numeric
+
+Any one of those being false renders only the primary catalog price — never a stray `NaN`/`0,00`
+secondary line. Same-currency documents (e.g. a EUR invoice against a EUR organization) show no
+secondary line at all.
+
+### Not fixed here (deliberately)
+
+- **Lines are not repriced when the header currency changes.** Switching the header to USD leaves
+  `netlistprice` at its EUR value, so the totals panel flips `5,00 EUR` to `$5,00` — symbol changed,
+  number unchanged. `SummaryBar.jsx` formats with `currency$_identifier`, which is correct for
+  totals; the stale amount comes from Etendo not repricing the lines. This affects posted amounts,
+  not a label, and is tracked separately from ETP-5148.
+
+### Manual verification
+
+1. Open a draft sales invoice whose header currency equals the organization currency (EUR) and open the
+   product selector from **Add line**: prices show `5,00 EUR` with the euro symbol.
+2. Change the header currency to USD with a rate (e.g. 1.47) and reopen the selector: prices keep
+   the same numbers and still show the euro symbol — no `$`.
+3. Confirm the totals panel still formats in the document currency (USD), which is intended.
+
+### Automated evidence
+
+- `artifacts/sales-invoice/decisions.json` — `window.selectorPriceCurrency: "org"`.
+- `artifacts/sales-invoice/contract.json` — `selectorPriceCurrency` carried into the window block.
+- `artifacts/sales-invoice/generated/web/sales-invoice/HeaderPage.jsx` — `selectorPriceCurrency="org"` passed to
+  `DetailView`.
+- `sf-validate-pipeline --scope=sales-invoice` — clean.
+
+## Printable — generic tax labels and document currency — ETP-5125
+
+This window's printable shares `DOCUMENT_TEMPLATE` with the other three commercial documents
+(`windows/custom/shared/documentPdf.js`), so both fixes below apply to all four at once, across all
+five entry points (preview, download, both email paths, print). Mechanism and decisions:
+`docs/document-printables.md` (D12–D14).
+
+- **Tax wording.** The lines-table tax column now reads **"Impuesto"** (was `IVA%`), and the Totals
+  rows read **"Impuestos"** and **"Subtotal (sin impuestos)"** (were `IVA` / `Subtotal (sin IVA)`).
+  The `%` was wrong because that column's cell prints the tax's *name* (`tax$_identifier`, e.g.
+  "IVA 21%"), not a rate; and the on-screen `DocumentTotalsPanel` already said "Impuesto", so the
+  PDF contradicted the screen. Changed values only, in the three source locales
+  (`src/locales/{es_ES,es_AR,en_US}.json` → `invoicePdfColTax` / `invoicePdfTax` /
+  `invoicePdfSubtotal`); `src/locales/generated/core.*.json` is gitignored build output.
+- **Document currency in the header.** The header meta block (below `Nº de factura`) now shows
+  `Moneda: <ISO>` — new key `invoicePdfCurrency` plus `currencyCode` in the template data, resolved
+  by `resolveDocumentCurrencyCode(header)` from `header['currency$_identifier']` inside
+  `buildInvoiceData`. It is read from the header, **not** from the `currencyData` argument, which is
+  `null` on the hook-free print path — otherwise the printed and previewed PDFs would disagree.
+  When no code resolves, the row is omitted rather than falling back to the org currency.
+- **Already-cached documents.** The preview panel serves a marked `AD_Attachment`, and its
+  invalidation only compared the record's `updated` — which a template change does not move. So a
+  completed document cached under the previous design kept printing it: that is how this bug was
+  first observed. The cache is now invalidated by bundle identity too
+  (`RENDERER_BUILD_EPOCH_MS`), so those documents regenerate themselves once, on their first open
+  after the deploy. Mechanism and rationale: `docs/document-printables.md` § *The second cause:
+  the renderer changed*, and D15/D16.
+
+Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`,
+`windows/custom/shared/__tests__/documentPdf.currencyCode.vitest.jsx`,
+`documentPdf.realLocaleLabels.vitest.jsx`, and the ETP-5125 describe blocks in
+`documentPdf.template.vitest.jsx`, plus
+`lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
+the cache invalidation.

@@ -102,6 +102,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `processOverrides` | object | `{}` | See below | Override presentation and behavior of process buttons in the detail view. Keys are process names or column names. See Process Overrides subsection. |
 | `detailSortBy` | string | `null` | Any valid sort expression | Default sort order for the detail entity tab (e.g., `"sEQNoAsset asc"`). Passed directly to DetailView as the `detailSortBy` prop. |
 | `documentDateField` | string | `"orderDate"` | Any header date field name | Names the header field that holds this document's primary date (e.g., `"orderDate"` for orders/quotations, `"invoiceDate"` for invoices). `DetailView` uses it for exchange-rate lookups (currency conversion of new lines and the currency-dropdown validation) and other document-date-dependent logic. Windows without an `orderDate` field (e.g. sales/purchase invoices) MUST declare this explicitly, or those lookups silently no-op. Defaults to `"orderDate"` for backward compatibility with windows that don't declare it. |
+| `selectorPriceCurrency` | string | `null` | `"org"` or absent | Currency used to format the **catalog price shown inside the product-selector drawer** (`ProductSearchDrawer`). Declare `"org"` on any document window whose header currency is user-editable: the drawer then labels the price with the organization/session currency, which is the currency the price list is actually expressed in. When absent, `DetailView` leaves `selectorContext.priceCurrency` unset and the drawer falls back to the **document** currency (`currency$_identifier`) — so an invoice switched to USD renders the unconverted EUR catalog price as `$5,00`. The backend does not convert the price, only the symbol was wrong. Required by every window that has a `product` field in `addLineFields` using the default lookup drawer; windows on `product-stock` (see `lookupDrawers.js`) show no price and do not need it. Read by `DetailView.jsx` (`priceCurrency` in `selectorContextByEntity`) and consumed by `ProductSearchDrawer.jsx`. Documented retroactively in ETP-5148, which added it to `sales-invoice` and `purchase-invoice`; `sales-order`, `purchase-order` and `sales-quotation` already declared it. |
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
 | `summaryFields` | array | _absent_ | `[]` or field names | Controls the `SummaryBar` recap strip under the detail header form. **When absent, the default is every `readOnly` field of the entity** (minus the resolved `statusField`) — so on a window whose fields are ALL `readOnly` the strip duplicates the whole form as a line of text. Declare `[]` to suppress it entirely, or list field names to pick a subset. Consumed by `getSummaryFields()` in `generate-frontend.js`; forwarded by `resolve-curated.js`. Documented retroactively in ETP-5075 (`matched-purchase-invoices` declares `[]`). |
 | `noHeaderBorder` | boolean | `false` | — | Drops the card wrapper (`rounded-2xl border … bg-card shadow-sm`) around the principal + collapsed header fields, so the form sits flush on the page background. Read by `DetailView.jsx` (the `hideFormCard`/`noHeaderBorder` class expression on the header card). Used by `goods-receipt`, `purchase-invoice`, `cost-center`, `matched-purchase-invoices`. Documented retroactively in ETP-5075. |
@@ -139,14 +140,21 @@ Real examples in this repo (all added for ETP-4714):
 
 | Window | `hidePrintWhen` | Meaning |
 |---|---|---|
-| `sales-invoice`, `sales-order`, `purchase-order`, `return-to-vendor-shipment`, `goods-shipment` | `{ "documentStatus": { "notEquals": "CO" } }` | Print only visible once Completado |
+| `sales-invoice`, `sales-order`, `purchase-order`, `return-to-vendor-shipment`, `goods-shipment`, `return-material-receipt` | `{ "documentStatus": { "notEquals": "CO" } }` | Print only visible once Completado |
 | `sales-quotation` | `{ "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } }` | Print only visible in Bajo Evaluación / Cerrado-Pedido creado / Cerrado-Factura creada / Cerrado-Rechazado |
-| `purchase-invoice`, `return-material-receipt` | `true` | Print always hidden |
+| `purchase-invoice` | `true` | Print always hidden |
 
-`purchase-invoice` and `return-material-receipt` use the unconditional-match literal `true`
-(not the plain `hidePrint` boolean — see the pitfall below for why). `goods-receipt` uses the
-plain `hidePrint: true` (it never needed a condition and its list-view print was already meant
-to be hidden).
+`purchase-invoice` uses the unconditional-match literal `true` (not the plain `hidePrint`
+boolean — see the pitfall below for why). `goods-receipt` uses the plain `hidePrint: true` (it
+never needed a condition and its list-view print was already meant to be hidden).
+
+`return-material-receipt` shipped with `hidePrintWhen: true` (Print unconditionally hidden in
+every status), which meant the sibling `HELPERS is not defined` bug in
+`useReturnReceiptPdf.js`'s `generateReturnReceiptPdf`/`generateReturnReceiptHtml` never fired for
+this window (Print was never reachable). ETP-5124 moved it into this conditional group, matching
+`return-to-vendor-shipment`/`goods-shipment` exactly, and fixed the `HELPERS` bug (present in both
+`return-material-receipt` and `return-to-vendor-shipment`'s PDF hooks) in the same change — see
+`docs/generated-custom-windows/return-material-receipt.md`.
 
 `goods-shipment`, `return-to-vendor-shipment`, and `return-material-receipt` used to gate their
 own **custom** Print buttons directly inside their custom `topbarRight` components

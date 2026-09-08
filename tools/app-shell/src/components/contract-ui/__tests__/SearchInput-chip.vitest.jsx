@@ -160,14 +160,14 @@ describe('SearchInput chip mode (ETP-4000)', () => {
   // Regression (purchase-order warehouse): a value auto-filled by a callout arrives
   // WITHOUT its `$_identifier` (displayValue empty). A `search` FK field must resolve
   // the label on-demand via the selector `?id=` endpoint so the chip shows the record
-  // NAME ("Almacen GO"), not the raw ID. This is why purchase-order's warehouse is
+  // NAME ("Almacen Principal"), not the raw ID. This is why purchase-order's warehouse is
   // declared `inputMode: "search"` (matching sales-order) instead of a plain dropdown,
   // which would show the raw ID until the user opened it.
   it('resolves the label on-demand for a value that has no $_identifier (callout-filled FK)', async () => {
     const warehouseId = '1FF18B068AA94146A2A49C51E13C7300';
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ items: [{ id: warehouseId, label: 'Almacen GO' }] }),
+      json: async () => ({ items: [{ id: warehouseId, label: 'Almacen Principal' }] }),
     });
     const WAREHOUSE_FIELD = {
       key: 'warehouse',
@@ -190,7 +190,7 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     // The chip renders immediately (value present) — initially with the raw ID as text,
     // then updated to the resolved name once the on-demand fetch settles.
     const chip = await screen.findByTestId('field-warehouse-chip');
-    await waitFor(() => expect(chip).toHaveTextContent('Almacen GO'));
+    await waitFor(() => expect(chip).toHaveTextContent('Almacen Principal'));
     expect(chip).not.toHaveTextContent(warehouseId);
 
     // The resolution used the selector endpoint with the current id.
@@ -273,7 +273,7 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     render(
       <Harness
         fields={[WAREHOUSE_FIELD]}
-        initialData={{ warehouse: warehouseId, 'warehouse$_identifier': 'Almacen GO' }}
+        initialData={{ warehouse: warehouseId, 'warehouse$_identifier': 'Almacen Principal' }}
         entity="purchase-order"
         apiBaseUrl="/sws/neo"
         token="test-token"
@@ -281,7 +281,7 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     );
 
     const chip = await screen.findByTestId('field-warehouse-chip');
-    expect(chip).toHaveTextContent('Almacen GO');
+    expect(chip).toHaveTextContent('Almacen Principal');
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
