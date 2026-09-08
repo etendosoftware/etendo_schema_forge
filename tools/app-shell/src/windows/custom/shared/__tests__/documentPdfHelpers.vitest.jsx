@@ -159,7 +159,7 @@ describe('computeDiscountBreakdown', () => {
     expect(result.grossAmount).toBe(250); // 2*100 + 1*50
   });
 
-  it('computes discountPerProduct as max(0, grossAmount - productNetAmount)', () => {
+  it('computes discountPerProduct as grossAmount - productNetAmount', () => {
     const lines = [
       { quantity: 2, unitPrice: 100, lineNetAmount: 180 },
       { quantity: 1, unitPrice: 50, lineNetAmount: 50 },
@@ -181,11 +181,30 @@ describe('computeDiscountBreakdown', () => {
     expect(result.totalDiscountAmt).toBe(10);
   });
 
-  it('discountPerProduct is never negative (clamped to 0)', () => {
-    // lineNetAmount > grossAmount would be unusual but guard is present
+  it('ETP-5132: discountPerProduct is signed, not clamped to 0 — a negative delta is returned as-is', () => {
+    // Pre-fix this clamped to 0 via Math.max(0, grossAmount - productNetAmount),
+    // which silently dropped the real discount on a negative-quantity line
+    // (whose productNetAmount is LESS negative than grossAmount once the
+    // per-line discount is applied — see documentPdf.js's ETP-5132 comment
+    // above this function). lineNetAmount > grossAmount reproduces that same
+    // negative-delta shape without needing negative quantities directly.
     const lines = [{ quantity: 1, unitPrice: 50, lineNetAmount: 100 }];
     const result = computeDiscountBreakdown(lines, 0, getGrossLine);
-    expect(result.discountPerProduct).toBeGreaterThanOrEqual(0);
+    expect(result.discountPerProduct).toBe(-50);
+  });
+
+  it('ETP-5132: returns a negative discountPerProduct for a negative-quantity line, matching documentTotals.js discountAmt sign convention', () => {
+    // qty=-1, price=5.00, net=-4.50 (10% discount already applied) —
+    // mirrors the ticket's worked example (see documentTotals.test.js's
+    // CP-1/CP-2 for the full derivation via computeDocumentTotals).
+    const lines = [{ quantity: -1, unitPrice: 5, lineNetAmount: -4.5 }];
+    const result = computeDiscountBreakdown(lines, 0, getGrossLine);
+    expect(result.grossAmount).toBe(-5);
+    // discountPerProduct = grossAmount - productNetAmount = -5 - (-4.5) = -0.5
+    expect(result.discountPerProduct).toBeCloseTo(-0.5, 5);
+    // Callers (useInvoicePdf.js/useQuotationPdf.js) sign-flip this for
+    // display — the flipped value must be the positive 0.5.
+    expect(-result.discountPerProduct).toBeCloseTo(0.5, 5);
   });
 
   it('returns zero values for empty lines array', () => {

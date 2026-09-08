@@ -186,9 +186,10 @@ describe('useInvoicePdf', () => {
       assert.match(src, /lineNet \/ \(1 - disc \/ 100\)/);
     });
 
-    it('computes discountPerProduct as Math.max(0, grossAmount - productNetAmount)', () => {
+    it('ETP-5132: computes discountPerProduct as grossAmount - productNetAmount, unclamped (no Math.max(0, ...))', () => {
       assert.match(src, /computeDiscountBreakdown/, 'delegates to computeDiscountBreakdown');
-      assert.match(sharedSrc, /Math\.max\(0, grossAmount - productNetAmount\)/);
+      assert.match(sharedSrc, /const discountPerProduct = grossAmount - productNetAmount;/);
+      assert.doesNotMatch(sharedSrc, /Math\.max\(0, grossAmount - productNetAmount\)/);
     });
 
     it('reads etgoTotalDiscount from header', () => {
@@ -200,12 +201,19 @@ describe('useInvoicePdf', () => {
       assert.match(sharedSrc, /etgoTotalDiscount > 0 \? productNetAmount \* etgoTotalDiscount/);
     });
 
-    it('passes null for grossAmount when discountPerProduct is 0', () => {
-      assert.match(src, /discountPerProduct > 0 \? grossAmount : null/);
+    it('ETP-5132: passes null for grossAmount only when discountPerProduct is exactly 0 (gate is !== 0, not > 0)', () => {
+      assert.match(src, /discountPerProduct !== 0 \? grossAmount : null/);
+      assert.doesNotMatch(src, /discountPerProduct > 0 \? grossAmount : null/);
     });
 
-    it('passes null for totalDiscountAmt when no total discount applies', () => {
-      assert.match(src, /totalDiscountAmt > 0 \? totalDiscountAmt : null/);
+    it('ETP-5132: passes the sign-flipped -discountPerProduct (positive display value) when a discount is applied', () => {
+      assert.match(src, /discountPerProduct !== 0 \? -discountPerProduct : null/);
+      assert.doesNotMatch(src, /discountPerProduct > 0 \? discountPerProduct : null/);
+    });
+
+    it('ETP-5132: passes the sign-flipped -totalDiscountAmt (positive display value), gated on !== 0', () => {
+      assert.match(src, /totalDiscountAmt !== 0 \? -totalDiscountAmt : null/);
+      assert.doesNotMatch(src, /totalDiscountAmt > 0 \? totalDiscountAmt : null/);
     });
 
     it('uses invoicedQuantity (not orderedQuantity) inside getGrossLine', () => {

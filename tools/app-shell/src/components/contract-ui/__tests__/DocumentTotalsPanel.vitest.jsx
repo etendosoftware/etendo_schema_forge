@@ -270,4 +270,62 @@ describe('DocumentTotalsPanel', () => {
       expect(screen.getByTestId('totals-row-total-value').textContent).toBe('171');
     });
   });
+
+  // ETP-5132 — a negative-quantity line (e.g. a return folded into the same
+  // document) makes discountAmt/totalDiscountAmt come back NEGATIVE from
+  // computeDocumentTotals even though a real discount was applied. The panel
+  // must display the sign-flipped (-discountAmt / -totalDiscountAmt) value —
+  // a POSITIVE amount — never fmt(0) (the pre-fix clamp-on-">0"" bug). The
+  // mock above sums each line's raw `discount` field directly into
+  // discountAmt (and net × pct/100 into totalDiscountAmt), so a negative
+  // `discount`/negative `lineNetAmount` drives the exact negative input this
+  // fix targets — see documentTotals.test.js for the real qty-based
+  // derivation (grossSubtotal=-5.00, netSubtotal=-4.50, discountAmt=-0.50).
+  describe('ETP-5132 — negative-quantity discount sign display', () => {
+    const NEG_QTY_LINE = { id: 'L1', lineGrossAmount: -5, lineNetAmount: -4.5, discount: -0.5, qty: -1 };
+
+    it('shows the positive sign-flipped amount on the per-product discount row when discountAmt is negative', () => {
+      render(
+        <DocumentTotalsPanel
+          lines={[NEG_QTY_LINE]}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => v.toFixed(2)}
+        />
+      );
+      const label = screen.getByText('discountPerProduct');
+      // fmt(-discountAmt) = fmt(-(-0.5)) = fmt(0.5) — never '0.00' (the bug).
+      expect(label.nextElementSibling.textContent).toBe('0.50');
+    });
+
+    it('shows the positive sign-flipped amount on the total-discount row (read-only variant) when totalDiscountAmt is negative', () => {
+      render(
+        <DocumentTotalsPanel
+          lines={[NEG_QTY_LINE]}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => v.toFixed(2)}
+          totalDiscountPct={10}
+          readOnly={true}
+        />
+      );
+      // Mock: totalDiscountAmt = netSubtotal(-4.5) × 10/100 = -0.45 → displayed 0.45.
+      const label = screen.getByText(/totalDiscount/);
+      expect(label.nextElementSibling.textContent).toBe('0.45');
+    });
+
+    it('shows the positive sign-flipped amount on the total-discount row (interactive variant) when totalDiscountAmt is negative', () => {
+      const { container } = render(
+        <DocumentTotalsPanel
+          lines={[NEG_QTY_LINE]}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => v.toFixed(2)}
+          totalDiscountPct={10}
+        />
+      );
+      // The interactive row's value span is uniquely identified by "ml-auto"
+      // among the panel's spans (checkbox/input sit between the label and it,
+      // so label.nextElementSibling does not reach it directly).
+      const valueSpan = container.querySelector('span.ml-auto');
+      expect(valueSpan.textContent).toBe('0.45');
+    });
+  });
 });
