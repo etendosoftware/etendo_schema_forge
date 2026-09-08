@@ -190,6 +190,56 @@ describe('useStatementActions', () => {
     expect(result.current.error.message).not.toMatch(/HTTP/);
   });
 
+  /**
+   * ETP-5111 — the message alone is not enough for the bulk-delete path. `batchDelete`'s
+   * `isBusinessRejection` only trusts a **4xx** to be a stated business reason (a 500's text is by
+   * design a log pointer, a network failure has no text at all), so it reads `err.status`. Without
+   * it every rejected statement delete degrades to "None of the 1 selected could be deleted" — the
+   * exact bug ETP-5085 fixed for movements and this ticket extends to statements. So the status is
+   * part of the hook's contract, not an implementation detail: assert it in both directions.
+   */
+  describe('the rejection carries the HTTP status', () => {
+    async function captureRejection(call) {
+      try {
+        await call();
+      } catch (err) {
+        return err;
+      }
+      throw new Error('expected the action to reject');
+    }
+
+    it('attaches a 4xx status, which is what lets the reason be surfaced', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Only draft (unprocessed) statements can be modified' } }),
+      });
+      const { result } = renderHook(() => useStatementActions(), { wrapper });
+
+      let err;
+      await act(async () => { err = await captureRejection(() => result.current.deleteStatement('st-1')); });
+
+      expect(err.status).toBe(400);
+      expect(err.message).toBe('Only draft (unprocessed) statements can be modified');
+      // The same object is what the hook exposes as `error`, so a caller reading either sees it.
+      expect(result.current.error.status).toBe(400);
+    });
+
+    // The other direction, and the reason the status has to be the real one rather than a
+    // hardcoded 4xx: a 500's message ("check the logs") must stay OUT of the outcome toast.
+    it('attaches a 5xx status too, so it can be recognised as not a stated reason', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false, status: 500, json: async () => ({ error: { message: 'Internal error' } }),
+      });
+      const { result } = renderHook(() => useStatementActions(), { wrapper });
+
+      let err;
+      await act(async () => { err = await captureRejection(() => result.current.deleteStatement('st-1')); });
+
+      expect(err.status).toBe(500);
+    });
+  });
+
   // A body that isn't the expected NEO envelope (or isn't JSON at all) must not surface as
   // "undefined" or an empty toast — fall back to a status-only message.
   it('falls back to an HTTP-status message when the error body has no reason', async () => {

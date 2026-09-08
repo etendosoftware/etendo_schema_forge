@@ -169,10 +169,22 @@ async function setFieldUntilDirty(page, testId, value) {
 /** Persist current edits, then run "Crear Amortización" and expect a toast. */
 async function saveThenProcess(page, expectRe) {
   await saveAsset(page);
+  // Drain the toast stack before triggering the next one. data-front="true"
+  // alone is NOT enough: it marks whichever toast is currently frontmost, and
+  // between saveAsset's own "Registro guardado" and the process result there is
+  // a window where the PREVIOUS cycle's toast is still mounted and still front.
+  // Under load that window widens and the assertion below reads the stale toast
+  // instead — observed twice on this file (Case 5, then Case 6 on the next run,
+  // the failure moving between adjacent cases being the giveaway that it was a
+  // race and not a real defect). Sonner auto-dismisses in 4s by default, so this
+  // converges on its own; waiting here means any toast that appears after the
+  // click can only be this cycle's.
+  await expect(page.locator('[data-sonner-toast]'),
+    'toasts from the previous cycle should have dismissed before the next process run',
+  ).toHaveCount(0, { timeout: 15_000 });
   await crearAmortizacionBtn(page).click();
   // Assert the FRONTMOST toast (newest = this cycle's result) so repeated
-  // identical errors (empty / 0 / negative) don't trip strict mode or match a
-  // stale toast from a previous attempt.
+  // identical errors (empty / 0 / negative) don't trip strict mode.
   await expect(page.locator('[data-sonner-toast][data-front="true"]'))
     .toContainText(expectRe, { timeout: 12_000 });
 }
