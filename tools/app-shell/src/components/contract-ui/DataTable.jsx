@@ -984,7 +984,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   const firstInputCtx = { assigned: false };
 
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
+    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/30 border-t border-primary/20">
       {/* ETP-4735 — matches the leading CHEVRON_COLUMN_WIDTH <col> renderLinesColgroup
           reserves when hasDimensionsPanel. A <col> alone doesn't reserve visual space —
           table column widths/positions are driven by the actual cells present in a row,
