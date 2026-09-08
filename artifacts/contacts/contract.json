@@ -1,8 +1,8 @@
 {
   "version": "0.51.0",
   "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-09-03T23:56:23.044Z",
-  "checksum": "7861811e19608940",
+  "updatedAt": "2026-09-07T16:05:38.080Z",
+  "checksum": "6636f3b5102a2fcd",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -68,7 +68,8 @@
             "customerPrepayment"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -80,7 +81,8 @@
             "vendorPrepayment"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,
@@ -5309,7 +5311,8 @@
             "customerPrepayment"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         },
         "vendorAccounting": {
           "tabMode": "table-form",
@@ -5321,7 +5324,8 @@
             "vendorPrepayment"
           ],
           "requireSavedRecord": true,
-          "maxDetailLines": 1
+          "maxDetailLines": 1,
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,

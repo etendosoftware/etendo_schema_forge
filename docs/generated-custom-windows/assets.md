@@ -317,6 +317,10 @@ the existing `menus.Accounting` / `tabs.Accounting` entries already present in b
   alongside the pre-existing `customTabs` entries for `amortizationPlan` and `attachments`.
 - `node cli/src/validate-pipeline.js --scope=assets` reports 0 violations.
 
+## ETP-5116 — Accounting tab hidden for roles without the accounting capability
+
+`window.secondaryTabs.assetAcct.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the whole Accounting tab is omitted from the tab strip (not merely disabled) and its `openSecondaryTab` deep link silently no-ops. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
+
 ## ETP-4334 — Visual & toolbar refinements (feature/ETP-4334)
 
 Window-scoped polish plus two cross-cutting changes. Items flagged **(global)** affect

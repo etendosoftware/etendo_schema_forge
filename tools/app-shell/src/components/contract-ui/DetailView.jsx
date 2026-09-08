@@ -2653,7 +2653,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -2957,7 +2957,7 @@ export function DetailView({
                 sqBtnSize={sqBtnSize}
                 statusField={statusField}
                 token={token}
-                ui={ui}
+                ui={ui} windowReadOnly={windowReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
@@ -2965,7 +2965,7 @@ export function DetailView({
               {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
-              {!isNew && processes
+              {!isNew && !windowReadOnly && processes
                 .filter(p => p.displayLogicRaw
                   ? evalDisplayLogicRaw(p.displayLogicRaw, data)
                   : displayLogic?.visibility?.[p.name] !== false)
@@ -3025,7 +3025,7 @@ export function DetailView({
                   The multi-row (selectedChildRows) case is rendered exclusively by the bulk
                   action bar above the lines table (see isDetailBulkBarVisible) to avoid
                   rendering these buttons twice. */}
-              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
+              {!isNew && !windowReadOnly && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
@@ -3844,8 +3844,8 @@ export function DetailView({
                         {secondaryTabs.map((st, stIdx) => {
                           const isActiveTab = tabs[activeTab]?.key === st.key;
                           // Panel tabs are always mounted so their onCount fires eagerly (counts appear without clicking).
-                          // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
-                          if (!isActiveTab && !st.Panel) return false;
+                          // Non-Panel tabs stay lazy to avoid unnecessary fetches; a capability-hidden tab (ETP-5116, mirrors ETP-4520) never renders at all, Panel or not — defense-in-depth alongside buildInitialTabs already excluding it from `tabs`/the nav strip and the openSecondaryTab deep-link.
+                          if (!isCapabilityVisible(capabilities, st.visibleWhenCapability) || (!isActiveTab && !st.Panel)) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
                             st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
                             extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
