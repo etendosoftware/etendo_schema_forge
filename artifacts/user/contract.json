@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
+  "version": "0.25.1",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-25T14:00:31.519Z",
-  "checksum": "1f22932d2c0ac365",
+  "updatedAt": "2026-09-07T18:37:59.539Z",
+  "checksum": "ef6a4d3f7b7f7781",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -142,7 +142,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": true,
             "reference": "BusinessPartner",
             "inputMode": "search",
@@ -181,7 +181,7 @@
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {

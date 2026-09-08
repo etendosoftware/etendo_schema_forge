@@ -445,3 +445,57 @@ describe('launchSaltEdgePopup', () => {
     }
   });
 });
+
+/**
+ * ETP-5179 — `fetchAccounts` must forward the bridge's empty-list diagnosis.
+ *
+ * The hook used to normalize the payload down to a fixed three-field shape, which dropped the
+ * `emptyReason` / `accountCurrency` the bridge now sends when the filtered list comes back empty.
+ * Without them the flow can only raise its generic "no compatible accounts" toast, so a USD
+ * account connected to a EUR-only bank never learns that currency was the cause.
+ */
+describe('useBankConnectionActions — fetchAccounts empty-list diagnosis', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function fetchAccountsWith(payload) {
+    globalThis.fetch.mockResolvedValue(okResponse(payload));
+    const { result } = renderHook(() => useBankConnectionActions());
+    let data;
+    await act(async () => {
+      data = await result.current.fetchAccounts('conn-1', 'B', 'FA-USD');
+    });
+    return data;
+  }
+
+  it('propagates emptyReason and accountCurrency on a currency mismatch', async () => {
+    const data = await fetchAccountsWith({
+      accounts: [],
+      emptyReason: 'currencyMismatch',
+      accountCurrency: 'USD',
+    });
+
+    expect(data.accounts).toEqual([]);
+    expect(data.emptyReason).toBe('currencyMismatch');
+    expect(data.accountCurrency).toBe('USD');
+  });
+
+  it('propagates a reason that carries no currency', async () => {
+    const data = await fetchAccountsWith({ accounts: [], emptyReason: 'typeMismatch' });
+
+    expect(data.emptyReason).toBe('typeMismatch');
+    expect(data.accountCurrency).toBeUndefined();
+  });
+
+  it('leaves both fields undefined when the backend sends neither', async () => {
+    const data = await fetchAccountsWith({ accounts: [{ id: 'acc1' }], providerName: 'BBVA' });
+
+    expect(data.emptyReason).toBeUndefined();
+    expect(data.accountCurrency).toBeUndefined();
+  });
+});

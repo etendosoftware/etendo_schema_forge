@@ -96,7 +96,17 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
     // the separate `doc_record_id` (account to open) and `doc_query`
     // (`txn=<id>`, so the window deep-links to the right movement) columns.
     const tables = [...DOC_WINDOW_CASE.matchAll(/UPPER\(adt\.tablename\)\s*=\s*'([A-Z_]+)'/gi)].map((m) => m[1]);
-    assert.deepEqual(tables, ['C_INVOICE', 'M_INOUT', 'M_INVENTORY', 'M_MATCHINV', 'A_AMORTIZATION', 'FIN_FINACC_TRANSACTION']);
+    assert.deepEqual(tables, [
+      'C_INVOICE',
+      'M_INOUT',
+      'M_INVENTORY',
+      'M_MATCHINV',
+      'A_AMORTIZATION',
+      'FIN_FINACC_TRANSACTION',
+      'GL_JOURNAL',
+      'FIN_PAYMENT',
+      'FIN_RECONCILIATION',
+    ]);
   });
 
   it('normalises the table name with UPPER() (ad_table.tablename casing is not guaranteed)', () => {
@@ -108,6 +118,17 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
       DOC_WINDOW_CASE,
       /UPPER\(adt\.tablename\)\s*=\s*'C_INVOICE'\s+THEN\s+CASE\s+WHEN\s+dt\.issotrx\s*=\s*'Y'\s+THEN\s+'sales-invoice'\s+ELSE\s+'purchase-invoice'\s+END/i,
     );
+  });
+
+  it('splits FIN_PAYMENT into payment-in / payment-out by dt.issotrx', () => {
+    assert.match(
+      DOC_WINDOW_CASE,
+      /UPPER\(adt\.tablename\)\s*=\s*'FIN_PAYMENT'\s+THEN\s+CASE\s+WHEN\s+dt\.issotrx\s*=\s*'Y'\s+THEN\s+'payment-in'\s+ELSE\s+'payment-out'\s+END/i,
+    );
+  });
+
+  it('maps GL_JOURNAL to simple-g-l-journal', () => {
+    assert.match(DOC_WINDOW_CASE, /UPPER\(adt\.tablename\)\s*=\s*'GL_JOURNAL'\s+THEN\s+'simple-g-l-journal'/i);
   });
 
   it('maps M_INVENTORY to physical-inventory', () => {
@@ -205,7 +226,12 @@ describe('report-journal-entries — entry number link markup (ETP-5013)', () =>
     // applyPlaceholders regression test below for why the '=' must not
     // appear next to a quote inside the report's SQL.
     assert.match(ENTRY_NO_LINE, /docQueryKey:'\{\{lookup this 'doc_query_key'\}\}'/);
-    assert.match(ENTRY_NO_LINE, /docQueryValue:'\{\{lookup this 'record_id'\}\}'/);
+    // doc_query_value, not record_id (ETP-5128 FIN_RECONCILIATION follow-up):
+    // they are the same value for every window except financial-account rows
+    // sourced from FIN_RECONCILIATION, whose record_id is the reconciliation
+    // session id while the deep-link must highlight one of the transactions
+    // it covers.
+    assert.match(ENTRY_NO_LINE, /docQueryValue:'\{\{lookup this 'doc_query_value'\}\}'/);
   });
 
   it('carries the resolved doc_window so the shell knows which window to open', () => {
@@ -223,7 +249,7 @@ describe('report-journal-entries — entry number link markup (ETP-5013)', () =>
   });
 });
 
-// ── Part 4: real render, all nine windows + the null case ──────────────────
+// ── Part 4: real render, all linkable windows + the null case ──────────────
 
 const WINDOW_CASES = [
   { doc_window: 'sales-invoice', document_type: 'AR Invoice' },
@@ -238,13 +264,38 @@ const WINDOW_CASES = [
   // A_Amortization rows, which have no c_doctype name) — the LINK is driven
   // by doc_window, never by the label, so it links while still reading
   // "Journal", exactly as Classic does.
-  { doc_window: 'matched-purchase-invoices', document_type: 'Match Invoice' },
+  // ETP-5128: the underlying ad_ref_list value name is still "Match Invoice"
+  // (shared across 209 doctypes — never renamed), but translateDocType() now
+  // overrides docbasetype MXI unconditionally to "Receipt-Invoice Link"; this
+  // fixture's document_type mirrors what the report actually shows, though
+  // this file only asserts the doc_window link, never the label text.
+  { doc_window: 'matched-purchase-invoices', document_type: 'Receipt-Invoice Link' },
   { doc_window: 'amortization', document_type: 'Journal' },
   {
     doc_window: 'financial-account',
     document_type: 'Financial Account Transaction',
     doc_record_id: 'ACCT0000000000000000000000000',
     doc_query_key: 'txnAny',
+  },
+  // ETP-5128: GL_JOURNAL and FIN_PAYMENT branches added after
+  // FIN_FINACC_TRANSACTION, before the ELSE NULL fallback.
+  { doc_window: 'simple-g-l-journal', document_type: 'GL Journal' },
+  { doc_window: 'payment-in', document_type: 'AR Receipt' },
+  { doc_window: 'payment-out', document_type: 'AP Payment' },
+  // ETP-5128: a Bank/Cash Reconciliation post. Like FIN_FINACC_TRANSACTION,
+  // record_id is NOT what the URL navigates to — here it is the
+  // RECONCILIATION session id. doc_record_id resolves to the ACCOUNT the
+  // reconciliation belongs to (frec.fin_financial_account_id), and the new
+  // doc_query_value column resolves to the FIRST transaction that
+  // reconciliation session covers (a session can cover many) — deliberately
+  // distinct from doc_record_id so a test can prove the two are never
+  // aliased together.
+  {
+    doc_window: 'financial-account',
+    document_type: 'Reconciliation',
+    doc_record_id: 'ACCT1111111111111111111111111',
+    doc_query_key: 'txnAny',
+    doc_query_value: 'TXN22222222222222222222222222',
   },
   { doc_window: null, document_type: 'Journal' },
 ];
@@ -266,6 +317,11 @@ const ROWS = WINDOW_CASES.map((c, i) => ({
   // and carries the transaction in doc_query instead.
   doc_record_id: c.doc_record_id ?? `REC${String(i + 1).padStart(29, '0')}`,
   doc_query_key: c.doc_query_key ?? null,
+  // Mirrors the SQL's own `ELSE fa.record_id` fallback in the doc_query_value
+  // projection: every window falls back to its own record_id unless a case
+  // explicitly overrides it (financial-account rows sourced from
+  // FIN_FINACC_TRANSACTION or FIN_RECONCILIATION).
+  doc_query_value: c.doc_query_value ?? `REC${String(i + 1).padStart(29, '0')}`,
   ad_table_id: '318',
   account_no: '43000',
   account_name: 'Clientes',
@@ -311,10 +367,20 @@ describe('report-journal-entries — rendered entry link output (ETP-5013)', () 
         `<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',` +
         `invoiceId:'${ROWS[i].doc_record_id}',docWindow:'${c.doc_window}',` +
         `docQueryKey:'${ROWS[i].doc_query_key ?? ''}',` +
-        `docQueryValue:'${ROWS[i].record_id}'},'*')">${ROWS[i].entry_no}</span>`;
+        `docQueryValue:'${ROWS[i].doc_query_value}'},'*')">${ROWS[i].entry_no}</span>`;
       assert.equal(cell, expected);
     });
   }
+
+  it('resolves the reconciliation case to the ACCOUNT id (not its own record_id) and highlights the transaction', () => {
+    const idx = WINDOW_CASES.findIndex((c) => c.document_type === 'Reconciliation');
+    assert.ok(idx >= 0, 'Reconciliation fixture not found');
+    const cell = CELLS[idx];
+    assert.match(cell, /invoiceId:'ACCT1111111111111111111111111'/);
+    assert.match(cell, /docQueryKey:'txnAny'/);
+    assert.match(cell, /docQueryValue:'TXN22222222222222222222222222'/);
+    assert.doesNotMatch(cell, new RegExp(`docQueryValue:'${ROWS[idx].record_id}'`));
+  });
 
   it('renders the window-less (Journal) entry as bare text — no span, no onclick', () => {
     const nullIndex = WINDOW_CASES.findIndex((c) => c.doc_window === null);
@@ -330,11 +396,19 @@ describe('report-journal-entries — rendered entry link output (ETP-5013)', () 
     assert.doesNotMatch(HTML, /docWindow:''/);
   });
 
-  it('emits each of the seven windows exactly once across the report', () => {
+  it('emits each linkable window exactly once per fixture row referencing it', () => {
+    // financial-account is deliberately covered twice — once via
+    // FIN_FINACC_TRANSACTION, once via FIN_RECONCILIATION (ETP-5128) — so the
+    // expected count is per-window occurrence count in the fixture, not a
+    // flat 1.
+    const expectedCounts = new Map();
     for (const c of WINDOW_CASES) {
       if (c.doc_window === null) continue;
-      const hits = HTML.split(`docWindow:'${c.doc_window}'`).length - 1;
-      assert.equal(hits, 1, `expected docWindow '${c.doc_window}' once, found ${hits}`);
+      expectedCounts.set(c.doc_window, (expectedCounts.get(c.doc_window) ?? 0) + 1);
+    }
+    for (const [win, expected] of expectedCounts) {
+      const hits = HTML.split(`docWindow:'${win}'`).length - 1;
+      assert.equal(hits, expected, `expected docWindow '${win}' ${expected} time(s), found ${hits}`);
     }
   });
 
