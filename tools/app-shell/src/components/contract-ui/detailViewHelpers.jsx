@@ -1322,3 +1322,47 @@ export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew })
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
   }, [isNew, recordId, editing, handleNew]);
 }
+
+/**
+ * Moved out of DetailView.jsx (ETP-5034) to make room for the record-unavailable guard;
+ * DetailView re-exports all three so existing importers are unaffected.
+ *
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {object} hook useEntity hook instance
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true when the loaded record matches the route
+ */
+export function hasRecordForRoute(isNew, hook, recordId) {
+  return isNew
+      || (hook.selected?.id && String(hook.selected.id) === String(recordId));
+}
+
+/**
+ * @param {object} hook useEntity hook instance
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true while the record for this route is still being fetched
+ */
+export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
+  return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
+}
+
+/**
+ * ETP-5034 — true when the detail route points at a record that could not be loaded.
+ *
+ * Guards on `isNew` FIRST: the creation route (`/:windowName/new`) has no record to fetch and must
+ * never be diverted into the error state. Then requires that the record for THIS route is
+ * genuinely absent, so a stale `recordError` left behind by a previous id cannot blank out a
+ * record that has since loaded.
+ *
+ * @param {object} hook useEntity hook instance (reads `recordError`, set by `fetchById`)
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true when the "record unavailable" state must be rendered
+ */
+export function isRecordUnavailableForRoute(hook, isNew, recordId) {
+  if (isNew) return false;
+  if (!hook?.recordError) return false;
+  return !hasRecordForRoute(isNew, hook, recordId);
+}

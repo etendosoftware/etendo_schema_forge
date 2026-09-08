@@ -247,6 +247,41 @@ See `DataTable.jsx` for the reference implementation.
 
 ---
 
+## Unreachable Detail Records (ETP-5034)
+
+A detail route (`/:windowName/:recordId`) whose record cannot be loaded MUST render
+`RecordUnavailable`, never a form.
+
+**Why this is a rule and not a nicety.** NEO answers `GET /{entity}/{id}` for an id that does not
+exist, an id the current role/organization cannot see, AND a malformed id with the **same**
+`HTTP 200` + `{"response":{"data":[],"status":0}}` — there is no 403 and no 404 anywhere in
+`NeoCrudHandler`'s read path (the MCP layer synthesizes its own 404 from this very shape; see
+`McpToolRouterSupport.buildNotFoundError`, IMP-5). So an empty answer is indistinguishable from a
+"nothing to show" success, and code that treats it as a record silently renders a blank form that
+reads as the creation form — the user believes they are editing a record while being one Save
+away from creating a junk one, and a permissions problem looks like an empty record.
+
+- The hook layer owns the detection: `useEntity.fetchById` sets `recordError`
+  (`null` | `'notFound'` | `'error'`) and leaves `selected`/`editing` at `null`. Never resurrect the
+  old `payload?.response?.data?.[0] ?? payload` shape — the `??` hands the envelope on as the record.
+  **This applies to EVERY reader of that endpoint, not just `fetchById`**: `refreshHeaderTotals`,
+  `discardChangesAndReload` and `refreshRecordVersion` all use `extractSingleRow` and treat an empty
+  answer as "nothing to apply", because a record can stop being visible mid-session and reinjecting
+  the envelope there is the same bug through a quieter door.
+- `fetchById` is sequenced (`fetchByIdSeqRef`), and `handleSelect`/`handleNew` bump the same
+  counter. Once an empty answer produces a VISIBLE error instead of just ending a spinner, a
+  late response from an abandoned navigation would paint "record not available" over a record that
+  is loading fine. Any future read that can render an error state needs the same guard.
+- The copy says **record**, never "document": `DetailView` is shared with master-data windows
+  (product, warehouse, tax, price-list, business-partner) where "document" is simply wrong.
+- The view layer owns the guard: `isRecordUnavailableForRoute(hook, isNew, recordId)`
+  (`detailViewHelpers.jsx`). It returns `false` for `isNew`, so the creation route is never diverted.
+- `DetailView` applies both, so every generated window is covered. **A window that bypasses
+  `DetailView` (currently only `financial-account`) must carry its own copy of the guard.**
+- Only **two** variants exist — `notFound` and `error` — on purpose. Do not add a "no permissions"
+  screen: the backend does not distinguish it, so that screen would be a guess presented as a fact.
+  `recordNotFoundBody` states both possibilities in one sentence instead.
+
 ## References
 
 - Component implementations: `tools/app-shell/src/components/contract-ui/`

@@ -332,6 +332,34 @@ function normalizeRecord(record, entityName) {
     return normalized;
 }
 
+/**
+ * ETP-5034 — pull the single row out of a get-by-id payload, or `null` when it carried none.
+ *
+ * NEO answers a GET `/{entity}/{id}` for an unknown / invisible id with HTTP 200 and
+ * `{"response":{"data":[],"status":0}}` — an EMPTY envelope, not an error status (verified against
+ * a live instance; see the `recordError` state comment for why there is no 404/403 to key off).
+ * The previous `payload?.response?.data?.[0] ?? payload` fell through to the envelope itself and
+ * handed it on as if it were the record.
+ *
+ * The bare-object fallback (no `response.data` at all → treat the payload as the record) is
+ * DEFENSIVE, carried over verbatim from the `?? payload` it replaced. There is no known call site:
+ * every get-by-id handler in `com.etendoerp.go` today wraps its answer in
+ * `{"response":{"data":[…]}}`. It stays reachable only because `NeoResponse.ok(JSONObject)`
+ * (`schemaforge/NeoResponse.java`) accepts an arbitrary body, so a future or bespoke handler could
+ * answer unwrapped. It cannot reintroduce ETP-5034: `fetchById` additionally rejects any row whose
+ * `id` is null, which is what an envelope leaking through here would look like.
+ *
+ * @param {any} payload parsed JSON body of the get-by-id response
+ * @returns {object|null} the row, or null when the response carried no record
+ */
+export function extractSingleRow(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const rows = payload?.response?.data;
+    if (Array.isArray(rows)) return rows.length > 0 ? rows[0] : null;
+    // No `response.data` at all → defensive unwrapped-record path; see the note above.
+    return payload;
+}
+
 function normalizeRows(rows, entityName) {
     return Array.isArray(rows) ? rows.map(row => normalizeRecord(row, entityName)) : [];
 }
@@ -916,6 +944,24 @@ export function useEntity(entity, childEntity, {
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    // ETP-5034: outcome of the last fetchById, when it did NOT yield a record.
+    // null = nothing wrong (never fetched, or the record loaded fine).
+    // 'notFound' = the backend answered but carried no row: the id does not exist,
+    //              or the current role/organization cannot see it. NEO does not
+    //              distinguish the two — a GET by id answers 200 with
+    //              `{"response":{"data":[],"status":0}}` in BOTH cases (there is no
+    //              403 anywhere in NeoCrudHandler's read path; the MCP layer
+    //              synthesizes its own 404 from this very shape, see
+    //              McpToolRouterSupport.buildNotFoundError / IMP-5).
+    // 'error'    = transport/HTTP failure (network down, 401, 500…).
+    // Before this, the empty envelope was swallowed by `?? data` in fetchById and
+    // normalized into an id-less pseudo-record, so `editing` became a blank object
+    // and the detail route silently rendered an empty form indistinguishable from
+    // the creation form.
+    const [recordError, setRecordError] = useState(null);
+    // ETP-5034: monotonically increasing id for fetchById calls, so a response that arrives after
+    // a newer fetchById was issued is discarded instead of overwriting the newer one's outcome.
+    const fetchByIdSeqRef = useRef(0);
     // ETP-4741: true while handleNew's defaults request is in flight, so the
     // creation form can gate itself instead of letting the user race the merge.
     const [defaultsLoading, setDefaultsLoading] = useState(false);
@@ -1190,20 +1236,57 @@ export function useEntity(entity, childEntity, {
     const fetchById = useCallback((id) => {
         if (!id) return;
         neutralizePendingDefaults();
+        // ETP-5034 — request sequencing. Navigating A → B faster than A resolves used to be
+        // harmless: the late A only turned the spinner off. Now a late A would call
+        // setRecordError('notFound') while B is still in flight, and since
+        // isLoadingRecordForRoute() is already false by then, DetailView's unavailable guard
+        // would render "record not available" over a record that is loading perfectly well.
+        // Every write below is therefore gated on this call still being the newest one.
+        // A counter rather than an AbortController: the stale response must be ignored, and an
+        // aborted fetch would additionally have to be told apart from a real transport failure
+        // in the catch — which is precisely the distinction the 'error' variant depends on.
+        const seq = fetchByIdSeqRef.current + 1;
+        fetchByIdSeqRef.current = seq;
+        const isCurrent = () => fetchByIdSeqRef.current === seq;
+        setRecordError(null);
         setLoading(true);
         apiFetch(`/${entity}/${id}`)
             .then(res => {
-                if (!res.ok) throw new Error(`${res.status}`);
+                if (!res.ok) {
+                    const err = new Error(`${res.status}`);
+                    err.status = res.status;
+                    throw err;
+                }
                 return res.json();
             })
             .then(data => {
-                const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+                if (!isCurrent()) return;
+                const raw = extractSingleRow(data);
+                const row = raw ? normalizeRecord(raw, entity) : null;
+                // ETP-5034: an id-less row is the same non-answer as an empty envelope — a
+                // get-by-id that resolves to a record without a primary key is never a record.
+                if (!row || row.id == null) {
+                    setRecordError('notFound');
+                    setSelected(null);
+                    setEditing(null);
+                    setLoading(false);
+                    return;
+                }
                 setSelected(row);
                 setEditing({ ...row });
-                fetchChildren(row?.id);
+                fetchChildren(row.id);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch(err => {
+                if (!isCurrent()) return;
+                // A 404 would mean the same thing as the empty envelope; NEO does not currently
+                // emit one for this route, but treating it as 'notFound' keeps the UI correct if
+                // the backend ever starts to.
+                setRecordError(err?.status === 404 ? 'notFound' : 'error');
+                setSelected(null);
+                setEditing(null);
+                setLoading(false);
+            });
     }, [entity, fetchChildren, neutralizePendingDefaults, apiFetch]);
 
     // Lightweight header refresh used after line add/update/delete operations.
@@ -1218,7 +1301,14 @@ export function useEntity(entity, childEntity, {
                 return res.json();
             })
             .then(data => {
-                const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+                // ETP-5034: the same GET that fetchById guards. An empty envelope here means the
+                // header stopped being visible mid-session (deleted by someone else, role/org
+                // switched) — merging it in would reinject the envelope as the record, which is
+                // the ETP-5034 bug through a second door and with no recordError to expose it.
+                // Nothing to refresh, so leave the form exactly as the user left it.
+                const raw = extractSingleRow(data);
+                if (!raw) return;
+                const row = normalizeRecord(raw, entity);
                 // ETP-4751 — carry forward the transient exemption-cause signals: the header GET
                 // does not echo them (they are not entity fields), so a naive setSelected(row)
                 // would wipe the flag a line-save just set before the SIF toast effect runs.
@@ -1304,6 +1394,11 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        // ETP-5034: a record is being handed to us directly (list row click) — any
+        // not-found state from a previous route is stale, and an in-flight fetchById for the
+        // PREVIOUS record must not land on top of the one we are selecting now.
+        fetchByIdSeqRef.current += 1;
+        setRecordError(null);
         // ETP-5024: a Complete-time blocking condition belongs to the record that raised
         // it — switching to a different one (or reselecting the same row after a refresh)
         // must not leak a stale banner forward.
@@ -1317,6 +1412,10 @@ export function useEntity(entity, childEntity, {
         backendDefaultKeysRef.current = new Set();
         userChangedKeysRef.current = new Set();
         setFieldErrors({});
+        // ETP-5034: the creation route must never inherit a previous route's not-found state,
+        // nor let an in-flight fetchById resolve into the empty creation form.
+        fetchByIdSeqRef.current += 1;
+        setRecordError(null);
         // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
         setBlockingCondition(null);
         setSelected(null);
@@ -1447,7 +1546,10 @@ export function useEntity(entity, childEntity, {
             const data = await res.json();
             // normalizeRecord also refreshes the remembered `updated`, so the next save carries
             // the token this read just produced instead of the one the conflict rejected.
-            const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+            // ETP-5034: an empty envelope is not a record — reloading it would blank the form.
+            const freshRaw = extractSingleRow(data);
+            if (!freshRaw) throw new Error('notFound');
+            const fresh = normalizeRecord(freshRaw, entity);
             setSelected(fresh);
             setEditing({ ...fresh });
             // Both sides now hold the same values, so isDirtyHeader is false and every unsaved-
@@ -1814,7 +1916,9 @@ export function useEntity(entity, childEntity, {
             const res = await apiFetch(`/${entity}/${id}`, { method: 'GET' });
             if (!res.ok) return;
             const data = await res.json();
-            const row = data?.response?.data?.[0] ?? data;
+            // ETP-5034: remembering the envelope's (non-existent) version is worse than
+            // remembering nothing — the next write would replay a token that is not the row's.
+            const row = extractSingleRow(data);
             if (row) normalizeRecord(row, entity);
         } catch {
             // Best-effort: without it the next write still fails loudly rather than silently.
@@ -2018,6 +2122,7 @@ export function useEntity(entity, childEntity, {
 
     return {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
+        recordError,
         runningProcess,
         blockingCondition, completionSignal,
         isDirtyHeader,

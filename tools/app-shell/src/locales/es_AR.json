@@ -21093,7 +21093,12 @@
     "walkthroughProductStepPriceAddTitle": "Agregá una tarifa",
     "walkthroughProductStepPriceAddBody": "Un precio siempre pertenece a una tarifa. Las de venta y las de compra son distintas: el selector de la izquierda cambia de una a otra.",
     "walkthroughProductStepPriceSetTitle": "Poné el precio",
-    "walkthroughProductStepPriceSetBody": "Escribí el precio unitario y el precio de lista, y después elegí la tarifa en Nombre: la fila se guarda en el momento en que la elegís. El precio de lista es el de antes de descuentos; el unitario es el que se cobra."
+    "walkthroughProductStepPriceSetBody": "Escribí el precio unitario y el precio de lista, y después elegí la tarifa en Nombre: la fila se guarda en el momento en que la elegís. El precio de lista es el de antes de descuentos; el unitario es el que se cobra.",
+    "recordNotFoundTitle": "Registro no disponible",
+    "recordNotFoundBody": "Este registro no existe o tu rol no tiene acceso a él. Revisá el enlace o volvé al listado.",
+    "recordLoadFailedTitle": "No se pudo cargar el registro",
+    "recordLoadFailedBody": "Hubo un problema al contactar con el servidor. Probá de nuevo o volvé al listado.",
+    "backToList": "Volver al listado"
   },
   "menus": {
     "Goods Movement": {

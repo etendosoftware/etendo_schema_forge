@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import RecordUnavailable from '@/components/contract-ui/RecordUnavailable.jsx';
 import AccountPage from '@generated/financial-account/generated/web/financial-account/AccountPage';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFinancialAccount } from '@/hooks/useFinancialAccount';
@@ -167,7 +168,7 @@ export function FinancialAccountDetail({ recordId }) {
     if (edit === 'true') setEditOpen(true);
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
-  const { account, reload: reloadAccount } = useFinancialAccount(recordId);
+  const { account, loading: accountLoading, error: accountError, reload: reloadAccount } = useFinancialAccount(recordId);
   // ETP-4795: cash accounts close their drawer instead of matching bank-statement lines, so both
   // the Reconciliation tab body and the automatch engine branch on this.
   const isCashAccount = account?.type === ACCOUNT_TYPE.CASH;
@@ -352,6 +353,20 @@ export function FinancialAccountDetail({ recordId }) {
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
   if (windowAccessTier === 'none') {
     return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" data-testid="WindowAccessGuard__financial-account" />;
+  }
+
+  // ETP-5034 — this window bypasses DetailView, so it needs its own copy of the guard: the
+  // account list this detail is filtered out of yields `null` for an id that does not exist or
+  // that this role/organization cannot see, which used to render the whole tab shell empty.
+  // Placed after every hook, same rationale as the tier guard above.
+  if (!account && !accountLoading) {
+    return (
+      <RecordUnavailable
+        variant={accountError ? 'error' : 'notFound'}
+        onBack={() => navigate('/financial-account')}
+        data-testid="record-unavailable"
+      />
+    );
   }
 
   return (
