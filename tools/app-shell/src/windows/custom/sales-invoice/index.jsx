@@ -169,8 +169,9 @@ export default function SalesInvoiceWindow(props) {
   const rowQuickActions = useMemo(
     () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, setEmailRow, requestDelete, {
       onRefresh: () => setRefreshKey(k => k + 1),
+      ui,
     }),
-    [navigate, windowName, requestDelete],
+    [navigate, windowName, requestDelete, ui],
   );
 
   // Pick up the saved record from navigation state when arriving at the list view

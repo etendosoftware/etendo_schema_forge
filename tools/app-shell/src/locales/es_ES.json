@@ -16961,6 +16961,7 @@
     "documentAction": "Acción de documento",
     "book": "Procesar",
     "processExecuted": "PROCESO EJECUTADO: {ok} registros procesados correctamente y {failed} registros fallidos.",
+    "processExecutedWithOmitted": "PROCESO EJECUTADO: {ok} registros procesados correctamente, {omitted} registros omitidos (no elegibles) y {failed} registros con error.",
     "ocrInvoiceTitle": "Importar PDF con OCR",
     "ocrInvoiceHint": "Sube una factura en PDF y completa el documento con los valores extraídos.",
     "ocrPickPdf": "Elegir un archivo PDF",

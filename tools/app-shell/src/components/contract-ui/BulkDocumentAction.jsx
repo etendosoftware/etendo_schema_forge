@@ -96,8 +96,12 @@ export default function BulkDocumentAction({
     if (running || !selectedAction) return;
     setRunning(true);
 
+    // ETP-5209 — `omitted` (pre-blocked by `rowFilter`, never sent to the API) is kept
+    // separate from `failed` (the API call was actually attempted and threw). Merging
+    // them used to make a correctly-skipped "not eligible yet" row read as a genuine
+    // failure in the toast — see useBulkActionToast.js for how the 3 counts render.
     let rowsToProcess = selectedRows;
-    let preBlocked = [];
+    const omitted = [];
     if (rowFilter) {
       rowsToProcess = [];
       for (const row of selectedRows) {
@@ -105,7 +109,7 @@ export default function BulkDocumentAction({
         if (result === true || result == null) {
           rowsToProcess.push(row);
         } else {
-          preBlocked.push({ documentNo: row.documentNo || row.id, message: result });
+          omitted.push({ documentNo: row.documentNo || row.id, message: result });
         }
       }
     }
@@ -113,19 +117,18 @@ export default function BulkDocumentAction({
     const outcomes = await Promise.allSettled(
       rowsToProcess.map((row) => execute(row.id, selectedAction).then(() => row)),
     );
-    const apiFailed = outcomes
+    const failed = outcomes
       .map((o, i) => ({ o, row: rowsToProcess[i] }))
       .filter(({ o }) => o.status === 'rejected')
       .map(({ o, row }) => ({
         documentNo: row.documentNo || row.id,
         message: o.reason?.message || 'Unknown error',
       }));
-    const failed = [...preBlocked, ...apiFailed];
-    const ok = rowsToProcess.length - apiFailed.length;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+    const ok = rowsToProcess.length - failed.length;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, omitted, failed }));
     setRunning(false);
     setOpen(false);
-    const delay = failed.length === 0 ? 600 : 1500;
+    const delay = (failed.length === 0 && omitted.length === 0) ? 600 : 1500;
     setTimeout(() => {
       clearSelection();
       window.location.reload();

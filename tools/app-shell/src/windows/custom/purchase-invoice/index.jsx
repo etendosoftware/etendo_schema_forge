@@ -165,8 +165,9 @@ export default function PurchaseInvoiceWindow(props) {
     () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, {
       showEmail: false,
       onRefresh: () => setRefreshKey(k => k + 1),
+      ui,
     }),
-    [navigate, windowName, requestDelete],
+    [navigate, windowName, requestDelete, ui],
   );
 
   const summary = [

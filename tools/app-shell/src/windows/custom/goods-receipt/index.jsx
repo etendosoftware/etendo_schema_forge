@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import GoodsReceiptTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
 import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceiptBottomPanel';
@@ -139,10 +141,20 @@ export default function GoodsReceiptWindow(props) {
       if (isPosted || !isProcessed) return [];
       return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
     },
-    onMenuActionExecuted: (action) => {
-      if (action.neoAction) setRefreshKey(k => k + 1);
+    // ETP-5209 follow-up — RowQuickActions deliberately never shows a toast itself
+    // ("toast/snackbar is the host's responsibility"); this was the missing host-side
+    // half for the row-kebab Post action, mirroring DetailMoreActionsMenu's
+    // runNeoMenuAction for the exact same neoAction shape.
+    onMenuActionExecuted: (action, result) => {
+      if (!action.neoAction) return;
+      if (result?.success === false) {
+        toast.error(translateBackendError(result?.message, ui) || ui('actionFailed'));
+      } else {
+        toast.success((action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted'));
+      }
+      setRefreshKey(k => k + 1);
     },
-  }), [navigate, windowName, requestDelete]);
+  }), [navigate, windowName, requestDelete, ui]);
 
   return (
     <>

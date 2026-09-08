@@ -16731,6 +16731,7 @@
     "documentAction": "Document Action",
     "book": "Book",
     "processExecuted": "PROCESS EXECUTED: {ok} registers successfully processed and {failed} registers failed.",
+    "processExecutedWithOmitted": "PROCESS EXECUTED: {ok} registers successfully processed, {omitted} registers omitted (not eligible) and {failed} registers with error.",
     "ocrInvoiceTitle": "Import PDF with OCR",
     "ocrInvoiceHint": "Upload a PDF invoice and prefill the document with the extracted values.",
     "ocrPickPdf": "Choose a PDF file",
