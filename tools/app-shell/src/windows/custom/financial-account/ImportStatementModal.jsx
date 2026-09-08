@@ -1,42 +1,49 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, Check, ChevronDown, FileText, UploadCloud, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, ChevronDown, Download, FileText, UploadCloud, X } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { useStatementImport } from '@/hooks/useStatementImport';
-import { useStatementPreview } from '@/hooks/useStatementPreview';
+import { buildTemplateCsv } from '@etendosoftware/app-shell-core/lib/import/buildTemplateCsv.js';
+import { buildTemplateXlsx } from '@etendosoftware/app-shell-core/lib/import/buildTemplateXlsx.js';
+import { downloadBlobAsFile } from '@/windows/custom/shared/pdfUtils.js';
+// The shared, already-tested formatter, replacing a local copy that divided by 1024 and
+// rounded to whole KB — so every file under ~512 bytes read "0 KB", which is most
+// statement CSVs. This one picks its unit, so 281 bytes reads "281 B".
+import { formatBytes } from '@/lib/formatBytes.js';
+import { ImportColumnMapping } from '@etendosoftware/app-shell-core/components/import/ImportColumnMapping.jsx';
+import { ImportReviewQueue, buildErrorsCsv } from '@etendosoftware/app-shell-core/components/import/ImportReviewQueue.jsx';
+import {
+  BANK_STATEMENT_IMPORT_FIELDS,
+  bankStatementFieldLabel,
+} from './bankStatementImportFields.js';
+import {
+  buildStatementCreatePayload,
+  buildStatementPreview,
+  sendableEntries,
+} from './bankStatementImportPipeline.js';
+import { parseStatementAmount } from './statementAmount.js';
+import { useStatementImportReview } from './useStatementImportReview.js';
+import { useCreateStatement } from '@/hooks/useCreateStatement';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function formatBytes(bytes) {
-  if (!bytes) return '0 B';
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${Math.round(kb)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
-}
 
 function formatMoney(amount, currency) {
   if (amount == null) return '—';
   return formatCurrency(currency, amount);
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// Cheap client-side line count for the "N líneas" hint shown on step 1, before
-// the authoritative server parse runs on Continue. Blank lines are ignored.
+/**
+ * Cheap line count for the "N líneas" hint on step 1, before the real parse runs on Continue.
+ * Blank lines are ignored. A spreadsheet is opaque to a text read, so it reports 0 rather than
+ * a nonsense number counting the zip container's newlines — the hint is then simply omitted.
+ */
 async function countFileLines(file) {
+  if (/\.xlsx$/i.test(file?.name ?? '')) return 0;
   try {
     const text = await file.text();
     return text.split(/\r\n|\r|\n/).filter((line) => line.trim() !== '').length;
@@ -120,9 +127,34 @@ const VIEW_TO_STEP = {
   analyzing: 1,
   selected:  0,
   error:     0,
+  // ETP-4954 — column mapping + row review. Shares stepper slot 1 with the preview: to the
+  // user both are "Revisar", and splitting them would have meant a four-step stepper for what
+  // reads as one reviewing activity.
+  mapping:   1,
   preview:   1,
   importing: 2,
   success:   2,
+};
+
+/**
+ * view → dialog width.
+ *
+ * `mapping` needs room for `ImportReviewQueue`'s fixed-width table — 190px (Estado) + 160px per
+ * import field, i.e. ~1150px for the six statement fields — plus the dialog's own 48px of
+ * horizontal padding. Capped at 96vw so a narrow window still gets the whole dialog on screen
+ * (the table scrolls inside its own container there, which is the component's own behaviour).
+ * Every other view falls through to `MODAL_WIDTH_NARROW`, the width it already had.
+ *
+ * Only the two views that differ are listed, and deliberately so: a map with a key literally
+ * named `error` made the quality gate's i18n check read its Tailwind class as a hardcoded
+ * user-facing error message — the same property-name collision this file already works around
+ * for `VIEW_TO_SUBTITLE_KEY`. Listing the exceptions removes the collision instead of
+ * suppressing the warning about it.
+ */
+const MODAL_WIDTH_NARROW = 'max-w-[600px]';
+const MODAL_WIDTH_CLASS = {
+  mapping: 'max-w-[min(1240px,96vw)]',
+  preview: 'max-w-[720px]',
 };
 
 // view → subtitle i18n key. Values are i18n KEYS resolved via ui(...) at render;
@@ -133,6 +165,7 @@ const VIEW_TO_SUBTITLE_KEY = {
   analyzing: 'financeAccountStatementsImportSubtitleUpload',
   selected:  'financeAccountStatementsImportSubtitleUpload',
   error:     'financeAccountStatementsImportSubtitleUpload',
+  mapping:   'financeAccountStatementsImportSubtitleMapping',
   preview:   'financeAccountStatementsImportSubtitleReview',
   importing: 'financeAccountStatementsImportSubtitleReview',
   success:   'financeAccountStatementsImportSubtitleDone',
@@ -213,6 +246,42 @@ function StepperItem({ label, isActive, isDone, index }) {
   );
 }
 
+/**
+ * Formats the picker offers and the drop zone accepts.
+ *
+ * ETP-4954 replaced the Spanish-banking Cuaderno 43 family (`.c43`, `.43`, `.nor`) with
+ * spreadsheet formats. That is a deliberate, product-approved narrowing, not an oversight: the
+ * import now parses the file in the browser so its columns can be mapped and its rows reviewed,
+ * and a fixed-width C43 record has no columns to map. The backend `?action=import` endpoint that
+ * reads C43 is untouched and still reachable, so restoring it here is a UI change only.
+ *
+ * `.xls` is listed but rejected on selection — see the note on the constant and
+ * `xlsRejectionKey`.
+ */
+const ACCEPTED_IMPORT_FORMATS = '.csv,.txt,.xlsx,text/csv,text/plain,'
+  + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
+  // `.xls` is listed even though it is REJECTED, and deliberately so. Left out, the OS file
+  // picker hides the user's own file: they click "select file", their .xls is simply not
+  // there, and the message telling them to re-save it as .xlsx — the one thing that fixes
+  // their problem — is unreachable, because only a drag-and-drop bypasses `accept`. Offering
+  // it and then explaining beats making it vanish with no explanation.
+  + '.xls,application/vnd.ms-excel';
+
+/**
+ * The error key for a file this modal cannot read, or `null` when it can.
+ *
+ * `.xls` is Excel 97-2003, a completely different (binary OLE) container from `.xlsx`, and the
+ * reader behind `parseXlsx` only speaks OOXML. Left to fall through it surfaces as an opaque
+ * "unable to read the file" — so it gets its own message telling the user the one thing that
+ * fixes it: re-save as `.xlsx`. Matched on the extension because browsers report an inconsistent
+ * MIME type for legacy Excel files (and none at all when dragged from some file managers).
+ */
+function xlsRejectionKey(fileName) {
+  return /\.xls$/i.test(String(fileName ?? '').trim())
+    ? 'financeAccountStatementsImportErrorXls'
+    : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Dropzone (Step 1)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,6 +319,70 @@ function Dropzone({ onPick, dragging, onDragOver, onDragLeave, onDrop, ui }) {
   );
 }
 
+/**
+ * The two downloadable templates (ETP-4954).
+ *
+ * QA asked for a template whose headers are the FIELD names in the session language, not the
+ * database column names — so both files are written by the core's `buildTemplateCsv` /
+ * `buildTemplateXlsx` with `headerFor` wired to `bankStatementFieldLabel`, which resolves each
+ * header through the very `financeAccountStatementsManualCol*` keys the line grid already uses.
+ * The header a user downloads is therefore character-for-character the column name they see on
+ * screen, in whichever of the three locales the session is running.
+ *
+ * The round trip closes because `mapColumns` strips the required marker (`*`) before matching
+ * and because each localized header is also carried as an alias: a template downloaded in
+ * Spanish, filled in and uploaded back auto-maps every column with nothing to do by hand.
+ */
+function TemplateLinks({ ui }) {
+  const [busy, setBusy] = useState(false);
+  const headerFor = bankStatementFieldLabel(ui);
+  const baseName = ui('financeAccountStatementsImportTemplateFileName');
+
+  const downloadCsv = () => {
+    const csv = buildTemplateCsv(BANK_STATEMENT_IMPORT_FIELDS, { headerFor });
+    downloadBlobAsFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `${baseName}.csv`);
+  };
+
+  const downloadXlsx = async () => {
+    // `buildTemplateXlsx` pulls in the workbook writer, so it is the one async branch and the
+    // only one that can fail on its own; a failure must not leave the link stuck in `busy`.
+    setBusy(true);
+    try {
+      const blob = await buildTemplateXlsx(BANK_STATEMENT_IMPORT_FIELDS, { headerFor });
+      downloadBlobAsFile(blob, `${baseName}.xlsx`);
+    } catch {
+      toast.error(ui('financeAccountStatementsImportTemplateError'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
+      <Download className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>{ui('financeAccountStatementsImportTemplateLabel')}</span>
+      <button
+        type="button"
+        onClick={downloadCsv}
+        data-testid="import-statement-template-csv"
+        className="rounded font-medium text-[hsl(var(--foreground))] underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))]"
+      >
+        {ui('financeAccountStatementsImportTemplateCsv')}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={downloadXlsx}
+        disabled={busy}
+        data-testid="import-statement-template-xlsx"
+        className="rounded font-medium text-[hsl(var(--foreground))] underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] disabled:opacity-50"
+      >
+        {ui('financeAccountStatementsImportTemplateXlsx')}
+      </button>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // File dropzone (Step 1 — selected): filled variant, click/drag to replace
 // ─────────────────────────────────────────────────────────────────────────────
@@ -278,7 +411,10 @@ function SelectedFile({
       <div className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">{file.name}</div>
       <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
         <div>
-          {formatBytes(file.size)} · {ui('financeAccountStatementsImportLines', { count: lineCount })}
+          {formatBytes(file.size)}
+          {/* Omitted for a spreadsheet, whose rows cannot be counted from a text read — a
+              literal "0 líneas" next to a file that clearly has rows reads as an error. */}
+          {lineCount > 0 ? ` · ${ui('financeAccountStatementsImportLines', { count: lineCount })}` : null}
         </div>
         <div>{ui('financeAccountStatementsImportReplace')}</div>
       </div>
@@ -359,8 +495,17 @@ function PreviewLines({ lines, max = 5, currency, bcpLocale, ui }) {
         >
           <span>{ui('financeAccountStatementLinesColDate')}</span>
           <span>{ui('financeAccountStatementsImportColConcept')}</span>
-          <span>{ui('financeAccountStatementsImportColCharge')}</span>
-          <span>{ui('financeAccountStatementsImportColCredit')}</span>
+          {/* The SAME keys the manual line grid, the downloadable template and the mapping step
+              use. This step used to carry its own `…ImportColCharge` / `…ImportColCredit` pair
+              reading "Cargo" / "Abono", so the one screen where the user confirms an import
+              named the two amounts differently from every other surface in the window — the
+              statements list right behind the modal included. One vocabulary, one source. */}
+          {/* `text-right` on both: the cells underneath are right-aligned `tabular-nums`, so a
+              left-aligned header floated away from the column of figures it names — the wider
+              the amounts, the bigger the gap. Same alignment the manual line grid's Salida /
+              Entrada headers carry (ETP-4924). */}
+          <span className="text-right">{ui('financeAccountStatementsManualColOut')}</span>
+          <span className="text-right">{ui('financeAccountStatementsManualColIn')}</span>
         </div>
         {/* Once every line is shown the list scrolls inside its own card, so the
             column header above and the toggle below stay visible. */}
@@ -436,7 +581,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
         ref={inputRef}
         type="file"
         data-testid="import-statement-file-input"
-        accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
+        accept={ACCEPTED_IMPORT_FORMATS}
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}
       />
@@ -453,6 +598,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
           if (dropped) handlePickFile(dropped);
         }}
         data-testid="Dropzone__de9647" />
+      <TemplateLinks ui={ui} />
       {view === 'error' ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-[var(--status-destructive-bg)] py-3 pl-1.5 pr-2">
           <AlertTriangle className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
@@ -482,7 +628,7 @@ function SelectedFileBody({
         ref={inputRef}
         type="file"
         data-testid="import-statement-file-input"
-        accept=".c43,.43,.txt,.nor,.csv,text/csv,text/plain"
+        accept={ACCEPTED_IMPORT_FORMATS}
         className="sr-only"
         onChange={(e) => handlePickFile(e.target.files?.[0])}
       />
@@ -502,6 +648,112 @@ function SelectedFileBody({
         ui={ui}
         data-testid="SelectedFile__de9647" />
     </>
+  );
+}
+
+/**
+ * How the review queue renders an amount cell.
+ *
+ * The queue used to show the raw cell text, which cannot reveal a MISREAD value: `1.234` looks
+ * identical whether the importer read it as 1234 or as 1.234, and the user only found out which
+ * one after committing the rows. Showing the parsed amount makes the interpretation visible
+ * while it is still correctable — the safety net for the one case where the decimal-convention
+ * rule can legitimately surprise someone (see `statementAmount.js`).
+ *
+ * Three deliberate return values:
+ *  - `null` for a non-numeric column, and for a cell that does not parse → the queue falls back
+ *    to the raw text. An unparseable amount must show what the user actually typed; its own
+ *    error message already explains the problem, and formatting it would hide the evidence.
+ *  - `''` for a blank cell → a statement line is an inflow OR an outflow, so the unused side is
+ *    genuinely empty and must not read `0,00 €`.
+ *  - the formatted amount otherwise, through the canonical `formatCurrency`.
+ */
+function makeAmountFormatter(currency) {
+  return (field, raw) => {
+    if (!field?.isNumeric) return null;
+    const parsed = parseStatementAmount(raw);
+    if (parsed == null) return '';
+    if (Number.isNaN(parsed)) return null;
+    return formatCurrency(currency, parsed);
+  };
+}
+
+/**
+ * Step 2a — column mapping and row review (ETP-4954).
+ *
+ * Composes the core's two generic import components rather than mounting `ImportDialog`:
+ * that dialog is a whole wizard with its own chrome and is only ever opened from a ListView,
+ * while statements import from a tab inside the financial account's detail and must keep the
+ * look they already have. Using the pieces gets the shared behaviour (auto-match, the
+ * N/M-columns counter, the Todas/Correctas/Errores tabs, inline editing, skipping, the
+ * downloadable error report) inside this modal's own frame.
+ *
+ * `fields` carries session-language labels (see `localizeFields`), which both components render
+ * directly — the mapping selects and the review-queue column heads therefore read the same
+ * column names as the rest of the screen.
+ */
+function MappingBody({
+  headers, mapping, fields, entries, statusFilter, ui, review, accountCurrency,
+}) {
+  const sendable = sendableEntries(entries);
+  const errorCount = entries.length - sendable.length;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
+        <ImportColumnMapping
+          headers={headers}
+          importFields={fields}
+          mapping={mapping}
+          onApplyMapping={review.applyMapping}
+          labels={{
+            notImported: ui('financeAccountStatementsImportMapNotImported'),
+            mappedSummary: ui('financeAccountStatementsImportMapSummary'),
+            editMatch: ui('financeAccountStatementsImportMapEdit'),
+            editTitle: ui('financeAccountStatementsImportMapEditTitle'),
+            save: ui('financeAccountStatementsImportMapSave'),
+            cancel: ui('financeAccountStatementsImportMapCancel'),
+          }}
+        />
+      </div>
+      {errorCount > 0 ? (
+        <div
+          className="flex items-start gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+          style={{ backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
+          data-testid="import-review-error-summary"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{ui('financeAccountStatementsImportReviewErrors', { count: errorCount })}</span>
+        </div>
+      ) : null}
+      <ImportReviewQueue
+        entries={entries}
+        fields={fields}
+        formatValue={makeAmountFormatter(accountCurrency)}
+        statusFilter={statusFilter}
+        onStatusFilterChange={review.setStatusFilter}
+        onEditField={review.editField}
+        onRetryEntry={review.retryEntry}
+        onSkipEntry={review.skipEntry}
+        onUnskipEntry={review.unskipEntry}
+        onDownloadErrors={() => downloadBlobAsFile(
+          new Blob([buildErrorsCsv(entries, headers, mapping)], { type: 'text/csv;charset=utf-8;' }),
+          `${ui('financeAccountStatementsImportErrorsFileName')}.csv`,
+        )}
+        showRetry={false}
+        labels={{
+          filterAll: ui('financeAccountStatementsImportReviewAll'),
+          filterOk: ui('financeAccountStatementsImportReviewOk'),
+          filterError: ui('financeAccountStatementsImportReviewError'),
+          skip: ui('financeAccountStatementsImportReviewSkip'),
+          skipped: ui('financeAccountStatementsImportReviewSkipped'),
+          unskip: ui('financeAccountStatementsImportReviewUnskip'),
+          downloadErrors: ui('financeAccountStatementsImportReviewDownloadErrors'),
+          status: ui('financeAccountStatementsImportReviewStatus'),
+          statusOk: ui('financeAccountStatementsImportReviewStatusOk'),
+          statusError: ui('financeAccountStatementsImportReviewStatusError'),
+        }}
+      />
+    </div>
   );
 }
 
@@ -547,8 +799,9 @@ function PreviewBody({ previewData, accountCurrency, bcpLocale, ui }) {
  * branch behind a small helper.
  */
 function ModalBody({
-  view, file, previewData, previewing, localLineCount, errorKey,
+  view, file, previewData, localLineCount, errorKey,
   accountCurrency, bcpLocale, ui, inputRef, dragging, setDragging, handlePickFile, reset,
+  review,
 }) {
   if (view === 'empty' || view === 'error') {
     return (
@@ -585,6 +838,20 @@ function ModalBody({
         subtitleKey="financeAccountStatementsImportAnalyzing"
         ui={ui}
         data-testid="ProcessingBody__de9647" />
+    );
+  }
+  if (view === 'mapping') {
+    return (
+      <MappingBody
+        headers={review.headers}
+        mapping={review.mapping}
+        fields={review.fields}
+        entries={review.entries}
+        statusFilter={review.statusFilter}
+        ui={ui}
+        review={review}
+        accountCurrency={accountCurrency}
+        data-testid="MappingBody__de9647" />
     );
   }
   if (view === 'preview' && previewData) {
@@ -630,8 +897,11 @@ function PreviewFooterButton({ ui, importing, previewData, handleConfirmImport }
   );
 }
 
-function DefaultFooterButtons({ ui, view, previewing, handleContinue }) {
-  const disabled = view !== 'selected' || previewing;
+function DefaultFooterButtons({ ui, view, busy, handleContinue, sendableCount }) {
+  // From `mapping`, Continue is only meaningful when at least one row will actually be sent —
+  // otherwise the preview would be an empty statement. From `selected` it just needs a file.
+  const disabled = busy
+    || (view === 'mapping' ? sendableCount === 0 : view !== 'selected');
   return (
     <button
       type="button"
@@ -649,7 +919,7 @@ function DefaultFooterButtons({ ui, view, previewing, handleContinue }) {
 }
 
 function ModalFooter({
-  view, ui, importing, previewing, previewData,
+  view, ui, importing, busy, previewData, sendableCount,
   setView, handleConfirmImport, handleContinue,
 }) {
   let rightButtons;
@@ -667,7 +937,8 @@ function ModalFooter({
       <DefaultFooterButtons
         ui={ui}
         view={view}
-        previewing={previewing}
+        busy={busy}
+        sendableCount={sendableCount}
         handleContinue={handleContinue}
         data-testid="DefaultFooterButtons__de9647" />
     );
@@ -675,7 +946,7 @@ function ModalFooter({
 
   return (
     <div className="flex items-center justify-between px-6 py-4">
-      {view === 'preview' ? (
+      {view === 'preview' || view === 'mapping' ? (
         <button
           type="button"
           onClick={() => setView('selected')}
@@ -696,11 +967,19 @@ function ModalFooter({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Multi-step "Importar extracto bancario" dialog. Flow:
- *   1. User picks a file → POST ?action=preview (parses in-memory, returns
- *      lines + totals + detected format).
- *   2. Show the preview (KPIs + lines table); user confirms.
- *   3. POST ?action=import which actually persists the statement.
+ * Multi-step "Importar extracto bancario" dialog. Flow (ETP-4954):
+ *   1. User picks a CSV/TXT/XLSX file, or downloads a template to fill in.
+ *   2. The file is parsed IN THE BROWSER and its columns auto-mapped; the user corrects the
+ *      mapping and reviews the rows, fixing or skipping the ones that fail validation.
+ *   3. Preview (KPIs + lines) of exactly what will be sent; user confirms.
+ *   4. POST ?action=create — the same endpoint, and the same payload, the manual form uses.
+ *
+ * Steps 2-4 replaced a pair of round trips that shipped the file as base64 to
+ * `?action=preview` and then `?action=import`. Parsing in the browser is what makes column
+ * mapping and per-row review possible at all, and reusing `?action=create` is what avoids
+ * reimplementing the header setup (document type, DocumentNo, line numbering, processing,
+ * aggregates) that only that endpoint performs. Both old endpoints remain in the backend for
+ * MCP/REST callers and for Cuaderno 43, which this screen no longer accepts.
  *
  * Props:
  *   open, accountId, accountCurrency, onClose, onSuccess
@@ -717,10 +996,10 @@ export function ImportStatementModal({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const inputRef = useRef(null);
 
-  const { previewStatement, previewing } = useStatementPreview();
-  const { importStatement, importing } = useStatementImport();
+  const { createStatement, creating } = useCreateStatement();
+  const review = useStatementImportReview(ui);
 
-  // view: empty | analyzing | selected | preview | importing | error
+  // view: empty | analyzing | selected | mapping | preview | importing | error
   const [view, setView] = useState('empty');
   // i18n key of the failure shown in the `error` view. null → generic
   // "unsupported format" copy, which is what most failures actually are.
@@ -735,6 +1014,7 @@ export function ImportStatementModal({
     setPreviewData(null);
     setLocalLineCount(0);
     setErrorKey(null);
+    review.clear();
     setView('empty');
   };
 
@@ -749,38 +1029,58 @@ export function ImportStatementModal({
   // for the "N líneas" hint; the authoritative parse runs on Continue (step 2).
   const handlePickFile = async (selected) => {
     if (!selected) return;
+    // Caught here rather than after a parse attempt so the user gets the actionable message
+    // ("save it as .xlsx") instead of the reader's opaque failure.
+    const rejection = xlsRejectionKey(selected.name);
+    if (rejection) {
+      setFile(null);
+      setPreviewData(null);
+      setErrorKey(rejection);
+      setView('error');
+      return;
+    }
     setFile(selected);
     setPreviewData(null);
     setLocalLineCount(await countFileLines(selected));
     setView('selected');
   };
 
-  // Step 2: parse the statement while the progress ring is shown (real parse
-  // time only — no artificial delay).
+  /**
+   * Continue advances one step, and which step depends on where we are.
+   *
+   * From `selected` it parses, auto-maps and validates the file behind the progress ring (real
+   * parse time only — no artificial delay), then opens the mapping/review step. From `mapping`
+   * it computes the preview from the rows that survived review; nothing is sent yet.
+   */
   const handleContinue = async () => {
+    if (view === 'mapping') {
+      setPreviewData(buildStatementPreview(review.entries));
+      setView('preview');
+      return;
+    }
     if (!file) return;
     setView('analyzing');
-    try {
-      const contentBase64 = await fileToBase64(file);
-      const data = await previewStatement({ accountId, fileName: file.name, contentBase64 });
-      setPreviewData(data);
-      setErrorKey(null);
-      setView('preview');
-    } catch (err) {
-      setErrorKey(ERROR_CODE_TO_KEY[err?.code] ?? null);
+    const result = await review.loadFile(file);
+    if (!result.ok) {
+      setErrorKey(result.errorKey);
       setView('error');
+      return;
     }
+    setErrorKey(null);
+    setView('mapping');
   };
 
   const handleConfirmImport = async () => {
     if (!file || !previewData) return;
+    // The file's base name is the statement's name, which is what the import has always used.
+    const name = file.name.replace(/\.[^./\\]+$/, '');
     setView('importing');
     try {
-      const contentBase64 = await fileToBase64(file);
-      const res = await importStatement({ accountId, fileName: file.name, contentBase64 });
-      const name = file.name.replace(/\.[^./\\]+$/, '');
-      const count = res?.lineCount ?? previewData?.lineCount ?? 0;
-      const discarded = res?.discardedLines ?? previewData?.discardedLines ?? 0;
+      await createStatement(buildStatementCreatePayload({
+        accountId, file, entries: review.entries, name,
+      }));
+      const count = previewData.lineCount ?? 0;
+      const discarded = previewData.discardedLines ?? 0;
       onSuccess?.();
       toast.success(discarded > 0
         ? ui('financeAccountStatementsImportSuccessToastPartial', { name, count, discarded })
@@ -793,7 +1093,12 @@ export function ImportStatementModal({
     }
   };
 
-  const wide = view === 'preview';
+  // Three widths, not two. The mapping step renders `ImportReviewQueue`, which lays its table
+  // out `table-fixed` with hardcoded per-column widths (190px for Estado + 160px per data
+  // column): six import fields make the table intrinsically ~1150px, so inside the 720px the
+  // preview uses it was permanently scrolled sideways with `Descripción` clipped. The preview's
+  // own table has four fluid columns and stays fine at 720px.
+  const widthClass = MODAL_WIDTH_CLASS[view] ?? MODAL_WIDTH_NARROW;
 
   return (
     <Dialog
@@ -806,7 +1111,7 @@ export function ImportStatementModal({
           // body used to grow past the viewport and push the footer (and the
           // Importar button) off screen. Same pattern as NewTransactionModal.
           'imp-modal-enter flex max-h-[90vh] flex-col overflow-hidden p-0',
-          wide ? 'max-w-[720px]' : 'max-w-[600px]',
+          widthClass,
         )}
         style={{ background: 'var(--surface-overlay, hsl(var(--card)))' }}
         onPointerDownOutside={(e) => e.preventDefault()}
@@ -834,7 +1139,6 @@ export function ImportStatementModal({
             view={view}
             file={file}
             previewData={previewData}
-            previewing={previewing}
             localLineCount={localLineCount}
             errorKey={errorKey}
             accountCurrency={accountCurrency}
@@ -845,6 +1149,7 @@ export function ImportStatementModal({
             setDragging={setDragging}
             handlePickFile={handlePickFile}
             reset={reset}
+            review={review}
             data-testid="ModalBody__de9647" />
         </div>
 
@@ -853,8 +1158,9 @@ export function ImportStatementModal({
           <ModalFooter
             view={view}
             ui={ui}
-            importing={importing}
-            previewing={previewing}
+            importing={creating}
+            busy={creating}
+            sendableCount={sendableEntries(review.entries).length}
             previewData={previewData}
             setView={setView}
             handleConfirmImport={handleConfirmImport}

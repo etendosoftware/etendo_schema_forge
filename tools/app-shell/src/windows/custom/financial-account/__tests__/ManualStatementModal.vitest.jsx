@@ -256,6 +256,84 @@ describe('ManualStatementModal', () => {
     expect(createStatement).not.toHaveBeenCalled();
   });
 
+  /**
+   * ETP-4954 — pins the `> 0` (NOT `!== 0`) semantics of `isLineComplete`. The agreed rule,
+   * decided with product and now enforced in BOTH flows (manual form + CSV import), is:
+   *
+   *   a statement line is valid only if it has at least one amount > 0 AND no amount < 0.
+   *
+   * This is a DELIBERATE divergence from Etendo Classic, whose manual bank-statement form only
+   * rejects "both amounts zero" and happily persists a negative one. QA reopened the ticket
+   * because a CSV line with Salida=-50 / Entrada=-20 was imported instead of rejected while the
+   * manual form rejected it — but only incidentally, and with zero test coverage. These tests are
+   * that coverage: relaxing the comparison back to `!== 0` (or to Classic's "not both zero") makes
+   * them go red, so nobody can "simplify" the rule away by accident.
+   *
+   * `isBlankLine` uses `=== 0`, which is what makes this reachable at all: a row carrying a
+   * negative amount counts as NON-blank, so it lands in `usable` and hits the `isLineComplete`
+   * check instead of being silently dropped as an empty row. That interplay is pinned too — every
+   * case below asserts the *incomplete-line* toast specifically, not merely "did not save".
+   */
+  describe('ETP-4954 negative amounts are rejected', () => {
+    // The exact case QA reported: both sides negative.
+    it('blocks saving a line with both amounts negative', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '-50', in: '-20' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    // Proves the rule is "no negative amount", not just "not both negative".
+    it('blocks saving a line whose only amount is a negative Salida', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '-50', in: '0' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    it('blocks saving a line whose only amount is a negative Entrada', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '0', in: '-20' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Opposite signs (Salida=50, Entrada=-20) — the case QA documented separately as being
+     * silently "netted" into a single value. Under the rule above it must be rejected: one of
+     * the two amounts is < 0.
+     *
+     * This is the case that exposed why the rule needed a second condition. The original
+     * predicate was a disjunction of the FIRST half of the rule only:
+     *
+     *     parseAmount(r.out) > 0 || parseAmount(r.in) > 0
+     *
+     * With out=50 the left operand is already true, so the negative Entrada was never looked
+     * at: the line validated, `handleSave` proceeded, and the payload went out carrying
+     * `in: -20`. The three cases above passed only INCIDENTALLY — they are the subset where
+     * NEITHER side is positive, so the OR collapses to false. "No amount < 0" was not enforced
+     * anywhere in this component; `isLineComplete` now asserts both halves separately.
+     */
+    it('blocks saving a line with opposite signs instead of netting them', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', out: '50', in: '-20' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
+      expect(createStatement).not.toHaveBeenCalled();
+    });
+  });
+
   it('does not render the import-only "file name" header field', () => {
     renderModal();
     expect(screen.queryByTestId('manual-statement-filename')).not.toBeInTheDocument();

@@ -2020,8 +2020,8 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       StatementLinesInline.jsx     — lines table shown in the expanded accordion row (white rounded card): date, description, contact name (free text), contact (BP FK name), Cuenta contable, Nº Referencia, **Estado** (badge: amber "Sin conciliar" / green "Conciliado"), **Transacción** (grey ↗ chip with the reconciled movement's doc no, opening `ReconciledTxnsModal`; a 1:N group shows as a single "N movimientos" chip), then **Salida · Entrada** last (amount headers left-aligned, values right-aligned)
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
-      ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats; a backend failure carrying `error.code` is mapped to its own message (`NO_VALID_LINES` → "El archivo no contiene líneas válidas para importar") instead of that generic copy. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When the backend pruned amount-less rows, step 2 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
-      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and an amount on **one** of out/in; **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here — the import instead drops such a row, see below. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved. Contacto and Cuenta contable are `ChipSelect` (ETP-4924 follow-up — see below), matching every other FK picker in the app.
+      ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar → Importar) with a neutral palette and an animated `ProgressRing` while parsing: dropzone (→ filled file card once a file is picked) + two template-download links, then the column-mapping/row-review step, then the review summary widget + lines table. **Since ETP-4954 the file is parsed in the browser and the result is POSTed to `?action=create`** — the same endpoint and the same payload the manual form uses; it no longer ships the file as base64 to `?action=preview`/`?action=import` (see "CSV/Excel import: templates, column mapping and row review" below). Picking a file goes to the "selected" step (no request); Continue parses and auto-maps (analyzing ring) then shows the mapping/review step; Continue again computes the preview; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats, and an `.xls` upload gets its own message telling the user to re-save as `.xlsx`. The dialog is capped at `max-h-[90vh]` as a flex column and only the body scrolls, so the footer (and `Importar`) stay reachable; with "Mostrar todas" the line list gets its own `max-h-[46vh]` scroller (`data-testid="import-preview-lines-scroll"`) so the column header and the toggle stay put. When rows are left behind (still invalid, or skipped by the user), step 3 shows a warning strip (`data-testid="import-discarded-lines"`) and the success toast switches to the partial variant.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, three header fields in one row (name, transaction date, import date) + a Notas textarea — the **file name field is not rendered here**: it is an import-only concept and its presence suggested a file could be attached. `form.fileName` survives as an invisible passthrough so editing a draft that already carries one does not wipe it, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the only required fields are **date** and a **positive** amount on **one** of out/in — a negative amount on either side is refused (ETP-4954, see below); **Reference No is optional** (blank → `**` server-side, same as the CSV import) and so are contact / accounting account. A filled-in line with no amount on either side is a validation error here; since ETP-4954 the CSV/Excel import treats it the same way, showing it as a fixable row in the review queue rather than dropping it (only the Cuaderno 43 path still prunes silently — see below). Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved. Contacto and Cuenta contable are `ChipSelect` (ETP-4924 follow-up — see below), matching every other FK picker in the app.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
       LookupPicker.jsx             — shared text-input + dropdown lookup (BP / accounting account), used by NewMovementDialog, NewMovementWizard and PaymentForm. No longer used by `ManualStatementModal` (ETP-4924 follow-up — switched to `ChipSelect`, see below).
 ```
@@ -2045,7 +2045,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 | `useAccountMovements(accountId)` | `hooks/useAccountMovements.js` | Thin wrapper over `useNeoResource` — hits `/sws/neo/financial-account-transactions?FIN_Financial_Account_ID={id}` (powered by `FinancialAccountTransactionsHandler` on the Etendo Go side). Returns `{ movements, totals, enabledDimensions, loading, error, reload }`. Each movement carries `paymentId` / `paymentIsReceipt` (for the Payment link) and a `dimensions` object (per-row dimension values); `enabledDimensions` is the account-level list of dimension keys enabled in the chart of accounts. |
 | `useBankStatements(accountId)` | `hooks/useBankStatements.js` | Fetches imported bank statements — hits `GET /sws/neo/bank-statements?FIN_Financial_Account_ID={id}`. Returns `{ statements, loading, error, reload }`. |
 | `useBankStatementLines(statementId)` | `hooks/useBankStatementLines.js` | Fetches lines of one statement — hits `GET /sws/neo/bank-statements?action=lines&statementId={id}`. Returns `{ lines, loading, error, reload }`. |
-| `useStatementImport()` | `hooks/useStatementImport.js` | Mutation hook for C43 import — posts `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
+| `useStatementImport()` / `useStatementPreview()` | `hooks/useStatementImport.js`, `hooks/useStatementPreview.js` | **No longer called from the UI since ETP-4954** — `ImportStatementModal` parses in the browser and writes through `useCreateStatement`. Kept because the endpoints behind them remain the Cuaderno 43 and MCP/REST path. Mutation hooks for file import — post `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
 | `useCreateStatement()` | `hooks/useCreateStatement.js` | Mutation hook for manual statement creation — posts `{ FIN_Financial_Account_ID, name, transactionDate, importDate, fileName, notes, lines[] }` to `POST /sws/neo/bank-statements?action=create`. Returns `{ createStatement, creating, error }`. |
 | `useStatementActions()` | `hooks/useStatementActions.js` | Mutation hook for the draft row actions — `processStatement(id)` (`?action=process`), `updateStatement({ id, ...header, lines })` (`?action=update`), `deleteStatement(id)` (`?action=delete`). All only valid for drafts (backend returns 400 otherwise). Returns `{ processStatement, updateStatement, deleteStatement, busy, error }`. |
 
@@ -2221,10 +2221,15 @@ GET  /sws/neo/bank-statements?action=lines&statementIds={a,b,c}      → lines (
 GET  /sws/neo/bank-statements?...&export=csv&columns=...&ids=...     → CSV download (generic, see neo-headless.md §4.3)
 POST /sws/neo/bank-statements?action=preview                         → in-memory parse (no persist)
 POST /sws/neo/bank-statements?action=import                          → C43 / CSV import
+                                                                       (both: no longer called by the
+                                                                        UI since ETP-4954 — MCP/REST
+                                                                        and Cuaderno 43 only)
      body: { FIN_Financial_Account_ID, fileName, contentBase64 }
      201  { id, fileName, lineCount, discardedLines }
      400  { error: { code: "NO_VALID_LINES", message } }  ← no line survived the prune
 POST /sws/neo/bank-statements?action=create                          → manual create (header + lines, no file)
+                                                                       — also the CSV/Excel import's
+                                                                         write path since ETP-4954
      body: { FIN_Financial_Account_ID, name, transactionDate, importDate,
              fileName, notes, process,
              lines: [{ date, reference, bpartnerName, bpartnerId,
@@ -2904,15 +2909,153 @@ The import handler:
 - Instantiates the Cuaderno 43 parser (`org.openbravo.module.cuaderno43.es.utility.Cuaderno43`) via reflection (no compile-time dependency on the commercial JAR)
 - Calls `init(account)` + `loadFile(stream, statement)` headlessly (no servlet context needed)
 - Saves `FIN_BankStatement` + `FIN_BankStatementLine` rows in one transaction
-- Runs `BankStatementLinePruner.pruneZeroAmountLines(statement)` (via the `pruneLines` test seam)
+- Runs `BankStatementLinePruner.pruneZeroAmountLines(statement)` (via the `pruneLines` test seam), which since ETP-4954 also drops negative-amount lines
 - Returns `201 { id, fileName, lineCount, discardedLines }` on success, where `lineCount` is what
   actually got persisted — not what the parser read
 
-#### Zero-amount lines and empty files (alignment with Classic)
+#### CSV/Excel import: templates, column mapping and row review (ETP-4954)
+
+QA returned ETP-4954 asking for three things beyond the negative-amount fix: a downloadable
+template whose headers are the **field names in the session language** rather than database column
+names, the **column mapping** that the Contacts bulk import has, and **Excel** support. All three
+are now in the same wizard, and none of the machinery behind them is new code.
+
+**The whole import engine is reused, not reimplemented.** The Contacts bulk import is not Contacts
+code — it lives in `@etendosoftware/app-shell-core`, is entity-agnostic, and was already driving two
+windows. Statements now drive it too:
+
+| Reused from the core | What it does here |
+|---|---|
+| `lib/import/parseDelimited.js` | CSV/TXT: delimiter autodetection (`, ; \t`), quoted fields, Windows-1252 fallback |
+| `lib/import/parseXlsx.js` | `.xlsx`, returning the identical `{ headers, rows }` shape — so nothing downstream can tell an Excel upload from a CSV one |
+| `lib/import/mapColumns.js` | auto-matches headers to fields, accent- and case-insensitively, stripping the template's `*` marker |
+| `lib/import/buildTemplateCsv.js` / `buildTemplateXlsx.js` | the two downloadable templates, including the required marker, the example row and the collision-safe header resolution |
+| `lib/import/validateRows.js` + `rowValidators.js` | the required/numeric checks plus the statement's own amount rule, in one pass |
+| `components/import/ImportColumnMapping.jsx` | the `N/M columnas asignadas` counter, the header→field chips and the per-column select modal |
+| `components/import/ImportReviewQueue.jsx` | Todas/Correctas/Con errores tabs, inline cell editing, skip/unskip, and the downloadable error report |
+
+`ImportDialog` itself is deliberately **not** mounted — it is a whole wizard with its own chrome,
+only ever opened from a `ListView`, whereas statements import from a tab inside the account detail
+and had to keep the look they already have. Its pieces are composed inside `ImportStatementModal`
+instead.
+
+**New code is only the wiring**, in four files under
+`tools/app-shell/src/windows/custom/financial-account/`:
+
+| File | Responsibility |
+|---|---|
+| `bankStatementImportFields.js` | the six-field descriptor (`date`, `reference`, `description`, `bpartnerName`, `out`, `in`), the session-language label resolver, and the amount rule as a registered row validator |
+| `bankStatementImportPipeline.js` | parse → map → validate → preview → payload; date and amount normalization |
+| `useStatementImportReview.js` | the mapping/review state, re-validating synchronously on every edit |
+| `statementAmount.js` | the one amount parser, shared with the manual form |
+
+**Why the payload goes to `?action=create` and not to `/sws/neo/batch`.** The Contacts import writes
+through the generic `POST /sws/neo/batch`. Statements cannot: `FIN_BankStatement` has three mandatory
+columns with **no default and no sequence** (`C_Doctype_ID`, `DocumentNo`,
+`FIN_Financial_Account_ID`), and `newManualBankStatement`/`handleCreate` additionally resolve the BSF
+document type, set `Processed`/`Posted`, number the lines, process the statement and recompute the
+aggregates. (The two `EntityPersistenceEventObserver`s — `BankStatementLineAggregateHandler` and
+`BankStatementHeaderStatusHandler` — do fire on any write path; the rest does not.) Going through
+`/batch` would have meant reimplementing all of it on a second path. So the import sends the
+**byte-identical payload the manual form sends** to the endpoint that already does the work, and
+inherits every bit of it. No backend change was needed for the import at all.
+
+**Templates.** `financeAccountStatementsManualCol*` — the very keys labelling the columns of the
+manual form's line grid, already maintained in all three locales — are what `bankStatementFieldLabel`
+resolves, so a downloaded header is character-for-character the column name on screen, in whichever
+language the session runs. The round trip closes because each localized header is also injected as an
+alias and because `mapColumns` strips the `*` marker before matching: a template downloaded in
+Spanish, filled in and re-uploaded auto-maps every column with nothing to do by hand.
+
+**Dates.** A statement file can carry `dd/MM/yyyy` (what an operator types, and what the template's
+example row shows), `dd-MM-yyyy` (what `parseXlsx` emits for a real Excel date cell, matching the CSV
+export), `dd.MM.yyyy`, or plain ISO. `normalizeStatementDate` folds all four to `yyyy-MM-dd`,
+**day-first** for every separated form, and constructs **no `Date` at all** — working on the string
+cannot shift a calendar day, which is the ETP-4031 / ETP-4850 bug class that hit this very flow
+(see "The import preview showed every date one day early" below). A two-digit year reads as `20xx`,
+and an impossible date (31 February) fails its row instead of rolling over.
+
+**Amounts.** `statementAmount.js` holds the single parser shared by the manual form, the CSV
+import and the Excel import. Two rules:
+
+1. A cell with **both** separators — the rightmost is the decimal, so `3.500,00` and `3,500.00`
+   both give 3500. (The core's `parseImportNumber` assumes es-ES unconditionally here and reads
+   `1,234.56` as `1.23456`, three orders of magnitude off, which is why statements do not use it.)
+2. A cell with **one** separator — three digits after it means thousands (`1.234` → 1234,
+   `12.345` → 12345, `1.500` → 1500), anything else means decimal (`1800.25`, `99,90`, `1.23`).
+
+Rule 2 was added after ETP-4954's first pass shipped a silent **1000x** corruption: a lone
+separator was read as a decimal point unconditionally, so `1.234` became 1.234 and rendered — after
+rounding to two decimals — as `1,23 €`. Every amount written with a thousands separator and no
+decimals was divided by a thousand, with nothing flagging it.
+
+**Why the digit count rather than the instance's decimal convention** — which is what Classic does.
+`org.openbravo.bankstatement.importer.generic.csv`'s `Utility.stringToBigDecimal` takes the decimal
+separator as a PARAMETER, read from the `CsvConfiguration` AD table (defaulting to `,`), and hands
+it to `DecimalFormat` under `Locale.ITALY` or `Locale.US`. Classic never guesses; it is told. That
+works for Classic because it only ever reads CSV text written in one declared convention. Three
+sources share the parser here and only one of them does:
+
+| source | what arrives | needs |
+|---|---|---|
+| CSV cell | `1.234`, text a bank wrote | 1234 |
+| xlsx numeric cell | `"1800.25"` — `parseXlsx` stringifies a real number with `String(value)` | 1800.25 |
+| manual grid | `"1500.50"`, whatever the user typed | 1500.5 |
+
+`1.234` and `1800.25` are structurally identical strings needing opposite readings, so no single
+convention serves both: applying the Spanish one (tried, measured, reverted) turned every Excel
+amount into 180025 and every typed `1500.50` into 150050. The digit count separates them, because
+money carries at most two decimals.
+
+Measured against `Utility.stringToBigDecimal` on its default separator, we agree with Classic on
+`1.234`, `12.345`, `1.500`, `1.234,56` and `99,90`, and diverge deliberately on `1,234.56`
+(Classic 1.234 — it stops at the first character its locale cannot read), `1.23` (Classic 123) and
+`1,234` (Classic 1.234 — money has no third decimal). Note also that Classic's model corrupts
+silently when MISconfigured: `99,90` read with separator `.` returns 9990.
+
+A partially-readable cell (`12x`) is a row error rather than the salvaged `12` that `parseFloat`
+would return — same posture as Classic, whose `DecimalFormat` throws. `1,2,3` stays invalid;
+`1.234.56` is read as 1234.56, since it is a grouped number with a decimal tail.
+
+**Two behaviour changes QA must retest.** Both were signed off in the previous round and are now
+different on purpose:
+
+1. **Invalid lines are shown, not dropped.** They arrive in the review queue's error tab with the
+   offending cell flagged, editable inline, and skippable. Nothing disappears without being seen
+   first — which contradicts cases 7, 8 and 10 of the previous test report. `discardedLines` in the
+   final preview now counts rows the user *knowingly* left behind rather than rows the backend
+   silently pruned.
+2. **Cuaderno 43 is gone from this screen.** `accept` is `.csv,.txt,.xlsx`; `.c43`, `.43` and `.nor`
+   were removed. The import now parses in the browser so its columns can be mapped, and a
+   fixed-width C43 record has no columns to map. This is a **functional regression for anyone using
+   C43** (it is the Spanish banking standard) and was accepted as a product decision — the backend
+   `?action=import` endpoint that reads it is untouched and still reachable, so restoring it here is
+   a UI change only.
+
+**One vocabulary across the whole flow.** The confirmation step used to carry its own
+`financeAccountStatementsImportColCharge` / `…ImportColCredit` pair, rendering the two amount
+columns as *Cargo* / *Abono* — so the single screen where a user commits an import named the
+amounts differently from every other surface in the window, the statements list visible right
+behind the modal included. Those two keys are gone; the step now reads
+`financeAccountStatementsManualColOut` / `…ManualColIn`, the same keys the manual line grid, the
+downloadable templates (via `labelKey`) and the mapping step already resolve. There is one source
+for those two words now, so a rename cannot drift them apart. The summary strip above the table
+follows (*Entradas* / *Salidas*, `Money in` / `Money out` in en_US).
+
+Note the strip still lists money-in before money-out while the table below lists money-out first,
+matching the statements grid. That ordering difference predates ETP-4954 and was left alone.
+
+`.xls` (Excel 97-2003) is **not** supported: it is a binary OLE container, a different format
+entirely from `.xlsx`, and the reader behind `parseXlsx` only speaks OOXML. Rather than surfacing the
+reader's opaque failure, an `.xls` upload is caught on the extension before any parse is attempted
+and gets a message naming the one thing that fixes it — re-save as `.xlsx`.
+
+#### Unusable-amount lines and empty files (alignment with Classic, except negatives)
 
 `BankStatementLinePruner` ports the sanitising half of Classic's
 `org.openbravo.advpaymentmngt.utility.FIN_BankStatementImport#saveFINBankStatementLines`: a parsed
-line whose `cramount` **and** `dramount` are both zero carries no financial information, so it is
+line with no **usable** amount — both `cramount` and `dramount` zero, or either one negative
+(ETP-4954, see below) — carries no financial information, so it is
 removed and the survivors are renumbered `(counter + 1) * 10` — **no gap** in `lineno`. Classic
 reports the drop through `AD_MESSAGE.APRM_ZeroAmountNotInserted` ("%s row/s inserted … %s row/s not
 inserted because credit and debit amount were 0") and still calls the import a success; we return
@@ -2931,8 +3074,30 @@ Two deliberate divergences from Classic, both documented in the tests:
 - a **blank** amount cell is `0` here, whereas Classic's `Utility.stringToBigDecimal("")` throws and
   aborts the whole file. The resulting zero/zero line is pruned anyway, so the outcome matches
   without failing an otherwise valid import;
-- **negative** amounts are kept. Classic's condition is "not both zero", not "positive", so
-  rejecting negatives would be a new business rule rather than a consistency fix.
+- **negative amounts are rejected** (ETP-4954). Classic's condition is "not both zero", not
+  "positive", so it accepts them — and that is exactly what QA reported: a CSV line reading
+  `Salida=-50 / Entrada=-20` imported silently and then displayed as a nonsensical `Entrada
+  +30,00`, because the read path collapses the pair to `cramount - dramount`. The rule is now
+  **at least one amount > 0 and no amount < 0**: money in belongs in Entrada, money out in
+  Salida, and a sign never substitutes for the column. Verified safe against the existing data
+  before the change — **0 of 2,965** `fin_bankstatementline` rows carry a negative amount, across
+  manual, Cuaderno 43, PSD2-synced and CSV origins.
+
+  The rule is enforced independently at every point a line can enter, because each covers a
+  caller the others do not:
+
+  | Where | Covers | Behaviour |
+  |---|---|---|
+  | `validateBankStatementRow` (`bankStatementImportFields.js`) | the CSV/Excel import UI | the row lands in the review queue's error tab with the offending cell flagged, so the user can fix or skip it |
+  | `isLineComplete` (`ManualStatementModal.jsx`) | the manual form | Save is refused with the incomplete-line toast |
+  | `BankStatementsHandler.createLines` | `?action=create` — the API, and therefore MCP/REST | `400` |
+  | `BankStatementLinePruner` | `?action=import` / `?action=preview`, i.e. Cuaderno 43 | the line is pruned and counted in `discardedLines` |
+
+  `isLineComplete` needed both halves asserted **separately**. The original predicate was a single
+  disjunction (`out > 0 || in > 0`), so `Salida=50 / Entrada=-20` satisfied it on the left operand
+  and the negative Entrada was never examined — the line saved and was then shown netted to `+30`.
+  The three same-sign cases only ever passed incidentally, being the subset where neither side is
+  positive.
 
 #### The import preview showed every date one day early — only on a deployed server (ETP-4924)
 

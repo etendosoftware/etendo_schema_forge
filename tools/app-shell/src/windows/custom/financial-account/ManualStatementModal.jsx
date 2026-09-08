@@ -16,6 +16,7 @@ import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
+import { parseAmount } from './statementAmount.js';
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS } from './fieldLengthValidation.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,29 +88,6 @@ function lineToRow(l) {
   };
 }
 
-/**
- * Parses a user-typed amount that may use either `,` or `.` as decimal
- * separator (Spanish operators type `3.500,00`). When both are present the
- * rightmost is treated as the decimal separator — same rule the backend CSV
- * importer applies. Returns a finite Number (0 on blank/invalid).
- */
-function parseAmount(v) {
-  if (v == null) return 0;
-  let s = String(v).trim();
-  if (!s) return 0;
-  const hasComma = s.includes(',');
-  const hasDot = s.includes('.');
-  if (hasComma && hasDot) {
-    s = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? s.replace(/\./g, '').replace(',', '.')
-      : s.replace(/,/g, '');
-  } else if (hasComma) {
-    s = s.replace(',', '.');
-  }
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function isBlankLine(r) {
   // The auto-filled date is ignored: a row with only the default date is empty.
   return !r.reference.trim() && !r.description.trim() && !r.contactName.trim() && !r.contact && !r.glItem
@@ -123,9 +101,22 @@ function isBlankLine(r) {
  * all optional — a blank reference is stored as `**`, exactly like the CSV
  * import does. Empty amount fields count as 0.
  */
+/**
+ * A line is usable when it carries a date, at least one amount above zero, and NO amount
+ * below zero. The two amount halves must be asserted separately: the old single disjunction
+ * (`out > 0 || in > 0`) short-circuits, so `Salida=50 / Entrada=-20` satisfied it on the left
+ * operand and the negative Entrada was never examined — the line saved and was then displayed
+ * netted to +30. Rejecting negatives outright is a deliberate divergence from Etendo Classic
+ * (ETP-4954): money in goes in Entrada, money out in Salida, and a sign never substitutes for
+ * the column. `BankStatementsHandler.createLines` and `BankStatementLinePruner` enforce the
+ * same rule on the API and import paths.
+ */
 function isLineComplete(r) {
-  return !!r.date
-    && (parseAmount(r.out) > 0 || parseAmount(r.in) > 0);
+  const out = parseAmount(r.out);
+  const inn = parseAmount(r.in);
+  if (!r.date) return false;
+  if (out < 0 || inn < 0) return false;
+  return out > 0 || inn > 0;
 }
 
 function computeTotals(rows) {
