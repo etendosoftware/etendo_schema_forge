@@ -1,8 +1,8 @@
 {
   "version": "0.25.0",
   "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-08-25T14:00:31.519Z",
-  "checksum": "1f22932d2c0ac365",
+  "updatedAt": "2026-09-08T17:17:35.336Z",
+  "checksum": "8bcb4ba63197f5ab",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -17,7 +17,8 @@
         "customForm": "AssignTemplateRolesControl"
       },
       "listViewOptions": {
-        "hidePrint": true
+        "hidePrint": true,
+        "hideLink": true
       },
       "customPanelTabs": [
         {
@@ -444,7 +445,8 @@
         "customForm": "AssignTemplateRolesControl"
       },
       "listViewOptions": {
-        "hidePrint": true
+        "hidePrint": true,
+        "hideLink": true
       },
       "customPanelTabs": [
         {
