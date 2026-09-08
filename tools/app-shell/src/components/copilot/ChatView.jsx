@@ -37,6 +37,9 @@ export function ChatView({
   attachments = [],
   onRemoveAttachment,
   isSending = false,
+  error = '',
+  onRetry,
+  onDismissError,
   welcomeMessage,
   inputPlaceholder,
 }) {
@@ -74,6 +77,22 @@ export function ChatView({
     <>
       {/* Message area */}
       <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-4">
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            data-testid="ChatError__61b427">
+            <p>{error}</p>
+            <div className="mt-2 flex gap-2">
+              <Button type="button" size="sm" onClick={onRetry} disabled={isSending}>
+                Retry
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={onDismissError}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
             {welcomeMessage || ui('copilotWelcome')}
