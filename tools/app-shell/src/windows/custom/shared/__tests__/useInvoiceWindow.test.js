@@ -116,6 +116,69 @@ describe('useInvoiceWindow', () => {
       const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, { showEmail: false });
       assert.equal('visibleWhen' in result.actions.email, false);
     });
+
+    // ETP-5209 — Post reachable from the row-hover kebab, gated the same way as
+    // the form-view kebab (decisions.json -> window.menuActions) and the bulk
+    // Post action (BulkDocumentAction.jsx's buildPostActions/createPostRowFilter):
+    // a row must be processed AND not yet posted for Post to appear.
+    describe('menuActions (ETP-5209 — row-hover Post entry)', () => {
+      it('offers post when the row is processed and not posted', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        const actions = result.menuActions({ row: { processed: 'Y', posted: 'N' } });
+        assert.deepEqual(actions, [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+      });
+
+      it('returns no actions when the row is already posted', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        const actions = result.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+        assert.deepEqual(actions, []);
+      });
+
+      it('returns no actions when the row is not processed yet', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        const actions = result.menuActions({ row: { processed: 'N', posted: 'N' } });
+        assert.deepEqual(actions, []);
+      });
+
+      it('treats boolean true the same as Y for both posted and processed', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        assert.deepEqual(
+          result.menuActions({ row: { processed: true, posted: false } }),
+          [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }],
+        );
+        assert.deepEqual(result.menuActions({ row: { processed: true, posted: true } }), []);
+      });
+
+      it('handles a missing/undefined row without throwing (returns no actions)', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        assert.deepEqual(result.menuActions({}), []);
+      });
+    });
+
+    describe('onMenuActionExecuted / onRefresh (ETP-5209)', () => {
+      it('calls the onRefresh option when a neoAction menu action completes', () => {
+        let refreshCalls = 0;
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          onRefresh: () => { refreshCalls += 1; },
+        });
+        result.onMenuActionExecuted({ neoAction: 'post' });
+        assert.equal(refreshCalls, 1);
+      });
+
+      it('does not call onRefresh for a menu action without a neoAction', () => {
+        let refreshCalls = 0;
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          onRefresh: () => { refreshCalls += 1; },
+        });
+        result.onMenuActionExecuted({ key: 'someOtherAction' });
+        assert.equal(refreshCalls, 0);
+      });
+
+      it('does not throw when onRefresh is not provided (optional chaining)', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        assert.doesNotThrow(() => result.onMenuActionExecuted({ neoAction: 'post' }));
+      });
+    });
   });
 
   describe('useClearSavedRecord (source shape)', () => {

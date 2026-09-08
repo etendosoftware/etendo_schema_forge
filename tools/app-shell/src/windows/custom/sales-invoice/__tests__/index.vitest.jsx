@@ -120,8 +120,10 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
 
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   default: ({ labelKey }) => (
-    <div data-testid="bulk-document-action" data-label-key={labelKey} />
+    <div data-testid={`bulk-document-action-${labelKey}`} data-label-key={labelKey} />
   ),
+  buildPostActions: vi.fn(() => []),
+  createPostRowFilter: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@generated/sales-invoice/custom/InvoiceHeaderTable.jsx', () => ({
@@ -432,5 +434,42 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       lastListViewProps.onExternalPreviewClose();
     });
     expect(navigate).toHaveBeenCalledWith('/sales-invoice', { replace: true, state: {} });
+  });
+
+  // ETP-5209 — Post reachable from the row-hover kebab menu, plus a second bulk
+  // BulkDocumentAction instance for Post. The gate itself (processed + not
+  // posted) is covered exhaustively in useInvoiceWindow.test.js — these tests
+  // only verify the window wires the shared helper through correctly.
+  describe('ETP-5209 — Post row-kebab entry and bulk button', () => {
+    it('offers the post menu action for a processed, unposted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+      expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    });
+
+    it('does not offer the post menu action for an already-posted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+      expect(actions).toEqual([]);
+    });
+
+    it('bumps refreshKey when a neoAction menu action (post) completes', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const beforeRefresh = lastListViewProps.refreshTrigger;
+      act(() => {
+        lastListViewProps.rowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+      });
+      expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
+    });
+
+    it('renders both the confirmBulk and the post bulk BulkDocumentAction instances', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-document-action-post')).toBeInTheDocument();
+    });
   });
 });

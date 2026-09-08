@@ -1,3 +1,4 @@
+let lastRowQuickActions = null;
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => ({
   default: ({
     rowQuickActions,
@@ -11,7 +12,9 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
     renderPreview,
     refreshTrigger,
     refetchAfterSave,
-  }) => (
+  }) => {
+    lastRowQuickActions = rowQuickActions;
+    return (
     <div
       data-testid="generated-app"
       data-initial-filters={initialColumnFilters ? JSON.stringify(initialColumnFilters) : ''}
@@ -125,7 +128,8 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
       </button>
       <span id="menu-dr-count" data-testid="menu-dr-count" />
     </div>
-  ),
+    );
+  },
 }));
 
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable', () => ({
@@ -143,6 +147,8 @@ vi.mock('@/components/attachments', () => ({
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   default: () => null,
   buildInOutActions: vi.fn(),
+  buildPostActions: vi.fn(() => []),
+  createPostRowFilter: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
@@ -203,6 +209,7 @@ vi.mock('react-router-dom', () => ({
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import GoodsReceiptWindow from '../index.jsx';
 
 const DEFAULT_PROPS = {
@@ -216,6 +223,7 @@ describe('GoodsReceiptWindow', () => {
     vi.clearAllMocks();
     mockSearchParams = new URLSearchParams();
     capturedOnSuccess = null;
+    lastRowQuickActions = null;
   });
 
   it('renders the generated app', () => {
@@ -392,5 +400,59 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.queryByTestId('clone-modal')).not.toBeInTheDocument();
     const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
     expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
+  // The gate itself (processed + not posted) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx (buildPostActions/createPostRowFilter) — these
+  // tests only verify this window wires the shared helper through correctly.
+
+  it('offers the post row-kebab menu action for a processed, unposted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+    expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+  });
+
+  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'N', posted: 'N' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('bumps refreshKey when a neoAction row-kebab menu action (post) completes', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  it('does not bump refreshKey for a menu action without a neoAction', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ key: 'someOtherAction' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(after).toBe(before);
+  });
+
+  it('wires the bulk Post BulkDocumentAction via createPostRowFilter', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    // GoodsReceiptBulkAction (rendered inside bulk-actions-slot) calls
+    // createPostRowFilter(ui) to build the second BulkDocumentAction's rowFilter.
+    expect(createPostRowFilter).toHaveBeenCalled();
   });
 });

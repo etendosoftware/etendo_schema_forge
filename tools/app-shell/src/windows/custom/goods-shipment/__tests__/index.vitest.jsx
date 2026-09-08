@@ -62,9 +62,11 @@ vi.mock('@generated/goods-shipment/custom/BulkInvoiceFromShipment', () => ({
 
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   default: ({ entity, labelKey }) => (
-    <div data-testid="bulk-document-action" data-entity={entity} data-label-key={labelKey} />
+    <div data-testid={`bulk-document-action-${labelKey}`} data-entity={entity} data-label-key={labelKey} />
   ),
   buildInOutActions: vi.fn(() => []),
+  buildPostActions: vi.fn(() => []),
+  createPostRowFilter: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('../GoodsShipmentPreview', () => ({
@@ -95,6 +97,7 @@ vi.mock('@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPag
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import GoodsShipmentWindow from '../index.jsx';
 
 describe('GoodsShipmentWindow', () => {
@@ -123,7 +126,9 @@ describe('GoodsShipmentWindow', () => {
     render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('bulk-invoice')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-document-action')).toHaveAttribute('data-entity', 'goodsShipment');
+    expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+    // ETP-5209 — bulk Post button, gated to processed & not-yet-posted rows.
+    expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
     expect(screen.getByTestId('shipment-preview')).toHaveAttribute('data-window-name', 'goods-shipment');
     expect(rowDeleteConfig).toMatchObject({ apiBaseUrl: '/api', entity: 'goodsShipment', token: 'tkn' });
 
@@ -177,5 +182,51 @@ describe('GoodsShipmentWindow', () => {
 
     lastPageProps.draftMode.onConfirm();
     expect(events).toEqual(['open']);
+  });
+
+  // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
+  // The gate itself (processed + not posted) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx (buildPostActions/createPostRowFilter) — these
+  // tests only verify this window wires the shared helper through correctly.
+  describe('ETP-5209 — Post row-kebab entry and bulk button', () => {
+    it('offers the post menu action for a processed, unposted row', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastPageProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+      expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    });
+
+    it('does not offer the post menu action for an already-posted row', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastPageProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+      expect(actions).toEqual([]);
+    });
+
+    it('bumps refreshKey when a neoAction menu action (post) completes', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      act(() => {
+        lastPageProps.rowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+      });
+      expect(lastPageProps.refreshTrigger).toBe(1);
+    });
+
+    it('does not bump refreshKey for a menu action without a neoAction', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      act(() => {
+        lastPageProps.rowQuickActions.onMenuActionExecuted({ key: 'someOtherAction' });
+      });
+      expect(lastPageProps.refreshTrigger).toBe(0);
+    });
+
+    it('renders both the confirmBulk (in-out) and the post bulk BulkDocumentAction instances', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+      expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
+      expect(createPostRowFilter).toHaveBeenCalled();
+    });
   });
 });

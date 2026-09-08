@@ -53,7 +53,7 @@ vi.mock('@/components/ui/label.jsx', () => ({
   Label: ({ children }) => <label>{children}</label>,
 }));
 
-import BulkDocumentAction, { buildInOutActions } from '../BulkDocumentAction.jsx';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '../BulkDocumentAction.jsx';
 
 describe('buildInOutActions', () => {
   it('returns CO action when rows have draft status', () => {
@@ -69,6 +69,68 @@ describe('buildInOutActions', () => {
   it('checks docStatus fallback', () => {
     const rows = [{ docStatus: 'DR' }];
     expect(buildInOutActions(rows)).toEqual([{ value: 'CO', labelKey: 'book' }]);
+  });
+});
+
+// ETP-5209 — buildPostActions/createPostRowFilter back the row-hover kebab and the
+// second bulk BulkDocumentAction instance added to purchase-invoice, sales-invoice,
+// goods-receipt and goods-shipment. Unlike buildInOutActions (and the
+// matched-purchase-invoices post/unpost pair), this gate offers only 'post' — there
+// is no bulk unpost for these windows — and requires a row to be BOTH processed
+// (completed) AND not yet posted.
+describe('buildPostActions', () => {
+  it('offers post when at least one selected row is processed and not posted', () => {
+    const rows = [{ processed: 'Y', posted: 'N' }];
+    expect(buildPostActions(rows)).toEqual([{ value: 'post', labelKey: 'post' }]);
+  });
+
+  it('returns empty array when every row is already posted', () => {
+    const rows = [{ processed: 'Y', posted: 'Y' }];
+    expect(buildPostActions(rows)).toEqual([]);
+  });
+
+  it('returns empty array when no row is processed yet', () => {
+    const rows = [{ processed: 'N', posted: 'N' }];
+    expect(buildPostActions(rows)).toEqual([]);
+  });
+
+  it('offers post when at least one of several rows qualifies (mixed selection)', () => {
+    const rows = [
+      { processed: 'Y', posted: 'Y' }, // already posted
+      { processed: 'N', posted: 'N' }, // not processed yet
+      { processed: 'Y', posted: 'N' }, // qualifies
+    ];
+    expect(buildPostActions(rows)).toEqual([{ value: 'post', labelKey: 'post' }]);
+  });
+
+  it('treats a real boolean true/false the same as Y/N', () => {
+    expect(buildPostActions([{ processed: true, posted: false }])).toEqual([{ value: 'post', labelKey: 'post' }]);
+    expect(buildPostActions([{ processed: true, posted: true }])).toEqual([]);
+  });
+
+  it('returns empty array for an empty selection', () => {
+    expect(buildPostActions([])).toEqual([]);
+  });
+});
+
+describe('createPostRowFilter — pre-blocks rows the Post action cannot touch', () => {
+  const ui = (key) => key;
+  const filter = createPostRowFilter(ui);
+
+  it('allows a processed, unposted row', () => {
+    expect(filter({ processed: 'Y', posted: 'N' }, 'post')).toBe(true);
+  });
+
+  it('blocks an already-posted row with bulkRowAlreadyPosted', () => {
+    expect(filter({ processed: 'Y', posted: 'Y' }, 'post')).toBe('bulkRowAlreadyPosted');
+  });
+
+  it('blocks a not-yet-processed row with bulkRowNotCompleted', () => {
+    expect(filter({ processed: 'N', posted: 'N' }, 'post')).toBe('bulkRowNotCompleted');
+  });
+
+  it('does not gate a different action (always true when action !== post)', () => {
+    expect(filter({ processed: 'N', posted: 'Y' }, 'unpost')).toBe(true);
   });
 });
 
