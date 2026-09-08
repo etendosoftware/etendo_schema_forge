@@ -24557,7 +24557,12 @@
     "walkthroughProductStepPriceAddTitle": "Add a tariff",
     "walkthroughProductStepPriceAddBody": "A price always belongs to a tariff. Sales and purchase tariffs are separate -- the toggle on the left switches between them.",
     "walkthroughProductStepPriceSetTitle": "Set the price",
-    "walkthroughProductStepPriceSetBody": "Enter the unit price and the list price, then pick the tariff under Name: the row is saved the moment you pick it. The list price is the one before discounts; the unit price is what is actually charged."
+    "walkthroughProductStepPriceSetBody": "Enter the unit price and the list price, then pick the tariff under Name: the row is saved the moment you pick it. The list price is the one before discounts; the unit price is what is actually charged.",
+    "recordNotFoundTitle": "Record not available",
+    "recordNotFoundBody": "This record does not exist, or your role does not have access to it. Check the link, or go back to the list.",
+    "recordLoadFailedTitle": "The record could not be loaded",
+    "recordLoadFailedBody": "There was a problem contacting the server. Try again, or go back to the list.",
+    "backToList": "Back to the list"
   },
   "menus": {
     "Currency": {
