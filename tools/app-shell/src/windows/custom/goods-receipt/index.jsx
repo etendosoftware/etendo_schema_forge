@@ -7,7 +7,7 @@ import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceip
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -56,7 +56,6 @@ function CustomHeaderTable(props) {
 }
 
 function GoodsReceiptBulkAction(props) {
-  const ui = useUI();
   return (
     <>
       <BulkDocumentAction
@@ -71,7 +70,7 @@ function GoodsReceiptBulkAction(props) {
         entity="goodsReceipt"
         actionMode="neoAction"
         buildActions={buildPostActions}
-        rowFilter={createPostRowFilter(ui)}
+        rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__bf4f23" />
       <CopyLinkButton

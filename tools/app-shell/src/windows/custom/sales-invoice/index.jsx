@@ -5,7 +5,7 @@ import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import BulkDocumentAction, { buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -95,7 +95,6 @@ const OVERDUE_INITIAL_COLUMNS = [
 ];
 
 function SalesInvoiceBulkAction(props) {
-  const ui = useUI();
   return (
     <>
       <BulkDocumentAction
@@ -107,7 +106,7 @@ function SalesInvoiceBulkAction(props) {
         {...props}
         actionMode="neoAction"
         buildActions={buildPostActions}
-        rowFilter={createPostRowFilter(ui)}
+        rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__c01c21" />
       <CopyLinkButton

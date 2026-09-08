@@ -25,9 +25,16 @@ const isRowProcessed = (row) => row.processed === 'Y' || row.processed === true;
 export const buildPostActions = (rows) =>
   (rows.some((row) => !isRowPosted(row) && isRowProcessed(row)) ? [{ value: 'post', labelKey: 'post' }] : []);
 
-// Factory (not a plain function) because the rejection message must be
-// translated via the caller's `useUI()` — this module has no hook context.
-export const createPostRowFilter = (ui) => (row, action) => {
+// Plain function (not a hook-producing factory): `ui` is passed in at call
+// time by BulkDocumentAction's own `handleDone`, which already holds a safe
+// `useUI()` result from its own top-level hook call. A caller-side factory
+// like `createPostRowFilter(ui)` would force every `bulkActions` wrapper
+// (a plain function invocation, not JSX — see ListView.jsx) to call
+// `useUI()` itself, which is a Rules-of-Hooks violation once that wrapper's
+// hook count becomes conditional on whether the selection toolbar is
+// mounted (ETP-5209 production bug — "Rendered more hooks than during the
+// previous render").
+export const postRowFilter = (row, action, ui) => {
   if (action !== 'post') return true;
   if (isRowPosted(row)) return ui('bulkRowAlreadyPosted');
   if (!isRowProcessed(row)) return ui('bulkRowNotCompleted');
@@ -94,7 +101,7 @@ export default function BulkDocumentAction({
     if (rowFilter) {
       rowsToProcess = [];
       for (const row of selectedRows) {
-        const result = rowFilter(row, selectedAction);
+        const result = rowFilter(row, selectedAction, ui);
         if (result === true || result == null) {
           rowsToProcess.push(row);
         } else {

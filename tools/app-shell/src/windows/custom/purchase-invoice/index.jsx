@@ -5,7 +5,7 @@ import { todayCalendarISO, tomorrowCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
-import BulkDocumentAction, { buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -102,7 +102,6 @@ const LABEL_OVERRIDES = {
 };
 
 function PurchaseInvoiceBulkAction(props) {
-  const ui = useUI();
   return (
     <>
       <BulkDocumentAction
@@ -114,7 +113,7 @@ function PurchaseInvoiceBulkAction(props) {
         {...props}
         actionMode="neoAction"
         buildActions={buildPostActions}
-        rowFilter={createPostRowFilter(ui)}
+        rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__c20e53" />
       <CopyLinkButton

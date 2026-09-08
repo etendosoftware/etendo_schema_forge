@@ -9,9 +9,9 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage';
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import { useUI, useMenuLabel } from '@/i18n';
+import { useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
 import { useShipmentPdf } from './useShipmentPdf';
@@ -37,7 +37,6 @@ function CustomGoodsShipmentTable(props) {
 }
 
 function GoodsShipmentBulkActions(props) {
-  const ui = useUI();
   return (
     <>
       <BulkInvoiceFromShipment {...props} data-testid="BulkInvoiceFromShipment__9851c7" />
@@ -53,7 +52,7 @@ function GoodsShipmentBulkActions(props) {
         entity="goodsShipment"
         actionMode="neoAction"
         buildActions={buildPostActions}
-        rowFilter={createPostRowFilter(ui)}
+        rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__9851c7" />
       <CopyLinkButton
