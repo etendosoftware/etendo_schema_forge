@@ -107,7 +107,7 @@ vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
     <div data-testid={`bulk-document-action-${labelKey}`} data-label-key={labelKey} />
   ),
   buildPostActions: vi.fn(() => []),
-  createPostRowFilter: vi.fn(() => vi.fn()),
+  postRowFilter: vi.fn(),
 }));
 
 vi.mock('../PurchaseInvoiceHeaderTable.jsx', () => ({
@@ -505,6 +505,32 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
 
       expect(screen.getByTestId('bulk-document-action-confirmBulk')).toBeInTheDocument();
       expect(screen.getByTestId('bulk-document-action-post')).toBeInTheDocument();
+    });
+
+    // ETP-5209 regression: production crash root cause. ListView.jsx invokes
+    // `bulkActions` as a PLAIN FUNCTION CALL — `bulkActions({...})` — inside its
+    // own render body (see ListView.jsx around the SelectionToolbar), never as
+    // JSX (`<bulkActions />`). The mocked ListView above renders it via JSX
+    // (`<props.bulkActions .../>`), which is exactly why the old suite never
+    // caught this: JSX invocation gives a function component its own hook
+    // dispatcher, so a stray `useUI()` inside the wrapper would have passed
+    // silently there. Calling the captured `bulkActions` reference directly
+    // here, OUTSIDE of any React render pass (this test's own body, after
+    // `render()` already completed), reproduces the same hook-dispatcher-less
+    // context production hits — any hook call inside the wrapper throws
+    // React's "Invalid hook call" error here, exactly as it would crash with
+    // "Rendered more hooks than during the previous render" in production the
+    // moment a row got selected.
+    it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+      render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(() => lastListViewProps.bulkActions({
+        selectedRows: [{ id: 'inv-1', processed: 'Y', posted: 'N' }],
+        clearSelection: vi.fn(),
+        token: 'tkn',
+        apiBaseUrl: '/api',
+        windowName: 'purchase-invoice',
+      })).not.toThrow();
     });
   });
 });

@@ -53,7 +53,7 @@ vi.mock('@/components/ui/label.jsx', () => ({
   Label: ({ children }) => <label>{children}</label>,
 }));
 
-import BulkDocumentAction, { buildInOutActions, buildPostActions, createPostRowFilter } from '../BulkDocumentAction.jsx';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '../BulkDocumentAction.jsx';
 
 describe('buildInOutActions', () => {
   it('returns CO action when rows have draft status', () => {
@@ -72,7 +72,7 @@ describe('buildInOutActions', () => {
   });
 });
 
-// ETP-5209 — buildPostActions/createPostRowFilter back the row-hover kebab and the
+// ETP-5209 — buildPostActions/postRowFilter back the row-hover kebab and the
 // second bulk BulkDocumentAction instance added to purchase-invoice, sales-invoice,
 // goods-receipt and goods-shipment. Unlike buildInOutActions (and the
 // matched-purchase-invoices post/unpost pair), this gate offers only 'post' — there
@@ -113,24 +113,27 @@ describe('buildPostActions', () => {
   });
 });
 
-describe('createPostRowFilter — pre-blocks rows the Post action cannot touch', () => {
+// ETP-5209 — `postRowFilter` is a plain function now (not a hook-producing
+// factory): `ui` is the 3rd argument, supplied by BulkDocumentAction's own
+// `handleDone` at CALL time. These tests got simpler as a direct result — no
+// factory setup, just call the exported function with a stub ui() translator.
+describe('postRowFilter — pre-blocks rows the Post action cannot touch', () => {
   const ui = (key) => key;
-  const filter = createPostRowFilter(ui);
 
   it('allows a processed, unposted row', () => {
-    expect(filter({ processed: 'Y', posted: 'N' }, 'post')).toBe(true);
+    expect(postRowFilter({ processed: 'Y', posted: 'N' }, 'post', ui)).toBe(true);
   });
 
   it('blocks an already-posted row with bulkRowAlreadyPosted', () => {
-    expect(filter({ processed: 'Y', posted: 'Y' }, 'post')).toBe('bulkRowAlreadyPosted');
+    expect(postRowFilter({ processed: 'Y', posted: 'Y' }, 'post', ui)).toBe('bulkRowAlreadyPosted');
   });
 
   it('blocks a not-yet-processed row with bulkRowNotCompleted', () => {
-    expect(filter({ processed: 'N', posted: 'N' }, 'post')).toBe('bulkRowNotCompleted');
+    expect(postRowFilter({ processed: 'N', posted: 'N' }, 'post', ui)).toBe('bulkRowNotCompleted');
   });
 
   it('does not gate a different action (always true when action !== post)', () => {
-    expect(filter({ processed: 'N', posted: 'Y' }, 'unpost')).toBe(true);
+    expect(postRowFilter({ processed: 'N', posted: 'Y' }, 'unpost', ui)).toBe(true);
   });
 });
 
@@ -217,6 +220,84 @@ describe('BulkDocumentAction', () => {
       <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
     );
     expect(screen.getByText(/bulkCompletion/)).toBeInTheDocument();
+  });
+});
+
+// ETP-5209 — proves the `rowFilter` contract works end-to-end through a REAL
+// render of BulkDocumentAction: the caller only needs to pass a plain
+// `(row, action, ui) => ...` function reference (like `postRowFilter` above)
+// and BulkDocumentAction supplies `ui` itself at call time, from its own safe
+// `useUI()` call. This is the regression that would have caught ETP-5209 at
+// the component-contract level: before the fix, `rowFilter` was built via
+// `createPostRowFilter(ui)`, which required the CALLER to already hold a
+// hook-derived `ui` — forcing every `bulkActions` wrapper (invoked as a plain
+// function by ListView.jsx, not JSX) to call `useUI()` itself, a Rules-of-Hooks
+// violation the instant the selection toolbar mounted.
+describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', () => {
+  const STORAGE_KEY = 'bulkActionResult';
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('calls rowFilter with (row, action, ui) — the caller never has to create its own ui()', async () => {
+    const rowFilter = vi.fn(() => true);
+    const rows = [{ id: 'row-1', documentStatus: 'DR' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        rowFilter={rowFilter}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(rowFilter).toHaveBeenCalled());
+    const [row, action, ui] = rowFilter.mock.calls[0];
+    expect(row).toEqual(rows[0]);
+    expect(action).toBe('CO');
+    // The mocked useUI() (top of file) returns the identity function — proves
+    // the 3rd argument really is a usable ui() translator, not undefined.
+    expect(ui).toBeInstanceOf(Function);
+    expect(ui('someKey')).toBe('someKey');
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled());
+  });
+
+  it('pre-blocks a row when rowFilter returns a rejection message (no ui needed from the caller side)', async () => {
+    const rowFilter = vi.fn(() => 'bulkRowAlreadyPosted');
+    const rows = [{ id: 'row-2', documentStatus: 'DR' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        rowFilter={rowFilter}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    expect(ok).toBe(0);
+    expect(failed).toEqual([{ documentNo: 'row-2', message: 'bulkRowAlreadyPosted' }]);
+
+    // A blocked row counts as a failure, so handleDone uses the longer 1500ms
+    // delay before reload (see BulkDocumentAction.jsx's `failed.length === 0`
+    // branch) — same pattern as the actionMode failure test above.
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
 });
 

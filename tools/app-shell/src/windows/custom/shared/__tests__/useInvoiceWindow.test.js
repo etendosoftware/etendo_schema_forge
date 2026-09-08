@@ -119,7 +119,7 @@ describe('useInvoiceWindow', () => {
 
     // ETP-5209 — Post reachable from the row-hover kebab, gated the same way as
     // the form-view kebab (decisions.json -> window.menuActions) and the bulk
-    // Post action (BulkDocumentAction.jsx's buildPostActions/createPostRowFilter):
+    // Post action (BulkDocumentAction.jsx's buildPostActions/postRowFilter):
     // a row must be processed AND not yet posted for Post to appear.
     describe('menuActions (ETP-5209 — row-hover Post entry)', () => {
       it('offers post when the row is processed and not posted', () => {
