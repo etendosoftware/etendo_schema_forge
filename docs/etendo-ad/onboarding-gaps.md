@@ -1673,11 +1673,14 @@ ticket asks for, but it is a real change in day-one capability.
 
 * `M_PRODUCT` `ETGO_DTO` ("Discount") — the product the inline-discount feature resolves at runtime
   (`ETGO_DTO_PRODUCT_ID`). Deleting it breaks discounts across sales and purchase orders.
-* Two of the three `M_PRODUCT_CATEGORY` rows — **`Discounts`**, required by `ETGO_DTO`, and
-  **`Otros`**, kept as the generic starter category. `Bebidas` was removed (2026-09-02, after
-  inspecting the live FranOB2 tenant); the earlier reason given for keeping it — that
-  `M_PRODUCT_CATEGORY_ACCT` references it — did not hold, since that table is not in
-  `INCLUDED_TABLES` and so never reaches a tenant.
+* Two of the three `M_PRODUCT_CATEGORY` rows — **`Discounts`**, required by `ETGO_DTO`, and the
+  generic starter category, renamed `Otros` -> **`Generic`** with the Spanish moved into a real
+  `M_PRODUCT_CATEGORY_TRL` row (`Genérico`). The third, `Bebidas`, is kept away from a tenant
+  (2026-09-02, after inspecting the live FranOB2 tenant); the earlier reason given for keeping it —
+  that `M_PRODUCT_CATEGORY_ACCT` references it — did not hold, since that table is not in
+  `INCLUDED_TABLES` and so never reaches a tenant. **It is no longer deleted from the source
+  dataset, only filtered at import time** — see N4b below, which also covers its rename to
+  `Beverages` and its own `es_ES` row.
 * `FIN_PAYMENTMETHOD` (Efectivo, Transferencia bancaria, Recibo, Tarjeta) — payment *methods*, not
   accounts; the ticket did not ask for their removal.
 
@@ -1738,6 +1741,93 @@ contract forbids.
 It existed only to give the now-removed BP a currency, an address and a contact user on older
 tenants; leaving it live would keep minting exactly the "Default Customer Contact" `AD_User` this
 ticket stops creating. Obsoleted, not superseded — `supersededBy` is empty.
+
+---
+
+### N4b — Serving the tenant by deleting from the source broke `install` (ETP-5079 follow-up, 2026-09-08)
+
+**Symptom.** `./gradlew install` died in `enableAllFK` on the foreign key
+`C_BPARTNER_FIN_FINACC`. The dataset itself was the cause: N4's fix for items **2**, **4** and **5**
+above (the second warehouse, the four sample products, the three template financial accounts) plus
+the `Bebidas` category removed those rows **from the source XML**, and the transactional rows that
+reference them were left in place.
+
+**Root cause — one source, two consumers with opposite needs.** This is the design fact the first
+cut missed:
+
+| Consumer | Reads | Scope | Needs |
+|---|---|---|---|
+| `install.source` -> `import.sample.data` | `com.etendoerp.go/referencedata/sampledata/GOClient/` | **all 121 XML** | the **complete** dataset — it creates the GOClient sample client, which is meant to have sample data to demo with |
+| tenant onboarding | the same files, via the classpath (`OnboardingSourceFiles`) | **40 tables** (`INCLUDED_TABLES`) | the dataset **without** demo data |
+
+`ImportSampledata` loads all 121 files with foreign keys disabled and then re-enables them, so the
+~394 references left dangling by the deletion (invoice lines, order lines, shipment lines,
+inventory, costing, storage, matching, payments, `FACT_ACCT`, `AD_TREENODE`) surfaced all at once at
+`enableAllFK`.
+
+**The dangling references were exclusively install's problem.** Every table in that transactional
+chain is either absent from `INCLUDED_TABLES` or listed in `EXCLUDED_TABLES` (`FACT_ACCT`,
+`AD_TREENODE` and `AD_PROCESS_REQUEST` are all in the excluded set), so none of it ever reaches a
+tenant. The deletion was needed for the onboarding consumer alone but was applied where it hit both.
+
+**Fix.** Restore the source dataset and drop the rows on the onboarding path instead, using the
+per-row filter mechanism that already existed in `OnboardingDatasetNormalizer` — the same one whose
+javadoc states the principle: *"This filter ignores it at import time without modifying the source
+dataset."*
+
+1. **Source restored** — 8 files. Six were pure deletions (`FIN_FINANCIAL_ACCOUNT`,
+   `FIN_FINACC_PAYMENTMETHOD`, `M_PRODUCT`, `M_PRODUCTPRICE`, `M_LOCATOR`, `AD_ORG_WAREHOUSE`);
+   `M_WAREHOUSE` and `M_PRODUCT_CATEGORY` were mixed — they also carry the legitimate
+   `Almacen GO` -> `Almacen Principal` and `Otros` -> `Generic` renames, so their deleted blocks
+   were reinserted surgically instead of checking the files out wholesale.
+2. **`DemoMasterDataFilter`** — a third sub-filter in `OnboardingDatasetNormalizer`'s
+   `RowExclusionFilter` composite, covering **9 tables**: the five parents match on their own
+   primary key, and `FIN_FINACC_PAYMENTMETHOD`, `M_PRODUCTPRICE`, `AD_ORG_WAREHOUSE` and
+   `M_PRODUCT_CATEGORY_TRL` match on the foreign key pointing at an excluded parent (`M_LOCATOR`
+   matches on both). The ten excluded ids live in `OnboardingDemoMasterData`.
+3. **`Bebidas` -> `Beverages`** with a real `es_ES` row (`Bebidas`) in `M_PRODUCT_CATEGORY_TRL.xml`,
+   the same English-base-plus-translation convention the ticket applied to the starter category and
+   to all 49 document types. Restoring it under its Spanish name would have broken
+   `testEveryUserFacingProductCategoryHasARealSpanishTranslation`, which rejects an `es_ES` row that
+   merely repeats the base name. That translation row is also why `M_PRODUCT_CATEGORY_TRL` is the
+   ninth filtered table: dropping the category while importing its translation would hand every
+   tenant a `_TRL` row pointing at a category it does not have.
+
+**Design note — this filter is stateless, unlike the two that preceded it.**
+`AccountElementTreeFilter` discovers parent ids at runtime and relies on the alphabetical
+source-file order to cascade to the children. That cannot work here: `FIN_FINACC_PAYMENTMETHOD`
+sorts **before** `FIN_FINANCIAL_ACCOUNT` and `AD_ORG_WAREHOUSE` before `M_WAREHOUSE`, so both
+children are processed before their parent is ever seen. And unlike `DanglingCalendarFilter` there
+is no ownership column to key on — demo master data sits in the same files as the rows a tenant
+genuinely needs (`ETGO_DTO`, `Discounts`, the primary warehouse). Hence a fixed id set matched
+against both the row's own PK and its parent FK, which is order-independent and free of mutable
+state. The composite's short-circuit comment still holds: the nine tables overlap neither
+`C_ELEMENT*` nor the fiscal calendar tables.
+
+**The test that was missing** — `OnboardingDatasetReferentialIntegrityTest`. No database. It walks
+all 121 files and asserts: *when the dataset ships a file for table `T`, every `T_ID` reference in
+any dataset row must resolve to a row that `T.xml` actually defines.* Scoped by table, not by id, so
+the ids the dataset legitimately references without defining (System `'0'`, users `100`/`0`, Core
+currencies, UoMs, countries) are out of scope, and so is any `_ID` column whose name does not match
+a shipped file (`SALESREP_ID`, `BILLTO_ID`, `EM_ETGO_*_ID`) — no exception list needed. Verified red
+before the restore (68 dangling references reported, the first of them the very
+`C_BPARTNER.FIN_FINANCIAL_ACCOUNT_ID` behind `C_BPARTNER_FIN_FINACC`) and green after. Its second
+test pins the ten demo rows as still **present in the source**, so re-deleting them fails loudly
+with a message naming the right fix. On the other side,
+`OnboardingDatasetNormalizerTest#testNormalizerDropsDemoMasterDataTogetherWithItsChildRows` counts
+the normalized rows per table, because the four child tables carry no names — only ids and numbers —
+so a filter that dropped the parents and kept the children would leave every string assertion green
+while handing each tenant 8 price rows, 6 payment-method rows and a stray warehouse assignment.
+
+**Why not the alternatives.** *Restore and stop* fixes install but silently reverts the ticket —
+every new tenant gets the demo data back. *Finish deleting the dependent chain* fixes install and
+the tenant but empties GOClient's sample data, which is the whole point of the sample client.
+
+**Watch out when verifying by hand.** `INCLUDED_TABLES` and the filter are Java, loaded once per
+JVM, while the XMLs are re-read on every provisioning — **a filter change needs a Tomcat restart**
+before it affects a newly provisioned tenant. Expected end state: GOClient at 5 products / 3
+financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`ETGO_DTO` only) / 0
+accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
 
 ---
 
