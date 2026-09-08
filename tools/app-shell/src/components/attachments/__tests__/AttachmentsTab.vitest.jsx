@@ -38,6 +38,19 @@ vi.mock('../useAttachments', () => ({
   useAttachments: () => hookState,
 }));
 
+// ETP-5038: the accepted types now come from GET /sws/neo/attachments/config. Pin them
+// here so these tests exercise the tab, not the network — the policy module has its own
+// suite for the fetch/fallback behavior.
+vi.mock('../useAttachmentPolicy', () => ({
+  useAttachmentPolicy: () => ({
+    maxSizeMB: 10,
+    allowedMimeTypes: ['application/pdf', 'image/png'],
+    allowedExtensions: ['pdf', 'png'],
+    typeGroups: ['pdf', 'image'],
+    degraded: false,
+  }),
+}));
+
 import AttachmentsTab from '../AttachmentsTab';
 import { toast } from 'sonner';
 
@@ -123,7 +136,7 @@ describe('AttachmentsTab', () => {
   it('forwards an accepted dropped file to the upload() callback', () => {
     render(<AttachmentsTab {...baseProps} />);
 
-    const small = new File(['hi'], 'small.txt', { type: 'text/plain' });
+    const small = new File(['hi'], 'small.pdf', { type: 'application/pdf' });
     Object.defineProperty(small, 'size', { value: 10 });
 
     const dropzone = screen.getByText('attachmentsDropHere').parentElement.parentElement;
@@ -133,13 +146,28 @@ describe('AttachmentsTab', () => {
     expect(hookState.upload).toHaveBeenCalledWith(small);
   });
 
+  // ETP-5038 TC-02: the dropzone advertised "PDF, Word, Excel, PowerPoint, images" while
+  // text/plain sat in the allowlist, so a .txt uploaded without a word of complaint.
+  it('rejects a .txt file with a visible error and never calls upload()', () => {
+    render(<AttachmentsTab {...baseProps} />);
+
+    const text = new File(['hi'], 'notes.txt', { type: 'text/plain' });
+    Object.defineProperty(text, 'size', { value: 10 });
+
+    const dropzone = screen.getByText('attachmentsDropHere').parentElement.parentElement;
+    fireEvent.drop(dropzone, { dataTransfer: { files: [text] } });
+
+    expect(hookState.upload).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('attachmentsInvalidType');
+  });
+
   // ETP-4315 QA follow-up: a brand-new record has no persisted id yet
   // (recordId is the literal string "new"), so a plain upload() 404s and
   // the file is silently lost. saveBeforeAttach forces the header to save
   // first, then uploads against the id it returns.
   describe('saveBeforeAttach (ETP-4315 QA follow-up)', () => {
     const small = () => {
-      const file = new File(['hi'], 'small.txt', { type: 'text/plain' });
+      const file = new File(['hi'], 'small.pdf', { type: 'application/pdf' });
       Object.defineProperty(file, 'size', { value: 10 });
       return file;
     };
