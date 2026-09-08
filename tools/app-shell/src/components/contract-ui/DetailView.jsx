@@ -1556,6 +1556,12 @@ export function DetailView({
   // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
   // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
   const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+  // ETP-5233: role-tier-only signal for the kebab menu — a window that's statically
+  // read-only by design (decisions.json `api.window.readOnly`) can still expose
+  // document actions like Post/Unpost (see matched-purchase-invoices); only an actual
+  // ETP-4520 role-tier read-only-access restriction (`windowProp.readOnly`) should hide
+  // them. Everything else above keeps using the combined `windowReadOnly`.
+  const menuActionsReadOnly = windowProp?.readOnly === true;
   const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
@@ -2949,7 +2955,7 @@ export function DetailView({
                 sqBtnSize={sqBtnSize}
                 statusField={statusField}
                 token={token}
-                ui={ui} windowReadOnly={windowReadOnly}
+                ui={ui} windowReadOnly={menuActionsReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}

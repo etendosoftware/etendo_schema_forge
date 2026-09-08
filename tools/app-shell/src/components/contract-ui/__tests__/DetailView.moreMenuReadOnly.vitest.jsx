@@ -1,19 +1,35 @@
 /**
- * Behavioral test for the window-level read-only gate on the DetailView toolbar
- * "more actions" kebab button (ETP-5116).
+ * Behavioral test for the read-only gate on the DetailView toolbar "more
+ * actions" kebab button (ETP-5116, corrected by ETP-5233).
  *
- * A read-only window access role (decisions.json → window.readOnly, threaded to
- * the frontend as api.window.readOnly === true, or the runtime per-tier
- * `window` prop override) must never expose write actions (Reactivate, Post,
- * Void, etc.) through the kebab menu — the whole button must not render, not
- * just its item list. DetailView derives `windowReadOnly` and passes it down to
- * DetailMoreActionsMenu, which collapses both `visibleActions` and
- * `hasCustomContent` to their empty/falsy state, so the pre-existing
- * `visibleActions.length === 0 && !hasCustomContent` guard hides the button.
+ * ETP-5116 originally gated the kebab on a COMBINED `windowReadOnly` flag
+ * (`api?.window?.readOnly === true || windowProp?.readOnly === true`). That
+ * conflated two distinct concepts:
+ *   - `api.window.readOnly` — a STATIC decisions.json-authored flag: a window
+ *     whose data is always view-only by design (e.g. matched-purchase-invoices),
+ *     but which must still be able to expose document actions like Post/Unpost
+ *     through the kebab.
+ *   - `window.readOnly` (the `window` prop, aka `windowProp`) — the ETP-4520
+ *     RUNTIME per-role access-tier override, forced true only when the CURRENT
+ *     USER's role has "read-only" tier access to that specific window.
+ *
+ * ETP-5233 fixes the bug this caused: a statically read-only window (e.g. an
+ * admin with full role access viewing matched-purchase-invoices) was wrongly
+ * losing Post/Unpost because the kebab was hidden on the combined flag. The
+ * fix introduces `menuActionsReadOnly = windowProp?.readOnly === true` — used
+ * ONLY at the `<DetailMoreActionsMenu windowReadOnly={menuActionsReadOnly}>`
+ * call site — while every other consumer of the combined `windowReadOnly`
+ * (isDocumentReadOnly, hideDeleteButton, save-action gates, field/line
+ * readOnly props) is unchanged (see DetailView.windowReadOnly.vitest.jsx).
+ *
+ * So: static-only readOnly (api.window.readOnly) must NOT hide the kebab.
+ * Role-tier readOnly (the `window` prop) must still hide it, regardless of
+ * whether the static flag is also true.
  *
  * Harness mirrors DetailView.windowReadOnly.vitest.jsx (ETP-4474/ETP-4520).
  */
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 const navigateMock = vi.fn();
@@ -159,7 +175,7 @@ function renderDetailView(props = {}) {
   );
 }
 
-describe('DetailView — window.readOnly "more actions" kebab gate (ETP-5116)', () => {
+describe('DetailView — "more actions" kebab read-only gate (ETP-5116, corrected ETP-5233)', () => {
   beforeEach(() => {
     navigateMock.mockClear();
     currentHook = makeHook({ id: '123', documentNo: 'CR-001', status: 'DR', processed: false });
@@ -170,25 +186,65 @@ describe('DetailView — window.readOnly "more actions" kebab gate (ETP-5116)', 
     expect(screen.queryByTestId('action-more')).toBeTruthy();
   });
 
-  it('hides the kebab button entirely when api.window.readOnly is true', () => {
+  it('does NOT hide the kebab button when only api.window.readOnly (static) is true (ETP-5233)', () => {
+    // Static, decisions.json-authored readOnly alone (no role-tier `window`
+    // prop override) must still expose document actions like Post/Unpost
+    // through the kebab — this is the exact ETP-5233 regression scenario.
     renderDetailView({ api: { window: { readOnly: true } } });
-    expect(screen.queryByTestId('action-more')).toBeNull();
+    expect(screen.queryByTestId('action-more')).toBeTruthy();
   });
 
   // ETP-4520 pattern — the runtime per-tier override passed via the `window`
-  // prop, distinct from the static api.window.readOnly case above.
-  it('hides the kebab button entirely when window.readOnly is true (runtime override)', () => {
+  // prop, distinct from the static api.window.readOnly case above. This is
+  // the one case that must still hide the kebab.
+  it('hides the kebab button entirely when window.readOnly is true (runtime role-tier override)', () => {
     renderDetailView({ api: {}, window: { readOnly: true } });
     expect(screen.queryByTestId('action-more')).toBeNull();
   });
 
-  it('hides the kebab button even when customMenuContent would otherwise render content', () => {
+  it('hides the kebab button on role-tier readOnly even when the static flag is ALSO true (signals are independent)', () => {
+    // Both flags true: the static decisions.json flag does not "cancel out"
+    // or interfere with the role-tier flag — role-tier readOnly alone is
+    // sufficient to hide the kebab, proving the two signals are evaluated
+    // independently rather than via the old combined OR.
+    renderDetailView({ api: { window: { readOnly: true } }, window: { readOnly: true } });
+    expect(screen.queryByTestId('action-more')).toBeNull();
+  });
+
+  it('does NOT suppress customMenuContent when only api.window.readOnly (static) is true (ETP-5233)', () => {
     renderDetailView({
       api: { window: { readOnly: true } },
       menuActions: [],
       customMenuContent: CustomMenuContent,
     });
+    expect(screen.queryByTestId('action-more')).toBeTruthy();
+  });
+
+  it('hides the kebab button (and suppresses customMenuContent) when window.readOnly (role-tier) is true', () => {
+    renderDetailView({
+      api: {},
+      window: { readOnly: true },
+      menuActions: [],
+      customMenuContent: CustomMenuContent,
+    });
     expect(screen.queryByTestId('action-more')).toBeNull();
     expect(screen.queryByTestId('custom-menu-content')).toBeNull();
+  });
+
+  it('ETP-5233 regression: static-only readOnly window with a visible menu action renders the kebab AND the action inside it', async () => {
+    // Full/non-read-only-tier role access (no `window` prop) + a statically
+    // read-only window (api.window.readOnly, decisions.json-style) + at least
+    // one visible menuAction. The kebab must render, and opening it must show
+    // the action — proving Post/Unpost-style actions survive on windows like
+    // matched-purchase-invoices for a user with full role access.
+    const user = userEvent.setup();
+    renderDetailView({
+      api: { window: { readOnly: true } },
+      menuActions: [{ key: 'reactivate', label: 'Reactivate', documentAction: 'RE' }],
+    });
+    const moreButton = screen.getByTestId('action-more');
+    expect(moreButton).toBeTruthy();
+    await user.click(moreButton);
+    expect(screen.getByTestId('menu-action-reactivate')).toBeTruthy();
   });
 });
