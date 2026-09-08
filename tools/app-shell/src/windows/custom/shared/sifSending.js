@@ -1,4 +1,4 @@
-import { getInvoiceFiscalTargets, isTbaiEligibleByDate } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from './fiscalTargets.js';
 
 /**
  * NEO serialises an AD `boolean` column either as a real JSON `true`/`false` or
@@ -28,7 +28,7 @@ export function isSent(value) {
 export function getPendingSifTargets(specName, profile, invoice, territory = null, tbaiRecord = null) {
   const { showSii, showTbai } = getInvoiceFiscalTargets(specName, profile, territory);
   const tbaiEligibleByDate = showTbai
-    && isTbaiEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
+    && isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
 
   return {
     sendSii: showSii && !isSent(invoice?.aeatsiiIssent),
