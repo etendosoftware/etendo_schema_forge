@@ -20217,6 +20217,7 @@
     "backendError.statementNotDraft": "A processed statement cannot be deleted. Reactivate it first.",
     "backendError.statementHasMatchedLines": "A statement with reconciled lines cannot be deleted. Unreconcile those lines first.",
     "backendError.statementNotProcessed": "Only processed statements can be reactivated",
+    "backendError.statementDraftNotReconcilable": "The bank statement is a draft. Process it before reconciling its lines.",
     "backendError.priceListCannotDeactivateDefault": "A tariff marked as default cannot be deactivated.",
     "backendError.productCategoryCannotSetMultipleDefault": "Only one product category can be marked as default.",
     "backendError.noLinesToInvoice": "There are no lines to invoice for this order.",
