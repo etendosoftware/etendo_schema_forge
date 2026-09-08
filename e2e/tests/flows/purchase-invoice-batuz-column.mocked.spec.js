@@ -47,6 +47,11 @@ const BASE_ROW = {
   documentStatus: 'CO',
   'documentStatus$_identifier': 'Completado',
   invoiceDate: '2026-05-08',
+  // ETP-5122 added a date gate to the SII column (isSifEligibleByDate(row.accountingDate,
+  // siiRecord?.fechaAcogidaSII)) on top of the pre-existing territory gate this spec
+  // exercises. Needs to be later than the mocked siiRecord.fechaAcogidaSII below (see
+  // openList()) so every row is eligible and the SII cell assertions actually run.
+  accountingDate: '2026-05-08',
   businessPartner: 'BP_1',
   'businessPartner$_identifier': 'QA Supplier',
   'currency$_identifier': 'EUR',
@@ -110,6 +115,20 @@ async function openList(page, { profile, territory }) {
   await seedSelectedOrg(page);
   await login(page);
   await installFiscalProfileMocks(page, profile, { territory });
+  // installFiscalProfileMocks()'s siiRecord (shared across specs, see
+  // fiscal-config-mocks.js) has no fechaAcogidaSII, so BASE_ROW.accountingDate
+  // above would never satisfy the ETP-5122 SII date gate without this override.
+  // Registered AFTER installFiscalProfileMocks — Playwright matches routes in
+  // reverse registration order, so this wins over the shared one — with a date
+  // earlier than every row's accountingDate, so this spec keeps exercising only
+  // what it was designed for (the territory gate), not the (correct, new) date gate.
+  await page.route('**/sws/neo/sii-config/siiConfiguration?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', fechaAcogidaSII: '2020-01-01' }]),
+    });
+  });
   await installListMock(page);
   await page.goto(`/${SPEC}`);
   // Any row proves the grid rendered with the mocked payload.
