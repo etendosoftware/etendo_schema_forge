@@ -15,6 +15,31 @@ vi.mock('@/components/CopilotContext', () => ({
   useCopilot: () => ({ toggle: vi.fn() }),
 }));
 
+// The real hook dynamic-imports EVERY generated contract.json (`import.meta.glob`) and only then
+// resolves the scope targets. Under the full suite that resolution routinely overran waitFor's 1s
+// default, so this file failed for machine load rather than for behaviour. What the pill actually
+// consumes is the resolved target list, which the fixture supplies directly; that the generated
+// contracts really declare `vectorSearch.target`, and that /sales-invoice resolves to its own
+// window, is covered against the resolvers themselves in src/lib/__tests__/vectorSearchConfig.test.js.
+// Two targets, not one, so "the current window" and "every window" stay distinguishable — that is
+// the difference between the pill showing and the pill being cleared.
+vi.mock('@/hooks/useVectorSearchContracts.js', () => ({
+  useVectorSearchContracts: () => ([
+    {
+      specName: 'sales-invoice',
+      contract: {
+        frontendContract: { window: { name: 'Sales Invoice', vectorSearch: { target: 'salesinvoice' } } },
+      },
+    },
+    {
+      specName: 'purchase-order',
+      contract: {
+        frontendContract: { window: { name: 'Purchase Order', vectorSearch: { target: 'purchaseorder' } } },
+      },
+    },
+  ]),
+}));
+
 import TopBar from '../TopBar.jsx';
 
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
