@@ -52,11 +52,13 @@ import { ensureOpenPeriod } from '../helpers/period-helpers.js';
  * from whatever the tenant happens to hold, and the spec is repeatable — it never consumes shared
  * data. It also covers the account wizard's own contract: `FinancialAccountSupport` auto-assigns
  * Efectivo to every type-'C' account on creation, which is precisely what makes step 4 possible.
- * (ETP-5079 additionally removed the seeded "Caja"/"Cuenta de Banco"/"Tarjeta" accounts from the
- * onboarding dataset, so a fresh tenant's account list is empty — creating its own is now the only
- * thing this spec could do, not merely the better one. The invoice line it collects is likewise
- * built on a self-provisioned product fixture, since no product is seeded either — and on a
- * self-provisioned contact, since a fresh tenant has no business partners at all.)
+ * (ETP-5079 additionally keeps the "Caja"/"Cuenta de Banco"/"Tarjeta" accounts out of an onboarded
+ * tenant — they are still shipped for the GOClient sample client and are dropped at import time by
+ * `OnboardingDatasetNormalizer`'s `DemoMasterDataFilter` — so a fresh tenant's account list is
+ * empty and creating its own is now the only thing this spec could do, not merely the better one.
+ * The invoice line it collects is likewise built on a self-provisioned product fixture, since no
+ * product reaches a fresh tenant either — and on a self-provisioned contact, since a fresh tenant
+ * has no business partners at all.)
  *
  * A sales invoice (not a purchase one) on purpose: the collection is money coming IN, so the drawer
  * ends up with a POSITIVE counted balance — the way a cash desk actually reads. Paying a purchase

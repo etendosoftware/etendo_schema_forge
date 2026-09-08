@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "generatedAt": "2026-09-02T14:40:15.987Z",
-  "updatedAt": "2026-09-03T02:37:12.013Z",
-  "checksum": "7c41ab662d74c8c6",
+  "updatedAt": "2026-09-07T18:33:11.376Z",
+  "checksum": "825143adcb053480",
   "frontendContract": {
     "window": {
       "id": "107",
@@ -186,7 +186,7 @@
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {

@@ -487,6 +487,146 @@ public NeoResponse afterHandle(NeoContext ctx) {
 }
 ```
 
+### Post-hook: Provision (and Pre-hook: Retire) a Scheduled Process from a Shared Cross-Cutting Service
+
+**Trigger condition:** suspect this problem whenever a config-like entity, once saved and active
+through GO, must trigger an ongoing background job that Classic UI's operator would otherwise set
+up by hand in a different window entirely (e.g. Process Request) — and the same provisioning
+logic is needed from more than one handler/entity (two different config specs that both unlock
+the same kind of background job).
+
+**The lifecycle is symmetric — whatever a post-hook provisions, something must de-provision.**
+A schedule created when a config becomes active must not outlive that config: if nothing tears it
+down when the config is deleted or deactivated, the background job keeps firing forever for an
+organization whose configuration is gone. Copying only the creation half of this recipe for a new
+config type reproduces exactly this leak — treat create and remove as one pattern, not two.
+
+**Don't duplicate the provisioning logic per handler.** Put it in a plain shared service class
+(not a `NeoHandler` itself — it has no `@Named` qualifier, it is just called by handlers), and
+have each handler call it — creation from `afterHandle`, removal from the pre-hook (see below) —
+once it has determined its own entity's state. This keeps `NeoHandlerUtils`-style per-window
+logic out of the handlers while still following the Golden Rule (no window-specific `if` chains
+in generic services): the service is a plain Java class, the *decision of when to call it* stays
+in each entity's own handler.
+
+#### Creation — `afterHandle`, because the record exists and is committed
+
+**Example (ETP-5117):** `SiiTbaiAutoSendScheduleService` creates (idempotently, scoped to
+client + organization) and best-effort-activates a twice-a-day `AD_Process_Request` that sends
+invoices via the SII / TicketBAI process. Two unrelated handlers — `SiiConfigDeactivateHandler`
+(`sii-config-deactivate-handler`) and `TbaiConfigSequenceHandler`
+(`tbai-config-sequence-handler`) — each call it from their own `afterHandle`, once their own
+entity (`AEATSII_CONFIG` / `TBAI_Config`) is confirmed active after a create-or-update save:
+
+```java
+private void scheduleAutoSendIfActive(NeoContext context, String recordId) {
+  MyConfig config = OBDal.getInstance().get(MyConfig.class, recordId);
+  if (config == null || !Boolean.TRUE.equals(config.isActive())) return;
+  OBContext obContext = context.getObContext();
+  if (obContext == null || obContext.getUser() == null || obContext.getRole() == null) return;
+  String requestId = scheduleService.ensureAutoSendSchedule(config.getClient().getId(),
+      config.getOrganization().getId(), obContext.getUser().getId(), obContext.getRole().getId(),
+      MyScheduleService.PROCESS_SEARCH_KEY, "…description…");
+  scheduleService.activateSchedule(requestId); // best-effort, see below
+}
+```
+
+The `AD_Process` to schedule is resolved by search key, never a hardcoded UUID (module
+sourcedata) — same defensive, non-fatal null-guard as `OnboardingBankConnectionSyncService`.
+
+**Activation timing differs from an onboarding-triggered schedule.** A schedule created during
+onboarding is provisioned inside a multi-step orchestrated transaction, with an explicit
+post-commit call to activate it (the orchestrator calls the "create" step, commits, then calls
+"activate" separately — see `OnboardingBankConnectionSyncService`). A `NeoHandler.afterHandle`
+hook has no equivalent "after commit" callback to hang activation off. The pattern here is to
+attempt activation **immediately**, still best-effort (caught, logged, swallowed): if the
+enclosing request's transaction has not committed yet when `OBScheduler` queries the row on its
+own connection, activation simply fails silently and the row's `SCH` status means it is still
+picked up on the next scheduler initialization — the same degraded-but-safe fallback the
+onboarding service documents for its own activation failures. This is why a test for "activation
+best-effort failure doesn't break the CRUD response" belongs in the suite for this shape.
+
+#### Removal — the **pre-hook**, not `afterHandle`: the record must still exist
+
+**⚠️ Anti-pattern, explicitly: never resolve a record's client/organization from `OBContext`/the
+session in a NeoHandler.** The first ETP-5117 removal attempt put the cleanup in `afterHandle`,
+loading the record by PK and falling back to `context.getObContext().getCurrentClient()` /
+`getCurrentOrganization()` whenever that PK lookup came back empty. It **silently did nothing in
+production**: by the time `afterHandle` runs the record is already deleted, so the PK lookup
+always returns `null` and the session fallback always takes over — and in a real Etendo GO
+session the acting client-admin role has `ad_role.ad_org_id = '0'` (the `*` org) while the user
+has no `default_ad_org_id`, so the session's current organization is `'0'`, never the business
+org the schedule actually belongs to. `findExistingRequest` then matched nothing and no-opped,
+every single time. It passed every unit test, because the tests mocked `getObContext()` to return
+an org a real GO session never returns. **A unit test that mocks the session context to return
+the "right" org proves nothing for this pattern** — it only proves the code compiles, not that it
+finds the schedule it needs to remove.
+
+The fix is to resolve client/org **from the record itself, while it still exists**, which means
+the cleanup has to run in the pre-hook, not the post-hook:
+
+- **PUT with `active: false`** → inside `smartDeactivate(recordId)`
+  (`AbstractSmartDeactivationHandler`), which already holds the loaded config — cover **both** of
+  its outcomes: the record deleted outright, and the fall-through where default CRUD deactivates
+  it instead (e.g. dependent records exist and the audit trail must be preserved).
+- **Genuine HTTP `DELETE`** → a new overridable `beforeDelete(NeoContext context, String
+  recordId)` hook on `AbstractSmartDeactivationHandler`, invoked while the record still exists,
+  right before default CRUD hard-deletes it. It defaults to a **no-op**, so existing subclasses
+  that need no DELETE cleanup are entirely unaffected, and `handle()` still returns `null` for a
+  DELETE either way — the hook can run cleanup ahead of the delete, it can never cancel or replace
+  it:
+
+```java
+@Override
+public NeoResponse handle(NeoContext context) {
+  if (METHOD_DELETE.equalsIgnoreCase(context.getHttpMethod())) {
+    runBeforeDelete(context); // admin mode, catches/logs — never blocks the delete
+    return null;              // default CRUD hard-delete proceeds unchanged
+  }
+  // ...PUT / smartDeactivate handling as before
+}
+
+@Override
+protected void beforeDelete(NeoContext context, String recordId) {
+  unscheduleAutoSendFor(OBDal.getInstance().get(MyConfig.class, recordId), recordId);
+}
+```
+
+Both entry points end up calling the same removal method, scoped to the record's **own**
+client/organization — never the session's:
+
+```java
+public void unscheduleAutoSend(String clientId, String orgId, String processSearchKey) {
+  Process process = resolveProcess(processSearchKey);
+  if (process == null) return; // non-fatal: dataset not (yet) configured
+  ProcessRequest existing = findExistingRequest(clientId, orgId, process);
+  if (existing == null) return; // never created, or already unscheduled — safe no-op
+  unscheduleFromQuartz(existing.getId(), existing.getOpenbravoContext()); // best-effort
+  existing.setActive(false);
+  existing.setStatus(STATUS_UNSCHEDULED); // "UNS" — see below, do not skip this
+  OBDal.getInstance().save(existing);
+}
+```
+
+**Set `Status = 'UNS'` yourself — don't rely on `OBScheduler.unschedule(...)` to do it.**
+`OBScheduler#unschedule` does three things inside a single exception-swallowing block: remove the
+Quartz trigger, delete the Quartz job, and only *then* update the row's `Status`. In an
+environment where the scheduler was never initialized, the first Quartz call throws, the catch
+swallows it, and the status update never runs — leaving the row at the self-contradictory
+`Active = N, Status = SCH`. That combination is not merely cosmetic:
+`OBScheduler.initialize()` re-registers jobs on server startup by selecting
+`WHERE Status = 'SCH'` **without filtering `isactive`**, so a row left at `Status = 'SCH'` gets
+resurrected on the next restart even though `isactive = 'N'`. Set `Status` explicitly after the
+best-effort Quartz call, regardless of whether Quartz itself succeeded — writing `UNS` over an
+already-`UNS` row is idempotent and harmless.
+
+Real implementation: `SiiTbaiAutoSendScheduleService` — `ensureAutoSendSchedule`/
+`activateSchedule` for creation, `unscheduleAutoSend` for removal — plus
+`AbstractSmartDeactivationHandler#beforeDelete`, called from `SiiConfigDeactivateHandler`/
+`TbaiConfigSequenceHandler`'s `smartDeactivate`/`beforeDelete` pre-hooks (ETP-5117, removal
+counterpart). GO-only by design (no Hibernate-level `EntityPersistenceEventObserver` — a config
+saved only through Classic UI gets no automatic schedule, and none to remove either).
+
 ### Post-hook: Sync a Related Entity from a Parent Field
 
 **Trigger condition:** suspect this problem whenever a single-value column on the saved entity

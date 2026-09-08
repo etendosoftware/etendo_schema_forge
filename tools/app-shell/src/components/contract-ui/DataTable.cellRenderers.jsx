@@ -7,6 +7,7 @@ import { formatAmount } from '@/lib/formatAmount.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { resolvePostedStatus, postedStatusLabel } from '@/lib/postedStatus.js';
 
 function getDateDotColor(dateValue) {
   if (!dateValue) return null;
@@ -195,6 +196,13 @@ export function renderBooleanCell({
   if (col.badge) {
     const badge = renderBooleanBadgeCell(locale, col, ui, val);
     if (badge) return badge;
+  }
+  // A posting-status column holds 17 codes, not a boolean: everything other than
+  // 'Y'/'N' is the REASON a posting attempt failed, and used to fall through to the
+  // dash below — reading as "no data" instead of "posting failed" (ETP-5075).
+  const posted = resolvePostedStatus(col.column, val);
+  if (posted) {
+    return <Tag variant={posted.variant} label={postedStatusLabel(posted, ui)} data-testid="Tag__eb5261" />;
   }
   return renderBooleanFallback(val, ui);
 }
