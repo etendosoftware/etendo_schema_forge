@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inspectInteractiveDom } from '../useAiCopilotChat.js';
 
 /**
- * ETP-5184 — `inspect_page_dom` now also indexes `[data-testid^="field-"]`.
+ * ETP-5211 — `inspect_page_dom` now also indexes `[data-testid^="field-"]`.
  *
  * Read-only fields are neither focusable nor clickable, so the interactive
  * selector never saw them and the model could not name them at all. Indexing

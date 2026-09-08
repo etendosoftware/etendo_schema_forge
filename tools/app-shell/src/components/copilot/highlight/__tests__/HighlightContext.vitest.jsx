@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { HighlightProvider, useHighlight } from '../HighlightContext.jsx';
 
 /**
- * ETP-5184 — highlight state for the Copilot's `highlight_element` tool.
+ * ETP-5211 — highlight state for the Copilot's `highlight_element` tool.
  *
  * Exactly one element is highlighted at a time. That single-slot rule is what
  * makes each tool call atomic while letting the model chain calls so the

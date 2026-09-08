@@ -27,6 +27,9 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/sales-order/123' }),
   useNavigate: () => navigateMock,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
+  // HighlightProvider gates its route-change reset on this (ETP-5211): it only
+  // mounts the useLocation() watcher when a Router is actually present.
+  useInRouterContext: () => true,
 }));
 
 // AppLayout now calls useRoleMenu() (ETP-4598), which internally calls useAuth().

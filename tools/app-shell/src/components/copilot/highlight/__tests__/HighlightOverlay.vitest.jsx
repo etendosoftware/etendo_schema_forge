@@ -14,7 +14,7 @@ import { HighlightProvider, useHighlight } from '../HighlightContext.jsx';
 import { HighlightOverlay } from '../HighlightOverlay.jsx';
 
 /**
- * ETP-5184 — visual half of the Copilot's `highlight_element` tool.
+ * ETP-5211 — visual half of the Copilot's `highlight_element` tool.
  *
  * The overlay is a portal on document.body that rings the element the model is
  * talking about and shows its explanation. It must never intercept the user's

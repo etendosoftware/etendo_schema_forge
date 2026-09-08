@@ -8,6 +8,7 @@ import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownW
 import { accessibleElementName, fieldAccessibleName, isVisibleElement } from './domVisibility.js';
 import { useHighlight } from './highlight/HighlightContext.jsx';
 import { resolveHighlightTarget } from './highlight/highlightTarget.js';
+import { normalizeHighlightSteps } from './highlight/highlightScript.js';
 
 /**
  * Guard the router against anything that is not an in-app path. This is the
@@ -173,6 +174,64 @@ export function interactWithDom(registry, { elementId, action, value }) {
 }
 
 /**
+ * Execute `highlight_element`, in either of its two shapes.
+ *
+ * Read-only by contract: it points, it never clicks, focuses or writes.
+ * Anything else belongs to interact_with_page.
+ *
+ * The single-element shape is untouched, down to its return value
+ * (`{ok, fieldKey, label}`) — it is what the model already knows and what the
+ * page-help flow already uses. The script shape adds the counters the model
+ * needs to reason about a tutorial it can no longer see.
+ *
+ * Exported so the tool's own logic is testable without mounting the chat hook.
+ */
+export function runHighlightTool(args, { registry, root = document, highlight, highlightScript }) {
+  const { mode, steps, dropped, rejected } = normalizeHighlightSteps(args);
+
+  if (mode === 'single') {
+    const element = resolveHighlightTarget(args, registry, root);
+    const fieldKey = args.fieldKey || fieldKeyOf(element);
+    const label = fieldAccessibleName(element);
+    highlight({ element, note: typeof args.note === 'string' ? args.note : '', durationMs: args.durationMs });
+    return { ok: true, fieldKey, label };
+  }
+
+  if (!steps.length) {
+    // Every step was malformed: say why, in the same voice as the resolver's
+    // own errors, so the model can retry instead of narrating a failure.
+    throw new Error(`No usable step in steps: ${rejected.map(entry => `step ${entry.step} — ${entry.reason}`).join('; ')}`);
+  }
+
+  const outcome = highlightScript({
+    steps: steps.map(step => ({
+      note: step.note,
+      // Resolved on advance, not now: a later field may still be off-screen,
+      // collapsed, or unrendered when this call arrives.
+      resolve: () => resolveHighlightTarget(step, registry, root),
+    })),
+    durationMs: args.durationMs,
+  });
+
+  if (!outcome.currentStep) {
+    throw new Error(`No step of this tutorial is on the page: ${outcome.skipped.map(entry => `step ${entry.step} — ${entry.reason}`).join('; ')}`);
+  }
+
+  const shownStep = steps[outcome.currentStep - 1];
+  const element = outcome.element;
+  return {
+    ok: true,
+    steps: outcome.total,
+    currentStep: outcome.currentStep,
+    fieldKey: shownStep.fieldKey || fieldKeyOf(element),
+    label: fieldAccessibleName(element),
+    ...(outcome.skipped.length ? { skipped: outcome.skipped } : {}),
+    ...(rejected.length ? { rejected } : {}),
+    ...(dropped ? { droppedSteps: dropped } : {}),
+  };
+}
+
+/**
  * Trace every Copilot tool call in the browser console.
  *
  * The agent decides which tool to call server-side, so when it reports
@@ -205,7 +264,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
   const menuLabel = useMenuLabel();
   // No-op when no HighlightProvider is mounted (see HighlightContext.jsx), so
   // the Copilot still works in previews and isolated tests.
-  const { highlight } = useHighlight();
+  const { highlight, highlightScript } = useHighlight();
   // filterMenuGroupsByAccess() returns a fresh array on every AppLayout
   // render, so memoize on what actually changes — which windows are reachable
   // — or the index (and the tool callback holding it) would be rebuilt each
@@ -284,16 +343,14 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
         case 'interact_with_page':
           result = interactWithDom(domRegistryRef.current, args);
           break;
-        case 'highlight_element': {
-          // Read-only by contract: this tool points, it never clicks, focuses
-          // or writes. Anything else belongs to interact_with_page.
-          const element = resolveHighlightTarget(args, domRegistryRef.current, document);
-          const fieldKey = args.fieldKey || fieldKeyOf(element);
-          const label = fieldAccessibleName(element);
-          highlight({ element, note: typeof args.note === 'string' ? args.note : '', durationMs: args.durationMs });
-          result = { ok: true, fieldKey, label };
+        case 'highlight_element':
+          result = runHighlightTool(args, {
+            registry: domRegistryRef.current,
+            root: document,
+            highlight,
+            highlightScript,
+          });
           break;
-        }
         default:
           traceToolCall('unsupported', { toolName: toolCall.toolName, args });
           return;
@@ -329,7 +386,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
       ...(errorText ? { state: 'output-error', errorText } : { output: result }),
     });
     pendingRef.current.push(outputPromise);
-  }, [highlight, location.hash, location.pathname, location.search, navigate, onOpenCopilot, windowRouteIndex]);
+  }, [highlight, highlightScript, location.hash, location.pathname, location.search, navigate, onOpenCopilot, windowRouteIndex]);
 
   const executeTool = useCallback(({ toolCall }) => executeToolCall({
     toolCall,

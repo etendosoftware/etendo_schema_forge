@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 /**
- * ETP-5184 — every rendered form field must carry `data-testid="field-<key>"`.
+ * ETP-5211 — every rendered form field must carry `data-testid="field-<key>"`.
  *
  * That attribute is the anchor `inspect_page_dom` indexes and
  * `highlight_element` resolves, so a field branch that omits it is invisible to

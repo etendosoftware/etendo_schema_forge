@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { positionHighlightNote, resolveHighlightTarget } from '../highlightTarget.js';
 
 /**
- * ETP-5184 — the resolver half of the Copilot's `highlight_element` tool.
+ * ETP-5211 — the resolver half of the Copilot's `highlight_element` tool.
  *
  * Every message thrown here is read by the MODEL, not by a human, so the tests
  * pin the actionable wording ("inspect the page again" / "call inspect_page_dom")

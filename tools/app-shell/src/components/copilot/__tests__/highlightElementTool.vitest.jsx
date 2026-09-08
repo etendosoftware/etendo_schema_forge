@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
 /**
- * ETP-5184 — the `highlight_element` case of the Copilot tool dispatcher.
+ * ETP-5211 — the `highlight_element` case of the Copilot tool dispatcher.
  *
  * The dispatcher is not exported, so it is exercised the way the AI SDK
  * exercises it: through the `onToolCall` callback the hook hands to useChat.
