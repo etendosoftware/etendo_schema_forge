@@ -56,6 +56,8 @@ Schema Forge is now **two sibling repos + one runtime module**. Always know whic
 - Skip writing tests before delivery
 - Add a fictitious list column — a `type: 'custom'` cell with no backing AD `column`. It is silently unfilterable and unsortable. See `<list_columns>`
 - Inject a synthetic field into the NEO response from `afterHandle()` to feed a list column
+- Report a stored computed column as working because the build was green — the failures are warnings, see `<stored_computed_columns>`
+- Widen the assigned scope on my own. If the same fix obviously applies to a sibling window, SAY SO in the delivery report and let the coordinator decide; do not migrate it unasked. In ETP-5216 a developer scoped to sales-invoice also migrated purchase-invoice — correct work, unapproved, and it made the PR harder to review and to split
 </what_i_never_do>
 
 <communication_style>
@@ -198,6 +200,63 @@ when the default filter widget is wrong (see `transactionDocument` in
 **When reviewing or extending a generic list component, treat a new unbacked `custom` column in a
 window as a bug to push back on, not a local style choice.**
 </list_columns>
+
+<stored_computed_columns>
+## Stored Computed Columns — the failures are SILENT (MANDATORY)
+
+Step 2 of the decision tree above sends you here. The engine works, but every way of getting it
+wrong reports itself as a warning or as nothing at all, and the resulting column looks healthy:
+it renders, it filters, it sorts. It just never changes. Both traps below were hit for real in
+ETP-5216.
+
+### Trap 1 — a resolver with no FROM clause is skipped, and the build stays green
+
+`TARGET_ID_RESOLVER_SQL` MUST end in `FROM dual`:
+
+```sql
+SELECT COALESCE(NEW.c_invoice_id, OLD.c_invoice_id) FROM dual
+```
+
+Without it, `GenerateStoredComputedTriggers` rejects the dependency for Oracle portability — as a
+`log.warn`, NOT an error. `update.database` finishes green, every other dependency deploys, and
+yours is skipped:
+
+```
+WARN — Skipping SCD dependency <id> — non-portable resolver SQL (missing FROM clause)
+```
+
+No enqueue trigger is created, so the column keeps whatever value the initial population gave it
+and never refreshes again. Etendo ships `public.dual` on PostgreSQL; the clause costs nothing.
+
+### Verification is a DB query, never a green build (MANDATORY)
+
+A successful `update.database` proves nothing here. After deploying a stored computed column, run:
+
+```sql
+-- 1. the enqueue trigger exists on the SOURCE table
+SELECT tgname FROM pg_trigger
+ WHERE tgrelid='<source_table>'::regclass AND NOT tgisinternal;
+-- expect ad_scd_<dependency_id>_trg
+
+-- 2. nothing is left un-recomputed
+SELECT ad_scd_check('<AD_Column_ID>');   -- expect 0
+
+-- 3. the value actually reacts: change a source row and re-read the target column
+```
+
+Step 3 is the only one that proves the chain end to end. Steps 1-2 can pass on a column that is
+still wrong.
+
+### Trap 2 — with Refresh_Mode = 'S', a too-short column blocks the save
+
+Synchronous refresh runs inside the business transaction, so a computation error does not produce
+a bad badge — it **rolls back the user's save**. Size the column for the longest value the source
+can ever hold, and keep the function total (see `ETGO_GET_TBAI_STATUS.xml`: every edge case returns
+a value, plus `EXCEPTION WHEN OTHERS`). Copying the source column's width is the floor, not a safe
+default: `TBAI_SYNCINVOICE.ESTADO` is `varchar(10)` and `Rechazado` already uses 9 of it.
+
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`.
+</stored_computed_columns>
 
 <diagnosis_workflow>
 ## Diagnosing a Generator Bug

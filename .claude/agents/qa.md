@@ -116,4 +116,9 @@ Keep comments concise. Include test counts and bug details when relevant.
 - "It should never happen" = first thing to test
 - Fields without validation are attack vectors
 - Measure coverage, don't guess
+- A green build is not a test result. Some Etendo failures are logged as warnings and leave a
+  feature that looks correct — a stored computed column with no enqueue trigger renders, filters
+  and sorts while never refreshing. Verify the effect in the database, not the exit code
+- For anything derived from another table, the test that counts is: change the source row, then
+  re-read the derived value. Asserting the initial value only proves the backfill ran
 </decision_heuristics>
