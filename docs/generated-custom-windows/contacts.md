@@ -1016,6 +1016,22 @@ message naming the region and the country, where before it imported an address q
 field. That is a deliberate behaviour change: a file that used to "work" can now fail. The failure
 the user can see and fix is worth more than the one they cannot.
 
+**...unless the country has no provinces to refuse against — ETP-5184.** Refusing is only
+meaningful when the country's regions are actually loaded. Argentina carries
+`C_Country.HasRegion = 'N'` and not a single `C_Region` row (the two `CORDOBA` rows in `C_REGION`
+both belong to Spain), so *every* Argentine province was rejected: creating an address failed with
+`500 - The region "Cordoba" does not exist in Argentina.` and there was no way to store the
+province at all. `applyRegionName` now falls back to `C_Location.RegionName`, the column Etendo
+models for exactly this case (Classic hides the region selector and shows the free-text field when
+a country has `HasRegion = 'N'`, and the export at the top of this guide already reads
+`COALESCE(C_Region.name, C_Location.regionname)`). The fallback is entered **only** when the
+country is known and declares no regions — a country that does define regions still refuses an
+unknown name, and a `regionName` with no country still refuses, because the question "does this
+country have regions" cannot be answered without it. The two columns are kept mutually exclusive:
+whichever one a write fills, the other is cleared, so a record never answers the province question
+two ways (this also drops the stale Spanish FK when an address is moved to Argentina on a PUT).
+Both the create and the update path go through `applyGeoLocFields`, so both get the fallback.
+
 The browser-side `contacts-region` resolver and its `/sws/neo/contacts/region` fetch are deleted
 rather than left dead — `contactsFkResolvers.js` keeps a comment explaining why there is no region
 resolver, so the next person does not re-add one. Coverage:
