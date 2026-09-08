@@ -1039,3 +1039,19 @@ hidden: a skipped row is inactive, not empty), and the freed space carries the *
 of repeating the status. Only a blank-target error counts as the reason — a field-level error
 belongs to a cell, and printing it there would read as if a bad email were why the row was
 skipped. A row the user skipped by hand has no reason and shows none.
+
+## ETP-5182 — List defaults to Razón Social (name) ascending
+
+The Contacts list opened sorted by `creationDate desc` — `ListView`'s hardcoded fallback for any
+window that declares no `window.listSortBy` in `decisions.json`. The PM wanted the default sort to
+be Razón Social (the `name` column, labelled "Razón Social" in es_ES) ascending instead.
+
+Fixed by adding `"listSortBy": "name asc"` to `artifacts/contacts/decisions.json`'s `window` block
+— the same declarative extension point already used by `financial-account`, `fiscal-calendar`,
+`open-close-period-control` and `amortization`. `ListView.parseListSortBy` reads it into
+`initialSortColumn: 'name'` / `initialSortDirection: 'asc'`, which seeds `useEntity`'s initial
+sort AND is what the third header click / "clear sort" now returns to (not `creationDate desc`).
+No secondary sort key was needed here, unlike `financial-account`'s two-key resting order.
+Purely declarative — no new generator or component logic — so no new test was added beyond the
+existing generic `listSortBy` coverage (`parseListSortBy.test.js`,
+`ListView.interactions.vitest.jsx`).
