@@ -443,23 +443,26 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   <Banner
                     tone="danger"
                     icon={<OctagonAlert size={16} data-testid="OctagonAlert__aeatConn" />}
-                    title={connError}
-                    data-testid="Banner__aeatConnError">
-                    {/* CTA only for the missing-default-IAE-activity guard — every other
-                        connError (connection failure, IBAN required) has no dedicated
-                        settings screen to send the user to. */}
-                    {missingIaeGuard && (
-                      <button
-                        type="button"
-                        className="fm-link-btn"
-                        style={{ marginTop: 8, display: 'inline-block' }}
-                        onClick={() => navigate('/organization')}
-                        data-testid="Landmark__aeatGoToOrganization"
-                      >
-                        {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
-                      </button>
-                    )}
-                  </Banner>
+                    /* CTA only for the missing-default-IAE-activity guard — every other
+                       connError (connection failure, IBAN required) has no dedicated
+                       settings screen to send the user to. Composed into `title` (not a
+                       separate `children` block) so it reads as the tail of the same
+                       sentence instead of a line of its own — this local `Banner` renders
+                       `title` and `children` as separate stacked divs. */
+                    title={missingIaeGuard ? (
+                      <>
+                        {connError}{' '}
+                        <button
+                          type="button"
+                          className="fm-link-btn fm-link-btn--bold"
+                          onClick={() => navigate('/organization')}
+                          data-testid="Landmark__aeatGoToOrganization"
+                        >
+                          {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
+                        </button>
+                      </>
+                    ) : connError}
+                    data-testid="Banner__aeatConnError" />
                 </div>
               )}
             </>

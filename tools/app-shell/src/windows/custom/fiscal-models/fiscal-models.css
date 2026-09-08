@@ -723,6 +723,13 @@
   cursor: pointer;
 }
 .fm-link-btn:hover { opacity: .75; }
+/* Bold variant (ETP-5187) — all three "Ir a Organización" CTAs now sit inline at the
+   end of their sentence and need to stand out from the surrounding warning text.
+   Only overrides weight; underline/color/inherit behavior stays `.fm-link-btn`'s.
+   600 matches this stylesheet's existing emphasis convention (.fm-btn--primary,
+   .fm-table td.strong, .fm-tabs__tab--active, etc.) rather than the heavier 700
+   used for grand-total rows. */
+.fm-link-btn--bold { font-weight: 600 !important; }
 /* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
 .fm-more-options-trigger {
   display: flex; align-items: center; justify-content: center;

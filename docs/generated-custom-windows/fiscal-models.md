@@ -1070,12 +1070,15 @@ a path that will eventually need it, before they ever reach that period:
 
 Both call the same shared helper, `showIaeActivityReminder(t, navigate)` (exported from
 `fiscalModelsUtils.js`), which shows a `sonner` `toast.warning` (`fm.aeat.reminder.iaeActivity`)
-with an underlined text-link action (`fm.aeat.action.go_to_organization` — the same CTA label the
-ETP-4975 hard guard below uses, rendered the same way there too via the shared `.fm-link-btn` CSS
-class) that navigates to `/organization`, plain — `OrganizationPage.jsx` has no
-section-anchor/deep-link support yet to land pre-scrolled at "Actividades del IAE" (see
-`docs/generated-custom-windows/organization.md`'s own "Actividades del IAE" section); that would be
-a follow-up, not implemented here.
+whose message is built as one JSX node so the CTA — an underlined, bold text link
+(`fm.aeat.action.go_to_organization` — the same CTA label the ETP-4975 hard guard below uses,
+rendered the same way there too via the shared `.fm-link-btn`/`.fm-link-btn--bold` CSS classes) —
+reads inline at the end of the warning sentence rather than as a separate control, and navigates to
+`/organization`, plain — `OrganizationPage.jsx` has no section-anchor/deep-link support yet to land
+pre-scrolled at "Actividades del IAE" (see `docs/generated-custom-windows/organization.md`'s own
+"Actividades del IAE" section); that would be a follow-up, not implemented here. The same inline,
+bold placement is used everywhere else this CTA appears (the `connError` banner in
+`AeatSubmitFlow.jsx` and the `genError` banner in `FmModel303Page.jsx`, both below).
 
 **This is deliberately a different mechanism from the ETP-4975 hard guard** described under
 "Generate error banner (`genError`)" below (`missingIaeGuard`, `isMissingDefaultIaeActivity`) —

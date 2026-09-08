@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { toast } from 'sonner';
 
@@ -925,24 +926,40 @@ export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
  * `fm.aeat.action.go_to_organization` CTA label as that guard's own "Go to Organization"
  * button. Navigates to `/organization` plain — `OrganizationPage.jsx` has no
  * section-anchor/deep-link support yet to land scrolled at "Actividades del IAE" directly.
+ *
+ * CTA placement (ETP-5187 follow-up): the CTA must read as the tail of the warning
+ * sentence, in bold, not as a separate control. sonner's built-in `action` option was
+ * tried first but doesn't lay out that way — per sonner's own markup
+ * (`node_modules/sonner/dist/index.mjs`), `toast.action` renders as a flex SIBLING of
+ * `[data-content]` (the title/description column), inside a `[data-sonner-toast]` that
+ * is itself `display:flex; align-items:center`. That places the action button to the
+ * right of the message, vertically centered, never inline after the text — so instead
+ * the whole toast message is built as one JSX node (sonner accepts a `ReactNode` message,
+ * which becomes `toast.title` and renders as-is) with the CTA as an inline `<button>`
+ * immediately after the sentence text. `toast.action`'s automatic click-to-dismiss is
+ * replicated manually via `toast.dismiss(id)` to keep the same UX as before.
  */
 export function showIaeActivityReminder(t, navigate) {
-  toast.warning(
-    t('fm.aeat.reminder.iaeActivity')
-      ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.',
-    {
-      action: {
-        label: t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización',
-        onClick: () => navigate('/organization'),
-      },
-      // Restyles sonner's default solid-pill action button into an underlined text link
-      // (ETP-5187), sharing `.fm-link-btn` with the same CTA in AeatSubmitFlow.jsx and
-      // FmModel303Page.jsx. Kept as the built-in `action` object (not a raw JSX node) so the
-      // button stays a real, keyboard-focusable <button> and click-to-dismiss keeps working —
-      // sonner renders `toast.action` verbatim (no wrapper styling) only when it's already a
-      // React element, which isn't needed here since `.fm-link-btn`'s `!important`s already
-      // beat sonner's own [data-button] CSS.
-      classNames: { actionButton: 'fm-link-btn' },
-    },
+  const sentence = t('fm.aeat.reminder.iaeActivity')
+    ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.';
+  const cta = t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización';
+  const id = toast.warning(
+    createElement(
+      'span',
+      null,
+      `${sentence} `,
+      createElement(
+        'button',
+        {
+          type: 'button',
+          className: 'fm-link-btn fm-link-btn--bold',
+          onClick: () => {
+            navigate('/organization');
+            toast.dismiss(id);
+          },
+        },
+        cta,
+      ),
+    ),
   );
 }

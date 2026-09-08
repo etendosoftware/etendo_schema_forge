@@ -743,12 +743,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           {genError}
           {/* CTA for the missing-default-IAE-activity guard, which is the only remaining
               producer of `genError` (all other generation failures surface as toasts since
-              ETP-5027). Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. */}
+              ETP-5027). Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. No
+              positioning style — a plain adjacent sibling already flows immediately after
+              `{genError}` given this container's `display:flex; flexWrap:wrap`; the previous
+              `marginLeft: 'auto'` was what pushed it to the far right instead. */}
           {missingIaeGuard && (
             <button
               type="button"
-              className="fm-link-btn"
-              style={{ marginLeft: 'auto' }}
+              className="fm-link-btn fm-link-btn--bold"
               onClick={() => navigate('/organization')}
               data-testid="Landmark__gen303GoToOrganization"
             >
