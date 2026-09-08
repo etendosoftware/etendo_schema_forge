@@ -148,7 +148,7 @@ export function knownWindowSlugs(index) {
 
 /**
  * A window reference the index could not resolve. Recoverable: the message
- * tells the model how to retry, and `stopWhen: stepCountIs(8)` in the BFF
+ * tells the model how to retry, and `stopWhen: stepCountIs(20)` in the BFF
  * leaves it room to do so.
  */
 export class UnknownWindowError extends Error {
