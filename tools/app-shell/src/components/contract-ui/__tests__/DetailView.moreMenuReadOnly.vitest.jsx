@@ -247,4 +247,26 @@ describe('DetailView — "more actions" kebab read-only gate (ETP-5116, correcte
     await user.click(moreButton);
     expect(screen.getByTestId('menu-action-reactivate')).toBeTruthy();
   });
+
+  it('composes the per-action visible filter with menuActionsReadOnly=false: only the visible action renders, the hidden one does not', async () => {
+    // Guards against the two filters (windowReadOnly-derived gate vs. per-action
+    // `visible !== false`) shadowing one another after ETP-5233 split the combined
+    // flag in two — DetailMoreActionsMenu.jsx computes
+    // `visibleActions = windowReadOnly ? [] : normalizedActions.filter(a => a.visible !== false)`,
+    // so with no role-tier restriction the per-action filter must still apply on
+    // its own, independent of the gate.
+    const user = userEvent.setup();
+    renderDetailView({
+      api: {},
+      menuActions: [
+        { key: 'reactivate', label: 'Reactivate', documentAction: 'RE' },
+        { key: 'hidden-action', label: 'Hidden', documentAction: 'HI', visible: false },
+      ],
+    });
+    const moreButton = screen.getByTestId('action-more');
+    expect(moreButton).toBeTruthy();
+    await user.click(moreButton);
+    expect(screen.getByTestId('menu-action-reactivate')).toBeTruthy();
+    expect(screen.queryByTestId('menu-action-hidden-action')).toBeNull();
+  });
 });
