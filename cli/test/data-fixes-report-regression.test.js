@@ -60,6 +60,17 @@ const FIXES_WITH_REPORT = new Set([
   // back empty and leave `detail` null on the APPLIED ledger row. A non-empty detail means a
   // row was skipped or something raced the update, and is worth investigating.
   '20260902T120000Z__R31-document-sequence-startno',
+  // R33 (ETP-5122) backfills ETSG_Tax_SIF_Config overrides from the shared System
+  // C_Tax row before its sibling R34 clears the System fields; its @report is a
+  // diagnostic audit listing every override row this run just created (read back
+  // from @apply's RETURNING via a temp table, since @report runs after @apply).
+  '20260904T120000Z__R33-tax-sif-config-migration',
+  // R34 (ETP-5122) is the destructive cutover that nulls the shared System C_Tax
+  // SIF fields once every active-config legal-entity org already has its own R33
+  // override; its @report is the full before/after audit (old values + which group
+  // was cleared) stored verbatim in the ledger's `detail` column as the secondary
+  // revert trail.
+  '20260904T130000Z__R34-tax-sif-config-clear-system',
 ]);
 
 async function loadCatalogFiles() {
