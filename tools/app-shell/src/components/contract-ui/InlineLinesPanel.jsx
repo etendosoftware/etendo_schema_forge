@@ -1235,11 +1235,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           pane into the sidebar (and, on windows with a right-side panel,
           into that panel too). Mirrors the scoped `overflow-x-auto` wrapper
           DataTable's classic (non-inlineEditable) path already uses around
-          its own `<Table>`. `pb-6` mirrors that same wrapper's bottom padding
-          — the CSS overflow spec forces this box's `overflow-y` to `auto`
-          too (see the header comment above), so without it a hovered last
-          row's shadow would get clipped instead of spilling past the row. */}
-      <div ref={bodyScrollRef} className="overflow-x-auto pb-6" onScroll={handleBodyScroll}>
+          its own `<Table>`. Unlike that wrapper, this one never carries
+          `rowHoverStyle="elevated"`/`shadow-lg` — InlineLinesPanel has no
+          elevated hover shadow to protect from the overflow-y:auto clipping
+          DataTable's `pb-6` compensates for (ETP-5216), so no bottom padding
+          is added here. */}
+      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;
