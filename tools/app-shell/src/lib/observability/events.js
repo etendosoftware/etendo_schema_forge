@@ -132,6 +132,24 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
     ],
   }),
+  // Per-tutorial "mark as read". Progress lives in the browser's
+  // `localStorage`, so this event is the ONLY way to answer "which tutorials do
+  // users not care about" from outside the user's machine -- which is why the
+  // dismiss control is per tutorial rather than one global "mark all as read".
+  WALKTHROUGH_DISMISSED: defineEvent('walkthrough_dismissed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
+      // The status the flow held at the moment it was silenced: separates
+      // "dismissed a tour they never opened" from "gave up and silenced it".
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+      // 'dismissed' | 'restored' -- one event with a direction rather than two,
+      // same shape as `walkthrough_finished`, so undo stays visible in the data
+      // instead of looking like a dismissal that never happened.
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
   WINDOW_OPENED: defineEvent('window_opened', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [

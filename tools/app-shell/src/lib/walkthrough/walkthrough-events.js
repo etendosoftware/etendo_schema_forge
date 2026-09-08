@@ -8,7 +8,7 @@
  * those descriptors into events in THIS app's catalog, which is what keeps the
  * core usable by a host with different (or no) telemetry.
  *
- * The three `track*` functions are injected into the core through
+ * The four `track*` functions are injected into the core through
  * `<ObservabilityProvider>` in `App.jsx`; `handleWalkthroughFinish` is handed to
  * `<WalkthroughProvider onFinish>` in `AppLayout.jsx`.
  *
@@ -45,6 +45,27 @@ export function trackWalkthroughMenuOpened(properties) {
  */
 export function trackWalkthroughStarted(properties) {
   emit(OBSERVABILITY_EVENTS.WALKTHROUGH_STARTED, properties);
+}
+
+/**
+ * A tutorial being silenced -- or un-silenced -- from the launcher's per-row
+ * "mark as read" toggle.
+ *
+ * WHY THIS EVENT EXISTS: dismissal is stored in the browser's `localStorage`
+ * (see `app-shell-core/walkthrough/walkthroughProgress.js`), so nothing about
+ * it is observable server-side. Without this event "which tutorials do people
+ * ignore?" -- the reason the control is per tutorial instead of one global
+ * "mark all as read" -- has no answer at all.
+ *
+ * `status` is the flow's state at the moment it was silenced, and the core
+ * reads it BEFORE it writes the dismissal, so a dismissal of a tour that was
+ * never opened is distinguishable from one the user gave up on.
+ *
+ * @param {{flowId: string, status: string, action: string, source: string}} properties
+ *        `action` is 'dismissed' | 'restored'
+ */
+export function trackWalkthroughDismissed(properties) {
+  emit(OBSERVABILITY_EVENTS.WALKTHROUGH_DISMISSED, properties);
 }
 
 /**

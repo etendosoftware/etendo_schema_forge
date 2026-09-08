@@ -6,6 +6,7 @@ import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 import {
+  trackWalkthroughDismissed,
   trackWalkthroughFinished,
   trackWalkthroughMenuOpened,
   trackWalkthroughStarted,
@@ -307,6 +308,7 @@ export default function App() {
         trackWalkthroughMenuOpened,
         trackWalkthroughStarted,
         trackWalkthroughFinished,
+        trackWalkthroughDismissed,
       }}
       data-testid="ObservabilityProvider__ecaf3f">
       <AppShellRuntime

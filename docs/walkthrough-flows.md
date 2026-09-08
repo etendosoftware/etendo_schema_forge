@@ -674,8 +674,9 @@ Imported from `@etendosoftware/app-shell-core/walkthrough`:
 
 | Export | Use |
 |---|---|
-| `WalkthroughLauncher` | The topbar launcher: flow list, per-flow badge, unfinished-work dot. Optional `icons` prop merges into the built-in glyph map. Telemetry arrives through `<ObservabilityProvider>` (§11), never imported. |
+| `WalkthroughLauncher` | The topbar launcher: flow list, per-flow badge, unfinished-work dot, per-flow "mark as read" toggle. Optional `icons` prop merges into the built-in glyph map. Telemetry arrives through `<ObservabilityProvider>` (§11), never imported. |
 | `FLOW_STATUS`, `getFlowStatus`, `countPendingFlows`, `markFlowStarted`, `markFlowCompleted`, `markFlowAbandoned`, `readFlowRecord`, `readProgress`, `resetProgress`, `isPendingStatus`, `WALKTHROUGH_PROGRESS_STORAGE_KEY` | The per-user progress store (§11). Pure, no React. |
+| `markFlowDismissed`, `markFlowUndismissed`, `isFlowDismissed`, `isFlowPending` | Per-tutorial "mark as read" (§11). A field on the record, not a status; `isFlowPending` is the combined predicate the dot asks. |
 | `recordFlowFinish`, `FINISH_STATUS` | Persists a run's outcome and returns a plain descriptor for the host to report. Feed it the engine's `onFinish` payload. |
 | `WalkthroughProvider` | Mount once inside the router + locale provider. Props: `flows`, `onFlowsInvalid?`, `onFinish?`. `onFinish` receives `{flowId, completed, stepId, stepIndex, totalSteps}` — the step fields are the position the run ENDED on, which on an abandoned run is where the user walked away. |
 | `useWalkthrough()` | `{ available, flows, isRunning, activeFlowId, start, stop }`. Returns an inert value outside the provider, so a launcher can render nothing instead of crashing. |
@@ -697,16 +698,18 @@ Imported from `@etendosoftware/app-shell-core/walkthrough`:
 ## 11. Progress badges and telemetry (ETP-5144)
 
 Which tutorials a user has taken is tracked so the launcher can say *"you never
-did this one"*, and every start/finish is reported to Mixpanel. The work is
-split so the core never learns an analytics vocabulary:
+did this one"*, and every start/finish is reported to Mixpanel. A user who
+already knows the system can also silence a tutorial they do not intend to take
+(see *Dismissal* below). The work is split so the core never learns an analytics
+vocabulary:
 
 | File | Repo | Job |
 |---|---|---|
-| `walkthrough/walkthroughProgress.js` | core | Persistence, the four statuses, and `recordFlowFinish` — which persists a run's outcome AND describes it as plain data. |
-| `walkthrough/WalkthroughLauncher.jsx` | core | The button, the dot and the badges. Reads telemetry callbacks off the observability context; never imports a tracker. |
+| `walkthrough/walkthroughProgress.js` | core | Persistence, the four statuses, dismissal, and `recordFlowFinish` — which persists a run's outcome AND describes it as plain data. |
+| `walkthrough/WalkthroughLauncher.jsx` | core | The button, the dot, the badges and the per-row "mark as read" toggle. Reads telemetry callbacks off the observability context; never imports a tracker. |
 | `lib/walkthrough/walkthrough-events.js` | functional | The ONLY place that names events. Maps the core's descriptors onto this app's catalog. |
 
-**How the telemetry reaches the core.** `App.jsx` injects the three `track*`
+**How the telemetry reaches the core.** `App.jsx` injects the four `track*`
 functions through `<ObservabilityProvider value={{...}}>`, whose defaults in
 `observability/ObservabilityContext.jsx` are no-ops — so the launcher works with
 no provider at all, and a host with different (or no) analytics is unaffected.
@@ -725,7 +728,7 @@ second would measure the wrong duration, or none.
 | Status | Condition | Launcher |
 |---|---|---|
 | `unseen` | no record | **Nuevo** badge |
-| `in-progress` | started, never finished | *A medias* badge |
+| `in-progress` | started, never finished | *En progreso* badge |
 | `updated` | finished, but `completedRevision < revision` | **Actualizado** badge |
 | `completed` | finished at the current revision | muted check |
 
@@ -733,19 +736,76 @@ second would measure the wrong duration, or none.
 6 keeps `in-progress` even after the flow is revised — they never finished it,
 and "half done" is the more useful of the two truths.
 
+### Dismissal — "mark as read"
+
+Every pending row in the launcher carries a per-tutorial toggle that silences
+it: the dot goes out without the user sitting through the tour. A short line at
+the foot of the menu explains it (`walkthroughDismissHint`), shown only while
+something is still pending.
+
+**It is a field on the record, NOT a fifth status.** `getFlowStatus` keeps
+returning `unseen` for a tutorial that was silenced but never opened. The two
+questions are orthogonal — *how far through the content am I* versus *do I want
+to be reminded* — and a user can silence a tour they never opened as easily as
+one they abandoned at step 6; folding them into one enum would have to destroy
+one answer to return the other. It would also have misled the UI: the
+launcher's `STATUS_BADGES` falls through to a muted check for any status it does
+not recognise, so a `dismissed` status would have rendered a never-taken
+tutorial as if it were finished. Keeping it a field lets the row read
+*available, and quiet*, and leaves every existing caller of
+`getFlowStatus`/`isPendingStatus` — including hosts outside this repo — with its
+old meaning.
+
+| API (core) | Job |
+|---|---|
+| `markFlowDismissed(flowId, revision)` | Records "I already know this one", **at that revision**. |
+| `markFlowUndismissed(flowId)` | Undo, for a mis-click. |
+| `isFlowDismissed(flowId, revision)` | `dismissedRevision >= revision`. |
+| `isFlowPending(flow)` | Unfinished **and** not silenced — the single predicate the dot should ask. |
+
+**A revision bump revives it.** The dismissal stores the revision it happened
+at, not a boolean, so a flow silenced at revision 1 and later revised to 3
+counts again: a revised tutorial teaches something the dismissal never covered.
+
+**`markFlowCompleted` is deliberately NOT reused.** Calling a never-taken
+tutorial *completed* would corrupt every adoption metric derived from
+`completions`.
+
+**Dismissal is never a side effect.** `markFlowStarted` and `markFlowCompleted`
+leave it alone; only `markFlowUndismissed` clears it. Same rule as the dot:
+every transition here is an explicit user act.
+
+A dismissed row keeps a muted *Leído* badge in place of its status badge —
+leaving it reading *Nuevo* would contradict the dot it just turned off — and
+stays fully startable. A `completed` flow gets no toggle: there is nothing left
+to silence. If it is later revised it becomes `updated`, and therefore
+dismissable again.
+
+**The toggle is its own menu item**, a sibling of the launch row inside a flex
+wrapper — not a button nested inside the row. A nested interactive in a
+`role="menuitem"` is neither reachable by Radix's arrow navigation nor announced
+as a separate control, and it fights the item's own selection handler. As
+siblings both are keyboard-reachable and no event-propagation tricks are
+needed. Its `onSelect` calls `preventDefault()` so the menu stays open —
+silencing one tutorial is usually the first of several.
+
 ### What lights the dot on the button
 
 **Anything unfinished** — `unseen`, `in-progress` and `updated` alike. Only
 `completed` (at the flow's current revision) is done. So a tour left half-way
 keeps the dot lit exactly like one never started.
 
+**An explicit dismissal does clear it, for that tutorial.** That is not a
+contradiction of the paragraph below: dismissal is a deliberate act on one
+tutorial, not an automatic consequence of viewing the list.
+
 **Opening the menu does NOT clear it.** An earlier design dismissed the dot once
 the list had been seen, via an `acknowledgedRevision` per flow. It was dropped:
 "you still have unfinished tutorials" does not stop being true because the user
 glanced at the menu, and a dot that clears on the first open is a reminder that
-reminds once. Completing a tutorial is the only thing that drops it from the
-count. Opening the menu still *refreshes* the badges, because a run may have
-finished while the menu was closed.
+reminds once. Completing a tutorial — or explicitly dismissing it — is the only
+thing that drops it from the count. Opening the menu still *refreshes* the
+badges, because a run may have finished while the menu was closed.
 
 The dot is positioned `right-1 top-1`, an inset from the button's corner rather
 than a negative offset. The button is 40px and the cap glyph only 20px, so a dot
@@ -754,6 +814,20 @@ measured against the live stylesheet, `-right-0.5 -top-0.5` put its centre
 11.3px from the glyph's top-right corner versus 2.8px now.
 
 ### Storage
+
+Three primitives own every access: `getStorage()` resolves
+`window.localStorage` (per call, so a host or a test can swap it), `readAll()`
+is the only `getItem` and `writeAll()` the only `setItem`. Every read goes
+through `readProgress`/`readFlowRecord` and every write through `updateFlow`
+(plus `resetProgress`, which drops a whole user). Keep new state inside that
+choke point — it is what will make the move to a server-held preference cheap.
+
+Each flow's record carries `starts`, `completions`, the start/finish
+timestamps, `completedRevision`, `lastAbandonedStep`, and — for dismissal —
+`dismissedRevision` (`null` when never silenced, so it can never read as
+"dismissed at revision 0") and `dismissedAt`. `readFlowRecord` spreads the
+defaults over whatever was stored, which is what keeps an older payload
+readable after a field is added.
 
 One key, `sf_walkthrough_v1`, namespaced by the `sf_auth_user` username (the
 same key the observability and feature-flag bootstraps read). Every access is
@@ -778,6 +852,13 @@ Declared in `src/lib/observability/events.js`, emitted fire-and-forget (a failed
 | `walkthrough_menu_opened` | the graduation-cap button is clicked | `count` (unannounced tutorials, i.e. whether the dot was lit), `total` (tutorials on offer) |
 | `walkthrough_started` | a tour begins | `flowId`, `status` (the status **before** this run — separates a first-timer from a repeater from someone returning to a revised tour), `total` (steps), `source` |
 | `walkthrough_finished` | a tour ends, either way | `flowId`, `status` (`completed` / `abandoned`), `step` (index), `stepId`, `total`, `durationMs` |
+| `walkthrough_dismissed` | a tutorial is silenced, or un-silenced | `flowId`, `status` (the status **at the moment of dismissal**), `action` (`dismissed` / `restored`), `source` |
+
+**Why `walkthrough_dismissed` is not optional.** Dismissal is stored in the
+user's `localStorage`, so nothing about it is observable server-side. Without
+this event *"which tutorials do people ignore?"* — the reason the control is per
+tutorial rather than one global "mark all as read" — has no answer at all. It is
+the point of the feature, not an extra.
 
 Two deliberate choices:
 
@@ -785,10 +866,15 @@ Two deliberate choices:
   `walkthrough_finished.stepId` already answers the only question worth asking
   of the data: *where does a tour lose people?*
 - **One finish event with a `status`, not two events**, so the funnel stays a
-  single step with a breakdown.
+  single step with a breakdown. `walkthrough_dismissed` follows the same shape
+  with `action`, so an undo stays visible in the data instead of looking like a
+  dismissal that never happened.
 
 `status` on `walkthrough_started` must be read **before** `markFlowStarted`
 touches the record, which is why the launcher reports first and marks second.
+`walkthrough_dismissed` does the same for the same reason: the status it carries
+is the one the flow held when the user silenced it, which is what separates
+"dismissed a tour they never opened" from "gave up and silenced it".
 
 ### The property-vocabulary trap
 
