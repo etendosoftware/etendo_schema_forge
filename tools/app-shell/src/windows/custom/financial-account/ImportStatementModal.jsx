@@ -359,7 +359,10 @@ function TemplateLinks({ ui }) {
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
-      <Download className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <Download
+        className="h-3.5 w-3.5 shrink-0"
+        aria-hidden="true"
+        data-testid="Download__de9647" />
       <span>{ui('financeAccountStatementsImportTemplateLabel')}</span>
       <button
         type="button"
@@ -611,7 +614,7 @@ function EmptyOrErrorBody({ view, ui, inputRef, dragging, setDragging, handlePic
           if (dropped) handlePickFile(dropped);
         }}
         data-testid="Dropzone__de9647" />
-      <TemplateLinks ui={ui} />
+      <TemplateLinks ui={ui} data-testid="TemplateLinks__de9647" />
       {view === 'error' ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-[var(--status-destructive-bg)] py-3 pl-1.5 pr-2">
           <AlertTriangle className="h-6 w-6 shrink-0 text-[hsl(var(--destructive))]" data-testid="AlertTriangle__de9647" />
@@ -726,7 +729,7 @@ function MappingBody({
             save: ui('financeAccountStatementsImportMapSave'),
             cancel: ui('financeAccountStatementsImportMapCancel'),
           }}
-        />
+          data-testid="ImportColumnMapping__de9647" />
       </div>
       {errorCount > 0 ? (
         <div
@@ -734,7 +737,7 @@ function MappingBody({
           style={{ backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
           data-testid="import-review-error-summary"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" data-testid="AlertTriangle__de9647" />
           <span>{ui('financeAccountStatementsImportReviewErrors', { count: errorCount })}</span>
         </div>
       ) : null}
@@ -765,7 +768,7 @@ function MappingBody({
           statusOk: ui('financeAccountStatementsImportReviewStatusOk'),
           statusError: ui('financeAccountStatementsImportReviewStatusError'),
         }}
-      />
+        data-testid="ImportReviewQueue__de9647" />
     </div>
   );
 }
