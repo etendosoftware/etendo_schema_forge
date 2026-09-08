@@ -43,6 +43,14 @@ and present a contextual suggestion in a floating callout. Clicking that callout
 opens the existing Copilot conversation with the help context. It is advisory:
 consequential operations remain explicit user actions.
 
+The BFF disables MCP protocol discovery when connecting to Etendo Go. Etendo's
+MCP endpoint uses the legacy `initialize` handshake and does not implement the
+optional `server/discover` probe introduced by newer MCP clients.
+
+Each browser conversation sends a stable `x-opencode-session` value to the BFF,
+which forwards it to OpenCode Go for request routing and prompt caching. The
+BFF generates a fallback session ID for older clients that omit the header.
+
 ## Navigation tools and the window allow-list
 
 `navigate_to` and `open_form` accept either an internal path (`/sales-order`,

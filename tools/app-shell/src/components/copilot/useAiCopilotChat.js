@@ -63,6 +63,20 @@ const DOM_INTERACTIVE_SELECTOR = [
  */
 const DOM_FIELD_SELECTOR = '[data-testid^="field-"]';
 
+let fallbackSessionSequence = 0;
+
+function createOpencodeSessionId() {
+  const webCrypto = globalThis.crypto;
+  if (webCrypto?.randomUUID) return webCrypto.randomUUID();
+  if (webCrypto?.getRandomValues) {
+    const randomValue = webCrypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    return `etendo-${Date.now()}-${randomValue}`;
+  }
+  // This ID correlates a browser conversation; it is not a secret.
+  fallbackSessionSequence += 1;
+  return `etendo-${Date.now()}-${fallbackSessionSequence}`;
+}
+
 function fieldKeyOf(element) {
   const testId = element.getAttribute?.('data-testid') || '';
   return testId.startsWith('field-') ? testId.slice('field-'.length) : undefined;
@@ -217,6 +231,10 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
   const messagesRef = useRef([]);
   const domRegistryRef = useRef(new Map());
   const pageHelpPendingRef = useRef(false);
+  const opencodeSessionRef = useRef(null);
+  if (!opencodeSessionRef.current) {
+    opencodeSessionRef.current = createOpencodeSessionId();
+  }
   const [pageHelpSuggestion, setPageHelpSuggestion] = useState('');
   const [pageHelpActive, setPageHelpActive] = useState(false);
   const [pageHelpError, setPageHelpError] = useState('');
@@ -344,7 +362,10 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/ai/chat',
-    headers: authHeaders(token),
+    headers: {
+      ...authHeaders(token),
+      'x-opencode-session': opencodeSessionRef.current,
+    },
   }), [token]);
   const [input, setInput] = useState('');
   const handlePageHelpFinish = useCallback(({ message }) => {
@@ -454,6 +475,8 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     setInput,
     resetConversation: () => chat.setMessages([]),
     startNewConversation: () => chat.setMessages([]),
+    retry: chat.regenerate,
+    dismissError: chat.clearError,
     stop: chat.stop,
     addToolResult: chat.addToolOutput,
     requestPageHelp,
