@@ -935,6 +935,14 @@ export function showIaeActivityReminder(t, navigate) {
         label: t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización',
         onClick: () => navigate('/organization'),
       },
+      // Restyles sonner's default solid-pill action button into an underlined text link
+      // (ETP-5187), sharing `.fm-link-btn` with the same CTA in AeatSubmitFlow.jsx and
+      // FmModel303Page.jsx. Kept as the built-in `action` object (not a raw JSX node) so the
+      // button stays a real, keyboard-focusable <button> and click-to-dismiss keeps working —
+      // sonner renders `toast.action` verbatim (no wrapper styling) only when it's already a
+      // React element, which isn't needed here since `.fm-link-btn`'s `!important`s already
+      // beat sonner's own [data-button] CSS.
+      classNames: { actionButton: 'fm-link-btn' },
     },
   );
 }

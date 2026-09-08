@@ -1070,8 +1070,9 @@ a path that will eventually need it, before they ever reach that period:
 
 Both call the same shared helper, `showIaeActivityReminder(t, navigate)` (exported from
 `fiscalModelsUtils.js`), which shows a `sonner` `toast.warning` (`fm.aeat.reminder.iaeActivity`)
-with an action button (`fm.aeat.action.go_to_organization` — the same CTA label the ETP-4975 hard
-guard below uses) that navigates to `/organization`, plain — `OrganizationPage.jsx` has no
+with an underlined text-link action (`fm.aeat.action.go_to_organization` — the same CTA label the
+ETP-4975 hard guard below uses, rendered the same way there too via the shared `.fm-link-btn` CSS
+class) that navigates to `/organization`, plain — `OrganizationPage.jsx` has no
 section-anchor/deep-link support yet to land pre-scrolled at "Actividades del IAE" (see
 `docs/generated-custom-windows/organization.md`'s own "Actividades del IAE" section); that would be
 a follow-up, not implemented here.

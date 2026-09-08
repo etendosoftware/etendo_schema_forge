@@ -700,6 +700,29 @@
 .fm-btn--primary { background: var(--fm-gray-900); border-color: var(--fm-gray-900); color: hsl(var(--card)); font-weight: 600; }
 .fm-btn--primary:hover { background: var(--fm-gray-800); }
 .fm-btn--danger { background: var(--fm-danger-bg); border-color: var(--fm-danger-border); color: var(--fm-danger-fg); }
+/* Underlined text-link CTA (ETP-5187) — shared by the three "Ir a Organización" /
+   "Go to Organization" prompts: AeatSubmitFlow.jsx's connError banner,
+   FmModel303Page.jsx's inline generate-error banner, and
+   fiscalModelsUtils.js's showIaeActivityReminder toast action. `color`/`font-size`
+   deliberately inherit from whatever alert/banner text surrounds the CTA in each
+   spot, so the link always matches its container's tone. The `!important`s are
+   needed only for the toast case, where sonner ships its own more-specific
+   `[data-button]` rule — this class must win there regardless of stylesheet
+   load order; harmless everywhere else since nothing else targets a plain
+   `<button>` in the other two contexts. */
+.fm-link-btn {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  height: auto !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: 500 !important;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fm-link-btn:hover { opacity: .75; }
 /* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
 .fm-more-options-trigger {
   display: flex; align-items: center; justify-content: center;

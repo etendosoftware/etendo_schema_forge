@@ -451,11 +451,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                     {missingIaeGuard && (
                       <button
                         type="button"
-                        className="fm-btn fm-btn--primary"
-                        style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        className="fm-link-btn"
+                        style={{ marginTop: 8, display: 'inline-block' }}
                         onClick={() => navigate('/organization')}
+                        data-testid="Landmark__aeatGoToOrganization"
                       >
-                        <Landmark size={14} data-testid="Landmark__aeatGoToOrganization" />
                         {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
                       </button>
                     )}

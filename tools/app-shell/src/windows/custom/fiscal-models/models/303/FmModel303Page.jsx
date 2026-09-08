@@ -6,7 +6,7 @@ import {
   Download,
   OctagonAlert, TriangleAlert, CircleCheck,
   Calculator, Loader2, TrendingUp, TrendingDown,
-  ClipboardCheck, ReceiptText, FileCheck, Landmark,
+  ClipboardCheck, ReceiptText, FileCheck,
 } from 'lucide-react';
 import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -747,11 +747,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           {missingIaeGuard && (
             <button
               type="button"
-              className="fm-btn fm-btn--primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}
+              className="fm-link-btn"
+              style={{ marginLeft: 'auto' }}
               onClick={() => navigate('/organization')}
+              data-testid="Landmark__gen303GoToOrganization"
             >
-              <Landmark size={14} data-testid="Landmark__gen303GoToOrganization" />
               {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
             </button>
           )}
