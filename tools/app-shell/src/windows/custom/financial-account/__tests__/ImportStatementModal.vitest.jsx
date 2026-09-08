@@ -33,6 +33,10 @@ const UI_MESSAGES = {
   financeAccountStatementsImportErrorNegativeAmount: '[negative-amount]',
   financeAccountStatementsImportErrorNoAmount: '[no-amount]',
   financeAccountStatementsImportErrorInvalidDate: '[invalid-date]',
+  // ETP-4954 — the "exactly one side" clause. Needs its own sentinel for the same reason: a
+  // row filled on BOTH sides is also a row with no single usable amount, so a test that only
+  // asserted "this row is in the Errores tab" would not notice the clause being deleted.
+  financeAccountStatementsImportErrorBothAmounts: '[both-amounts]',
 };
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => UI_MESSAGES[key] ?? key,
@@ -118,6 +122,15 @@ const VALID_ROWS = [
 const NEGATIVE_ROWS = [
   '01/05/2026,R1,INGRESO 1,,,100',
   '02/05/2026,R2,DEVOLUCION,,,-20',
+];
+
+// One clean row and one filled on BOTH sides (ETP-4954). A bank that exports Salida and
+// Entrada as two independent columns produces this whenever it fills both; the read path
+// collapses the pair into `cramount - dramount`, so before the rule it imported and then
+// displayed as -70,00 EUR.
+const BOTH_SIDES_ROWS = [
+  '01/05/2026,R1,INGRESO 1,,,100',
+  '02/05/2026,R2,AMBAS,,100,30',
 ];
 
 // Nothing sendable: one row with no amount at all, one with a negative Salida.
@@ -528,6 +541,120 @@ describe('ImportStatementModal', () => {
     // The positive Salida is untouched, so only the offending cell is flagged.
     expect(screen.queryByTestId('ImportReviewQueue__fieldError-0-out')).toBeNull();
     expect(continueButton()).toBeDisabled();
+  });
+
+  /**
+   * ETP-4954 (product decision) — the third clause of the amount rule: EXACTLY ONE SIDE.
+   *
+   * > A statement line must carry an amount on exactly one side: at least one amount above
+   * > zero, no amount below zero, and NEVER both sides filled.
+   *
+   * "Never both" arrived with no coverage anywhere — the whole suite stayed green when it was
+   * added, so no fixture had ever fed the wizard a both-sides-positive row. It is trivially
+   * reachable from a real file: a bank that exports Salida and Entrada as two independent
+   * columns produces such a row whenever it fills both. Before the rule, `100 / 30` imported
+   * and then DISPLAYED as −70,00 € (the read path collapses the pair into
+   * `cramount - dramount`, so the movement appears in no statement) and `50 / 50` imported and
+   * read back as 0,00 €, which is the state the both-zero guard exists to reject.
+   *
+   * The `[both-amounts]` sentinel is load-bearing: a both-filled row also has no *single*
+   * usable amount, so a test that only checked "this row is in the Errores tab" would pass
+   * just as well with the clause deleted (the row would then be flagged `[no-amount]`… except
+   * it would NOT be, because both sides are above zero — it would be sent). Naming the message
+   * is what makes these fail for the right reason.
+   */
+  describe('ETP-4954 a row filled on both sides', () => {
+    it('lands in the errors tab with BOTH amount cells flagged', async () => {
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      const user = mkUser();
+      await gotoMapping(user, container, csvFile(BOTH_SIDES_ROWS));
+
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-ok')).toHaveTextContent('1');
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-error')).toHaveTextContent('1');
+      expect(screen.getByTestId('import-review-error-summary')).toBeInTheDocument();
+      // Both cells carry the error, because either one is a valid thing for the user to clear.
+      expect(screen.getByTestId('ImportReviewQueue__fieldError-1-out'))
+        .toHaveTextContent('[both-amounts]');
+      expect(screen.getByTestId('ImportReviewQueue__fieldError-1-in'))
+        .toHaveTextContent('[both-amounts]');
+
+      await user.click(screen.getByTestId('ImportReviewQueue__statusFilter-error'));
+      // Only the offending row survives the filter, and both its cells are editable.
+      expect(screen.getByTestId('ImportReviewQueue__input-1-out')).toHaveValue('100');
+      expect(screen.getByTestId('ImportReviewQueue__input-1-in')).toHaveValue('30');
+    });
+
+    // The case that motivated the rule. Two equal sides clear every other clause, so the row
+    // was sent — and the saved statement then read back as 0,00 €.
+    it('flags two equal sides, which used to import and then read back as 0,00 €', async () => {
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      await gotoMapping(mkUser(), container, csvFile(['02/05/2026,R2,CINCUENTA,,50,50']));
+
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-error')).toHaveTextContent('1');
+      expect(screen.getByTestId('ImportReviewQueue__fieldError-0-out'))
+        .toHaveTextContent('[both-amounts]');
+      expect(screen.getByTestId('ImportReviewQueue__fieldError-0-in'))
+        .toHaveTextContent('[both-amounts]');
+      // Nothing sendable, so the wizard cannot advance to the preview at all.
+      expect(continueButton()).toBeDisabled();
+    });
+
+    it('is excluded from what gets sent, and counted as a discarded line', async () => {
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      const user = mkUser();
+      await gotoPreview(user, container, csvFile(BOTH_SIDES_ROWS));
+
+      expect(screen.getByTestId('import-discarded-lines')).toBeInTheDocument();
+      // The offending row is not in the preview at all.
+      expect(screen.queryByText('AMBAS')).toBeNull();
+      expect(screen.getByText('INGRESO 1')).toBeInTheDocument();
+
+      await user.click(confirmButton());
+
+      await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
+      const { lines } = createStatement.mock.calls[0][0];
+      expect(lines).toHaveLength(1);
+      expect(lines[0].description).toBe('INGRESO 1');
+      // Specifically: no line carrying BOTH amounts reaches `?action=create`, which is the
+      // shape `BankStatementsHandler.createLines` now answers 400 to.
+      expect(lines.filter((l) => l.in > 0 && l.out > 0)).toEqual([]);
+    });
+
+    // Clearing either cell is a complete fix, and it has to clear in the SAME render or the row
+    // stays in the Errores tab while visibly correct.
+    it('clears both cell errors in the same render when one side is emptied', async () => {
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      const user = mkUser();
+      await gotoMapping(user, container, csvFile(BOTH_SIDES_ROWS));
+
+      await user.clear(screen.getByTestId('ImportReviewQueue__input-1-in'));
+
+      expect(screen.queryByTestId('ImportReviewQueue__fieldError-1-in')).toBeNull();
+      expect(screen.queryByTestId('ImportReviewQueue__fieldError-1-out')).toBeNull();
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-error')).toHaveTextContent('0');
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-ok')).toHaveTextContent('2');
+    });
+
+    // ── The discriminator ─────────────────────────────────────────────────────
+    // Without this the rule could just as well read "reject any row whose two amount cells are
+    // both non-blank" — which would reject the template the modal itself hands out (`150,00`
+    // out / `0,00` in) and every ordinary file a bank exports with an explicit zero on the
+    // unused side. That is the ETP-4995 class of bug: an un-importable template.
+    it('accepts an explicit zero on the unused side, in both directions', async () => {
+      const { container } = render(<ImportStatementModal {...defaultProps()} />);
+      await gotoMapping(mkUser(), container, csvFile([
+        // Spanish decimals, quoted so the comma stays inside the cell.
+        '01/05/2026,R1,SALIDA CON CERO,,"150,00","0,00"',
+        '02/05/2026,R2,ENTRADA CON CERO,,"0,00","150,00"',
+        // Dot decimals, the shape an English-convention spreadsheet writes.
+        '03/05/2026,R3,SALIDA PUNTO,,150.00,0.00',
+      ]));
+
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-ok')).toHaveTextContent('3');
+      expect(screen.getByTestId('ImportReviewQueue__statusFilterCount-error')).toHaveTextContent('0');
+      expect(screen.queryByTestId('import-review-error-summary')).toBeNull();
+      expect(continueButton()).toBeEnabled();
+    });
   });
 
   it('leaves an unrecognized column unmapped instead of guessing', async () => {

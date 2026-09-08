@@ -11,6 +11,9 @@ import {
   BANK_STATEMENT_IMPORT_FIELDS,
   bankStatementFieldLabel,
 } from '../financial-account/bankStatementImportFields.js';
+// The template's own example amounts are asserted through the canonical parser, not by eye:
+// `'0,00'` has to be a ZERO to the rule, not merely a non-blank cell.
+import { parseStatementAmount } from '../financial-account/statementAmount.js';
 import {
   applyStatementMapping,
   buildStatementCreatePayload,
@@ -294,6 +297,54 @@ describe('ETP-4954 — the bank-statement CSV template round-trips', () => {
     const { mapping } = mapColumns(headers, FIELDS);
     const row = renameRowKeys(rows[0], mapping);
     assert.deepEqual(validateStatementRow(row, (k) => k).errors, []);
+  });
+
+  /**
+   * ETP-4954 (product decision) — the template must stay importable under the "exactly one
+   * side" clause, which is the ETP-4995 class of bug all over again.
+   *
+   * The rule now reads: at least one amount above zero, no amount below zero, and NEVER both
+   * sides filled. The template's own sample row ships `out: '150,00'` and `in: '0,00'` — TWO
+   * NON-BLANK amount cells. If the clause were ever implemented as "reject a row whose two
+   * amount cells are both non-blank" rather than "both above zero", the file the dialog itself
+   * hands the user would come back rejected on upload, with no column to delete to fix it.
+   *
+   * The test above already asserts the sample row validates clean; this one pins WHY it is
+   * allowed to, and names the message that must not appear — otherwise a future rewrite could
+   * satisfy "errors is empty" while quietly moving the boundary.
+   */
+  it('keeps the sample row importable under the exactly-one-side rule, explicit zero and all', () => {
+    const out = FIELDS.find((f) => f.target === 'out');
+    const inn = FIELDS.find((f) => f.target === 'in');
+    // The shape being pinned: one side above zero, the other an EXPLICIT zero (not blank).
+    assert.equal(out.example, '150,00');
+    assert.equal(inn.example, '0,00');
+    assert.notEqual(inn.example, '', 'the sample row must keep an explicit zero, not a blank');
+    assert.ok(parseStatementAmount(out.example) > 0);
+    assert.equal(parseStatementAmount(inn.example), 0);
+
+    const { headers, rows } = parseDelimited(buildTemplateCsv(FIELDS));
+    const { mapping } = mapColumns(headers, FIELDS);
+    const row = renameRowKeys(rows[0], mapping);
+    const { valid, errors } = validateStatementRow(row, (k) => k);
+    assert.equal(valid, true);
+    assert.deepEqual(errors, []);
+    // Named explicitly: an "exactly one side" clause that counted non-blank cells instead of
+    // positive amounts would flag the template's own row here.
+    const messages = errors.map((e) => e.message);
+    assert.ok(!messages.includes('financeAccountStatementsImportErrorBothAmounts'));
+    assert.ok(!messages.some((m) => /not in both/i.test(m)));
+  });
+
+  // And the row that would be rejected, straight from the same template shape — so the pin
+  // above is a real boundary and not a vacuous truth about any row at all.
+  it('would reject the same sample row if its zero were replaced by an amount', () => {
+    const { headers, rows } = parseDelimited(buildTemplateCsv(FIELDS));
+    const { mapping } = mapColumns(headers, FIELDS);
+    const row = { ...renameRowKeys(rows[0], mapping), in: '30,00' };
+    const { valid, errors } = validateStatementRow(row, (k) => k);
+    assert.equal(valid, false);
+    assert.deepEqual(errors.map((e) => e.target), ['out', 'in']);
   });
 
   it('turns the sample row into a sendable payload line', () => {
