@@ -247,6 +247,47 @@ themselves were **not** rebuilt for this — they already exist and are reachabl
 "Resultado final" nav section (`fm303Layouts.js`'s `rectificativa` section, `CASILLAS_SECTIONS` in
 `FmModel303Page.jsx`); this fix only adds the warning + gate around the existing checkbox.
 
+#### Troubleshooting — `CheckException: Property declSeq does not exist for entity ETGO_Fiscal_Decl` (ETP-5187)
+
+The backend counterpart of the rectificativa flow is a dedicated `decl_seq` DECIMAL(10,0) column on
+`ETGO_Fiscal_Decl` (`FiscalDeclCrudHandler.PROPERTY_DECL_SEQ`, `resolveNextDeclSeq`) that
+disambiguates multiple declarations for the same `(client, org, model, year, period)` natural key —
+see the runtime-module writeup this section is paired with. A first pass at adding that column made
+every declaration creation fail with `CheckException: Property declSeq does not exist for entity
+ETGO_Fiscal_Decl`, thrown from `Entity.getProperty()` at `decl.set(PROPERTY_DECL_SEQ, ...)` —
+**even though the `AD_Column`/`AD_Table` rows were correct, active, and a genuine fresh runtime
+model rebuild (`ModelProvider — Building runtime model`) had already run** after a full
+`./gradlew smartbuild` + Tomcat restart.
+
+**Root cause — not a build/caching issue, a property-naming mismatch:** Openbravo's dynamic
+`Entity`/`Property` model (`org.openbravo.base.model.NamingUtil#getPropertyMappingName`) derives a
+column's runtime Java/DAL property name from **`AD_Column.Name`** (the human-readable label, camel-
+cased on both `_` and `" "`), **not** from `AD_Column.ColumnName` (the physical DB column name). The
+generated entity bean under `src-gen` (`com.etendoerp.go.schemaforge.data.FiscalDecl`) is the
+ground truth for this: it names the constant from the exact same derivation, so it always shows the
+real registered property name in its javadoc (`Property declarationSequence stored in column
+Decl_Seq in table ETGO_Fiscal_Decl`) — check that file first, don't assume the property name mirrors
+the column name.
+
+This column's `AD_Column.Name`/`AD_Element.Name` was set to the spelled-out `"Declaration
+Sequence"` (consistent with the sibling columns `declarationType`/`declarationStatus`/
+`declarationFileName`, all spelled out rather than abbreviated), so the real runtime property is
+`declarationSequence` — not the abbreviated `declSeq` that `PROPERTY_DECL_SEQ` was first given
+(which would only be correct if the property name mirrored the physical column name `Decl_Seq`
+instead of the AD_Element name). **Fix:** `PROPERTY_DECL_SEQ = "declarationSequence"` — a pure
+Java string-literal fix, no DB/XML/AD metadata change, no `update.database`, no `smartbuild`
+required. A plain recompile (`./gradlew compile.complete`) plus redeploying the compiled classes
+into the running Tomcat (`./gradlew build.deploy.class` — or a full app-server restart) is enough.
+
+**General lesson (worth re-checking any time a new `AD_Column` is added to any table across
+`etendo_schema_forge`, `schema_forge_core`, or `com.etendoerp.go`):** when writing Java that
+references a new column by a hand-rolled `PROPERTY_*` string constant, verify the exact spelling
+against the generated `src-gen/.../<Entity>.java` bean's own `PROPERTY_*` constant (or query
+`AD_Column.Name` directly) — never assume the property name is a mechanical transform of the DB
+column name. A short, spelled-out `AD_Element.Name` and a long/abbreviated physical
+`AD_Column.ColumnName` (or vice versa) are common and both valid; only `AD_Column.Name` drives the
+Java property name.
+
 ### Identification section (`tipo_declaracion` + bank data)
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
