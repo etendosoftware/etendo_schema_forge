@@ -756,6 +756,43 @@ describe('UserWindow — actionable "user created" toast (ETP-4830, onAfterCreat
 
     expect(navigateMock).toHaveBeenCalledWith('/user/new-user-1', expect.anything());
   });
+
+  // ETP-5193 (Fix 4) — the "Configurar roles" action must not be offered when
+  // `selectedRoleIds` (the shared role-selection state, read via `RoleSelectionProvider`)
+  // is already non-empty at creation time. `handleAfterCreate`'s `useCallback` deps were
+  // also fixed to include `selectedRoleIds` (previously a stale-closure bug — the callback
+  // never picked up state changes) as part of the same change.
+  describe('toast action gating by pre-existing role selection (ETP-5193 Fix 4)', () => {
+    it('includes the "Configurar roles" action when selectedRoleIds is empty at creation time (normal create-path state)', () => {
+      render(<UserWindow windowName="user" />);
+
+      lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+      expect(toastSuccess).toHaveBeenCalledTimes(1);
+      const [message, options] = toastSuccess.mock.calls[0];
+      expect(message).toBe('userCreatedInvitationSentToast');
+      expect(options).toHaveProperty('action');
+      expect(options.action.label).toBe('configureRolesAction');
+    });
+
+    it('omits the action entirely when selectedRoleIds is non-empty at creation time (also covers the stale-closure fix: the callback must pick up the latest selection)', async () => {
+      render(<UserWindow windowName="user" />);
+
+      // Force selectedRoleIds to non-empty via the shared RoleSelectionProvider state —
+      // the same mechanism the additionalDirtyState tests above use to simulate a prior
+      // role toggle.
+      screen.getByTestId('select-fin-sales').click();
+      await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+
+      lastUserPageProps.onAfterCreate({ id: 'new-user-1' });
+
+      expect(toastSuccess).toHaveBeenCalledTimes(1);
+      const [message, options] = toastSuccess.mock.calls[0];
+      expect(message).toBe('userCreatedInvitationSentToast');
+      expect(options.id).toBe(RECORD_SAVE_TOAST_ID);
+      expect(options).not.toHaveProperty('action');
+    });
+  });
 });
 
 describe('UserWindow — "Resend invitation" button (ETP-4999 — moved from topbarExtra to the right-side extraActions toolbar)', () => {
