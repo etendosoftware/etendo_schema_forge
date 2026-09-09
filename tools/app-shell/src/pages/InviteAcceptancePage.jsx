@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLogout } from '@/auth/useLogout.js';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -33,7 +34,7 @@ const SESSION_GUARD = {
 
 const ACTIONABLE_BRANCHES = new Set(['existing_account', 'registration_required']);
 
-function readStoredToken(key) {
+function readStoredValue(key) {
   try {
     return globalThis.localStorage?.getItem(key) || '';
   } catch {
@@ -67,6 +68,14 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const [sessionGuard, setSessionGuard] = useState(SESSION_GUARD.CHECKING);
   const [activeAccountEmail, setActiveAccountEmail] = useState(null);
   const logout = useLogout();
+
+  // ETP-5202 phase 2 — reaching the tenant that invited you. `enabled: false` keeps the hook
+  // from listing environments on mount: this page only ever needs the one-shot
+  // `enterByClientName`, which re-fetches the list itself (the newly joined tenant cannot be in
+  // a list loaded before the invitation was accepted).
+  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  const [entering, setEntering] = useState(false);
+  const [enterError, setEnterError] = useState(false);
 
   const clearTokenFromUrl = () => {
     try {
@@ -149,8 +158,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       return undefined;
     }
 
-    const authToken = readStoredToken('sf_auth_token');
-    const platformToken = readStoredToken('sf_platform_token');
+    const authToken = readStoredValue('sf_auth_token');
+    const platformToken = readStoredValue('sf_platform_token');
     if (!authToken && !platformToken) {
       setSessionGuard(SESSION_GUARD.CLEAR);
       return undefined;
@@ -188,6 +197,16 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       const invitedEmail = invitationData?.email || '';
       if (email && invitedEmail && email.trim().toLowerCase() === invitedEmail.trim().toLowerCase()) {
         // Same person, another tenant — nothing to close, nothing to warn about.
+        //
+        // And nothing to sign in to either: asking for the password of the account you are
+        // ALREADY signed in with is the other half of "do not get in the way" (the
+        // `existing_account` branch was written assuming the visitor arrives with no session).
+        // Only skip it when there is a platform token to accept WITH, since that is what
+        // `handleAcceptExisting` sends; if that token turns out to be stale the accept call
+        // falls back to the login step rather than dead-ending on an error.
+        if (branch === 'existing_account' && platformToken) {
+          setExistingAuthenticated(true);
+        }
         setSessionGuard(SESSION_GUARD.CLEAR);
         return;
       }
@@ -231,6 +250,28 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     }
   };
 
+  // ETP-5202 phase 2 — "Go to app" used to mean `navigate('/')`, which lands wherever the
+  // browser was already pointing: the tenant you were in before, or the onboarding redirect when
+  // there was no tenant session at all. Neither is the company you just joined, and nothing on
+  // screen said so. This enters the inviting tenant instead.
+  //
+  // A failure is never a dead end: `enterByClientName` answers false both when the environment
+  // cannot be reached and when the invited user has no role yet in it (see the roleList guard in
+  // useEnvironmentSwitch), and either way an escape route to the app is offered below.
+  const handleEnterCompany = async () => {
+    if (!companyName) {
+      navigate('/');
+      return;
+    }
+    setEnterError(false);
+    setEntering(true);
+    const entered = await enterByClientName(companyName);
+    if (!entered) {
+      setEntering(false);
+      setEnterError(true);
+    }
+  };
+
   const handleExistingAuthenticated = async () => {
     setActionError(null);
     setExistingAuthenticated(true);
@@ -252,6 +293,16 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
+        // The accept was attempted with a platform token this page never verified (it is read
+        // straight from storage). When that token is the problem, dropping back to the login
+        // step is recoverable; showing the error alone would dead-end a user who skipped the
+        // login precisely because they were already signed in.
+        if (res.status === 401 || data.code === 'AUTHENTICATION_REQUIRED') {
+          setExistingAuthenticated(false);
+          setActionError(null);
+          setSubmitting(false);
+          return;
+        }
         setActionError(data.message || ui('invitePageInvalidDescription'));
         setSubmitting(false);
         return;
@@ -354,6 +405,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
   const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
   const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
+  // Whether there is a tenant to stay in — read from storage on every render rather than
+  // remembered by the guard effect, because the guard only runs on the actionable branches: an
+  // already-accepted invitation reopened from the email skipped it entirely and silently lost
+  // the "stay where you are" option, even though the situation is identical to the screen shown
+  // right after accepting.
+  const currentClientName = readStoredValue('sf_auth_client_name');
+  const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClientName);
 
   // The marketing shell is identical on every full-page state; the pre-existing states below
   // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.
@@ -573,14 +631,59 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               ? ui('invitePageAlreadyAcceptedDescription').replace('{companyName}', companyName)
               : ui('invitePageSuccessDescription')}
           </p>
+          {enterError && (
+            <div
+              className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+              data-testid="invite-enter-error"
+            >
+              {ui('invitePageEnterFailed')}
+            </div>
+          )}
           <Button
             className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
-            onClick={() => navigate('/')}
+            onClick={handleEnterCompany}
+            disabled={entering}
             data-testid="action-go-to-app"
           >
-            <span>{ui('invitePageGoToApp')}</span>
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+            {entering
+              ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
+              : (
+                <>
+                  <span>
+                    {companyName
+                      ? ui('invitePageEnterCompany').replace('{companyName}', companyName)
+                      : ui('invitePageGoToApp')}
+                  </span>
+                  <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+                </>
+              )}
           </Button>
+          {/* Naming the tenant you are currently in is the whole point of this second button:
+              without it, joining a company from an open session is silent — you press "go to
+              app" and land back where you were, with nothing saying you now belong somewhere
+              else. Switching is a hard reload that discards every per-tenant cache, so staying
+              has to remain an explicit, equally reachable choice for someone who was in the
+              middle of something. */}
+          {canStayInCurrent && (
+            <Button
+              variant="outline"
+              className="mt-3 h-12 w-full rounded-lg text-base font-medium"
+              onClick={() => navigate('/')}
+              data-testid="action-stay-in-current"
+            >
+              {ui('invitePageStayInCompany').replace('{companyName}', currentClientName)}
+            </Button>
+          )}
+          {enterError && !canStayInCurrent && (
+            <Button
+              variant="outline"
+              className="mt-3 h-12 w-full rounded-lg text-base font-medium"
+              onClick={() => navigate('/')}
+              data-testid="action-go-to-app-fallback"
+            >
+              {ui('invitePageGoToApp')}
+            </Button>
+          )}
         </div>
       </AuthShell>
     );

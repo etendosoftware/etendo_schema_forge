@@ -76,12 +76,19 @@ const jsonFail = (status, body = {}) => ({ ok: false, status, json: async () => 
  * `/sws/neo/session` requests (0, 1 or 2) depending on which tokens are stored, so a
  * `mockResolvedValueOnce` chain would silently shift under it.
  */
-function installFetch({ resolve: resolveResponse, session }) {
+function installFetch({ resolve: resolveResponse, session, accept, login }) {
   const calls = [];
   const fetchMock = vi.fn(async (url, options = {}) => {
     calls.push({ url: String(url), options });
     if (String(url).includes('/sws/go/company-invitations/resolve')) {
       return resolveResponse;
+    }
+    if (String(url).includes('/sws/go/login')) {
+      return login ? login() : jsonFail(404);
+    }
+    if (String(url).includes('/sws/go/company-invitations/accept')) {
+      const bearer = (options.headers?.Authorization || '').replace('Bearer ', '');
+      return accept ? accept(bearer) : jsonOk({ status: 'success', clientName: 'Acme Corp' });
     }
     if (String(url).includes('/sws/neo/session')) {
       const bearer = (options.headers?.Authorization || '').replace('Bearer ', '');
@@ -194,6 +201,150 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
       expect(screen.getByTestId('invite-shared-login')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('invite-session-conflict')).not.toBeInTheDocument();
+  });
+
+  /**
+   * ETP-5202 phase 2 — "si yo estoy logueado, cuando me llega una invitación a otro tenant, me
+   * pidió loguearme de vuelta, no debería".
+   *
+   * The `existing_account` branch was written assuming the visitor arrives with no session, so
+   * it always asked for the password of the account the user was ALREADY signed in with. The
+   * shortcut skips LoginStep, but only when there is a platform token to accept WITH — that is
+   * the bearer `handleAcceptExisting` sends, and without it the shortcut would dead-end.
+   */
+  describe('already signed in as the invitee', () => {
+    it('skips the login step and goes straight to accepting', async () => {
+      installFetch({
+        resolve: jsonOk(existingBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+      globalThis.localStorage.setItem('sf_platform_token', 'platform-jwt');
+
+      renderPage('/invite?token=already-me');
+
+      await screen.findByTestId('invite-authenticated-step');
+      expect(screen.getByTestId('action-accept-invitation')).toBeInTheDocument();
+      expect(screen.queryByTestId('invite-shared-login')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('invite-session-conflict')).not.toBeInTheDocument();
+    });
+
+    // The condition that keeps the shortcut honest: no platform token means nothing to accept
+    // with, so the login step is still the right answer.
+    it('still asks for the login when there is no platform token to accept with', async () => {
+      installFetch({
+        resolve: jsonOk(existingBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+
+      renderPage('/invite?token=no-platform-token');
+
+      await screen.findByTestId('invite-shared-login');
+      expect(screen.queryByTestId('invite-authenticated-step')).not.toBeInTheDocument();
+    });
+
+    // The shortcut is scoped to `existing_account`. On `registration_required` the backend says
+    // no platform account exists for this email, so there is nothing to shortcut past.
+    it('does not apply on the registration branch', async () => {
+      installFetch({
+        resolve: jsonOk(registrationBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+      globalThis.localStorage.setItem('sf_platform_token', 'platform-jwt');
+
+      renderPage('/invite?token=same-email-register');
+
+      await screen.findByTestId('invite-new-account');
+      expect(screen.queryByTestId('invite-authenticated-step')).not.toBeInTheDocument();
+    });
+
+    // The platform token was read from storage and never verified. When it turns out to be
+    // stale, the recoverable answer is the login step the user skipped — not an error banner
+    // on a screen whose only button just failed.
+    it('falls back to the login step when the accept call rejects the token', async () => {
+      installFetch({
+        resolve: jsonOk(existingBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+        accept: () => jsonFail(401, { error: true, message: 'token expired' }),
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+      globalThis.localStorage.setItem('sf_platform_token', 'stale-platform-jwt');
+
+      renderPage('/invite?token=stale-platform');
+
+      fireEvent.click(await screen.findByTestId('action-accept-invitation'));
+
+      await screen.findByTestId('invite-shared-login');
+      // No banner: the user is being handed a way forward, not told off.
+      expect(screen.queryByTestId('invite-action-error')).not.toBeInTheDocument();
+    });
+
+    // The fallback is only worth anything if the recovered login actually completes the
+    // acceptance. Half a recovery — the login reappears but re-accepting fails again — would
+    // pass the test above and still strand the user, so the loop is closed here end to end.
+    it('completes the acceptance after recovering through the login step', async () => {
+      let acceptAttempts = 0;
+      const { fetchMock } = installFetch({
+        resolve: jsonOk(existingBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+        login: () => jsonOk({ token: 'fresh-platform-jwt', account: { email: INVITED_EMAIL } }),
+        accept: () => {
+          acceptAttempts += 1;
+          return acceptAttempts === 1
+            ? jsonFail(401, { error: true, message: 'token expired' })
+            : jsonOk({ status: 'success', clientName: 'Acme Corp' });
+        },
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+      globalThis.localStorage.setItem('sf_platform_token', 'stale-platform-jwt');
+
+      const { container } = renderPage('/invite?token=recover-and-accept');
+
+      fireEvent.click(await screen.findByTestId('action-accept-invitation'));
+      await screen.findByTestId('invite-shared-login');
+
+      fireEvent.change(container.querySelector('#login-password'), {
+        target: { value: 'the-real-password' },
+      });
+      fireEvent.click(screen.getByTestId('action-login-submit'));
+
+      fireEvent.click(await screen.findByTestId('action-accept-invitation'));
+
+      await screen.findByTestId('invite-success-state');
+      // The retry used the token the login just wrote, not the stale one it started with.
+      const acceptCalls = fetchMock.mock.calls.filter(
+        ([url]) => String(url).includes('/company-invitations/accept')
+      );
+      expect(acceptCalls).toHaveLength(2);
+      expect(acceptCalls[1][1].headers.Authorization).toBe('Bearer fresh-platform-jwt');
+    });
+
+    // …but a genuine domain rejection is NOT an authentication problem, and sending the user
+    // back to a login they would pass is a loop. It has to surface.
+    it('surfaces a domain rejection instead of looping back to the login', async () => {
+      installFetch({
+        resolve: jsonOk(existingBranch),
+        session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
+        accept: () => jsonFail(403, {
+          error: true,
+          code: 'INVITATION_ACCOUNT_MISMATCH',
+          message: 'This invitation belongs to a different account',
+        }),
+      });
+      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
+      globalThis.localStorage.setItem('sf_platform_token', 'platform-jwt');
+
+      renderPage('/invite?token=account-mismatch');
+
+      fireEvent.click(await screen.findByTestId('action-accept-invitation'));
+
+      const error = await screen.findByTestId('invite-action-error');
+      expect(error).toHaveTextContent('This invitation belongs to a different account');
+      expect(screen.queryByTestId('invite-shared-login')).not.toBeInTheDocument();
+      expect(screen.getByTestId('invite-authenticated-step')).toBeInTheDocument();
+    });
   });
 
   // 3 — The bug this ticket is about: a different account is live in the browser.
