@@ -1,4 +1,4 @@
-import { getInvoiceFiscalTargets } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from './fiscalTargets.js';
 
 /**
  * NEO serialises an AD `boolean` column either as a real JSON `true`/`false` or
@@ -13,12 +13,26 @@ export function isSent(value) {
   return value === true || value === 'Y';
 }
 
-export function getPendingSifTargets(specName, profile, invoice, territory = null) {
+/**
+ * @param {string} specName kebab-case spec (`sales-invoice`, `purchase-invoice`, ...)
+ * @param {string|null|undefined} profile active fiscal profile from `useFiscalConfig`
+ * @param {object} invoice the invoice record (needs `aeatsiiIssent`, `tbaiIssent`, `invoiceDate`)
+ * @param {string|null} [territory] TBAI territory (`tbaiRecord.etsgSifTerritory`, ETP-5087) —
+ *   only `BIZKAIA` enables TBAI for purchase documents; see `getInvoiceFiscalTargets`.
+ * @param {object|null} [tbaiRecord] `useFiscalConfig().tbaiRecord` — carries `tbaisystemdate`
+ *   (the org's TBAI adoption date). TBAI is never pending without it (ETP-5122):
+ *   an invoice dated before the org's adoption date must not offer TicketBAI sending.
+ *   Territory (ETP-5087) and date (ETP-5122) are independent gates and are ANDed:
+ *   TBAI is only pending when the document's territory AND its date both qualify.
+ */
+export function getPendingSifTargets(specName, profile, invoice, territory = null, tbaiRecord = null) {
   const { showSii, showTbai } = getInvoiceFiscalTargets(specName, profile, territory);
+  const tbaiEligibleByDate = showTbai
+    && isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
 
   return {
     sendSii: showSii && !isSent(invoice?.aeatsiiIssent),
-    sendTbai: showTbai && !isSent(invoice?.tbaiIssent),
+    sendTbai: tbaiEligibleByDate && !isSent(invoice?.tbaiIssent),
   };
 }
 
