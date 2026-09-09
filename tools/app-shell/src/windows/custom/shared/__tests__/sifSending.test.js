@@ -7,6 +7,10 @@ import {
   getSifTbaiErrorKey,
 } from '../sifSending.js';
 
+// A TBAI adoption date safely in the past relative to the fixture invoice dates
+// below, so these pre-ETP-5122 cases keep passing the (new) date gate.
+const TBAI_RECORD = { tbaisystemdate: '2020-01-01T00:00:00.000Z' };
+
 describe('sifSending', () => {
   describe('getPendingSifTargets', () => {
     it('keeps only SII pending for purchase invoices with sii+tbai when nothing was sent yet', () => {
@@ -14,7 +18,8 @@ describe('sifSending', () => {
         getPendingSifTargets('purchase-invoice', 'sii+tbai', {
           aeatsiiIssent: false,
           tbaiIssent: false,
-        }),
+          invoiceDate: '2026-01-01',
+        }, null, TBAI_RECORD),
         { sendSii: true, sendTbai: false },
       );
     });
@@ -24,7 +29,8 @@ describe('sifSending', () => {
         getPendingSifTargets('sales-invoice', 'sii+tbai', {
           aeatsiiIssent: false,
           tbaiIssent: false,
-        }),
+          invoiceDate: '2026-01-01',
+        }, null, TBAI_RECORD),
         { sendSii: true, sendTbai: true },
       );
     });
@@ -34,67 +40,175 @@ describe('sifSending', () => {
         getPendingSifTargets('sales-invoice', 'sii+tbai', {
           aeatsiiIssent: true,
           tbaiIssent: false,
-        }),
+          invoiceDate: '2026-01-01',
+        }, null, TBAI_RECORD),
         { sendSii: false, sendTbai: true },
       );
     });
 
     it('treats Etendo Y values as already sent', () => {
       assert.deepEqual(
-        getPendingSifTargets('sales-invoice', 'tbai', { tbaiIssent: 'Y' }),
+        getPendingSifTargets('sales-invoice', 'tbai', {
+          tbaiIssent: 'Y',
+          invoiceDate: '2026-01-01',
+        }, null, TBAI_RECORD),
         { sendSii: false, sendTbai: false },
       );
     });
 
+    // ETP-5122 — TBAI must not be offered on an invoice dated before the org's
+    // TBAI adoption date, even when every other condition (profile, status,
+    // not-yet-sent) says it should be pending.
+    describe('TBAI adoption-date gate (ETP-5122)', () => {
+      it('keeps TBAI pending when the invoice date is after the adoption date', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'tbai', {
+            tbaiIssent: false,
+            invoiceDate: '2026-06-15',
+          }, null, { tbaisystemdate: '2026-01-01T00:00:00.000Z' }),
+          { sendSii: false, sendTbai: true },
+        );
+      });
+
+      it('keeps TBAI pending when the invoice date equals the adoption date (inclusive)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'tbai', {
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, null, { tbaisystemdate: '2026-01-01T00:00:00.000Z' }),
+          { sendSii: false, sendTbai: true },
+        );
+      });
+
+      it('hides TBAI when the invoice date is before the adoption date', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'tbai', {
+            tbaiIssent: false,
+            invoiceDate: '2025-12-31',
+          }, null, { tbaisystemdate: '2026-01-01T00:00:00.000Z' }),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+
+      it('hides TBAI when no TBAI config (or adoption date) is available at all', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'tbai', {
+            tbaiIssent: false,
+            invoiceDate: '2026-06-15',
+          }, null, null),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+    });
+
     // ETP-5087: purchase-invoice TBAI eligibility follows the active TBAI config's territory.
-    it('includes TBAI for a purchase invoice when the TBAI territory is Bizkaia', () => {
-      assert.deepEqual(
-        getPendingSifTargets('purchase-invoice', 'sii+tbai', {
-          aeatsiiIssent: false,
-          tbaiIssent: false,
-        }, 'BIZKAIA'),
-        { sendSii: true, sendTbai: true },
-      );
+    describe('TBAI territory gate (ETP-5087)', () => {
+      it('includes TBAI for a purchase invoice when the TBAI territory is Bizkaia', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, 'BIZKAIA', TBAI_RECORD),
+          { sendSii: true, sendTbai: true },
+        );
+      });
+
+      it('excludes TBAI for a purchase invoice when the TBAI territory is Alava', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, 'ARABA', TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('excludes TBAI for a purchase invoice when the TBAI territory is Gipuzkoa', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, 'GIPUZKOA', TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('keeps TBAI available for a sales invoice regardless of territory', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, 'ARABA', TBAI_RECORD),
+          { sendSii: true, sendTbai: true },
+        );
+      });
+
+      it('does not break and excludes TBAI for a purchase invoice when no TBAI config exists (territory null)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
     });
 
-    it('excludes TBAI for a purchase invoice when the TBAI territory is Alava', () => {
-      assert.deepEqual(
-        getPendingSifTargets('purchase-invoice', 'sii+tbai', {
-          aeatsiiIssent: false,
-          tbaiIssent: false,
-        }, 'ARABA'),
-        { sendSii: true, sendTbai: false },
-      );
-    });
+    // ETP-5122 + ETP-5087 combined: territory and date are independent gates,
+    // ANDed together — TBAI is only pending when BOTH the territory qualifies
+    // (Bizkaia, for a purchase document) AND the invoice date is on/after the
+    // org's adoption date.
+    describe('territory + date combined gate (ETP-5122 + ETP-5087)', () => {
+      const ADOPTED = { tbaisystemdate: '2026-01-01T00:00:00.000Z' };
 
-    it('excludes TBAI for a purchase invoice when the TBAI territory is Gipuzkoa', () => {
-      assert.deepEqual(
-        getPendingSifTargets('purchase-invoice', 'sii+tbai', {
-          aeatsiiIssent: false,
-          tbaiIssent: false,
-        }, 'GIPUZKOA'),
-        { sendSii: true, sendTbai: false },
-      );
-    });
+      it('shows TBAI for a purchase invoice in Bizkaia dated after adoption', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-06-15',
+          }, 'BIZKAIA', ADOPTED),
+          { sendSii: true, sendTbai: true },
+        );
+      });
 
-    it('keeps TBAI available for a sales invoice regardless of territory', () => {
-      assert.deepEqual(
-        getPendingSifTargets('sales-invoice', 'sii+tbai', {
-          aeatsiiIssent: false,
-          tbaiIssent: false,
-        }, 'ARABA'),
-        { sendSii: true, sendTbai: true },
-      );
-    });
+      it('hides TBAI for a purchase invoice in Bizkaia dated before adoption', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2025-12-31',
+          }, 'BIZKAIA', ADOPTED),
+          { sendSii: true, sendTbai: false },
+        );
+      });
 
-    it('does not break and excludes TBAI for a purchase invoice when no TBAI config exists (territory null)', () => {
-      assert.deepEqual(
-        getPendingSifTargets('purchase-invoice', 'sii+tbai', {
-          aeatsiiIssent: false,
-          tbaiIssent: false,
-        }, null),
-        { sendSii: true, sendTbai: false },
-      );
+      it('hides TBAI for a purchase invoice outside Bizkaia even when dated after adoption', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2026-06-15',
+          }, 'ARABA', ADOPTED),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('hides TBAI for a sales invoice (territory irrelevant) dated before adoption', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii+tbai', {
+            aeatsiiIssent: false,
+            tbaiIssent: false,
+            invoiceDate: '2025-12-31',
+          }, null, ADOPTED),
+          { sendSii: true, sendTbai: false },
+        );
+      });
     });
   });
 
