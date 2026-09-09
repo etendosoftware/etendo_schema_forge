@@ -1838,11 +1838,37 @@ export function useEntity(entity, childEntity, {
                 return null;
             }
             const data = await res.json().catch(() => null);
-            // Refresh children and header totals. refreshHeaderTotals preserves any
-            // pending header edits in editing while updating server-computed fields (totals).
-            fetchChildren(selected.id);
-            refreshHeaderTotals(selected.id);
             const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
+            // ETP-5005 — show the persisted line IMMEDIATELY, then reconcile in the background.
+            //
+            // This is not an optimistic write: `savedLine` is the record the backend just
+            // returned from the POST, so it is as authoritative as anything the refetch will
+            // bring back. Displaying it closes the window in which the line is visible NOWHERE:
+            // DataTable's add-row unmounts as soon as the POST resolves, and before this the
+            // grid stayed without the row until a full refetch round-trip completed. Adding the
+            // FIRST line was worse still — `fetchChildren` without `silent` raises
+            // `childrenLoading` while `children.length` is still 0, which is exactly
+            // DetailView's `isInitialChildrenLoading` gate, so the whole table was replaced by a
+            // spinner and the line appeared to be lost and then recovered.
+            //
+            // Appended at the end because nothing in this repo passes `childSortBy` (no
+            // `_sortBy`, so the backend's own line order applies) and the add-row mints
+            // `lineNo = max + 10`, i.e. the new line does belong last. The silent refetch below
+            // is what makes that an optimisation rather than an assumption: it replaces the
+            // array with the server's own ordering a moment later, without blanking anything.
+            // An `id` is required, not just an object: the grid keys rows by it and every row
+            // action addresses the line through it, so a row without one would be a ghost the
+            // user can see but not act on. When it is missing, fall through to the refetch —
+            // late, but never wrong.
+            if (savedLine && typeof savedLine === 'object' && savedLine.id != null) {
+                setChildren(prev => [...prev, savedLine]);
+            }
+            // `silent: true` — see the flicker reasoning above; a refresh that merely reconciles
+            // an already-visible grid must never toggle childrenLoading.
+            fetchChildren(selected.id, { silent: true });
+            // refreshHeaderTotals preserves any pending header edits in editing while updating
+            // server-computed fields (totals).
+            refreshHeaderTotals(selected.id);
             // ETP-4751 — the exemption-cause signals live at the RESPONSE ROOT
             // (InvoiceLineHandler#augmentResponseWithSignal does body.put(signalKey, true) on the
             // full NEO response, i.e. {response:{data:[line]}, exemptionCauseWarning:true}), NOT on
