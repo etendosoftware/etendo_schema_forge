@@ -42,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:siiConfiguration
 
 // @sf-generated-start requiredHeaderFields:siiConfiguration
-const requiredHeaderFields = ['acogidaAlSII', 'plazoLmiteDeEnvoASII', 'cadenciaEnvoFacturasVentaASII', 'cadenciaEnvoFacturasCompraASII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'recc', 'redeme', 'postedInvoices', 'validHash', 'sinceJanuary2017'];
+const requiredHeaderFields = ['acogidaAlSII', 'plazoLmiteDeEnvoASII', 'cadenciaEnvoFacturasVentaASII', 'cadenciaEnvoFacturasCompraASII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'recc', 'postedInvoices', 'validHash', 'sinceJanuary2017'];
 // @sf-generated-end requiredHeaderFields:siiConfiguration
 
 // @sf-generated-start addLineFields:logHash
