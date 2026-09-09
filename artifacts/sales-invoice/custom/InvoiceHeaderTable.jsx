@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -53,7 +53,7 @@ export default function InvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord, tbaiRecord, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
 
@@ -67,10 +67,20 @@ export default function InvoiceHeaderTable(props) {
   // ─── Custom columns ────────────────────────────────────────────
   const columns = useMemo(() => {
     const fiscalCols = [];
+    // ETP-5122: each cell is additionally gated by per-row date eligibility —
+    // an invoice dated before the org's adoption date for that system must not
+    // show a status at all (the invoice could never have been sent there). The
+    // column itself still exists whenever the profile enables the system
+    // (`targets.showX`), since OTHER rows in the same grid may well be eligible
+    // (dated on/after the adoption date); only the ineligible row's cell is blank.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />,
+        render: (row) => (
+          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
+            ? <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />
+            : <span className="text-muted-foreground">—</span>
+        ),
       });
     }
     if (targets.showTbai) {
@@ -92,7 +102,13 @@ export default function InvoiceHeaderTable(props) {
     if (targets.showVerifactu) {
       fiscalCols.push({
         key: '_vfStatus', type: 'custom', label: vfColLabel,
-        render: (row) => <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />,
+        render: (row) => (
+          // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION
+          // timestamp (`created`), not `invoiceDate` — see fiscalTargets.js.
+          isVerifactuEligibleByDate(row.created, verifactuRecord?.inVfactuSystem)
+            ? <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />
+            : <span className="text-muted-foreground">—</span>
+        ),
       });
     }
 
@@ -223,7 +239,7 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, siiRecord, tbaiRecord, verifactuRecord]);
 
   return (
     <>
