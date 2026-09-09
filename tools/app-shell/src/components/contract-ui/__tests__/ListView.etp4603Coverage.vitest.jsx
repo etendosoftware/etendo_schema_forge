@@ -282,6 +282,31 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     }));
   });
 
+  // ETP-5007: the builder now hands its DRAFT advanced filter to onSavePreset.
+  // The preset must store that draft, never the last APPLIED advancedFilter.
+  it('stores the draft advanced filter handed by the builder instead of the applied one', () => {
+    const applied = { rowOperator: 'and', conditions: [{ field: 'name', operator: 'iContains', value: 'applied' }] };
+    const draft = { rowOperator: 'or', conditions: [{ field: 'amount', operator: 'greaterThan', value: '100' }] };
+    renderListView({ initialAdvancedFilter: applied });
+
+    act(() => { filterBarProps.onSavePreset('fromDraft', draft); });
+
+    expect(savePresetMock).toHaveBeenCalledWith('fromDraft', expect.objectContaining({
+      advancedFilter: draft,
+    }));
+  });
+
+  it('stores a null draft as null (user cleared every condition before saving)', () => {
+    const applied = { rowOperator: 'and', conditions: [{ field: 'name', operator: 'iContains', value: 'applied' }] };
+    renderListView({ initialAdvancedFilter: applied });
+
+    act(() => { filterBarProps.onSavePreset('emptied', null); });
+
+    expect(savePresetMock).toHaveBeenCalledWith('emptied', expect.objectContaining({
+      advancedFilter: null,
+    }));
+  });
+
   // ── refresh effects: columnFilters change + refreshTrigger bump ───────
   it('refetches when columnFilters change after the initial mount (skips the very first run)', () => {
     renderListView();
