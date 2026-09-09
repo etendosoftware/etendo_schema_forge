@@ -121,6 +121,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 "window": {
   "customComponents": {
     "topbarRight":    "GoodsShipmentActions",
+    "subHeader":      "ProductCostBanner",
     "bottomSection":  "InvoiceBottomPanel",
     "sidePanel":      "PaymentActivityPanel",
     "sidePanelStyle": { "width": "40%", "minWidth": 260 },
@@ -132,6 +133,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
 | `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
+| `subHeader` | `headerContent={(data) => <X data={data} />}` | Full-width strip between the toolbar and the form — the first child of the detail content container | `data` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
@@ -139,9 +141,12 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 **Real examples:**
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
+- `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
 
 **Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
@@ -1636,6 +1641,9 @@ I need to customize the UI of a window
 │   │
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
+│   │
+│   ├─ Full-width notice/banner above the form (record-wide warning, locked state)
+│   │   └─ → window.customComponents.subHeader
 │   │
 │   ├─ Stack title + code + image into one sortable/filterable list column
 │   │   └─ → multiField decorator on the host grid field (decisions.json)

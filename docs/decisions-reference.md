@@ -614,6 +614,7 @@ Override generated components with custom implementations from `artifacts/{windo
 | `headerTable` | string | Custom table component name. Replaces the generated `{Entity}Table` import. File must exist at `artifacts/{window}/custom/{value}.jsx`. |
 | `bottomSection` | string | Custom bottom panel component. Replaces the default totals + footer layout. Receives `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused`. |
 | `topbarRight` | string | Custom component rendered on the right side of the detail topbar (before icon buttons). Receives `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`. When present, the default status badge is hidden. |
+| `subHeader` | string | **(ETP-5245)** Custom component rendered as a full-width strip between the toolbar and the form — emitted as `DetailView`'s `headerContent={(data) => <X data={data} />}` prop, i.e. the first child of the detail content container, above the form and above any primary-tab panel. Receives only `data` (the current record); return `null` to render nothing, since the slot has no visibility gate of its own. Intended for a record-wide notice (blocking warning, locked-state explanation) built on the shared `InfoBanner` primitive — the same position the built-in credit-limit / BP-on-hold banner occupies. First user: `product` (`ProductCostBanner`). Full guidance, including tone choice and how to pair it with a save gate: `docs/ui-customization.md` §4. |
 
 ### Menu Actions (`window.menuActions`)
 

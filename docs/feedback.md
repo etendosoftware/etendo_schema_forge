@@ -1940,3 +1940,41 @@ broken for any Organization-level role; only a core fix closes them. Written up 
 - **Back up before you destroy, and verify the backup.** `git diff > file` in this repo produces
   RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
   `rtk proxy git diff`, and validate with `git apply --check` before relying on it.
+
+---
+
+## [2026-09-09] ETP-5245 — Secondary tabs have no per-row delete gate (accepted debt)
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` +
+`DataTable.jsx` / `InlineLinesPanel.jsx` (the shared components live in `schema_forge_core`)
+
+**Symptom:** The Product window's new **Cost** tab (ETP-5245) lists the whole `M_Costing` history —
+rows the user typed *and* rows the costing engine generated. Engine rows must never be deleted, but
+the trash icon renders on every row. Clicking it on an engine row produces a backend `403`
+("This cost was calculated by the system and cannot be modified or deleted."), so the user is
+stopped, but only after acting: the affordance promises something the system will refuse.
+
+**Root cause:** The delete affordance is decided **per entity, not per row**.
+`DetailView.jsx:638` derives `onDeleteRow` from `props.crud?.[props.st.key]?.delete` — one boolean
+for the whole `costing` entity — and `DataTable.jsx:1689` renders the trash `TableCell` for every
+row as soon as that handler exists (`InlineLinesPanel`'s `canDelete` gate behaves the same way).
+There is no hook for "this entity is deletable, but *this row* is not". `hideDelete` (see
+`docs/decisions-reference.md`) can only turn the capability off for the entire entity, which would
+also block deleting the manual rows the tab exists to maintain.
+
+**Fix (partial, deliberate):** `ProductCostingHandler.guardEngineRow` returns `403` on any
+`PATCH`/`PUT`/`DELETE` against a row with `ISMANUAL != 'Y'`, and the message is translated through
+`lib/backendErrors.js` (`backendError.costingEngineRowLocked`). This was reviewed and **accepted**
+for ETP-5245 rather than blocked, because a server-side guard is the only one that also covers the
+REST API and the MCP — a UI-only gate would have been the weaker half of the pair regardless.
+
+**Open work:** a `canDeleteRow` predicate (record → boolean) on `DataTable` / `InlineLinesPanel`,
+plumbed from `DetailView`'s secondary-tab props and declarable from `decisions.json` the way
+`readOnlyLogicJs` already is for fields. Both components live in **`schema_forge_core`**, so the
+change belongs in that repo and needs a package publish + pin bump here
+(`docs/repo-topology.md`). Not scheduled.
+
+**Lesson:** A row-level invariant cannot be expressed with an entity-level flag. When a tab mixes
+records with different write rules — user-authored vs. machine-authored, draft vs. posted — the
+backend guard is mandatory and the UI gate is, at best, a courtesy. Ship the guard first, and record
+the missing affordance instead of pretending the UI covers it.
