@@ -2047,3 +2047,40 @@ alternative (no dependency) leaves those invoices permanently wrong until somebo
 **Still open.** The SII and VERI*FACTU columns keep the same gate in the browser, and carry the
 same selected-organization bug. They are not stored computed columns, so they do not have the
 filter inconsistency — but the organization bug is real for them today.
+
+## [2026-09-09] ETP-5216 — A stored computed column cannot be verified inside a transaction you roll back
+
+**Component:** the EPL-1807 stored-computed-column engine (`ad_scd_*` triggers), exercised on
+`EM_ETGO_Tbai_Status`.
+
+**Symptom:** a freshly deployed dependency looks dead. You change the source row inside
+`BEGIN … ROLLBACK`, read the target column back, and it has not moved. Every instinct says the
+trigger was not generated — which is exactly the failure mode this engine is notorious for, so the
+wrong conclusion is very easy to reach.
+
+**Why it happens.** Synchronous refresh (`Refresh_Mode = 'S'`) runs in **deferred constraint
+triggers**, which fire at COMMIT. A transaction that is rolled back never reaches that point. The
+enqueue half runs immediately; the recompute half never does.
+
+**The tell.** `ad_scd_check('<AD_Column_ID>')` *inside* the rolled-back transaction returned the
+exact number of affected rows (8, matching by hand the invoices dated after the new adoption date).
+A non-zero `ad_scd_check` there is evidence the enqueue trigger works — the opposite of what a
+non-zero check means outside a transaction, where it means drift. Reading it as drift is the trap.
+
+**How to verify instead.** Commit the change, assert, then revert in a second committed step and
+assert again. That round trip is safe precisely because the computation is deterministic: restoring
+the original source value recomputes the same rows back. Asserting the return leg is worth doing —
+it proves the recompute is driven by the data rather than by a one-way migration.
+
+**Second trap, same session: `update.database` does not repopulate an existing column.** Changing
+the function of a column that already exists regenerates its triggers and deliberately leaves the
+stored values untouched. `ad_scd_check` reported all 2709 rows stale until `ad_scd_rebuild` ran.
+Expected behaviour, but between deploy and rebuild the column serves stale values with no warning
+anywhere.
+
+**Third: after the rebuild, the correct answer looked exactly like the bug.** Every invoice
+resolved to `NoAplica`, so the column rendered as a dash on every row — visually identical to the
+dead column the ticket set out to fix. It was right (both configured organizations adopted on
+2026-09-08 and no invoice is later than that), but a reviewer opening a dev instance would have
+filed it as a regression. When a column's correct state in dev data is uniform, say so out loud
+before somebody else looks at it.

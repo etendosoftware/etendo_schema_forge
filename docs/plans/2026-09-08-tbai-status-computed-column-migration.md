@@ -1025,10 +1025,46 @@ data (adoption date temporarily moved inside a transaction that was then rolled 
 | Invoice after the adoption date | falls through to `tbai_syncinvoice` |
 | Config set `isactive = 'N'` | `NoAplica` |
 
-**Still outstanding:** the deploy-time check that a green build cannot give — after
-`update.database`, confirm the enqueue trigger exists on `tbai_config`, that
-`ad_scd_check('F580979CD28F42B8BFD32B2BC9E65DAD')` returns 0, and that editing a real
-`tbaisystemdate` actually moves the stored values. The first two pass on a broken column.
+**Deploy verified (2026-09-09), after `update.database`:**
+
+| Check | Result |
+|---|---|
+| Enqueue trigger on `tbai_syncinvoice` | `ad_scd_f727e1b8…_trg` |
+| Enqueue trigger on `tbai_config` (the new one) | `ad_scd_d51fd6fb…_trg` |
+| Deployed function carries the gate | yes |
+| `ad_scd_rebuild(...)` | 2709 rows, 1.2 s |
+| `ad_scd_check(...)` | 0 |
+| **Editing only `tbaisystemdate` moves the stored values** | yes — 8 invoices reclassified with no invoice touched, and back again when the date was restored |
+
+`update.database` does NOT repopulate an existing column whose function changed — it regenerates
+the triggers and deliberately leaves the stored values alone. `ad_scd_check` reported all 2709 rows
+stale until `ad_scd_rebuild` ran. That is expected, not a fault, but it means the column serves
+stale values in the window between the two.
+
+### Trap: you cannot verify this inside a transaction you roll back
+
+The obvious way to test "does changing the adoption date recompute the invoices?" without touching
+data is to do it inside `BEGIN … ROLLBACK`. **It does not work, and it fails in a way that looks
+like a broken trigger.** Synchronous refresh runs in *deferred constraint triggers*, which fire at
+COMMIT; a rolled-back transaction never reaches that point, so the stored values are unchanged when
+you read them back.
+
+The tell is `ad_scd_check`: inside the rolled-back transaction it returned **8** — the enqueue
+trigger had correctly identified exactly the 8 invoices dated after the new adoption date. The
+queue was right; only the recompute had not happened yet. Read that as evidence the chain works,
+not as drift.
+
+Verifying properly means committing and then reverting in a second committed step. That is safe
+here because the computation is deterministic: restoring the original `tbaisystemdate` recomputes
+the same rows back to their previous values, which is itself worth asserting (this run did).
+
+### The correct result is indistinguishable from the bug
+
+After the rebuild, all 2709 invoices hold `NoAplica`, so the column renders as a dash on every row.
+That is correct — both configured organizations adopted on 2026-09-08 and the instance holds no
+invoice later than that — but on screen it looks exactly like the dead column this whole ticket
+existed to fix. To see the column populated, move an adoption date backwards. Anyone reviewing this
+in a dev instance needs to be told, or they will report it as a regression.
 
 ### Known asymmetry (deliberate, not an oversight)
 
