@@ -21,7 +21,8 @@ import {
  *     column is independent: a regression that coupled the two hid SII outside
  *     Bizkaia, so the non-Bizkaia case asserts SII is STILL there.
  *
- *  B. CONTENT — `row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')`.
+ *  B. CONTENT — `isTbaiStatusNotApplicable(row.eTGOTbaiStatus)` picks a dash;
+ *     otherwise `row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')`.
  *     `eTGOTbaiStatus` is the real backend status — since ETP-5216, backed by the
  *     stored computed AD column `em_etgo_tbai_status` (previously the synthetic
  *     `tbaiSyncEstado` field injected server-side by the now-deleted
@@ -46,6 +47,20 @@ import {
  *    `eTGOTbaiStatus`, not the pre-ETP-5216 synthetic `_tbaiStatus` — this is
  *    exactly what makes the column pass `isFilterableColumn` (it now carries a
  *    real `column`), the defect this migration fixes.
+ *  - The dash rows assert the literal `'—'`: the "does not apply" branch renders
+ *    a plain muted span, not a `FiscalStatusBadge`, so it has no i18n key to
+ *    resolve through `t()`.
+ *
+ * ETP-5216 also moved the ADOPTION-DATE GATE out of the cell. It used to run
+ * here as `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`
+ * (ETP-5122), which was invisible to the backend — so filtering the now
+ * filterable column by "Pendiente" returned rows the grid then drew as a dash —
+ * and compared EVERY row against the SELECTED organization's adoption date
+ * rather than the invoice's own. `ETGO_GET_TBAI_STATUS` now decides per invoice,
+ * against the invoice's OWN organization, and reports it as the literal
+ * `'NoAplica'`; the cell only translates that value to a dash. The cut lands
+ * exactly on the adoption date and the adoption day itself is eligible
+ * (`>=`, not `>`) — verified against the real DB.
  */
 
 const SPEC = 'purchase-invoice';
@@ -88,7 +103,39 @@ const ROWS = [
   { id: 'PI_PENDING_CHAR', orderReference: 'PI-PENDING-CHAR', tbaiIssent: 'N', expected: 'fiscalMonitor.tbai.status.Pendiente' },
 ];
 
-const LIST_ROWS = ROWS.map(({ expected, ...row }) => ({ ...BASE_ROW, ...row, documentNo: row.orderReference }));
+/**
+ * ETP-5216 — rows the DB reports as 'NoAplica': the invoice predates its OWN
+ * organization's Batuz adoption date, or that organization has no active
+ * `tbai_config` row. Not pending anything, ever, so the cell draws a dash
+ * instead of a badge. Kept out of ROWS because they assert a literal, not an
+ * i18n-resolved status label.
+ */
+const NOT_APPLICABLE_ROWS = [
+  { id: 'PI_NO_APLICA', orderReference: 'PI-NO-APLICA', eTGOTbaiStatus: 'NoAplica', tbaiIssent: false },
+  // The flag being set changes nothing: 'NoAplica' short-circuits before the
+  // `isSent(tbaiIssent)` fallback is ever consulted.
+  { id: 'PI_NO_APLICA_SENT', orderReference: 'PI-NO-APLICA-SENT', eTGOTbaiStatus: 'NoAplica', tbaiIssent: true },
+];
+
+/**
+ * ETP-5216 regression row — the reason the gate had to leave the browser.
+ * `invoiceDate` is four years BEFORE the adoption date of the SELECTED org
+ * (`tbaisystemdate: '2026-05-08'` in `installFiscalProfileMocks`), but the
+ * invoice belongs to another organization that joined Batuz earlier, so the
+ * backend computed a real status. The old cell-side gate hid it behind a dash.
+ * `accountingDate` stays on BASE_ROW's value so the SII column — which still
+ * gates in the browser — is unaffected and keeps showing its own state.
+ */
+const CROSS_ORG_ROW = {
+  id: 'PI_OTHER_ORG',
+  orderReference: 'PI-OTHER-ORG',
+  invoiceDate: '2022-01-01',
+  eTGOTbaiStatus: 'Recibido',
+  tbaiIssent: true,
+};
+
+const LIST_ROWS = [...ROWS, ...NOT_APPLICABLE_ROWS, CROSS_ORG_ROW]
+  .map(({ expected, ...row }) => ({ ...BASE_ROW, ...row, documentNo: row.orderReference }));
 
 /**
  * Install the purchase-invoice list/detail endpoint. Two routes on purpose: a
@@ -183,6 +230,32 @@ test.describe('Purchase Invoice list — Estado Batuz column (ETP-5087)', () => 
         await expect(page.getByTestId(`cell-${row.id}-eTGOTbaiStatus`)).toHaveText(t(row.expected));
       });
     }
+
+    // ── ETP-5216: 'NoAplica' → dash, and nothing else does ──────────────────
+    for (const row of NOT_APPLICABLE_ROWS) {
+      test(`${row.id}: eTGOTbaiStatus='NoAplica' tbaiIssent=${JSON.stringify(row.tbaiIssent)} renders a dash, not a badge`, async ({ page }) => {
+        const cell = page.getByTestId(`cell-${row.id}-eTGOTbaiStatus`);
+        await expect(cell).toHaveText('—');
+        // Not the fallback the flag would otherwise produce — the dash branch
+        // short-circuits before `isSent(tbaiIssent)` is consulted at all.
+        await expect(cell).not.toHaveText(t('fiscalMonitor.tbai.status.Enviada'));
+        await expect(cell).not.toHaveText(t('fiscalMonitor.tbai.status.Pendiente'));
+      });
+    }
+
+    test('a dashed Batuz cell does not dash the row — the SII column keeps its own state', async ({ page }) => {
+      // Proves the dash is the TBAI cell's own decision, not a broken row.
+      await expect(page.getByTestId('cell-PI_NO_APLICA-eTGOTbaiStatus')).toHaveText('—');
+      await expect(page.getByTestId('cell-PI_NO_APLICA-_siiStatus'))
+        .toHaveText(t('fiscalMonitor.status.sii.CO'));
+    });
+
+    test('an invoice dated before the SELECTED org adoption date still shows its stored status', async ({ page }) => {
+      // The ETP-5216 regression: the browser no longer second-guesses the DB by
+      // comparing invoiceDate against the selected org's tbaisystemdate.
+      await expect(page.getByTestId(`cell-${CROSS_ORG_ROW.id}-eTGOTbaiStatus`))
+        .toHaveText(t('fiscalMonitor.tbai.status.Recibido'));
+    });
 
     test('a rejected invoice is never reported as sent, and its SII column is unaffected', async ({ page }) => {
       const cell = page.getByTestId('cell-PI_REJECTED-eTGOTbaiStatus');
