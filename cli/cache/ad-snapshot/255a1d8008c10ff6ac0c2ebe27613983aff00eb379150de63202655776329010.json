@@ -90514,7 +90514,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "b98f015c13536cec7e366dd8ff40d3a4ac798c4a2a2193f9dede211b6a9384a6",
+      "checksum": "1d0ecc5edcb5d76aff3a381641dac730c58715c896b73a6c329841da470e23b5",
       "params": [
         "183"
       ],
@@ -93728,7 +93728,7 @@
           "callout_class": null,
           "columnname": "EM_Tbai_Xmlgenerator",
           "defaultvalue": null,
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "entity_alias": null,
