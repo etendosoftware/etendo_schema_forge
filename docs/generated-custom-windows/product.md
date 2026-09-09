@@ -297,6 +297,10 @@ When creating a new product, `uOM` now preselects the UOM row flagged `IsDefault
 
 **Also unresolved — tab order.** The ticket asks for `... → Precio → Contabilidad → ...`; today's order is `Accounting, Price, Attachments` (Accounting first). Per the "Tab position follow-up (ETP-4402 continued)" section above, inverting the relative order of `secondaryTabs` vs. `customPanelTabs` entries is explicitly **not achievable with a decisions.json-only change** — already tracked as **ETP-4415**, which touches CODEOWNERS-gated `DetailView.jsx`/`generate-frontend.js`. Not changed in this pass.
 
+## ETP-5116 — Accounting tab hidden for roles without the accounting capability
+
+`window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the entire Accounting tab is omitted from the tab strip — not merely disabled — and the `openSecondaryTab` deep link/location-state path silently no-ops instead of activating it. Roles with the capability see no change (Accounting still renders first, as described above). Full mechanism reference (field-level and tab-level `visibleWhenCapability`, the `isCapabilityVisible()` implementation, the Panel eager-mount interaction): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
+
 ## Tariffs section fixes — ETP-4605
 
 Four issues were reported against the `Price` tab. Investigation confirmed two of them,
