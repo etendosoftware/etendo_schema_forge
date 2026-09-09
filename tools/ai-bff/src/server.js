@@ -200,7 +200,22 @@ export async function handleChat(req, res) {
         maxOutputTokens: 220,
         temperature: 0.1,
       } : {}),
-      stopWhen: stepCountIs(8),
+      // 8 was too few for a create-with-address task: contract exploration
+      // alone can eat ~6 steps, leaving no room for the 3 creations such a task
+      // needs (the business partner, the `C_Location` via
+      // `bp-location/bpLocation`, then the `contacts/locationAddress` link).
+      // Exploration is that expensive because tool output is never capped
+      // before it goes back to the model — the `.slice()` calls below only
+      // trim the trace log, so `neo_discover` (~77 KB) and every `neo_schema`
+      // dump accumulate whole in the conversation.
+      //
+      // Raising this does NOT fix the hang that prompted the investigation:
+      // that was a [400] from the model provider, and both runs died right
+      // after `neo_selectors` — at step 6 with the limit at 8, at ~8 with it at
+      // 20. A larger budget only moves the failure later. Excess context is the
+      // likeliest cause given the uncapped payloads above, but the provider
+      // never said so, so treat it as unproven.
+      stopWhen: stepCountIs(20),
       abortSignal: AbortSignal.timeout(modelTimeoutMs),
       onStepFinish: ({ text, toolCalls, toolResults, finishReason }) => {
         trace('step', {

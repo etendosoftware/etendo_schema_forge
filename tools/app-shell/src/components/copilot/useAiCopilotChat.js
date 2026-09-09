@@ -4,20 +4,10 @@ import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } fro
 import { useLocation, useNavigate } from 'react-router-dom';
 import { authHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
-import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
+import { AmbiguousWindowError, UnknownWindowError, assertInternalPath, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
-/**
- * Guard the router against anything that is not an in-app path. This is the
- * security boundary of the navigation tools (see the ETP-5064 acceptance
- * criteria) and its message must never be reused for a reference the index
- * simply could not resolve — see UnknownWindowError in ./windowRoutes.js.
- */
-export function assertInternalPath(path) {
-  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
-    throw new Error('Only internal application paths are allowed');
-  }
-  return path;
-}
+// Re-exported so existing importers of the guard keep their current path.
+export { assertInternalPath } from './windowRoutes.js';
 
 /**
  * Resolve whatever the model sent — an explicit path or a window name in any

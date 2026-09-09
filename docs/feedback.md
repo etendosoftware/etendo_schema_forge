@@ -1711,3 +1711,109 @@ reader no way to tell which half is current.**
 behind even when every line of logic is correct and every test is green, because no gate reads
 prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
 diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## [2026-09-08] ETP-5234 — Copilot markdown: an external link href truncates at the first `)`
+
+**Component:** `tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `INLINE_RE`
+
+**Status:** Known issue, **logged not fixed** (deliberate user decision). **Pre-existing** — not a
+regression from the GFM-table/internal-link work in ETP-5234; the old regex used the same `[^\s)]`
+href class.
+
+**Symptom:** A link whose URL legitimately contains a closing parenthesis renders a **live but
+truncated** anchor, so the user lands on a 404. Verified output for
+`[w](https://en.wikipedia.org/wiki/Foo_(bar)) tail`:
+
+```html
+<a href="https://en.wikipedia.org/wiki/Foo_(bar" target="_blank">w</a>) tail
+```
+
+**Root cause:** the href group of `INLINE_RE` is `([^\s)]{1,2000})` — it stops at the first `)`
+because that is the delimiter closing the markdown link. Balanced parentheses in a URL are legal
+markdown (GFM handles them) but need paren-counting, which a single regex alternation cannot do.
+
+**Why not fixed:** `INLINE_RE` is one alternation that governs **all** inline formatting — bold,
+italic, inline code and links. Rewriting the link branch to match balanced parens changes the regex
+every inline construct in every Copilot message flows through, so the fix carries its own regression
+risk out of proportion to a cosmetic 404.
+
+**Not a security issue — verified.** The infidelity is cosmetic only. Truncation happens *after* the
+href policy has already classified the scheme, so a refused scheme is still refused: for
+`[x](data:text/html,<script>alert(1)</script>)` the whole construct degrades to React-escaped text
+with **zero anchors** in the output.
+
+**Lesson:** when a single regex carries several unrelated grammars, the blast radius of "just fix the
+link case" is every case. Log the narrow cosmetic bug rather than widening a shared pattern.
+
+---
+
+## [2026-09-08] ETP-5234 — `assertInternalPath` returns the original string, not the normalized one (OPEN QUESTION)
+
+**Component:** `tools/app-shell/src/components/copilot/windowRoutes.js` — `assertInternalPath()`
+
+**Status:** **Open question for the team**, raised by developer-1 during ETP-5234. Not a decided bug,
+and **not a security issue**. Recorded so the next reader does not have to re-derive the trade-off.
+
+**Behavior:** `assertInternalPath()` is *identity-or-throw*. It normalizes the path (strip TAB/LF/CR,
+`\` → `/`) only to make the **decision** on the same string the WHATWG URL parser will see, then
+returns the caller's **original** string. See `docs/copilot-markdown-rendering.md` §4 for why the
+normalization itself is mandatory.
+
+**Consequence:** for an *allowed* path that contains `\` or a stripped character mid-string, the two
+navigation mechanisms disagree on the destination. For `/a\b`:
+
+- `<Link to="/a\b">` — react-router navigates the SPA to the literal `/a\b`.
+- Ctrl/Cmd-click or "open in new tab" on the same `href` — the browser resolves it to
+  `http://<app-origin>/a/b`.
+
+**Why this is not a vulnerability:** both destinations are **on-origin**. Origin escape depends only
+on the leading authority prefix, which the guard has already rejected; any string whose normalized
+form is on-origin is itself on-origin. The worst case is a 404 or landing on another screen of the
+same tenant.
+
+**Why it was not simply "fixed" by returning the sanitized form:** that would close the divergence
+but changes a guard that is currently identity-or-throw, and it affects **both** consumers:
+
+- `navigate_to` / `open_form` (`useAiCopilotChat.js:229`, `:235`, via `resolveWindowPath()` at `:19`)
+  would navigate somewhere other than the path the model asked for — silently rewriting a tool
+  argument.
+- `resolveWindowPath()` would start returning a rewritten string to every caller that reads it.
+
+**What to decide:** whether the guard's contract is "validate" (today) or "validate and canonicalize".
+Do not change it as a drive-by; it needs a call on both consumers at once.
+
+---
+
+## [2026-09-08] ETP-5234 — `data-testid="MarkdownContent__61b427"` is silently dropped and does not exist in the DOM
+
+**Component:** `tools/app-shell/src/components/copilot/ChatView.jsx:134` →
+`tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `MarkdownContent({ children })`
+
+**Status:** Known issue, **logged not fixed** in ETP-5234 (deliberate user decision).
+**Pre-existing** — not introduced by the GFM-table/internal-link work. Not user-facing, not a
+security issue: it is a **test-authoring trap**.
+
+**Symptom you will actually see:** a Playwright spec (or any query by test id) that waits on
+`[data-testid="MarkdownContent__61b427"]` inside a Copilot chat bubble **times out after 30 s**
+looking for a selector that cannot exist. Nothing is logged, nothing warns, and the surrounding
+markup renders perfectly — so the natural conclusion is "the chat did not render" or "the message
+never arrived", and the search goes to the chat transport rather than to the renderer.
+
+**Root cause:** `ChatView` renders
+`<MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>`, but
+`MarkdownContent` destructures **only** `{ children }` and spreads nothing onto its root
+`<div className="space-y-2 leading-6">`. React does not forward unknown props to a function
+component's DOM output, so the attribute is discarded with no error.
+
+**Fix:** delete the `data-testid` prop from the `<MarkdownContent>` call site in `ChatView.jsx`.
+It is a dead attribute, not a missing feature — do **not** add a prop spread to `MarkdownContent`
+just to make the testid appear. The renderer already emits real, reachable test ids for the nodes
+worth targeting (`MarkdownLink__e0b411`, `MarkdownInternalLink__e0b411`, `MarkdownTable__e0b411`);
+target those, or the bubble container in `ChatView`.
+
+**Lesson:** a `data-testid` on a **function component** is inert unless that component explicitly
+forwards it. Auto-generated testids applied uniformly across a file will land on both host elements
+(where they work) and custom components (where they vanish). Before writing a selector against a
+testid, grep the component it names and confirm it reaches a DOM element.
