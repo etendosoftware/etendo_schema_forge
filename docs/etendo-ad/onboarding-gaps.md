@@ -19,6 +19,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
+| A9 | Accounting | `FIN_Financial_Account_Acct.FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT` ("Cleared payment account" IN/OUT) born pre-filled with the ledger asset account (`57200000`) instead of empty — a non-null cleared account is what makes `DocFINReconciliation` post a reconciliation, so reconciliations generated unwanted entries in Sumas y Saldos / Libro Mayor. NOT a missing-row gap (A2c) or a missing-account gap (A7): the row and the account both exist, the *value* is wrong | Both fronts closed: preventive in `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (stops selecting the two columns) + `FinancialAccountAccountingDefaultsSupport` (actively clears them after core's trigger seeds them, for the live create path); corrective data-fix (`R34`) blanks them on already-onboarded tenants, skipping accounts with posted reconciliations. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R34`'s `@check` returns 0 rows for it | ETP-5207 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -38,6 +39,22 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 > `onboarding-and-datafixes-map.md`/`tenant-remediation-knowledge.md` references. No functional impact
 > either way — `@gap` is a documentation/categorization tag only, never stored in
 > `ETGO_DATA_FIX_HISTORY` or read by the runner.
+
+> **Label history note:** ETP-5207's Financial Account cleared-payment gap collided with ETP-5075's
+> invoice-price-variance gap — both independently claimed `A8` (authored 2026-09-08 and 2026-09-07
+> respectively), discovered when merging `origin/develop` into `feature/ETP-5207`. ETP-5075's `A8`
+> was already published on `develop` and keeps the label; ETP-5207 is relabeled `A9` (2026-09-09)
+> across this table, its detailed section below, `onboarding-and-datafixes-map.md`'s row,
+> `tenant-remediation-knowledge.md`'s heading, `R34-fin-account-cleared-payment-accounts.sql`'s own
+> `@gap` header, and its regression test — cheap since ETP-5207 was still on a feature branch with
+> only those few references, unlike the N1/R31 case (`tenant-remediation-knowledge.md`, "2026-09-03
+> — Merge of ETP-5117…"), where neither side was renamed because both were already cross-referenced
+> in many places. `R34`
+> itself is NOT renamed — both fixes' full filenames are already distinct
+> (`R34-invoice-price-variance-backfill` vs. `R34-fin-account-cleared-payment-accounts`), and
+> R-number reuse alone is normal in this catalog (see R14/R17/R23/R26). No functional impact either
+> way — `@gap` is a documentation tag only, never stored in `ETGO_DATA_FIX_HISTORY` or read by the
+> runner.
 
 ---
 
@@ -893,6 +910,118 @@ deliberately NOT bumped by this change — same reasoning as A7's caveat: the cu
 (`2026-09-01T14:00:00Z` at authoring time) already sits behind several other unbumped, individually
 unverified intervening fixes (`R32`/`R33`), and bumping past them on this fix's say-so risks
 silently skipping one of theirs for a brand-new tenant.
+
+---
+
+### A9 — `Cleared payment account` (IN/OUT) born pre-filled instead of empty (ETP-5207, 2026-09-08)
+
+**Symptom:** creating a Financial Account leaves the accounting-configuration fields **Cleared
+payment account (IN)** and **(OUT)** filled with the ledger's asset account (`57200000 - Bancos e
+instituciones de crédito c/c vista euros`). Reconciliations on that account are then **posted**,
+generating accounting entries the business never wanted and distorting Sumas y Saldos, Libro Mayor
+and the rest of the accounting reports.
+
+Distinct from its neighbours in this section: **A2c** is about the `FIN_Financial_Account_Acct` row
+being *missing entirely*, and **A7** is about a named ledger *account* not existing in the chart.
+Here both the row and the account exist — the **value** is wrong.
+
+**Root cause:** core's `AFTER INSERT` trigger `FIN_FINANCIAL_ACCOUNT_TRG`
+(`src-db/database/model/triggers/FIN_FINANCIAL_ACCOUNT_TRG.xml`, lines 53-65) inserts the
+`fin_financial_account_acct` row and assigns `v_AssetAccount` (`B_Asset_Acct`, or `CB_Asset_Acct`
+when `type='C'`) to **both** `fin_in_clear_acct` and `fin_out_clear_acct`. Both columns are nullable
+(`ISMANDATORY=N`) and the functional default for all three account types is EMPTY. The trigger is
+CORE and must not be modified.
+
+Why it produces postings: `DocFINReconciliation#getDocumentConfirmation`
+(`DocFINReconciliation.java:1351-1390`) queues a transaction for posting **only when the relevant
+account is non-null** — `("CLE").equals(getINUponClearingUse()) && getClearedPaymentAccount() != null`,
+plus the GL-item `BPD`/`BPW` and bank-fee `BF` equivalents. The seeded **"Recibo"** payment method
+carries `INUPONCLEARINGUSE`/`OUTUPONCLEARINGUSE` = `CLE` and is auto-assigned to Banco and Tarjeta
+accounts (`FinancialAccountSupport.PAYMENT_METHODS_BY_TYPE`), so a filled cleared account made the
+gate pass. With both columns empty nothing passes the gate → `STATUS_DocumentDisabled` → the
+document is simply not posted, no error.
+
+**Preventive (closed, two places):**
+- `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` no longer selects the two
+  columns. **This — not the sampledata XML — is the front that matters for a new tenant:**
+  `FIN_FINANCIAL_ACCOUNT_ACCT` is absent from `OnboardingDatasetDefinition.INCLUDED_TABLES`, so
+  `GOClient/FIN_FINANCIAL_ACCOUNT_ACCT.xml` is never imported (it was cleaned in the same pass for
+  template consistency only, and for the day the table joins `INCLUDED_TABLES`).
+- `FinancialAccountAccountingDefaultsSupport.applyDefaultsForType` now ends with an unconditional
+  `setClearedPaymentAccount(null)` / `setClearedPaymentAccountOUT(null)` — this is the **live**
+  create path (accounts created through the Etendo GO UI/NEO), where the trigger *does* fire. Note
+  `applyIfResolved` only ever assigns, so the pre-existing "intentionally never set here" comment
+  left the trigger's value in place — clearing is required, not merely omitting.
+
+**Corrective:** `20260908T120000Z__R34-fin-account-cleared-payment-accounts.sql` blanks both columns
+for already-onboarded tenants, on **every** account.
+
+Scope decision (product owner, explicit): an earlier draft skipped any account that already had a
+**posted** reconciliation, because its `FACT_ACCT` entries were produced *using* the cleared
+account. That guard was **removed** — leaving those accounts configured means they can still post
+NEW reconciliations, which defeats the point of the ticket. Accepted trade-off: existing entries are
+untouched (blanking a column does not delete `FACT_ACCT`), but those old documents can no longer be
+re-posted identically — a reset+repost would either stop posting silently
+(`STATUS_DocumentDisabled`) or fail outright on a document mixing a still-passing line with a
+bank-fee/GL-item line.
+
+One guard survives, and it is a **technical** necessity rather than a functional choice: type-`B`
+rows missing `fin_bankfee_acct` / `fin_bankrevaluationgain_acct` / `fin_bankrevaluationloss_acct`
+are skipped and listed by `@report`, because `APRM_FIN_FINACC_ACCT_CHECK_TRG` fires `BEFORE INSERT`
+**and UPDATE** and a single such row would abort the transaction, failing the fix for the entire
+tenant so that nothing at all gets cleaned.
+
+Related core trigger worth knowing about: `APRM_FIN_FINACC_TRAN_CHECK_TRG` (:84-94) raises
+`@APRM_RelatedPostedDocument@` when a `FIN_FINACC_TRANSACTION` belonging to a posted reconciliation
+is UPDATED while its payment method uses `UPONDEPOSITUSE`/`UPONWITHDRAWALUSE = 'CLE'` and the
+matching clear column is NULL. It fires on `fin_finacc_transaction`, **not** on the table this fix
+updates, so it cannot fail the fix — but on such an account, later edits to those transactions would
+be refused. No GO-provisioned tenant has a `'CLE'`-on-deposit/withdrawal method (GOClient's affected
+account carries only "Recibo", which is `DEP`/`WIT`); the only links that do are on QA Testing,
+which does not run the GO sampledata at all — it derives from F&B — so this is not a GO-fleet
+concern. Re-check per tenant with:
+
+```sql
+SELECT name, upondeposituse, uponwithdrawaluse FROM fin_paymentmethod
+WHERE ad_client_id = '<client_id>' AND 'CLE' IN (upondeposituse, uponwithdrawaluse);
+```
+
+`R22` is the frozen twin that still fills both columns; it is immutable and NOT retired — `R34`
+sorts after it, so the chain self-corrects.
+
+**CUT deliberately NOT bumped.** With the onboarding edit above a newborn tenant is born correct, so
+`R34`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — exactly
+the case `ONBOARDING_PROVISIONED_THROUGH`'s own contract says must not consume a bump ("Reserve CUT
+bumps for fixes whose `@check` WOULD match on a correctly provisioned new tenant").
+
+**Residual, accepted (out of scope for ETP-5207):** an account created from the **Classic**
+backoffice window fires the trigger and nobody clears the columns — the GO hook only runs on the NEO
+`financial-account` POST. The bug reappears one row at a time on that path; re-force `R34` with
+`FIX=R34-fin-account-cleared-payment-accounts` when it does.
+
+**Functional consequence to be aware of:** this also stops GO's cash-close *difference* postings
+(GL-item `BPD`/`BPW`) from reaching the ledger, silently — the same gate governs them. That is a
+direct consequence of what the ticket asks for, but it is broader than "reconciliations are not
+posted", so anyone auditing "why is the cash-close difference missing from the P&L" belongs here.
+Not hypothetical: on the dev DB (2026-09-08) GOClient's single posted reconciliation **does** carry
+a GL-item line, on the account literally named "Cuenta bug" — the ticket's own reproduction account.
+That account is exactly what the removed guard used to protect and what the final scope now cleans.
+(QA Testing's 18 posted reconciliations carry no GL-item lines.)
+
+**Live evidence (2026-09-08, `etendo_go_mergeblock`).** Applied for real across the fleet: 34
+`APPLIED` ledger rows totalling 116 rows cleaned, then a targeted `FIX=` re-run for the remaining
+7 rows once the posted-reconciliation guard was dropped (2 tenants matched — GOClient 1 row,
+QA Testing 6 — with the other 33 reporting `SKIPPED_NOT_NEEDED`). End state verified: **0 of 136**
+`fin_financial_account_acct` rows still carry a cleared payment account, and the "Cuenta bug"
+account was confirmed empty in the UI. The surviving APRM guard fired nowhere on this DB — expected,
+since the same trigger gates the INSERT; it exists for a tenant with an incomplete
+`c_acctschema_default` (gap A2d).
+
+**Operational note.** A normal chain run skips a tenant already recorded as `APPLIED`, so after a
+scope change the corrected version only reaches the leftover rows through a targeted run:
+`make data-fixes FIX=R34-fin-account-cleared-payment-accounts` (add `DRY_RUN=1` first). Anywhere
+`R34` was applied under the earlier, narrower scope, that targeted re-run is required to finish the
+job.
 
 ---
 

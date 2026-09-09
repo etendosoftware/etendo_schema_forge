@@ -295,7 +295,7 @@ describe('SupportChatContext', () => {
       });
       mockApiFetch.mockResolvedValueOnce(jsonResponse({ messages: [{ id: 'm1', sender: 'ai', text: 'Nuevo' }] }));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.messages).toHaveLength(1);
       expect(result.current.state.messages[0].id).toBe('m1');
@@ -305,9 +305,12 @@ describe('SupportChatContext', () => {
       const { result } = await renderSupportChat();
       mockApiFetch.mockClear();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
-      expect(mockApiFetch).not.toHaveBeenCalled();
+      // Both polls now share the same 60s interval, so the conversation-list poll
+      // legitimately fires here too — scope the assertion to the messages endpoint,
+      // which is what this test actually guards.
+      expect(mockApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/messages'));
       expect(result.current.state.messages).toEqual([]);
     });
 
@@ -316,9 +319,9 @@ describe('SupportChatContext', () => {
       act(() => result.current.actions.open());
       mockApiFetch.mockClear();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
-      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/messages'));
     });
 
     it('the 5s message poll does nothing for an unsent draft conversation ("new")', async () => {
@@ -329,9 +332,9 @@ describe('SupportChatContext', () => {
       });
       mockApiFetch.mockClear();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
-      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/messages'));
     });
 
     it('the 5s message poll does nothing while a message is being sent', async () => {
@@ -356,9 +359,9 @@ describe('SupportChatContext', () => {
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
       mockApiFetch.mockClear();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
-      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/messages'));
       await act(async () => {
         resolveSend(jsonResponse({}));
         await sendPromise;
@@ -377,7 +380,7 @@ describe('SupportChatContext', () => {
         conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false }],
       }));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(15000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.conversations[0].unread).toBe(true);
     });
@@ -397,7 +400,7 @@ describe('SupportChatContext', () => {
         conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false, assigneeKind: 'human' }],
       }));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(15000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.conversations[0].assigneeKind).toBe('human');
     });
@@ -410,7 +413,7 @@ describe('SupportChatContext', () => {
       });
       mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.messages).toEqual([]);
     });
@@ -423,7 +426,7 @@ describe('SupportChatContext', () => {
       });
       mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(15000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.conversations).toHaveLength(1);
     });
@@ -451,7 +454,7 @@ describe('SupportChatContext', () => {
         ],
       }));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(15000);
+        await vi.advanceTimersByTimeAsync(60000);
       });
       expect(result.current.state.conversations.map((c) => c.id)).toEqual(['c1', 'c2']);
     });
@@ -467,7 +470,7 @@ describe('SupportChatContext', () => {
           messages: [{ id: 'm1', sender: 'ai', text: 'Nuevo' }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(5000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(mockPlayReceiveSound).toHaveBeenCalledTimes(1);
       });
@@ -482,7 +485,7 @@ describe('SupportChatContext', () => {
           messages: [{ id: 'm1', sender: 'user', text: 'Yo mismo' }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(5000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(result.current.state.messages).toHaveLength(1);
         expect(mockPlayReceiveSound).not.toHaveBeenCalled();
@@ -496,7 +499,7 @@ describe('SupportChatContext', () => {
         });
         mockApiFetch.mockResolvedValueOnce(jsonResponse({ messages: [] }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(5000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(mockPlayReceiveSound).not.toHaveBeenCalled();
       });
@@ -514,7 +517,7 @@ describe('SupportChatContext', () => {
           conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false, lastActivity: '2024-01-02T00:00:00.000Z' }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(15000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(mockPlayReceiveSound).toHaveBeenCalledTimes(1);
       });
@@ -535,7 +538,7 @@ describe('SupportChatContext', () => {
           conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false, lastActivity: '2024-01-02T00:00:00.000Z' }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(15000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(mockPlayReceiveSound).not.toHaveBeenCalled();
       });
@@ -554,7 +557,7 @@ describe('SupportChatContext', () => {
           conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'closed', rated: false, lastActivity: '2024-01-01T00:00:00.000Z' }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(15000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         expect(mockPlayReceiveSound).not.toHaveBeenCalled();
       });
@@ -860,7 +863,7 @@ describe('SupportChatContext', () => {
           }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(15000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         // The NEXT poll tick's response reflects a snapshot read from the DB before the
         // escalation flip (stale updatedAt) — reproduces the reported bug: the escalate
@@ -876,7 +879,7 @@ describe('SupportChatContext', () => {
           }],
         }));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(15000);
+          await vi.advanceTimersByTimeAsync(60000);
         });
         const conv = result.current.state.conversations.find((c) => c.id === 'c1');
         expect(conv.assigneeKind).toBe('human');

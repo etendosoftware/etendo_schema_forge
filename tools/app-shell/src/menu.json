@@ -202,7 +202,7 @@
           "label": "Reports",
           "favname": "Inventory Reports",
           "path": "report-viewer?category=inventory",
-          "windowId": "6346B88619F948F9A42224BDB0B239FA"
+          "accessWindowId": "6346B88619F948F9A42224BDB0B239FA"
         },
         {
           "name": "warehouse-storage-bins",
@@ -380,7 +380,7 @@
           "label": "Reports",
           "favname": "Finance Reports",
           "path": "report-viewer?category=finance",
-          "windowId": "D647D118F5014D00AF47A636B2CD0DD3"
+          "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3"
         }
       ]
     },
@@ -441,7 +441,7 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "windowId": "33705E0F52874D91B0BB2FF8BB648B8E"
+          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E"
         },
         {
           "name": "oauth2-clients",
