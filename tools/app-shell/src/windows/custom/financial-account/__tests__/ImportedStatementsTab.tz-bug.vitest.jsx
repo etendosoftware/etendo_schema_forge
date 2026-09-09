@@ -19,8 +19,20 @@
 // TZ is forced to America/Argentina/Buenos_Aires (verified empirically:
 // process.env.TZ takes effect per-call in this project's Node/Vitest setup)
 // to make the bug reproducible regardless of the CI machine's default
-// timezone. The filter range uses explicit `{ from, to }` Date bounds (not a
-// relative preset) so the test does not depend on "today".
+// timezone. The filter range under test uses explicit `{ from, to }` Date
+// bounds rather than a relative preset, so the assertion itself is unaffected
+// by "today".
+//
+// "Now" is pinned via vi.setSystemTime to 2026-08-15 12:00 local (a midday
+// instant, so the pin is not itself near a day boundary). This is NOT
+// cosmetic: the pre-condition below leans on the component's DEFAULT range,
+// which is the relative "last30" preset (today - 29 days, see
+// lib/dateRangeBounds.js presetBounds). With a real clock that pre-condition
+// silently expired 30 days after the fixture's date and the test began failing
+// on 2026-09-09 for a reason that had nothing to do with the bug it guards —
+// from that day on, Aug 10 fell outside "last30". Pinning the clock is what
+// makes the whole file, pre-condition included, actually independent of when
+// it runs.
 
 // --- Mocks (before imports) ---
 
@@ -123,15 +135,23 @@ describe('ImportedStatementsTab — ETP-4850 date off-by-one bug', () => {
   });
 
   beforeEach(() => {
+    // See the header note: the default range is the relative "last30" preset,
+    // so an unpinned clock makes the pre-condition below expire on its own.
+    vi.setSystemTime(new Date(2026, 7, 15, 12, 0, 0));
     statementsRef.value = [STATEMENT_AUG_10];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('includes a statement imported on 2026-08-10 when filtering for that exact day', async () => {
     const user = userEvent.setup();
     render(<ImportedStatementsTab account={ACCOUNT} />);
 
-    // Before filtering, the default "last30" window already includes it — this
-    // just confirms the fixture reaches the table before we narrow the range.
+    // Before filtering, the default "last30" window (Jul 17 – Aug 15, from the
+    // pinned "now") already includes it — this just confirms the fixture
+    // reaches the table before we narrow the range.
     expect(screen.getByTestId('stub-table')).toHaveAttribute('data-len', '1');
 
     await user.click(screen.getByTestId('toolbar-daterange-aug10'));
