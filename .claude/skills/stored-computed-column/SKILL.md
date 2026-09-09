@@ -139,10 +139,29 @@ SELECT ad_scd_check('<AD_Column_ID>');          -- expect 0
 --    change a row in the source table, then re-read the target column
 ```
 
+> **You cannot run step 3 inside `BEGIN … ROLLBACK`.** Synchronous refresh fires in *deferred
+> constraint triggers*, which run at COMMIT — a rolled-back transaction never gets there, so the
+> target column is unchanged when you read it back and the dependency looks dead. The tell is
+> `ad_scd_check` *inside* that transaction: it returns the exact number of affected rows, which
+> there means the enqueue trigger worked, the opposite of what a non-zero check means outside a
+> transaction. Verify by committing, asserting, then reverting in a second committed step and
+> asserting again — safe because the computation is deterministic, and the return leg is worth
+> asserting on its own.
+
 **Step 3 is the only one that proves the chain.** Steps 1 and 2 pass on a column that is still
 wrong. Asserting the initial value proves the backfill ran, nothing more — and if the source table
 is empty in your environment, every row will hold the "no data" answer and a broken column is
 indistinguishable from a working one.
+
+Two more things that look like bugs and are not:
+
+- **`update.database` does not repopulate an existing column** whose function changed. It
+  regenerates the triggers and leaves stored values alone, so `ad_scd_check` reports every row
+  stale until `ad_scd_rebuild` runs. Between deploy and rebuild the column serves stale values
+  with no warning.
+- **A correct result can be uniform.** If every row in your dev data resolves to the same value,
+  the column renders identically to a dead one. Say so before a reviewer opens the instance and
+  files a regression.
 
 Manual rebuild when needed (idempotent):
 
