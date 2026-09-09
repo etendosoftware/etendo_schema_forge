@@ -10,9 +10,10 @@ import {
 } from '../helpers/printable-helpers.js';
 
 // Both of these used to be literals ('Queso Sardo' / 'Almacen GO') naming rows the
-// GOClient onboarding dataset happened to seed. ETP-5079 deleted the four demo
-// products and renamed the warehouse, so a fresh tenant has neither — this spec
-// was written against the old dataset in parallel and broke on the merge. Name the
+// GOClient onboarding dataset happened to seed. ETP-5079 keeps the four demo
+// products out of an onboarded tenant (still shipped for GOClient, dropped at import
+// time) and renamed the warehouse, so a fresh tenant has neither — this spec was
+// written against the old dataset in parallel and broke on the merge. Name the
 // fixture and the shared constant instead: the product is provisioned by the spec
 // itself via ensureProductSetup, and the warehouse name lives in one place.
 const PRODUCT = PRODUCT_FIXTURE_ALPHA.name;
