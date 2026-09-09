@@ -253,6 +253,19 @@ flowchart TB
    ships). The dialog names both people, so the strings take `{currentUser}` / `{invitedEmail}`
    placeholders.
 
+#### Deferred: skipping the re-login in Case 1
+
+Found while implementing phase 1, deliberately left out of it. In Case 1 the guard lets the user
+through without a prompt, but the `existing_account` branch still renders `LoginStep` and asks for
+the password **of the account they are already signed in with** — that branch was written assuming
+the visitor arrives with no session. Since `handleAcceptExisting` already reads `sf_platform_token`
+from storage, the page could jump straight to the "Accept invitation" button when the resolved
+account email matches. No security is weakened: the backend re-validates and answers 403
+`INVITATION_ACCOUNT_MISMATCH` regardless.
+
+Left out of phase 1 because it changes what the acceptance surface renders in a case the phase-1
+tests already pin, and the ticket is closed without it. Worth doing next to the phase 2 work.
+
 ### Phase 2 — reaching the inviting tenant after accepting (separate commit)
 
 Two different behaviours, decided by whether a session existed when the page was opened:
