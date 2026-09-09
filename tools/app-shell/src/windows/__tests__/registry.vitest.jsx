@@ -147,6 +147,111 @@ describe('registry', () => {
     });
   });
 
+  // ETP-5240 — a third, independent axis for items that declare
+  // `"accessWindowId": "<AD_Window_ID>"` (report viewers, Smart Scan): windows
+  // that exist only as a permission anchor with no active AD_Menu node, so
+  // they can never be matched via the `windowId`/allowedIds axis above. This
+  // check fails CLOSED, same convention as the `capability` axis: hidden
+  // unless `windowAccess[item.accessWindowId]` is a defined access tier.
+  describe('filterMenuGroupsByAccess — windowAccess axis (ETP-5240)', () => {
+    it('hides an accessWindowId-gated item when windowAccess is null/omitted (fails closed)', () => {
+      // allowedIds is set to a non-null Set here (rather than null) so the
+      // function's own "all three axes falsy -> back-compat passthrough" guard
+      // (mirrors the pre-ETP-4513 2-arg signature) doesn't mask the assertion —
+      // same reasoning as the capability-axis test right above this one.
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, new Set(['999']), null, null);
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+
+    it('hides an accessWindowId-gated item when windowAccess is loaded but has no matching key', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+
+    it('shows an accessWindowId-gated item when windowAccess[id] is "full"', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, { AW1: 'full' });
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('shows an accessWindowId-gated item when windowAccess[id] is "read-only" (presence, not tier value, is what is checked)', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, { AW1: 'read-only' });
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('does not affect an item with no accessWindowId, regardless of windowAccess contents', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'dashboard' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('dashboard');
+    });
+
+    it('interaction: an item carrying BOTH windowId and accessWindowId must pass both axes independently (defensive/future-proofing — no real menu.json entry combines them today)', () => {
+      const bothIds = { name: 'hybrid', windowId: '111', accessWindowId: 'AW1' };
+
+      // allowedIds says yes, windowAccess says no -> hidden.
+      const hiddenByWindowAccess = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['111']),
+        null,
+        {},
+      );
+      expect(hiddenByWindowAccess.find(g => g.group === 'Mixed')).toBeUndefined();
+
+      // windowAccess says yes, allowedIds says no -> hidden.
+      const hiddenByAllowedIds = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['999']),
+        null,
+        { AW1: 'full' },
+      );
+      expect(hiddenByAllowedIds.find(g => g.group === 'Mixed')).toBeUndefined();
+
+      // Both say yes -> shown.
+      const shown = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['111']),
+        null,
+        { AW1: 'full' },
+      );
+      const mixed = shown.find(g => g.group === 'Mixed');
+      expect(mixed).toBeDefined();
+      expect(mixed.items.map(i => i.name)).toContain('hybrid');
+    });
+
+    it('drops a group whose every item is filtered out by the windowAccess axis, same as the other axes', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+  });
+
   describe('buildMenuGroups', () => {
     it('returns an array of menu groups', () => {
       const groups = buildMenuGroups();

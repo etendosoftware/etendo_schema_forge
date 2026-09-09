@@ -39,6 +39,19 @@ vi.mock('@/hooks/useRoleMenu.js', () => ({
   useRoleMenu: vi.fn(() => null),
 }));
 
+// ETP-5240 — AppLayout now also calls useWindowAccessSafe() (alongside the
+// pre-existing useCapabilitiesSafe()) and threads its return value through to
+// filterMenuGroupsByAccess() as the 4th arg. Both are `vi.fn()`s (not plain
+// arrows) so the dedicated test below can override useWindowAccessSafe's
+// return value for a single render via mockReturnValueOnce, the same pattern
+// already used for useRoleMenu above. Default `{}` matches the real hook's
+// own fallback (no AuthProvider / not-yet-loaded), so none of the other tests
+// in this file — which never set accessWindowId on any item — change behavior.
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: vi.fn(() => ({})),
+  useWindowAccessSafe: vi.fn(() => ({})),
+}));
+
 // Same situation as useRoleMenu above: AppLayout now mounts useAccountIdentity()
 // (ETP-4693) to resolve the account flags are targeted on, and that hook calls
 // useAuth(). Rendering AppLayout without an AuthProvider therefore throws, so the
@@ -117,6 +130,7 @@ vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
@@ -242,6 +256,31 @@ describe('AppLayout — normal mode', () => {
     const sales = groups.find((g) => g.group === 'Sales');
     expect(sales).toBeDefined();
     expect(sales.items.map((i) => i.name)).toContain('sales-order');
+  });
+
+  it('threads useWindowAccessSafe()\'s return value through to filterMenuGroupsByAccess as the 4th arg (ETP-5240)', () => {
+    // Default mock (see useCapabilitiesSafe.js mock above) is `{}`, so an
+    // accessWindowId-gated item is hidden until this test overrides it.
+    const props = {
+      menuGroups: [
+        {
+          group: 'Reports',
+          items: [{ name: 'report-viewer-finance', label: 'Informes', accessWindowId: 'AW1' }],
+        },
+      ],
+    };
+
+    const { rerender } = render(<AppLayout {...props} />);
+    let groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    // windowAccess is the default {} -> item is hidden, group dropped.
+    expect(groups.find((g) => g.group === 'Reports')).toBeUndefined();
+
+    vi.mocked(useWindowAccessSafe).mockReturnValueOnce({ AW1: 'full' });
+    rerender(<AppLayout {...props} />);
+    groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    const reports = groups.find((g) => g.group === 'Reports');
+    expect(reports).toBeDefined();
+    expect(reports.items.map((i) => i.name)).toContain('report-viewer-finance');
   });
 });
 
