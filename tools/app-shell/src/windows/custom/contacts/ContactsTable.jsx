@@ -231,11 +231,24 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     setPendingDelete(null);
   }, [pendingDelete]);
 
+  // ETP-5182 — ListView always forwards its own `hiddenColumns` (default `[]`,
+  // see ListView.jsx) inside `...rest`. Spreading `{...rest}` after an
+  // explicit `hiddenColumns={HIDDEN_COLS}` prop lets `rest.hiddenColumns`
+  // silently win (last prop wins in JSX), which un-hid the filter-only
+  // `__contactType` column and rendered it as a second, duplicate "Tipo"
+  // column. Merging instead of just reordering keeps this correct even if
+  // ListView starts forwarding a real dynamic hiddenColumns list (e.g. from
+  // lineDisplayLogic, docs/ui-customization.md §14) — that value must survive
+  // alongside `__contactType`, not get dropped by a naive "ours always wins".
+  const hiddenColumns = useMemo(
+    () => [...HIDDEN_COLS, ...(rest.hiddenColumns ?? [])],
+    [rest.hiddenColumns]
+  );
+
   return (
     <>
       <DataTable
         columns={columns}
-        hiddenColumns={HIDDEN_COLS}
         filters={filters}
         data={data}
         apiBaseUrl={apiBaseUrl}
@@ -247,6 +260,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         onSaveRow={handleSave}
         onCancelEdit={handleCancelEdit}
         {...rest}
+        hiddenColumns={hiddenColumns}
         data-testid="DataTable__5c74a8" />
       <Dialog
         open={Boolean(pendingDelete)}
