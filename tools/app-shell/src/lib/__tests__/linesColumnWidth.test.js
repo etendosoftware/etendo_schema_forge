@@ -105,6 +105,32 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'search', grow: false }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 1 192px');
     });
+
+    // ETP-5210 — decisions.json `columnWidth` is carried through to `col.minWidth`
+    // by the generator; this is the exact override mechanism the Simple G/L
+    // Journal Account-column widening (and the physical-inventory `etgoQtydiff`
+    // precedent) depends on. It must win over the type-based default regardless
+    // of type/idx/grow, since it is checked first and short-circuits.
+    describe('minWidth override (ETP-5210)', () => {
+      it('overrides the selector type-based default (192px)', () => {
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280 }, 0), '1 1 280px');
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280 }, 1), '1 1 280px');
+      });
+
+      it('overrides the string type-based default (224px)', () => {
+        assert.equal(columnFlex({ type: 'string', minWidth: 280 }, 0), '1 1 280px');
+        assert.equal(columnFlex({ type: 'string', minWidth: 280 }, 1), '1 1 280px');
+      });
+
+      it('wins even when grow:false is also set (minWidth check short-circuits first)', () => {
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280, grow: false }, 0), '1 1 280px');
+        assert.equal(columnFlex({ type: 'string', minWidth: 280, grow: false }, 1), '1 1 280px');
+      });
+
+      it('wins even when grow:true is also set', () => {
+        assert.equal(columnFlex({ type: 'amount', minWidth: 300, grow: true }, 1), '1 1 300px');
+      });
+    });
   });
 
   describe('columnMinWidthPx', () => {
@@ -141,6 +167,23 @@ describe('linesColumnWidth', () => {
         const flexBasis = basis(columnFlex(col, idx));
         assert.equal(px, flexBasis, `px and flex-basis must match for type=${col.type} idx=${idx}`);
       }
+    });
+
+    // ETP-5210 — same override guarantee as columnFlex above, for the
+    // HTML-table-layout counterpart used by DataTable's inline-add row.
+    describe('minWidth override (ETP-5210)', () => {
+      it('overrides the selector type-based default (192px)', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }), 280);
+      });
+
+      it('overrides the string type-based default (224px)', () => {
+        assert.equal(columnMinWidthPx({ type: 'string', minWidth: 280 }), 280);
+      });
+
+      it('wins regardless of idx', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 0), 280);
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 1), 280);
+      });
     });
   });
 });
