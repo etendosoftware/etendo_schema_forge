@@ -43,6 +43,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChipSelect } from '@/components/forms/fields';
 import { cn } from '@/lib/utils';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -1481,7 +1482,7 @@ export function ReconciliationSplitPanel({
         setSelectedOpIds(new Set());
         reloadLines();
       }
-      toast.error(err?.message || ui('financeReconcileToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
   };
 
@@ -1540,7 +1541,7 @@ export function ReconciliationSplitPanel({
       onReconcileSuccess?.();
       toast.success(ui('financeReconcileGlItemSetupToastSaved'));
     } catch (err) {
-      toast.error(err?.message || ui('financeReconcileToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     } finally {
       setSavingGlItem(false);
     }
@@ -1570,7 +1571,7 @@ export function ReconciliationSplitPanel({
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
-      toast.error(err?.message || ui('financeReconcileToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
   };
 
@@ -1637,7 +1638,7 @@ export function ReconciliationSplitPanel({
       reloadLines();
       onReconcileSuccess?.();
     } catch (err) {
-      toast.error(err?.message || ui('financeReconcileToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
   };
 

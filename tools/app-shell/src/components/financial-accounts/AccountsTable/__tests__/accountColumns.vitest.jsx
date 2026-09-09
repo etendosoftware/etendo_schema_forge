@@ -22,7 +22,9 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-import { NameCell, TypeCell, BalanceCell } from '../accountColumns.jsx';
+import {
+  NameCell, TypeCell, CurrencyCell, BalanceCell,
+} from '../accountColumns.jsx';
 
 const ACCOUNT = {
   id: 'acc-1',
@@ -175,6 +177,52 @@ describe('TypeCell', () => {
 
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * "Moneda" column (ETP-5113). The chip is the shared `Tag` primitive, which renders a plain
+ * <span class="tag tag--neutral"> with inline styles and forwards NO data-testid — so the
+ * assertions below go through the rendered text (and the variant class), not a testid.
+ * Reusing `Tag` is deliberate: two hand-rolled `CurrencyBadge` copies already exist
+ * (ReconciliationSplitPanel, FundsTransferModal) and this must not become a third.
+ */
+describe('CurrencyCell', () => {
+  it('renders the ISO code as a neutral chip', () => {
+    const { container } = render(<CurrencyCell account={ACCOUNT} />);
+
+    expect(screen.getByText('EUR')).toBeInTheDocument();
+    expect(container.firstChild.className).toContain('tag--neutral');
+  });
+
+  it('renders whatever ISO code the row carries — no hardcoded currency', () => {
+    render(<CurrencyCell account={{ ...ACCOUNT, currencyIso: 'USD' }} />);
+
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.queryByText('EUR')).not.toBeInTheDocument();
+  });
+
+  // The cell reads the server-injected `currencyIso`, not the `currency` FK the column is
+  // declared on, exactly as CountryCell reads `countryName`. An account served without it
+  // must degrade to the em dash, never to "undefined" or an empty chip.
+  it('renders an em dash when the row carries no currencyIso', () => {
+    const { container } = render(<CurrencyCell account={{ ...ACCOUNT, currencyIso: '' }} />);
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(container.firstChild.className).not.toContain('tag--neutral');
+  });
+
+  it('renders an em dash for null and undefined alike', () => {
+    const { unmount } = render(<CurrencyCell account={{ ...ACCOUNT, currencyIso: null }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+    unmount();
+
+    render(<CurrencyCell account={{ id: 'acc-2' }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('needs no context — the currency cell reads everything off the row', () => {
+    expect(() => render(<CurrencyCell account={ACCOUNT} />)).not.toThrow();
   });
 });
 

@@ -314,3 +314,115 @@ describe('AccountsHeaderTable — delete wiring (ETP-4871)', () => {
     assert.match(src, /<DeleteAccountDialog[\s\S]*?onDeleted=\{reload\}/);
   });
 });
+
+// ETP-5113 — the advanced ("by conditions") filter. The generic builder only emits the
+// condition tree; the evaluation is client-side and lives in this slot, next to the type
+// filter and the search box it composes with. Behavioural coverage:
+// tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+describe('AccountsHeaderTable — advanced filter wiring (ETP-5113)', () => {
+  it('holds the condition tree in its own ephemeral state, like every other list', () => {
+    assert.match(src, /const \[advancedFilter, setAdvancedFilter\] = useState\(null\)/);
+  });
+
+  it('evaluates it through the shared account filter, never a local re-implementation', () => {
+    // Both names come from the shared spec module: the evaluator AND the `countryLabel`
+    // projection the value pickers need. The import is asserted per-name rather than as one
+    // literal list so re-ordering the specifiers does not fail the test.
+    assert.match(
+      src,
+      /import \{[^}]*\bapplyAccountAdvancedFilter\b[^}]*\} from '@\/components\/financial-accounts\/accountAdvancedFilter\.js'/,
+    );
+    assert.match(
+      src,
+      /import \{[^}]*\bwithDerivedFields\b[^}]*\} from '@\/components\/financial-accounts\/accountAdvancedFilter\.js'/,
+    );
+    assert.match(src, /applyAccountAdvancedFilter\(scopedAccounts, advancedFilter\)/);
+    // The operator semantics belong to the shared evaluator (advancedFilterApply.js), which
+    // is what makes Saldo compare numerically. A second copy here would drift from it.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /matchesCondition/);
+    assert.doesNotMatch(code, /applyConditions/);
+  });
+
+  it('hands the funnel its state and its change handler through the toolbar', () => {
+    assert.match(src, /<AccountsToolbar[\s\S]*?advancedFilter=\{advancedFilter\}/);
+    assert.match(src, /<AccountsToolbar[\s\S]*?onAdvancedFilterChange=\{setAdvancedFilter\}/);
+  });
+
+  // The seeding invariant. `scopedAccounts` is type + search ONLY: seeding the funnel's value
+  // pickers from the fully filtered result would collapse each picker to the value already
+  // chosen (filter Moneda = EUR and EUR becomes the only option left), making a selection
+  // impossible to widen. So the memo must not depend on `advancedFilter`, and the toolbar's
+  // `rows` must trace back to it (through `filterPickerRows`, see below) rather than to
+  // `visibleAccounts`.
+  it('seeds the funnel value pickers from the pre-conditions rows', () => {
+    assert.match(
+      src,
+      /const scopedAccounts = useMemo\(\s*\(\) => filterAccounts\(data, typeFilter, search\),\s*\[data, typeFilter, search\],\s*\)/,
+    );
+    assert.doesNotMatch(src, /rows=\{visibleAccounts\}/);
+    assert.doesNotMatch(src, /rows=\{data\}/);
+  });
+
+  // The País "zero options" bug. `IdentifierMultiPicker` reads `row[col.key]` straight off
+  // the rows it is handed, and `countryLabel` is a DERIVED key that only exists after
+  // `withDerivedFields` — so seeding the toolbar with the RAW `scopedAccounts` left every
+  // row's `countryLabel` undefined, every row was dropped by the picker's
+  // `if (id == null || id === '') continue` guard, and País opened with an empty list.
+  // Moneda was never affected: `currencyIso` is a real row property.
+  it('seeds them with the PROJECTED rows, so the derived País key is readable', () => {
+    assert.match(
+      src,
+      /const filterPickerRows = useMemo\(\s*\(\) => scopedAccounts\.map\(withDerivedFields\),\s*\[scopedAccounts\],\s*\)/,
+    );
+    assert.match(src, /<AccountsToolbar[\s\S]*?rows=\{filterPickerRows\}/);
+  });
+
+  // The negative that actually pins the bug: `scopedAccounts` still exists and is still the
+  // correct input to the APPLIER (which projects each row itself), so re-pointing the
+  // toolbar's `rows` back at it is a one-word edit that would silently empty the País picker
+  // again while every other assertion here kept passing.
+  it('never hands the picker the raw, unprojected rows', () => {
+    assert.doesNotMatch(src, /rows=\{scopedAccounts\}/);
+    assert.doesNotMatch(src, /rows=\{filterAccounts\(/);
+  });
+
+  // The projection is applied ONCE, in the memo, not inline in the JSX — an inline
+  // `.map(withDerivedFields)` in the prop would rebuild the array (and so reset the
+  // picker's option identity) on every render.
+  it('projects the picker rows in a memo keyed off scopedAccounts alone', () => {
+    assert.doesNotMatch(src, /rows=\{scopedAccounts\.map\(/);
+    // Sliced to the memo's own text (up to its first `);`) rather than matched across the
+    // whole file: a lazy `[\s\S]*?` from the declaration would happily run on into the
+    // NEXT memo's dependency array and report a false positive.
+    const memo = /const filterPickerRows = useMemo\(([\s\S]*?)\);/.exec(src)?.[1];
+    assert.ok(memo, 'filterPickerRows must be a useMemo');
+    // Must NOT depend on `advancedFilter` or read the filtered result: that is the same
+    // picker-collapsing bug the pre-conditions invariant above guards, one level down.
+    assert.doesNotMatch(memo, /\badvancedFilter\b/);
+    assert.doesNotMatch(memo, /\bvisibleAccounts\b/);
+  });
+
+  it('feeds the grid the fully filtered rows', () => {
+    assert.match(src, /data=\{visibleAccounts\}/);
+  });
+});
+
+describe('AccountsHeaderTable — Moneda column chrome (ETP-5113)', () => {
+  // Tailwind arbitrary values must be static in source, so the per-column widths stay in
+  // code rather than in decisions.json (see COLUMN_CHROME's own comment). A missing entry
+  // does not break the column — it silently loses its pinned width.
+  it('pins a width for the currency column like every other data column', () => {
+    assert.match(src, /currency: \{ headClass: 'w-\[120px\][^']*', cellClass: 'w-\[120px\][^']*' \}/);
+  });
+
+  it('keys the chrome off the contract field name, not the enriched row key', () => {
+    assert.match(src, /COLUMN_CHROME\[col\.name\]/);
+    assert.doesNotMatch(src, /currencyIso: \{ headClass/);
+  });
+
+  it('leaves the Moneda cell body to the registry rather than rendering a chip here', () => {
+    assert.doesNotMatch(src, /<Tag\b/);
+    assert.doesNotMatch(src, /CurrencyCell/);
+  });
+});

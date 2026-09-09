@@ -1,4 +1,49 @@
-import { RETURN_LABELS } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+import { RETURN_LABELS, DOC_TYPE_LABEL_OVERRIDES } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+
+/**
+ * Neutralizes one spreadsheet cell value against formula injection (CWE-1236).
+ *
+ * A value whose first significant character is a formula trigger gets a single ASCII
+ * apostrophe prepended, so Excel / LibreOffice Calc / Google Sheets render it as literal
+ * text instead of evaluating it. Triggers are `= + - @`, TAB, CR and LF (initiators in
+ * their own right, not skippable whitespace) and the full-width variants `＝ ＋ － ＠`.
+ * A leading BOM or Unicode space is skipped first so a marker cannot hide behind one.
+ * An already-neutralized value is untouched — an apostrophe is not a trigger.
+ *
+ * The policy is specified by ADR-0004 (`com.etendoerp.go/docs/adr/`) and pinned by the
+ * fixture table in `com.etendoerp.go/docs/security/csv-neutralization-fixtures.md`, whose
+ * executable twin lives in `@etendosoftware/app-shell-core/lib/csv/csvNeutralizationFixtures.js`.
+ * Three implementations must satisfy it: this one, that package's `csvSerializer`, and
+ * `NeoCsvExportService.java`.
+ *
+ * Exported because it is the only CSV-escaping policy this repo owns: any client-side CSV
+ * builder that keeps its own quoting style (e.g. fiscal-monitor's always-quote
+ * `buildCsvAndDownload`) must still route its cells through THIS function rather than
+ * hand-rolling a second policy.
+ */
+export function neutralizeSpreadsheetCell(value) {
+  var s = value == null ? '' : String(value);
+  var triggers = '=+-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20';
+  var i = 0;
+  while (i < s.length && triggers.indexOf(s.charAt(i)) < 0 && /[\s\uFEFF]/.test(s.charAt(i))) i++;
+  return i < s.length && triggers.indexOf(s.charAt(i)) >= 0 ? "'" + s : s;
+}
+
+/**
+ * CSV cell serialization for `template-csv.hbs` and the list Print-to-CSV template
+ * (ETP-5032). Canonical since it had been duplicated, WITHOUT neutralization, in nine
+ * per-report `helpers.js` files.
+ *
+ * Two jobs in this normative order: neutralize, THEN apply RFC 4180 quoting — so the
+ * apostrophe lands inside the quoted field rather than outside it.
+ *
+ * Every Handlebars call site MUST triple-stash it (`{{{csvField x}}}`, never `{{ }}`):
+ * double-stash HTML-escapes the `""` this returns into `&quot;&quot;` and corrupts the CSV.
+ */
+export function csvField(value) {
+  var s = neutralizeSpreadsheetCell(value);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
 
 /**
  * Canonical Handlebars helpers for LOCAL HTML rendering of reports.
@@ -13,7 +58,8 @@ import { RETURN_LABELS } from '@etendosoftware/schema-forge-cli/src/report-i18n.
  * that the report HTML render path historically registered (the fixed whitelist:
  * isGroupBreak, resetGroupTracking, formatDate, formatCurrency, formatBoolean,
  * formatNumber, ifCond, eq, sumField, sumFields, formatDateDisplay, sumRowsByCategory,
- * translateDocType).
+ * translateDocType), plus `csvField`, promoted here by ETP-5032 after nine reports
+ * had each hand-copied it without formula neutralization.
  *
  * Keeping them as a trusted in-repo module lets the report server and the Vite
  * dev plugin register the helpers WITHOUT dynamically executing the per-report
@@ -143,6 +189,8 @@ export function createReportHelpers({ numberFormat } = {}) {
   // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
   // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
   function translateDocType(docbasetype, isreturn, translatedName, locale) {
+    var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
+    if (overrides[docbasetype]) return overrides[docbasetype];
     if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
     var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
     return dict[docbasetype + '_RETURN'] || translatedName;
@@ -162,6 +210,7 @@ export function createReportHelpers({ numberFormat } = {}) {
     formatDateDisplay,
     sumRowsByCategory,
     translateDocType,
+    csvField,
   };
 }
 
@@ -366,9 +415,25 @@ const JSREPORT_HELPER_SOURCES = {
   // (this module's own load), not per-render, since the dictionary is static.
   translateDocType: `function translateDocType(docbasetype, isreturn, translatedName, locale) {
   var RETURN_LABELS = ${JSON.stringify(RETURN_LABELS)};
+  var DOC_TYPE_LABEL_OVERRIDES = ${JSON.stringify(DOC_TYPE_LABEL_OVERRIDES)};
+  var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
+  if (overrides[docbasetype]) return overrides[docbasetype];
   if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
   var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
   return dict[docbasetype + '_RETURN'] || translatedName;
+}`,
+  // ETP-5032 — see createReportHelpers()'s csvField for why this exists and why
+  // it must stay behaviourally identical to it. Being listed here also makes
+  // `csvField` a CANONICAL_HELPER_NAME, which strips the per-report copies from
+  // a report's extras: the nine artifacts that used to declare their own,
+  // non-neutralizing csvField now get this one instead.
+  csvField: `function csvField(value) {
+  var s = value == null ? '' : String(value);
+  var triggers = '=+-@\\t\\r\\n\\uFF1D\\uFF0B\\uFF0D\\uFF20';
+  var i = 0;
+  while (i < s.length && triggers.indexOf(s.charAt(i)) < 0 && /[\\s\\uFEFF]/.test(s.charAt(i))) i++;
+  if (i < s.length && triggers.indexOf(s.charAt(i)) >= 0) s = "'" + s;
+  return /[",\\n\\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }`,
 };
 
