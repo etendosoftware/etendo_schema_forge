@@ -25,12 +25,21 @@ vi.mock('@/i18n', () => ({
 }));
 
 // Mock auth context
+// ETP-5116 — ReportViewerPage now gates the finance category behind
+// useWindowAccess()/WindowAccessGuard. Mutable so the dedicated gate suite
+// below can flip it to 'none'; defaults to 'full' so every other test in
+// this file (including finance-category renders) is unaffected.
+let mockFinanceWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     selectedRole: { orgList: [] },
     selectedOrg: { id: 'org1' },
   }),
+  useWindowAccess: () => mockFinanceWindowAccessTier,
+  WindowAccessGuard: (props) => (
+    <div data-testid="window-access-guard" data-window-id={props.windowId} />
+  ),
 }));
 
 // Mock PageMetaContext
@@ -460,6 +469,143 @@ describe('ReportViewerPage', () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
       expect(screen.getByText('Grouped Land')).toBeInTheDocument();
+    });
+  });
+});
+
+// -------------------------------------------------------------------
+// ReportViewerPage — finance-category window access gate (ETP-5116)
+//
+// The Financial Reports page (report-viewer?category=finance) had zero real
+// access control — any authenticated user, any role, could reach it by URL
+// regardless of the menu. ReportViewerPage is shared across every report
+// category, so the gate must apply ONLY when category=finance; other
+// categories sharing this same page must render normally regardless of tier.
+// -------------------------------------------------------------------
+
+describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
+  beforeEach(() => {
+    mockSetSearchParams.mockClear();
+    mockFinanceWindowAccessTier = 'full';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Reset so state never leaks into other describe blocks in this file —
+    // mockFinanceWindowAccessTier is a plain module-scope variable, not a
+    // vi.fn(), so vi.restoreAllMocks() above does not touch it.
+    mockFinanceWindowAccessTier = 'full';
+  });
+
+  it('renders the WindowAccessGuard (windowId D647D118F5014D00AF47A636B2CD0DD3) instead of the report list when category=finance and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
+      'data-window-id',
+      'D647D118F5014D00AF47A636B2CD0DD3',
+    );
+  });
+
+  it('renders the WindowAccessGuard instead of the report viewer when category=finance, a report is selected, and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-cancel')).not.toBeInTheDocument();
+  });
+
+  it('renders the report list normally when category=finance and the access tier is full', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'full';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('does NOT gate other report categories when the tier is none (gate is finance-only)', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'sales' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('does NOT gate the page when no category filter is present, even if the tier is none', async () => {
+    mockSearchParams = new URLSearchParams();
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  // Review follow-up (ETP-5116): the gate generalizes to every category with a
+  // real permission-anchor window, not just finance — "Informes de inventario"
+  // now has a windowId in menu.json (6346B88619F948F9A42224BDB0B239FA) too, and
+  // the frontend gate must cover it the same way, or the page stays reachable
+  // by URL despite the backend enforcing it.
+  it('renders the WindowAccessGuard (windowId 6346B88619F948F9A42224BDB0B239FA) instead of the report list when category=inventory and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
+      'data-window-id',
+      '6346B88619F948F9A42224BDB0B239FA',
+    );
+  });
+
+  it('renders the report list normally when category=inventory and the access tier is full', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'full';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  // Review follow-up (ETP-5116): the fetch effect re-fires when access
+  // resolves (or a denied user switches category), but must reset loading to
+  // true first — otherwise a stale "no results" state (left over from the
+  // denied branch's setReports([])/setLoading(false)) briefly renders while
+  // the new request is still in flight.
+  it('shows the loading spinner, not a stale "no results" flash, while the fetch re-fires after access resolves', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    let resolveFetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise((resolve) => { resolveFetch = resolve; }),
+    );
+
+    const { rerender } = render(<ReportViewerPage />);
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+
+    mockFinanceWindowAccessTier = 'full';
+    rerender(<ReportViewerPage />);
+
+    expect(screen.getByTestId('Loader2__3c998a')).toBeInTheDocument();
+    expect(screen.queryByText('noResults')).not.toBeInTheDocument();
+
+    resolveFetch({ ok: true, json: () => Promise.resolve([]) });
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
     });
   });
 });
