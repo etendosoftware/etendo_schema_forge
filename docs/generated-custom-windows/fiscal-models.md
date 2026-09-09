@@ -342,6 +342,25 @@ column name. A short, spelled-out `AD_Element.Name` and a long/abbreviated physi
 `AD_Column.ColumnName` (or vice versa) are common and both valid; only `AD_Column.Name` drives the
 Java property name.
 
+#### Known gap — declarations CRUD resolves org differently than boxes/generate/submit
+
+`DECL_SEQ`'s natural key is `(client, org, model, year, period)` (see `resolveNextDeclSeq` above),
+and the `org` half of that key comes from `FiscalDeclCrudHandler`'s own org resolution — every one
+of its entry points (`handleDeclGet`, `handleDeclPost`, `handleDeclPut`, `handleDeclDelete`, and its
+shared incident lookup) reads `OBContext.getOBContext().getCurrentOrganization().getId()` directly,
+verified against the current source. This is a **different, narrower** resolution than
+`AbstractFiscalHandler#resolveEffectiveOrg()` — the method the boxes/operators/generate/submit
+family of endpoints (`Fiscal303BoxesHandler`, `Fiscal349BoxesHandler`, etc.) all call instead:
+`resolveEffectiveOrg()` additionally handles a session parked at the `*` (summary/"0") organization
+level by falling back to the client's first non-summary leaf org, whereas `FiscalDeclCrudHandler`
+has no such fallback and would create/query/delete declarations scoped to org `"0"` verbatim in that
+case. **Pre-existing, not introduced or fixed by ETP-5187** — `resolveNextDeclSeq`/`DECL_SEQ` simply
+inherited whatever org `handleDeclPost` was already resolving; nothing in this ticket changed that
+resolution. Practical impact is narrow (a session actually parked at `*` for a fiscal-models
+action), but worth knowing: in that scenario, a declaration's CRUD-side `org` and the org the same
+declaration's box/operator computation resolves to via `resolveEffectiveOrg()` need not be the same
+value. Flagged as a follow-up, not fixed here.
+
 ### Identification section (`tipo_declaracion` + bank data)
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
@@ -475,7 +494,10 @@ silently accepting it: `__tests__/fiscalModelsUtils.download.vitest.js`.
 ### i18n namespace
 
 All new strings for this flow live under the `fm.aeat.*` namespace (`en_US.json`/`es_ES.json`,
-parity verified — 36 keys each), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
+parity verified — 39 keys each as of ETP-5187, up from the 36 this flow originally shipped with;
+the 3 added since are `fm.aeat.action.go_to_organization`, `fm.aeat.error.missingDefaultIae` (both
+ETP-4975) and `fm.aeat.reminder.iaeActivity` (ETP-5187) — see "IAE-activity activation reminder"
+below), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
 `PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label.
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
@@ -820,7 +842,7 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
   `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
 
   The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
-  - **Software vendor NIF (ETP-5187 point 6):** unlike Modelo 303/390 (whose `OBTL_Tax_Report_Parameter` seed data — `org.openbravo.module.aeat303.es` / `.aeat390.es`, both fixed under ETP-5187 — hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, previously Openbravo's `B31733934`, now Etendo's `B75117705`), the Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
+  - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
 
 ### Generate error banner (`genError`)
 
@@ -1077,14 +1099,20 @@ reads inline at the end of the warning sentence rather than as a separate contro
 `/organization`, plain — `OrganizationPage.jsx` has no section-anchor/deep-link support yet to land
 pre-scrolled at "Actividades del IAE" (see `docs/generated-custom-windows/organization.md`'s own
 "Actividades del IAE" section); that would be a follow-up, not implemented here. The same inline,
-bold placement is used everywhere else this CTA appears (the `connError` banner in
-`AeatSubmitFlow.jsx` and the `genError` banner in `FmModel303Page.jsx`, both below).
+bold placement is used everywhere else this CTA appears — the `connError` banner in
+`AeatSubmitFlow.jsx` (the NRC-required guard, described above under "Confirm screen") and the
+`genError` banner in `FmModel303Page.jsx` (the ETP-4975 pre-flight guard, see immediately below).
 
-**This is deliberately a different mechanism from the ETP-4975 hard guard** described under
-"Generate error banner (`genError`)" below (`missingIaeGuard`, `isMissingDefaultIaeActivity`) —
-that one is authoritative, runs a real `GET /sws/neo/organization/actividadesDelIae` check right
-before "Generar fichero"/"Marcar como Presentado" for the actual last-period declaration, and
-blocks the action when nothing qualifies. This reminder never blocks anything and never checks the
+**This is deliberately a different mechanism from the ETP-4975 hard guard** — `missingIaeGuard`/
+`isMissingDefaultIaeActivity` in `AeatSubmitFlow.jsx`/`FmModel303Page.jsx` — fully documented in
+`docs/generated-custom-windows/organization.md`'s "Modelo 303 pre-flight guard — both buttons"
+section, **not** in this file: this file's only section literally titled "Generate error banner
+(`genError`)" is further below, under "Modelo 349 detail page", and covers a distinct, unrelated
+concern (`AEAT3492010Report`'s own validation exceptions on the 349 file-generation path) — do not
+confuse the two `genError` states, they belong to different pages and different guards. The ETP-4975
+guard is authoritative: it runs a real `GET /sws/neo/organization/actividadesDelIae` check right
+before "Generar fichero"/"Marcar como Presentado" for the actual last-period declaration, and blocks
+the action when nothing qualifies. This reminder never blocks anything and never checks the
 backend — it is purely an earlier, informational nudge so the user isn't surprised later by the
 hard guard.
 
