@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import {
@@ -73,6 +74,20 @@ export default function SmartScanPage() {
     onAddToFavorites: () => toggleFavorite(favKey, 'Smart Scan'),
     isFavorite: isFavorite(favKey),
   }, [isFavorite(favKey)]);
+
+  // ETP-5116 — Smart Scan had zero real access control (any authenticated
+  // user, any role, could reach it by URL regardless of the menu). Checked
+  // here, after every other hook, so hook order stays stable across renders
+  // regardless of the tier (mirrors custom/financial-account/index.jsx).
+  const windowAccessTier = useWindowAccess('33705E0F52874D91B0BB2FF8BB648B8E');
+  if (windowAccessTier === 'none') {
+    return (
+      <WindowAccessGuard
+        windowId="33705E0F52874D91B0BB2FF8BB648B8E"
+        data-testid="WindowAccessGuard__smart-scan"
+      />
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="smartscan-page">
