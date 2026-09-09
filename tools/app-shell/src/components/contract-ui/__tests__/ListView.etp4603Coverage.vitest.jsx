@@ -296,13 +296,18 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     }));
   });
 
-  it('stores a null draft as null (user cleared every condition before saving)', () => {
+  // Pins the fallback semantics of `draftAdvancedFilter !== undefined ? ... : advancedFilter`.
+  // A `null` draft is a REAL value (the builder saves it for a preset that carries
+  // only column filters) and must reach savePreset untouched. Writing the fallback
+  // as `draftAdvancedFilter || advancedFilter` would silently substitute the stale
+  // applied filter here — that is the regression this test exists to catch.
+  it('forwards a null draft verbatim instead of falling back to the applied filter', () => {
     const applied = { rowOperator: 'and', conditions: [{ field: 'name', operator: 'iContains', value: 'applied' }] };
     renderListView({ initialAdvancedFilter: applied });
 
-    act(() => { filterBarProps.onSavePreset('emptied', null); });
+    act(() => { filterBarProps.onSavePreset('columnsOnly', null); });
 
-    expect(savePresetMock).toHaveBeenCalledWith('emptied', expect.objectContaining({
+    expect(savePresetMock).toHaveBeenCalledWith('columnsOnly', expect.objectContaining({
       advancedFilter: null,
     }));
   });

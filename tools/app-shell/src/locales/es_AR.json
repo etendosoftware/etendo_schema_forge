@@ -17375,6 +17375,8 @@
     "filterPresetPromptName": "Nombre para esta plantilla de filtro:",
     "filterPresetOverwriteConfirm": "Ya existe una plantilla llamada \"{name}\". ¿Sobrescribir?",
     "filterPresetOverwriteAction": "Sobrescribir",
+    "filterPresetBlockedIncomplete": "Terminá o quitá la condición sin completar antes de guardar este filtro.",
+    "filterPresetBlockedEmpty": "Agregá al menos una condición completa para poder guardar un filtro.",
     "filterPresetDeleteConfirm": "¿Eliminar la plantilla de filtro \"{name}\"?",
     "advancedFilterInSetPlaceholder": "Valores separados por coma",
     "search": "Buscar",
