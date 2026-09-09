@@ -22,7 +22,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - **Visibility:** visible from the **Finance** menu as **Manual Journals** (es: **Asientos Manuales**), wired via `menus["Manual Journals"]` in both locales.
 - **Implementation type:** fully generated window (no custom components). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST and routes document-completion (CO) through `FIN_AddPaymentFromJournal`.
 - **Window shape:** master-detail. The header entity is `gLJournal` (table `GL_Journal`) and the line entity is `gLJournalLine` (table `GL_JournalLine`). The two Classic auxiliary tabs — `Fact_Acct` (posting result) and `C_Conversion_Rate_Document` (document rates) — are **dropped** (`exclude: true`) for V1.
-- **Lines tab layout:** classic grid + side-panel editor (no `linesLayout` declared). The lines table shows the five core columns; clicking a row opens a side panel for editing, where the Open Items toggle and its dependent dimensions live.
+- **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows the five core columns; existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
 - An **Attachments** tab is available in the detail tab strip.
 
 ## Header fields
@@ -110,8 +110,9 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 5. Confirm no Post/Complete action is offered and no posting status field is shown (posting deferred; `Posted` is hidden).
 6. Open a line in the side panel, tick **Open Items**, and confirm the five dimension fields (Business Partner, Product, Project, Cost Center, Asset) appear; untick it and confirm they hide again.
 7. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
+8. Confirm the **Account** column in the lines grid renders visibly wider than the **Description** column (ETP-5210 — `columnWidth: 280` on `accountingCombination` vs. `description`'s 224px type default).
 
-**TODO(QA) — ETP-4917 impact on this checklist:** steps 2–4 assert on the balance footer's now-removed **Difference** value and balanced ✓/✗ badge (`data-testid="balance-difference"`/`"balance-status"` no longer render — see "Balance rule" above), and step 5's "no Post/Complete action is offered … `Posted` is hidden" no longer matches current behavior (draftMode/CO completion, Post/Unpost menu actions, and the `posted` status pill all ship today — see "Posting & completion status correction" below). Please rewrite steps 2–5 against current behavior, and add coverage for: (a) the header date field rendering as **Fecha**/**Date**, (b) both status chips (accounting `posted` pill + `documentStatus` lifecycle chip) appearing independently and reflecting Draft/Complete + Posted/Not-posted correctly, and (c) the list/grid being filterable by Fecha, Periodo, Descripción, Moneda, and both status chips.
+**TODO(QA) — ETP-4917 impact on this checklist:** steps 2–4 assert on the balance footer's now-removed **Difference** value and balanced ✓/✗ badge (`data-testid="balance-difference"`/`"balance-status"` no longer render — see "Balance rule" above), and step 5's "no Post/Complete action is offered … `Posted` is hidden" no longer matches current behavior (draftMode/CO completion, Post/Unpost menu actions, and the `posted` status pill all ship today — see "Posting & completion status correction" below). Please rewrite steps 2–5 against current behavior, and add coverage for: (a) the header date field rendering as **Fecha**/**Date**, (b) both status chips (accounting `posted` pill + `documentStatus` lifecycle chip) appearing independently and reflecting Draft/Complete + Posted/Not-posted correctly, and (c) the list/grid being filterable by Fecha, Periodo, Descripción, Moneda, and both status chips. **Also stale:** step 6's "side panel" wording — this window's lines actually render through `InlineLinesPanel` (`linesLayout` defaults to `inlineEditable`, see "Interaction model" above); Open Items/Asset are set via the add-row form, and the other four dimensions toggle through the row's "Add dimensions" hover action, not a side panel.
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -147,10 +148,12 @@ generic bugs (the `EntityForm.jsx` visibility filter never actually consulting t
 evaluate-display result, the `principal` section hardcoding empty visibility, and no
 lines-scoped `useDisplayLogic` call existing at all) were found and fixed — full write-up in
 `sales-invoice.md`. Both `header.*` and `lines.*` dimension fields are now genuinely
-config-gated at runtime. Unlike the inlineEditable windows (sales-invoice, purchase-invoice,
-goods-shipment, goods-receipt, physical-inventory, goods-movements), this window uses the
-classic `linesLayout`, so `LinesForm.jsx`'s sidebar always mounts and the lines-scoped evaluator
-fix is fully effective here — no residual UI-surface limitation.
+config-gated at runtime. This window resolves to the same `inlineEditable` `linesLayout` as
+sales-invoice, purchase-invoice, goods-shipment, goods-receipt, physical-inventory and
+goods-movements — via `DetailView.jsx`'s default, since `decisions.json` doesn't declare
+`window.linesLayout` here — so the lines-scoped evaluator fix reaches this window through
+`InlineLinesPanel`'s dimension expand-row (see the ETP-4610 note below), not a `LinesForm.jsx`
+sidebar.
 
 ### Header section placement fix (ETP-4529 follow-up)
 
@@ -178,9 +181,9 @@ Fixed by adding `"dimensionsPanel": true` to all four fields in `decisions.json`
 `GLJournalLineTable.jsx` now emits a synthetic `dimensions` column
 (`type: 'dimensionsPanel'`, `label`/`labels: {"Dimensiones contables"}`) listing all four fields
 as `dimensionFields`. This column definition is passed to both `InlineLinesPanel` and
-`DataTable`, so the expand-row "Dimensiones contables" panel renders in the lines grid for this
-window's classic grid + side-panel layout too — in addition to (not instead of) the existing
-side-panel editor, which still separately gates `asset` behind the Open Items checkbox.
+`DataTable`, so the expand-row "Dimensiones contables" panel renders in this window's
+`InlineLinesPanel` lines grid too — in addition to (not instead of) the add-row form, which
+still separately gates `asset` behind the Open Items checkbox.
 
 ### Regen gap re-closed + "Añadir dimensiones" moved to a hover action (ETP-4610)
 
@@ -193,9 +196,10 @@ Separately, `InlineLinesPanel` no longer renders the `dimensionsPanel` type as a
 its own `inlineEditable` layout — "Añadir dimensiones" is now a hover action next to Edit/Delete,
 gated on at least one visible dimension field, with the expand-chevron column unchanged. The
 label/icon is adaptive: "Añadir dimensiones" while the line has no dimension values, "Editar
-dimensiones" once at least one is set. (The
-`DataTable`-driven classic-grid path this window also uses does not render `dimensionsPanel` at
-all — pre-existing behavior, unrelated to and unchanged by ETP-4610.) See
+dimensiones" once at least one is set. (`GLJournalLineTable.jsx` also mounts a hidden,
+data-less `DataTable` block solely to host the add-row form's callouts/selectors when
+`addRow?.active` — that block does not render `dimensionsPanel` at all — pre-existing behavior,
+unrelated to and unchanged by ETP-4610.) See
 `docs/ui-customization.md` §14b/§14c and `docs/feedback.md`'s ETP-4610 entry.
 
 ## DF Contabilidad §2.1 corrections — ETP-4917
