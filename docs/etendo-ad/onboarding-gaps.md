@@ -19,6 +19,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
+| A8b | Accounting | Product decision, made after A8/ETP-5075 shipped: the fleet-wide standard Invoice Price Variance account is a dedicated GL account (`99904000`), not each tenant's own `P_Expense_Acct` — A8's resolution was a reasonable unblocker but not the intended long-term value | Both fronts revised in place (same method/same file, no new step or file replacing A8's): preventive rewrites `backfillInvoicePriceVarianceDefault`'s SQL to resolve `99904000`'s own NATURAL `C_ValidCombination` first (scoped through `C_AcctSchema_Element`/`elementtype='AC'`, filtered on all ~11 dimension columns being NULL), falling back to A8's `P_Expense_Acct`-derived value only when `99904000` doesn't resolve for that tenant's chart; corrective is a NEW file, `R35`, which corrects any row R34 already touched (still `NULL` or still equal to R34's `P_Expense_Acct` value) to `99904000`'s resolved combination — R34 itself stays byte-identical, un-edited, and remains the sole source for a chart that genuinely lacks `99904000` | ETP-5222 |
 | A9 | Accounting | `FIN_Financial_Account_Acct.FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT` ("Cleared payment account" IN/OUT) born pre-filled with the ledger asset account (`57200000`) instead of empty — a non-null cleared account is what makes `DocFINReconciliation` post a reconciliation, so reconciliations generated unwanted entries in Sumas y Saldos / Libro Mayor. NOT a missing-row gap (A2c) or a missing-account gap (A7): the row and the account both exist, the *value* is wrong | Both fronts closed: preventive in `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (stops selecting the two columns) + `FinancialAccountAccountingDefaultsSupport` (actively clears them after core's trigger seeds them, for the live create path); corrective data-fix (`R34`) blanks them on already-onboarded tenants, skipping accounts with posted reconciliations. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R34`'s `@check` returns 0 rows for it | ETP-5207 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -910,6 +911,61 @@ deliberately NOT bumped by this change — same reasoning as A7's caveat: the cu
 (`2026-09-01T14:00:00Z` at authoring time) already sits behind several other unbumped, individually
 unverified intervening fixes (`R32`/`R33`), and bumping past them on this fix's say-so risks
 silently skipping one of theirs for a brand-new tenant.
+
+---
+
+### A8b — Standard Invoice Price Variance account revised to 99904000 (ETP-5222, follow-up to A8, 2026-09-09)
+
+**Not a new symptom — a product decision made after A8/ETP-5075 shipped.** A8's `P_Expense_Acct`
+copy-down unblocked posting (the immediate bug), but product subsequently confirmed the intended
+long-term value is a dedicated GL account from the chart's own `999*` default/suspense family:
+first `99905000` ("Diferencia entre el precio de compra y el coste estándar"), corrected mid-ticket
+to `99904000` after re-verification (see the ticket's own ledger,
+`etendo_schema_forge/santo_ETP-5222_ledger.md`, for the full 99905000→99904000 correction arc,
+including the accepted risk that both accounts are `AccountType='M'`/Memorandum rather than
+`E`/Expense). Both accounts already exist in GOClient's bundled chart (and broadly, fleet-wide) as
+a genuine leaf (`elementlevel='S'`) — this is a value-priority change, not a missing-account-shape
+gap like A7.
+
+**Orphan-element trap (same class as elsewhere in this catalog):** GOClient carries a SECOND,
+unwired `C_ElementValue` row for `99904000` under an orphan "GOOrg Account Tree" element (same
+trap independently confirmed for `99905000`). The resolution scopes through
+`C_AcctSchema_Element`/`elementtype='AC'` so only the wired element's leaf is ever picked — a
+plain `value`+`ad_client_id` join would risk resolving the wrong one.
+
+**Fix (preventive):** same method, same file as A8 — `OnboardingAccountingWiringService
+#backfillInvoicePriceVarianceDefault` / `ACCTSCHEMA_DEFAULT_IPV_BACKFILL_SQL`, rewritten (not a new
+step) to resolve `99904000`'s own NATURAL `C_ValidCombination` for the tenant's schema FIRST —
+scoped through `C_AcctSchema_Element`/`elementtype='AC'`, and (added in the same session, review
+finding W1) filtered on all ~11 `C_ValidCombination` dimension columns (`m_product_id`,
+`c_bpartner_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`, `c_salesregion_id`, `c_project_id`,
+`c_campaign_id`, `c_activity_id`, `user1_id`, `user2_id`) being `NULL`, `ORDER BY
+c_validcombination_id LIMIT 1` — the same defensive shape
+`GlItemProvisioningSupport#resolveNaturalCombination` uses elsewhere in this codebase, needed
+because a non-natural, dimension-specific row for the same `(account, schema)` pair could otherwise
+make Postgres `UPDATE ... FROM` pick an arbitrary match. `COALESCE`s with A8's own
+`P_Expense_Acct`-derived value as the fallback for a chart that genuinely lacks `99904000`.
+`ONBOARDING_PROVISIONED_THROUGH` not bumped — same reasoning as A8/A7 (this edits the SQL a single
+already-correctly-placed statement runs, not where/when it runs).
+
+**Fix (corrective):** `cli/src/data-fixes/sql/20260909T150000Z__R35-invoice-price-variance-99904000-correction.sql`
+— a NEW file, R34 stays untouched (immutable-applied-fix rule, `sql/README.md` rule 3; R17-to-R21
+is the precedent for a new file superseding an old one's value choice rather than an in-place edit).
+Corrects any of the three levels (schema default, product-category, product) whose current value is
+either still `NULL` or still equals that row's own `P_Expense_Acct` (i.e. R34's value) to
+`99904000`'s resolved natural combination — same `C_AcctSchema_Element`/dimension-null filter as the
+Java fix above. Unlike R34/the Java fix, R35 has no fallback of its own (plain `INNER JOIN`, not
+`LEFT JOIN`): a chart lacking `99904000` is simply not matched, leaving R34's `P_Expense_Acct` value
+as that tenant's only source. A row holding neither `NULL` nor its own `P_Expense_Acct` — a genuine
+manual override — is left untouched on purpose (confirmed live against GOClient's own "Fernet"
+product, manually pointed at `99905000` outside either catalog fix). Live-verified (rolled-back
+transactions plus the real runner) against GOClient/SantoEmpresa (resolve `99904000`) and a
+`99904000`-lacking "QA Testing" client (`SKIPPED_NOT_NEEDED`, confirming no fallback).
+
+**Open item, not yet closed by this ticket:** whether R34 (and now R35) has already run on the
+experimental/production server — this session had DB credentials only for local dev. Flagged in
+`etendo_schema_forge/santo_ETP-5222_ledger.md`, not resolved there either; check
+`etgo_data_fix_history` directly before treating either fix as applied fleet-wide.
 
 ---
 
