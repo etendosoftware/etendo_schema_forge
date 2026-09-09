@@ -486,7 +486,7 @@ export function FinancialAccountDetail({ recordId }) {
             onEdit={() => setEditOpen(true)}
             onAutoMatch={() => setAutoMatchOpen(true)}
             onExport={handleExport}
-          />
+            data-testid="DetailToolbarActions__f7dbb3" />
         </div>
 
         {/* Tab content */}
