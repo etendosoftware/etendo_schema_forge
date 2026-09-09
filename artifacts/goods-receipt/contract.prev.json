@@ -1,8 +1,8 @@
 {
   "version": "0.34.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-09-09T16:24:27.061Z",
-  "checksum": "39fcb8df9c33c5d9",
+  "updatedAt": "2026-09-09T16:24:55.236Z",
+  "checksum": "864ee2053576246d",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -647,7 +647,10 @@
           "enabled": true,
           "processField": "documentAction",
           "processValue": "CO",
-          "label": "Confirmar"
+          "label": "Confirmar",
+          "keepSaveWhenCompletedFields": [
+            "orderReference"
+          ]
         }
       },
       "goodsReceiptLine": {

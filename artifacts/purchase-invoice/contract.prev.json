@@ -1,8 +1,8 @@
 {
   "version": "0.91.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-09T13:55:05.921Z",
-  "checksum": "d2354c76515daeac",
+  "updatedAt": "2026-09-09T16:08:20.109Z",
+  "checksum": "8a4d6af71b1838ca",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1808,7 +1808,9 @@
           "processField": "documentAction",
           "processValue": "CO",
           "label": "Confirm",
-          "keepSaveWhenCompleted": true
+          "keepSaveWhenCompletedFields": [
+            "orderReference"
+          ]
         }
       },
       "lines": {
