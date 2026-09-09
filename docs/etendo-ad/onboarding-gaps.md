@@ -970,9 +970,10 @@ this fix). GOClient/SantoEmpresa (both have `99904000`) resolve Level 1 to `9990
 combination, which then cascades identically. A row holding neither `NULL` nor its own
 `P_Expense_Acct` — a genuine manual override — is left untouched at every level on purpose (confirmed
 live against GOClient's own "Fernet" product, manually pointed at `99905000` outside either catalog
-fix). A tenant is `SKIPPED_NOT_NEEDED` only when `C_AcctSchema_Default.P_InvoicePriceVariance_Acct`
-is itself `NULL` (Level 1 no-op with nothing set beforehand either) — e.g. "QA Testing" — not merely
-because the chart lacks `99904000`.
+fix). A tenant is `SKIPPED_NOT_NEEDED` when `C_AcctSchema_Default.P_InvoicePriceVariance_Acct`
+is itself `NULL` (Level 1 no-op with nothing set beforehand either) — e.g. "QA Testing" — or when
+every level already holds the correct value (an idempotent re-run) — not merely because the chart
+lacks `99904000`.
 
 **Open item, not yet closed by this ticket:** whether R34 (and now R35) has already run on the
 experimental/production server — this session had DB credentials only for local dev. Flagged in
