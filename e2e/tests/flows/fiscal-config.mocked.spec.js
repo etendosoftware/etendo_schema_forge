@@ -116,7 +116,7 @@ test.describe('Fiscal Config — SII profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
   });
 
   test('shows the Navarra SII section when the SII record has navarra=Y', async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe('Fiscal Config — SII profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_NAVARRA_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -154,7 +154,7 @@ test.describe('Fiscal Config — SII+TBAI combined profile', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD, tbai: TBAI_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
 
     // SII+TBAI uses tabs — switch to TBAI tab to verify it renders
     await page.getByRole('button', { name: t('fiscal.tab.tbai') }).click();
@@ -428,7 +428,7 @@ const CHANGE_SIF_CASES = [
   {
     label: 'SII',
     spec: 'sii-config',
-    detailFieldLabel: t('fiscal.sii.legend.special'),
+    detailFieldLabel: t('fiscal.sii.legend.specialAuth'),
     record: { id: 'e2e-csif-sii-001', acogidaAlSII: 'N', navarra: 'N', guipuzcoa: 'N' },
     noticeKey: 'fiscal.changeSif.notice.sii',
   },
@@ -583,7 +583,7 @@ const ONBOARDING_SAVE_CASES = [
     spec: 'sii-config',
     territoryLabel: t('fiscal.territory.navarra'),
     hasSubquestion: false,
-    detailFieldLabel: t('fiscal.sii.legend.special'),
+    detailFieldLabel: t('fiscal.sii.legend.specialAuth'),
     record: {
       id: 'e2e-onb-sii-001',
       navarra: 'Y',
@@ -714,7 +714,7 @@ test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
     await installFiscalConfigMocks(page, { sii: SII_RECORD });
     await navigateTo(page, 'fiscal-config');
 
-    await expect(page.getByText(t('fiscal.sii.legend.special'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
 
     // canAddComplementary is false for sii-only profile — open the kebab and verify
     // addComplementary is absent from its items.
