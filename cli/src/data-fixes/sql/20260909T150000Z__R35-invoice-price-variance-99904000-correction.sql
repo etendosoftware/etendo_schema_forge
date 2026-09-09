@@ -2,7 +2,7 @@
 -- @gap: A8b
 -- @risk: low
 -- @type: sql
--- @description: Correct P_InvoicePriceVariance_Acct (schema-default, product-category, product) to GL account 99904000's own NATURAL combination wherever it is currently NULL or still holds R34's old P_Expense_Acct-derived value — supersedes R34's value choice without editing R34 itself
+-- @description: Correct P_InvoicePriceVariance_Acct at three levels wherever it is currently NULL or still holds R34's old P_Expense_Acct-derived value — Level 1 (schema-default) resolves GL account 99904000's own NATURAL combination; Levels 2/3 (product-category, product) cascade from whatever Level 1 ends up holding, so a chart lacking 99904000 can still be corrected to that schema's own existing default — supersedes R34's value choice without editing R34 itself
 
 -- Background
 -- ----------

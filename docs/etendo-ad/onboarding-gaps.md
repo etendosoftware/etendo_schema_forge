@@ -951,16 +951,28 @@ already-correctly-placed statement runs, not where/when it runs).
 **Fix (corrective):** `cli/src/data-fixes/sql/20260909T150000Z__R35-invoice-price-variance-99904000-correction.sql`
 — a NEW file, R34 stays untouched (immutable-applied-fix rule, `sql/README.md` rule 3; R17-to-R21
 is the precedent for a new file superseding an old one's value choice rather than an in-place edit).
-Corrects any of the three levels (schema default, product-category, product) whose current value is
-either still `NULL` or still equals that row's own `P_Expense_Acct` (i.e. R34's value) to
-`99904000`'s resolved natural combination — same `C_AcctSchema_Element`/dimension-null filter as the
-Java fix above. Unlike R34/the Java fix, R35 has no fallback of its own (plain `INNER JOIN`, not
-`LEFT JOIN`): a chart lacking `99904000` is simply not matched, leaving R34's `P_Expense_Acct` value
-as that tenant's only source. A row holding neither `NULL` nor its own `P_Expense_Acct` — a genuine
-manual override — is left untouched on purpose (confirmed live against GOClient's own "Fernet"
-product, manually pointed at `99905000` outside either catalog fix). Live-verified (rolled-back
-transactions plus the real runner) against GOClient/SantoEmpresa (resolve `99904000`) and a
-`99904000`-lacking "QA Testing" client (`SKIPPED_NOT_NEEDED`, confirming no fallback).
+Three levels, but only **Level 1** (schema default) independently resolves `99904000` — same
+`C_AcctSchema_Element`/dimension-null filter as the Java fix above — and only when the row's current
+value is still `NULL` or still equals its own `P_Expense_Acct` (i.e. R34's value); a chart lacking
+`99904000` leaves Level 1 a no-op, so the schema default keeps whatever it already held (R34's
+`P_Expense_Acct` value, or still `NULL`). **Levels 2/3** (product-category, product) no longer
+re-derive `99904000` on their own — they `COALESCE`/cascade WHATEVER
+`C_AcctSchema_Default.P_InvoicePriceVariance_Acct` ends up holding after Level 1 (guarded
+`IS NOT NULL`), onto any row still `NULL` or still equal to that row's own `P_Expense_Acct`. **This
+means a chart lacking `99904000` can still get its product/category rows corrected** — not to
+`99904000`'s combination (which doesn't exist there), but to whatever value `C_AcctSchema_Default`
+already carries for that schema (its own pre-existing default, possibly a dedicated variance account
+set by that tenant, or R34's `P_Expense_Acct` value if nothing else was ever set). Live-verified:
+"F&B International Group" — a real client whose chart has NO `99904000` element at all — had 35
+`M_Product_Acct`/`M_Product_Category_Acct` rows corrected during the same R35 run, cascaded down to
+that schema's own existing account `5610` (its `C_AcctSchema_Default` value, set independently of
+this fix). GOClient/SantoEmpresa (both have `99904000`) resolve Level 1 to `99904000`'s own
+combination, which then cascades identically. A row holding neither `NULL` nor its own
+`P_Expense_Acct` — a genuine manual override — is left untouched at every level on purpose (confirmed
+live against GOClient's own "Fernet" product, manually pointed at `99905000` outside either catalog
+fix). A tenant is `SKIPPED_NOT_NEEDED` only when `C_AcctSchema_Default.P_InvoicePriceVariance_Acct`
+is itself `NULL` (Level 1 no-op with nothing set beforehand either) — e.g. "QA Testing" — not merely
+because the chart lacks `99904000`.
 
 **Open item, not yet closed by this ticket:** whether R34 (and now R35) has already run on the
 experimental/production server — this session had DB credentials only for local dev. Flagged in
