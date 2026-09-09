@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
+import { defaultNavigation, optionalNavigation } from '../windows/__tests__/navigationExpectations.js';
 
 describe('buildRuntimeRoutes', () => {
+  it('keeps synthetic navigation destinations explicitly registered and protected', () => {
+    const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: '/sws/neo' });
+    const synthetic = [...defaultNavigation.filter(entry => !entry.windowId && !entry.obuiappProcessId),
+      ...optionalNavigation.filter(entry => !entry.app)];
+    for (const entry of synthetic) {
+      const route = routes.find(candidate => candidate.path === entry.path.split('?')[0]);
+      expect(route, entry.name).toBeDefined();
+      expect(route.public, entry.name).toBe(false);
+    }
+  });
+
   it('marks onboarding, login, logout and the bank connection callback as public routes', () => {
     const routes = buildRuntimeRoutes({ windowMap: {}, apiBaseUrl: 'http://x/api' });
     const paths = routes.filter((r) => r.public).map((r) => r.path);

@@ -5,7 +5,7 @@ import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
-import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -265,6 +265,13 @@ export default function AppLayout({ menuGroups }) {
   // returns `{}` before the map has loaded, which `filterMenuGroupsByAccess`
   // already treats as "hide" for any capability-gated item (fails closed).
   const capabilities = useCapabilitiesSafe();
+  // ETP-5240 — the real per-window AD_Window_Access tier map, used to gate
+  // menu.json entries that declare `"accessWindowId": "<AD_Window_ID>"` for a
+  // permission-anchor window with no active AD_Menu node (report viewers,
+  // Smart Scan — see filterMenuGroupsByAccess's JSDoc). `useWindowAccessSafe()`
+  // returns `{}` before the map has loaded, which filterMenuGroupsByAccess
+  // already treats as "hide" for any accessWindowId-gated item (fails closed).
+  const windowAccess = useWindowAccessSafe();
   // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
   // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
   // carrying a windowId/processId/obuiappProcessId is hidden until the real
@@ -276,7 +283,8 @@ export default function AppLayout({ menuGroups }) {
   const filteredMenuGroups = filterMenuGroupsByAccess(
     menuGroups,
     allowedIds === undefined ? new Set() : allowedIds,
-    capabilities
+    capabilities,
+    windowAccess
   );
 
   // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means
