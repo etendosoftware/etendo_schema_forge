@@ -85,46 +85,69 @@ function isThousands(s, sep) {
   return !/^-?0$/.test(parts[0]);
 }
 
+/**
+ * A plain decimal number, and nothing else.
+ *
+ * Deliberately unambiguous. The first version was `/^-?\d*\.?\d*$/`, whose two adjacent `\d*`
+ * around an optional dot give the engine several ways to split the same digits: on a long run of
+ * digits that ultimately fails to match, it backtracks through all of them, which is quadratic
+ * and a real ReDoS surface (Sonar javascript:S5852). Here each alternative consumes its digits
+ * one way only, so there is nothing to backtrack through. A bare `.` or `-` matches neither
+ * branch, which is correct — they are not numbers.
+ */
+const PLAIN_NUMBER_RE = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/**
+ * Rewrites the separators of `s` into a plain `1234.56`, applying the three rules in the header
+ * comment. Returns the string untouched when it carries no separator, or when what it carries
+ * cannot be read as a number — `parseStatementAmount`'s digits check rejects it from there.
+ *
+ * Split out of `parseStatementAmount` rather than left inline: the two rules plus their
+ * grouped-tail exception took that function to a cognitive complexity of 17 against the 15
+ * allowed (Sonar javascript:S3776), and the separator rewriting is a named step of its own —
+ * everything the caller does around it is guard clauses and the final numeric check.
+ */
+function normalizeSeparators(s) {
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  // Rule 1 — a cell holding both can only be read one way: the rightmost is the decimal.
+  if (hasComma && hasDot) {
+    return s.lastIndexOf(',') > s.lastIndexOf('.')
+      ? stripAll(s, '.').replace(',', '.')
+      : stripAll(s, ',');
+  }
+  if (!hasComma && !hasDot) return s;
+  const sep = hasComma ? ',' : '.';
+  // Rule 2 — a lone separator followed by exactly three digits groups thousands.
+  if (isThousands(s, sep)) return stripAll(s, sep);
+  return withDecimalTail(s, sep);
+}
+
+/**
+ * Rule 3 — the LAST occurrence of `sep` is the decimal point, any earlier ones group.
+ *
+ * The "earlier ones group" half only applies when the cell really is a grouped number with a
+ * decimal tail (`1.234.56` → 1234.56). `1,2,3` is not a number at all, and salvaging it into
+ * 12.3 would import garbage silently, so it comes back untouched for the digits check to reject.
+ */
+function withDecimalTail(s, sep) {
+  const parts = s.split(sep);
+  const grouped = parts.length === 2 || parts.slice(1, -1).every((p) => GROUP_RE.test(p));
+  if (!grouped) return s;
+  const idx = s.lastIndexOf(sep);
+  return `${stripAll(s.slice(0, idx), sep)}.${s.slice(idx + 1)}`;
+}
+
 export function parseStatementAmount(raw) {
   if (raw == null) return null;
   const s = String(raw).trim();
   if (!s) return null;
-
-  const hasComma = s.includes(',');
-  const hasDot = s.includes('.');
-
-  let normalized = s;
-  if (hasComma && hasDot) {
-    // Rule 1 — the rightmost separator is the decimal one.
-    normalized = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? stripAll(s, '.').replace(',', '.')
-      : stripAll(s, ',');
-  } else if (hasComma || hasDot) {
-    const sep = hasComma ? ',' : '.';
-    if (isThousands(s, sep)) {
-      // Rule 2.
-      normalized = stripAll(s, sep);
-    } else {
-      // Rule 3 — the LAST occurrence is the decimal point, any earlier ones group.
-      //
-      // The "earlier ones group" half only applies when the cell really is a grouped number
-      // with a decimal tail (`1.234.56` → 1234.56). `1,2,3` is not a number at all, and
-      // salvaging it into 12.3 would import garbage silently, so it is left as-is for the
-      // digits check below to reject.
-      const parts = s.split(sep);
-      const grouped = parts.length === 2 || parts.slice(1, -1).every((p) => GROUP_RE.test(p));
-      const idx = s.lastIndexOf(sep);
-      normalized = grouped
-        ? `${stripAll(s.slice(0, idx), sep)}.${s.slice(idx + 1)}`
-        : s;
-    }
-  }
-
+  const normalized = normalizeSeparators(s);
   const n = parseFloat(normalized);
   // `parseFloat` stops at the first character it cannot read, so "12x" would yield 12. A cell
   // must be a number in full or not at all — a partially-readable amount is a row error, which
   // is also what Classic does (its DecimalFormat throws rather than salvaging a prefix).
-  return Number.isFinite(n) && /^-?\d*\.?\d*$/.test(normalized) ? n : NaN;
+  return Number.isFinite(n) && PLAIN_NUMBER_RE.test(normalized) ? n : NaN;
 }
 
 /**
