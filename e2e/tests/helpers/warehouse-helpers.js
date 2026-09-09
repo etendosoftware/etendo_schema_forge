@@ -2,10 +2,15 @@
  * Deterministic WAREHOUSE master-data fixture for live-backend integration specs.
  *
  * ## Why this exists (ETP-5079)
- * The GOClient onboarding dataset used to seed TWO warehouses — `Almacen GO`
- * (value `AG`, bin `AG-0-0-0`) and `Almacén Secundario` (value `AS`, bin
- * `AS-0-0-0`). ETP-5079 reduced it to ONE: `Almacen Principal` (value `AG`, bin
- * `AG-0-0-0`, see `DEFAULT_WAREHOUSE_NAME` in inventory-helpers.js).
+ * The GOClient dataset ships TWO warehouses — `Almacen Principal` (value `AG`,
+ * bin `AG-0-0-0`, see `DEFAULT_WAREHOUSE_NAME` in inventory-helpers.js) and
+ * `Almacén Secundario` (value `AS`, bin `AS-0-0-0`). ETP-5079 reduced what an
+ * ONBOARDED TENANT receives to the first one only: the secondary warehouse, its
+ * locator and its org-link row are still shipped for the GOClient sample client
+ * that `install.source` seeds, but are dropped at IMPORT TIME by
+ * `OnboardingDatasetNormalizer`'s `DemoMasterDataFilter` (deleting them from
+ * the source dataset instead broke `./gradlew install` — see
+ * `OnboardingDemoMasterData`).
  *
  * That silently invalidated the ETP-4772 backend regression guard in
  * `purchase-order-full-flow.integration.spec.js` ("an explicitly picked
@@ -24,8 +29,10 @@
  * carried exactly such a mid-test `test.skip` and reported green while proving
  * nothing. Weakening the `>= 2` assertion or re-adding a skip would recreate
  * that bug.) So the fix is to PROVIDE the second warehouse, the same way
- * `ensureProductSetup()` provides the products ETP-5079 deleted and
- * `ensureVendorSetup()` provides the contact the dataset never had.
+ * `ensureProductSetup()` provides the products a tenant no longer receives and
+ * `ensureVendorSetup()` provides the contact the dataset never had. Provide,
+ * not assume: goadmin's own GOClient still holds `AS`, so a guard leaning on it
+ * would pass there and go vacuous against any real tenant.
  *
  * ## Why API-only (no UI automation)
  * Same reasoning as `ensureProductSetup()` (product-helpers.js) and
@@ -70,11 +77,11 @@
  * `etendo_core/src-db/database/model/tables/AD_ORG_WAREHOUSE.xml`; surfaced as
  * the `Warehouse` tab of the Organization window, AD_Tab
  * `9F030341690C4BB3A3C15835AEC0FF39` -> AD_Table `OrganizationWarehouse` ->
- * DAL entity `OrgWarehouse`). The GOClient onboarding dataset ships exactly one
- * row (`referencedata/sampledata/GOClient/AD_ORG_WAREHOUSE.xml`) binding the
- * operational org to the seeded warehouse — and ETP-5079 deleted the second row
- * along with the second warehouse. So a fixture warehouse with no link row does
- * NOT match the shape of the one the tenant already has.
+ * DAL entity `OrgWarehouse`). An onboarded tenant receives exactly one such row
+ * (`referencedata/sampledata/GOClient/AD_ORG_WAREHOUSE.xml` ships two; ETP-5079
+ * filters out the one binding the operational org to the secondary warehouse,
+ * along with that warehouse itself). So a fixture warehouse with no link row
+ * does NOT match the shape of the one the tenant already has.
  *
  * That row is NOT created here, because there is no API path to it. The
  * `organization` spec DOES carry a `warehouse` entity pointing at that tab, and
