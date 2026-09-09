@@ -27,7 +27,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   // top-nav org selector — see resolveInvoiceOrgId.js. Falls back to
   // selectedOrg only if the record hasn't exposed adOrgId yet.
   const orgId = resolveInvoiceOrgId(invoiceData, selectedOrg?.id);
-  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord, tbaiRecord, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -116,7 +116,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData, territory);
+  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData, territory, tbaiRecord);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(specName, pendingTargets);
@@ -174,6 +174,9 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)
     orgId, profile, territory,
+    // ETP-5122: adoption-date records, needed to gate each fiscal status InfoRow
+    // by whether THIS invoice is dated on/after the org's adoption date.
+    siiRecord, tbaiRecord, verifactuRecord,
     // payment modal
     showPaymentModal, setShowPaymentModal,
     // email modal
