@@ -92,6 +92,66 @@ describe('Sales InvoiceHeaderTable — TBAI column is a real AD column (ETP-5216
   });
 });
 
+// ── ETP-5216: the adoption-date gate MOVED from the cell into the DB ─────────
+// The cell used to call `isSifEligibleByDate(row.invoiceDate,
+// tbaiRecord?.tbaisystemdate)` and draw a dash for an invoice predating
+// adoption. That decision was invisible to the backend (so filtering the now
+// filterable column by "Pendiente" returned rows the grid drew as a dash) and
+// it compared EVERY row against the SELECTED organization's adoption date
+// rather than the invoice's own. `ETGO_GET_TBAI_STATUS` now answers the literal
+// 'NoAplica' per invoice, against the invoice's OWN organization, and the cell
+// only translates that value to a dash.
+
+describe('Sales InvoiceHeaderTable — TBAI cell renders a dash only for "NoAplica" (ETP-5216)', () => {
+  const tbaiCell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)\;\s*\}/);
+  // The block's own comments narrate the migration (they name 'NoAplica' and
+  // isSifEligibleByDate on purpose), so the "must not appear" assertions below
+  // read the CODE only — otherwise the documentation would fail the test.
+  const tbaiCode = tbaiCell[0].replace(/^\s*\/\/.*$/gm, '');
+
+  it('imports the shared isTbaiStatusNotApplicable helper (no inline literal comparison)', () => {
+    assert.match(
+      src,
+      /import \{[^}]*isTbaiStatusNotApplicable[^}]*\} from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
+      'the NoAplica literal lives in fiscalTargets.js — the cell must not re-declare it',
+    );
+    assert.doesNotMatch(
+      tbaiCode,
+      /'NoAplica'/,
+      'the cell must go through the helper, never compare the literal itself',
+    );
+  });
+
+  it('renders the muted dash when the stored status does not apply', () => {
+    assert.match(
+      tbaiCell[0],
+      /isTbaiStatusNotApplicable\(row\.eTGOTbaiStatus\)\s*\n\s*\? <span className="text-muted-foreground">—<\/span>/,
+      'a NoAplica invoice must render the dash, not a badge',
+    );
+  });
+
+  it('renders the FiscalStatusBadge on the other branch', () => {
+    assert.match(
+      tbaiCell[0],
+      /: <FiscalStatusBadge status=\{row\.eTGOTbaiStatus \?\? 'Pendiente'\} \/>/,
+      'any status other than NoAplica must still render the badge',
+    );
+  });
+
+  it('no longer gates the TBAI cell on invoiceDate vs. the selected org adoption date', () => {
+    assert.doesNotMatch(
+      tbaiCode,
+      /isSifEligibleByDate|tbaisystemdate/,
+      'the adoption-date gate moved into the stored computed column (ETP-5216)',
+    );
+  });
+
+  it('keeps the browser-side date gates for SII and VERI*FACTU (they are NOT stored columns)', () => {
+    assert.match(src, /isSifEligibleByDate\(row\.accountingDate, siiRecord\?\.fechaAcogidaSII\)/);
+    assert.match(src, /isVerifactuEligibleByDate\(/);
+  });
+});
+
 // ── ETP-4841: payment state follows the SIGN of the total ────────────────────
 // The grid used to call `isRectificativa(row)` (getArSubtype === 'RECTIFICATIVA')
 // to pick the credit branch. That mislabelled a POSITIVE Factura Rectificativa

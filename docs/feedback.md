@@ -1997,3 +1997,53 @@ broken for any Organization-level role; only a core fix closes them. Written up 
 - **Back up before you destroy, and verify the backup.** `git diff > file` in this repo produces
   RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
   `rtk proxy git diff`, and validate with `git apply --check` before relying on it.
+
+## [2026-09-09] ETP-5216 — Making a column filterable moves the goalposts for every rule that was living in its cell
+
+**Component:** the TicketBAI / Batuz list column —
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`,
+`com.etendoerp.go/src-db/database/model/functions/ETGO_GET_TBAI_STATUS.xml`.
+
+**Symptom:** none visible. Two branches merged cleanly in intent and produced a column whose
+filter and whose cell answered different questions.
+
+**What happened.** ETP-5216 turned the column into a stored computed column so it could be
+filtered and sorted. In parallel, ETP-5122 added an *adoption-date gate* to the same column on
+`develop`: an invoice dated before its organization joined TicketBAI is never submitted, so it
+shows a dash rather than a fabricated "Pendiente". Each change is correct on its own. Together
+they are not, because ETP-5122 put its rule in the React cell:
+
+```jsx
+isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
+  ? <FiscalStatusBadge status={...} /> : <span>—</span>
+```
+
+A rule in the cell is invisible to the backend. Once the column filtered on
+`em_etgo_tbai_status`, filtering by "Pendiente" returned rows the grid then drew as a dash. No
+error, no warning — the two halves simply disagreed.
+
+**The lesson, and it generalizes past this column.** *A `type: 'custom'` cell is allowed to hold
+business rules only for as long as the column is unfilterable.* The moment a `column:` is added,
+every rule in that cell's `render` becomes a candidate defect: the database now answers questions
+about this column, and it does not know any of them. Adding `column:` to an existing custom cell
+is therefore not a one-line change — it is a review of everything that cell decides.
+
+**A second, independent bug found on the way.** `useFiscalConfig(orgId)` is called with
+`selectedOrg?.id` — the organization chosen in the session selector, not the organization of each
+invoice. Every row in a multi-organization list was measured against one adoption date. This was
+wrong before the migration too; nobody had noticed because the wrong answer looks exactly like the
+right one unless you happen to be looking at a list that spans organizations. Moving the rule into
+the function fixed it as a side effect, because the function starts from `c_invoice.ad_org_id`.
+
+**Fix.** The gate moved into `ETGO_GET_TBAI_STATUS`, which reads `tbai_config` for the invoice's
+own organization and returns `'NoAplica'`. A second `AD_COLUMN_COMP_DEPENDENCY` watches
+`TBAI_Config` so an organization that joins later has its invoices recomputed automatically. Cost
+accepted knowingly: changing an adoption date recomputes every invoice of that organization inside
+the saving transaction — an event that happens about once in an organization's lifetime, and the
+alternative (no dependency) leaves those invoices permanently wrong until somebody runs
+`ad_scd_rebuild` by hand.
+
+**Still open.** The SII and VERI*FACTU columns keep the same gate in the browser, and carry the
+same selected-organization bug. They are not stored computed columns, so they do not have the
+filter inconsistency — but the organization bug is real for them today.

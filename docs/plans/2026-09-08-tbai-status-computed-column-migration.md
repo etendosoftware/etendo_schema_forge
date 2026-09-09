@@ -940,3 +940,99 @@ the root cause of ETP-4391. If the field is missing it is missing from the contr
 | `tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx:154-158` | SF | **NO CHANGE** — consumes `useFiscalStatus`, not `tbaiSyncEstado` |
 | `docs/generated-custom-windows/{sales,purchase}-invoice.md` | SF | mandatory (atomic doc policy) |
 | `docs/feedback.md:1328-1341` | SF | close out the ETP-4391 entry |
+
+---
+
+## Follow-up (2026-09-09) — the adoption-date gate moves into the function
+
+**Status:** implemented.
+
+The migration above landed while ETP-5122 was independently adding an *adoption-date gate* to the
+same column on `develop`. Merging the two exposed that they disagree about where the decision
+belongs.
+
+### What ETP-5122 had built
+
+An invoice dated before its organization joined TicketBAI/Batuz is never submitted, so reporting
+it as `Pendiente` states something false — it is not pending, it does not apply. ETP-5122 handled
+that in the React cell:
+
+```jsx
+isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
+  ? <FiscalStatusBadge status={...} />
+  : <span className="text-muted-foreground">—</span>
+```
+
+That was coherent while the column was a `type: 'custom'` cell with no `column:` — unfilterable
+anyway, so the cell was the only truth. This migration broke that assumption.
+
+### Two defects, not one
+
+1. **The filter cannot see a decision taken in the cell.** The column now filters and sorts on
+   `em_etgo_tbai_status`; the database knows nothing about adoption dates. Filtering by
+   "Pendiente" returned rows the grid then drew as a dash.
+2. **The cell compared every row against the wrong organization.** `useFiscalConfig(orgId)` is
+   called with `selectedOrg?.id` — the organization picked in the session selector, not the
+   organization of each invoice. Any list spanning organizations measured them all with one
+   yardstick. This one is a genuine bug ETP-5122 shipped, independent of the migration.
+
+### Resolution
+
+The gate moved into `ETGO_GET_TBAI_STATUS`, which now reads `tbai_config` for the invoice's **own**
+organization and returns the literal `'NoAplica'` (8 chars; the column is `VARCHAR(10)`) when the
+invoice predates the adoption date or the organization has no active config. The cell only
+translates that value to a dash, via `isTbaiStatusNotApplicable()` in `shared/fiscalTargets.js`.
+
+The comparison is deliberately **not** truncated to a calendar day: Classic's
+`TBAI_ExistConfigAndIsAvailable` compares `TO_TIMESTAMP(DateInvoiced) >= conf.tbaisystemdate`, so a
+config carrying a time-of-day excludes invoices dated that same day. Truncating would silently
+disagree with Classic on exactly those rows.
+
+### A second dependency, deliberately added
+
+`AD_COLUMN_COMP_DEPENDENCY` `D51FD6FB8BBB4E09B0DCDEA2AF8D3A49` watches `TBAI_Config`
+(`Tbaisystemdate`, `Isactive`) and resolves to every invoice of the affected organization:
+
+```sql
+SELECT i.c_invoice_id FROM c_invoice i
+ WHERE i.ad_client_id = COALESCE(NEW.ad_client_id, OLD.ad_client_id)
+   AND i.ad_org_id = COALESCE(NEW.ad_org_id, OLD.ad_org_id)
+```
+
+This resolver brings its own `FROM`, so the `FROM dual` rule (which applies only to resolvers with
+no `FROM` clause) does not bite here. Filtering on `ad_client_id` as well as `ad_org_id` lets the
+lookup enter through the existing composite index `c_invoice_client_org_date_doc` rather than
+scanning.
+
+The cost is real and was accepted knowingly: changing an adoption date recomputes **every invoice
+of that organization**, synchronously, inside the transaction that saves the config. It is
+justified because the alternative is worse — without the dependency, an organization that joins
+*later* would keep `NoAplica` on all its invoices until somebody remembered to run
+`ad_scd_rebuild` by hand. Adoption dates change approximately once in an organization's lifetime.
+
+### Verified, not assumed
+
+The function was compiled into the live database under a throwaway name and exercised against real
+data (adoption date temporarily moved inside a transaction that was then rolled back):
+
+| Case | Result |
+|---|---|
+| `NULL` id | `Pendiente` (no exception) |
+| Non-existent invoice | `Pendiente` (no exception) |
+| Organization with no config | `NoAplica` |
+| Invoice before the adoption date | `NoAplica` |
+| Invoice on the adoption date itself | eligible (`>=`, not `>`) |
+| Invoice after the adoption date | falls through to `tbai_syncinvoice` |
+| Config set `isactive = 'N'` | `NoAplica` |
+
+**Still outstanding:** the deploy-time check that a green build cannot give — after
+`update.database`, confirm the enqueue trigger exists on `tbai_config`, that
+`ad_scd_check('F580979CD28F42B8BFD32B2BC9E65DAD')` returns 0, and that editing a real
+`tbaisystemdate` actually moves the stored values. The first two pass on a broken column.
+
+### Known asymmetry (deliberate, not an oversight)
+
+The SII column keeps the browser-side gate (`isSifEligibleByDate` against
+`siiRecord.fechaAcogidaSII`), as does VERI*FACTU. Neither is a stored computed column, so neither
+is filterable, so neither has the inconsistency this change fixes. Both carry the same
+selected-organization bug described above. Worth its own ticket; out of scope here.

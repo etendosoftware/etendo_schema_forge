@@ -10,7 +10,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
@@ -126,9 +126,18 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // Reading the flag first would let a rejection render as a cheerful
         // "Enviada". `isSent` is used rather than a plain truthy test because NEO
         // may deliver the flag as the AD character `'N'`, truthy in JS.
-        render: (row) => <FiscalStatusBadge
-          status={row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
-          data-testid="FiscalStatusBadge__tbai_6b7cdb" />,
+        // 'NoAplica' means the invoice predates the organization's Batuz adoption
+        // date (or the organization never joined): not pending anything, ever, so
+        // it renders as a dash. That gate used to run here as isSifEligibleByDate()
+        // against the SELECTED org's date; the stored column now decides it per
+        // invoice, against the invoice's OWN organization.
+        render: (row) => (
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge
+                status={row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
+                data-testid="FiscalStatusBadge__tbai_6b7cdb" />
+        ),
       });
     }
 
