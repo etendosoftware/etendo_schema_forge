@@ -1,8 +1,7 @@
 {
-  "version": "0.25.1",
-  "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-09-07T18:37:59.539Z",
-  "checksum": "ef6a4d3f7b7f7781",
+  "version": "0.1.0",
+  "generatedAt": "2026-09-09T12:56:47.915Z",
+  "checksum": "98704900fd40cc19",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -17,7 +16,8 @@
         "customForm": "AssignTemplateRolesControl"
       },
       "listViewOptions": {
-        "hidePrint": true
+        "hidePrint": true,
+        "hideLink": true
       },
       "customPanelTabs": [
         {
@@ -444,7 +444,8 @@
         "customForm": "AssignTemplateRolesControl"
       },
       "listViewOptions": {
-        "hidePrint": true
+        "hidePrint": true,
+        "hideLink": true
       },
       "customPanelTabs": [
         {
@@ -781,6 +782,14 @@
             "required": true
           },
           {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "grantPortalAccess",
             "apiKey": "grantPortalAccess",
             "column": "Grant_Portal_Access",
@@ -826,14 +835,6 @@
             "column": "Viasms",
             "type": "boolean",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
-            "visibility": "discarded",
             "required": true
           }
         ],
