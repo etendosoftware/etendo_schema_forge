@@ -459,7 +459,7 @@ export function ListFilterBar({
             onApplyPreset={onApplyPreset}
             onSavePreset={onSavePreset}
             onDeletePreset={onDeletePreset}
-            hasActiveFilter={hasActiveFilter}
+            hasActiveColumnFilter={hasActiveColumnFilter}
             labelOverrides={labelOverrides}
             data-testid="AdvancedFilterBuilder__6d5e90" />
         </PopoverContent>

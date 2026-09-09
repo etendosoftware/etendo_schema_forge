@@ -17310,6 +17310,8 @@
     "filterPresetPromptName": "Name for this filter preset:",
     "filterPresetOverwriteConfirm": "A preset named \"{name}\" already exists. Overwrite?",
     "filterPresetOverwriteAction": "Overwrite",
+    "filterPresetBlockedIncomplete": "Finish or remove the unfinished condition before saving this filter.",
+    "filterPresetBlockedEmpty": "Add at least one complete condition to save a filter.",
     "filterPresetDeleteConfirm": "Delete filter preset \"{name}\"?",
     "advancedFilterInSetPlaceholder": "Comma-separated values",
     "search": "Search",
