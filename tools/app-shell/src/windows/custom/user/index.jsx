@@ -505,30 +505,43 @@ export default function UserWindow(props) {
    */
   const handleAfterCreate = useCallback((saved) => {
     if (!saved?.id) return;
+    // ETP-5193 (Fix 4) — the "Configurar roles" action must not be offered when the
+    // saved user already has roles assigned. Role composition (`SFAssignUserRoles`)
+    // only ever fires from `onAfterExistingSave` (see B above) — the create path here
+    // never assigns template roles, and `selectedRoleIds` is explicitly reset to `[]`
+    // whenever this window is on the `'new'` route (see the effect above) — so under
+    // the CURRENT architecture this is always empty at create time, and the action
+    // would always render regardless. Gating on it anyway is a cheap, safe defensive
+    // guard against that invariant changing later (e.g. a future "duplicate user"
+    // flow that could pre-populate roles on creation), rather than a fix for a
+    // presently-reachable state.
+    const hasRolesAlready = selectedRoleIds.length > 0;
     toast.success(ui('userCreatedInvitationSentToast'), {
       id: RECORD_SAVE_TOAST_ID,
-      action: {
-        label: ui('configureRolesAction'),
-        onClick: () => {
-          navigate(`/${windowName}/${saved.id}`, {
-            replace: true,
-            state: { openSecondaryTab: 'custom:roles' },
-          });
-          // Deferred: `openSecondaryTab` is picked up by a `DetailView.jsx` effect on
-          // the next render tick, and `AssignTemplateRolesControl` (formFooter) may
-          // not have painted its expanded toggle yet on the very first render after
-          // create. Best-effort — if neither test-id is present (e.g. slow data load)
-          // this silently no-ops rather than throwing.
-          setTimeout(() => {
-            const target = document.querySelector('[data-testid="AssignTemplateRolesControl__toggle-expand"]')
-              ?? document.querySelector('[data-testid="AssignTemplateRolesControl__save-first"]');
-            target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-            target?.focus?.();
-          }, 50);
+      ...(hasRolesAlready ? {} : {
+        action: {
+          label: ui('configureRolesAction'),
+          onClick: () => {
+            navigate(`/${windowName}/${saved.id}`, {
+              replace: true,
+              state: { openSecondaryTab: 'custom:roles' },
+            });
+            // Deferred: `openSecondaryTab` is picked up by a `DetailView.jsx` effect on
+            // the next render tick, and `AssignTemplateRolesControl` (formFooter) may
+            // not have painted its expanded toggle yet on the very first render after
+            // create. Best-effort — if neither test-id is present (e.g. slow data load)
+            // this silently no-ops rather than throwing.
+            setTimeout(() => {
+              const target = document.querySelector('[data-testid="AssignTemplateRolesControl__toggle-expand"]')
+                ?? document.querySelector('[data-testid="AssignTemplateRolesControl__save-first"]');
+              target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+              target?.focus?.();
+            }, 50);
+          },
         },
-      },
+      }),
     });
-  }, [navigate, ui, windowName]);
+  }, [navigate, ui, windowName, selectedRoleIds]);
 
   return (
     <RoleSelectionProvider
