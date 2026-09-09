@@ -2460,6 +2460,23 @@ describe('NewPaymentEntryModal', () => {
         await waitFor(() => expect(screen.getByTestId('field-pisIban-chip'))
           .toHaveTextContent('DE89370400440532013000'));
       });
+
+      // ETP-5177: the placeholder used to be CreatableSearchSelect's generic
+      // `${searchLabelPrefix} ${resolvedLabel}...` composition ("Buscar IBAN Destino..."),
+      // which reads as search-only and hid the hand-typed path exercised above. The field
+      // now opts out via placeholderOverride. The useUI mock echoes keys, so the assertion
+      // is on the key itself.
+      it('advertises search AND manual entry in the IBAN placeholder', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        fireEvent.click(screen.getByTestId('field-pisIban-chip'));
+        const ibanInput = await screen.findByTestId('field-pisIban');
+
+        expect(ibanInput.getAttribute('placeholder')).toBe('cpPisIbanPlaceholder');
+        expect(ibanInput.getAttribute('placeholder')).not.toContain('searchLabelPrefix');
+      });
     });
 
     describe('template-driven creditor fields', () => {

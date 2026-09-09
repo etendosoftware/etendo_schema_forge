@@ -6,22 +6,16 @@
 // this function's Intl.NumberFormat call (without executing it) to detect
 // that tax rates need 2 fixed decimals ("21,00%"), unlike the canonical
 // default (no fixed decimals).
+//
+// csvField is NO LONGER declared here: ETP-5032 promoted it to that canonical
+// set, because it had been hand-copied into nine reports and every copy only
+// quoted the value — none of them neutralized spreadsheet formula injection
+// (CWE-1236, ADR-0004). template-csv.hbs keeps calling {{{csvField x}}}
+// unchanged; the canonical helper now also prefixes an apostrophe when the
+// value starts with a formula trigger.
 function formatNumber(value) {
   if (value == null) return '';
   var num = Number(value);
   if (isNaN(num)) return String(value);
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
-
-// csvField is a report-specific extra (ETP-4899, same pattern as other reports'
-// csvField) — quotes a CSV field and doubles any embedded quote, only when the
-// value actually needs it (contains a comma/quote/newline). Used exclusively by
-// template-csv.hbs; the HTML/PDF/XLSX templates never need it.
-function csvField(value) {
-  if (value == null) return '';
-  var s = String(value);
-  if (/[",\n\r]/.test(s)) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
 }
