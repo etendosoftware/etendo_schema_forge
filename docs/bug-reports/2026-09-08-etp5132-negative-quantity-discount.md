@@ -278,3 +278,8 @@ any file changed by this fix.
   `TotalDiscountService` sign-flip formula this fix's convention is derived from.
 - `docs/document-printables.md` — the five-entry-point/three-template model that required fixing
   the PDF template's hardcoded sign alongside the data builders, not just one or the other.
+- `docs/bug-reports/2026-09-09-etp5132-confirm-modal-double-discount.md` — a second, unrelated bug
+  found during this fix's exhaustive multi-window live verification (confirm/send-to-evaluation
+  modals double-apply the total discount for Draft documents), fixed in the same branch.
+- `docs/plans/2026-09-09-etp5132-consolidated-test-plan.md` — the full live test battery for both
+  bugs, combining this ticket's own acceptance cases with every case developed during verification.
