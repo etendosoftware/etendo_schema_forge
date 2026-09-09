@@ -34,6 +34,32 @@ export function resolveWindowPath(reference, index) {
   throw new UnknownWindowError(reference, index);
 }
 
+/**
+ * Append a record id to a resolved window path as the PATH SEGMENT the router
+ * actually reads.
+ *
+ * The app routes a single record at `:windowName/:recordId` (runtime-routes.jsx)
+ * — `/contacts/BC8D…`, never `/contacts?recordId=BC8D…`. `open_form` used to set
+ * a `recordId` SEARCH PARAM, which no route or page reads: the navigation
+ * succeeded, the list view rendered, and the tool answered `{ ok: true }` with a
+ * URL that looked right. The model had no way to tell it had not opened the
+ * record, so it reported success too.
+ *
+ * A trailing `/new` is dropped rather than kept: `/contacts/new/BC8D…` matches
+ * no route, and between "create a blank record" and "open this specific one"
+ * the explicit id is the more specific request. (`new` is itself just a
+ * `:recordId` value — see the note in BlockingBpBanner.jsx.)
+ *
+ * The id is encoded as one segment, so a value containing `/`, `?`, `#` or a
+ * backslash cannot add segments or escape the window — which is why this needs
+ * no second pass through assertInternalPath.
+ */
+export function withRecordSegment(path, recordId) {
+  if (recordId === undefined || recordId === null || recordId === '') return path;
+  const base = String(path).replace(/\/+$/, '').replace(/\/new$/, '');
+  return `${base}/${encodeURIComponent(String(recordId))}`;
+}
+
 const DOM_INTERACTIVE_SELECTOR = [
   'a[href]', 'button', 'input:not([type="hidden"]):not([type="password"])',
   'textarea', 'select', '[contenteditable="true"]',
@@ -233,11 +259,9 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
           break;
         }
         case 'open_form': {
-          const path = resolveWindowPath(args.path, windowRouteIndex);
-          const target = new URL(path, window.location.origin);
-          if (args.recordId) target.searchParams.set('recordId', String(args.recordId));
-          navigate(`${target.pathname}${target.search}`);
-          result = { ok: true, path: `${target.pathname}${target.search}` };
+          const path = withRecordSegment(resolveWindowPath(args.path, windowRouteIndex), args.recordId);
+          navigate(path);
+          result = { ok: true, path };
           break;
         }
         case 'get_current_context':
