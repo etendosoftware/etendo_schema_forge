@@ -414,18 +414,20 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     text: messageText(message),
   })).filter(message => message.text || message.role === 'user'), [chat.messages]);
 
+  // ETP-4576: no `token` in this gate. Under the cookie session the client holds none, so
+  // gating on it would swallow every message silently. authHeaders() already resolves the
+  // active scheme, and an unauthenticated request surfaces through the chat's error path.
   const sendMessage = useCallback(async (text) => {
     const value = text?.trim();
-    if (!value || !token) return;
+    if (!value) return;
     setInput('');
     await chat.sendMessage({ text: value });
-  }, [chat, token]);
+  }, [chat]);
 
   const requestPageHelp = useCallback(async () => {
-    if (!token) {
-      setPageHelpError('No hay una sesión disponible para analizar esta pantalla.');
-      return;
-    }
+    // ETP-4576: the missing-session case is no longer detectable from a token the client does
+    // not hold. A request without a session fails and lands in the catch below, which already
+    // reports it — gating here just made page help a no-op for every authenticated user.
     if (pageHelpChat.status !== 'ready') return;
     pageHelpPendingRef.current = true;
     setPageHelpActive(true);
@@ -448,7 +450,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
       setPageHelpActive(false);
       setPageHelpError(error instanceof Error ? error.message : 'No se pudo analizar esta pantalla.');
     }
-  }, [pageHelpChat, token]);
+  }, [pageHelpChat]);
 
   const showPageHelp = useCallback(() => {
     const suggestion = pageHelpSuggestion.trim();
