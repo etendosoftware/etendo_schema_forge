@@ -20,6 +20,25 @@ function computeIsDirtyHeader(editing, selected) {
   );
 }
 
+/**
+ * ETP-4839 follow-up: mirrors the `dirtyHeaderFieldKeys` useMemo in
+ * useEntity.js (the array `isDirtyHeader` above is now derived FROM, via
+ * `.length > 0`) — same divergence rule, but returns WHICH keys differ
+ * instead of collapsing to a boolean. Consumed by DetailView's
+ * completed-document save gate (see saveActions.jsx buildCompletedFieldsGate)
+ * to tell dirty-but-allowed apart from dirty-and-disallowed fields.
+ */
+function computeDirtyHeaderFieldKeys(editing, selected) {
+  if (!selected) {
+    return Object.keys(editing || {}).filter(
+      k => k !== 'id' && editing[k] != null && editing[k] !== '',
+    );
+  }
+  return Object.entries(editing || {})
+    .filter(([key, val]) => key !== 'id' && val !== selected[key])
+    .map(([key]) => key);
+}
+
 function mergeHeaderTotals(prev, serverRow, userChangedKeys) {
   if (!prev) return { ...serverRow };
   const merged = { ...prev };
@@ -82,6 +101,88 @@ describe('isDirtyHeader — new record (no selected)', () => {
 
   it('is false with undefined editing', () => {
     assert.equal(computeIsDirtyHeader(undefined, null), false);
+  });
+});
+
+describe('dirtyHeaderFieldKeys', () => {
+  describe('existing record', () => {
+    it('is empty when editing matches selected exactly (mirrors the false isDirtyHeader fixture)', () => {
+      const rec = { id: '1', businessPartner: 'BP1', paymentTerms: 'NET30' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys({ ...rec }, rec), []);
+    });
+
+    it('contains exactly the one field that differs from selected', () => {
+      const selected = { id: '1', businessPartner: 'BP1', paymentTerms: 'NET30' };
+      const editing = { ...selected, paymentTerms: 'NET60' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, selected), ['paymentTerms']);
+    });
+
+    it('excludes the id field even when it differs', () => {
+      const selected = { id: '1', businessPartner: 'BP1' };
+      const editing = { id: '999', businessPartner: 'BP1' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, selected), []);
+    });
+
+    it('contains the key when a field is set in editing but null in selected', () => {
+      const selected = { id: '1', notes: null };
+      const editing = { id: '1', notes: 'some note' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, selected), ['notes']);
+    });
+
+    it('is empty when both editing and selected have the same null value', () => {
+      const selected = { id: '1', notes: null };
+      const editing = { id: '1', notes: null };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, selected), []);
+    });
+
+    it('contains every key that diverges, in editing key-order, when several fields differ at once', () => {
+      const selected = { id: '1', businessPartner: 'BP1', paymentTerms: 'NET30', warehouse: 'W1' };
+      const editing = { id: '1', businessPartner: 'BP2', paymentTerms: 'NET30', warehouse: 'W2' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, selected), ['businessPartner', 'warehouse']);
+    });
+
+    it('is empty for empty editing', () => {
+      const selected = { id: '1', businessPartner: 'BP1' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys({}, selected), []);
+    });
+  });
+
+  describe('new record (no selected)', () => {
+    it('is empty when editing has no non-id fields with values', () => {
+      assert.deepEqual(computeDirtyHeaderFieldKeys({ id: undefined }, null), []);
+    });
+
+    it('is empty when editing has only null/empty non-id fields', () => {
+      assert.deepEqual(computeDirtyHeaderFieldKeys({ id: '1', businessPartner: null, notes: '' }, null), []);
+    });
+
+    it('contains exactly the one non-empty non-id field', () => {
+      assert.deepEqual(computeDirtyHeaderFieldKeys({ id: '1', businessPartner: 'BP1' }, null), ['businessPartner']);
+    });
+
+    it('contains every non-empty non-id field when several are set', () => {
+      const editing = { id: '1', businessPartner: 'BP1', notes: '', warehouse: 'W1' };
+      assert.deepEqual(computeDirtyHeaderFieldKeys(editing, null), ['businessPartner', 'warehouse']);
+    });
+
+    it('is empty with undefined editing', () => {
+      assert.deepEqual(computeDirtyHeaderFieldKeys(undefined, null), []);
+    });
+  });
+
+  it('is consistent with isDirtyHeader: isDirtyHeader === (dirtyHeaderFieldKeys.length > 0)', () => {
+    const cases = [
+      [{ id: '1', notes: 'x' }, { id: '1', notes: null }],
+      [{ id: '1', notes: null }, { id: '1', notes: null }],
+      [{ id: '1', businessPartner: 'BP1' }, null],
+      [{ id: '1' }, null],
+    ];
+    for (const [editing, selected] of cases) {
+      assert.equal(
+        computeIsDirtyHeader(editing, selected),
+        computeDirtyHeaderFieldKeys(editing, selected).length > 0,
+      );
+    }
   });
 });
 

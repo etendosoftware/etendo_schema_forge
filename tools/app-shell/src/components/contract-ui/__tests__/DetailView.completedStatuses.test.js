@@ -56,9 +56,38 @@ describe('DetailView — draftMode.completedStatuses (ETP-3873 regression)', () 
   });
 
   it('feeds the result to the Save-button gate', () => {
+    // ETP-4839: the literal `!isDraftModeCompleted` gate grew an OR-escape hatch
+    // (`draftMode?.keepSaveWhenCompletedFields?.length > 0`) so a window can opt
+    // into keeping the block rendered once completed (Save's own enabled/disabled
+    // state is then a SEPARATE per-field gate — see buildSaveGate /
+    // buildCompletedFieldsGate in saveActions.jsx, and
+    // DetailView.saveButtons.vitest.jsx for the behavioral coverage). This regex
+    // was updated alongside the boolean-flag -> string-array redesign; it
+    // previously pinned the boolean `keepSaveWhenCompleted === true` literal.
     assert.match(
       src,
-      /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*!isDraftModeCompleted/,
+      /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*\(\s*!isDraftModeCompleted\s*\|\|\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0\s*\)/,
+    );
+  });
+
+  // ETP-4839 — `draftMode.keepSaveWhenCompletedFields` lets a window keep the footer
+  // Save button visible once completed while Confirm stays hidden. Regression
+  // guard: the escape hatch must appear at BOTH call sites that gate
+  // renderSaveActions (saveActionsFirst and its !saveActionsFirst mirror), or a
+  // window using saveActionsFirst would silently lose the feature.
+  it('applies the keepSaveWhenCompletedFields escape hatch at both saveActionsFirst call sites (ETP-4839)', () => {
+    const pattern = /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*\(\s*!isDraftModeCompleted\s*\|\|\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0\s*\)\s*\n\s*&&\s*renderSaveActions\(saveActionParams\)/g;
+    const matches = src.match(pattern) || [];
+    assert.equal(matches.length, 2);
+  });
+
+  // ETP-4839 — `onlySaveButton` must be derived from the SAME isDraftModeCompleted
+  // this file already tests, not a second ad-hoc completion check, or the two
+  // could drift (e.g. one honoring completedStatuses, the other not).
+  it('derives saveActionParams.onlySaveButton from isDraftModeCompleted AND a non-empty keepSaveWhenCompletedFields (ETP-4839)', () => {
+    assert.match(
+      src,
+      /onlySaveButton:\s*isDraftModeCompleted\s*&&\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0/,
     );
   });
 });

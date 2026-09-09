@@ -29,6 +29,11 @@ const mockHook = {
   saving: false,
   isSaving: false,
   isDirtyHeader: false,
+  // ETP-4839 — the array of header field keys that differ from the last-saved
+  // record (see useEntity's dirtyHeaderFieldKeys memo). This mock is fully
+  // stubbed (useEntity itself is mocked below), so tests set this directly
+  // rather than deriving it from selected/editing.
+  dirtyHeaderFieldKeys: [],
   error: null,
   children: [],
   childrenLoading: false,
@@ -119,6 +124,7 @@ function resetHook() {
   mockNavigate.mockClear();
   mockHook.isSaving = false;
   mockHook.isDirtyHeader = false;
+  mockHook.dirtyHeaderFieldKeys = [];
   mockHook.children = [];
   mockHook.childrenLoading = false;
   mockHook.handleSave = vi.fn(() => Promise.resolve({ id: '123' }));
@@ -412,6 +418,130 @@ describe('DetailView toolbar order — saveActionsFirst', () => {
   it('lets saveActionsFirst=false override the order saveBeforeProcesses would impose', () => {
     render(<DetailView {...BASE_PROPS} processes={PROCESSES} saveBeforeProcesses saveActionsFirst={false} />);
     expect(orderOf()).toEqual(['process', 'save']);
+  });
+});
+
+// ETP-4839 — `draftMode.keepSaveWhenCompletedFields` (string[]) keeps the
+// footer "Save" (Guardar) button visible once the document reaches a
+// completed state, while "Confirm" stays hidden UNCONDITIONALLY — its handler
+// always sends processField, which some backends are not idempotent against
+// on an already-completed document (e.g. purchase-invoice re-confirm
+// duplicating discount lines). That part is unchanged from the original
+// boolean design.
+//
+// What's new: Save's own enabled/disabled state is a SEPARATE, fail-closed
+// per-field gate (see buildCompletedFieldsGate in saveActions.jsx). Once
+// completed, Save is enabled only when every DIRTY header field
+// (hook.dirtyHeaderFieldKeys) is named in keepSaveWhenCompletedFields — any
+// other dirty field disables Save with an explanatory title, even if it's
+// dirty ALONGSIDE an allowed field. Never a silent partial save of just the
+// allowed subset, never a silent save of everything.
+//
+// Without the flag (absent or an empty array), behavior is byte-identical to
+// the pre-ETP-4839 baseline: BOTH buttons hide together once completed.
+// purchase-invoice/decisions.json (`keepSaveWhenCompletedFields: ['orderReference']`,
+// "N° documento") is the first real consumer.
+describe('DetailView draftMode.keepSaveWhenCompletedFields (ETP-4839)', () => {
+  beforeEach(resetHook);
+
+  function completedRecord() {
+    // getDraftModeCompleted's default (no completedStatuses array) fallback is
+    // `isProcessed || documentStatus === 'CO'` — 'CO' alone is enough, no need
+    // to also flip `processed`.
+    return { id: '123', documentNo: 'PI-001', documentStatus: 'CO', processed: true };
+  }
+
+  it('regression — WITHOUT the flag, completing the document hides BOTH Save and Confirm (unchanged behavior)', () => {
+    mockHook.selected = completedRecord();
+    mockHook.editing = mockHook.selected;
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+    expect(screen.queryByTestId('action-save-draft')).toBeNull();
+    expect(screen.queryByTestId('action-save')).toBeNull();
+  });
+
+  it('with the flag but NOT completed — both buttons render normally (flag is a no-op until completion)', () => {
+    // resetHook() already seeds documentStatus: 'DR' (not completed).
+    const draftMode = {
+      enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process',
+      keepSaveWhenCompletedFields: ['orderReference'],
+    };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+    expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+  });
+
+  describe('with the flag AND completed', () => {
+    const draftModeWithFields = () => ({
+      enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process',
+      keepSaveWhenCompletedFields: ['orderReference'],
+    });
+
+    it('Confirm is absent from the DOM — not merely disabled/hidden', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-save')).toBeNull();
+      // Not just the button — the Confirm label/icon must be gone too.
+      expect(screen.queryByText('process')).toBeNull();
+    });
+
+    it('no dirty header fields → Save renders (dirtyHeaderFieldKeys empty, per-field gate is a no-op)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = [];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    });
+
+    it('the only dirty field IS in keepSaveWhenCompletedFields → Save is enabled', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['orderReference'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeInTheDocument();
+      // Other disabling conditions (isSaving, !isDirty, blockSaveForBalance) are
+      // all falsy here (BASE_PROPS.additionalDirtyState=true, no balanceFooter) —
+      // saveGate.blocked is the only variable under test.
+      expect(saveBtn).not.toBeDisabled();
+    });
+
+    it('a dirty field NOT in keepSaveWhenCompletedFields → Save is disabled with an explanatory reason (fail-closed)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['businessPartner'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeDisabled();
+      expect(saveBtn.getAttribute('data-missing-required')).toContain('businessPartner');
+      // GateTooltip wraps a disabled button in a titled <span> — a `title` on a
+      // disabled element never fires natively (see saveActions.jsx).
+      expect(saveBtn.closest('[title]')?.getAttribute('title')).toBeTruthy();
+    });
+
+    it('a MIX of allowed and disallowed dirty fields still blocks Save (never a silent partial save)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['orderReference', 'businessPartner'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeDisabled();
+      // Only the disallowed key is surfaced — the allowed one is not "missing".
+      expect(saveBtn.getAttribute('data-missing-required')).toBe('businessPartner');
+    });
+  });
+
+  it('a window without draftMode at all is unaffected by keepSaveWhenCompletedFields (dispatcher never reaches renderDraftModeSaveActions)', () => {
+    // Existing (non-new) record, completed status, NO draftMode prop — routes
+    // through renderExistingRecordSaveAction, which has no onlySaveButton
+    // concept at all. Save must render exactly as it always has.
+    mockHook.selected = completedRecord();
+    mockHook.editing = mockHook.selected;
+    render(<DetailView {...BASE_PROPS} />);
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-save-draft')).toBeNull();
   });
 });
 

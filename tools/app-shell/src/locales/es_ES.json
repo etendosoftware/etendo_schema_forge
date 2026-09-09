@@ -16832,6 +16832,7 @@
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
     "saveMissingRequired": "Completa primero los campos obligatorios: {fields}",
+    "saveBlockedFieldsNotAllowedWhenCompleted": "No se puede guardar: {fields} no se puede modificar junto con los campos permitidos en un documento completado",
     "journalUnbalancedCompleteBlocked": "El debe y el haber deben ser iguales y distintos de cero antes de completar",
     "totalCredit": "Total haber",
     "totalDebit": "Total debe",

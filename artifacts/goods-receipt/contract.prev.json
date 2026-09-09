@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.34.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-08-28T16:57:57.057Z",
-  "checksum": "d4bae3764d5905d7",
+  "updatedAt": "2026-09-09T16:24:27.061Z",
+  "checksum": "39fcb8df9c33c5d9",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -251,11 +251,6 @@
             "seq": 20,
             "validation": {
               "maxLength": 20
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
             }
           },
           {
@@ -3330,14 +3325,6 @@
         "description": "Read-only logic for 'ndDimension' in goodsReceipt should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsReceipt-orderReference",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsReceipt",
-        "field": "orderReference",
-        "runner": "node",
-        "description": "Read-only logic for 'orderReference' in goodsReceipt should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsReceipt-partnerAddress",
         "category": "readonlylogic-evaluable",
         "entity": "goodsReceipt",
@@ -3536,14 +3523,6 @@
         "field": "ndDimension",
         "runner": "node",
         "description": "Read-only logic for 'ndDimension' in goodsReceipt should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsReceipt-orderReference",
-        "category": "readonlylogic-valid",
-        "entity": "goodsReceipt",
-        "field": "orderReference",
-        "runner": "node",
-        "description": "Read-only logic for 'orderReference' in goodsReceipt should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsReceipt-partnerAddress",
@@ -4739,7 +4718,7 @@
       }
     ],
     "summary": {
-      "total": 290,
+      "total": 288,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
@@ -4748,8 +4727,8 @@
         "displaylogic-valid": 6,
         "field-presence": 34,
         "field-type": 34,
-        "readonlylogic-evaluable": 26,
-        "readonlylogic-valid": 26,
+        "readonlylogic-evaluable": 25,
+        "readonlylogic-valid": 25,
         "rule-declared": 38,
         "searchable-filters": 5,
         "selector-endpoint": 20,
@@ -4757,7 +4736,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 290,
+        "node": 288,
         "junit": 0
       }
     }

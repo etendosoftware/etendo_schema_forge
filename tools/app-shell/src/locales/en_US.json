@@ -16601,6 +16601,7 @@
     "difference": "Difference",
     "journalUnbalancedSaveBlocked": "Debit and credit must be equal before saving",
     "saveMissingRequired": "Complete the required fields first: {fields}",
+    "saveBlockedFieldsNotAllowedWhenCompleted": "Cannot save: {fields} cannot be changed together with the fields allowed on a completed document",
     "journalUnbalancedCompleteBlocked": "Debit and credit must be equal and non-zero before completing",
     "totalCredit": "Total credit",
     "totalDebit": "Total debit",
