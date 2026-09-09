@@ -80,7 +80,8 @@
           "accumulatedDepreciation",
           "depreciation"
         ],
-        "requireSavedRecord": true
+        "requireSavedRecord": true,
+        "visibleWhenCapability": "showAccountingFields"
       }
     },
     "detailEntity": null,
