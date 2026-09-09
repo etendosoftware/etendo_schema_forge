@@ -207,6 +207,31 @@ describe('computeDiscountBreakdown', () => {
     expect(-result.discountPerProduct).toBeCloseTo(0.5, 5);
   });
 
+  it('ETP-5132: exposes discountPerProduct/totalDiscountAmt so callers gate on !== 0 (not > 0) and sign-flip for display — single source of truth for useInvoicePdf.js and useQuotationPdf.js, which both apply this exact contract to this function\'s return value', () => {
+    // No discount at all: discountPerProduct comes back exactly 0 — the
+    // "!== 0" gate a caller applies must be OFF here.
+    const noDiscountLines = [{ quantity: 1, unitPrice: 100, lineNetAmount: 100 }];
+    const none = computeDiscountBreakdown(noDiscountLines, 0, getGrossLine);
+    expect(none.discountPerProduct).toBe(0);
+    expect(none.discountPerProduct !== 0).toBe(false);
+
+    // A negative-quantity (return) line makes discountPerProduct AND
+    // totalDiscountAmt come back negative, not positive. A caller gating on
+    // "> 0" would silently hide this real discount; the gate must be "!== 0".
+    const returnLines = [{ quantity: -1, unitPrice: 5, lineNetAmount: -4.5 }];
+    const withDiscount = computeDiscountBreakdown(returnLines, 10, getGrossLine);
+    expect(withDiscount.discountPerProduct).toBeCloseTo(-0.5, 5);
+    expect(withDiscount.totalDiscountAmt).toBeCloseTo(-0.45, 5);
+    expect(withDiscount.discountPerProduct !== 0).toBe(true);
+    expect(withDiscount.discountPerProduct > 0).toBe(false); // ">0" would have missed it
+    expect(withDiscount.totalDiscountAmt !== 0).toBe(true);
+    expect(withDiscount.totalDiscountAmt > 0).toBe(false);
+
+    // Callers print the sign-flipped magnitude (positive) for both fields.
+    expect(-withDiscount.discountPerProduct).toBeCloseTo(0.5, 5);
+    expect(-withDiscount.totalDiscountAmt).toBeCloseTo(0.45, 5);
+  });
+
   it('returns zero values for empty lines array', () => {
     const result = computeDiscountBreakdown([], 0, getGrossLine);
     expect(result.grossAmount).toBe(0);

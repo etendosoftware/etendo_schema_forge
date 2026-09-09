@@ -201,20 +201,9 @@ describe('useInvoicePdf', () => {
       assert.match(sharedSrc, /etgoTotalDiscount > 0 \? productNetAmount \* etgoTotalDiscount/);
     });
 
-    it('ETP-5132: passes null for grossAmount only when discountPerProduct is exactly 0 (gate is !== 0, not > 0)', () => {
-      assert.match(src, /discountPerProduct !== 0 \? grossAmount : null/);
-      assert.doesNotMatch(src, /discountPerProduct > 0 \? grossAmount : null/);
-    });
-
-    it('ETP-5132: passes the sign-flipped -discountPerProduct (positive display value) when a discount is applied', () => {
-      assert.match(src, /discountPerProduct !== 0 \? -discountPerProduct : null/);
-      assert.doesNotMatch(src, /discountPerProduct > 0 \? discountPerProduct : null/);
-    });
-
-    it('ETP-5132: passes the sign-flipped -totalDiscountAmt (positive display value), gated on !== 0', () => {
-      assert.match(src, /totalDiscountAmt !== 0 \? -totalDiscountAmt : null/);
-      assert.doesNotMatch(src, /totalDiscountAmt > 0 \? totalDiscountAmt : null/);
-    });
+    // The !== 0 gate / sign-flip contract (discountPerProduct, totalDiscountAmt)
+    // is tested once, behaviorally, against the shared computeDiscountBreakdown
+    // function in documentPdfHelpers.vitest.jsx — see its ETP-5132 test.
 
     it('uses invoicedQuantity (not orderedQuantity) inside getGrossLine', () => {
       assert.match(src, /l\.invoicedQuantity \?\? l\.qtyInvoiced/);
