@@ -57,16 +57,16 @@ describe('DetailView — draftMode.completedStatuses (ETP-3873 regression)', () 
 
   it('feeds the result to the Save-button gate', () => {
     // ETP-4839: the literal `!isDraftModeCompleted` gate grew an OR-escape hatch
-    // (`draftMode?.keepSaveWhenCompletedFields?.length > 0`) so a window can opt
-    // into keeping the block rendered once completed (Save's own enabled/disabled
-    // state is then a SEPARATE per-field gate — see buildSaveGate /
-    // buildCompletedFieldsGate in saveActions.jsx, and
-    // DetailView.saveButtons.vitest.jsx for the behavioral coverage). This regex
-    // was updated alongside the boolean-flag -> string-array redesign; it
-    // previously pinned the boolean `keepSaveWhenCompleted === true` literal.
+    // so a window can opt into keeping the block rendered once completed (Save's
+    // own enabled/disabled state is then a SEPARATE per-field gate — see
+    // buildSaveGate/buildCompletedFieldsGate in saveActions.jsx, and
+    // DetailView.saveButtons.vitest.jsx for the behavioral coverage). The escape
+    // hatch itself was extracted to the module-level `shouldRenderSaveActionsRow`
+    // helper (S3776 cognitive-complexity fix) rather than inlined here, so this
+    // regex now pins the CALL, not the boolean expression it used to inline.
     assert.match(
       src,
-      /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*\(\s*!isDraftModeCompleted\s*\|\|\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0\s*\)/,
+      /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*shouldRenderSaveActionsRow\(\s*isDraftModeCompleted,\s*draftMode\s*\)/,
     );
   });
 
@@ -75,19 +75,37 @@ describe('DetailView — draftMode.completedStatuses (ETP-3873 regression)', () 
   // guard: the escape hatch must appear at BOTH call sites that gate
   // renderSaveActions (saveActionsFirst and its !saveActionsFirst mirror), or a
   // window using saveActionsFirst would silently lose the feature.
-  it('applies the keepSaveWhenCompletedFields escape hatch at both saveActionsFirst call sites (ETP-4839)', () => {
-    const pattern = /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*\(\s*!isDraftModeCompleted\s*\|\|\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0\s*\)\s*\n\s*&&\s*renderSaveActions\(saveActionParams\)/g;
+  it('applies the shouldRenderSaveActionsRow escape hatch at both saveActionsFirst call sites (ETP-4839)', () => {
+    const pattern = /!hideSaveStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)\s*&&\s*shouldRenderSaveActionsRow\(\s*isDraftModeCompleted,\s*draftMode\s*\)\s*\n\s*&&\s*renderSaveActions\(saveActionParams\)/g;
     const matches = src.match(pattern) || [];
     assert.equal(matches.length, 2);
   });
 
   // ETP-4839 — `onlySaveButton` must be derived from the SAME isDraftModeCompleted
   // this file already tests, not a second ad-hoc completion check, or the two
-  // could drift (e.g. one honoring completedStatuses, the other not).
-  it('derives saveActionParams.onlySaveButton from isDraftModeCompleted AND a non-empty keepSaveWhenCompletedFields (ETP-4839)', () => {
+  // could drift (e.g. one honoring completedStatuses, the other not). The check
+  // itself lives in the module-level `onlySaveButtonForCompletedDoc` helper
+  // (S3776 cognitive-complexity fix), so this regex pins the CALL.
+  it('derives saveActionParams.onlySaveButton from onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode) (ETP-4839)', () => {
     assert.match(
       src,
-      /onlySaveButton:\s*isDraftModeCompleted\s*&&\s*draftMode\?\.keepSaveWhenCompletedFields\?\.length\s*>\s*0/,
+      /onlySaveButton:\s*onlySaveButtonForCompletedDoc\(\s*isDraftModeCompleted,\s*draftMode\s*\)/,
+    );
+  });
+
+  // ETP-4839 — the extraction itself: both helpers must be genuine module-level
+  // functions (not inline in DetailView's body / not nested closures), which is
+  // what keeps this logic off DetailView's own S3776 score. A regression here
+  // (e.g. someone inlining the logic back into DetailView "for clarity") would
+  // silently reintroduce the CRITICAL Sonar finding this refactor fixed.
+  it('declares shouldRenderSaveActionsRow and onlySaveButtonForCompletedDoc as module-level functions, each equivalent to the pre-extraction inline expression', () => {
+    assert.match(
+      src,
+      /function shouldRenderSaveActionsRow\(isDraftModeCompleted, draftMode\) \{ return !isDraftModeCompleted \|\| \(Array\.isArray\(draftMode\?\.keepSaveWhenCompletedFields\) && draftMode\.keepSaveWhenCompletedFields\.length > 0\); \}/,
+    );
+    assert.match(
+      src,
+      /function onlySaveButtonForCompletedDoc\(isDraftModeCompleted, draftMode\) \{ return isDraftModeCompleted && shouldRenderSaveActionsRow\(isDraftModeCompleted, draftMode\); \}/,
     );
   });
 });

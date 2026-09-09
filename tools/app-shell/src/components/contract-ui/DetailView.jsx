@@ -882,6 +882,9 @@ function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField)
       )
   );
 }
+// ETP-4839 — extracted out of DetailView's body so this stays off its S3776 score.
+function shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode) { return !isDraftModeCompleted || (Array.isArray(draftMode?.keepSaveWhenCompletedFields) && draftMode.keepSaveWhenCompletedFields.length > 0); }
+function onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode) { return isDraftModeCompleted && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode); }
 
 export function getDetailContentContainerClassName({
   linesLayout,
@@ -1555,10 +1558,7 @@ export function DetailView({
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
   const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
-  // ETP-4933/ETP-4839: the required-field + completed-document-fields gate every
-  // primary persist button honours. Declared HERE (after isDraftModeCompleted, still
-  // before the loading-state early return below) so a useMemo below it runs on some
-  // renders and not others — "Rendered fewer hooks than expected" — never happens.
+  // ETP-4933/ETP-4839: gate for every persist button — must stay before the loading-state early return below (hook order).
   const saveGate = useMemo(
     () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui, draftMode, isDraftModeCompleted, dirtyFieldKeys: hook.dirtyHeaderFieldKeys, gateFields }),
     [hook.isValid, hook.missingRequiredFields, tField, ui, draftMode, isDraftModeCompleted, hook.dirtyHeaderFieldKeys, gateFields],
@@ -2837,11 +2837,11 @@ export function DetailView({
     );
   }
 
-const saveActionParams = {
+  const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: isDraftModeCompleted && draftMode?.keepSaveWhenCompletedFields?.length > 0,
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2954,7 +2954,7 @@ const saveActionParams = {
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
-              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && (!isDraftModeCompleted || draftMode?.keepSaveWhenCompletedFields?.length > 0)
+              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && !windowReadOnly && processes
@@ -3040,7 +3040,7 @@ const saveActionParams = {
                   );
                 })}
 
-              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && (!isDraftModeCompleted || draftMode?.keepSaveWhenCompletedFields?.length > 0)
+              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
                  Both live in this one flex row, so source order is visual order, and the
