@@ -36,7 +36,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
     selectedRole: { orgList: [] },
     selectedOrg: { id: 'org1' },
   }),
-  useWindowAccess: () => mockFinanceWindowAccessTier,
+  useWindowAccess: vi.fn(() => mockFinanceWindowAccessTier),
   WindowAccessGuard: (props) => (
     <div data-testid="window-access-guard" data-window-id={props.windowId} />
   ),
@@ -82,6 +82,7 @@ import ReportViewerPage, {
   getSelectorButtonTitle,
   applyProductSelectorScopeParams,
 } from '../ReportViewerPage.jsx';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 
 describe('getSelectorPlaceholderLabel', () => {
   it('shows count when multi and items selected', () => {
@@ -485,6 +486,7 @@ describe('ReportViewerPage', () => {
 
 describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
   beforeEach(() => {
+    vi.mocked(useWindowAccess).mockClear();
     mockSetSearchParams.mockClear();
     mockFinanceWindowAccessTier = 'full';
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -506,6 +508,7 @@ describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
     mockFinanceWindowAccessTier = 'none';
     render(<ReportViewerPage />);
 
+    expect(useWindowAccess).toHaveBeenCalledWith('D647D118F5014D00AF47A636B2CD0DD3');
     expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
       'data-window-id',
       'D647D118F5014D00AF47A636B2CD0DD3',
@@ -564,6 +567,7 @@ describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
     mockFinanceWindowAccessTier = 'none';
     render(<ReportViewerPage />);
 
+    expect(useWindowAccess).toHaveBeenCalledWith('6346B88619F948F9A42224BDB0B239FA');
     expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
       'data-window-id',
       '6346B88619F948F9A42224BDB0B239FA',

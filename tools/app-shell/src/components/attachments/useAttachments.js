@@ -4,21 +4,11 @@ import { useUI } from '@/i18n';
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-/**
- * Format a byte size into a human readable string.
- *
- * @param {number} bytes - Raw size in bytes.
- * @returns {string} A short, locale-agnostic representation (e.g. "1.2 MB").
- */
-export function formatBytes(bytes) {
-  if (bytes == null || Number.isNaN(bytes)) return '—';
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const idx = Math.min(Math.floor(Math.log(Math.abs(bytes)) / Math.log(1024)), units.length - 1);
-  const value = bytes / (1024 ** idx);
-  return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
-}
-
+// Re-exported so this module's public surface (and its tests) are unchanged; the
+// implementation moved to `lib/` so a caller that wants only the formatter does not
+// have to import a React hook module — and the `@/i18n` barrel — to get it.
+export { formatBytes } from '@/lib/formatBytes.js';
+import { formatBytes } from '@/lib/formatBytes.js';
 /**
  * Trigger a browser download for a binary blob.
  *
