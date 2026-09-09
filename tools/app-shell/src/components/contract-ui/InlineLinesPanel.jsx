@@ -431,7 +431,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -658,7 +658,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          className="w-full h-7 text-sm bg-card focus:ring-2 focus:ring-primary"
+          className="w-full h-7 text-sm bg-card focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
         </SelectTrigger>
