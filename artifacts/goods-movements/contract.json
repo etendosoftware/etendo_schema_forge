@@ -1,7 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "checksum": "adbcca35cb666fa1",
+  "updatedAt": "2026-09-07T23:51:02.313Z",
+  "checksum": "bc6284c27edb979c",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -389,6 +390,10 @@
                   "warehouse$_identifier",
                   "storageBin"
                 ]
+              },
+              {
+                "value": "0",
+                "to": "movementQuantity"
               }
             ],
             "gridOrder": 1,

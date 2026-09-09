@@ -71,7 +71,8 @@ import DetailSidePanel from './DetailSidePanel.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard,
+  resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -116,7 +117,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
+  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -722,22 +723,6 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-// Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
-// priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
-// the header's, so without this prune the callout would receive businessPartner=null and NEO
-// returns listPrice=0. The addRow flow doesn't hit this because it starts from an empty values
-// object, but existing rows include denormalized parent keys.
-function pruneInheritedParentKeys(row, headerSnapshot) {
-  const cleanRow = { ...row };
-  for (const k of Object.keys(headerSnapshot)) {
-    const v = cleanRow[k];
-    if (v === null || v === undefined || v === '') {
-      delete cleanRow[k];
-    }
-  }
-  return cleanRow;
-}
-
 export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
@@ -797,6 +782,9 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     }
     // 3. The user-changed field always wins (last-write).
     fieldValues[fieldKey] = payloadValue;
+    // 4. Declarative onSelectMappings for the field just picked (ETP-5037) — see
+    // applySelectedItemMappings in detailViewHelpers.jsx.
+    applySelectedItemMappings(fieldKey, selectedItem, fields, fieldValues, derivedUpdates, coerce);
 
     // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
     // Without this the backend keeps the pre-discount PriceActual and
@@ -1556,6 +1544,12 @@ export function DetailView({
   // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
   // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
   const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+  // ETP-5233: role-tier-only signal for the kebab menu — a window that's statically
+  // read-only by design (decisions.json `api.window.readOnly`) can still expose
+  // document actions like Post/Unpost (see matched-purchase-invoices); only an actual
+  // ETP-4520 role-tier read-only-access restriction (`windowProp.readOnly`) should hide
+  // them. Everything else above keeps using the combined `windowReadOnly`.
+  const menuActionsReadOnly = windowProp?.readOnly === true;
   const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
@@ -2441,7 +2435,7 @@ export function DetailView({
     } catch {
       // Callout is best-effort
     }
-  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch]);
+  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch, ui]);
 
   const data = transformRecord ? transformRecord(hook.editing || currentItem || {}) : (hook.editing || currentItem || {});
   // ETP-5052: display-only `data` + `hasLines` merge for HEADER `<Form>` calls only — see buildHeaderFormData in detailViewHelpers.jsx. Never persisted.
@@ -2949,7 +2943,7 @@ export function DetailView({
                 sqBtnSize={sqBtnSize}
                 statusField={statusField}
                 token={token}
-                ui={ui} windowReadOnly={windowReadOnly}
+                ui={ui} windowReadOnly={menuActionsReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}

@@ -1,3 +1,8 @@
+// Relative import (not the `@/lib/...` alias): this module is exercised by
+// `fiscalTargets.test.js` via plain `node --test` (see Makefile), which has no
+// alias resolution — only Vitest-run specs can use the `@` alias.
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
+
 /**
  * Which fiscal systems (SII / TicketBAI / VERI*FACTU) apply to a given document.
  *
@@ -57,4 +62,118 @@ export function getInvoiceFiscalTargets(specName, profile, territory = null) {
   }
 
   return { showSii: false, showTbai: false, showVerifactu: false };
+}
+
+/**
+ * Whether a document's reference date makes it eligible for a given fiscal
+ * system (SII / TicketBAI / VERI*FACTU), given that system's "adoption date"
+ * for the organization.
+ *
+ * Generalized from the TBAI-only gate (ETP-5122) so the same "no status before
+ * adoption" rule applies to TBAI and SII, each compared against the date-only
+ * business field Classic itself uses for that system (ETP-5122 follow-up):
+ *   - **TBAI**: invoice date (`invoiceDate`) vs. `tbaiRecord.tbaisystemdate`.
+ *     Mirrors Classic's `TBAI_ExistConfigAndIsAvailable` auxiliary input
+ *     (`TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate`) and
+ *     the server-side backstop `SynchronizeUtils.validateConfigAndInvoiceDates`.
+ *   - **SII**: accounting date (`accountingDate`, NOT invoice date) vs.
+ *     `siiRecord.fechaAcogidaSII`. Classic's `AEATSII_PreSII_Invoice` auxiliary
+ *     input compares `DateAcct`, not `DateInvoiced` — SII books by accounting
+ *     date, so this is a deliberate asymmetry, not an oversight.
+ *
+ * **VERI*FACTU does NOT use this function** — see {@link isVerifactuEligibleByDate}.
+ * Classic's `InvoiceSendingListener.invoiceMadeWithConfigPresent()` compares the
+ * invoice's record-creation timestamp (`getCreationDate()`), not `invoiceDate`,
+ * and neither side of that comparison is a date-only value to truncate
+ * (ETP-5122 follow-up correction — VERI*FACTU was originally, incorrectly,
+ * wired through this same date-only gate on `invoiceDate`).
+ *
+ * Both sides compare the reference date **truncated to midnight** (it is a
+ * date-only AD field) against the config's **full timestamp** (the adoption
+ * date can carry a real time-of-day component — it is set at whatever moment
+ * the org enabled the system). This is NOT a same-calendar-day comparison: a
+ * document dated the same day the org adopted the system, but before the exact
+ * adoption timestamp, is still ineligible — exactly like Classic.
+ *
+ * `referenceDateRaw` is parsed via `parseCalendarDate` (never a raw
+ * `new Date(string)` on a date-only value — see `docs/i18n-guide.md`'s sibling
+ * rule in CLAUDE.md on date-only parsing) so the calendar day is never shifted
+ * by the host's timezone offset. `adoptionDateRaw` is a genuine timestamp (not
+ * a date-only value), so parsing it with `new Date(...)` and comparing epoch
+ * millis is safe — no local calendar getters are read off it.
+ *
+ * Fail-safe: with no config / no adoption date on file, or an unparsable
+ * reference date, eligibility cannot be confirmed, so this returns `false`
+ * (same as Classic's auxiliary input, which returns 0 when no config row
+ * exists).
+ *
+ * @param {string|null|undefined} referenceDateRaw the document's date-only field
+ *   used by that system (`invoiceDate` for TBAI/VERI*FACTU, `accountingDate` for SII)
+ * @param {string|null|undefined} adoptionDateRaw the system's adoption date/timestamp
+ *   for the organization (`tbaiRecord.tbaisystemdate`, `verifactuRecord.inVfactuSystem`,
+ *   `siiRecord.fechaAcogidaSII`)
+ * @returns {boolean}
+ */
+export function isSifEligibleByDate(referenceDateRaw, adoptionDateRaw) {
+  if (!adoptionDateRaw) return false;
+
+  const referenceDay = parseCalendarDate(referenceDateRaw);
+  if (!referenceDay) return false;
+
+  const adoptionInstant = new Date(adoptionDateRaw);
+  if (Number.isNaN(adoptionInstant.getTime())) return false;
+
+  return referenceDay.getTime() >= adoptionInstant.getTime();
+}
+
+/**
+ * VERI*FACTU-specific eligibility gate.
+ *
+ * Unlike TBAI (`invoiceDate`) and SII (`accountingDate`), Classic's VERI*FACTU
+ * gate does NOT compare a business date at all. `InvoiceSendingListener
+ * .invoiceMadeWithConfigPresent()` (module `com.etendoerp.verifactu`) reads
+ * `i.getCreationDate()` — the record's real creation timestamp — not
+ * `i.getInvoiceDate()`:
+ *
+ * ```java
+ * Date invoiceCreationDate = i.getCreationDate();
+ * return invoiceCreationDate.equals(configVFactuSystem)
+ *     || invoiceCreationDate.after(configVFactuSystem);
+ * ```
+ *
+ * Both sides of this comparison are genuine timestamps (the invoice's `Created`
+ * audit column and the config's adoption timestamp), so — unlike
+ * {@link isSifEligibleByDate}, which truncates one side to a calendar day
+ * because TBAI/SII compare against date-only business fields — neither side is
+ * truncated here. `createdRaw` must be parsed as a full instant via
+ * `new Date(...)`, never `parseCalendarDate` (which would incorrectly collapse
+ * it to local midnight).
+ *
+ * @param {string|null|undefined} createdRaw the invoice's `created` field
+ *   (column `Created` — record creation timestamp, NOT `invoiceDate`)
+ * @param {string|null|undefined} adoptionDateRaw `verifactuRecord.inVfactuSystem`
+ * @returns {boolean}
+ */
+export function isVerifactuEligibleByDate(createdRaw, adoptionDateRaw) {
+  if (!adoptionDateRaw) return false;
+
+  const createdInstant = new Date(createdRaw);
+  if (Number.isNaN(createdInstant.getTime())) return false;
+
+  const adoptionInstant = new Date(adoptionDateRaw);
+  if (Number.isNaN(adoptionInstant.getTime())) return false;
+
+  return createdInstant.getTime() >= adoptionInstant.getTime();
+}
+
+/**
+ * @deprecated Use {@link isSifEligibleByDate} directly — kept as a thin wrapper
+ * so existing TBAI call sites (`sifSending.js`) do not need to change. New code
+ * (SII / VERI*FACTU gates) should call `isSifEligibleByDate` directly.
+ * @param {string|null|undefined} invoiceDateRaw the invoice's date-only field (e.g. `invoiceDate`)
+ * @param {string|null|undefined} tbaiSystemDateRaw `tbaiRecord.tbaisystemdate` (a timestamp)
+ * @returns {boolean}
+ */
+export function isTbaiEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw) {
+  return isSifEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw);
 }
