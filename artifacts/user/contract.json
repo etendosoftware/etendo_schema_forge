@@ -1,8 +1,7 @@
 {
-  "version": "0.25.0",
-  "generatedAt": "2026-08-19T19:01:09.365Z",
-  "updatedAt": "2026-09-08T17:17:35.336Z",
-  "checksum": "8bcb4ba63197f5ab",
+  "version": "0.1.0",
+  "generatedAt": "2026-09-09T12:56:47.915Z",
+  "checksum": "98704900fd40cc19",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -143,7 +142,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": true,
             "reference": "BusinessPartner",
             "inputMode": "search",
@@ -182,7 +181,7 @@
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -783,6 +782,14 @@
             "required": true
           },
           {
+            "name": "eTGOIsOwner",
+            "apiKey": "eTGOIsOwner",
+            "column": "EM_ETGO_Is_Owner",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
             "name": "grantPortalAccess",
             "apiKey": "grantPortalAccess",
             "column": "Grant_Portal_Access",
@@ -828,14 +835,6 @@
             "column": "Viasms",
             "type": "boolean",
             "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "eTGOIsOwner",
-            "apiKey": "eTGOIsOwner",
-            "column": "EM_ETGO_Is_Owner",
-            "type": "boolean",
-            "visibility": "discarded",
             "required": true
           }
         ],

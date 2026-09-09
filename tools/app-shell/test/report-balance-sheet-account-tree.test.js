@@ -681,8 +681,14 @@ function renderCsv({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
 }
 
 describe('balance-sheet helpers.js', () => {
-  it('declares csvField (the CSV template depends on it)', () => {
-    assert.match(HELPERS_CODE, /function csvField\s*\(/);
+  // ETP-5032 — csvField is no longer declared per report: it moved into the
+  // canonical helper set, because all nine copies quoted the value without
+  // neutralizing spreadsheet formula injection. What the CSV template actually
+  // depends on is the helper being present in the string jsreport receives, so
+  // that is what is asserted; the artifact file must NOT redeclare it (a local
+  // copy would be stripped as canonical, leaving a silently dead function).
+  it('does not redeclare csvField locally', () => {
+    assert.doesNotMatch(HELPERS_CODE, /function csvField\s*\(/);
   });
 
   it('is exposed to jsreport through buildJsreportHelpersString', () => {

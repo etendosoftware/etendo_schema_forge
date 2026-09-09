@@ -77,9 +77,9 @@
         },
         "locked": {
           "visibility": "readOnly",
-          "grid": true,
+          "grid": false,
           "section": "security",
-          "reason": "Account lock status, typically system-managed but visible for admin review"
+          "reason": "ETP-5198: removed from grid/filters — read-only, system-managed field, not editable from the grid and should not be offered as a list column or advanced-filter option. Account lock status remains visible on the detail form for admin review."
         },
         "active": {
           "visibility": "editable",
@@ -96,10 +96,11 @@
         },
         "businessPartner": {
           "visibility": "editable",
-          "grid": true,
+          "grid": false,
           "section": "details",
           "inputMode": "search",
-          "reference": "BusinessPartner"
+          "reference": "BusinessPartner",
+          "reason": "ETP-5198: removed from grid/filters — not editable inline from the grid (a search-lookup field), so it should not be offered as a list column or advanced-filter option. Still editable on the detail form."
         },
         "phone": {
           "visibility": "editable",

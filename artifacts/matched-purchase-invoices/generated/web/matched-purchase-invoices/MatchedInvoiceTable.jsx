@@ -8,7 +8,6 @@ const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true },
   { key: 'quantity', column: 'Qty', type: 'number', label: 'Quantity', required: true },
   { key: 'transactionDate', column: 'DateTrx', type: 'date', label: 'Transaction Date', required: true, dot: false },
-  { key: 'processed', column: 'Processed', type: 'boolean', label: 'Processed', badge: true, badgeLabels: {"true":{"en_US":"Yes","es_ES":"Sí"},"false":{"en_US":"No","es_ES":"No"}}, required: true },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true, visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end columns:matchedInvoice
