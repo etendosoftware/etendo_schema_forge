@@ -201,7 +201,8 @@
           "name": "report-viewer-inventory",
           "label": "Reports",
           "favname": "Inventory Reports",
-          "path": "report-viewer?category=inventory"
+          "path": "report-viewer?category=inventory",
+          "windowId": "6346B88619F948F9A42224BDB0B239FA"
         },
         {
           "name": "warehouse-storage-bins",
@@ -378,7 +379,8 @@
           "name": "report-viewer-finance",
           "label": "Reports",
           "favname": "Finance Reports",
-          "path": "report-viewer?category=finance"
+          "path": "report-viewer?category=finance",
+          "windowId": "D647D118F5014D00AF47A636B2CD0DD3"
         }
       ]
     },
@@ -439,7 +441,7 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "hidden": true
+          "windowId": "33705E0F52874D91B0BB2FF8BB648B8E"
         },
         {
           "name": "oauth2-clients",
@@ -451,7 +453,8 @@
         {
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
-          "favname": "Fiscal Configuration"
+          "favname": "Fiscal Configuration",
+          "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
         }
       ]
     },

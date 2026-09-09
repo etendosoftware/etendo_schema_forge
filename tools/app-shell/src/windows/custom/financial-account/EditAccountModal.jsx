@@ -31,7 +31,7 @@ import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEl
 import { normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
-import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
 
@@ -210,7 +210,10 @@ function notifySyncResult(res, ui) {
   if (res?.status === 'ERROR') {
     toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
   } else if (res?.status === 'WARNING') {
-    toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
+    // ETP-5181: a WARNING carries something the user has to act on — most often "your import
+    // range reaches further back than this provider serves" — so it must not read as a neutral
+    // notice. The sync itself did complete; only the wording is downgraded, not the outcome.
+    toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
   } else {
     toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
   }
@@ -553,6 +556,38 @@ function isImportRangeInvalid({ importFromDate, importToDate } = {}) {
 }
 
 /**
+ * ETP-5181. Whether "Importar desde" reaches further back than the bank will serve, and from
+ * which date it actually will.
+ *
+ * PSD2 providers publish a `max_fetch_interval` (90 days under the regulation's baseline, more
+ * for some banks) and the account's provider record carries it; the bridge exposes it on
+ * `GET status` as `maxFetchInterval`. A missing or non-positive limit means the provider never
+ * published one, and we advise nothing rather than guess.
+ *
+ * Advisory only, deliberately: it does not block Save. The date stays exactly as typed, because
+ * the range is applied as a LOCAL filter over whatever the provider returns (Salt Edge ignores
+ * from_date/to_date — see BankIntegrationUtils.buildSaltEdgeTransactionsEndpoint), so an
+ * over-long range loses nothing inside the window that IS available. The point is only to stop
+ * the user expecting history the bank will never hand over.
+ *
+ * The comparison is plain string `<` on two `yyyy-MM-dd` values: ISO date-only strings order
+ * lexicographically, so no `Date` is built here and there is no timezone to get wrong. The bound
+ * itself comes from `calendarISODaysAgo`, which does the local-calendar arithmetic.
+ */
+function importFromBeyondFetchInterval(importFromDate, maxFetchInterval) {
+  if (!importFromDate) return null;
+  // Finiteness FIRST, then a positive comparison. Do not collapse this into `maxFetchInterval <= 0`
+  // (what Sonar's S1940 proposes for the equivalent `!(maxFetchInterval > 0)`): the bridge OMITS
+  // the key when the provider declares no limit, and `undefined <= 0` is false, so that rewrite
+  // would fall through on the commonest case and build the bound from NaN. `NaN <= 0` is false
+  // too. Stating finiteness explicitly says what the guard is actually for and keeps the
+  // comparison uninverted.
+  if (!Number.isFinite(maxFetchInterval) || maxFetchInterval <= 0) return null;
+  const earliest = calendarISODaysAgo(maxFetchInterval);
+  return importFromDate < earliest ? { days: maxFetchInterval, earliest } : null;
+}
+
+/**
  * Bank connection panel state + actions.
  *
  * Covers both live connections and soft-disconnected ones: a deactivated connection still needs
@@ -653,6 +688,13 @@ function useBankConnection(
   return {
     status, loading, busy, form, setForm, refresh, connected, reconnectable,
     hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
+    // Derived from `form`, not from `initial`, so it covers both halves of the requirement with
+    // no extra wiring: `form` is hydrated from GET status when the modal opens (so an account
+    // already saved with an out-of-range date advises immediately, untouched) and rewritten on
+    // every keystroke of the date box (so it tracks edits).
+    fetchIntervalWarning: importFromBeyondFetchInterval(
+      form.importFromDate, status?.maxFetchInterval,
+    ),
     handleSync, handleReconnect, handleDisconnect, handleDeleteConnection,
   };
 }
@@ -1766,6 +1808,28 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
           {ui('financeAccountsMenuSyncNow')}
         </button>
       </div>
+
+      {/* ETP-5181. Deliberately a banner at the top of the panel, not small print under the grid:
+          as a one-line hint it sat right next to the far louder re-authorization banner and was
+          simply not read. Mirrors that banner's shape (same warning tokens, same AlertTriangle)
+          so the two register as the same class of notice — minus the action button, because
+          there is nothing to click: the fix is to edit the date right below, and the value is
+          saveable as it stands. */}
+      {bankConnection.fetchIntervalWarning ? (
+        <div
+          className="flex items-center gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3"
+          data-testid="bank-connection-import-fetch-interval-warning"
+        >
+          <AlertTriangle
+            className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
+            data-testid="AlertTriangle__73027d" />
+          <span className="text-sm font-medium text-[var(--status-warning-fg)]">
+            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
+              days: bankConnection.fetchIntervalWarning.days,
+            })}
+          </span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <DateInput

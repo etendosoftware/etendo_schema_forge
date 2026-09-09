@@ -1,5 +1,5 @@
 -- @id: R34-fin-account-cleared-payment-accounts
--- @gap: A8
+-- @gap: A9
 -- @risk: medium
 -- @type: sql
 -- @description: ETP-5207 — empty FIN_FINANCIAL_ACCOUNT_ACCT.fin_in_clear_acct / fin_out_clear_acct (DAL clearedPaymentAccount / clearedPaymentAccountOUT), which core's FIN_FINANCIAL_ACCOUNT_TRG (and R22's own frozen backfill) seed with the ledger asset account 57200000 even though the functional default for every account type (Banco/Caja/Tarjeta) is EMPTY; scope is EVERY account, deliberately including those that already have POSTED reconciliation documents, so that no account is left able to post a reconciliation; the ONLY rows skipped are Bank rows that would trip APRM_FIN_FINACC_ACCT_CHECK_TRG, and those are listed by @report

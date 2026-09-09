@@ -7,7 +7,7 @@ import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/par
 
 /**
  * Static + parse validation for the R34 corrective data-fix
- * (20260908T120000Z__R34-fin-account-cleared-payment-accounts.sql, ETP-5207, gap A8).
+ * (20260908T120000Z__R34-fin-account-cleared-payment-accounts.sql, ETP-5207, gap A9).
  *
  * Core's AFTER INSERT trigger FIN_FINANCIAL_ACCOUNT_TRG seeds FIN_FINANCIAL_ACCOUNT_ACCT's
  * fin_in_clear_acct/fin_out_clear_acct with the ledger asset account (57200000), and a non-null
@@ -63,7 +63,7 @@ const sqlReport = sqlOnly(fix.report);
 describe('R34 data-fix — header metadata', () => {
   it('parses with the expected id and gap', () => {
     assert.equal(fix.id, 'R34-fin-account-cleared-payment-accounts');
-    assert.equal(fix.gap, 'A8');
+    assert.equal(fix.gap, 'A9');
   });
 
   it('is a medium-risk sql fix', () => {

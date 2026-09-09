@@ -1,8 +1,8 @@
 {
-  "version": "0.25.0",
+  "version": "0.25.1",
   "generatedAt": "2026-08-19T19:01:09.365Z",
   "updatedAt": "2026-08-25T13:57:01.202Z",
-  "contractChecksum": "1f22932d2c0ac365",
+  "contractChecksum": "ef6a4d3f7b7f7781",
   "apiPrediction": {
     "specName": "user",
     "baseUrl": "/sws/neo/user",
