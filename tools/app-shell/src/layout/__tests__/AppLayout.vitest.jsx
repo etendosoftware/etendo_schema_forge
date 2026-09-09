@@ -130,7 +130,9 @@ vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
-import { useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { buildMenuGroups } from '@/windows/registry.js';
+import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
@@ -281,6 +283,63 @@ describe('AppLayout — normal mode', () => {
     const reports = groups.find((g) => g.group === 'Reports');
     expect(reports).toBeDefined();
     expect(reports.items.map((i) => i.name)).toContain('report-viewer-finance');
+  });
+});
+
+describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
+  const anchors = defaultNavigation.filter(entry => entry.accessWindowId).map(entry => [entry.name, entry.accessWindowId]);
+
+  beforeEach(() => {
+    vi.mocked(useRoleMenu).mockReturnValue(undefined);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue({});
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+  });
+
+  afterEach(() => {
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue({});
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+  });
+
+  function expectSidebarAnchors(visible) {
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    const names = groups.flatMap(group => group.items.map(item => item.name));
+    expect(names.filter(name => anchors.some(([anchor]) => anchor === name)).sort())
+      .toEqual([...visible].sort());
+    expect(names).not.toContain('report-viewer-purchases');
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  }
+
+  it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id) => {
+    const menuGroups = buildMenuGroups();
+    const { rerender } = render(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([]);
+
+    // The anchor map can resolve before SFListMenu: independent axes.
+    vi.mocked(useWindowAccessSafe).mockReturnValue({ [id]: 'read-only' });
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([name]);
+
+    // User = 108 from committed core-maps/ad-menu-cache.json. Nonempty so
+    // this checks sidebar permissions, not the shell-wide no-access screen.
+    vi.mocked(useRoleMenu).mockReturnValue(new Set(['108']));
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([name]);
+
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([]);
+  });
+
+  it.each([{}, null])('shows all anchors for admin/client-admin with map %j', windowAccess => {
+    const { allowedIds, capabilities } = navigationPermissions();
+    vi.mocked(useRoleMenu).mockReturnValue(allowedIds);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue(capabilities);
+    vi.mocked(useWindowAccessSafe).mockReturnValue(windowAccess);
+
+    render(<AppLayout menuGroups={buildMenuGroups()} />);
+    expectSidebarAnchors(anchors.map(([name]) => name));
+    expectNavigation(JSON.parse(screen.getByTestId('side-menu-groups').textContent), expectedNavigation({ proof: true }));
   });
 });
 

@@ -1,4 +1,6 @@
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
+import menuConfig from '../../menu.json';
+import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
 
 describe('registry', () => {
   // ETP-4598 — calling filterMenuGroupsByAccess() directly with synthetic
@@ -321,6 +323,97 @@ describe('registry', () => {
         expect(mixed).toBeDefined();
         expect(mixed.items.map(i => i.name)).toContain('hybrid-anchor');
       });
+    });
+  });
+
+  describe('shipped navigation catalog (ETP-5240)', () => {
+    const gated = defaultNavigation.filter(entry => entry.windowId || entry.processId || entry.obuiappProcessId || entry.accessWindowId || entry.capability);
+    const ungated = defaultNavigation.filter(entry => !gated.includes(entry));
+    const proof = optionalNavigation.filter(entry => entry.proof);
+
+    it('requires review of every default, optional and hidden catalog entry', () => {
+      expect(menuConfig.menu.flatMap(group => group.items.map(item => item.name)).sort()).toEqual([
+        ...defaultNavigation.map(entry => entry.name),
+        ...optionalNavigation.filter(entry => !entry.app).map(entry => entry.name),
+        ...hiddenNavigation,
+      ].sort());
+      expect(getAllWindowNames().sort()).toEqual([
+        ...defaultNavigation.map(entry => entry.name), ...optionalNavigation.map(entry => entry.name), ...hiddenNavigation,
+      ].sort());
+    });
+
+    it('keeps permission namespaces and identities aligned with independent sources', () => {
+      const items = menuConfig.menu.flatMap(group => group.items);
+      const keys = ['windowId', 'processId', 'obuiappProcessId', 'accessWindowId', 'capability'];
+      for (const expected of [...defaultNavigation, ...optionalNavigation.filter(entry => !entry.app)]) {
+        const actual = items.find(item => item.name === expected.name);
+        expect(actual, expected.name).toBeDefined();
+        for (const key of keys) expect(actual[key], `${expected.name}.${key}`).toBe(expected[key]);
+      }
+    });
+
+    it('keeps intentionally hidden entries hidden independently of role grants', () => {
+      for (const name of hiddenNavigation) {
+        const group = menuConfig.menu.find(candidate => candidate.items.some(item => item.name === name));
+        const item = group?.items.find(candidate => candidate.name === name);
+        expect(item, name).toBeDefined();
+        expect(Boolean(group.hidden || item.hidden), name).toBe(true);
+      }
+    });
+
+    it.each(navigationProfiles)('admin catalog: $label', profile => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions();
+      const groups = filterMenuGroupsByAccess(
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+      );
+      // Proof visibility belongs to SideMenu, not the registry. Its real flag
+      // behavior is exercised in SideMenu.vitest.jsx using these same profiles.
+      expectNavigation(groups, expectedNavigation({ ...profile, proof: true }));
+    });
+
+    it.each(navigationProfiles)('ungated optional navigation without role grants: $label', profile => {
+      const groups = filterMenuGroupsByAccess(
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {},
+      );
+      expectNavigation(groups, expectedNavigation({ ...profile, proof: true }).filter(entry => !gated.includes(entry)));
+    });
+
+    it.each(gated)('single grant: $name', entry => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
+      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
+      const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
+        ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
+      expectNavigation(groups, [...ungated, ...proof, entry, ...bypassedAnchors]);
+    });
+
+    it.each(gated)('revoked grant: $name', entry => {
+      // Non-admin exercises anchor denial rather than its admin bypass.
+      const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...remaining, ...proof]);
+    });
+
+    it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry], 'read-only');
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof, entry]);
+    });
+
+    it.each([{}, null])('admin bypass with window map %j preserves the entire catalog', windowAccess => {
+      const { allowedIds, capabilities } = navigationPermissions();
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...defaultNavigation, ...proof]);
+    });
+
+    it.each([
+      { label: 'denied', allowedIds: new Set(), capabilities: {}, windowAccess: {} },
+      { label: 'maps loading', allowedIds: new Set(), capabilities: null, windowAccess: null },
+    ])('$label exposes only ungated entries', ({ allowedIds, capabilities, windowAccess }) => {
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof]);
+    });
+
+    it('null role-menu fallback opens only the membership axis, not capabilities or anchors', () => {
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}), [
+        ...defaultNavigation.filter(entry => !entry.accessWindowId && !entry.capability), ...proof,
+      ]);
     });
   });
 

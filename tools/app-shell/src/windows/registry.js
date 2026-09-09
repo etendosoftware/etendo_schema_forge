@@ -95,28 +95,25 @@ const windowLoaders = {
  * convention as the `capability` axis: an item with `accessWindowId` is hidden
  * unless `windowAccess[item.accessWindowId]` is a defined access tier.
  *
- * Admin/client-admin is exempt from this axis (ETP-5240 follow-up): none of
- * these 3 permission-anchor windows backs an active `ETGO_SF_SPEC` row, so
- * `SFWindowAccessMap`'s admin bypass (`resolveActiveEtendoGoWindowIds()`)
- * never marks them in `windowAccess` even for admin/client-admin — the map's
- * admin enumeration is narrower than "literally every window". Gating on it
- * unconditionally hid these items from admin/client-admin too, which the
- * actual content gate (`NeoAccessHelper.hasWindowAccess()`, Java) never did —
- * it bypasses unconditionally for admin regardless of spec. Reusing
- * `capabilities.isAdminOrClientAdmin` (already threaded through this function)
- * keeps the proactive sidebar check consistent with that reactive gate.
+ * Admin/client-admin is exempt from this axis (ETP-5240 follow-up).
+ * `SFWindowAccessMap` now includes windows with active grants alongside active
+ * spec windows, so permission anchors are included in the admin map. Keeping
+ * the `capabilities.isAdminOrClientAdmin` bypass makes sidebar visibility
+ * resilient to an absent map or missing anchor entry once admin status is
+ * known. It bypasses neither the other menu axes nor the page's content gate,
+ * which still consumes the backend access map.
  *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
  * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
- *   `useCapabilitiesSafe()`. `null`/omitted disables the capability filtering
- *   axis. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
+ *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
+ *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
  *   `groups` is returned unchanged (matches this function's pre-ETP-4513
  *   behavior).
  * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
- *   `useWindowAccessSafe()`. `null`/omitted disables the accessWindowId
- *   filtering axis.
+ *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
+ *   items unless the admin exemption or all-falsy passthrough above applies.
  */
 export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null) {
   if (!allowedIds && !capabilities && !windowAccess) return groups;
