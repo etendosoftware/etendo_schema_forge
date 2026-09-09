@@ -36,7 +36,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:taxCategory
 
 // @sf-generated-start requiredHeaderFields:taxCategory
-const requiredHeaderFields = ['name', 'default', 'asbom', 'aeatsiiDeclarable'];
+const requiredHeaderFields = ['name', 'default', 'aeatsiiDeclarable'];
 // @sf-generated-end requiredHeaderFields:taxCategory
 
 

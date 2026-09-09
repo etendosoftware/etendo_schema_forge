@@ -115,6 +115,27 @@ printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\\`$]" && echo "REJECTED: prohibit
 Same convention as commits otherwise: `Feature ETP-1234: Description`, `Epic ETP-1234: ...`,
 `Issue #N: ...`.
 
+**The `Feature ETP-XXXX:` prefix is enforced on PR TITLES too, not only on commits.** A
+charset-clean title with no prefix is still closed on sight, with a different message:
+
+```
+Invalid pull request title. PR title must start with 'Feature etp-5184:'.
+```
+
+Observed in `etendo-go-docs` on PR #41 (2026-09-07), where a bare descriptive title was
+closed within minutes. Do not assume this is repo-specific — treat the prefix as required
+everywhere and let a repo that does not enforce it simply not care. So validate both:
+
+```bash
+TITLE="Feature ETP-1234: Some description"
+printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\`$]" && echo "REJECTED: prohibited char"
+printf '%s' "$TITLE" | grep -qE '^(Feature ETP-[0-9]+|Epic ETP-[0-9]+|Issue #[0-9]+): .' \
+  || echo "REJECTED: missing prefix"
+```
+
+A coordinator who dictates a PR title without the prefix is making this mistake — add it
+rather than submitting the title verbatim, and say so in the report.
+
 **Recovering a PR Git Police already closed.** Fix the title FIRST, then reopen — reopening
 with the bad title gets it closed again. Note `gh pr edit` may fail with
 `your authentication token is missing required scopes [read:project]`; the REST API needs no
