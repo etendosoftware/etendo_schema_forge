@@ -1312,51 +1312,82 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     expect(container.textContent).toBe('CO');
   });
 
-  // ── ETP-5122 (bug fix): Batuz column must gate on invoiceDate eligibility,
-  // exactly like the SII column already gates on accountingDate. Before this
-  // fix the Batuz/TBAI cell had no date gate at all — territory alone
-  // (`targets.showTbai`) decided visibility, so a Bizkaia purchase invoice
-  // dated before the org's Batuz adoption date still showed a fabricated
-  // "Pendiente"/"Enviada" badge on every row.
-  describe('Batuz column gated by tbaisystemdate (invoiceDate, ETP-5122)', () => {
-    function renderBatuzCell(row, tbaisystemdate) {
+  // ── ETP-5216: the adoption-date gate MOVED out of this cell and into the
+  // stored computed column `EM_ETGO_Tbai_Status` (DB function
+  // `ETGO_GET_TBAI_STATUS` in com.etendoerp.go). It used to run here as
+  // `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`
+  // (ETP-5122), which had two defects: the gate was invisible to the backend,
+  // so filtering the now-filterable column by "Pendiente" returned rows the
+  // grid then drew as a dash; and it compared EVERY row against the SELECTED
+  // organization's adoption date rather than the invoice's own — wrong for any
+  // list spanning organizations. The database now answers the literal
+  // 'NoAplica' for an invoice that predates its OWN organization's adoption
+  // date (or whose organization has no active tbai_config row), and the cell
+  // does nothing but translate that value to a dash.
+  //
+  // `isSifEligibleByDate` is NOT dead — SII (both windows) and VERI*FACTU
+  // (sales) still gate in the browser; see the SII cell tests above.
+  describe('Batuz cell — "NoAplica" renders a dash (gate moved to the DB, ETP-5216)', () => {
+    function renderBatuzCell(row, tbaisystemdate = FAR_PAST_ADOPTION) {
       useFiscalConfig.mockReturnValue({
         profile: 'sii+tbai',
         tbaiRecord: { etsgSifTerritory: 'BIZKAIA', tbaisystemdate },
         siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
       });
       render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[row]} />);
-      return render(<>{getColumn('_tbaiStatus').render(row)}</>);
+      return render(<>{getColumn('eTGOTbaiStatus').render(row)}</>);
     }
 
-    it('shows the dash, not the badge, for a row dated BEFORE the org Batuz adoption date', () => {
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
-      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+    it('shows the dash, not the badge, when the stored status is "NoAplica"', () => {
+      // Previously encoded as "row dated BEFORE the org Batuz adoption date":
+      // the DB now makes that decision and reports it as this literal.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'NoAplica', invoiceDate: '2026-01-01' };
+      const { container } = renderBatuzCell(row);
       expect(container.textContent).toBe('—');
       expect(container.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
     });
 
-    it('shows the badge normally for a row dated ON/AFTER the org Batuz adoption date', () => {
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-07-01' };
+    it('shows the badge normally for a real stored status', () => {
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-07-01' };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('Recibido');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).not.toBeNull();
+    });
+
+    it('no longer gates on invoiceDate — a row dated before the SELECTED org adoption date still shows its stored status', () => {
+      // The exact regression ETP-5216 fixes: the invoice belongs to another
+      // organization that adopted Batuz earlier, so the backend computed a real
+      // status. The old cell-side gate would have hidden it behind a dash.
+      const row = {
+        ...AP_INVOICE_ROW,
+        eTGOTbaiStatus: 'Recibido',
+        accountingDate: '2026-07-01',
+        invoiceDate: '2026-01-01',
+      };
       const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
       expect(container.textContent).toBe('Recibido');
     });
 
-    it('gates on invoiceDate, NOT accountingDate — a row with an eligible accountingDate but an ineligible invoiceDate still shows the dash', () => {
-      const row = {
-        ...AP_INVOICE_ROW,
-        tbaiSyncEstado: 'Recibido',
-        accountingDate: '2026-07-01', // eligible if this were used
-        invoiceDate: '2026-01-01',    // ineligible — this is what must be used
-      };
-      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
-      expect(container.textContent).toBe('—');
+    it('does not dash a row merely because the SELECTED org has no Batuz adoption record', () => {
+      // Previously "fails safe (dash) when there is no Batuz adoption record at
+      // all". The absence of an adoption date on the selected org says nothing
+      // about the invoice's own organization, so the stored status wins.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido' };
+      const { container } = renderBatuzCell(row, undefined);
+      expect(container.textContent).toBe('Recibido');
     });
 
-    it('fails safe (dash) when there is no Batuz adoption record at all', () => {
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido' };
-      const { container } = renderBatuzCell(row, undefined);
-      expect(container.textContent).toBe('—');
+    it('matches "NoAplica" exactly — a lowercase "noaplica" is treated as a real status', () => {
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'noaplica' };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('noaplica');
+    });
+
+    it('falls back to the tbaiIssent logic when the stored status is absent', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiIssent: false };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('Pendiente');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).not.toBeNull();
     });
   });
 });

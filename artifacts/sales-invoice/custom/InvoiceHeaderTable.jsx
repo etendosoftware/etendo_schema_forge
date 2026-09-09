@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -96,7 +96,16 @@ export default function InvoiceHeaderTable(props) {
         filterMode: 'text', label: tbaiColLabel,
         // The database answers 'Pendiente' for "no resolved submission", so the
         // ?? is only a guard for a row fetched before the column was backfilled.
-        render: (row) => <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />,
+        // 'NoAplica' means the invoice predates the organization's TBAI adoption
+        // date (or the organization never joined): it is not pending anything and
+        // never will be, so it gets a dash instead of a badge. That gate used to
+        // run here as isSifEligibleByDate(); it now lives in the stored column so
+        // the filter and the sort agree with the cell.
+        render: (row) => (
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />
+        ),
       });
     }
     if (targets.showVerifactu) {
