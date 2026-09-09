@@ -250,6 +250,78 @@ describe('registry', () => {
       const result = filterMenuGroupsByAccess(groups, null, null, {});
       expect(result.find(g => g.group === 'Reports')).toBeUndefined();
     });
+
+    // ETP-5240 follow-up (96dff5d7e) — none of the 3 permission-anchor windows
+    // backs an active ETGO_SF_SPEC row, so SFWindowAccessMap's admin bypass
+    // never populates `windowAccess` for them even for GOClient Admin. The
+    // accessWindowId check now short-circuits on `capabilities.isAdminOrClientAdmin`
+    // so the proactive sidebar filter matches the reactive Java content gate
+    // (NeoAccessHelper.hasWindowAccess(), which bypasses unconditionally for
+    // admin regardless of spec).
+    describe('admin/client-admin bypass on the accessWindowId axis', () => {
+      it('shows an accessWindowId-gated item for an admin/client-admin even when windowAccess is null/{}/missing the key', () => {
+        const item = { name: 'report-viewer-finance', accessWindowId: 'AW1' };
+        const adminCaps = { isAdminOrClientAdmin: true };
+
+        for (const windowAccess of [null, {}, { OTHER_ID: 'full' }]) {
+          const result = filterMenuGroupsByAccess(
+            [{ group: 'Reports', items: [item] }],
+            null,
+            adminCaps,
+            windowAccess,
+          );
+          const reports = result.find(g => g.group === 'Reports');
+          expect(reports).toBeDefined();
+          expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+        }
+      });
+
+      it('still hides an accessWindowId-gated item for a non-admin when windowAccess lacks the key (bypass does not leak into the normal case)', () => {
+        const item = { name: 'report-viewer-finance', accessWindowId: 'AW1' };
+
+        // capabilities: { isAdminOrClientAdmin: false } — distinct shape from
+        // `null`/omitted, which the earlier tests in this block already cover.
+        const result = filterMenuGroupsByAccess(
+          [{ group: 'Reports', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: false },
+          {},
+        );
+        expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+      });
+
+      it('interaction: the accessWindowId admin-bypass does not exempt the independent capability axis on the same item', () => {
+        // Item gated on BOTH axes: `capability` (checked first, unaffected by
+        // the admin-bypass — that bypass only reads `capabilities.isAdminOrClientAdmin`
+        // for the accessWindowId line, one line below) and `accessWindowId`.
+        const item = {
+          name: 'hybrid-anchor',
+          capability: 'someOtherCapability',
+          accessWindowId: 'AW1',
+        };
+
+        // Admin-bypass satisfies the accessWindowId line, but `someOtherCapability`
+        // is not true -> still hidden by the capability axis.
+        const stillHidden = filterMenuGroupsByAccess(
+          [{ group: 'Mixed', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: true, someOtherCapability: false },
+          {},
+        );
+        expect(stillHidden.find(g => g.group === 'Mixed')).toBeUndefined();
+
+        // Both satisfied -> shown.
+        const shown = filterMenuGroupsByAccess(
+          [{ group: 'Mixed', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: true, someOtherCapability: true },
+          {},
+        );
+        const mixed = shown.find(g => g.group === 'Mixed');
+        expect(mixed).toBeDefined();
+        expect(mixed.items.map(i => i.name)).toContain('hybrid-anchor');
+      });
+    });
   });
 
   describe('buildMenuGroups', () => {
