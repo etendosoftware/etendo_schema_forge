@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
 import { cn } from '@/lib/utils';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -341,12 +342,16 @@ export function AutoMatchSuggestionModal({
       } else if (successCount > 0) {
         toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
       } else {
-        toast.error(failures[0]?.error?.message || ui('financeReconcileAutomatchToastError'));
+        // ETP-5121: the backend explains itself in English (e.g. the draft-statement guard);
+        // translateBackendError maps the known sentences to a locale key and passes anything
+        // else through untouched, so an unmapped message still reaches the user.
+        toast.error(translateBackendError(failures[0]?.error?.message, ui)
+          || ui('financeReconcileAutomatchToastError'));
       }
       onSuccess?.();
       onClose();
     } catch (err) {
-      toast.error(err?.message || ui('financeReconcileAutomatchToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileAutomatchToastError'));
     }
   };
 

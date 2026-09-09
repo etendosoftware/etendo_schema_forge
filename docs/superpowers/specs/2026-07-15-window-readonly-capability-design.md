@@ -153,6 +153,31 @@ other windows is unchanged). `Save`/add-line/inline-edit/bulk-delete were alread
 All fixes are in `schema_forge` (`tools/app-shell/`), so this ships from this repo with no
 core publish.
 
+### Correction (2026-09-07) — process buttons and detail-view kebab menu gap (ETP-5116)
+
+Two more mutating surfaces were found ungated by `window.readOnly`, both in `DetailView.jsx`
+(not the list-level `RowQuickActions.jsx` covered by the 2026-07-16 correction above, and
+unrelated to it):
+
+- **Process buttons** (the header and detail-line process-button rows, e.g. a custom
+  "Create Amortization"-style action) rendered regardless of `windowReadOnly` — a read-only
+  window's detail toolbar still exposed every process action. Fixed by adding
+  `!windowReadOnly &&` to both button-list guards in `DetailView.jsx`.
+- **`DetailMoreActionsMenu.jsx`** (the detail view's own "more" kebab menu — a distinct
+  component from the list-row kebab inside `RowQuickActions.jsx` that step 5 / line 111 above
+  refers to) rendered every `menuActions[]` item and any `customMenuContent` regardless of
+  `windowReadOnly`. Every existing `customMenuContent` implementation
+  (`GoodsShipmentMoreMenu`, `InventoryMenuContent`, `InternalConsumptionActions`) fires a write
+  action on click, so it cannot be assumed read-only by default. Fixed by threading a new
+  `windowReadOnly` prop into `DetailMoreActionsMenu`, forcing `visibleActions = []` and
+  `hasCustomContent = false` when the window is read-only.
+
+Neither surface was mentioned in the original architecture/data-flow diagram or the step-5/6
+change list above — this closes that gap rather than contradicting either. The line-111 claim
+("kebab menu actions stay gated by their own config") remains accurate as written: it describes
+`RowQuickActions.jsx`'s own kebab (list view, per row), which this pass did not touch and which
+is still gated only by its own `menuActions`/`visibleWhen` config, not by `windowReadOnly`.
+
 ## Testing strategy
 
 - **Core:** generator fixtures — `window.readOnly` in decisions produces `crud` all-false on

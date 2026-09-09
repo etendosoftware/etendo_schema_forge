@@ -554,6 +554,10 @@ The block offers a **payment template** select (`cpPisTemplateLabel` — SEPA / 
 from the AD "Template List for Bank Payments" ref-list, defaulting by the **account** currency:
 EUR→SEPA, USD→DOMESTIC, GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
 `C_BP_BankAccount` IBANs, or a hand-typed one), plus an amber transfer summary and an SCA hint.
+Because that select takes a typed IBAN as well as a listed one, it overrides
+`CreatableSearchSelect`'s generic `searchLabelPrefix {label}...` placeholder with its own
+`cpPisIbanPlaceholder` ("Buscar o introducir IBAN destino...", ETP-5177) so both paths are visible;
+the hand-typed one is what `createLabel`/`onCreateRequest` (`cpPisIbanUseTyped`) commits.
 The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
 
 The default is re-derived whenever the selected account's currency changes, so switching to a
