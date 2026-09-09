@@ -893,3 +893,146 @@ describe('SendDocumentButton', () => {
     expect(sendRequestBody().language).toBeTruthy();
   });
 });
+
+// ── ETP-5069: the success-only `onSent` callback ─────────────────────────────
+// `onClose` alone cannot tell a successful send apart from a dismissal, so a caller had no
+// way to know the document actually went out (the email-history card needs exactly that to
+// invalidate itself). `onSent` fires ONLY on a success, carrying the outcome the module
+// reported, and immediately before `onClose`.
+describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
+  function getCancelButton() {
+    return screen.getByRole('button', { name: 'cancel' });
+  }
+
+  it('fires onSent with the send outcome on a SENT response', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT', auditId: 'aud-1', requestId: 'req-1' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    expect(onSent).toHaveBeenCalledWith({ status: 'SENT', auditId: 'aud-1', requestId: 'req-1' });
+  });
+
+  it('fires onSent on a DUPLICATE response — an idempotent re-send is still a success', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ response: { data: { status: 'DUPLICATE', auditId: 'aud-2' } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    expect(onSent).toHaveBeenCalledWith(expect.objectContaining({ status: 'DUPLICATE', auditId: 'aud-2' }));
+  });
+
+  it('fires onSent BEFORE onClose, so the caller can react while the outcome is still known', async () => {
+    const user = userEvent.setup();
+    const order = [];
+    const onSent = vi.fn(() => order.push('onSent'));
+    const onClose = vi.fn(() => order.push('onClose'));
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(order).toEqual(['onSent', 'onClose']);
+  });
+
+  it('does NOT fire onSent when the send fails at the provider', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data: { status: 'PROVIDER_FAILED' } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the send is throttled', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data: { status: 'THROTTLED', retryAfterSeconds: 30 } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the request itself rejects', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockRejectedValueOnce(new Error('Network down'));
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the operator cancels the modal', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getCancelButton());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the operator dismisses the modal with the header close', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: '×' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('completes a successful send unchanged when no onSent is supplied (every existing caller omits it)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});

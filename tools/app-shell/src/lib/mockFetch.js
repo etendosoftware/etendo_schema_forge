@@ -16,6 +16,9 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
     // `url` may be a `Request` object (a valid `fetch` argument) rather than a
     // string — normalize before any string-only method (`.includes`/`.startsWith`).
     const urlStr = typeof url === 'string' ? url : url.url;
+    // Hoisted above the `basePath` guard because the path-based checks below
+    // (which intercept URLs that do NOT sit under `basePath`) need it too.
+    const method = (options.method || 'GET').toUpperCase();
 
     if (isWindowAccessMapRequest(urlStr)) {
       return handleWindowAccessMapRequest();
@@ -25,11 +28,14 @@ export function createMockFetch(mockData, basePath, catalogData = {}) {
       return handleRolesOverviewRequest();
     }
 
+    if (isDocumentEmailHistoryRequest(method, urlStr)) {
+      return handleDocumentEmailHistoryRequest(urlStr);
+    }
+
     if (!urlStr.startsWith(basePath)) {
       return undefined;
     }
 
-    const method = (options.method || 'GET').toUpperCase();
     const path = urlStr.slice(basePath.length);
     const segments = path.split('/').filter(Boolean);
 
@@ -249,6 +255,51 @@ function handleRolesOverviewRequest() {
       ],
     },
   });
+}
+
+// ETP-5069 — the document email history feeding EmailsCard. Same reasoning as
+// WINDOW_ACCESS_MAP_PATH above, so it gets its own path check ahead of the `basePath`
+// guard: the URL is built from `resolveNeoBaseUrl(apiBaseUrl)`, which strips the last
+// segment off the API base and therefore does NOT sit under `basePath`.
+const DOCUMENT_EMAIL_HISTORY_PATH = '/documentemailhistory';
+
+function isDocumentEmailHistoryRequest(method, url) {
+  return method === 'GET' && url.includes(DOCUMENT_EMAIL_HISTORY_PATH);
+}
+
+// The real endpoint answers `{ result: "<JSON string>" }` — `result` is a STRING the
+// client parses, not a nested array. The mock must reproduce that or it would let a
+// parsing regression through.
+function handleDocumentEmailHistoryRequest(url) {
+  const recordId = readQueryParam(url, 'recordId');
+  if (!recordId) {
+    return makeResponse(200, { error: 'recordId is required' });
+  }
+  return makeResponse(200, { result: JSON.stringify(buildMockEmailHistory(recordId)) });
+}
+
+function readQueryParam(url, name) {
+  const queryIndex = url.indexOf('?');
+  if (queryIndex === -1) return null;
+  return new URLSearchParams(url.slice(queryIndex + 1)).get(name);
+}
+
+function buildMockEmailHistory(recordId) {
+  return [
+    {
+      id: `mock-email-history-${recordId}`,
+      sentAt: '2026-08-20T09:31:00Z',
+      status: 'SENT',
+      recipientsTo: ['customer@example.com'],
+      recipientsCc: [],
+      subject: 'Your document',
+      messageBody: 'Please find the attached document.',
+      downloadLink: null,
+      contractName: 'mock-document-send',
+      errorMessage: null,
+      sentBy: 'Mock User',
+    },
+  ];
 }
 
 function isEmailContractSend(method, segments) {

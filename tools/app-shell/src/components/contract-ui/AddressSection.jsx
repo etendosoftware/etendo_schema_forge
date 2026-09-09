@@ -3,6 +3,7 @@ import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
+import RequiredMark from '@/components/ui/required-mark.jsx';
 
 const INPUT_CLS =
   `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-border-control bg-card px-3 !text-[14px] focus:outline-none focus:ring-2 focus:ring-primary`;
@@ -100,10 +101,6 @@ function OptionPicker({ open, onClose, title, options, loading, failed, loadErro
     </div>
   );
 }
-
-const RequiredMark = () => (
-  <span style={{ color: 'hsl(var(--destructive))', marginLeft: '2px' }}>*</span>
-);
 
 export default function AddressSection({ form, onChange, opts, requiredFields = [] }) {
   const ui = useUI();

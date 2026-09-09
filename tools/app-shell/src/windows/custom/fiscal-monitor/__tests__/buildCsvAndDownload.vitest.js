@@ -168,6 +168,52 @@ describe('buildCsvAndDownload — browser download mechanics', () => {
   });
 });
 
+// ETP-5032 / SEC-04 — these exports carry AEAT-returned free text (error reasons,
+// `descripcionOperacion`, invoice descriptions), so a value starting with a formula
+// trigger would evaluate in the recipient's spreadsheet (CWE-1236). The POLICY is the
+// shared `neutralizeSpreadsheetCell`; the always-quote style, LF line ending and BOM are
+// this path's own observable format and the suite above pins them unchanged.
+describe('buildCsvAndDownload — spreadsheet formula neutralization', () => {
+  beforeEach(installDomMocks);
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The data line of a one-row, one-column export of `value`. */
+  function exportedCell(value) {
+    buildCsvAndDownload('test', [{ label: 'X', get: () => value }], [{}]);
+    return blobContents[0].replace(/^﻿/, '').split('\n')[1];
+  }
+
+  it.each([
+    ['equals', '=1+1', '"\'=1+1"'],
+    ['plus', '+SUM(A1:A2)', '"\'+SUM(A1:A2)"'],
+    ['minus', '-CMD', '"\'-CMD"'],
+    ['at sign', '@SUM(A1:A2)', '"\'@SUM(A1:A2)"'],
+    ['DDE payload', "+cmd|' /C calc'!A0", '"\'+cmd|\' /C calc\'!A0"'],
+    ['marker behind spaces', '   =1+1', '"\'   =1+1"'],
+    ['standalone TAB', '\tText', '"\'\tText"'],
+    ['full-width equals', '＝1+1', '"\'＝1+1"'],
+    ['negative number', '-500.00', '"\'-500.00"'],
+    ['already neutralized', "'=1+1", '"\'=1+1"'],
+    ['plain text', 'Normal Value', '"Normal Value"'],
+  ])('neutralizes %s', (_label, input, expected) => {
+    expect(exportedCell(input)).toBe(expected);
+  });
+
+  it('neutralizes the HYPERLINK payload and doubles its quotes inside one cell', () => {
+    expect(exportedCell('=HYPERLINK("http://example.com","Click")'))
+      .toBe('"\'=HYPERLINK(""http://example.com"",""Click"")"');
+  });
+
+  it('neutralizes a formula-shaped column label too', () => {
+    buildCsvAndDownload('test', [{ label: '=1+1', get: () => 'v' }], []);
+    expect(blobContents[0].replace(/^﻿/, '').split('\n')[0]).toBe('"\'=1+1"');
+  });
+
+  it('never double-prefixes an already neutralized value', () => {
+    expect(exportedCell("'=1+1")).not.toContain("''");
+  });
+});
+
 describe('buildCsvAndDownload — edge cases', () => {
   beforeEach(installDomMocks);
   afterEach(() => vi.restoreAllMocks());

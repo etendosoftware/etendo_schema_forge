@@ -60,14 +60,9 @@ vi.mock('../NewPaymentEntryModal.jsx', () => ({
   ),
 }));
 
+import { SendDocumentModalMock } from './testUtils/sendDocumentModalMock.jsx';
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
-  default: ({ onClose, documentNo }) => (
-    <div data-testid="send-modal" data-docno={documentNo}>
-      <button data-testid="send-modal-close" onClick={onClose}>
-        Close Send
-      </button>
-    </div>
-  ),
+  default: SendDocumentModalMock,
 }));
 
 vi.mock('../SifSendingModal.jsx', () => ({
@@ -91,10 +86,18 @@ vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
+// `importActual` keeps `isSifEligibleByDate` real — InvoicePreview.jsx uses it
+// directly for the ETP-5122 date gate — while `getInvoiceFiscalTargets` is
+// replaced with an inspectable mock so ETP-5087 territory-forwarding tests can
+// assert on the args it was called with.
 const getInvoiceFiscalTargetsMock = vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false }));
-vi.mock('../fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: (...args) => getInvoiceFiscalTargetsMock(...args),
-}));
+vi.mock('../fiscalTargets.js', async () => {
+  const actual = await vi.importActual('../fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: (...args) => getInvoiceFiscalTargetsMock(...args),
+  };
+});
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
   const { mockUseDocumentCurrency } = await import('./testUtils/mockUseDocumentCurrency.js');
@@ -153,8 +156,14 @@ const defaultInvoice = {
   'businessPartner$_identifier': 'Acme Corp',
   businessPartner: 'bp-1',
   invoiceDate: '2024-01-01',
+  created: '2024-01-01T10:00:00.000Z',
   'currency$_identifier': 'EUR',
 };
+
+// ETP-5122: far-past adoption dates so pre-existing tests (written before the
+// date gate existed) keep passing without knowing about it. Tests that
+// specifically exercise the gate override these via an explicit hook override.
+const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
 
 function baseInvoicePreviewHook(overrides = {}) {
   return {
@@ -166,7 +175,11 @@ function baseInvoicePreviewHook(overrides = {}) {
     installments: [], payments: [], loadingPayments: false,
     totalOutstanding: 0, canAddPayment: false, isFullyPaid: false, fetchPayments: vi.fn(),
     status: 'CO', badgeProps: {}, statusLabel: 'Completed', partnerName: 'Acme Corp', grandTotal: 1000,
-    orgId: 'org-1', profile: null,
+    orgId: 'org-1', profile: null, territory: null,
+    // ETP-5122: adoption-date records, needed to gate each fiscal status InfoRow.
+    siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+    tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
+    verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
     showPaymentModal: false, setShowPaymentModal: vi.fn(),
     showSendModal: false, sendModalClosing: false, openEmailModal: vi.fn(), closeEmailModal: vi.fn(),
     showSifModal: false, setShowSifModal: vi.fn(),
@@ -287,6 +300,109 @@ describe('InvoicePreview', () => {
       const row = tbaiInfoRow();
       expect(row).toBeTruthy();
       expect(row.props.label).toBe('invoicePreview.fiscalStatus.tbai');
+    });
+  });
+
+  // ETP-5087 + ETP-5122 combined: territory (forwarded from useInvoicePreview's
+  // `territory`) and the per-system adoption date are independent gates — the
+  // component must forward territory to getInvoiceFiscalTargets AND still
+  // apply the date gate on top of whatever targets that returns.
+  describe('fiscal status territory + date gates combined (ETP-5087 + ETP-5122)', () => {
+    function tbaiInfoRow() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      const rows = (props.children || []).filter(Boolean);
+      return rows.find((el) => el?.props?.label);
+    }
+
+    it('forwards territory to getInvoiceFiscalTargets', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ territory: 'BIZKAIA' }));
+      renderInvoicePreview({ specName: 'purchase-invoice' });
+      expect(getInvoiceFiscalTargetsMock).toHaveBeenCalledWith('purchase-invoice', null, 'BIZKAIA');
+    });
+
+    it('hides the TBAI InfoRow when showTbai is true but the invoice predates TBAI adoption', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+      const oldInvoice = { ...defaultInvoice, invoiceDate: '1999-01-01' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: oldInvoice,
+        territory: 'BIZKAIA',
+        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: oldInvoice });
+      expect(tbaiInfoRow()).toBeUndefined();
+    });
+
+    it('shows the TBAI InfoRow when territory qualifies AND the invoice is dated after adoption', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+      const newInvoice = { ...defaultInvoice, invoiceDate: '2026-06-15' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: newInvoice,
+        territory: 'BIZKAIA',
+        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: newInvoice });
+      expect(tbaiInfoRow()).toBeTruthy();
+    });
+  });
+
+  // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION timestamp
+  // (`created`), never `invoiceDate` — unlike TBAI/SII, which key off business
+  // dates. This proves the three gates are independent, not accidentally
+  // sharing one date field.
+  describe('VERI*FACTU date gate uses created, not invoiceDate (ETP-5122 follow-up)', () => {
+    function fiscalInfoRows() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      return (props.children || []).filter((el) => el?.props?.label);
+    }
+
+    function vfInfoRow() {
+      return fiscalInfoRows().find((el) => el.props.label === 'invoicePreview.fiscalStatus.verifactu');
+    }
+
+    it('hides the VERI*FACTU InfoRow for an invoice created before inVfactuSystem', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      const oldInvoice = { ...defaultInvoice, created: '1999-01-01T00:00:00.000Z' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: oldInvoice,
+        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: oldInvoice });
+      expect(vfInfoRow()).toBeUndefined();
+    });
+
+    it('shows the VERI*FACTU InfoRow for an invoice created after inVfactuSystem', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
+      const newInvoice = { ...defaultInvoice, created: '2026-07-01T00:00:00.000Z' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: newInvoice,
+        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: newInvoice });
+      expect(vfInfoRow()).toBeTruthy();
+    });
+
+    // The exact case ETP-5122 asked to demonstrate: SAME invoice, invoiceDate
+    // predates adoption for all three systems, but created postdates the
+    // VERI*FACTU adoption date — VERI*FACTU shows, SII/TBAI stay hidden.
+    it('shows VERI*FACTU but hides SII/TBAI on the same invoice when only created qualifies', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: true });
+      const divergentInvoice = {
+        ...defaultInvoice,
+        invoiceDate: '2026-01-01', // predates SII/TBAI adoption
+        accountingDate: '2026-01-01', // predates SII adoption
+        created: '2026-07-01T00:00:00.000Z', // postdates VERI*FACTU adoption
+      };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: divergentInvoice,
+        siiRecord: { fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
+        tbaiRecord: { tbaisystemdate: '2026-06-01T00:00:00.000Z' },
+        verifactuRecord: { inVfactuSystem: '2026-06-01T00:00:00.000Z' },
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: divergentInvoice });
+      const rows = fiscalInfoRows();
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.sii')).toBe(false);
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.tbai')).toBe(false);
+      expect(vfInfoRow()).toBeTruthy();
     });
   });
 
@@ -740,5 +856,63 @@ describe('InvoicePreview', () => {
 
       expect(screen.queryByTestId('Download__cf88e6')).not.toBeInTheDocument();
     });
+  });
+});
+
+// ── ETP-5069: the EMAILS card now reads the document's real send history ─────
+// The card needs the invoice id and the API base to issue that request, plus a
+// `refreshSignal` the panel bumps once a send succeeds — otherwise the card would keep
+// showing the state it had BEFORE the email went out. (EmailsCard is only rendered for
+// sales invoices; purchase-invoice has no send flow.)
+describe('InvoicePreview — email history wiring (ETP-5069)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true }));
+    useDocumentCurrency.mockReturnValue({
+      orgCurrencyCode: null,
+      exchangeRate: null,
+      isSameCurrency: true,
+      loading: false,
+      convertAmount: (amount) => amount,
+    });
+  });
+
+  function lastEmailsCardProps() {
+    return vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+  }
+
+  function renderSalesInvoiceWithOpenSendModal() {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true, showSendModal: true }));
+    return renderInvoicePreview({ specName: 'sales-invoice', windowName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+  }
+
+  it('passes the invoice id and the API base down to EmailsCard', () => {
+    renderInvoicePreview({ specName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+    const props = lastEmailsCardProps();
+    expect(props.documentId).toBe('inv-1');
+    expect(props.apiBaseUrl).toBe('/api/sales-invoice');
+  });
+
+  it('starts EmailsCard with a defined refreshSignal', () => {
+    renderInvoicePreview({ specName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+    expect(lastEmailsCardProps().refreshSignal).toBeDefined();
+  });
+
+  it('bumps refreshSignal on EmailsCard when the send modal reports a successful send', () => {
+    renderSalesInvoiceWithOpenSendModal();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('send-modal-sent'));
+
+    expect(lastEmailsCardProps().refreshSignal).not.toBe(before);
+  });
+
+  it('leaves refreshSignal untouched when the send modal is merely closed', () => {
+    renderSalesInvoiceWithOpenSendModal();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('send-modal-close'));
+
+    expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });

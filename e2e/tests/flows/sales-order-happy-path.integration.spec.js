@@ -78,10 +78,12 @@ test.describe('Sales Order — Happy path (integration)', () => {
     });
 
     // ETP-5079: the onboarding dataset no longer seeds any visible product
-    // (the demo "Queso Sardo"/"Agua"/"Cerveza"/"Fernet" rows were deleted, and
-    // the only remaining product is hidden behind a system category), so the
-    // two lines this test adds have nothing to search for unless the suite
-    // provisions its own fixtures first. See e2e/tests/helpers/product-helpers.js.
+    // (the demo "Queso Sardo"/"Agua"/"Cerveza"/"Fernet" rows are filtered out
+    // at import time — still shipped for GOClient, never handed to a tenant —
+    // and the only product a tenant does receive is hidden behind a system
+    // category), so the two lines this test adds have nothing to search for
+    // unless the suite provisions its own fixtures first.
+    // See e2e/tests/helpers/product-helpers.js.
     await test.step('Ensure product fixtures', async () => {
       await ensureProductFixtures(page);
     });

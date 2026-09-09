@@ -87,7 +87,7 @@ vi.mock('@/components/forms/fields', () => ({
   ),
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { todayISO } from '@/components/payment/paymentData';
 import { NewTransactionModal } from '../NewTransactionModal.jsx';
@@ -468,5 +468,120 @@ describe('NewTransactionModal — edit mode', () => {
     expect(screen.getByTestId('tx-new-save')).toBeInTheDocument();
     // The G/L item is still editable.
     expect(screen.getByTestId('tx-glitem-pick')).toBeInTheDocument();
+  });
+});
+
+// ── description max length (PSD-23) ───────────────────────────────────────────
+//
+// Same defect as the funds-transfer modal, same window: a description longer than the
+// AD column width is allowed to leave the browser and comes back as a 400. The limit is
+// 255, published by the window contract at
+//   artifacts/financial-account/contract.json
+//     → frontendContract.entities.transaction.fields[].validation.maxLength
+// and declared once as FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription in
+// windows/custom/financial-account/fieldLengthValidation.js.
+//
+// This modal's single gate is the `valid` const, which drives BOTH footer buttons
+// (tx-new-save → Draft, tx-new-confirm → create + process) and is re-checked inside
+// handleSave, so an over-long description must block all three paths.
+describe('NewTransactionModal — description max length', () => {
+  const LIMIT = 255;
+  const AT_LIMIT = 'x'.repeat(LIMIT);
+  const OVER_LIMIT = 'x'.repeat(LIMIT + 1);
+
+  beforeEach(() => {
+    createMovement.mockReset().mockResolvedValue({ id: 'mov-1' });
+    updateMovement.mockReset().mockResolvedValue({ id: 'mov-1' });
+    creatingFlag = false;
+    toastSuccess.mockClear();
+    toastError.mockClear();
+  });
+
+  // fireEvent.change rather than user.type: typing 256 characters one keystroke at a
+  // time is needlessly slow and this test is about the value, not the keystrokes.
+  function typeDescription(value) {
+    fireEvent.change(screen.getByTestId('tx-description'), { target: { value } });
+  }
+
+  it('keeps both footer buttons enabled at exactly 255 characters', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+    typeDescription(AT_LIMIT);
+
+    expect(screen.queryByTestId('tx-description-error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tx-new-save')).toBeEnabled();
+    expect(screen.getByTestId('tx-new-confirm')).toBeEnabled();
+  });
+
+  it('surfaces the error and disables Guardar AND Confirmar at 256 characters', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+    // Both buttons are genuinely reachable first, so the disabled state below is
+    // attributable to the description length and to nothing else.
+    expect(screen.getByTestId('tx-new-save')).toBeEnabled();
+    expect(screen.getByTestId('tx-new-confirm')).toBeEnabled();
+
+    typeDescription(OVER_LIMIT);
+
+    // i18n is mocked as identity, so the shared key surfaces verbatim. It already ships in
+    // both locale files, so the fix adds no new copy.
+    expect(screen.getByTestId('tx-description-error')).toHaveTextContent('fieldMaxLengthError');
+    expect(screen.getByTestId('tx-new-save')).toBeDisabled();
+    expect(screen.getByTestId('tx-new-confirm')).toBeDisabled();
+  });
+
+  it('never calls createMovement when the description is over the limit', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+    typeDescription(OVER_LIMIT);
+
+    fireEvent.click(screen.getByTestId('tx-new-save'));
+    fireEvent.click(screen.getByTestId('tx-new-confirm'));
+    await Promise.resolve();
+
+    expect(createMovement).not.toHaveBeenCalled();
+  });
+
+  it('saves again once the description is trimmed back to the limit', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+    typeDescription(OVER_LIMIT);
+    fireEvent.click(screen.getByTestId('tx-new-save'));
+    await Promise.resolve();
+    expect(createMovement).not.toHaveBeenCalled();
+
+    // The gate must be reactive, not a one-way latch.
+    typeDescription(AT_LIMIT);
+    expect(screen.queryByTestId('tx-description-error')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('tx-new-save'));
+
+    await waitFor(() => expect(createMovement).toHaveBeenCalledOnce());
+    expect(createMovement.mock.calls[0][0]).toMatchObject({ description: AT_LIMIT });
+  });
+
+  it('renders a live character counter against the limit', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+
+    typeDescription('abcde');
+    expect(screen.getByTestId('tx-description-counter')).toHaveTextContent(`5/${LIMIT}`);
+
+    typeDescription(OVER_LIMIT);
+    expect(screen.getByTestId('tx-description-counter')).toHaveTextContent(`${LIMIT + 1}/${LIMIT}`);
+  });
+
+  it('treats an emptied description as valid (length is not a required check)', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await makeValid(user);
+    typeDescription('');
+
+    expect(screen.queryByTestId('tx-description-error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tx-new-save')).toBeEnabled();
   });
 });

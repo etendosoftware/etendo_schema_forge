@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { extractApiErrorMessage } from '@/lib/apiError';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
@@ -73,6 +75,53 @@ function DiscountSelect({ value, options, onChange, loading }) {
   );
 }
 
+// ─── Discount change helpers ─────────────────────────────────────────────────
+// Each branch of handleDiscountChange (delete/update/create) is extracted into
+// its own helper to keep the dispatcher's cognitive complexity low. Behavior
+// (requests, bodies, success/error toasts, state updates) is unchanged.
+
+async function deleteDiscount(discountRecord, apiFetch, ui, setDiscountRecord) {
+  try {
+    const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDiscountRecord(null);
+      toast.success(ui('discountDeleteSuccess'));
+    } else {
+      toast.error(await extractApiErrorMessage(res));
+    }
+  } catch (err) {
+    toast.error(err.message || ui('discountDeleteError'));
+  }
+}
+
+async function updateDiscount(discountRecord, newDiscountId, apiFetch, setDiscountRecord) {
+  const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ discount: newDiscountId }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    setDiscountRecord(d?.response?.data?.[0] ?? { ...discountRecord, discount: newDiscountId });
+  }
+}
+
+async function createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRecord) {
+  const res = await apiFetch(`/basicDiscount?parentId=${bpId}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      discount: newDiscountId,
+      lineNo: 10,
+      applyInOrder: 'Y',
+      customer: data?.customer ? 'Y' : 'N',
+      vendor: data?.vendor ? 'Y' : 'N',
+    }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    setDiscountRecord(d?.response?.data?.[0] ?? null);
+  }
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export default function BillingPreferencesForm(props) {
@@ -87,8 +136,6 @@ export default function BillingPreferencesForm(props) {
   // Sub-entity records (current BP's discount)
   const [discountRecord, setDiscountRecord] = useState(undefined); // undefined=loading, null=none
 
-  const paymentMethodId = resolveId(data?.paymentMethod);
-  const pOPaymentMethodId = resolveId(data?.pOPaymentMethod);
   const baseSelectorContext = useMemo(() => {
     const ctx = {};
     if (organizationId) ctx.AD_Org_ID = organizationId;
@@ -98,25 +145,39 @@ export default function BillingPreferencesForm(props) {
   }, [organizationId, clientId, bpId]);
 
   // Customer and vendor account selectors must filter INDEPENDENTLY: each side carries only its
-  // own payment method. If both Fin_Paymentmethod_ID and PO_Paymentmethod_ID were sent together,
-  // the backend policy (which reads Fin_Paymentmethod_ID first) would filter the vendor account by
-  // the customer's method. FIN_ISRECEIPT also drives the payment-method selector's own direction
-  // filter: 'Y' = incoming (customer pays us), 'N' = outgoing (we pay vendor).
-  const customerSelectorContext = useMemo(() => {
-    const ctx = { ...baseSelectorContext, FIN_ISRECEIPT: 'Y' };
-    if (paymentMethodId) ctx.Fin_Paymentmethod_ID = paymentMethodId;
-    return ctx;
-  }, [baseSelectorContext, paymentMethodId]);
-  const vendorSelectorContext = useMemo(() => {
-    const ctx = { ...baseSelectorContext, FIN_ISRECEIPT: 'N' };
-    if (pOPaymentMethodId) ctx.PO_Paymentmethod_ID = pOPaymentMethodId;
-    return ctx;
-  }, [baseSelectorContext, pOPaymentMethodId]);
+  // own payment method. FIN_ISRECEIPT drives the payment-method selector's own direction filter:
+  // 'Y' = incoming (customer pays us), 'N' = outgoing (we pay vendor).
+  //
+  // ETP-5183: Fin_Paymentmethod_ID / PO_Paymentmethod_ID are NO LONGER injected here — the
+  // `account`/`pOFinancialAccount` field defs below now declare `dependsOn` (paymentMethod /
+  // pOPaymentMethod respectively), and CreatableSearchSelect's own request-building
+  // (`params = {...selectorContext}; if (parentKey && parentValue && filterKey) params[filterKey]
+  // = parentValue;`) always sets that same key from the SAME source value (`data.paymentMethod` /
+  // `data.pOPaymentMethod`) — a second, manually-injected copy here would be a pure duplicate,
+  // never a different value. `dependsOn` additionally gets the field auto-disabled while its
+  // payment method is empty, which this hand-rolled context alone never provided (Etendo Classic
+  // parity gap fixed by this ticket).
+  const customerSelectorContext = useMemo(
+    () => ({ ...baseSelectorContext, FIN_ISRECEIPT: 'Y' }),
+    [baseSelectorContext],
+  );
+  const vendorSelectorContext = useMemo(
+    () => ({ ...baseSelectorContext, FIN_ISRECEIPT: 'N' }),
+    [baseSelectorContext],
+  );
 
   // Clearing the account is a user-triggered side effect of changing the payment method: the
   // account list is filtered by the method (see the FIN_Financial_Account selector policy), so the
   // previously selected account may no longer be a valid option. Wrapping onChange fires only on
   // user edits, never on initial hydration, so a compatible saved pair survives when the record loads.
+  //
+  // NOT made redundant by `dependsOn`: CreatableSearchSelect's serverSearch-mode parent-change
+  // effect (see CreatableSearchSelect.jsx) only auto-clears the dependent value when the parent
+  // becomes EMPTY, not when it changes to a DIFFERENT non-empty value — the fetch-once mode's
+  // richer "auto-clear/auto-select when the current value is no longer among the freshly fetched
+  // items" logic does not apply here (`serverSearch: true` is always forced for `type:'selector'`
+  // fields — see EntityForm.jsx's renderSearchSelectField). So this explicit clear-on-change stays
+  // as the only guard against a stale, now-incompatible account surviving a payment method change.
   const handleCustomerChange = useCallback((key, value, ...rest) => {
     onChange?.(key, value, ...rest);
     if (key === 'paymentMethod') {
@@ -196,34 +257,13 @@ export default function BillingPreferencesForm(props) {
     try {
       if (!newDiscountId && discountRecord?.id) {
         // Clear: delete existing record
-        await apiFetch(`/basicDiscount/${discountRecord.id}`, { method: 'DELETE' });
-        setDiscountRecord(null);
+        await deleteDiscount(discountRecord, apiFetch, ui, setDiscountRecord);
       } else if (discountRecord?.id) {
         // Update existing record
-        const res = await apiFetch(`/basicDiscount/${discountRecord.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ discount: newDiscountId }),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setDiscountRecord(d?.response?.data?.[0] ?? { ...discountRecord, discount: newDiscountId });
-        }
+        await updateDiscount(discountRecord, newDiscountId, apiFetch, setDiscountRecord);
       } else if (newDiscountId) {
         // Create new record with required auto-flags
-        const res = await apiFetch(`/basicDiscount?parentId=${bpId}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            discount: newDiscountId,
-            lineNo: 10,
-            applyInOrder: 'Y',
-            customer: data?.customer ? 'Y' : 'N',
-            vendor: data?.vendor ? 'Y' : 'N',
-          }),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setDiscountRecord(d?.response?.data?.[0] ?? null);
-        }
+        await createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRecord);
       }
     } finally {
       setSaving(false);
@@ -238,7 +278,18 @@ export default function BillingPreferencesForm(props) {
   const customerTopBillingFields = [
     { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-    { key: 'account', column: 'FIN_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    // ETP-5183: `dependsOn` (kept as type:'selector' so it still renders through
+    // CreatableSearchSelect/renderSearchSelectField, NOT the DependentSelect component that
+    // `type: 'dependent'` would route to) — disables the field until paymentMethod has a value
+    // and supplies Fin_Paymentmethod_ID as the selector's filter param (see CreatableSearchSelect.jsx).
+    {
+      key: 'account',
+      column: 'FIN_Financial_Account_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'dependent',
+      dependsOn: { field: 'paymentMethod', filterKey: 'Fin_Paymentmethod_ID' },
+    },
   ];
   const customerPaymentTermsField = [
     { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
@@ -247,7 +298,15 @@ export default function BillingPreferencesForm(props) {
   const vendorTopBillingFields = [
     { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'pOPaymentMethod', column: 'PO_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-    { key: 'pOFinancialAccount', column: 'PO_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    // ETP-5183: same dependsOn treatment as `account` above, mirrored for the vendor side.
+    {
+      key: 'pOFinancialAccount',
+      column: 'PO_Financial_Account_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'dependent',
+      dependsOn: { field: 'pOPaymentMethod', filterKey: 'PO_Paymentmethod_ID' },
+    },
   ];
   const vendorPaymentTermsField = [
     { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },

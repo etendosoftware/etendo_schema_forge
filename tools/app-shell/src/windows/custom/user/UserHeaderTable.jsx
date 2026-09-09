@@ -37,12 +37,21 @@ import PendingInvitationPill from './PendingInvitationPill.jsx';
  * columns:user` block) for every column except `defaultRole` and `invitationStatus`
  * (see below) — same `key`/`column`/`type`/`required`, so headers, AD-dictionary
  * label resolution and the advanced-filter builder behave identically. No `label:`
- * literal is declared here for those 4 columns — `DataTable`'s own header resolution
+ * literal is declared here for those columns — `DataTable`'s own header resolution
  * (`t(col.column) ?? col.label ?? col.key`) always resolves them through the native AD
  * dictionary lookup (`t(col.column)`) before ever falling back to `col.label`, so a
  * hardcoded literal here would be dead fallback text that the `sfqg` i18n check flags
  * regardless of whether it renders. Re-verify this list against that file whenever
  * `artifacts/user/decisions.json`'s `user` entity's grid fields change.
+ *
+ * **ETP-5198 — `businessPartner` ("Contacto") and `locked` ("Bloqueado") removed.**
+ * Neither field is editable from the grid, so both were dropped from `decisions.json`
+ * (`grid: false`) — but since this window's grid is fully taken over by this hand-written
+ * component, the generated `UserTable.jsx`'s own column list is NOT what actually renders
+ * (or feeds `DataTable`'s `onColumnsReady` → `ListView`'s advanced-filter column list) —
+ * this file's own `columns` array had to be hand-synced to drop the same two entries,
+ * same precedent as the DEV wave 12 `firstName`/`lastName` re-sync documented in
+ * `docs/generated-custom-windows/user.md`. Both fields remain on the detail form.
  *
  * **`invitationStatus` (ETP-4830 scope addition) has no generated-table equivalent at
  * all** — it is not an `AD_User` column, just a backend-contract-only field NEO adds
@@ -52,7 +61,7 @@ import PendingInvitationPill from './PendingInvitationPill.jsx';
  * form's toolbar — extracted into its own file specifically so this grid column and
  * that toolbar pill share ONE status→style mapping instead of two. Declared via
  * `invitationColumn` below (not the static `columns` array), because building its
- * `label` needs the `ui()` hook, which — unlike the 5 columns above, which never call
+ * `label` needs the `ui()` hook, which — unlike the columns above, which never call
  * `ui()` for their headers — is only available inside the component render, not at
  * module scope.
  *
@@ -67,9 +76,7 @@ import PendingInvitationPill from './PendingInvitationPill.jsx';
  */
 const columns = [
   { key: 'name', column: 'Name', type: 'string', required: true },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
   { key: 'email', column: 'Email', type: 'string', required: true },
-  { key: 'locked', column: 'IsLocked', type: 'boolean', required: true },
   // ETP-4830 — 'Activo' column (reference screenshot). `toggle: true` mirrors what
   // generate-frontend.js emits for `inlineToggle: true` on this field in
   // decisions.json (see artifacts/user/generated/web/user/UserTable.jsx's own

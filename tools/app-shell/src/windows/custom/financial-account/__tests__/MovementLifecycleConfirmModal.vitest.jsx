@@ -129,6 +129,44 @@ describe('MovementLifecycleConfirmModal — item visibility (Conciliación / Asi
   });
 });
 
+/**
+ * ETP-5111 — the cartel's three warning-bearing states, which the new dialog ROUTING must leave
+ * untouched. Only an unblocked, posted and/or reconciled delete still reaches this component
+ * (`showCartel` in MovementRowKebab); a draft and a blocked row now get the generic
+ * `DeleteConfirmDialog` instead. So these three cases ARE the cartel's whole live surface for
+ * delete, and the user protected them explicitly: losing the desconciliación/asiento enumeration
+ * on the most destructive action in the menu was not acceptable.
+ *
+ * NOTE on the retained `'neither'` branch (`financeAccountTxConfirmDeleteSubNeither`,
+ * `financeAccountTxConfirmDeleteBtnPlain`): it is deliberately unreachable now and deliberately
+ * NOT covered here — a render test would assert a path no caller can produce. See the report
+ * accompanying this change for why a unit test on `resolveStateKey` is not available either.
+ */
+describe('MovementLifecycleConfirmModal — the delete states that still reach the cartel', () => {
+  it.each([
+    ['posted only', false, true, 'financeAccountTxConfirmWarningPostedOnly', 'financeAccountTxConfirmDeleteSubPostedOnly'],
+    ['reconciled only', true, false, 'financeAccountTxConfirmWarningReconciledOnly', 'financeAccountTxConfirmDeleteSubReconciledOnly'],
+    ['both', true, true, 'financeAccountTxConfirmWarningBoth', 'financeAccountTxConfirmDeleteSubBoth'],
+  ])('%s keeps its warning, its subtitle and the "de todos modos" button', (_label, reconciled, posted, warningKey, subKey) => {
+    render(
+      <MovementLifecycleConfirmModal
+        action="delete"
+        reconciled={reconciled}
+        posted={posted}
+        onConfirm={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(subKey)).toBeInTheDocument();
+    expect(screen.getByText(warningKey)).toBeInTheDocument();
+    expect(screen.getByText('financeAccountTxConfirmDeleteBtn')).toBeInTheDocument();
+    // The plain-delete copy belongs to the unreachable state and must not leak into these.
+    expect(screen.queryByText('financeAccountTxConfirmDeleteSubNeither')).not.toBeInTheDocument();
+    expect(screen.queryByText('financeAccountTxConfirmDeleteBtnPlain')).not.toBeInTheDocument();
+  });
+});
+
 describe('MovementLifecycleConfirmModal — confirmIcon', () => {
   it('renders RotateCcw (width 15, strokeWidth 2.2) for action="reactivate"', () => {
     render(

@@ -1339,3 +1339,604 @@ fix alone. Full write-up: `com.etendoerp.go/docs/neo-headless.md` §4.3.1.
 **Lesson 1 — the field existed; what was missing was the backend injector that populates it, and the frontend's `??` turned that absence into plausible, silent data.** This is a sharper trap than a typo'd property name, because every check you would run comes back clean: the field is real, the sibling window proves it works, the network response is a valid 200 with a valid row — the property is simply not in it. `row.someField ?? 'SomeDefault'` cannot distinguish "the record legitimately has no value" from "no producer is wired for this endpoint", and when the default is a *plausible* domain value ("Pendiente", 0, "N/A", "Draft") the bug renders as ordinary-looking data forever. So: before writing a default, identify the field's PRODUCER, not just its name — grep `frontendContract.entities.<entity>.fields` in the window's own `contract.json`, and if it is not there, find the `afterHandle()`/injector that adds it and confirm it is registered for *this* spec. A field being real in a sibling window proves nothing; copying a cell renderer copies its data contract too, and the producer is exactly the part that does not travel with the JSX.
 
 **Lesson 2 — when a sibling feature in the same file already solves your problem synchronously, matching it beats improving on it.** The per-row resolution was strictly more "correct" in the abstract (a page *can* mix orgs) and strictly worse in practice: three regressions, a deleted hook, and a capability nobody needed, because an invoice list is browsed one org at a time. Asymmetry between two adjacent, near-identical columns is itself a design smell — it doubles the states the component can be in and guarantees that the next fix to one will not apply to the other. Take the documented trade-off (visibility follows the top-nav org, exactly as SII does) and write it down, rather than paying an architectural cost to erase an edge case that has not been observed.
+
+---
+
+## [2026-09-03] ETP-5111 (out of scope, open) — `Utilities.checkPeriod` is not called on the NEO delete/reactivate path
+
+**Component:** `FinancialAccountTransactionsHandler#handleDelete` / `#handleReactivate`
+(`com.etendoerp.go`, around `:745-760` before ETP-5111 rewrote `handleDelete`)
+
+**Symptom.** Deleting or reactivating a processed financial-account movement through Etendo GO
+succeeds even when its accounting period is **closed**. The same operation in the Etendo Classic UI
+is refused. Nothing surfaces to the user in GO, so the divergence is silent: the unposting simply
+happens.
+
+**Root cause.** This is not merely a missing convenience check — it is a **divergence from
+Classic**, which calls it on every one of the four Payment Removal entry points:
+`com.etendoerp.payment.removal/.../handler/RemoveTransaction.java:34-38`, and likewise
+`RemovePayment:37`, `ReactivateTransaction:34` and `ReactivatePayment:37`. The GO handler delegates
+to `TransactionRemovalUtil` for the removal itself but never performs the period check Classic runs
+*before* invoking the same code, so the period gate exists in exactly one of the two front doors to
+the same operation.
+
+**Status: open, deliberately out of ETP-5111's scope** — the ticket unified the *delete criterion*
+across the window's three surfaces and did not touch accounting-period validation, which is a
+different rule with its own blast radius (it would also apply to the `reactivate` action, which
+ETP-5111 does not otherwise change). Needs its own ticket.
+
+**Precedent for wiring it, when that ticket comes.** `ReconciliationHandler.java:1152` already calls
+the period check on its own mutation path, with a package-private `checkPeriod` seam at `:1586`
+specifically so tests can substitute it. Copy that shape rather than inventing a second one — a
+handler-local static call with no seam is untestable without a real closed period in the fixture DB.
+
+**Lesson.** When a GO handler delegates to a Classic module's utility, the utility is rarely the
+whole of what Classic does around it. Read the Classic *handler* that calls the same utility, not
+just the utility, before assuming parity: here all four Classic handlers wrap the same
+`*RemovalUtil` call in a `checkPeriod` the GO side dropped by omission.
+
+---
+
+## [2026-09-03] ETP-5111 (out of scope, latent) — `PaymentRemovalUtil.reactivate` commits mid-request
+
+**Component:** `PaymentRemovalUtil#reactivate` (`com.etendoerp.payment.removal`, `:98`), as reached
+from any future payment-aware delete route in `com.etendoerp.go`
+
+**Symptom.** None today. This is a latent hazard, recorded before someone builds on top of it.
+
+**Root cause.** `PaymentRemovalUtil.reactivate` calls
+`SessionHandler.getInstance().commitAndStart()` at `:98` — a **commit in the middle of a request**.
+NEO's own mutation wrapper (`FinancialAccountTransactionsSupport#runMutation`) is built on the
+opposite assumption: it owns one transaction for the whole request and calls `rollbackAndClose()`
+when anything after the mutation fails. A mid-request commit makes that rollback a no-op for
+everything that happened before it, so a later failure would leave the request half-applied — the
+exact all-or-nothing guarantee the handler advertises.
+
+**Why nothing is broken right now.** The delete path this window actually uses is
+`TransactionRemovalUtil`, which only `flush()`es and never commits, so `runMutation`'s rollback
+still covers the whole request. ETP-5111 kept that path — its rule 2 ("one record = Payment
+Removal") routes through `TransactionRemovalUtil.reactivateAndRemove`, not through
+`PaymentRemovalUtil`. The hazard only materialises if a future ticket enables deleting a
+**payment-originated** movement from this window, which would mean invoking `PaymentRemovalUtil`
+against the payment (see `docs/generated-custom-windows/financial-account.md`, the `action=delete`
+section: ETP-5111 instead rejects those with a 409).
+
+**Status: latent, out of scope.** Whoever builds that feature must decide first whether to call
+`PaymentRemovalUtil` outside `runMutation`, to accept the split transaction explicitly, or to get
+the `commitAndStart()` removed upstream. Do not discover it from a half-applied production request.
+
+**Lesson.** Before delegating to a Classic module utility from inside a single-transaction NEO
+handler, grep the utility for `commitAndStart` / `SessionHandler` before wiring it. A utility that
+manages its own transaction boundaries is not composable with a wrapper that manages the request's.
+
+---
+
+## [2026-09-03] ETP-5111 (pre-existing environment debt) — three gaps that block *verification*, not functionality
+
+**Component:** the repo's own test/dev harness — `tools/app-shell` vitest resolution, the installed
+`@etendosoftware/app-shell-core` package, and `make dev`
+
+**None of these were introduced by ETP-5111.** All three reproduce on `origin/develop` with no
+ETP-5111 change applied. They are recorded here because this ticket is what surfaced them: the
+unified delete rule needed exactly the two mechanical verification routes that are down, so parts of
+it ship with tests that are **written but not executable**. Each gap needs its own ticket; none of
+them is ETP-5111's to fix.
+
+### Gap 1 — `ListView` is not testable in this repo (0 tests collected, both dev profiles)
+
+The whole `ListView.*.vitest.jsx` family — plus `windows/custom/financial-account/__tests__/index.vitest.jsx`
+and `index.interactions.vitest.jsx` — collects **no tests at all**. It is a module-resolution
+failure at transform time, so the suites never run; they do not fail assertions, they fail to load.
+The two dev profiles fail differently, which is why this reads as two separate bugs until you try
+both:
+
+| Profile | Failure |
+|---|---|
+| Published packages (default) | `Failed to resolve import "@etendosoftware/app-shell-core/lib/import/importFormats.js"` from `components/contract-ui/ListExportButton.jsx:8`. Reproduced: `npx vitest run src/components/contract-ui/__tests__/ListView.bulkDelete.vitest.jsx` → *1 failed, no tests*. |
+| `LOCAL_CORE=1` | `Failed to resolve import "read-excel-file/universal"` from `schema_forge_core/packages/app-shell-core/src/lib/import/parseXlsx.js`. |
+
+The `LOCAL_CORE` half is an **uninstalled declared dependency**, not a missing declaration:
+`schema_forge_core/packages/app-shell-core/package.json:82` declares `"read-excel-file": "^9.3.10"`,
+but the package is absent from `node_modules` in *both* checkouts. So the fix is an install in the
+core checkout, not a manifest edit — worth knowing before someone "fixes" the manifest and sees no
+change.
+
+**Consequence for ETP-5111, stated plainly.** The replacement sentinel for the deleted
+`ListView.isRowDeletable.vitest.jsx` — the test asserting that the bulk trash button is never
+pre-disabled by row eligibility — is written and parses cleanly but **cannot execute**. That
+guarantee therefore has no running vitest coverage today.
+
+### Gap 2 — a vitest run without `LOCAL_CORE=1` produces a number that means nothing
+
+With the default published-package profile, **333 of 975 suites fail to load**, because the
+installed `@etendosoftware/app-shell-core@0.3.40` does not serve three paths the source imports:
+
+- `./auth/api` — the file *exists* (`src/auth/api.js`) but is not an `exports` key; the package maps
+  only `./auth` → `./src/auth/index.js`, so Node/Vite answer `ERR_PACKAGE_PATH_NOT_EXPORTED`. An
+  existing file that is not exported is the confusing case: "the file is right there" is true and
+  irrelevant.
+- `./lib/recordVersions.js` and `./lib/import/importFormats.js` — genuinely absent from the
+  installed tarball, even though `./lib/*` **is** an exports wildcard. So the wildcard resolves and
+  then finds nothing.
+
+With `LOCAL_CORE=1` the same command yields roughly **14033 tests / 3 pre-existing failures**.
+
+**So the flag is not an optimisation, it is the difference between a meaningful result and noise.**
+Any test brief, QA instruction or CI step that omits it reports a number that cannot be interpreted
+in either direction — a "333 failures" run says nothing about the change under test, and a green run
+of a subset says nothing about the 333.
+
+Related, and a separate trap: **`node:test` gets no benefit from the flag**, because it performs no
+alias resolution — it always resolves against the published package and so always hits the gaps
+above (~51 `ERR_PACKAGE_PATH_NOT_EXPORTED` failures, all pre-existing). Do not "fix" a `node:test`
+failure by adding `LOCAL_CORE=1`; it will not change.
+
+### Gap 3 — `make dev` does not boot in either profile, so nothing serves `localhost:3100`
+
+`tools/app-shell/vite-plugins/report-api.js:19` imports
+`@etendosoftware/schema-forge-cli/src/report-filters.js`, which is **absent from the installed
+package** (`require.resolve` → `MODULE_NOT_FOUND`). `vite.config.js` imports that plugin at its line
+8, so the config itself never evaluates and the dev server never starts.
+
+> Correction to how this was first reported: the bad import is **not** in `vite.config.js` — it is
+> one hop away, in `vite-plugins/report-api.js`. Grepping `vite.config.js` for `report-filters`
+> finds nothing, which reads as "already fixed". Follow the plugin imports.
+
+Playwright cannot paper over it: `e2e/playwright.config.js:57` starts a `webServer` **only** when
+`E2E_EMAIL_SINK === '1'` (and that server is the email sink, not the app), while `use.baseURL`
+defaults to `http://localhost:3100`. So every spec points at a port nothing is listening on.
+
+**Consequence for ETP-5111.** `e2e/tests/flows/financial-account-delete.mocked.spec.js` was updated
+for the new rule (two assertions inverted, two tests added) but has **never been executed**.
+
+### The two gaps compound, and that is the honest state of this ticket
+
+Gap 1 and gap 3 are the **only two places** the unified delete rule could be verified mechanically —
+the vitest sentinel and the mocked Playwright flow — and both are down. There is no third route.
+So the specific guarantee *"the bulk trash button is never pre-disabled by row eligibility, on any
+of the three surfaces"* currently rests on **code review, not on a green test**. That should not be
+smoothed over in the PR description or in a QA sign-off: the tests exist, they are correct as far as
+reading them goes, and they have never run. Whoever closes gap 1 or gap 3 should re-run these two
+first, before anything else, because they are the oldest unexecuted assertions in the change.
+
+**Lesson.** A test that cannot load is not a failing test, it is an absent one, and the two look
+completely different in a report: 0 collected reads as "nothing to do here" where a red assertion
+reads as "fix me". Check the *collected* count, not just the pass/fail line — a suite family that
+reports "no tests" is the strongest possible signal that a guarantee you believe is covered is not.
+And when a repo has two dev profiles, a verification claim has to name the profile it was made
+under, or it is not a claim about anything.
+
+---
+
+## [2026-09-03] ETP-5111 (pre-existing, found while verifying blast radius) — `deleteBlockedByReferences` is missing from `es_AR`, so that locale falls back to raw English
+
+**Component:** `tools/app-shell/src/locales/es_AR.json` (`genericLabels` section) /
+`useEntity.js#extractErrorMessage`
+
+**Reproduces independent of this branch** — confirmed on the working tree with no ETP-5111 change
+applied: the key is genuinely absent from `es_AR.json`, not merely stale relative to the other two
+locales.
+
+### Gap — the key exists in two of three locales, not three
+
+Verified directly against the files, not against a description of them:
+
+```
+en_US.json → genericLabels.deleteBlockedByReferences =
+  "This record cannot be deleted because it has associated records."
+es_ES.json → genericLabels.deleteBlockedByReferences =
+  "No es posible eliminar este registro porque tiene registros asociados."
+es_AR.json → genericLabels.deleteBlockedByReferences = <absent — zero occurrences of the key>
+```
+
+This is the translated sentence `useEntity.js`'s `normalizeServerError` folds a DB-level
+foreign-key-constraint delete rejection into — both the raw Postgres RESTRICT wording ("is still
+referenced from table" / the Spanish "se hace referencia a la llave/clave") and Classic's own
+`ErrorTextParser` AD_Message wording map to it, at two separate call sites in that file
+(`useEntity.js:189` and `:217`).
+
+**Why `es_AR` shows the raw English sentence instead of erroring or falling back to `es_ES`.**
+`useUI()` resolves a key as `dictionary?.genericLabels?.[key] ?? key` — a miss returns the **key
+itself**, with no cross-locale fallback chain (an `es_AR` reader never silently gets `es_ES` or
+`en_US` copy for a key their own dictionary lacks). `useEntity.js`'s local `translate()` helper then
+checks `translated === key`; on a miss it falls through to the **hardcoded English literal** passed
+as its second argument — `'This record cannot be deleted because it has associated records.'`,
+copy-pasted inline at both call sites rather than read from `en_US.json`. So an `es_AR` user who
+tries to delete a record with dependents — in **any window that hits this path**, not only
+`financial-account` — reads that literal English sentence, with no error and no visual sign anything
+is wrong: a hardcoded fallback string is by construction well-formed prose, so this fails exactly as
+silently as the wire-contract gaps recorded elsewhere in this file.
+
+### Why ETP-5111 gives this more exposure, without introducing it
+
+This ticket's `useBulkRowDelete` fix (attaching `err.status` to a rejected DELETE and forwarding
+`errors` to `toastBatchDeleteOutcome`, so `commonFailureReason` can now show a reason from the
+generic bulk-delete path) makes a single-row bulk-delete failure surface a translated backend reason
+on **every `ListView` window's grid multi-select**, not just the two Financial Account tabs that
+already had it via `useBatchDeleteDialog`. `deleteBlockedByReferences` is exactly the kind of reason
+that fix is meant to surface — an FK-RESTRICT delete rejection is one of the most common ways a
+single-row bulk delete fails. The gap itself is not new and was already reachable through the
+existing single-row header/row delete path (`useEntity.handleDelete` calls the same
+`extractErrorMessage`); ETP-5111 does not create it, it just adds a second, wider path (every
+generic grid's bulk delete) that reaches the same already-missing key.
+
+**Status: open, not ETP-5111's to fix.** Filling in the `es_AR` copy is a separate ticket — this
+entry deliberately does not propose Spanish text; the two existing entries (`es_ES` full sentence,
+`en_US` source) are not automatically the right words for `es_AR`'s register and may need the kind
+of native-speaker check already done for this ticket's own voseo strings, rather than a mechanical
+copy of `es_ES`.
+
+**Lesson.** A locale dictionary miss in this app fails through a **hardcoded literal**, not a
+visible error — `useEntity.js`'s `translate()` helper exists precisely because `ui()` alone gives no
+signal that a key was missing, only silently equal-to-itself. When auditing a locale for parity, do
+not trust a grep across `en_US.json`/`es_ES.json` alone: `es_AR.json` is a third, independently
+maintained file (see the existing `bulkDelete*` note earlier in this file — it carries zero keys in
+that unrelated family) and needs its own explicit check, key by key, for anything a fix widens the
+reach of.
+
+---
+
+## [2026-09-03] ETP-5111 — a documented-unreachable branch became a live lie when its guard moved (`resolveStateKey`)
+
+**Component:** `tools/app-shell/src/windows/custom/financial-account/MovementLifecycleConfirmModal.jsx`
+(`resolveStateKey`) and `tools/app-shell/src/windows/custom/shared/LifecycleConfirmModal.jsx`
+
+**Fixed in ETP-5111.** Logged not for the fix but for the *shape* of the bug, which is repeatable
+and was invisible to every local review of the file that changed.
+
+### What happened
+
+The kebab's Eliminar was made to always confirm (previously a plain draft deleted on a single click
+while the bulk trash confirmed every selection — a user-reported inconsistency). The gate that was
+removed, `needsConfirm = isPosted || isReconciled`, lived in `MovementRowKebab.jsx`. Three files
+away, `MovementLifecycleConfirmModal`'s state resolver read:
+
+```js
+if (reconciled && posted) return 'both';
+if (reconciled) return 'reconciled';
+return 'posted';           // <- catches "neither", not just "posted"
+```
+
+That final `return` was **sound by contract, not by accident**: the dialog could only open when
+`reconciled || posted`, so "neither" was genuinely unreachable — and the function's own JSDoc said
+so in as many words. The contract was documented, correct, and then silently invalidated from
+another file. Opened for a plain draft, the dialog rendered the posted tier and asserted two
+specific things that never happened — *"Al eliminarlo se deshará el asiento contable asociado."*
+and *"Esta acción deshará la contabilización del movimiento."* — over an empty effects list, under
+an *"Eliminar de todos modos"* button overriding a warning it had not shown. Not merely wordy: two
+false statements about the user's own data, rendered confidently.
+
+### Why the fix reached shared code
+
+The honest fourth state needs **no yellow warning box at all**, and `warning` arrives at the shared
+`LifecycleConfirmModal` as a pre-resolved string that it rendered unconditionally — so "nothing to
+warn about" was inexpressible. Three things there are now conditional: the warning box, the items
+list, and the padded body wrapper itself (with both halves hidden it left ~24px of dead space — the
+same empty-container bug one level up). A local fix in the wrapper could not express the state; the
+shared component had to learn that its body is optional. The contract now lives in
+`docs/ui-customization.md` §9f.
+
+One knock-on worth naming, since it lands in another domain: the items `<div>` carried
+`marginBottom: 16`, so a caller producing an **empty** items list used to pay 16px of dead space
+above its warning box. `PaymentLifecycleConfirmModal` on a draft payment is exactly that case
+(`items = []` with a truthy generic warning), so its warning box now sits 16px higher. An
+improvement, not a regression, and the only appearance change to any pre-existing dialog.
+
+### The transferable lesson
+
+**A `resolveStateKey`-shaped function whose final `return` names a *specific* state rather than a
+neutral default turns every unhandled input into a confident false statement.** The dangerous shape
+is precisely a catch-all that reads like one case: `return 'posted'` looks like "the posted case"
+and behaves as "everything else". Prefer an explicit branch per state so that widening the input
+space fails **loudly** — a missing key, a blank subtitle — instead of quietly rendering a
+neighbouring state's copy. `reactivate` in the fixed wrapper is deliberately left with *no*
+`neither` subtitle for exactly this reason: if its gate is ever removed the subtitle renders empty,
+which was chosen as the safe direction to fail over repeating the old lie.
+
+And: **"this state is unreachable" is a contract with a caller in another file, and nothing enforces
+it.** When you delete the condition that made a state unreachable, grep for what justified the
+assumption before treating the change as local.
+
+### Checked and NOT a defect: `PaymentLifecycleConfirmModal` (Cobros/Pagos)
+
+The obvious next question is whether the sibling modal in the payments domain has the same hole. It
+was inspected and **does not** — it is the counter-example worth copying, not a pending ticket:
+
+- `resolvePaymentStateKey(reconciled, hasTransaction)` ends `return 'draft'` — a **named, handled**
+  state, not a specific-state catch-all. Both action maps have real `draft` entries
+  (`DRAFT_DELETE_SUB_KEY`, `DRAFT_REACTIVATE_SUB_KEY`).
+- `resolveWarningKey`'s final branch returns the generic `'paymentConfirmWarning'` — honest for any
+  state rather than an accounting claim.
+- `resolveSubKey` additionally ends `?? 'paymentConfirmWarning'`, carrying its own comment about a
+  past incident where a missing combination threw and blanked the whole window.
+
+So the difference is not that Movimientos was unlucky: the payments modal was written with a
+neutral default and a total fallback, and the movements one was written with a specific-state
+fallthrough plus a comment promising it could not be reached. Same problem shape, two designs, and
+only one of them survived a caller changing three files away.
+
+---
+
+## [2026-09-04] ETP-5111 — in a ticket that changes shape repeatedly, the *rationale* comments go stale faster than the code
+
+**Component:** process, not code — observed across `MovementRowKebab.jsx`,
+`MovementLifecycleConfirmModal.jsx`, `useBatchDeleteDialog.jsx` and this ticket's own docs
+
+**Not a defect.** Logged because the pattern is now established rather than anecdotal, and because
+nothing in the toolchain catches it.
+
+### What happened, three times
+
+The kebab's delete path was revised three times inside one ticket, each revision driven by the user
+comparing two surfaces side by side:
+
+1. hidden for ineligible rows → always rendered, refusal explained in a toast;
+2. draft deleted on a single click → every non-blocked row confirms first;
+3. blocked row short-circuited to the toast → **every** row confirms, and the dialog is chosen by
+   what is at stake (`showCartel`).
+
+Each revision left behind comments that were *correct when written* and false afterwards. The
+developer caught three of their own this round. The docs had the same failure: a passage I had
+written and verified was contradicted by its own neighbour ten lines below after one such revision,
+and a reviewer flagged it as **worse than a merely stale doc — a self-contradicting one gives the
+reader no way to tell which half is current.**
+
+### Why this class survives every gate
+
+- **Tests assert behaviour, not explanations.** All three intermediate states had passing suites.
+  A comment saying "gets NO dialog: there is nothing to confirm" sat directly above code that had
+  started opening a dialog, and nothing failed.
+- **The rationale is the part most worth keeping and the part that rots first.** `showCartel`'s
+  *what* is one line and self-evident; its *why* (the cartel earns its place only when it has
+  effects to enumerate) took three revisions to reach and is invisible in the expression.
+- **Density makes it likelier, not less likely.** This branch carries ~148 `ETP-5111`-tagged
+  comment lines. Explaining a decision well and then changing the decision is the whole mechanism —
+  the better the comment, the more specific the claim it can outlive.
+- **A comment is often a contract with a caller in another file** (see the `resolveStateKey` entry
+  above), so the line that invalidates it is frequently not in the file being reviewed.
+
+### What to do about it
+
+- When a reviewer or user changes a decision mid-ticket, **grep the branch for the ticket tag**
+  (`git diff -U0 | grep ETP-XXXX`) before calling it done, and re-read every hit against the new
+  decision. That is the only sweep that reliably finds these; a diff review of the last commit will
+  not, because the stale comment is in an *earlier* commit's hunk.
+- Treat "explain the exception" comments as the highest-risk kind. An exception is exactly what a
+  later revision removes — all three cases above were the removal of an exception.
+- The same sweep applies to docs: after a behaviour change, re-read the *whole* passage, not the
+  sentence being patched. Two of this ticket's doc findings were survivors of a partial rewrite —
+  a parenthetical that outlived the sentence around it, twice.
+
+**Lesson.** Code that changes shape three times in one ticket will leave stale *explanations*
+behind even when every line of logic is correct and every test is green, because no gate reads
+prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
+diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## [2026-09-07] ETP-5233 — Kebab menu hid Post/Unpost on every statically read-only window, for every user, regardless of role access
+
+**Component:** `DetailView.jsx` — `windowReadOnly` derivation and its single `DetailMoreActionsMenu`
+render call site. Regression introduced by ETP-5116 (2026-09-07), surfaced the same day while
+manually testing an unrelated ticket (ETP-5175) after rebasing onto `develop`.
+
+**Symptom.** `matched-purchase-invoices` lost its documented, sanctioned kebab exception —
+Post/Unpost disappeared from the "more" menu for every user, including ones with full read-write
+role access. The window is statically read-only for CRUD (`decisions.json` `window.readOnly:
+true`) but was explicitly designed to keep Post/Unpost as a document action anyway (see
+`docs/generated-custom-windows/matched-purchase-invoices.md`).
+
+**Cause.** `windowReadOnly` is an intentional OR of two different concepts: a **static**
+`decisions.json` "this window's data is view-only by design" flag (`api?.window?.readOnly`) and a
+**runtime** ETP-4520 per-role access-tier flag ("this user's role only has read-only access",
+`windowProp?.readOnly`). ETP-5116 closed a real gap — `DetailMoreActionsMenu` wasn't gated by
+either — but wired the kebab to the *combined* flag, same as every other consumer (save, delete,
+add-line). Unlike those, the kebab is not supposed to inherit the static half: a window can be
+CRUD-read-only by design while still exposing a hand-picked document action in its menu.
+
+**Fix.** Added a second, narrower derivation — `menuActionsReadOnly = windowProp?.readOnly ===
+true` (role-tier signal only) — and passed *that* to `DetailMoreActionsMenu`'s one render call
+site instead of `windowReadOnly`. The combined flag is untouched everywhere else (save/delete
+gates, process buttons, field read-only) — those correctly still want the OR of both signals.
+
+**Lesson.** When a boolean is a deliberate OR of two distinct concepts (a static design-time
+declaration and a runtime access-tier check), wiring a *new* consumer straight to that combined
+flag is not automatically correct just because every existing consumer does. Check which half of
+the OR the new consumer actually needs — here the kebab needed only the role-tier half, and
+gating it on the union silently regressed a documented per-window exception. Full history:
+`docs/superpowers/specs/2026-07-15-window-readonly-capability-design.md` § "Correction
+(2026-09-08)".
+
+---
+
+## [2026-09-08] ETP-5234 — Copilot markdown: an external link href truncates at the first `)`
+
+**Component:** `tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `INLINE_RE`
+
+**Status:** Known issue, **logged not fixed** (deliberate user decision). **Pre-existing** — not a
+regression from the GFM-table/internal-link work in ETP-5234; the old regex used the same `[^\s)]`
+href class.
+
+**Symptom:** A link whose URL legitimately contains a closing parenthesis renders a **live but
+truncated** anchor, so the user lands on a 404. Verified output for
+`[w](https://en.wikipedia.org/wiki/Foo_(bar)) tail`:
+
+```html
+<a href="https://en.wikipedia.org/wiki/Foo_(bar" target="_blank">w</a>) tail
+```
+
+**Root cause:** the href group of `INLINE_RE` is `([^\s)]{1,2000})` — it stops at the first `)`
+because that is the delimiter closing the markdown link. Balanced parentheses in a URL are legal
+markdown (GFM handles them) but need paren-counting, which a single regex alternation cannot do.
+
+**Why not fixed:** `INLINE_RE` is one alternation that governs **all** inline formatting — bold,
+italic, inline code and links. Rewriting the link branch to match balanced parens changes the regex
+every inline construct in every Copilot message flows through, so the fix carries its own regression
+risk out of proportion to a cosmetic 404.
+
+**Not a security issue — verified.** The infidelity is cosmetic only. Truncation happens *after* the
+href policy has already classified the scheme, so a refused scheme is still refused: for
+`[x](data:text/html,<script>alert(1)</script>)` the whole construct degrades to React-escaped text
+with **zero anchors** in the output.
+
+**Lesson:** when a single regex carries several unrelated grammars, the blast radius of "just fix the
+link case" is every case. Log the narrow cosmetic bug rather than widening a shared pattern.
+
+---
+
+## [2026-09-08] ETP-5234 — `assertInternalPath` returns the original string, not the normalized one (OPEN QUESTION)
+
+**Component:** `tools/app-shell/src/components/copilot/windowRoutes.js` — `assertInternalPath()`
+
+**Status:** **Open question for the team**, raised by developer-1 during ETP-5234. Not a decided bug,
+and **not a security issue**. Recorded so the next reader does not have to re-derive the trade-off.
+
+**Behavior:** `assertInternalPath()` is *identity-or-throw*. It normalizes the path (strip TAB/LF/CR,
+`\` → `/`) only to make the **decision** on the same string the WHATWG URL parser will see, then
+returns the caller's **original** string. See `docs/copilot-markdown-rendering.md` §4 for why the
+normalization itself is mandatory.
+
+**Consequence:** for an *allowed* path that contains `\` or a stripped character mid-string, the two
+navigation mechanisms disagree on the destination. For `/a\b`:
+
+- `<Link to="/a\b">` — react-router navigates the SPA to the literal `/a\b`.
+- Ctrl/Cmd-click or "open in new tab" on the same `href` — the browser resolves it to
+  `http://<app-origin>/a/b`.
+
+**Why this is not a vulnerability:** both destinations are **on-origin**. Origin escape depends only
+on the leading authority prefix, which the guard has already rejected; any string whose normalized
+form is on-origin is itself on-origin. The worst case is a 404 or landing on another screen of the
+same tenant.
+
+**Why it was not simply "fixed" by returning the sanitized form:** that would close the divergence
+but changes a guard that is currently identity-or-throw, and it affects **both** consumers:
+
+- `navigate_to` / `open_form` (`useAiCopilotChat.js:229`, `:235`, via `resolveWindowPath()` at `:19`)
+  would navigate somewhere other than the path the model asked for — silently rewriting a tool
+  argument.
+- `resolveWindowPath()` would start returning a rewritten string to every caller that reads it.
+
+**What to decide:** whether the guard's contract is "validate" (today) or "validate and canonicalize".
+Do not change it as a drive-by; it needs a call on both consumers at once.
+
+---
+
+## [2026-09-08] ETP-5234 — `data-testid="MarkdownContent__61b427"` is silently dropped and does not exist in the DOM
+
+**Component:** `tools/app-shell/src/components/copilot/ChatView.jsx:134` →
+`tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `MarkdownContent({ children })`
+
+**Status:** Known issue, **logged not fixed** in ETP-5234 (deliberate user decision).
+**Pre-existing** — not introduced by the GFM-table/internal-link work. Not user-facing, not a
+security issue: it is a **test-authoring trap**.
+
+**Symptom you will actually see:** a Playwright spec (or any query by test id) that waits on
+`[data-testid="MarkdownContent__61b427"]` inside a Copilot chat bubble **times out after 30 s**
+looking for a selector that cannot exist. Nothing is logged, nothing warns, and the surrounding
+markup renders perfectly — so the natural conclusion is "the chat did not render" or "the message
+never arrived", and the search goes to the chat transport rather than to the renderer.
+
+**Root cause:** `ChatView` renders
+`<MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>`, but
+`MarkdownContent` destructures **only** `{ children }` and spreads nothing onto its root
+`<div className="space-y-2 leading-6">`. React does not forward unknown props to a function
+component's DOM output, so the attribute is discarded with no error.
+
+**Fix:** delete the `data-testid` prop from the `<MarkdownContent>` call site in `ChatView.jsx`.
+It is a dead attribute, not a missing feature — do **not** add a prop spread to `MarkdownContent`
+just to make the testid appear. The renderer already emits real, reachable test ids for the nodes
+worth targeting (`MarkdownLink__e0b411`, `MarkdownInternalLink__e0b411`, `MarkdownTable__e0b411`);
+target those, or the bubble container in `ChatView`.
+
+**Lesson:** a `data-testid` on a **function component** is inert unless that component explicitly
+forwards it. Auto-generated testids applied uniformly across a file will land on both host elements
+(where they work) and custom components (where they vanish). Before writing a selector against a
+testid, grep the component it names and confirm it reaches a DOM element.
+
+---
+
+## [2026-09-08] ETP-5230 — a role's User Level can silently revoke an organization access the UI still shows it has
+
+**Component:** `com.etendoerp.go` — `schemaforge/{ReconciliationHandler,PaymentRegistrationService,AddPaymentService,CashCloseHandler}.java`
+
+**Symptom.** On a freshly onboarded tenant, every invited user with a fixed GO role (Finance, Sales, …)
+got HTTP 400 on **every** reconciliation and **every** payment; only the tenant owner could perform
+them. Reported from `go.experimental.etendo.cloud` with three verbatim payloads, all of this shape:
+
+```
+Organization 0 of object (ADSequence(D6A6995B1B5E48BDBE76DA3FC95E262D) (name: Reconciliation))
+is not present in OrganizationList [8CF2FCD6E86746918C5449635CBB030F]
+```
+
+The tell that it was not a reconciliation bug: the error names an `AD_Sequence`, not a document, and
+the flows that "worked" (bank statements, movements) also number documents.
+
+**Root cause — two facts, neither a bug alone.**
+
+1. `OBContext#setWritableOrganizations` (`src/org/openbravo/dal/core/OBContext.java:622`) does
+   `if (localUserLevel.equals("O")) writableOrganizations.remove("0")`. Every GO fixed role and every
+   per-user personal role is created with `UserLevel = "  O"`
+   (`SystemRoleTemplates.java:56`). The role **does** hold `AD_Role_OrgAccess` to `*` and the UI shows
+   it — core removes it silently when computing the session. The owner role ships `" CO"`
+   (`GOClient/AD_ROLE.xml:14`) and keeps it. That one field is the entire difference.
+2. The APRM numbering path bumps the sequence **through the DAL**
+   (`Fin_UtilityLegacy#incrementSeqIfUpdateNext`), so the write is security-checked on flush and
+   rejected — the record being written is the sequence row, whose org is `0`. All 143 sequences in the
+   onboarding dataset live at org `*`, which is valid, standard configuration.
+
+Bank statements and movements are unaffected because they number through the **SQL** path (the
+`AD_SEQUENCE_DOC` PL function), which performs no org check. Two numbering mechanisms in core, only
+one of them checked — that asymmetry is the whole bug.
+
+**Fix.** `schemaforge/StarOrgWriteScope.java` grants org `*` write access for the duration of one
+document-number expression, flushes the counter while the grant is open, and restores the org lists in
+a `finally` — core's own `InitialOrgSetup` idiom (`InitialOrgSetup.java:352`, cleanup at
+`ad_forms/InitialOrgSetup.java:79-80`). Applied at 5 call sites. Documented in the module's
+`docs/neo-headless.md` §7.
+
+Three traps, all verified in the source and all recorded in the helper's javadoc:
+
+- **`OBContext.setAdminMode(false)` does not work here, and fails silently.**
+  `doOrgClientAccessCheck` reads the *innermost* admin frame, and core pushes its own
+  `setAdminMode(true)` inside `APRM_MatchingUtility#addNewDraftReconciliation`. An outer frame is
+  never the one consulted. The grant has to change the writable-organization **set**.
+- **The check fires on flush, not on save**, so the flush must be inside the scope. At the cash-close
+  site nothing flushes in the enclosing method at all.
+- The cleanup needs **both** `removeWritableOrganization` (the "additional" set) and a forced
+  recompute; removing from only one set leaves `"0"` writable for the rest of the request.
+
+**Verification — the part that mattered most.** The first local run was green, but nobody had ever
+seen it red *locally*, so green proved nothing. Reverting the fix via patch, recompiling, and
+reproducing both 400s first turned it into a controlled experiment:
+
+| | reconcile | invoice payment |
+|---|---|---|
+| fix reverted | 400 `Reconciliation` | 400 `AR Receipt` |
+| fix applied | doc `1000021` | payment `1000002` |
+| sequence at org `*` | → 1000023 | → 1000003 |
+
+Both written by a `[  O]` role, sequence counter and document created in the same second. The
+sequence ids in the local errors matched the ids read out of the onboarding dataset during the
+investigation, independently confirming the dataset analysis.
+
+**Out of scope, recorded as a follow-up.** Etendo Classic and ~15 other core APRM call sites stay
+broken for any Organization-level role; only a core fix closes them. Written up in
+`docs/etendo-ad/document-sequence-star-org-write-core-proposal.md`.
+
+**Lessons.**
+
+- **A green result proves nothing until you have seen it red in the same environment.** Ask "have I
+  ever observed this failing here?" before accepting a passing test as evidence. The reporter caught
+  this, not the agent.
+- **An error naming an infrastructure record (`AD_Sequence`, `AD_Role`, a counter) is rarely a bug in
+  the feature that surfaced it.** Read what the message says is being *written* before reading the
+  handler.
+- **Two mechanisms for the same job will diverge, and the unchecked one hides the bug in the checked
+  one.** The SQL and DAL numbering paths disagreeing about whether bumping a counter is a
+  security-relevant write is why five flows failed and a dozen similar ones did not.
+- **A silently revoked permission is worse than a missing one.** The role showed `*` in the UI the
+  whole time. When a permission looks present but does not apply, suspect a derived field
+  (`UserLevel`) over the visible grant.
+- **Back up before you destroy, and verify the backup.** `git diff > file` in this repo produces
+  RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
+  `rtk proxy git diff`, and validate with `git apply --check` before relying on it.

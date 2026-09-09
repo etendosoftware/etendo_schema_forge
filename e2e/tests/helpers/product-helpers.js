@@ -2,21 +2,31 @@
  * Deterministic PRODUCT master-data fixtures for live-backend integration specs.
  *
  * ## Why this exists (ETP-5079)
- * The GOClient onboarding dataset used to seed four demo products — "Agua"
- * (SK-001), "Cerveza" (SK-002), "Fernet" (SK-003) and "Queso Sardo" (SK-004) —
- * plus the eight `M_PRODUCTPRICE` rows that made them appear in the product
- * search drawer. ETP-5079 deleted all four so a NEW tenant is born clean: the
- * only `M_PRODUCT` row left is `ETGO_DTO` ("Discount"), and that one is
+ * The GOClient dataset ships four demo products — "Agua" (SK-001), "Cerveza"
+ * (SK-002), "Fernet" (SK-003) and "Queso Sardo" (SK-004) — plus the eight
+ * `M_PRODUCTPRICE` rows that make them appear in the product search drawer.
+ * They are still shipped, for the GOClient sample client `install.source`
+ * seeds, but ETP-5079 stopped them from reaching a NEW tenant: they are dropped
+ * at IMPORT TIME by `OnboardingDatasetNormalizer`'s `DemoMasterDataFilter`, so
+ * the source dataset stays whole — deleting the rows there instead broke
+ * `./gradlew install` (see `OnboardingDemoMasterData`). A new tenant is
+ * therefore born clean: the only `M_PRODUCT` row it receives is `ETGO_DTO`
+ * ("Discount"), and that one is
  * INVISIBLE in the UI because its category is flagged
  * `EM_Etgo_IsSystemCategory='Y'` (hidden by `ProductDefaultsHandler
  * #hideSystemCategoryProducts` on GET, and by `ProductCategorySystemFlagSelector
  * Policy` on every category selector). A fresh tenant's Products list is empty.
  *
- * Every sales/purchase integration spec therefore has nothing to put on a
- * document line. Specs that named a seeded product ("Queso Sardo", "Agua") now
- * match nothing; specs that picked one POSITIONALLY (`productIndex: 0/1`) find
- * an empty drawer and time out on an unrelated locator. Both failure modes look
- * like UI bugs and are not.
+ * A sales/purchase integration spec run against such a tenant therefore has
+ * nothing to put on a document line. Specs that named a seeded product ("Queso
+ * Sardo", "Agua") match nothing there; specs that picked one POSITIONALLY
+ * (`productIndex: 0/1`) find an empty drawer and time out on an unrelated
+ * locator. Both failure modes look like UI bugs and are not. Note that the
+ * `integration` project logs in as goadmin (GOClient), which DOES still hold
+ * the demo products — so neither failure reproduces there. That is exactly why
+ * the fixtures below are mandatory rather than optional: a spec that leans on
+ * GOClient's sample data passes for the wrong reason and breaks the moment it
+ * runs against a real tenant.
  *
  * The fix is the same one `ensureVendorSetup()` (purchase-helpers.js) applies to
  * contacts: a dedicated, deterministically-named fixture that the suite
@@ -390,11 +400,12 @@ async function ensurePrices(page, { productId, fixture, headers }) {
  * "whatever product happens to sit at index N of the drawer".
  *
  * Replaces the previous approach across the integration specs, which either
- * named a demo product ETP-5079 deleted from the onboarding dataset ("Queso
- * Sardo", "Agua", "Cerveza", "Fernet") or picked one by drawer position
- * (`productIndex: 0/1`) — the first now matches nothing, the second now finds
- * an empty drawer, and on a long-lived dev tenant the second also silently
- * bound the assertions to whatever leftover data a previous run created.
+ * named a demo product ETP-5079 keeps out of an onboarded tenant ("Queso
+ * Sardo", "Agua", "Cerveza", "Fernet" — still shipped for GOClient, filtered at
+ * import) or picked one by drawer position (`productIndex: 0/1`) — on a real
+ * tenant the first matches nothing and the second finds an empty drawer, and on
+ * a long-lived dev tenant the second also silently bound the assertions to
+ * whatever leftover data a previous run created.
  *
  * @param {import('@playwright/test').Page} page - Must already be logged in
  *   (`login(page)`), so the bearer token is in localStorage.

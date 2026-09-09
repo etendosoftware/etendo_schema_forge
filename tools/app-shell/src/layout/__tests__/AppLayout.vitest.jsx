@@ -17,9 +17,15 @@ vi.mock('@/auth/useLogout.js', () => ({
 // Mock react-router-dom. useSearchParams is a vi.fn() (not a plain arrow) so
 // the embedded-mode test below can override it for a single render via
 // mockReturnValueOnce, the same pattern already used for useRoleMenu.
+// ETP-5144: useNavigate is stubbed too, because AppLayout now mounts
+// WalkthroughProvider (which navigates on the user's behalf between the steps
+// of a guided flow). A module-level fn keeps its identity stable across
+// renders, matching what a real router hands out.
+const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useLocation: () => ({ pathname: '/sales-order/123' }),
+  useNavigate: () => navigateMock,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
 }));
 
@@ -31,6 +37,19 @@ vi.mock('react-router-dom', () => ({
 // below can override it for a single render via mockReturnValueOnce.
 vi.mock('@/hooks/useRoleMenu.js', () => ({
   useRoleMenu: vi.fn(() => null),
+}));
+
+// ETP-5240 — AppLayout now also calls useWindowAccessSafe() (alongside the
+// pre-existing useCapabilitiesSafe()) and threads its return value through to
+// filterMenuGroupsByAccess() as the 4th arg. Both are `vi.fn()`s (not plain
+// arrows) so the dedicated test below can override useWindowAccessSafe's
+// return value for a single render via mockReturnValueOnce, the same pattern
+// already used for useRoleMenu above. Default `{}` matches the real hook's
+// own fallback (no AuthProvider / not-yet-loaded), so none of the other tests
+// in this file — which never set accessWindowId on any item — change behavior.
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: vi.fn(() => ({})),
+  useWindowAccessSafe: vi.fn(() => ({})),
 }));
 
 // Same situation as useRoleMenu above: AppLayout now mounts useAccountIdentity()
@@ -111,6 +130,9 @@ vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { buildMenuGroups } from '@/windows/registry.js';
+import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
@@ -236,6 +258,88 @@ describe('AppLayout — normal mode', () => {
     const sales = groups.find((g) => g.group === 'Sales');
     expect(sales).toBeDefined();
     expect(sales.items.map((i) => i.name)).toContain('sales-order');
+  });
+
+  it('threads useWindowAccessSafe()\'s return value through to filterMenuGroupsByAccess as the 4th arg (ETP-5240)', () => {
+    // Default mock (see useCapabilitiesSafe.js mock above) is `{}`, so an
+    // accessWindowId-gated item is hidden until this test overrides it.
+    const props = {
+      menuGroups: [
+        {
+          group: 'Reports',
+          items: [{ name: 'report-viewer-finance', label: 'Informes', accessWindowId: 'AW1' }],
+        },
+      ],
+    };
+
+    const { rerender } = render(<AppLayout {...props} />);
+    let groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    // windowAccess is the default {} -> item is hidden, group dropped.
+    expect(groups.find((g) => g.group === 'Reports')).toBeUndefined();
+
+    vi.mocked(useWindowAccessSafe).mockReturnValueOnce({ AW1: 'full' });
+    rerender(<AppLayout {...props} />);
+    groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    const reports = groups.find((g) => g.group === 'Reports');
+    expect(reports).toBeDefined();
+    expect(reports.items.map((i) => i.name)).toContain('report-viewer-finance');
+  });
+});
+
+describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
+  const anchors = defaultNavigation.filter(entry => entry.accessWindowId).map(entry => [entry.name, entry.accessWindowId]);
+
+  beforeEach(() => {
+    vi.mocked(useRoleMenu).mockReturnValue(undefined);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue({});
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+  });
+
+  afterEach(() => {
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue({});
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+  });
+
+  function expectSidebarAnchors(visible) {
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    const names = groups.flatMap(group => group.items.map(item => item.name));
+    expect(names.filter(name => anchors.some(([anchor]) => anchor === name)).sort())
+      .toEqual([...visible].sort());
+    expect(names).not.toContain('report-viewer-purchases');
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  }
+
+  it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id) => {
+    const menuGroups = buildMenuGroups();
+    const { rerender } = render(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([]);
+
+    // The anchor map can resolve before SFListMenu: independent axes.
+    vi.mocked(useWindowAccessSafe).mockReturnValue({ [id]: 'read-only' });
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([name]);
+
+    // User = 108 from committed core-maps/ad-menu-cache.json. Nonempty so
+    // this checks sidebar permissions, not the shell-wide no-access screen.
+    vi.mocked(useRoleMenu).mockReturnValue(new Set(['108']));
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([name]);
+
+    vi.mocked(useWindowAccessSafe).mockReturnValue({});
+    rerender(<AppLayout menuGroups={menuGroups} />);
+    expectSidebarAnchors([]);
+  });
+
+  it.each([{}, null])('shows all anchors for admin/client-admin with map %j', windowAccess => {
+    const { allowedIds, capabilities } = navigationPermissions();
+    vi.mocked(useRoleMenu).mockReturnValue(allowedIds);
+    vi.mocked(useCapabilitiesSafe).mockReturnValue(capabilities);
+    vi.mocked(useWindowAccessSafe).mockReturnValue(windowAccess);
+
+    render(<AppLayout menuGroups={buildMenuGroups()} />);
+    expectSidebarAnchors(anchors.map(([name]) => name));
+    expectNavigation(JSON.parse(screen.getByTestId('side-menu-groups').textContent), expectedNavigation({ proof: true }));
   });
 });
 

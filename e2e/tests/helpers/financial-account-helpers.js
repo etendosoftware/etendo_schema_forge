@@ -2,15 +2,18 @@
  * Deterministic FINANCIAL-ACCOUNT master-data fixture for live-backend integration specs.
  *
  * ## Why this exists (ETP-5079)
- * The GOClient onboarding dataset used to seed three financial accounts ("Caja",
- * "Cuenta de Banco", "Tarjeta") and, with them, six `FIN_FINACC_PAYMENTMETHOD`
- * link rows. ETP-5079 emptied both dataset files
- * (`referencedata/sampledata/GOClient/FIN_FINANCIAL_ACCOUNT.xml` and
- * `.../FIN_FINACC_PAYMENTMETHOD.xml` are now `<data></data>`), while both tables
- * stay listed in `OnboardingDatasetDefinition.INCLUDED_TABLES` — so a freshly
- * onboarded tenant gets **0 financial accounts and 0 account/payment-method
- * links**, holding only the 4 `FIN_PAYMENTMETHOD` masters (Efectivo,
- * Transferencia bancaria, Recibo, Tarjeta).
+ * The GOClient dataset ships three financial accounts ("Caja", "Cuenta de
+ * Banco", "Tarjeta") and, with them, six `FIN_FINACC_PAYMENTMETHOD` link rows.
+ * Both files still ship them, for the GOClient sample client `install.source`
+ * seeds, but ETP-5079 stopped them from reaching a NEW tenant: every row of
+ * both is dropped at IMPORT TIME by `OnboardingDatasetNormalizer`'s
+ * `DemoMasterDataFilter`, while both tables stay listed in
+ * `OnboardingDatasetDefinition.INCLUDED_TABLES`. (Emptying the two dataset
+ * files instead — the first cut of ETP-5079 — broke `./gradlew install`; see
+ * `OnboardingDemoMasterData`.) So a freshly onboarded tenant gets **0 financial
+ * accounts and 0 account/payment-method links**, holding only the 4
+ * `FIN_PAYMENTMETHOD` masters (Efectivo, Transferencia bancaria, Recibo,
+ * Tarjeta).
  *
  * That silently emptied every payment-method selector in the product, because
  * the AD validation rules behind them are `EXISTS` checks over the LINK table,

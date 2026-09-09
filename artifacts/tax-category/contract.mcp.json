@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-07-14T00:34:34.923Z",
-  "contractChecksum": "fe68572d8a6ad233",
+  "updatedAt": "2026-09-07T19:24:08.704Z",
+  "contractChecksum": "f27c7fe59acde6e4",
   "apiPrediction": {
     "specName": "tax-category",
     "baseUrl": "/sws/neo/tax-category",
@@ -51,10 +51,6 @@
           "default": {
             "required": true
           },
-          "asbom": {
-            "required": true,
-            "defaultValue": "N"
-          },
           "obsptiTaxtype": {},
           "obsptiTransactiontype": {},
           "obsptiRatetype": {},
@@ -77,7 +73,6 @@
       "headerFields": [
         "name",
         "default",
-        "asbom",
         "aeatsiiDeclarable"
       ],
       "recommendedOrder": [
@@ -95,7 +90,6 @@
         "fields": [
           "name",
           "default",
-          "asbom",
           "aeatsiiDeclarable"
         ]
       }
@@ -104,5 +98,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "011b555e9cd6bc29"
+  "checksum": "46f8be7be99e618c"
 }

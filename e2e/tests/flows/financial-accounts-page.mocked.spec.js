@@ -356,14 +356,15 @@ test.describe('Financial Accounts list — Cuentas', () => {
  *     checkbox column renders. There is no per-row select testid — DataTable emits none — so
  *     the checkbox is reached as `Checkbox__eb5261` SCOPED INSIDE `row-{id}` (the same testid
  *     is also on the select-all header checkbox).
- *   - `hideListBar` gates only the idle filter bar, so the selection bar itself still renders;
- *     the slot unmounts its own `cuentas-toolbar` while a selection is active, which is why the
- *     swap reads as one bar replacing another.
+ *   - `hideListBar` gates only the idle filter bar, so the selection bar itself still renders.
+ *     ETP-5111: the slot KEEPS its own `cuentas-toolbar` mounted while a selection is active, so
+ *     the floating pill is an addition rather than a replacement — ticking a row no longer costs
+ *     the user the type filter, the search box and Reglas de conciliación.
  *
  * Exhaustive branch coverage lives at unit level:
  *   - ListView's bar + outcome wiring: components/contract-ui/__tests__/ListView.bulkDelete.vitest.jsx
  *   - the batch itself + confirm dialog: hooks/__tests__/useBulkRowDelete.vitest.jsx
- *   - the toolbar/selection-bar swap: windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+ *   - the toolbar staying mounted: windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
  *
  * The mock tracks archived ids in memory so the list mock and the DELETE mock stay consistent
  * across the refetch the batch outcome triggers.
@@ -420,7 +421,10 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('selecting rows swaps the toolbar for the selection bar with the right count', async ({ page }) => {
+  // ETP-5111 — the toolbar no longer goes away while a selection is active (CP-9). It used to be
+  // unmounted, so ticking one row cost the user the type filter, the search box and Reglas de
+  // conciliación; the floating pill is an ADDITION now, not a replacement.
+  test('selecting rows adds the selection bar and keeps the toolbar, with the right count', async ({ page }) => {
     await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
     await expect(page.getByTestId('selection-count')).toHaveCount(0);
 
@@ -429,7 +433,7 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
     // The bar has no wrapper testid — its count and its delete trigger are the two markers.
     await expect(page.getByTestId('selection-count')).toBeVisible();
     await expect(page.getByTestId('bulk-delete-selected')).toBeVisible();
-    await expect(page.getByTestId('cuentas-toolbar')).toHaveCount(0);
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
     await expect(page.getByTestId('selection-count')).toContainText('1');
 
     await rowCheckbox(page, 'acc-2').click();

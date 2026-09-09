@@ -5,7 +5,7 @@ import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
-import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -22,6 +22,17 @@ import { Button } from '@/components/ui/button';
 import { useLogout } from '@/auth/useLogout.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
+import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
+import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+
+/**
+ * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
+ * look up the finished flow's `revision`. Module-level so its identity is
+ * stable across renders; it persists progress AND reports the outcome, which
+ * must agree on the same run (see `lib/walkthrough/walkthrough-events.js`).
+ */
+const reportWalkthroughFinish = (info) => handleWalkthroughFinish(info, WALKTHROUGH_FLOWS);
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
@@ -141,6 +152,13 @@ export default function AppLayout({ menuGroups }) {
   // returns `{}` before the map has loaded, which `filterMenuGroupsByAccess`
   // already treats as "hide" for any capability-gated item (fails closed).
   const capabilities = useCapabilitiesSafe();
+  // ETP-5240 — the real per-window AD_Window_Access tier map, used to gate
+  // menu.json entries that declare `"accessWindowId": "<AD_Window_ID>"` for a
+  // permission-anchor window with no active AD_Menu node (report viewers,
+  // Smart Scan — see filterMenuGroupsByAccess's JSDoc). `useWindowAccessSafe()`
+  // returns `{}` before the map has loaded, which filterMenuGroupsByAccess
+  // already treats as "hide" for any accessWindowId-gated item (fails closed).
+  const windowAccess = useWindowAccessSafe();
   // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
   // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
   // carrying a windowId/processId/obuiappProcessId is hidden until the real
@@ -152,7 +170,8 @@ export default function AppLayout({ menuGroups }) {
   const filteredMenuGroups = filterMenuGroupsByAccess(
     menuGroups,
     allowedIds === undefined ? new Set() : allowedIds,
-    capabilities
+    capabilities,
+    windowAccess
   );
 
   // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means
@@ -172,12 +191,22 @@ export default function AppLayout({ menuGroups }) {
           <FavoritesProvider data-testid="FavoritesProvider__488148">
             <SidebarProvider data-testid="SidebarProvider__488148">
               <PageMetaProvider data-testid="PageMetaProvider__488148">
-                <FirstStepsProvider data-testid="FirstStepsProvider__488148">
-                  <AppLayoutInner
-                    menuGroups={filteredMenuGroups}
-                    embedded={embedded}
-                    data-testid="AppLayoutInner__488148" />
-                </FirstStepsProvider>
+                {/* ETP-5144 — mounted here, inside the router and the locale
+                    provider but ABOVE the routed Outlet, so a walkthrough that
+                    navigates between windows survives the route change. The
+                    flows are pure data (src/walkthrough/flows); the engine
+                    itself lives in app-shell-core and is window-agnostic. */}
+                <WalkthroughProvider
+                  flows={WALKTHROUGH_FLOWS}
+                  onFinish={reportWalkthroughFinish}
+                  data-testid="WalkthroughProvider__488148">
+                  <FirstStepsProvider data-testid="FirstStepsProvider__488148">
+                    <AppLayoutInner
+                      menuGroups={filteredMenuGroups}
+                      embedded={embedded}
+                      data-testid="AppLayoutInner__488148" />
+                  </FirstStepsProvider>
+                </WalkthroughProvider>
               </PageMetaProvider>
             </SidebarProvider>
           </FavoritesProvider>

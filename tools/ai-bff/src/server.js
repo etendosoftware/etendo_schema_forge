@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createMCPClient } from '@ai-sdk/mcp';
@@ -13,6 +14,34 @@ const modelTimeoutMs = Number(process.env.OPENCODE_TIMEOUT_MS || 60_000);
 
 export function hasConfiguredSecret(value) {
   return Boolean(value && !['null', 'undefined'].includes(value.trim().toLowerCase()));
+}
+
+export function mcpClientOptions(authorization) {
+  return {
+    transport: {
+      type: 'http',
+      url: mcpUrl,
+      headers: { Authorization: authorization },
+    },
+    // Etendo Go currently implements the legacy initialize handshake, not
+    // the optional stateless server/discover probe from newer MCP clients.
+    protocolVersionDiscovery: false,
+  };
+}
+
+export function opencodeSessionId(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128
+    ? value
+    : randomUUID();
+}
+
+export function opencodeProviderOptions(sessionId) {
+  return {
+    name: 'opencode-go',
+    baseURL: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1',
+    apiKey: process.env.OPENCODE_API_KEY,
+    headers: { 'x-opencode-session': sessionId },
+  };
 }
 
 function json(res, status, body) {
@@ -147,24 +176,15 @@ export async function handleChat(req, res) {
   const body = await readBody(req);
   let mcpClient;
   const isPageHelpRequest = body.mode === 'page-help';
+  const opencodeSession = opencodeSessionId(req.headers['x-opencode-session']);
 
   try {
     // Page help already includes the sanitized DOM in the user message. It
     // must not wait for or depend on the Etendo MCP endpoint.
     if (!isPageHelpRequest) {
-      mcpClient = await createMCPClient({
-        transport: {
-          type: 'http',
-          url: mcpUrl,
-          headers: { Authorization: authorization },
-        },
-      });
+      mcpClient = await createMCPClient(mcpClientOptions(authorization));
     }
-    const provider = createOpenAICompatible({
-      name: 'opencode-go',
-      baseURL: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1',
-      apiKey: process.env.OPENCODE_API_KEY,
-    });
+    const provider = createOpenAICompatible(opencodeProviderOptions(opencodeSession));
     const tools = isPageHelpRequest ? {} : {
       ...(await mcpClient.tools()),
       ...browserTools(),
@@ -180,7 +200,22 @@ export async function handleChat(req, res) {
         maxOutputTokens: 220,
         temperature: 0.1,
       } : {}),
-      stopWhen: stepCountIs(8),
+      // 8 was too few for a create-with-address task: contract exploration
+      // alone can eat ~6 steps, leaving no room for the 3 creations such a task
+      // needs (the business partner, the `C_Location` via
+      // `bp-location/bpLocation`, then the `contacts/locationAddress` link).
+      // Exploration is that expensive because tool output is never capped
+      // before it goes back to the model — the `.slice()` calls below only
+      // trim the trace log, so `neo_discover` (~77 KB) and every `neo_schema`
+      // dump accumulate whole in the conversation.
+      //
+      // Raising this does NOT fix the hang that prompted the investigation:
+      // that was a [400] from the model provider, and both runs died right
+      // after `neo_selectors` — at step 6 with the limit at 8, at ~8 with it at
+      // 20. A larger budget only moves the failure later. Excess context is the
+      // likeliest cause given the uncapped payloads above, but the provider
+      // never said so, so treat it as unproven.
+      stopWhen: stepCountIs(20),
       abortSignal: AbortSignal.timeout(modelTimeoutMs),
       onStepFinish: ({ text, toolCalls, toolResults, finishReason }) => {
         trace('step', {

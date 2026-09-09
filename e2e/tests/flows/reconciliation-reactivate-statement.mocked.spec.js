@@ -18,6 +18,15 @@ import { login } from '../helpers/auth.js';
  * `line_status = 'reconciled'`), so a line whose reconciliation is back in DRAFT still falls to
  * the pending pool.
  *
+ * QA round — the automatch leg. The same reactivation left the Automatch modal still PROPOSING the
+ * statement's unmatched line, and applying that suggestion succeeded. The proposals come from a
+ * SECOND, independent query: `ReconciliationHandler.loadPendingLines`, the only line source
+ * `buildAutoMatch` reads, was a raw HQL with no `processed` filter at all while `PENDING_LINES_SQL`
+ * next door had one. That divergence between two queries over the same concept is the whole bug.
+ * `loadPendingLines` is now an `OBCriteria` gated on `bs.processed = true`, and the three write
+ * paths (`reconcileGroup`, `ReconciliationFlowSupport.prepareGroup`,
+ * `ReconciliationDifferenceSupport`) refuse a draft statement's line with a 409.
+ *
  * Covered here (browser, mocked backend):
  *   CP-1  the reconciled line is still listed under the "Conciliadas" filter after the statement
  *         has been reactivated, and is still selectable / un-reconcilable there;
@@ -28,16 +37,26 @@ import { login } from '../helpers/auth.js';
  *   CP-2  that same reconciled line stays read-only in the statement editor even though its
  *         statement is now a draft — core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` rejects any
  *         update/delete of it regardless of the parent's Processed flag (ETP-4921);
+ *   CP-3  the Automatch modal proposes NOTHING once the statement is a draft — QA's report
+ *         verbatim ("si el extracto está en borrador, no debería sugerir con el automatch
+ *         transacciones");
+ *   CP-3b before the reactivation that same line IS proposed (baseline, so CP-3 cannot pass on a
+ *         fixture that never produced a group in the first place);
  *   the reactivate request itself is header-only (it carries the id and nothing else, so it can
  *   never resend — and so never rewrite — the matched line).
  *
- * SCOPE NOTE — a mocked spec cannot catch the backend regression itself: the `pendingLines`
- * payload is produced here, so it is a MODEL of the fixed handler, not the handler. What it does
- * guard is the whole UI contract on top of it (routing, the two tabs, the client-side status
- * filter, the read-only rendering) and the requests the client sends. The SQL predicate itself is
- * pinned by `ReconciliationHandlerTest`'s `PENDING_LINES_SQL` shape tests in
- * `com.etendoerp.go`. The mock below deliberately implements the FIXED gate rather than returning
- * a canned list, so the fixture states the contract it stands in for.
+ * SCOPE NOTE — a mocked spec cannot catch either backend regression itself: the `pendingLines` and
+ * `autoMatch` payloads are produced here, so they are a MODEL of the two fixed queries, not the
+ * queries. What this spec does guard is the whole UI contract on top of them (routing, the two
+ * tabs, the client-side status filter, the read-only rendering, the automatch modal's arming and
+ * rendering) and the requests the client sends. The queries themselves are pinned by
+ * `ReconciliationHandlerTest` in `com.etendoerp.go` — the `PENDING_LINES_SQL` shape tests for the
+ * panel gate, and the `loadPendingLines` criteria tests for the automatch one. Both mocks below
+ * deliberately implement the FIXED gates rather than returning canned lists, so each fixture states
+ * the contract it stands in for — and they are written as TWO separate functions, because
+ * `loadPendingLines` and `PENDING_LINES_SQL` are two different queries with two different
+ * predicates, and collapsing them into one helper would hide exactly the divergence that caused
+ * this bug.
  *
  * Mock mode only. Every route is installed AFTER `login()` so the specific handlers beat the
  * generic `**\/sws\/**` stub that helper seeds (Playwright matches routes in reverse
@@ -54,6 +73,11 @@ const PENDING_LINE_ID = 'bsl-pending';
 /** The transaction the reconciled line is matched against. */
 const TRANSACTION_ID = 'trx-reconciled';
 const TRANSACTION_DOC_NO = '1000501';
+/** The movement the automatch engine pairs the UNMATCHED line with (same amount, same window). */
+const AUTOMATCH_TRANSACTION_ID = 'trx-automatch';
+const AUTOMATCH_TRANSACTION_DOC_NO = '1000502';
+/** The automatch group key — the per-group checkbox testid is built from it. */
+const AUTOMATCH_GROUP_KEY = 'grp-etp5121';
 
 /**
  * Every date in these fixtures is RELATIVE to the run.
@@ -251,6 +275,77 @@ function panelLinesFor(statementProcessed) {
 }
 
 /**
+ * The one suggestion the engine produces: the statement's UNMATCHED line against a movement of the
+ * same amount. Shaped as `buildAutoMatch` emits a group and as `AutoMatchSuggestionModal` reads one
+ * — `groupKey` (the per-row checkbox testid is derived from it), `statementLine`, `operations[]`,
+ * `origin`, `isNew`, `difference`. A plain exact match: `origin: 'standard'`, no `nearMatch`, zero
+ * difference, so the modal renders it as a single linked operation and creates nothing.
+ */
+const AUTOMATCH_GROUP = {
+  groupKey: AUTOMATCH_GROUP_KEY,
+  statementLine: {
+    id: PENDING_LINE_ID,
+    description: 'Cargo sin conciliar',
+    referenceNo: 'REF-LIBRE',
+    amount: -40,
+    date: isoDaysAgo(3),
+  },
+  operations: [{
+    id: AUTOMATCH_TRANSACTION_ID,
+    documentNo: AUTOMATCH_TRANSACTION_DOC_NO,
+    partnerName: 'Acme S.L.',
+    description: 'Recibo Acme',
+    amount: -40,
+    date: isoDaysAgo(3),
+    isNew: false,
+  }],
+  origin: 'standard',
+  isNew: false,
+  difference: 0,
+};
+
+/**
+ * The FIXED `loadPendingLines` gate, expressed over the fixtures.
+ *
+ * `loadPendingLines` is the ONLY line source `buildAutoMatch` reads, and it is a DIFFERENT query
+ * from `PENDING_LINES_SQL` above — a raw HQL that carried no `processed` filter at all while its
+ * neighbour did. That divergence is precisely what caused this bug: fixing the panel gate left the
+ * automatch still proposing a draft statement's lines. It is now an `OBCriteria` gated on
+ * `bs.processed = true`, with NO reconciled-line exception: a reconciled line is not a candidate
+ * for a new suggestion in the first place, so the automatch gate is the plain one.
+ *
+ * A draft statement therefore contributes NOTHING here, even though `panelLinesFor` still hands its
+ * reconciled line to the left panel. The two helpers are kept separate so that asymmetry is visible
+ * rather than accidental.
+ *
+ * @param {boolean} statementProcessed
+ * @returns {object[]}
+ */
+function autoMatchGroupsFor(statementProcessed) {
+  return statementProcessed ? [AUTOMATCH_GROUP] : [];
+}
+
+/**
+ * The modal's KPI strip, derived from the same list the gate above returns.
+ *
+ * "Movimientos pendientes" (`pendingLines`) is fed by exactly the lines `loadPendingLines` yields,
+ * so a draft statement must zero it too — a strip still advertising a pending line above an empty
+ * group list would be the same bug wearing a different hat.
+ *
+ * @param {object[]} groups
+ * @returns {object}
+ */
+function autoMatchKpisFor(groups) {
+  const opsToLink = groups.reduce((n, g) => n + (g.operations ?? []).length, 0);
+  return {
+    pendingLines: groups.length,
+    groupsFound: groups.length,
+    opsToLink,
+    willCreate: groups.filter((g) => g.isNew).length,
+  };
+}
+
+/**
  * Installs every route the account detail needs for both tabs, plus a tiny amount of state so the
  * reactivate POST actually changes what the subsequent GETs report.
  *
@@ -383,11 +478,17 @@ async function installMocks(page, { processed = true } = {}) {
     }
 
     if (action === 'autoMatch') {
-      // No suggestions → the automatch modal never opens and cannot swallow clicks.
+      // STATE-AWARE on purpose. This branch used to return a constant `{ groups: [] }` whatever the
+      // statement's state, which made the spec structurally incapable of catching the QA bug: an
+      // automatch that keeps proposing a draft statement's lines looks identical to one that
+      // proposes nothing when the fixture never proposes anything.
+      const groups = autoMatchGroupsFor(state.processed);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: { groups: [], counts: {} } } }),
+        body: JSON.stringify({
+          response: { data: { groups, kpis: autoMatchKpisFor(groups), counts: {} } },
+        }),
       });
       return;
     }
@@ -401,9 +502,12 @@ async function installMocks(page, { processed = true } = {}) {
 /**
  * Opens the account detail on the requested tab.
  *
- * Entering the reconciliation tab MAY pop the automatch suggestions modal, whose overlay swallows
- * every click on the panel behind it — so dismiss it defensively even though the mock reports no
- * suggestions.
+ * Entering the reconciliation tab ARMS the automatch check (`?tab=reconciliation` alone is enough —
+ * see the ETP-4922 "armed" effect in `windows/custom/financial-account/index.jsx`), and the modal
+ * pops by itself as soon as a fresh response carries at least one group. Its overlay swallows every
+ * click on the panel behind it, so dismiss it defensively. This is no longer hypothetical: since
+ * the `autoMatch` mock became state-aware, the processed-statement cases DO produce a group. The
+ * effect disarms itself on the same pass, so a dismissed modal stays dismissed.
  *
  * @param {import('@playwright/test').Page} page
  * @param {string} tab
@@ -418,6 +522,27 @@ async function openTab(page, tab) {
     await page.getByTestId('automatch-modal-cancel').click();
     await expect(automatch).toHaveCount(0);
   }
+}
+
+/**
+ * Opens the automatch modal DELIBERATELY, from the header button.
+ *
+ * Not by relying on the auto-open: whether the modal has already popped by the time `openTab`
+ * returns is a race against the `autoMatch` fetch settling, and a test that asserts on what the
+ * automatch proposes must not also depend on the timing of how it got on screen. `openTab` has
+ * already dismissed any auto-opened instance; if one is somehow still up, reuse it rather than
+ * clicking through its overlay.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<import('@playwright/test').Locator>} the modal
+ */
+async function openAutomatchModal(page) {
+  const modal = page.getByTestId('automatch-suggestion-modal');
+  if (!(await modal.isVisible().catch(() => false))) {
+    await page.getByTestId('financial-account-automatch').click();
+  }
+  await expect(modal).toBeVisible();
+  return modal;
 }
 
 /**
@@ -542,6 +667,47 @@ test.describe('ETP-5121 — a reactivated statement keeps its reconciled line (m
 
     await expect(page.getByTestId(`recon-line-row-${RECONCILED_LINE_ID}`)).toBeVisible();
     await expect(page.getByTestId(`recon-line-row-${PENDING_LINE_ID}`)).toHaveCount(0);
+  });
+
+  // ── CP-3: the automatch leg ────────────────────────────────────────────────
+  //
+  // Baseline first. With the statement still processed the engine proposes its unmatched line, so a
+  // CP-3 failure can only mean the group disappeared for the reason under test — not that the
+  // fixture never produced one.
+  test('CP-3b: with the statement processed, the automatch proposes the unmatched line', async ({ page }) => {
+    await installMocks(page);
+    await openTab(page, 'reconciliation');
+
+    const modal = await openAutomatchModal(page);
+
+    const group = modal.getByTestId(`automatch-group-check-${AUTOMATCH_GROUP_KEY}`);
+    await expect(group).toBeVisible();
+    await expect(modal.getByTestId(/^automatch-group-check-/)).toHaveCount(1);
+    // The proposal names the line it is about, so the assertion is tied to this group and not to
+    // "some group rendered".
+    await expect(modal).toContainText('Cargo sin conciliar');
+    await expect(modal).toContainText(AUTOMATCH_TRANSACTION_DOC_NO);
+  });
+
+  test('CP-3: the automatch proposes nothing once the statement is a draft', async ({ page }) => {
+    const { state } = await installMocks(page);
+
+    await reactivateStatementFromUi(page);
+    // Same guard CP-1 uses: without it the assertion below could be passing against the
+    // pre-reactivation state.
+    expect(state.processed).toBe(false);
+
+    await openTab(page, 'reconciliation');
+    const modal = await openAutomatchModal(page);
+
+    // THE QA REPORT, VERBATIM: "si el extracto está en borrador, no debería sugerir con el
+    // automatch transacciones". Before the fix `loadPendingLines` still yielded the draft
+    // statement's line, so this group was offered — and applying it succeeded.
+    await expect(modal.getByTestId(/^automatch-group-check-/)).toHaveCount(0);
+    await expect(modal.getByTestId(`automatch-group-check-${AUTOMATCH_GROUP_KEY}`)).toHaveCount(0);
+    // Nothing selected → nothing to apply. The button being disabled is what makes the empty list
+    // a dead end rather than a list the user could still act on.
+    await expect(modal.getByTestId('automatch-modal-apply')).toBeDisabled();
   });
 
   test('the reactivate request is header-only: it carries the id and nothing else', async ({ page }) => {

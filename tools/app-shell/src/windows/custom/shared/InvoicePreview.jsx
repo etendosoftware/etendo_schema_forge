@@ -11,7 +11,7 @@ import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
-import { getInvoiceFiscalTargets } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
 import PaymentsCard from './preview-cards/PaymentsCard.jsx';
@@ -102,9 +102,18 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, siiRecord, tbaiRecord, verifactuRecord, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
+  // ETP-5122: a single invoice this time (not a grid row), but the same rule —
+  // no status before the org's adoption date for that system. SII compares
+  // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI
+  // compares invoice date. VERI*FACTU is its own gate (ETP-5122 follow-up):
+  // Classic compares the invoice's record CREATION timestamp, not invoiceDate
+  // — see isVerifactuEligibleByDate in fiscalTargets.js.
+  const siiEligibleByDate = isSifEligibleByDate(invoice?.accountingDate, siiRecord?.fechaAcogidaSII);
+  const tbaiEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
+  const verifactuEligibleByDate = isVerifactuEligibleByDate(invoice?.created, verifactuRecord?.inVfactuSystem);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
     invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
   );
@@ -136,7 +145,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__cf88e6">
-        {fiscalTargets.showSii && (
+        {fiscalTargets.showSii && siiEligibleByDate && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.sii')}
             data-testid="InfoRow__cf88e6">
@@ -145,7 +154,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
               : <StatusPill estado={siiStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showTbai && (
+        {fiscalTargets.showTbai && tbaiEligibleByDate && (
           <InfoRow
             // ETP-5027: a purchase invoice's TBAI is always Batuz specifically
             // (fiscalTargets.js only ever grants it for the Bizkaia territory —
@@ -158,7 +167,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
               : <StatusPill estado={tbaiStatus ?? 'Pendiente'} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showVerifactu && (
+        {fiscalTargets.showVerifactu && verifactuEligibleByDate && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.verifactu')}
             data-testid="InfoRow__cf88e6">
@@ -180,7 +189,14 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         onAddPayment={onAddPayment}
         specName={specName}
         data-testid="PaymentsCard__cf88e6" />
-      {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
+      {specName !== 'purchase-invoice' && (
+        <EmailsCard
+          onSend={onSend}
+          documentId={invoice?.id}
+          apiBaseUrl={apiBaseUrl}
+          refreshSignal={emailsRefreshSignal}
+          data-testid="EmailsCard__cf88e6" />
+      )}
       <RelatedDocumentsCard
         documentId={invoice?.id}
         token={token}
@@ -199,6 +215,9 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
   const ratePrecision = useCurrencyPrecision();
+  // ETP-5069 — see OrderPreview.jsx: bumped on a successful send so the
+  // email-history card refetches instead of showing its pre-send state.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
   // (GET /preview-file) resolves ahead of the jsreport regeneration behind
   // p.pdfUrl; capturing it here lets Download gate on whichever resolves first.
@@ -323,12 +342,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           orgId={p.orgId}
           profile={p.profile}
           territory={p.territory}
+          siiRecord={p.siiRecord}
+          tbaiRecord={p.tbaiRecord}
+          verifactuRecord={p.verifactuRecord}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
           ratePrecision={ratePrecision}
+          emailsRefreshSignal={emailsRefreshSignal}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
     },
@@ -418,6 +441,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           pdfBlobLoading={p.pdfLoading}
           isClosing={p.sendModalClosing}
           onClose={p.closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__cf88e6" />
       )}
     </>

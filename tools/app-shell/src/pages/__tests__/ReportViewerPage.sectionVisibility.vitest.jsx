@@ -23,12 +23,19 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
+// ETP-5116 — ReportViewerPage now gates the finance category behind
+// useWindowAccess()/WindowAccessGuard; defaults to 'full' so the existing
+// suite's finance-category renders are unaffected.
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     selectedRole: { orgList: [] },
     selectedOrg: { id: 'org1' },
   }),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: (props) => (
+    <div data-testid="window-access-guard" data-window-id={props.windowId} />
+  ),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({

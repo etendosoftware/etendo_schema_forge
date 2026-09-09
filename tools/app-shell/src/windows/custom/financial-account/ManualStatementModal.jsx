@@ -16,6 +16,8 @@ import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
+import { parseAmount } from './statementAmount.js';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS } from './fieldLengthValidation.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -86,29 +88,6 @@ function lineToRow(l) {
   };
 }
 
-/**
- * Parses a user-typed amount that may use either `,` or `.` as decimal
- * separator (Spanish operators type `3.500,00`). When both are present the
- * rightmost is treated as the decimal separator — same rule the backend CSV
- * importer applies. Returns a finite Number (0 on blank/invalid).
- */
-function parseAmount(v) {
-  if (v == null) return 0;
-  let s = String(v).trim();
-  if (!s) return 0;
-  const hasComma = s.includes(',');
-  const hasDot = s.includes('.');
-  if (hasComma && hasDot) {
-    s = s.lastIndexOf(',') > s.lastIndexOf('.')
-      ? s.replace(/\./g, '').replace(',', '.')
-      : s.replace(/,/g, '');
-  } else if (hasComma) {
-    s = s.replace(',', '.');
-  }
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function isBlankLine(r) {
   // The auto-filled date is ignored: a row with only the default date is empty.
   return !r.reference.trim() && !r.description.trim() && !r.contactName.trim() && !r.contact && !r.glItem
@@ -117,14 +96,32 @@ function isBlankLine(r) {
 
 /**
  * A line is "complete" (committable / saveable) when it has its transaction date
- * and at least one amount entered (a statement line is an inflow OR an outflow,
- * so the other side is left empty = 0). Reference No, contact and G/L item are
+ * and an amount on EXACTLY ONE of the two sides — a statement line is an inflow
+ * OR an outflow, so the other side must be left empty. Reference No, contact and G/L item are
  * all optional — a blank reference is stored as `**`, exactly like the CSV
  * import does. Empty amount fields count as 0.
  */
+/**
+ * A line is usable when it carries a date, at least one amount above zero, and NO amount
+ * below zero. The two amount halves must be asserted separately: the old single disjunction
+ * (`out > 0 || in > 0`) short-circuits, so `Salida=50 / Entrada=-20` satisfied it on the left
+ * operand and the negative Entrada was never examined — the line saved and was then displayed
+ * netted to +30. Rejecting negatives outright is a deliberate divergence from Etendo Classic
+ * (ETP-4954): money in goes in Entrada, money out in Salida, and a sign never substitutes for
+ * the column. `BankStatementsHandler.createLines` and `BankStatementLinePruner` enforce the
+ * same rule on the API and import paths.
+ */
 function isLineComplete(r) {
-  return !!r.date
-    && (parseAmount(r.out) > 0 || parseAmount(r.in) > 0);
+  const out = parseAmount(r.out);
+  const inn = parseAmount(r.in);
+  if (!r.date) return false;
+  if (out < 0 || inn < 0) return false;
+  // Exactly one side. A line filled on both is not a movement the bank reported: the read path
+  // collapses the pair to `cramount - dramount`, so 100/30 displays as a −70 that is in no
+  // statement and 50/50 saves and then reads as 0,00 €. `ReactivationSupport` already refuses
+  // to leave both sides filled (it nets them onto one, "Classic's sign normalization").
+  if (out > 0 && inn > 0) return false;
+  return out > 0 || inn > 0;
 }
 
 function computeTotals(rows) {
@@ -324,10 +321,18 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   return (
     <div className={cn(LINES_GRID, 'group items-center bg-card px-6 py-1.5 hover:bg-[hsl(var(--muted))]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
-      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference} className={cellInput} data-testid="manual-line-ref" />
+      {/* PSD-23 — dense grid cells with no room for an inline error, and this modal reports
+          its own validation as a submit-time toast (see onProcess). The hard maxLength
+          attribute is the pattern AccountFormStep and EditAccountModal already use in this
+          same window: the browser truncates on typing AND on paste, so the over-long value
+          never exists to be sent. Lengths come from bankStatementLines in the contract. */}
+      <input type="text" value={row.reference} onChange={set('reference')} title={row.reference}
+        maxLength={FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineReference}
+        className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
         placeholder={ui('financeAccountStatementsManualDescPlaceholder')}
         title={row.description}
+        maxLength={FINANCIAL_ACCOUNT_FIELD_LIMITS.statementLineDescription}
         className={cellInput} data-testid="manual-line-description" />
       <input type="text" value={row.contactName} onChange={set('contactName')}
         placeholder={ui('financeAccountStatementsManualCounterpartyPlaceholder')}

@@ -226,7 +226,11 @@ describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)',
     await waitFor(() => expect(result.current.loadingPayments).toBe(false));
 
     expect(result.current.territory).toBe('BIZKAIA');
-    expect(getPendingSifTargetsMock).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', expect.anything(), 'BIZKAIA');
+    // ETP-5122: getPendingSifTargets also receives the tbaiRecord itself (5th
+    // arg) for the adoption-date gate, ANDed with the territory gate above.
+    expect(getPendingSifTargetsMock).toHaveBeenCalledWith(
+      'purchase-invoice', 'sii+tbai', expect.anything(), 'BIZKAIA', { etsgSifTerritory: 'BIZKAIA' },
+    );
   });
 
   it('falls back to null territory when tbaiRecord is missing, without throwing', async () => {
@@ -237,7 +241,9 @@ describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)',
     await waitFor(() => expect(result.current.loadingPayments).toBe(false));
 
     expect(result.current.territory).toBeNull();
-    expect(getPendingSifTargetsMock).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', expect.anything(), null);
+    expect(getPendingSifTargetsMock).toHaveBeenCalledWith(
+      'purchase-invoice', 'sii+tbai', expect.anything(), null, null,
+    );
   });
 });
 
