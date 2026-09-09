@@ -184,3 +184,37 @@ export class AmbiguousWindowError extends Error {
     this.candidates = candidates;
   }
 }
+
+// Characters the WHATWG URL parser removes from the input before parsing it.
+const URL_STRIPPED_RE = /[\t\n\r]/g;
+
+/**
+ * Guard the router against anything that is not an in-app path. This is the
+ * security boundary of the navigation tools (see the ETP-5064 acceptance
+ * criteria) and its message must never be reused for a reference the index
+ * simply could not resolve — see UnknownWindowError above.
+ */
+export function assertInternalPath(path) {
+  if (typeof path !== 'string') {
+    throw new Error('Only internal application paths are allowed');
+  }
+  // A leading "/" is NOT by itself proof the URL stays on this origin: the
+  // WHATWG URL parser reshapes the string before it decides where the
+  // authority starts, so the decision has to be made on the SAME string the
+  // parser will see. Two rewrites, both mandatory, neither redundant:
+  //   1. TAB, LF and CR are stripped before parsing, so "/\t/evil.example"
+  //      collapses to "//evil.example". (Plain space is NOT stripped.)
+  //   2. Under a special scheme "\" is equivalent to "/", so "/\evil.example"
+  //      enters authority state exactly like "//evil.example".
+  // Without both, every one of those forms passes a bare startsWith('//')
+  // check and resolves to http://evil.example/.
+  const normalized = path.replace(URL_STRIPPED_RE, '').replace(/\\/g, '/');
+  if (!normalized.startsWith('/') || normalized.startsWith('//')) {
+    throw new Error('Only internal application paths are allowed');
+  }
+  // The original string is returned on purpose: normalization exists to make
+  // the DECISION on the parser's view of the input, not to rewrite the caller's
+  // path. Any string whose normalized form is on-origin is itself on-origin,
+  // because origin escape depends only on that leading authority prefix.
+  return path;
+}
