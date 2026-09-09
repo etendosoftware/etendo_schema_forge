@@ -290,12 +290,15 @@ describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', 
     fireEvent.click(screen.getByText('done'));
 
     await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
-    const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    // ETP-5209 — a row blocked by rowFilter BEFORE any API call is `omitted`,
+    // never `failed`: nothing was actually attempted, let alone errored.
+    const { ok, omitted, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(ok).toBe(0);
-    expect(failed).toEqual([{ documentNo: 'row-2', message: 'bulkRowAlreadyPosted' }]);
+    expect(failed).toEqual([]);
+    expect(omitted).toEqual([{ documentNo: 'row-2', message: 'bulkRowAlreadyPosted' }]);
 
-    // A blocked row counts as a failure, so handleDone uses the longer 1500ms
-    // delay before reload (see BulkDocumentAction.jsx's `failed.length === 0`
+    // A blocked row still uses the longer 1500ms delay before reload (see
+    // BulkDocumentAction.jsx's `failed.length === 0 && omitted.length === 0`
     // branch) — same pattern as the actionMode failure test above.
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
