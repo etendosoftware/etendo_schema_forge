@@ -69,7 +69,7 @@ async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook
     if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
     if (onAfterSave) return navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
     if (saved.id && isNew) { hook.primeSaved?.(saved); return navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } }); }
-    if (saved.id) return hook.fetchById?.(saved.id);
+    if (saved.id) return hook.fetchById?.(saved.id, { force: true });
     reportUnnavigableSave({ saved, isNew, windowName, ui });
   } finally {
     if (showProcessing) setShowProcessingModal(false);
