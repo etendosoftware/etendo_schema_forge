@@ -2696,3 +2696,93 @@ as the immutability trigger for a data-fix `.sql` file.
   file's own N1/N2/N3 bullets above, and `OnboardingBaselineService.java`'s javadoc), so a rename
   is a real multi-file edit, not a one-line fix, and is a product/process call (which ticket's
   label "wins") as much as a technical one.
+## 2026-09-09 — Merge of `develop` into `feature/ETP-5207`: `A8`/`R34` label collision (ETP-5207 vs ETP-5075)
+
+- **Two independent branches (ETP-5207 and ETP-5075) both claimed gap label `A8`**, discovered as a
+  merge conflict when merging `origin/develop` into `feature/ETP-5207`. ETP-5075 authored it
+  2026-09-07 (already published on `develop`); ETP-5207 authored it 2026-09-08 (still on a feature
+  branch, unmerged).
+- **Both also minted a corrective `.sql` labeled `R34`** the same week —
+  `20260907T180000Z__R34-invoice-price-variance-backfill.sql` (ETP-5075) and
+  `20260908T120000Z__R34-fin-account-cleared-payment-accounts.sql` (ETP-5207) — but unlike the
+  `N1`/`R31` case above, this is NOT a filename collision: both full filenames are already distinct,
+  only the human-readable `Rnn` prefix repeats, which this catalog already treats as normal (see
+  R14/R17/R23/R26). Nothing to rename on the SQL side.
+- **The `A8` gap LABEL is the only real collision, and — unlike the `N1` case — it WAS renamed
+  during this merge rather than left as a duplicate.** ETP-5075's `A8` stays (published on
+  `develop` first); ETP-5207's is relabeled `A9`. The `N1` case's own "Apply generally" advice
+  (query `ETGO_DATA_FIX_HISTORY` before assuming a rename is cheap, and don't rename when a label is
+  already cross-referenced in many places) still holds — it just resolves differently here because
+  ETP-5207's `A8` was one day old, on a feature branch, and referenced in exactly 4 places (this
+  file, `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and its own `.sql`/regression test),
+  none of them a real `ETGO_DATA_FIX_HISTORY` row keyed on the label itself (`@gap` is never stored
+  there). A rename was a one-line fix in each of those 4 places, not the "real multi-file edit" the
+  `N1` case flagged — so it was done directly instead of deferred to a separate decision.
+- **Apply generally:** "flag for a decision instead of renaming" (the `N1` precedent) is the right
+  default when a rename is expensive or ambiguous — many cross-references, unclear which ticket's
+  label should win, or a real ledger row under the disputed identifier. When the newer side is
+  still unmerged and lightly referenced, as here, renaming it during the merge is simpler and
+  leaves no dangling decision for someone else to pick up later.
+
+---
+
+## ETP-5207 — "Cleared payment account" (IN/OUT) pre-filled on Financial Account creation (A9, R34, 2026-09-08)
+
+Four reusable core/onboarding facts came out of this one. All four were verified by reading the
+code, not inferred.
+
+- **`FIN_FINANCIAL_ACCOUNT_ACCT` is NOT in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so
+  `GOClient/FIN_FINANCIAL_ACCOUNT_ACCT.xml` is never imported into a tenant.** `INCLUDED_TABLES`
+  carries `FIN_FINANCIAL_ACCOUNT` but not the `_ACCT` child; `OnboardingSourceFiles`'
+  classpath provider filters every bundled XML through `shouldIncludeTable`, so that file is inert.
+  The row a new tenant actually receives is written by
+  `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL`.
+  **Apply:** before "fixing" a value in any `referencedata/sampledata/GOClient/*.xml`, check that
+  its table is actually in `INCLUDED_TABLES`. If it is not, the XML edit is cosmetic and the real
+  preventive front is the corresponding `*_SQL` constant in `OnboardingAccountingWiringService`.
+  Edit the XML anyway for template consistency, but never *instead of* the Java.
+
+- **`APRM_FIN_FINACC_ACCT_CHECK_TRG` fires `BEFORE INSERT` *and `UPDATE`*.** It raises
+  `@APRM_GainLossFeeAccountsError@` whenever a `fin_financial_account_acct` row whose account
+  `type='B'` has any of `fin_bankfee_acct` / `fin_bankrevaluationgain_acct` /
+  `fin_bankrevaluationloss_acct` NULL. In PostgreSQL that aborts the whole transaction.
+  **Apply:** any data-fix that `UPDATE`s this table must exclude such rows, or a single malformed
+  Bank row (typically a tenant with an incomplete `c_acctschema_default`, i.e. gap A2d) turns the
+  fix into `FAILED` for the entire tenant. It is not enough that the fix does not *write* those
+  three columns — the trigger re-validates the row on any update.
+
+- **`DocFINReconciliation`'s posting gate and its fact-building loop are asymmetric.**
+  `getDocumentConfirmation` (`:1351-1390`) decides *whether the document posts at all* by adding
+  transactions to `transactionsToBePosted` only when the relevant account is non-null (empty set →
+  `STATUS_DocumentDisabled`, a clean no-post, not an error). But once the gate passes, `createFact`
+  (`:722-734`) iterates **every** `p_lines` entry, not `transactionsToBePosted` — and
+  `createFactFee` (`:772`) / `createFactGLItem` call `getClearOutAccount`/`getAccount`
+  unconditionally, where `:1609-1611` dereferences `getClearedPaymentAccount(OUT)().getId()` with
+  **no null check** (NPE → `IllegalStateException` → `@InvalidAccount@`).
+  **Apply:** nulling a `*_acct` column that the gate consults is safe only while *nothing* passes
+  the gate. If one line can pass while another line in the same document needs the nulled account,
+  posting fails hard instead of skipping. For the ETP-5207 seeded configuration this is
+  unreachable (only "Recibo" carries `INUPONCLEARINGUSE=CLE`, and `AcctServer:859-860` gates
+  `post()` on `getDocumentConfirmation`, with no `createfact` template in the GOClient sampledata to
+  trigger `disableDocumentConfirmation()`), but a tenant that hand-configures a method with
+  `INUponClearingUse`/`OUTUponClearingUse` in `INT`/`DEP`/`WIT` re-opens it. Cheap pre-check:
+  `SELECT name, upondeposituse, uponwithdrawaluse, inuponclearinguse, outuponclearinguse FROM
+  fin_paymentmethod WHERE ad_client_id = '<client_id>';`
+
+- **`FIN_FINACC_PAYMENTMETHOD.INUPONCLEARINGUSE`/`OUTUPONCLEARINGUSE` have no column default
+  (empty `<default/>`), and `FinancialAccountSupport#createLink` copies all four use-fields from
+  the payment-method master.** So a link's clearing-use is whatever the master says, or NULL. In
+  the GOClient sampledata only **"Recibo"** carries `CLE` on both — and it is auto-assigned to
+  Banco and Tarjeta accounts by `PAYMENT_METHODS_BY_TYPE`, which is why the bug manifested on
+  exactly those two types.
+  **Apply:** when reasoning about which reconciliation path a tenant actually exercises, read the
+  *link* row (`FIN_FINACC_PAYMENTMETHOD`), not the master — and remember `UPONDEPOSITUSE`/
+  `UPONWITHDRAWALUSE` (transaction-time) are different fields from `INUPONCLEARINGUSE`/
+  `OUTUPONCLEARINGUSE` (reconciliation-time). Confusing the two pairs makes the whole gate analysis
+  wrong.
+
+**Non-obvious consequence worth carrying forward:** emptying these two columns also stops GO's
+cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines from reaching the
+ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
+"reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
+implementation detail.

@@ -60,6 +60,14 @@ const FIXES_WITH_REPORT = new Set([
   // back empty and leave `detail` null on the APPLIED ledger row. A non-empty detail means a
   // row was skipped or something raced the update, and is worth investigating.
   '20260902T120000Z__R31-document-sequence-startno',
+  // R34 (ETP-5207) blanks FIN_FINANCIAL_ACCOUNT_ACCT's cleared-payment IN/OUT columns, but
+  // deliberately skips two populations it must not touch: an account with a POSTED reconciliation
+  // (its FACT_ACCT entries were produced USING the cleared account) and a type-'B' row missing
+  // bankfee/revaluation accounts (APRM_FIN_FINACC_ACCT_CHECK_TRG fires BEFORE UPDATE too and would
+  // abort the whole tenant's transaction). Its @report lists each skipped (account, ledger) pair
+  // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
+  // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
+  '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
 ]);
 
 async function loadCatalogFiles() {
