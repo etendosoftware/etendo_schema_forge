@@ -126,14 +126,36 @@ function cellClassName(alignment) {
   return `border border-border px-2 py-1 align-top ${alignment}`.trim();
 }
 
+/**
+ * Turns one row's raw text into cells that already carry their own key and
+ * class, so the JSX below only reads them.
+ *
+ * A cell's identity here IS its position: the whole table is re-parsed from the
+ * markdown on every render, so there is no reorder for a key to survive.
+ * Deriving the key while parsing says that once, instead of leaving a bare
+ * `key={column}` in the JSX for a reader (or S6479) to weigh as an oversight.
+ */
+function buildCells(cells, alignments, rowKey) {
+  return cells.map((text, column) => ({
+    key: `${rowKey}-c${column}`,
+    text,
+    className: cellClassName(alignments[column] ?? ''),
+  }));
+}
+
 function renderTable(lines, startIndex) {
   const headers = splitRow(lines[startIndex]);
   const alignments = splitRow(lines[startIndex + 1]).map(cellAlignment);
   const bordered = hasBorderPipes(lines[startIndex].trim());
+  const headerCells = buildCells(headers, alignments, `t${startIndex}-h`);
   const rows = [];
   let index = startIndex + 2;
   while (index < lines.length && continuesTable(lines, index, bordered)) {
-    rows.push(normalizeRow(splitRow(lines[index]), headers.length));
+    const rowKey = `t${startIndex}-r${rows.length}`;
+    rows.push({
+      key: rowKey,
+      cells: buildCells(normalizeRow(splitRow(lines[index]), headers.length), alignments, rowKey),
+    });
     index += 1;
   }
   return {
@@ -144,16 +166,16 @@ function renderTable(lines, startIndex) {
       className="my-2 overflow-x-auto"
       data-testid="MarkdownTable__e0b411"><table className="w-full border-collapse text-xs">
       <thead>
-        <tr>{headers.map((header, column) => (
-          <th key={`h-${column}`} className={`${cellClassName(alignments[column] ?? '')} font-semibold`}>
-            {renderInline(header)}
+        <tr>{headerCells.map((cell) => (
+          <th key={cell.key} className={`${cell.className} font-semibold`}>
+            {renderInline(cell.text)}
           </th>
         ))}</tr>
       </thead>
-      <tbody>{rows.map((row, line) => (
-        <tr key={`r-${line}`}>{row.map((cell, column) => (
-          <td key={`c-${line}-${column}`} className={cellClassName(alignments[column] ?? '')}>
-            {renderInline(cell)}
+      <tbody>{rows.map((row) => (
+        <tr key={row.key}>{row.cells.map((cell) => (
+          <td key={cell.key} className={cell.className}>
+            {renderInline(cell.text)}
           </td>
         ))}</tr>
       ))}</tbody>
@@ -195,6 +217,25 @@ function renderListBlock(lines, index, line) {
   return null;
 }
 
+/**
+ * Consumes the run of consecutive paragraph lines starting at `startIndex` into
+ * a single `<p>`, joined by explicit line breaks.
+ *
+ * Always consumes at least one line, so it cannot stall the caller's loop: it
+ * is only reached for a line that is non-blank and none of the other block
+ * kinds, which is exactly what `isParagraphLine` answers true to.
+ */
+function renderParagraph(lines, startIndex) {
+  const parts = [];
+  let index = startIndex;
+  while (index < lines.length && isParagraphLine(lines, index)) {
+    if (parts.length) parts.push(<br key={`break-${index}`} />);
+    parts.push(...renderInline(lines[index]));
+    index += 1;
+  }
+  return { node: <p key={`paragraph-${startIndex}`}>{parts}</p>, nextIndex: index };
+}
+
 export function MarkdownContent({ children }) {
   if (!children) return null;
   const lines = String(children).split('\n');
@@ -211,19 +252,9 @@ export function MarkdownContent({ children }) {
     }
     const block = startsTable(lines, index)
       ? renderTable(lines, index)
-      : renderListBlock(lines, index, line);
-    if (block) {
-      blocks.push(block.node);
-      index = block.nextIndex;
-      continue;
-    }
-    const paragraph = [];
-    while (index < lines.length && isParagraphLine(lines, index)) {
-      if (paragraph.length) paragraph.push(<br key={`break-${index}`} />);
-      paragraph.push(...renderInline(lines[index]));
-      index += 1;
-    }
-    blocks.push(<p key={`paragraph-${index}`}>{paragraph}</p>);
+      : renderListBlock(lines, index, line) ?? renderParagraph(lines, index);
+    blocks.push(block.node);
+    index = block.nextIndex;
   }
   return <div className="space-y-2 leading-6">{blocks}</div>;
 }
