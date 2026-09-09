@@ -21,7 +21,9 @@ appears both under Pendientes and under Con sugerencia. See `reconciliationStatu
 The classification below only ever runs on the lines `PENDING_LINES_SQL`
 (`ReconciliationHandler`) returns, and that query has a precondition the five states do not
 express: **the line's bank statement must be processed** (`bs.processed = 'Y'`). A draft statement
-is not reconcilable yet, so its lines are deliberately absent from the left panel.
+is not reconcilable yet, so its lines are deliberately absent from the left panel. The Automatch
+enters through a second, separate query that carries the same rule — see "Two queries, one rule"
+below.
 
 **The exception: an already reconciled line (ETP-5121).** Reactivating a bank statement flips only
 `FIN_BankStatement.PROCESSED`; it does not revert reconciliations. A line that was reconciled
@@ -38,6 +40,34 @@ AND (bs.processed = 'Y'
 The exception repeats the exact predicate that defines `line_status = 'reconciled'`, so it can
 never pull a line back in whose reconciliation has been returned to DRAFT — that line still falls
 through to the pending pool and gets classified by the cascade below.
+
+### Two queries, one rule (ETP-5121, QA round)
+
+The Automatch preview does **not** read `PENDING_LINES_SQL`. `ReconciliationHandler.buildAutoMatch`
+collects its lines through `loadPendingLines`, a different query on the same tables, and until this
+ticket that query had no `processed` predicate at all. The two were gated together when the flag was
+first introduced and then drifted apart: ETP-4101 dropped the requirement from `loadPendingLines`
+(18 Jun 2026) while `PENDING_LINES_SQL` still had no gate either, and added the gate to
+`PENDING_LINES_SQL` alone five days later. From then on a statement returned to Borrador showed
+*Pendientes (0)* in the left panel while the Automatch modal went on proposing its unmatched line —
+and applying that suggestion succeeded.
+
+`loadPendingLines` now gates on `bs.processed = true` as well. It is expressed as an `OBCriteria`
+rather than raw HQL so that the DAL also contributes the readable-client and readable-organization
+predicates, which the hand-written query lacked — the same reason ETP-4950 moved
+`MatchRuleEngine.loadRules` to the DAL, and it holds even under `OBContext.setAdminMode(true)`.
+
+It deliberately does **not** carry the already-reconciled exception above, and cannot: that exception
+requires a non-null `FIN_FinAcc_Transaction_ID`, which contradicts `loadPendingLines`' own
+`financialAccountTransaction is null` restriction, so the intersection is empty. The panel needs the
+exception because it still has to *display* a reconciled line under "Conciliadas"; the Automatch only
+ever looks at unmatched lines, and a reconciled one has nothing left to suggest.
+
+The rule is enforced again on the way in. The three write paths that consume a suggestion —
+`reconcileGroup`, `ReconciliationFlowSupport.prepareGroup` and `ReconciliationDifferenceSupport` —
+reject a line whose statement is in Borrador with a `409`, so a preview taken before a reactivation
+cannot be applied after it. Each guard sits above the first setter on its path, because a handler
+that returns an error after a write still commits it.
 
 ## 1. The classification chain
 

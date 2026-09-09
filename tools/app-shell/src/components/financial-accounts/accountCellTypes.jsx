@@ -19,7 +19,7 @@
 //
 // This file lives under `tools/app-shell/src/` on purpose: vitest's `include` is
 // `src/**`, so a registry placed in the artifact's `custom/` dir would not be collected.
-import { NameCell, TypeCell, BalanceCell, CountryCell } from './AccountsTable/accountColumns.jsx';
+import { NameCell, TypeCell, BalanceCell, CountryCell, CurrencyCell } from './AccountsTable/accountColumns.jsx';
 import { ReconcilePill } from './ReconcilePill.jsx';
 
 /* eslint-disable react/prop-types */
@@ -46,6 +46,8 @@ export const ACCOUNT_CELL_TYPES = {
   accountType: (row, ctx) => <TypeCell account={row} ui={ctx.ui} data-testid="TypeCell__c4cfe9" />,
 
   accountCountry: (row) => <CountryCell account={row} data-testid="CountryCell__c4cfe9" />,
+
+  currencyChip: (row) => <CurrencyCell account={row} data-testid="CurrencyCell__c4cfe9" />,
 
   accountBalance: (row) => <BalanceCell account={row} data-testid="BalanceCell__c4cfe9" />,
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-08-31T13:46:13.403Z",
-  "checksum": "3e8e3538e7ea8ded",
+  "updatedAt": "2026-09-07T14:21:09.238Z",
+  "checksum": "48ddcfa5d2a89c50",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -60,11 +60,14 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Currency",
             "inputMode": "selector",
+            "cellType": "currencyChip",
+            "gridLabelKey": "financeAccountsColCurrency",
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 32
@@ -211,7 +214,7 @@
             "defaultValue": "0",
             "cellType": "accountBalance",
             "gridLabelKey": "financeAccountsColBalance",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 12
@@ -287,7 +290,7 @@
             "inputMode": "selector",
             "cellType": "accountCountry",
             "gridLabelKey": "financeAccountsColCountry",
-            "gridOrder": 3,
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 32
@@ -849,7 +852,7 @@
             "form": false,
             "cellType": "reconcilePill",
             "gridLabelKey": "financeAccountsColPending",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "computed": {
               "mode": "stored",
               "refresh": "synchronous"

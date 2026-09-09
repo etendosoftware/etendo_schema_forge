@@ -27,6 +27,7 @@ export function DetailMoreActionsMenu({
   statusField,
   token,
   ui,
+  windowReadOnly,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const moreMenuRef = useRef(null);
@@ -62,9 +63,19 @@ export function DetailMoreActionsMenu({
   const resolvedActions = typeof menuActions === 'function'
     ? menuActions({ data, status: data?.[statusField] })
     : menuActions;
-  const visibleActions = (Array.isArray(resolvedActions) ? resolvedActions : [])
-    .filter(a => a.visible !== false);
-  const hasCustomContent = customMenuContent && customMenuHasContent !== false;
+  // ETP-5116: a read-only window (window.readOnly) must not expose ANY write
+  // action through the kebab menu — filter the whole list out, mirroring the
+  // same "!windowReadOnly && ..." pattern DetailView.jsx already applies to
+  // renderSaveActions/processes/detailProcesses (see ETP-5116 sibling commit).
+  const normalizedActions = Array.isArray(resolvedActions) ? resolvedActions : [];
+  const visibleActions = windowReadOnly
+    ? []
+    : normalizedActions.filter(a => a.visible !== false);
+  // Every existing customMenuContent implementation (GoodsShipmentMoreMenu,
+  // InventoryMenuContent, InternalConsumptionActions) fires a write action
+  // (post/void/update quantities) on click, so it must be gated the same way
+  // rather than assumed read-only.
+  const hasCustomContent = !windowReadOnly && customMenuContent && customMenuHasContent !== false;
   if (visibleActions.length === 0 && !hasCustomContent) return null;
   const currentId = data?.id || recordId;
   const runDocumentAction = async (action) => {
