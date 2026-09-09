@@ -57,7 +57,8 @@
           "productCOGS"
         ],
         "requireSavedRecord": true,
-        "maxDetailLines": 1
+        "maxDetailLines": 1,
+        "visibleWhenCapability": "showAccountingFields"
       }
     },
     "import": {

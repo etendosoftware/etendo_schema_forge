@@ -1334,8 +1334,10 @@ Customer/Vendor Accounting, etc.).
    `product`, `product-category`, `business-partner-category`, `tax`, `asset-group`, and `contacts`
    use for their Accounting/Customer-Accounting/Vendor-Accounting tabs. Full property reference
    (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
-   `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
-   ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   `customForm`, `customAddModal`, `readOnlyLogic`, the per-tab `maxDetailLines` cap added in
+   ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
+   `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
+   `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s

@@ -108,7 +108,7 @@
         },
         "processed": {
           "visibility": "readOnly",
-          "grid": true,
+          "grid": false,
           "form": true,
           "section": "principal",
           "seq": 6,
