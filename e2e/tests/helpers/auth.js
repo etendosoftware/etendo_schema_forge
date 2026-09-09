@@ -71,6 +71,7 @@ export async function login(page, {
     // token (which would return 401 and trigger logout()).
     // - GET /selectors/**  → single synthetic item so product search dropdowns populate
     // - POST /**/callout   → synthetic updates so forceCalloutFields can override user values
+    // - first-steps        → an already-seen onboarding state, so the dashboard is reachable
     // - POST/PUT/PATCH     → synthetic saved record so the UI can navigate to detail
     // - GET (other)        → empty list
     await page.route('**/sws/**', (route) => {
@@ -99,6 +100,29 @@ export async function login(page, {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ response: { data: [] } }),
+        });
+      } else if (url.includes('/sws/go/onboarding/first-steps')) {
+        // ETP-5190 — the dashboard now mounts a one-time gate that redirects to
+        // /first-steps whenever this endpoint reports the page has never been seen. The
+        // generic GET fallback at the bottom of this handler returns `{data: [], ...}`,
+        // which reads as exactly that, so without this branch EVERY mocked spec that
+        // stays on the dashboard renders the First Steps page instead (8/8 failures
+        // across dashboard-period-filter and pending-shipments-card), and the
+        // `waitForURL('**/dashboard')` below races the gate's `replace` and throws a
+        // navigation timeout at random. Answering "already seen" restores the
+        // pre-ETP-5190 behaviour: login() lands on the dashboard and stays there.
+        //
+        // Deliberately narrow — a single URL match, no state of its own. A spec that
+        // needs an UNSEEN account (see first-steps-onboarding.mocked.spec.js) just
+        // registers its own `**\/sws\/go\/onboarding\/first-steps**` route after
+        // login(); Playwright matches routes in reverse registration order, so the
+        // spec's route wins over this one.
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: method === 'GET'
+            ? JSON.stringify({ status: 'success', firstSteps: { v: 1, seen: true, completed: [] } })
+            : JSON.stringify({ status: 'success' }),
         });
       } else if (url.includes('/selectors/')) {
         route.fulfill({

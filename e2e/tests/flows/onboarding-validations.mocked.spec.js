@@ -177,10 +177,13 @@ test.describe('Onboarding — Full registration flow', () => {
     // Country selector visible
     await expect(page.locator('#countryCode')).toBeVisible();
 
-    // Business type options visible
+    // Business type options visible — Empresa and Autónomo only. "Asesoría" was retired
+    // from the product by ETP-5190, so its absence is asserted rather than left untested:
+    // the option comes back the moment `businessTypeValues` in OnboardingPage.jsx drops
+    // the explicit list (the core ProfileStep's own fallback still includes 'advisory').
     await expect(page.getByText(/empresa/i).first()).toBeVisible();
     await expect(page.getByText(/autónomo|autonomo/i).first()).toBeVisible();
-    await expect(page.getByText(/asesoría|asesoria/i).first()).toBeVisible();
+    await expect(page.getByText(/asesor[íi]a/i)).toHaveCount(0);
 
     // Continue disabled without name
     const continueBtn = page.getByRole('button', { name: /continuar|continue/i });

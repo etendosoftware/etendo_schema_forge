@@ -1,6 +1,18 @@
 {
   "menu": [
     {
+      "group": "First Steps",
+      "icon": "ClipboardCheck",
+      "section": "General",
+      "items": [
+        {
+          "name": "first-steps",
+          "label": "First Steps",
+          "favname": "First Steps"
+        }
+      ]
+    },
+    {
       "group": "Home",
       "icon": "Home",
       "section": "General",
@@ -389,6 +401,12 @@
           "label": "Organization",
           "favname": "Organization",
           "windowId": "110"
+        },
+        {
+          "name": "document-sequence",
+          "label": "Document Sequence",
+          "favname": "Document Sequence",
+          "windowId": "112"
         },
         {
           "name": "price-list",
