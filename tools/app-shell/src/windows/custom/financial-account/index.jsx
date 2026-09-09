@@ -97,6 +97,69 @@ const LINE_CSV_COLUMNS = [
 ].join('|');
 
 /**
+ * The action buttons to the right of the tab strip: refresh (reconciliation only), edit, automatch
+ * (bank reconciliation only) and export (only the two tabs that implement it).
+ *
+ * Extracted from `FinancialAccountDetail`'s JSX to keep that function's cognitive complexity under
+ * the Sonar limit (javascript:S3776) — its three visibility conditions were a quarter of the score.
+ * Markup, conditions and test ids are unchanged; the inline handlers became props.
+ */
+function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit, onAutoMatch, onExport }) {
+  return (
+          <div className="flex items-center gap-2">
+        {/* Reconciliation is the one tab whose toolbar gets no refresh button of its own:
+            the bank split panel's toolbar belongs to its LEFT column, so a button there
+            would reload only the statement lines, and the cash-close screen has no toolbar
+            at all. Sitting here it reloads the whole tab — account, movements, and whichever
+            of the two screens is mounted (via the remount key). */}
+        {activeTab === 'reconciliation' ? (
+          <RefreshButton
+            onRefresh={onRefresh}
+            label={ui('refresh')}
+            data-testid="RefreshButton__f7dbb3" />
+        ) : null}
+        <button
+          type="button"
+          data-testid="financial-account-edit"
+          onClick={onEdit}
+          className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+        >
+          <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
+          <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
+        </button>
+        {/* Automatch is bank-only (ETP-4795): a cash account's Reconciliation tab is the
+            cash-close screen, which has nothing to automatch against. */}
+        {activeTab === 'reconciliation' && !isCashAccount ? (
+          <button
+            type="button"
+            data-testid="financial-account-automatch"
+            onClick={onAutoMatch}
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+          >
+            <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
+            <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
+          </button>
+        ) : null}
+        {/* Export only exists for the two tabs that implement it — Movements (transactions CSV)
+            and Imported statements (statements / their lines). It used to be the fallback for
+            every other tab, so it also rendered on the cash close and the reconciliation list,
+            where `handleExport` matches no branch and does nothing. */}
+        {EXPORTABLE_TABS.has(activeTab) ? (
+          <button
+            type="button"
+            data-testid="financial-account-export"
+            onClick={onExport}
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+          >
+            <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
+            <span className="px-1">{ui('financeAccountDetailExport')}</span>
+          </button>
+        ) : null}
+      </div>
+  );
+}
+
+/**
  * Reads the deep-link params (tab / autoMatch / txn / txnAny / newMovement / edit) into state and
  * clears them from the URL. Reacts to `searchParams` changes — not just mount — because navigating
  * within the SAME account (e.g. from the reconciled-txns modal to the Movements tab) updates the
@@ -415,56 +478,15 @@ export function FinancialAccountDetail({ recordId }) {
               reconciliationList: reconciliations.length,
             }}
             data-testid="DetailTabs__f7dbb3" />
-          <div className="flex items-center gap-2">
-            {/* Reconciliation is the one tab whose toolbar gets no refresh button of its own:
-                the bank split panel's toolbar belongs to its LEFT column, so a button there
-                would reload only the statement lines, and the cash-close screen has no toolbar
-                at all. Sitting here it reloads the whole tab — account, movements, and whichever
-                of the two screens is mounted (via the remount key). */}
-            {activeTab === 'reconciliation' ? (
-              <RefreshButton
-                onRefresh={handleReconciliationRefresh}
-                label={ui('refresh')}
-                data-testid="RefreshButton__f7dbb3" />
-            ) : null}
-            <button
-              type="button"
-              data-testid="financial-account-edit"
-              onClick={() => setEditOpen(true)}
-              className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
-            >
-              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
-              <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
-            </button>
-            {/* Automatch is bank-only (ETP-4795): a cash account's Reconciliation tab is the
-                cash-close screen, which has nothing to automatch against. */}
-            {activeTab === 'reconciliation' && !isCashAccount ? (
-              <button
-                type="button"
-                data-testid="financial-account-automatch"
-                onClick={() => setAutoMatchOpen(true)}
-                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
-              >
-                <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
-                <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
-              </button>
-            ) : null}
-            {/* Export only exists for the two tabs that implement it — Movements (transactions CSV)
-                and Imported statements (statements / their lines). It used to be the fallback for
-                every other tab, so it also rendered on the cash close and the reconciliation list,
-                where `handleExport` matches no branch and does nothing. */}
-            {EXPORTABLE_TABS.has(activeTab) ? (
-              <button
-                type="button"
-                data-testid="financial-account-export"
-                onClick={handleExport}
-                className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
-              >
-                <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
-                <span className="px-1">{ui('financeAccountDetailExport')}</span>
-              </button>
-            ) : null}
-          </div>
+          <DetailToolbarActions
+            activeTab={activeTab}
+            isCashAccount={isCashAccount}
+            ui={ui}
+            onRefresh={handleReconciliationRefresh}
+            onEdit={() => setEditOpen(true)}
+            onAutoMatch={() => setAutoMatchOpen(true)}
+            onExport={handleExport}
+          />
         </div>
 
         {/* Tab content */}
