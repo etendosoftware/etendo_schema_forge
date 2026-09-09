@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-08-31T11:36:23.257Z",
-  "checksum": "86d6d6ad62398160",
+  "updatedAt": "2026-09-09T18:22:25.791Z",
+  "checksum": "30ee0a47aac69f20",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -615,6 +615,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "columnWidth": 280,
             "validation": {
               "maxLength": 32
             },

@@ -229,7 +229,8 @@
           "grid": true,
           "lookup": true,
           "label": "Account",
-          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column."
+          "columnWidth": 280,
+          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default."
         },
         "description": {
           "visibility": "editable",

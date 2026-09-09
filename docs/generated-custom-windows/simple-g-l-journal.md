@@ -69,6 +69,18 @@ The side-panel line editor additionally exposes the **Open Items** checkbox and,
 | `rate` | CurrencyRate | — | system | Line currency rate, derived. |
 | `financialAccount`, `paymentMethod`, `paymentDate`, `relatedPayment`, `aPRMAddPayment`, `gLItem` | FIN_Financial_Account_ID, FIN_Paymentmethod_ID, Paymentdate, FIN_Payment_ID, EM_Aprm_Addpayment, C_Glitem_ID | — | discarded | Payment-integration fields dropped for V1 (spec §2). `EM_*` also caught by `discardPatterns`. |
 
+### Account column widened past Description (ETP-5210)
+
+`accountingCombination` and `description` neither set an explicit grid width, so both fell back to
+the type-based defaults in `tools/app-shell/src/lib/linesColumnWidth.js`: `accountingCombination`
+(a `foreignKey`/selector) defaulted to 192px while `description` (a plain `string`) defaulted to
+224px elastic — leaving the Account column narrower than Description, backwards from the intended
+emphasis. Fixed by adding `"columnWidth": 280` to `accountingCombination` in `decisions.json`
+(the same `columnWidth` mechanism already used by `physical-inventory`'s `etgoQtydiff`), which the
+generator carries through `contract.json` and renders as `minWidth: 280` in the generated
+`GLJournalLineTable.jsx` columns array — comfortably above Description's 224px default. `description`
+itself is unchanged.
+
 ## Balance rule (core behavior)
 
 This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDebit", "creditField": "foreignCurrencyCredit" }`.
