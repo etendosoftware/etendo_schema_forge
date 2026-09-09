@@ -23,7 +23,7 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
 
   const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
-  const pendingTargets = getPendingSifTargets(specName, profile, data, territory);
+  const pendingTargets = getPendingSifTargets(specName, profile, data, territory, tbaiRecord);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
 
   if (status !== 'CO' || !hasPendingTargets) return null;
