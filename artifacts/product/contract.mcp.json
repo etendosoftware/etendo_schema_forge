@@ -1,8 +1,8 @@
 {
-  "version": "0.1.1",
+  "version": "0.2.0",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-27T15:11:37.217Z",
-  "contractChecksum": "b60ba2f38cc700e9",
+  "updatedAt": "2026-09-09T12:12:00.195Z",
+  "contractChecksum": "db027d1acc28f7d6",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -262,6 +262,14 @@
         "reference": "ValidCombination",
         "inputMode": "selector",
         "url": "/sws/neo/product/accounting/selectors/productCOGS"
+      },
+      {
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "column": "P_InvoicePriceVariance_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/invoicePriceVariance"
       },
       {
         "entity": "billOfMaterials",
@@ -728,7 +736,8 @@
           "productRevenue": {
             "required": true
           },
-          "productCOGS": {}
+          "productCOGS": {},
+          "invoicePriceVariance": {}
         }
       },
       "billOfMaterials": {
@@ -1087,5 +1096,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "8c7c572283033fee"
+  "checksum": "3918fe61e7d5d199"
 }

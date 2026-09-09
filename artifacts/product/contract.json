@@ -1,8 +1,8 @@
 {
-  "version": "0.1.1",
+  "version": "0.2.0",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-09-07T16:05:38.276Z",
-  "checksum": "b60ba2f38cc700e9",
+  "updatedAt": "2026-09-09T12:12:00.195Z",
+  "checksum": "db027d1acc28f7d6",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -1065,6 +1065,25 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "seq": 4,
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "invoicePriceVariance",
+            "apiKey": "invoicePriceVariance",
+            "column": "P_InvoicePriceVariance_Acct",
+            "label": "Invoice Price Variance",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 5,
             "grow": true,
             "validation": {
               "maxLength": 32
@@ -3964,7 +3983,7 @@
             "apiKey": "invoicePriceVariance",
             "column": "P_InvoicePriceVariance_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6043,6 +6062,14 @@
         "url": "/sws/neo/product/accounting/selectors/productCOGS"
       },
       {
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "column": "P_InvoicePriceVariance_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/invoicePriceVariance"
+      },
+      {
         "entity": "billOfMaterials",
         "field": "bOMProduct",
         "column": "M_ProductBOM_ID",
@@ -6720,6 +6747,14 @@
         "description": "Field 'fixedAsset' should be present in accounting"
       },
       {
+        "id": "t-field-presence-accounting-invoicePriceVariance",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Field 'invoicePriceVariance' should be present in accounting"
+      },
+      {
         "id": "t-field-presence-accounting-productCOGS",
         "category": "field-presence",
         "entity": "accounting",
@@ -7382,6 +7417,14 @@
         "field": "fixedAsset",
         "runner": "node",
         "description": "Field 'fixedAsset' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-invoicePriceVariance",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Field 'invoicePriceVariance' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-accounting-productCOGS",
@@ -9114,6 +9157,14 @@
         "description": "Selector endpoint for 'fixedAsset' in accounting should exist"
       },
       {
+        "id": "t-selector-endpoint-accounting-invoicePriceVariance",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoicePriceVariance' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-accounting-productCOGS",
         "category": "selector-endpoint",
         "entity": "accounting",
@@ -9368,14 +9419,6 @@
         "field": "id",
         "runner": "node",
         "description": "System field 'id' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-invoicePriceVariance",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "invoicePriceVariance",
-        "runner": "node",
-        "description": "System field 'invoicePriceVariance' should exist in backend but not frontend for accounting"
       },
       {
         "id": "t-system-field-accounting-organization",
@@ -11415,25 +11458,25 @@
       }
     ],
     "summary": {
-      "total": 665,
+      "total": 667,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 27,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 83,
-        "field-type": 83,
+        "field-presence": 84,
+        "field-type": 84,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 142,
         "searchable-filters": 5,
-        "selector-endpoint": 27,
-        "system-field": 251,
+        "selector-endpoint": 28,
+        "system-field": 250,
         "visibility": 12
       },
       "byRunner": {
-        "node": 665,
+        "node": 667,
         "junit": 0
       }
     }

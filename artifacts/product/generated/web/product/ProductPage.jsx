@@ -307,6 +307,14 @@ export const api = {
       "url": "/sws/neo/product/accounting/selectors/productCOGS"
     },
     {
+      "entity": "accounting",
+      "field": "invoicePriceVariance",
+      "column": "P_InvoicePriceVariance_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/invoicePriceVariance"
+    },
+    {
       "entity": "billOfMaterials",
       "field": "bOMProduct",
       "column": "M_ProductBOM_ID",
