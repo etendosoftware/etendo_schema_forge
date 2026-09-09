@@ -1,12 +1,73 @@
 # Reconciliation line classification — how a statement line lands in each filter
 
-How a pending `FIN_BankStatementLine` is classified into the left-panel filters of the
-Conciliación tab (**Pendiente**, **Sugerido**, **Por regla**, **Diferencias**, **Conciliadas**),
-what the standard matching algorithm's three flags actually change, and why **Diferencias** is
-unreachable under the configuration currently shipped to every client.
+How a pending `FIN_BankStatementLine` is classified into one of five **states** (`pending`,
+`suggested`, `byRule`, `difference`, `reconciled` — the five rows of the table below), what the
+standard matching algorithm's three flags actually change, and why **Diferencias** is unreachable
+under the configuration currently shipped to every client.
 
 This is general Etendo behaviour (Core's `StandardMatchingAlgorithm` plus our classifier), not
 specific to any one window or feature.
+
+**A state is not the same thing as a filter (ETP-5033).** The classification below still puts
+exactly one state on a line, but the left-panel **Pendientes** filter is a *superset*: it shows
+every line whose state is not `reconciled` (i.e. `pending` + `suggested` + `byRule` + `difference`).
+**Con sugerencia**, **Por regla** and **Diferencias** are strict subsets of it — a suggested line
+appears both under Pendientes and under Con sugerencia. See `reconciliationStatusFilter.js`
+(`STATUS_MEMBERS`) for the filter→states mapping, and the "Left-panel state filter" bullet in
+`docs/generated-custom-windows/financial-account.md` for the UI-facing summary.
+
+## 0. Which lines enter the chain at all
+
+The classification below only ever runs on the lines `PENDING_LINES_SQL`
+(`ReconciliationHandler`) returns, and that query has a precondition the five states do not
+express: **the line's bank statement must be processed** (`bs.processed = 'Y'`). A draft statement
+is not reconcilable yet, so its lines are deliberately absent from the left panel. The Automatch
+enters through a second, separate query that carries the same rule — see "Two queries, one rule"
+below.
+
+**The exception: an already reconciled line (ETP-5121).** Reactivating a bank statement flips only
+`FIN_BankStatement.PROCESSED`; it does not revert reconciliations. A line that was reconciled
+before the reactivation therefore keeps its `FIN_Finacc_Transaction_ID`, that transaction keeps a
+PROCESSED `FIN_Reconciliation`, and Core's `APRM_FIN_BNKSTM_LINE_CHECK_TRG` keeps the line
+immutable. Such a line stays listed, and stays in state `reconciled`:
+
+```sql
+AND (bs.processed = 'Y'
+     OR (bsl.fin_finacc_transaction_id IS NOT NULL
+         AND COALESCE(rec.processed, 'N') = 'Y'))
+```
+
+The exception repeats the exact predicate that defines `line_status = 'reconciled'`, so it can
+never pull a line back in whose reconciliation has been returned to DRAFT — that line still falls
+through to the pending pool and gets classified by the cascade below.
+
+### Two queries, one rule (ETP-5121, QA round)
+
+The Automatch preview does **not** read `PENDING_LINES_SQL`. `ReconciliationHandler.buildAutoMatch`
+collects its lines through `loadPendingLines`, a different query on the same tables, and until this
+ticket that query had no `processed` predicate at all. The two were gated together when the flag was
+first introduced and then drifted apart: ETP-4101 dropped the requirement from `loadPendingLines`
+(18 Jun 2026) while `PENDING_LINES_SQL` still had no gate either, and added the gate to
+`PENDING_LINES_SQL` alone five days later. From then on a statement returned to Borrador showed
+*Pendientes (0)* in the left panel while the Automatch modal went on proposing its unmatched line —
+and applying that suggestion succeeded.
+
+`loadPendingLines` now gates on `bs.processed = true` as well. It is expressed as an `OBCriteria`
+rather than raw HQL so that the DAL also contributes the readable-client and readable-organization
+predicates, which the hand-written query lacked — the same reason ETP-4950 moved
+`MatchRuleEngine.loadRules` to the DAL, and it holds even under `OBContext.setAdminMode(true)`.
+
+It deliberately does **not** carry the already-reconciled exception above, and cannot: that exception
+requires a non-null `FIN_FinAcc_Transaction_ID`, which contradicts `loadPendingLines`' own
+`financialAccountTransaction is null` restriction, so the intersection is empty. The panel needs the
+exception because it still has to *display* a reconciled line under "Conciliadas"; the Automatch only
+ever looks at unmatched lines, and a reconciled one has nothing left to suggest.
+
+The rule is enforced again on the way in. The three write paths that consume a suggestion —
+`reconcileGroup`, `ReconciliationFlowSupport.prepareGroup` and `ReconciliationDifferenceSupport` —
+reject a line whose statement is in Borrador with a `409`, so a preview taken before a reactivation
+cannot be applied after it. Each guard sits above the first setter on its path, because a handler
+that returns an error after a write still commits it.
 
 ## 1. The classification chain
 
@@ -150,4 +211,34 @@ the Diferencias filter is *theoretically* reachable today, not a case worth rely
 | The queries behind each pass | `modules_core/org.openbravo.advpaymentmngt/.../dao/MatchTransactionDao.java` |
 | Flag storage | `FIN_MATCHING_ALGORITHM` table, per financial account |
 | Our classifier + date window | `AutoMatchSupport.classifyPendingLine` / `standardMatchLevel` (com.etendoerp.go) |
-| Filter chips and badges | `ReconciliationSplitPanel.jsx` — `STATUS_CODES`, `STATUS_LABEL_KEYS` |
+| Filter membership (which states each filter code shows) | `reconciliationStatusFilter.js` — `STATUS_CODES`, `STATUS_MEMBERS`, `matchesStatus` |
+| Filter chips and row badges | `ReconciliationSplitPanel.jsx` — `STATUS_LABEL_KEY` |
+
+## 6. Consuming candidates across a batch (ETP-4971)
+
+Every query behind the standard algorithm's two passes filters on an **exact** amount match with
+no ordering (`MatchTransactionDao`, no `ORDER BY`), so with several pending lines of the identical
+amount, `transactions.get(0)` would return the *same* candidate transaction for every one of them —
+unless the caller excludes what earlier lines already claimed. Core's own auto-match driver
+(`MatchStatementOnLoadActionHandler.runAutoMatchingAlgorithm`) does this via a single `excluded`
+list that grows with every accepted match across the whole batch, in `bsl.transactionDate,
+bsl.lineNo` order (first pending line wins the transaction).
+
+`AutoMatchSupport.classifyPendingLine` and `ReconciliationHandler.suggestedTransactionIds` now have
+overloads that accept the same kind of shared accumulator (`Set<String> usedTxnIds,
+List<FIN_FinaccTransaction> excludedTxns`) and feed it into `AutoMatchSupport.standardMatch`
+(the single place that calls `FIN_MatchingTransaction.match(line, excluded)`). Two call sites share
+one accumulator each, in the same `datetrx, line` order the underlying SQL already returns:
+
+- `ReconciliationHandler.buildAutoMatch` — the actual Automatch preview. Before ETP-4971 this
+  called the standard algorithm with an always-empty `excluded` list, so N pending lines of the
+  same amount only ever produced ONE suggestion per run (accepting it and re-running Automatch
+  revealed the next one, one at a time).
+- `ReconciliationHandlerSupport.summarizePendingLines` — the left-panel `pendingLines` classifier.
+  Without the same accumulator its `suggested` count would over-report: a same-amount line whose
+  only candidate was already claimed by an earlier line would still be counted `suggested`, even
+  though an actual Automatch run would leave it `pending`.
+
+The no-accumulator overloads of both methods still exist for single-line lookups (e.g.
+`buildCandidates`'s right-panel preselection, which only ever classifies the one selected line) —
+they just create a fresh, empty accumulator per call, so their behavior is unchanged.

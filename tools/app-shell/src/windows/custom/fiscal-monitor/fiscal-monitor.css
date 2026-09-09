@@ -249,6 +249,22 @@
 }
 .fm-tablecard .fm-table tr:last-child td { border-bottom: 0; }
 .fm-tablecard .fm-table tr:hover td { background: hsl(var(--muted) / 0.5); }
+/* ETP-5030 — selected-row tint. `hsl(var(--primary) / 0.05)` is the literal
+   Tailwind `bg-primary/5` resolves to (see the app-shell-core tailwind preset:
+   primary.DEFAULT = 'hsl(var(--primary))'), keeping this table on the same
+   selection colour as the Sales Orders grid, InlineLinesPanel and DataTable.
+
+   It has to live here rather than as a `bg-primary/5` class on the <tr>: this
+   table paints its backgrounds on the CELLS (`tr:hover td` above), and a td
+   background covers whatever the tr paints underneath. Since the pointer is
+   necessarily over the row at the instant the user clicks the checkbox, a
+   row-level utility would have shown nothing at exactly the moment the user
+   looks for feedback — the very bug this ticket fixes.
+
+   The `:hover` selector is not redundant: it outranks `tr:hover td` (0,3,2) on
+   specificity alone, so the tint survives regardless of rule order. */
+.fm-tablecard .fm-table tbody tr.fm-row--selected td,
+.fm-tablecard .fm-table tbody tr.fm-row--selected:hover td { background: hsl(var(--primary) / 0.05); }
 .fm-tablecard .fm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fm-tablecard .fm-table td.strong { font-weight: 500; }
 .fm-tablecard .fm-table td.mono {

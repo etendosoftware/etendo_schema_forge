@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
-import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
+import {
+  isAttachmentStale,
+  isCachedRenderingStale,
+  RENDERER_BUILD_EPOCH_MS,
+} from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ---------------------------------------------------------------------------
 // Shared PDF CSS (A4 document layout — used by all delivery-note hooks)
 // ---------------------------------------------------------------------------
@@ -107,18 +112,14 @@ function fmt(v) {
 // Shared fetch helpers
 // ---------------------------------------------------------------------------
 export async function fetchJson(url, token) {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`);
   const d = await res.json();
   return d?.response?.data?.[0] ?? d?.response?.data ?? d;
 }
 
 export async function fetchAll(url, token) {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) return [];
   const d = await res.json();
   return d?.response?.data ?? (Array.isArray(d) ? d : []);
@@ -158,9 +159,7 @@ export function blobToDataUrl(blob) {
 export async function fetchImageDataUrl(imageId, base, token) {
   if (!imageId) return null;
   try {
-    const res = await fetch(`${base}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch(`${base}/image/${imageId}`, { baseUrl: '', token });
     if (!res.ok) return null;
     return await blobToDataUrl(await res.blob());
   } catch { return null; }
@@ -192,9 +191,9 @@ export function downloadBlobAsFile(blob, filename) {
  * @returns {Promise<string>} the rendered HTML
  */
 export async function renderHtml(content, css, helpers, data) {
-  const res = await fetch('/jsreport/api/report', {
+  const res = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify({
       template: { content, engine: 'handlebars', recipe: 'html', helpers },
       data: { css, ...data },
@@ -227,9 +226,9 @@ export async function renderPdf(content, css, helpers, data) {
     data: { css, ...data },
   };
 
-  const res = await fetch('/jsreport/api/report', {
+  const res = await apiFetch('/jsreport/api/report', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    baseUrl: '',
     body: JSON.stringify(payload),
   });
 
@@ -314,18 +313,34 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
 /**
+ * Which of the two causes made the cached rendering stale, for the `[pdf]` console
+ * line. Diagnosing a stale document from the console instead of by reading code is a
+ * documented requirement (`docs/document-printables.md`, criterion 5), and the two
+ * causes read very differently in practice: an edit invalidating one document is
+ * routine, whereas a whole deploy's worth of bundle-invalidations is expected exactly
+ * once per document — and neither should be mistaken for a cache that never converges.
+ */
+function staleReason(attachment, recordUpdated) {
+  const writtenAt = attachment.updatedAt || attachment.uploadedAt;
+  if (isAttachmentStale(attachment, recordUpdated)) {
+    return `written ${writtenAt}, record updated ${recordUpdated}`;
+  }
+  return `written ${writtenAt}, before this bundle built at ${new Date(RENDERER_BUILD_EPOCH_MS).toISOString()}`;
+}
+
+/**
  * The cached rendering of this record, or null when there is none or it no longer
- * matches the record (ETP-4787 — see `lib/attachmentFreshness.js`). Returning null on
- * staleness is all the invalidation the read side needs: the caller's next step is
- * already "render fresh".
+ * matches the record (ETP-4787) or the renderer that produced it (ETP-5125) — see
+ * `lib/attachmentFreshness.js`. Returning null on staleness is all the invalidation the
+ * read side needs: the caller's next step is already "render fresh".
  */
 async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, recordUpdated, isCancelled }) {
   const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
   if (isCancelled() || !main?.id) return null;
-  if (isAttachmentStale(main, recordUpdated)) {
+  if (isCachedRenderingStale(main, recordUpdated)) {
     console.info(
       `[pdf] ${tableName}/${recordId}: cached attachment is stale `
-      + `(written ${main.updatedAt || main.uploadedAt}, record updated ${recordUpdated}) — re-rendering`,
+      + `(${staleReason(main, recordUpdated)}) — re-rendering`,
     );
     return null;
   }

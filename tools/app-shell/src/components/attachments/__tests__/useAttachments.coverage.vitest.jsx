@@ -125,7 +125,7 @@ describe('useAttachments — remaining branches', () => {
       await setup();
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/C_Order/REC-1',
-        expect.objectContaining({ headers: { Authorization: 'Bearer tok-123' } }),
+        expect.objectContaining({ headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } }),
       );
     });
 
@@ -134,9 +134,11 @@ describe('useAttachments — remaining branches', () => {
       expect(globalThis.fetch.mock.calls[0][0]).toBe('/sws/neo/attachments/C_Order/REC-1');
     });
 
-    it('sends no Authorization header without a token', async () => {
+    it('sends no Authorization header without a token, but still sends the UI locale', async () => {
+      // ETP-5022: a tokenless request carries no credentials, but Accept-Language is not a
+      // credential — it must always travel so the backend answers in the UI locale.
       await setup({ token: undefined });
-      expect(globalThis.fetch.mock.calls[0][1].headers).toEqual({});
+      expect(globalThis.fetch.mock.calls[0][1].headers).toEqual({ 'Accept-Language': 'es_ES' });
     });
   });
 
@@ -329,7 +331,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/file/att-1',
-        { headers: { Authorization: 'Bearer tok-123' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
       );
       expect(anchorClick).toHaveBeenCalledTimes(1);
       expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
@@ -377,7 +379,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/C_Order/REC-1/zip',
-        { headers: { Authorization: 'Bearer tok-123' } },
+        { credentials: 'include', headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
       );
       expect(downloadName).toBe('attachments-REC-1.zip');
     });

@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
 
 /**
  * Sales Order + Invoice — Full happy-path integration E2E.
@@ -74,6 +77,17 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await slow(page);
     });
 
+    // ETP-5079: the onboarding dataset no longer seeds any visible product
+    // (the demo "Queso Sardo"/"Agua"/"Cerveza"/"Fernet" rows are filtered out
+    // at import time — still shipped for GOClient, never handed to a tenant —
+    // and the only product a tenant does receive is hidden behind a system
+    // category), so the two lines this test adds have nothing to search for
+    // unless the suite provisions its own fixtures first.
+    // See e2e/tests/helpers/product-helpers.js.
+    await test.step('Ensure product fixtures', async () => {
+      await ensureProductFixtures(page);
+    });
+
     await test.step('Navigate to Sales Order list view', async () => {
       await navigateTo(page, 'sales-order');
       await slow(page);
@@ -140,18 +154,16 @@ test.describe('Sales Order — Happy path (integration)', () => {
     await test.step('Add first line — select product', async () => {
       await waitForDetailReady(page);
 
-      // Click "+ Añadir líneas" — retry the whole click→response→render sequence
+      // Click "+ Añadir líneas" — wait for the button to appear first (the lines
+      // panel may still be loading after the draft save redirect), then retry the
+      // click→response→render sequence if the inline-add-row doesn't appear.
       const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
         .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
+      await expect(emptyStateBtn).toBeVisible({ timeout: 15_000 });
 
       await expect(async () => {
-        const addLinesResponse = page.waitForResponse(
-          (r) => r.url().includes('/sws/neo/') && r.status() < 400,
-          { timeout: 15_000 },
-        );
-        await emptyStateBtn.click({ timeout: 3_000 });
-        await addLinesResponse;
-        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+        await emptyStateBtn.click({ timeout: 5_000 });
+        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
       }).toPass({ timeout: 30_000 });
       await slow(page);
 
@@ -165,20 +177,24 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Search for "Queso Sardo" — wait for filtered results to appear
+      // Search for the first fixture product — wait for filtered results to appear
       const searchInput = page.getByTestId('product-search-input');
-      await searchInput.fill('Queso Sardo');
+      await searchInput.fill(PRODUCT_FIXTURE_ALPHA.name);
 
       const productOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: /queso sardo/i }).first();
+        .filter({ hasText: PRODUCT_FIXTURE_ALPHA.name }).first();
       await expect(productOption).toBeVisible({ timeout: 15_000 });
 
-      // Start listening for callout (price/tax fill) BEFORE clicking the product
-      const productCalloutResponse = page.waitForResponse(
-        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-        { timeout: 30_000 },
-      );
-      await productOption.click();
+      // Retry click if the product element detaches mid-click (the drawer
+      // re-renders its list when waterfall fetches complete — see purchase-helpers.js).
+      let productCalloutResponse;
+      await expect(async () => {
+        productCalloutResponse = page.waitForResponse(
+          (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+          { timeout: 30_000 },
+        );
+        await productOption.click({ timeout: 3_000 });
+      }).toPass({ timeout: 15_000 });
       await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
       await productCalloutResponse;
       await slow(page);
@@ -193,7 +209,7 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
 
       // Wait for the saved line to render with the product name in the lines list
-      await expect(page.getByText('Queso Sardo').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 15_000 });
 
       // Wait for any inline-add-row to disappear (save fully committed to table)
       await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
@@ -220,20 +236,24 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Search for "Agua" — wait for filtered results to appear
+      // Search for the second fixture product — wait for filtered results to appear
       const searchInput2 = page.getByTestId('product-search-input');
-      await searchInput2.fill('Agua');
+      await searchInput2.fill(PRODUCT_FIXTURE_BETA.name);
 
       const secondOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: /agua/i }).first();
+        .filter({ hasText: PRODUCT_FIXTURE_BETA.name }).first();
       await expect(secondOption).toBeVisible({ timeout: 10_000 });
 
-      // Start listening for callout BEFORE clicking the product
-      const productCalloutResponse2 = page.waitForResponse(
-        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-        { timeout: 30_000 },
-      );
-      await secondOption.click();
+      // Retry click if the product element detaches mid-click (same drawer
+      // re-render issue as the first line — see purchase-helpers.js).
+      let productCalloutResponse2;
+      await expect(async () => {
+        productCalloutResponse2 = page.waitForResponse(
+          (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+          { timeout: 30_000 },
+        );
+        await secondOption.click({ timeout: 3_000 });
+      }).toPass({ timeout: 15_000 });
       await expect(searchDrawer2).toBeHidden({ timeout: 10_000 }).catch(() => {});
       await productCalloutResponse2;
       await slow(page);
@@ -340,8 +360,8 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await expect(invoicePill).toContainText(/borrador|draft/i, { timeout: 5_000 });
 
       // Verify the invoice inherited both lines from the order
-      await expect(page.getByText(/queso sardo/i).first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText(/agua/i).first()).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(PRODUCT_FIXTURE_BETA.name).first()).toBeVisible({ timeout: 5_000 });
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i })).toBeVisible({ timeout: 5_000 });
       await slow(page);
     });

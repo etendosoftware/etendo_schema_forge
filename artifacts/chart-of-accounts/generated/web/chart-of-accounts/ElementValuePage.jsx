@@ -10,12 +10,12 @@ import NewAccountModal from '../../../custom/NewAccountModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Accounting / Chart of Accounts';
+const breadcrumb = 'Finance / Chart of Accounts';
 
 
 // @sf-generated-start summary:elementValue
 const summary = [
-  { key: 'active', column: 'IsActive', type: 'boolean' },
+
 ];
 
 const statusField = null;
@@ -75,7 +75,7 @@ export const api = {
     "parentFilter": "parentId={id} for child entities"
   },
   "window": {
-    "category": "accounting"
+    "category": "finance"
   }
 };
 
@@ -127,6 +127,8 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hideCreate
+      hideListFilters
+      hideRecordCount
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

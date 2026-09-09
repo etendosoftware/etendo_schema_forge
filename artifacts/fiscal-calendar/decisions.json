@@ -12,6 +12,16 @@
         "label": "Create Periods",
         "params": [
           {
+            "key": "FISCALYEARSTART",
+            "type": "select",
+            "label": "Fiscal Year Range",
+            "required": true,
+            "options": [
+              { "value": "JANUARY", "label": "January - December" },
+              { "value": "JULY", "label": "July - June" }
+            ]
+          },
+          {
             "key": "CREATEADJUSTMENT",
             "type": "select",
             "label": "Create Adjustment Period",
@@ -60,7 +70,8 @@
           "gridOrder": 2
         },
         "calendar": {
-          "visibility": "system"
+          "visibility": "system",
+          "derivation": "fromParent"
         },
         "processNow": {
           "form": true,

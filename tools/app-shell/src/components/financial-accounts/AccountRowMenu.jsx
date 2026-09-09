@@ -37,9 +37,11 @@ import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
  *   4''. Conectar banco          (no bank link at all)
  *   5. Borrar conexión           (any bank link — irreversible, ETP-4764)
  *   ───
- *   6. Eliminar cuenta            (only when `account.deletable === true`, ETP-4871 — a real,
- *                                  irreversible delete; independent of Archivar/Desarchivar, so
- *                                  both can be offered on the same deletable-but-active account)
+ *   6. Eliminar cuenta            (ALWAYS offered since ETP-5111 — a real, irreversible delete;
+ *                                  independent of Archivar/Desarchivar, so both can be offered on
+ *                                  the same active account. It no longer hides when the account
+ *                                  has dependent records: the dialog opens and the backend's 409
+ *                                  explains the refusal)
  *
  * The former standalone "Editar conexión bancaria" item was merged into "Editar
  * cuenta": both surfaced the same account data, so editing is now unified.
@@ -53,7 +55,6 @@ export function AccountRowMenu({
   const isCash = account.type === ACCOUNT_TYPE.CASH;
   const bankConnected = account.bankConnected === true;
   const isArchived = account.active === false;
-  const isDeletable = account.deletable === true;
   // Soft-disconnected: not connected, but the bank link survives and can be revived.
   const bankReconnectable = account.bankReconnectable === true;
 
@@ -216,21 +217,23 @@ export function AccountRowMenu({
           </DropdownMenuItem>
         )}
 
-        {/* ETP-4871 — independent of Archivar/Desarchivar above: a deletable, still-active
-            account can be archived OR deleted, whichever the user prefers, so this never
-            replaces the item above it. Only offered once the row confirms zero dependent
-            records anywhere (every FK into FIN_Financial_Account is RESTRICT). */}
-        {isDeletable ? (
-          <DropdownMenuItem
-            onClick={() => onDelete?.(account)}
-            data-testid={`account-row-menu-delete-${account.id}`}
-          >
-            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
-            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-              {ui('financeAccountsMenuDelete')}
-            </span>
-          </DropdownMenuItem>
-        ) : null}
+        {/* ETP-4871 — independent of Archivar/Desarchivar above: a still-active account can be
+            archived OR deleted, whichever the user prefers, so this never replaces the item above
+            it.
+            ETP-5111 — and it is now offered on EVERY row, not only where `account.deletable` is
+            true. Hiding it was the same "don't let them touch it" pattern this ticket inverted for
+            the movements kebab and the three bulk-delete trash buttons: the user could not tell an
+            account that cannot be deleted from one where the action simply does not exist. The
+            confirmation dialog opens either way and the backend's 409 explains the refusal. */}
+        <DropdownMenuItem
+          onClick={() => onDelete?.(account)}
+          data-testid={`account-row-menu-delete-${account.id}`}
+        >
+          <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+            {ui('financeAccountsMenuDelete')}
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

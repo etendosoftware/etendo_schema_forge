@@ -32,7 +32,10 @@ vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (url) => url?.replace(/\/[^/]+$/, '') ?? '',
 }));
 
-vi.mock('../fiscalConfig.utils.js', () => ({
+// ETP-5027: spread the real module so isProductionEnvironment keeps its real
+// behaviour — the applied-summary environment row is derived from it.
+vi.mock('../fiscalConfig.utils.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   buildOnboardingPayloads: vi.fn(() => ({})),
   getFiscalRecordId: vi.fn(() => null),
   getAllowedSystemsForTerritory: vi.fn(() => ['SII', 'TBAI', 'VERIFACTU']),
@@ -678,5 +681,61 @@ describe('OnboardingWizard — renderPageHead helper', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     // SubquestionScreen also calls renderPageHead
     expect(screen.getByText('Test Organization')).toBeInTheDocument();
+  });
+});
+
+describe('OnboardingWizard — AppliedScreen environment row (ETP-5027)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Walks the manual path up to the applied summary for the given system,
+  // with createRecords returning `record` as the created config row.
+  async function navigateToAppliedFor({ systemLabel, payloadKey, record }) {
+    buildOnboardingPayloads.mockReturnValue({ [payloadKey]: {} });
+    useApiFetch.mockReturnValue(vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [record] } }),
+    })));
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText(systemLabel));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    await waitFor(() => {
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('fiscal.save'));
+    await waitFor(() => {
+      expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
+    });
+  }
+
+  it('shows the sandbox label when VERI*FACTU runs in the developer environment', async () => {
+    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'Y' } });
+    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.onboarding.applied.env.production')).not.toBeInTheDocument();
+  });
+
+  it('shows the production label when VERI*FACTU runs in production', async () => {
+    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'N' } });
+    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.onboarding.applied.env.sandbox')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the sandbox label when the environment flag is missing', async () => {
+    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: {} });
+    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
+  });
+
+  it('shows the production label when SII is in the production environment', async () => {
+    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'Y' } });
+    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
+  });
+
+  it('shows the sandbox label when SII is not in the production environment', async () => {
+    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'N' } });
+    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
   });
 });

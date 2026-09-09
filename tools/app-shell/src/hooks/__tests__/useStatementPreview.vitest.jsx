@@ -1,10 +1,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useStatementPreview } from '../useStatementPreview.js';
+
+// ETP-5022: useStatementPreview (via useStatementFileRequest) now goes through
+// useApiFetch, which reads the token from the real core AuthProvider (or falls
+// back to the ambient session) rather than from a mocked `useAuth`. A mocked
+// `@/auth/AuthContext.jsx` never crosses the `useApiFetch` shim (it imports auth
+// via the core package's own relative path, which the `@/auth` alias does not
+// intercept), so a real AuthProvider seeded with a token is required instead.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
@@ -24,7 +31,7 @@ describe('useStatementPreview', () => {
   });
 
   it('returns the initial idle state', () => {
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
     expect(result.current.previewing).toBe(false);
     expect(result.current.error).toBeNull();
     expect(typeof result.current.previewStatement).toBe('function');
@@ -36,7 +43,7 @@ describe('useStatementPreview', () => {
       json: async () => ({ response: { data: { format: 'C43', lineCount: 7 } } }),
     });
 
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
 
     let res;
     await act(async () => {
@@ -66,7 +73,7 @@ describe('useStatementPreview', () => {
       new Promise((r) => { resolve = r; }),
     );
 
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
     let promise;
     act(() => {
       promise = result.current.previewStatement({
@@ -86,7 +93,7 @@ describe('useStatementPreview', () => {
     globalThis.fetch.mockResolvedValue({
       ok: false, status: 415, text: async () => 'unsupported',
     });
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
 
     let caught;
     await act(async () => {
@@ -107,7 +114,7 @@ describe('useStatementPreview', () => {
 
   it('propagates network rejection and stores it', async () => {
     globalThis.fetch.mockRejectedValue(new Error('offline'));
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
 
     await act(async () => {
       await expect(result.current.previewStatement({
@@ -120,7 +127,7 @@ describe('useStatementPreview', () => {
 
   it('returns {} when the API omits response.data', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
-    const { result } = renderHook(() => useStatementPreview());
+    const { result } = renderHook(() => useStatementPreview(), { wrapper });
 
     let res;
     await act(async () => {

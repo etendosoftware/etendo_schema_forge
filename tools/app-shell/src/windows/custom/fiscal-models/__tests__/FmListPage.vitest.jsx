@@ -2,6 +2,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,8 @@ vi.mock('../FmCommon.jsx', () => ({
 }));
 
 import FmListPage from '../FmListPage.jsx';
+// ETP-5030 — shared row-shading assertion helper (see @/test/rowShading.js).
+import { classesOf } from '@/test/rowShading.js';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -145,10 +148,16 @@ async function waitForCatalogLoad() {
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('fetch not mocked for this test')));
+  // FmListPage now goes through useApiFetch (ETP-5022), which resolves its bearer
+  // token from the ambient session when no AuthProvider wraps the tree (as here) —
+  // not from the `token` prop directly. Registering it with the same TOKEN constant
+  // keeps the "bearer token" assertions below meaningful without weakening them.
+  registerApiSession({ getToken: () => TOKEN });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetApiSessionForTests();
 });
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -827,7 +836,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
     await waitForCatalogLoad();
     expect(globalThis.fetch).toHaveBeenCalledWith(
       `${BASE}/fiscal-models-catalog`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
     );
   });
 
@@ -877,7 +886,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': true, '349': false }),
         })
       );
@@ -897,7 +906,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
         `${BASE}/fiscal-models-catalog`,
         expect.objectContaining({
           method: 'PUT',
-          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
           body: JSON.stringify({ '303': false, '349': false }),
         })
       );
@@ -1083,7 +1092,7 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `${BASE}/fiscal303/incidents?id=decl-url-check`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } })
+        expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } })
       );
     });
   });
@@ -1146,5 +1155,117 @@ describe('FmListPage — fiscal-models-catalog concurrent save and unmount safet
 
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+// ── ETP-5030 — selected-row shading ───────────────────────────────────────────
+// GROUP B (CSS rule, not a Tailwind utility). This table paints its backgrounds
+// on the CELLS (`.fm-table tbody tr:hover td`, fiscal-models.css), and a td
+// background covers whatever the tr paints underneath — so a `bg-primary/5` on
+// the <tr> would have rendered ONLY while the pointer was elsewhere, i.e. never
+// at the moment the user ticks the checkbox. The fix is therefore the
+// `fm-row--selected` class plus a pair of CSS rules
+// (`tr.fm-row--selected td` / `tr.fm-row--selected:hover td`) in
+// fiscal-models.css.
+//
+// IMPORTANT — these assertions are a PROXY. jsdom does not apply stylesheets, so
+// asserting the class proves the hook-up (the row is marked when, and only when,
+// it is selected), NOT the rendered colour and NOT the CSS specificity that
+// makes the tint outrank `tbody tr:hover td`. Neither of those is observable
+// from a unit test in this repo.
+describe('FmListPage — ETP-5030 selected-row shading', () => {
+  /** The <tr> whose period cell matches `period`. */
+  function rowByPeriod(container, period) {
+    return [...container.querySelectorAll('tbody tr')]
+      .find((tr) => tr.querySelector('.fm-period')?.textContent === period);
+  }
+
+  /** Row checkbox inside the given <tr>. */
+  const checkboxIn = (row) => row.querySelector('input[type="checkbox"]');
+
+  /** The row-state classes that compete for the same td background. */
+  const selectionClasses = (row) => classesOf(row)
+    .filter((c) => c === 'fm-row--selected' || c === 'fm-table__row--current');
+
+  async function renderDecls(decls) {
+    globalThis.fetch = mockCatalogFetch();
+    const view = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    return view;
+  }
+
+  it('marks ONLY the ticked row as selected and leaves the others unmarked', async () => {
+    const { container } = await renderDecls([
+      makeDecl({ id: 'r1', period: 'T1' }),
+      makeDecl({ id: 'r2', period: 'T2' }),
+    ]);
+
+    const row1 = rowByPeriod(container, 'T1');
+    const row2 = rowByPeriod(container, 'T2');
+    // Sanity: neither row is marked before the tick, so the assertion below is
+    // a real change of state and cannot pass vacuously.
+    expect(row1.className).not.toContain('fm-row--selected');
+    expect(row2.className).not.toContain('fm-row--selected');
+
+    fireEvent.click(checkboxIn(row1));
+
+    expect(rowByPeriod(container, 'T1').className).toContain('fm-row--selected');
+    expect(rowByPeriod(container, 'T2').className).not.toContain('fm-row--selected');
+  });
+
+  it('removes the marker when the row is unticked', async () => {
+    const { container } = await renderDecls([makeDecl({ id: 'r1', period: 'T1' })]);
+
+    fireEvent.click(checkboxIn(rowByPeriod(container, 'T1')));
+    expect(rowByPeriod(container, 'T1').className).toContain('fm-row--selected');
+
+    fireEvent.click(checkboxIn(rowByPeriod(container, 'T1')));
+    expect(rowByPeriod(container, 'T1').className).not.toContain('fm-row--selected');
+  });
+
+  it('keeps the marker on the row while it is hovered', async () => {
+    const { container } = await renderDecls([makeDecl({ id: 'r1', period: 'T1' })]);
+
+    const row = rowByPeriod(container, 'T1');
+    fireEvent.click(checkboxIn(row));
+    fireEvent.mouseOver(row);
+    fireEvent.mouseEnter(row);
+
+    // The class is unconditional — nothing in the component toggles it on
+    // pointer events, which is what makes the CSS `:hover` variant reachable.
+    // The guarantee that the tint actually WINS over `tbody tr:hover td` is
+    // CSS-level (selector specificity) and is not testable here: jsdom applies
+    // no stylesheets.
+    expect(rowByPeriod(container, 'T1').className).toContain('fm-row--selected');
+  });
+
+  it('collision — selected + current declaration: selection wins and exactly one row-state class paints', async () => {
+    const { container } = await renderDecls([
+      makeDecl({ id: 'cur-1', period: 'T1', current: true }),
+      makeDecl({ id: 'oth-1', period: 'T2' }),
+    ]);
+
+    const currentRow = rowByPeriod(container, 'T1');
+    // Sanity: the current-declaration marker is what the row carried BEFORE the
+    // fix, and it is still what an unselected current row carries.
+    expect(selectionClasses(currentRow)).toEqual(['fm-table__row--current']);
+
+    fireEvent.click(checkboxIn(currentRow));
+
+    // Both classes paint the same td background, so emitting both would leave
+    // the winner to stylesheet order — the trap this ticket is about.
+    expect(selectionClasses(rowByPeriod(container, 'T1'))).toEqual(['fm-row--selected']);
+    // The non-current sibling is unaffected.
+    expect(selectionClasses(rowByPeriod(container, 'T2'))).toEqual([]);
+  });
+
+  it('collision — unticking a current declaration falls back to the current-declaration marker', async () => {
+    const { container } = await renderDecls([makeDecl({ id: 'cur-1', period: 'T1', current: true })]);
+
+    fireEvent.click(checkboxIn(rowByPeriod(container, 'T1')));
+    expect(selectionClasses(rowByPeriod(container, 'T1'))).toEqual(['fm-row--selected']);
+
+    fireEvent.click(checkboxIn(rowByPeriod(container, 'T1')));
+    expect(selectionClasses(rowByPeriod(container, 'T1'))).toEqual(['fm-table__row--current']);
   });
 });

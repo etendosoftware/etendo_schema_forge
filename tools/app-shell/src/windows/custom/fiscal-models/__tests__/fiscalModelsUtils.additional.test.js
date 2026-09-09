@@ -17,10 +17,16 @@ import {
 // has no DOM, so we install a minimal stub for the duration of this file.
 // URL.createObjectURL/revokeObjectURL are natively available in Node 24.
 let savedDocument;
+// The last anchor triggerDownload() built, so tests can assert the `download`
+// attribute it was given (ETP-5027 — the 349 modal's "Nombre del fichero").
+let lastAnchor = null;
 before(() => {
   savedDocument = globalThis.document;
   globalThis.document = {
-    createElement: () => ({ href: '', download: '', click() {} }),
+    createElement: () => {
+      lastAnchor = { href: '', download: '', click() {} };
+      return lastAnchor;
+    },
     body: { appendChild() {}, removeChild() {} },
   };
 });
@@ -214,6 +220,96 @@ describe('generate303File — success path with identChecks and manualOverrides'
       }
     );
     assert.match(capturedUrl, /AdministrativeDiscrepancyRectifyingReason=Y/);
+  });
+
+  it('forwards redeme as MonthlyRegister=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', redeme: true },
+      }
+    );
+    assert.match(capturedUrl, /MonthlyRegister=Y/);
+  });
+
+  it('does not set MonthlyRegister when redeme is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' } }
+    );
+    assert.doesNotMatch(capturedUrl, /MonthlyRegister/);
+  });
+
+  it('forwards concurso as IsConcurso=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true },
+      }
+    );
+    assert.match(capturedUrl, /IsConcurso=Y/);
+  });
+
+  it('does not set IsConcurso when concurso is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' } }
+    );
+    assert.doesNotMatch(capturedUrl, /IsConcurso/);
+  });
+
+  it('forwards postconcursal as ConcursoType=Y when checked (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true, postconcursal: true },
+      }
+    );
+    assert.match(capturedUrl, /ConcursoType=Y/);
+  });
+
+  it('does not set ConcursoType when postconcursal is falsy/absent (ETP-5027)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: true } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoType/);
   });
 
   it('falls back to decl.result.kind and then N when tipo_declaracion is absent', async () => {
@@ -592,6 +688,84 @@ describe('generate349File', () => {
     globalThis.fetch = async () => { throw new Error('offline'); };
     const result = await generate349File({ year: 2026, period: 'T1' }, { token: 'tok', apiBaseUrl: '/x' });
     assert.deepEqual(result, { ok: false, error: 'network' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// generate349File — download filename (ETP-5027)
+//
+// The backend sets Content-Disposition from the user's "Nombre del fichero", but a
+// fetch+blob+a.download flow ignores that header, so the name has to be applied
+// client-side. The 349 modal's field starts EMPTY with an extension-less
+// placeholder, so the typed value normally carries no extension.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('generate349File — download filename', () => {
+  beforeEach(() => {
+    lastAnchor = null;
+    globalThis.fetch = async () => ({ ok: true, blob: async () => new Blob(['349-data']) });
+  });
+
+  async function downloadNameFor(fileName) {
+    const result = await generate349File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', ...(fileName === undefined ? {} : { fileName }) }
+    );
+    assert.equal(result.ok, true);
+    return lastAnchor.download;
+  }
+
+  it("uses the user's filename, with .txt appended", async () => {
+    assert.equal(await downloadNameFor('modelo349-2026'), 'modelo349-2026.txt');
+  });
+
+  it('does NOT duplicate the extension when the user already typed .txt', async () => {
+    assert.equal(await downloadNameFor('modelo349-2026.txt'), 'modelo349-2026.txt');
+  });
+
+  it('treats an uppercase/mixed-case .TXT as already present', async () => {
+    assert.equal(await downloadNameFor('modelo349.TXT'), 'modelo349.TXT');
+    assert.equal(await downloadNameFor('modelo349.Txt'), 'modelo349.Txt');
+  });
+
+  it('only matches .txt at the END — an inner ".txt" still gets the extension', async () => {
+    assert.equal(await downloadNameFor('a.txt.backup'), 'a.txt.backup.txt');
+  });
+
+  it('trims surrounding whitespace off the typed name', async () => {
+    assert.equal(await downloadNameFor('  modelo349  '), 'modelo349.txt');
+  });
+
+  it('falls back to 349_${period}_${year}.txt when no filename is given', async () => {
+    assert.equal(await downloadNameFor(undefined), '349_T1_2026.txt');
+  });
+
+  it('falls back for an empty or whitespace-only filename', async () => {
+    assert.equal(await downloadNameFor(''), '349_T1_2026.txt');
+    assert.equal(await downloadNameFor('   '), '349_T1_2026.txt');
+    assert.equal(await downloadNameFor(null), '349_T1_2026.txt');
+  });
+
+  it('the whitespace-only case is NOT sent to the backend either', async () => {
+    // `if (fileName)` keeps '' out of the body, but '   ' is truthy and IS sent —
+    // pinning the observed behaviour so a future change to either side is deliberate.
+    let capturedBody;
+    globalThis.fetch = async (url, opts) => {
+      capturedBody = opts.body;
+      return { ok: true, blob: async () => new Blob(['349-data']) };
+    };
+    await generate349File({ year: 2026, period: 'T1' }, { token: 'tok', apiBaseUrl: '/x', fileName: '' });
+    assert.doesNotMatch(capturedBody, /fileName=/);
+  });
+
+  it('does not touch the anchor at all when the request fails', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => '' });
+    const result = await generate349File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', fileName: 'modelo349' }
+    );
+    assert.equal(result.ok, false);
+    assert.equal(lastAnchor, null);
   });
 });
 

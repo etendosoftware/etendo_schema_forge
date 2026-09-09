@@ -6,6 +6,7 @@ import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { useUI } from '@/i18n';
 import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
@@ -104,9 +105,20 @@ const LISTING_TEMPLATE = `<!DOCTYPE html>
   </div>
 </div></body></html>`;
 
-// CSV template (text recipe)
-const CSV_TEMPLATE = `{{#each columns}}{{this.label}}{{#unless @last}},{{/unless}}{{/each}}
-{{#each rows}}{{#each ../columns}}{{lookup ../this this.key}}{{#unless @last}},{{/unless}}{{/each}}
+// CSV template (text recipe).
+//
+// Every label and every cell goes through `csvField` (ETP-5032), the canonical
+// helper `buildHelpersCode()` already ships — it neutralizes spreadsheet formula
+// injection (a Contact whose name is `=HYPERLINK(...)` must export as literal
+// text, CWE-1236) and applies RFC 4180 quoting, which this template previously
+// did not do at all: a value containing a comma silently split into two cells.
+//
+// TRIPLE-stash is mandatory ({{{ }}}, never {{ }}): Handlebars HTML-escapes
+// double-stash output, which turns csvField's own escaped `""` into
+// `&quot;&quot;` and corrupts the file. Same rule as the reports'
+// template-csv.hbs.
+export const CSV_TEMPLATE = `{{#each columns}}{{{csvField this.label}}}{{#unless @last}},{{/unless}}{{/each}}
+{{#each rows}}{{#each ../columns}}{{{csvField (lookup ../this this.key)}}}{{#unless @last}},{{/unless}}{{/each}}
 {{/each}}`;
 
 // ---------------------------------------------------------------------------
@@ -115,15 +127,14 @@ const CSV_TEMPLATE = `{{#each columns}}{{this.label}}{{#unless @last}},{{/unless
 const MAX_REPORT_ROWS = 10000;
 const BATCH = 200;
 
-async function fetchAllRecords(apiBaseUrl, entity, token, sortColumn, sortDirection) {
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+async function fetchAllRecords(apiFetch, entity, sortColumn, sortDirection) {
   let allRows = [];
   let start = 0;
   let hasMore = true;
 
   while (hasMore) {
-    const url = `${apiBaseUrl}/${entity}?_sortBy=${sortColumn} ${sortDirection}&_startRow=${start}&_endRow=${start + BATCH - 1}`;
-    const res = await fetch(url, { headers });
+    const path = `/${entity}?_sortBy=${sortColumn} ${sortDirection}&_startRow=${start}&_endRow=${start + BATCH - 1}`;
+    const res = await apiFetch(path);
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const data = await res.json();
     const rows = data?.response?.data ?? (Array.isArray(data) ? data : []);
@@ -183,6 +194,7 @@ async function renderViaJsreport(recipe, title, columns, rows, filters) {
     // Uses Chrome by default (same as chrome-pdf) — no htmlEngine override needed
   }
 
+  // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
   const res = await fetch('/jsreport/api/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -215,8 +227,11 @@ export default function ReportDrawer({
   const [error, setError] = useState(null);
   const [jsreportAvailable, setJsreportAvailable] = useState(null);
 
+  const apiFetch = useApiFetch(apiBaseUrl);
+
   // Check jsreport availability on mount
   useEffect(() => {
+    // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
     fetch('/jsreport/api/ping').then(r => setJsreportAvailable(r.ok)).catch(() => setJsreportAvailable(false));
   }, []);
 
@@ -232,7 +247,7 @@ export default function ReportDrawer({
     setFetchingData(true);
     setError(null);
 
-    fetchAllRecords(apiBaseUrl, entity, token, sortColumn || 'creationDate', sortDirection || 'desc')
+    fetchAllRecords(apiFetch, entity, sortColumn || 'creationDate', sortDirection || 'desc')
       .then(rows => {
         if (cancelled) return;
         const resolved = resolveRows(rows, columns || []);
@@ -246,7 +261,7 @@ export default function ReportDrawer({
       });
 
     return () => { cancelled = true; };
-  }, [open, apiBaseUrl, entity, token, sortColumn, sortDirection, columns]);
+  }, [open, apiBaseUrl, apiFetch, entity, token, sortColumn, sortDirection, columns]);
 
   // Store preview HTML so we can re-render and print reliably
   const previewHtmlRef = useRef('');

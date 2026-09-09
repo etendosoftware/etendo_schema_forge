@@ -1,8 +1,12 @@
+import { useMemo } from 'react';
 import { Search, Plus, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { AccountTypeFilter } from './AccountTypeFilter.jsx';
+import { RefreshButton } from '../contract-ui/RefreshButton.jsx';
+import { AdvancedFilterButton } from '../contract-ui/AdvancedFilterButton.jsx';
+import { buildAccountFilterColumns } from './accountAdvancedFilter.js';
 
 /**
  * Toolbar above the accounts table. Sizes match Figma `3012:25602`:
@@ -16,14 +20,26 @@ export function AccountsToolbar({
   onTypeFilterChange,
   search,
   onSearchChange,
+  // Advanced ("by conditions") filter — state lives in AccountsHeaderTable, which
+  // owns the rows and applies the condition tree client-side. Absent onChange
+  // renders no funnel at all (AdvancedFilterButton's own guard).
+  advancedFilter,
+  onAdvancedFilterChange,
+  // The rows the funnel's value pickers seed their option lists from (e.g. the ISO
+  // codes actually present in the Moneda column).
+  rows = [],
   onNewAccount,
   onMatchingRules,
   // Rendered node rather than sort props: the toolbar stays presentational, and the slot that
   // owns the ListView sort state decides what goes here. Absent = nothing rendered, so this is
   // inert for any other caller.
   sortControl = null,
+  // This window sets `hideListBar` and draws its own toolbar (see AccountsHeaderTable), so it
+  // never gets ListView's own refresh button either — reproduced here the same way sortControl is.
+  onRefresh,
 }) {
   const ui = useUI();
+  const filterColumns = useMemo(() => buildAccountFilterColumns(ui), [ui]);
 
   return (
     <div
@@ -35,6 +51,16 @@ export function AccountsToolbar({
           value={typeFilter}
           onChange={onTypeFilterChange}
           data-testid="AccountTypeFilter__c01b81" />
+        {/* h-10 to match every other control in this toolbar; the button's own
+            base height is h-9 (see docs/list-filters.md "Visual parity"). */}
+        <AdvancedFilterButton
+          columns={filterColumns}
+          rows={rows}
+          value={advancedFilter}
+          onChange={onAdvancedFilterChange}
+          testId="cuentas-advanced-filter"
+          className="h-10"
+          data-testid="AdvancedFilterButton__c01b81" />
       </div>
       <div className="flex items-center gap-2">
         <div className="relative h-10 w-[232px]">
@@ -52,6 +78,11 @@ export function AccountsToolbar({
         </div>
 
         {sortControl}
+
+        <RefreshButton
+          onRefresh={onRefresh}
+          label={ui('refresh')}
+          data-testid="RefreshButton__c01b81" />
 
         <Button
           type="button"

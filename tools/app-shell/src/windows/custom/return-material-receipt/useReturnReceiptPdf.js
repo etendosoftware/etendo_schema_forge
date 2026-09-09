@@ -137,12 +137,12 @@ export function getReturnReceiptPdfLabels(ui) {
 export async function generateReturnReceiptPdf(recordId, apiBaseUrl, token, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const data = await buildReceiptData(recordId, base, token);
-  return renderPdf(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+  return renderPdf(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels });
 }
 
 /** HTML twin of generateReturnReceiptPdf, for the list view's multi-document print. */
 export async function generateReturnReceiptHtml(recordId, apiBaseUrl, token, labels) {
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const data = await buildReceiptData(recordId, base, token);
-  return renderHtml(TEMPLATE, COMMON_PDF_CSS, HELPERS, { ...data, labels });
+  return renderHtml(TEMPLATE, COMMON_PDF_CSS, RETURN_DOC_HELPERS, { ...data, labels });
 }

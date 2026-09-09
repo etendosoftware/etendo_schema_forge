@@ -174,6 +174,17 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// ETP-5085 — the bulk-delete outcome toast now names the reason when every failure shares one, and
+// that reason is run through `translateBackendError`, which reads "t() returned the key" as a MISSING
+// translation and falls back to the raw English message. Only the `backendError.*` namespace is
+// stubbed as translated here; every other key still resolves to the bare, un-interpolated key, which
+// is exactly what the real provider-less `useUI()` already did in this harness — so the assertions
+// and comments in the pre-existing tests below are unaffected. Every other i18n export is kept real.
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useUI: () => (key) => (key.startsWith('backendError.') ? `translated:${key}` : key),
+}));
+
 import { MovementsTab } from '../MovementsTab.jsx';
 
 // Date helper — choose dates relative to "today" so that the default last30
@@ -217,6 +228,30 @@ describe('MovementsTab — default filters', () => {
     expect(ids).toContain('b');
     expect(ids).toContain('c');
     expect(ids).not.toContain('d');
+  });
+
+  // ETP-5013 follow-up: the Journal Entries report's "Financial Account
+  // Transaction" drill-down lands here as `?txnAny=<id>`, targeting ONE specific
+  // movement that is very often older than the 30-day default. Keeping the
+  // default would leave that row out of `movements` entirely, so the
+  // highlight/expand silently did nothing and the account looked empty.
+  it('opens the date filter unbounded when arriving via a txnAny deep-link, so the target row is loaded', () => {
+    renderTab({ highlightTxnId: 'd', txnUnbounded: true });
+    // "d" is 40 days old — invisible under the last30 default, visible now.
+    expect(rowIds()).toContain('d');
+  });
+
+  // The four in-app `?txn=` callers (reconciled-txns modal, transfer jump,
+  // conciliado badge, cleared-items) always point at a recent movement, so
+  // highlighting alone must NOT widen their date filter.
+  it('keeps the last30 default for a plain txn deep-link without the unbounded flag', () => {
+    renderTab({ highlightTxnId: 'd' });
+    expect(rowIds()).not.toContain('d');
+  });
+
+  it('keeps the last30 default for normal navigation (no deep-link)', () => {
+    renderTab({ highlightTxnId: null });
+    expect(rowIds()).not.toContain('d');
   });
 
   it('renders the toolbar, summary strip and table', () => {
@@ -321,6 +356,40 @@ describe('MovementsTab — pass-through props', () => {
   });
 });
 
+// ETP-4921 — this tab draws its own table instead of going through ListView, so it never
+// inherited ListView's refresh progress bar. It now renders the extracted ListProgressBar
+// under the same gate ListView uses: only once rows are already on screen, because on the
+// true first fetch MovementsTable's own skeleton is the indicator.
+describe('MovementsTab — refresh progress bar', () => {
+  it('shows the bar while refreshing over movements already on screen', () => {
+    renderTab({ loading: true });
+    expect(screen.getByTestId('movements-progress-bar')).toBeInTheDocument();
+  });
+
+  it('keeps the rows mounted underneath the bar (smooth refresh, not a remount)', () => {
+    renderTab({ loading: true });
+    expect(screen.getByTestId('movements-progress-bar')).toBeInTheDocument();
+    // The last30 default window keeps a, b and c; the 40-day-old d is filtered out.
+    expect(rowIds().sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('hides the bar on the very first fetch, where the table skeleton is the indicator', () => {
+    renderTab({ loading: true, movements: [] });
+    expect(screen.queryByTestId('movements-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('hides the bar once the fetch settles', () => {
+    renderTab({ loading: false });
+    expect(screen.queryByTestId('movements-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('uses its own testid so it never collides with another tab bar', () => {
+    renderTab({ loading: true });
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBe(screen.getByTestId('movements-progress-bar'));
+  });
+});
+
 describe('MovementsTab — selection toggle', () => {
   it('selects then deselects the same id (both branches of handleSelectionChange)', () => {
     renderTab();
@@ -342,6 +411,19 @@ describe('MovementsTab — selection toggle', () => {
 // selection, via BulkDeleteSelectionBar + useBatchDeleteDialog (neither
 // mocked here — the real components render, matching ImportedStatementsTab's
 // equivalent suite).
+// ETP-5111 — WHICH confirmation the trash opens depends on what is at stake, so the button's
+// testid depends on the selection. A one-row selection whose movement carries a conciliación
+// and/or an asiento gets the lifecycle cartel (`movement-confirm-*`), because that row is
+// deleted through Payment Removal exactly as the row kebab does it and the same consequences
+// have to be spelled out; everything else gets the neutral count dialog the bulk bar has always
+// shown (`batch-delete-*`). Which one appeared is asserted explicitly in the suite below — this
+// helper only has to click the right thing.
+function confirmBulkDelete() {
+  act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
+  const cartelAccept = screen.queryByTestId('movement-confirm-accept');
+  act(() => (cartelAccept ?? screen.getByTestId('batch-delete-confirm')).click());
+}
+
 describe('MovementsTab — bulk delete selection bar', () => {
   beforeEach(() => {
     mockDeleteMovement.mockReset();
@@ -350,24 +432,42 @@ describe('MovementsTab — bulk delete selection bar', () => {
     toastError.mockReset();
   });
 
+  // ETP-4972 — BulkDeleteSelectionBar now renders through the shared,
+  // portaled `SelectionToolbar` shell instead of an in-flow `<div>`.
+  // `SelectionToolbar` forwards a `data-testid` prop onto its pill (so
+  // `bulk-delete-selection-bar`, set by BulkDeleteSelectionBar.jsx, is a
+  // valid query too), but these tests assert presence via
+  // `bulk-delete-selection-count` — a testid on a real child element —
+  // which works the same regardless and predates this forwarding fix. The
+  // trigger button also became icon-only (no more `{label} ({count})` text)
+  // and the standalone Cancel button was dropped in favor of
+  // `SelectionToolbar`'s own built-in close (X) button.
   it('is hidden with no selection, and appears once a row is selected', () => {
     renderTab();
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
 
     act(() => screen.getByTestId('toggle-select-a').click());
 
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-delete-selection-trigger')).toHaveTextContent('(1)');
+    // No i18n provider is mounted in this harness (real useUI() falls back to
+    // the raw, un-interpolated key), so the exact "N Selected" text can't be
+    // asserted here — the actual selection count is already covered via
+    // `selected-ids`'s textContent in the sibling "selection toggle" tests.
+    // This just proves the bar mounts once a row is selected.
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeInTheDocument();
   });
 
   it('Cancel clears the selection and hides the bar', () => {
     renderTab();
     act(() => screen.getByTestId('toggle-select-a').click());
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
 
-    act(() => screen.getByTestId('bulk-delete-selection-cancel').click());
+    // The testid lives on SelectionToolbar's inner <X> svg icon, not the
+    // <button> itself — jsdom's SVGElement has no .click(), so target the
+    // actual button via closest().
+    act(() => screen.getByTestId('SelectionToolbar__close').closest('button').click());
 
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
     expect(screen.getByTestId('selected-ids').textContent).toBe('');
   });
 
@@ -378,16 +478,18 @@ describe('MovementsTab — bulk delete selection bar', () => {
 
     act(() => screen.getByTestId('toggle-select-a').click());
     act(() => screen.getByTestId('toggle-select-b').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
-    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'a' });
-    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'b' });
+    // ETP-5111 — still one call per selected id, but each now carries the delete SEMANTICS for
+    // this selection size: two rows means a plain delete (`paymentRemoval: false`). The flag's
+    // own rule is pinned in the "delete semantics" describe below.
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'a', paymentRemoval: false });
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'b', paymentRemoval: false });
     expect(toastSuccess).toHaveBeenCalled();
     expect(toastWarning).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('bulk-delete-selection-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
   });
 
   it('partial failure (e.g. a payment-linked movement): reloads, fires ONE warning toast, and keeps only the failed movement selected', async () => {
@@ -399,8 +501,7 @@ describe('MovementsTab — bulk delete selection bar', () => {
 
     act(() => screen.getByTestId('toggle-select-a').click());
     act(() => screen.getByTestId('toggle-select-b').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastWarning).toHaveBeenCalled());
     expect(toastSuccess).not.toHaveBeenCalled();
@@ -416,13 +517,147 @@ describe('MovementsTab — bulk delete selection bar', () => {
     renderTab({ onReload });
 
     act(() => screen.getByTestId('toggle-select-a').click());
-    act(() => screen.getByTestId('bulk-delete-selection-trigger').click());
-    act(() => screen.getByTestId('batch-delete-confirm').click());
+    confirmBulkDelete();
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onReload).not.toHaveBeenCalled();
     expect(screen.getByTestId('selected-ids').textContent).toBe('a');
-    expect(screen.getByTestId('bulk-delete-selection-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+  });
+
+  // ETP-5085 — the reported bug, end to end through the real BulkDeleteSelectionBar +
+  // useBatchDeleteDialog + toastBatchDeleteOutcome chain: selecting ONE leg of a funds transfer and
+  // confirming the bulk delete used to toast "No se pudo eliminar ninguno de los 1 registros
+  // seleccionados." — a count, with no hint that the row is undeletable by design.
+  const TRANSFER_NOT_DELETABLE = 'Movements generated by a funds transfer cannot be deleted.';
+
+  function rejectWith(message, status) {
+    const err = new Error(message);
+    err.status = status;
+    return err;
+  }
+
+  it('one undeletable transfer leg: the toast states the translated reason instead of a bare count', async () => {
+    mockDeleteMovement.mockRejectedValue(rejectWith(TRANSFER_NOT_DELETABLE, 409));
+    const onReload = vi.fn();
+    renderTab({ onReload });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    confirmBulkDelete();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(toastError).toHaveBeenCalledWith('translated:backendError.transferMovementNotDeletable');
+    // Neither the counter-only message nor the untranslated backend English.
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringContaining('bulkDeleteAllFailed'));
+    expect(toastError).not.toHaveBeenCalledWith(TRANSFER_NOT_DELETABLE);
+    // Outcome handling is unchanged: nothing succeeded, so no reload and the selection stays.
+    expect(onReload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('selected-ids').textContent).toBe('a');
+  });
+
+  // ETP-5111 — the same two legs, and now the reason is deliberately withheld: from two records up
+  // the toast is counters-only, because one singular sentence cannot be attributed to a specific
+  // row of the batch. The harness's useUI() returns bare keys, so assert on the key chosen.
+  it('two undeletable transfer legs: counters only, the shared reason is withheld', async () => {
+    mockDeleteMovement.mockRejectedValue(rejectWith(TRANSFER_NOT_DELETABLE, 409));
+    renderTab({ onReload: vi.fn() });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+    confirmBulkDelete();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('bulkDeleteAllFailed'));
+    expect(toastError).not.toHaveBeenCalledWith('translated:backendError.transferMovementNotDeletable');
+    expect(toastError).not.toHaveBeenCalledWith(TRANSFER_NOT_DELETABLE);
+  });
+});
+
+/**
+ * ETP-5111 — the rule this ticket turns on, and the one behavioural change the user can actually
+ * see: the trash's delete SEMANTICS depend on the size of the selection, for parity with Classic's
+ * own toolbar.
+ *
+ *   exactly 1 selected -> `paymentRemoval: true`  -> the backend reactivates, then removes, so a
+ *                                                   processed/posted/reconciled movement CAN go;
+ *   2 or more selected -> `paymentRemoval: false` -> a plain per-row delete, which the DB trigger
+ *                                                   (APRM_FIN_FINACC_TRAN_CHECK_TRG) refuses for
+ *                                                   any row that is still processed.
+ *
+ * The flag is captured in a ref at click time, because `deleteOneFn` is held by
+ * `useBatchDeleteDialog` across the confirm dialog and a closure over `selectedIds` would go
+ * stale — so these tests deliberately go through the real bar + dialog rather than calling the
+ * callback directly, and one of them re-runs the flow at a different size on the same mount.
+ */
+describe('MovementsTab — bulk delete semantics by selection size', () => {
+  beforeEach(() => {
+    mockDeleteMovement.mockReset();
+    mockDeleteMovement.mockResolvedValue(undefined);
+    toastSuccess.mockReset();
+    toastWarning.mockReset();
+    toastError.mockReset();
+  });
+
+
+  it('ONE selected row is deleted with paymentRemoval: true (Payment Removal)', async () => {
+    renderTab({ onReload: vi.fn() });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    confirmBulkDelete();
+
+    await waitFor(() => expect(mockDeleteMovement).toHaveBeenCalledTimes(1));
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'a', paymentRemoval: true });
+  });
+
+  it('TWO selected rows are deleted with paymentRemoval: false (plain delete)', async () => {
+    renderTab({ onReload: vi.fn() });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+    confirmBulkDelete();
+
+    await waitFor(() => expect(mockDeleteMovement).toHaveBeenCalledTimes(2));
+    for (const call of mockDeleteMovement.mock.calls) {
+      expect(call[0].paymentRemoval).toBe(false);
+    }
+  });
+
+  // The staleness regression the ref exists to prevent: the flag must be re-read at each click,
+  // not frozen at the mount or at the first delete. Two rows first, then a single row on the SAME
+  // mount — a closure over the initial selection would keep sending `false`.
+  it('re-evaluates the flag on every click rather than freezing the first value', async () => {
+    renderTab({ onReload: vi.fn() });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+    confirmBulkDelete();
+    await waitFor(() => expect(mockDeleteMovement).toHaveBeenCalledTimes(2));
+    expect(mockDeleteMovement).toHaveBeenLastCalledWith(
+      expect.objectContaining({ paymentRemoval: false }),
+    );
+
+    // A successful batch clears the selection, so re-select exactly one row and go again.
+    mockDeleteMovement.mockClear();
+    act(() => screen.getByTestId('toggle-select-b').click());
+    confirmBulkDelete();
+
+    await waitFor(() => expect(mockDeleteMovement).toHaveBeenCalledTimes(1));
+    expect(mockDeleteMovement).toHaveBeenCalledWith({ id: 'b', paymentRemoval: true });
+  });
+
+  // The other half of the unified delete rule on this surface: the trash is never pre-disabled by
+  // what the selection happens to hold (a payment-linked row, a transfer leg, a processed row in a
+  // multi-row batch). Its only disabled state is the in-flight one.
+  it('never pre-disables the trash for a selection the backend may refuse', () => {
+    renderTab({ onReload: vi.fn() });
+
+    act(() => screen.getByTestId('toggle-select-a').click());
+    act(() => screen.getByTestId('toggle-select-b').click());
+
+    const trigger = screen.getByTestId('bulk-delete-selection-trigger');
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).not.toBeDisabled();
+    // No eligibility tooltip either — the plain "delete" label, same as an unblocked selection.
+    expect(trigger).toHaveAttribute('title', 'delete');
   });
 });
 

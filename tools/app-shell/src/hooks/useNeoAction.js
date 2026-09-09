@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
  *
@@ -26,11 +27,7 @@ import { useCallback, useMemo, useState } from 'react';
  */
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
-
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const execute = useCallback(async (recordId, actionName) => {
     if (!apiBaseUrl || !recordId || !actionName) {
@@ -38,9 +35,9 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `${apiBaseUrl}/${entityName}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(actionName)}`,
-        { method: 'POST', headers, body: '{}' },
+      const res = await apiFetch(
+        `/${entityName}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(actionName)}`,
+        { method: 'POST', body: '{}' },
       );
       const body = await res.json().catch(() => null);
       const nested = body?.response?.data?.[0];
@@ -59,7 +56,7 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, entityName, headers]);
+  }, [apiBaseUrl, entityName, apiFetch]);
 
   return { execute, loading };
 }

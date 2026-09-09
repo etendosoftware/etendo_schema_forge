@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
-import { normalizeCodedInput, resolveCodedValue, describeAcceptedValues, resolveCodedCellOrThrow } from '../codedValue.js';
+import { normalizeCodedInput, resolveCodedValue, describeAcceptedValues, resolveCodedCellOrThrow, codeLabels } from '../codedValue.js';
 
 // A miniature stand-in for a real AD reference list, shaped exactly like the tables the
 // contacts/product descriptors declare.
@@ -47,6 +47,24 @@ describe('resolveCodedValue', () => {
     const taxIdKeys = { 1: ['NIF'], 2: ['NOI'] };
     assert.deepEqual(resolveCodedValue(1, taxIdKeys), { status: 'resolved', code: '1' });
     assert.deepEqual(resolveCodedValue('NIF', taxIdKeys), { status: 'resolved', code: '1' });
+  });
+});
+
+describe('codeLabels', () => {
+  it('inverts the table onto each code\'s primary label', () => {
+    assert.deepEqual(codeLabels(TYPES), { I: 'Articulo', S: 'Servicio' });
+  });
+
+  it('falls back to the bare code when a value has no synonyms', () => {
+    assert.deepEqual(codeLabels({ X: [], Y: undefined }), { X: 'X', Y: 'Y' });
+  });
+
+  // The point of inverting the synonym table rather than reading an AD label: what the export
+  // writes is, by construction, something the import resolves back to the SAME code.
+  it('produces labels that resolve back to their own code', () => {
+    for (const [code, label] of Object.entries(codeLabels(TYPES))) {
+      assert.deepEqual(resolveCodedValue(label, TYPES), { status: 'resolved', code });
+    }
   });
 });
 

@@ -73,6 +73,22 @@ describe('ChatView', () => {
     expect(screen.queryByText('copilotWelcome')).not.toBeInTheDocument();
   });
 
+  it('renders assistant markdown and rejects unsafe link protocols', () => {
+    const messages = [{
+      id: 'markdown',
+      role: 'copilot',
+      text: '# Resultado\n\n**Importante**: [documentación](https://example.com)\n\n- Uno\n- Dos\n\nClick [acá](javascript:alert(1))',
+    }];
+    const { container } = render(<ChatView messages={messages} />);
+
+    expect(container.querySelector('h3')).toHaveTextContent('Resultado');
+    expect(container.querySelector('strong')).toHaveTextContent('Importante');
+    expect(container.querySelector('a')).toHaveAttribute('href', 'https://example.com');
+    expect(container.querySelectorAll('ul li')).toHaveLength(2);
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+    expect(container).toHaveTextContent('[acá](javascript:alert(1))');
+  });
+
   it('renders the file list attached to a message', () => {
     const messages = [
       {
@@ -102,6 +118,25 @@ describe('ChatView', () => {
     render(<ChatView messages={[{ id: '1', role: 'user', text: 'hi' }]} isSending />);
     // The Bot icon appears in the typing indicator even for a user-only thread.
     expect(screen.getByTestId('Bot__61b427')).toBeInTheDocument();
+  });
+
+  it('shows a visible error with retry and dismiss actions', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const onDismissError = vi.fn();
+    render(
+      <ChatView
+        messages={[{ id: '1', role: 'user', text: 'hello' }]}
+        error="The AI service is unavailable"
+        onRetry={onRetry}
+        onDismissError={onDismissError}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('The AI service is unavailable');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDismissError).toHaveBeenCalledTimes(1);
   });
 
   it('renders AttachmentChips and forwards onRemoveAttachment', async () => {

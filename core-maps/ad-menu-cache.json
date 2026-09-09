@@ -1,6 +1,6 @@
 {
-  "refreshedAt": "2026-07-12T21:15:43.078Z",
-  "count": 472,
+  "refreshedAt": "2026-09-03T13:09:55.717Z",
+  "count": 476,
   "entries": [
     {
       "id": "120",
@@ -122,20 +122,6 @@
       "processId": null
     },
     {
-      "id": "280",
-      "name": "Analysis Tools",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800075",
-      "name": "Analysis Tools",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
       "id": "800141",
       "name": "Analysis Tools",
       "type": "folder",
@@ -150,13 +136,6 @@
       "processId": null
     },
     {
-      "id": "800076",
-      "name": "Analysis Tools",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
       "id": "F11FC6C518B149AFAB4DAED58751119C",
       "name": "Analysis Tools",
       "type": "folder",
@@ -164,7 +143,21 @@
       "processId": null
     },
     {
-      "id": "800079",
+      "id": "800075",
+      "name": "Analysis Tools",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800076",
+      "name": "Analysis Tools",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800077",
       "name": "Analysis Tools",
       "type": "folder",
       "windowId": null,
@@ -178,7 +171,14 @@
       "processId": null
     },
     {
-      "id": "800077",
+      "id": "800079",
+      "name": "Analysis Tools",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "280",
       "name": "Analysis Tools",
       "type": "folder",
       "windowId": null,
@@ -241,17 +241,17 @@
       "processId": null
     },
     {
-      "id": "037FAE527C4140E49F868669BB7A6665",
-      "name": "Async Process Log",
-      "type": "window",
-      "windowId": "4F02F39384C64915AC3BCB7003178A75",
-      "processId": null
-    },
-    {
       "id": "0629FC5BA38C46EA834DD791621DB6A6",
       "name": "Async Process Log",
       "type": "window",
       "windowId": "37DDB0FC24D34C3D91EF29F1E6F3C0BB",
+      "processId": null
+    },
+    {
+      "id": "037FAE527C4140E49F868669BB7A6665",
+      "name": "Async Process Log",
+      "type": "window",
+      "windowId": "4F02F39384C64915AC3BCB7003178A75",
       "processId": null
     },
     {
@@ -535,17 +535,17 @@
       "processId": null
     },
     {
-      "id": "148",
-      "name": "Client",
-      "type": "window",
-      "windowId": "109",
-      "processId": null
-    },
-    {
       "id": "156",
       "name": "Client",
       "type": "folder",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "148",
+      "name": "Client",
+      "type": "window",
+      "windowId": "109",
       "processId": null
     },
     {
@@ -1127,6 +1127,13 @@
       "name": "Fiscal Calendar",
       "type": "window",
       "windowId": "117",
+      "processId": null
+    },
+    {
+      "id": "B3CD982AE3414702BD58609C710F475F",
+      "name": "Fiscal Declarations NEO Support",
+      "type": "window",
+      "windowId": "64D940BC436346329DD4DED863FFA40B",
       "processId": null
     },
     {
@@ -1907,18 +1914,18 @@
       "processId": null
     },
     {
-      "id": "800029",
-      "name": "Payment Report",
-      "type": "report",
-      "windowId": null,
-      "processId": "800026"
-    },
-    {
       "id": "C662C29A164243C18C71BE164899A71B",
       "name": "Payment Report",
       "type": "report",
       "windowId": null,
       "processId": "6AD04479EC134BD4826077F36B709876"
+    },
+    {
+      "id": "800029",
+      "name": "Payment Report",
+      "type": "report",
+      "windowId": null,
+      "processId": "800026"
     },
     {
       "id": "D0022AAFF0F44BBCA96AA7D007E65C7D",
@@ -2023,6 +2030,13 @@
       "name": "Preference",
       "type": "window",
       "windowId": "129",
+      "processId": null
+    },
+    {
+      "id": "86CEFAFD7135435D9A218AFAA202E178",
+      "name": "Presentaciones AEAT 303",
+      "type": "window",
+      "windowId": "20F5A7A9071543468B27DD80D7767027",
       "processId": null
     },
     {
@@ -2614,7 +2628,14 @@
       "processId": null
     },
     {
-      "id": "800189",
+      "id": "800251",
+      "name": "Setup",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800255",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2628,14 +2649,21 @@
       "processId": null
     },
     {
-      "id": "800251",
+      "id": "800189",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
       "processId": null
     },
     {
-      "id": "164",
+      "id": "800256",
+      "name": "Setup",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "C3805F4FAB2E491B8B18D5F6CB4F1737",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2656,21 +2684,7 @@
       "processId": null
     },
     {
-      "id": "C3805F4FAB2E491B8B18D5F6CB4F1737",
-      "name": "Setup",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800256",
-      "name": "Setup",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800255",
+      "id": "164",
       "name": "Setup",
       "type": "folder",
       "windowId": null,
@@ -2824,10 +2838,24 @@
       "processId": null
     },
     {
+      "id": "BEAC55D81C95499290C8A644A71280C4",
+      "name": "Stored Column Dirty View",
+      "type": "window",
+      "windowId": "61DE7E1A0BF34D7E938938E06E741BC2",
+      "processId": null
+    },
+    {
       "id": "5D501B7F2ED84F1ABCA21CF9D0409C4A",
       "name": "Suministro Inmediato de Información (SII)",
       "type": "folder",
       "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "0473FDC0B68B467982B82201D411514A",
+      "name": "Survey Configuration",
+      "type": "window",
+      "windowId": "05F410A8100E4B17BB6CAE369D69A2F0",
       "processId": null
     },
     {
@@ -3013,13 +3041,6 @@
       "processId": null
     },
     {
-      "id": "800250",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
       "id": "800254",
       "name": "Transactions",
       "type": "folder",
@@ -3027,28 +3048,7 @@
       "processId": null
     },
     {
-      "id": "800253",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800249",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800247",
-      "name": "Transactions",
-      "type": "folder",
-      "windowId": null,
-      "processId": null
-    },
-    {
-      "id": "800245",
+      "id": "800242",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,
@@ -3062,7 +3062,35 @@
       "processId": null
     },
     {
-      "id": "800242",
+      "id": "800245",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800247",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800249",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800250",
+      "name": "Transactions",
+      "type": "folder",
+      "windowId": null,
+      "processId": null
+    },
+    {
+      "id": "800253",
       "name": "Transactions",
       "type": "folder",
       "windowId": null,

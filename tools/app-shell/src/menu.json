@@ -142,6 +142,12 @@
           "windowId": "273673D2ED914C399A6C51DB758BE0F9"
         },
         {
+          "name": "matched-purchase-invoices",
+          "label": "Receipt-Invoice Link",
+          "favname": "Receipt-Invoice Link",
+          "windowId": "107"
+        },
+        {
           "name": "report-viewer-purchases",
           "label": "Reports",
           "favname": "Purchases Reports",
@@ -195,7 +201,8 @@
           "name": "report-viewer-inventory",
           "label": "Reports",
           "favname": "Inventory Reports",
-          "path": "report-viewer?category=inventory"
+          "path": "report-viewer?category=inventory",
+          "windowId": "6346B88619F948F9A42224BDB0B239FA"
         },
         {
           "name": "warehouse-storage-bins",
@@ -310,8 +317,8 @@
         },
         {
           "name": "asset-group",
-          "label": "Asset Category",
-          "favname": "Asset Category",
+          "label": "Asset Group",
+          "favname": "Asset Group",
           "windowId": "252"
         },
         {
@@ -323,7 +330,8 @@
         {
           "name": "not-posted-documents",
           "label": "Not Posted Documents",
-          "favname": "Not Posted Documents"
+          "favname": "Not Posted Documents",
+          "obuiappProcessId": "D6AB95CE52D34E1599590526115E26C6"
         },
         {
           "name": "simple-g-l-journal",
@@ -340,7 +348,8 @@
         {
           "name": "fiscal-monitor",
           "label": "Fiscal Monitor",
-          "favname": "Fiscal Monitor"
+          "favname": "Fiscal Monitor",
+          "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C"
         },
         {
           "name": "conversion-rates",
@@ -351,13 +360,27 @@
         {
           "name": "fiscal-models",
           "label": "Fiscal Models",
-          "favname": "Fiscal Models"
+          "favname": "Fiscal Models",
+          "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8"
+        },
+        {
+          "name": "tax",
+          "label": "Tax",
+          "favname": "Tax",
+          "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
         },
         {
           "name": "report-viewer-finance",
           "label": "Reports",
           "favname": "Finance Reports",
-          "path": "report-viewer?category=finance"
+          "path": "report-viewer?category=finance",
+          "windowId": "D647D118F5014D00AF47A636B2CD0DD3"
         }
       ]
     },
@@ -397,18 +420,6 @@
           "windowId": "141"
         },
         {
-          "name": "tax",
-          "label": "Tax",
-          "favname": "Tax",
-          "windowId": "137"
-        },
-        {
-          "name": "tax-category",
-          "label": "Tax Category",
-          "favname": "Tax Category",
-          "windowId": "138"
-        },
-        {
           "name": "business-partner-category",
           "label": "Business Partner Category",
           "favname": "Business Partner Category",
@@ -430,7 +441,7 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "hidden": true
+          "windowId": "33705E0F52874D91B0BB2FF8BB648B8E"
         },
         {
           "name": "oauth2-clients",
@@ -442,13 +453,8 @@
         {
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
-          "favname": "Fiscal Configuration"
-        },
-        {
-          "name": "conversion-rate-downloader-log",
-          "label": "Conversion Rate Downloader Log",
-          "favname": "Conversion Rate Downloader Log",
-          "windowId": "6FEBA130CDE24CC09041FFA6117ADFA9"
+          "favname": "Fiscal Configuration",
+          "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
         }
       ]
     },

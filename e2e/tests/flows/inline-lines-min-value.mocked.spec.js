@@ -52,37 +52,43 @@ const QUOTATION_LINE = {
   'currency$_identifier': 'EUR',
 };
 
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installQuotationMocks(page, { onPatch } = {}) {
   await page.route('**/sws/neo/sales-quotation/quotation?**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ response: { data: [DRAFT_QUOTATION], totalRows: 1 } }),
     });
   });
   await page.route(`**/sws/neo/sales-quotation/quotation/${QUOT_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ response: { data: [DRAFT_QUOTATION] } }),
     });
   });
   await page.route(`**/sws/neo/sales-quotation/header/${QUOT_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ response: { data: [DRAFT_QUOTATION] } }),
     });
   });
   await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ response: { data: [QUOTATION_LINE], totalRows: 1 } }),
     });
   });
   await page.route('**/sws/neo/sales-quotation/quotationLine/**', async (route) => {
-    if (route.request().method() !== 'PATCH') return route.continue();
+    if (route.request().method() !== 'PATCH') return route.fallback();
     const body = JSON.parse(route.request().postData() || '{}');
     onPatch?.({ url: route.request().url(), body });
     await route.fulfill({

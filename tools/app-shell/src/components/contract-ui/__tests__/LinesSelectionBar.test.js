@@ -7,66 +7,22 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'LinesSelectionBar.jsx'), 'utf8');
 
-describe('LinesSelectionBar', () => {
-  it('exports a default function component', () => {
-    assert.match(src, /export default function LinesSelectionBar/);
+// ETP-4972 — LinesSelectionBar.jsx was rebuilt in place as SelectionToolbar.jsx
+// (a viewport-fixed floating toolbar, not anchored to a measured DOM rect —
+// see SelectionToolbar.jsx's own header comment for the full history). This
+// file is now a one-release re-export shim so any straggler import of the old
+// filename keeps resolving. Its own behavioral coverage (visibility, portal,
+// children/dividers, close button, no DOM measurement) lives in
+// SelectionToolbar.vitest.jsx / SelectionToolbar.test.js — this file only
+// verifies the shim's re-export contract.
+describe('LinesSelectionBar (re-export shim, ETP-4972)', () => {
+  it('re-exports SelectionToolbar as its default export', () => {
+    assert.match(src, /export\s*\{\s*default\s*\}\s*from\s*'\.\/SelectionToolbar\.jsx'/);
   });
 
-  it('uses createPortal to avoid overflow clipping', () => {
-    assert.match(src, /createPortal/);
-    assert.match(src, /document\.body/);
-  });
-
-  it('returns null when visible is false or barRect is missing', () => {
-    assert.match(src, /if \(!visible \|\| !barRect\) return null/);
-  });
-
-  it('positions the portal via fixed coordinates from barRect', () => {
-    assert.match(src, /position:\s*'fixed'/);
-    assert.match(src, /top:\s*barRect\.top/);
-    assert.match(src, /left:\s*barRect\.left/);
-    assert.match(src, /width:\s*barRect\.width/);
-    assert.match(src, /height:\s*barRect\.height/);
-  });
-
-  it('compact prop reduces button size to 28px (vs 40px default)', () => {
-    assert.match(src, /compact\s*=\s*false/);
-    assert.match(src, /compact\s*\?\s*28\s*:\s*40/);
-  });
-
-  it('applies appear/dismiss animation classes', () => {
-    assert.match(src, /lines-bar-appear/);
-    assert.match(src, /lines-bar-dismiss/);
-    assert.match(src, /closing\s*\?\s*'lines-bar-dismiss'\s*:\s*'lines-bar-appear'/);
-  });
-
-  it('hides totalLabel line when prop is null', () => {
-    assert.match(src, /totalLabel\s*!=\s*null/);
-  });
-
-  it('renders a trash (delete) button and an X (close) button', () => {
-    assert.match(src, /Trash2/);
-    assert.match(src, /\bX\b/);
-    assert.match(src, /onClick=\{onDelete\}/);
-    assert.match(src, /onClick=\{onClose\}/);
-  });
-
-  it('disables the trash button while deleting', () => {
-    assert.match(src, /disabled=\{deleting\}/);
-  });
-
-  it('shows selectedLabel and optional totalLabel', () => {
-    assert.match(src, /\{selectedLabel\}/);
-    assert.match(src, /\{totalLabel\}/);
-  });
-
-  it('uses Inter font and semantic foreground color for labels', () => {
-    assert.match(src, /fontFamily:\s*'Inter'/);
-    assert.match(src, /hsl\(var\(--foreground\)\)/);
-  });
-
-  it('uses destructive border and icon roles for the delete button', () => {
-    assert.match(src, /hsl\(var\(--destructive\) \/ 0\.3\)/);
-    assert.match(src, /hsl\(var\(--destructive\)\)/);
+  it('contains no component logic of its own (single re-export statement, no JSX/hooks)', () => {
+    assert.doesNotMatch(src, /export default function/);
+    assert.doesNotMatch(src, /useState|useEffect|useRef/);
+    assert.doesNotMatch(src, /<[A-Za-z]/); // no JSX tags
   });
 });

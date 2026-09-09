@@ -31,7 +31,13 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — z-50, the Overlay tier. It was raised to z-[60] to beat
+          SelectionToolbar's z-50 (ETP-4972): the pill portals to document.body while
+          this renders in place, so an equal z-index left paint order to decide. The
+          pill is at z-40 now, where the scale puts chrome an overlay must cover, so
+          this no longer has to outrank the whole modal tier to win — and anything
+          this preview opens can sit above it again (see GenericPreviewModal, whose
+          same workaround left the payment modal underneath it). */}
       <div
         className="fixed inset-0 bg-foreground/30 z-50 transition-opacity"
         onClick={onClose}

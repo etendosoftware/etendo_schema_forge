@@ -1,10 +1,17 @@
 import { renderHook, act } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '../useAccountMutations.js';
+
+// ETP-5022: useAccountMutations now goes through useApiFetch, which reads the token from
+// the real core AuthProvider (or falls back to the ambient session) rather than from a
+// mocked `useAuth`. The old `vi.mock('@/auth/AuthContext.jsx', ...)` stub never crossed the
+// `useApiFetch` shim (it imports auth via core's own relative path, which the `@/auth`
+// alias does not intercept), so every Authorization assertion silently saw `undefined`
+// until this was swapped for a real AuthProvider seeded with a token.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 const ENTITY_URL = '/etendo/sws/neo/financial-account/account';
 
@@ -38,7 +45,7 @@ describe('useAccountMutations', () => {
   it('createAccount POSTs to the W entity endpoint (no ?action=) with auth headers', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new', name: 'BBVA' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let created;
     await act(async () => {
@@ -57,7 +64,7 @@ describe('useAccountMutations', () => {
   it('createAccount maps the SPA payload to DAL names (currency, iBAN)', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.createAccount({
         name: 'BBVA',
@@ -81,7 +88,7 @@ describe('useAccountMutations', () => {
   it('createAccount omits keys that are absent from the payload', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.createAccount({ name: 'Caja', currencyId: '102' });
     });
@@ -98,7 +105,7 @@ describe('useAccountMutations', () => {
   it('createAccount maps countryId to country (ETP-4896)', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.createAccount({ name: 'BBVA', currencyId: '102', countryId: '106' });
     });
@@ -112,7 +119,7 @@ describe('useAccountMutations', () => {
       okResponse([{ id: 'acc-1', name: 'First' }, { id: 'acc-2', name: 'Second' }]),
     );
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let created;
     await act(async () => {
       created = await result.current.createAccount({ name: 'First' });
@@ -123,7 +130,7 @@ describe('useAccountMutations', () => {
   it('createAccount unwraps a non-array data envelope', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ id: 'acc-obj', name: 'Object' }));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let created;
     await act(async () => {
       created = await result.current.createAccount({ name: 'Object' });
@@ -134,7 +141,7 @@ describe('useAccountMutations', () => {
   it('createAccount returns null when the envelope has no data', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let created;
     await act(async () => {
       created = await result.current.createAccount({ name: 'X', currencyId: '102' });
@@ -145,7 +152,7 @@ describe('useAccountMutations', () => {
   it('createAccount returns null when the envelope data array is empty', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let created;
     await act(async () => {
       created = await result.current.createAccount({ name: 'X' });
@@ -156,7 +163,7 @@ describe('useAccountMutations', () => {
   it('createAccount throws an Error with .status on a 409 (duplicate name)', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(409, 'duplicate name'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     await act(async () => {
       await expect(
@@ -174,7 +181,7 @@ describe('useAccountMutations', () => {
       },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     await act(async () => {
       await expect(
@@ -188,7 +195,7 @@ describe('useAccountMutations', () => {
   it('updateAccount PUTs to /account/{id} with the DAL-mapped body', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1', name: 'Renamed' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let updated;
     await act(async () => {
@@ -217,7 +224,7 @@ describe('useAccountMutations', () => {
   it('updateAccount maps dateTolerance/amountTolerance to their real DAL property names', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.updateAccount('acc-1', { dateTolerance: 3, amountTolerance: 0 });
     });
@@ -232,7 +239,7 @@ describe('useAccountMutations', () => {
   it('updateAccount PUTs only { country } for a country-only edit (ETP-4896)', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.updateAccount('acc-1', { countryId: '106' });
     });
@@ -244,7 +251,7 @@ describe('useAccountMutations', () => {
   it('updateAccount omits both tolerance keys when neither is in the payload', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.updateAccount('acc-1', { name: 'Renamed' });
     });
@@ -258,7 +265,7 @@ describe('useAccountMutations', () => {
   it('updateAccount URL-encodes the account id', async () => {
     globalThis.fetch.mockResolvedValue(okResponse([{ id: 'x', name: 'x' }]));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await result.current.updateAccount('acc/with space', { name: 'x' });
     });
@@ -270,7 +277,7 @@ describe('useAccountMutations', () => {
   it('updateAccount throws with .status on a non-ok response', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(409, 'taken'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await expect(
         result.current.updateAccount('acc-1', { name: 'taken' }),
@@ -286,7 +293,7 @@ describe('useAccountMutations', () => {
   it('archiveAccount PATCHes /account/{id} with { active: false } and returns true', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let res;
     await act(async () => {
@@ -304,7 +311,7 @@ describe('useAccountMutations', () => {
   it('archiveAccount throws with .status on a 409 (open reconciliations)', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(409, 'open reconciliations'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await expect(result.current.archiveAccount('acc-1')).rejects.toMatchObject({
         message: 'open reconciliations',
@@ -321,7 +328,7 @@ describe('useAccountMutations', () => {
   it('deleteAccount DELETEs /account/{id} and returns true', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let res;
     await act(async () => {
@@ -338,7 +345,7 @@ describe('useAccountMutations', () => {
   it('deleteAccount throws with .status on a 409 (a dependency appeared since the row was loaded)', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(409, 'account has dependent records'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await expect(result.current.deleteAccount('acc-1')).rejects.toMatchObject({
         message: 'account has dependent records',
@@ -352,7 +359,7 @@ describe('useAccountMutations', () => {
   it('unarchiveAccount PATCHes /account/{id} with { active: true }', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let res;
     await act(async () => {
@@ -372,7 +379,7 @@ describe('useAccountMutations', () => {
   it('unarchiveAccount throws with .status when the backend rejects', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(400, 'nope'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await expect(result.current.unarchiveAccount('acc-1')).rejects.toMatchObject({
         message: 'nope',
@@ -409,7 +416,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '102' } },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
 
     let defaults;
     await act(async () => {
@@ -439,7 +446,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '102', country: '106' } },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -455,7 +462,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '102' }, countryIbanRules: rules },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -470,7 +477,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '102' } },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -487,7 +494,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '100' } },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -510,7 +517,7 @@ describe('useAccountMutations', () => {
       defaultsJson: { defaults: { currency: '' } },
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -528,7 +535,7 @@ describe('useAccountMutations', () => {
       defaultsFails: 'reject',
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -548,7 +555,7 @@ describe('useAccountMutations', () => {
       defaultsFails: 'non-ok',
     });
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     let defaults;
     await act(async () => {
       defaults = await result.current.fetchDefaults();
@@ -565,7 +572,7 @@ describe('useAccountMutations', () => {
   it('fetchDefaults throws with .status when the selectors call fails', async () => {
     globalThis.fetch.mockResolvedValue(errorResponse(500, 'boom'));
 
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     await act(async () => {
       await expect(result.current.fetchDefaults()).rejects.toMatchObject({
         message: 'boom',
@@ -581,7 +588,7 @@ describe('useAccountMutations', () => {
   // ETP-4871: deleteAccount is a new, distinct mutation alongside archiveAccount — a caller
   // must be able to reach both rather than deleteAccount silently missing from the hook.
   it('exposes deleteAccount alongside the other mutations', () => {
-    const { result } = renderHook(() => useAccountMutations());
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
     expect(typeof result.current.deleteAccount).toBe('function');
     expect(Object.keys(result.current)).toEqual(expect.arrayContaining([
       'createAccount', 'updateAccount', 'archiveAccount', 'unarchiveAccount',

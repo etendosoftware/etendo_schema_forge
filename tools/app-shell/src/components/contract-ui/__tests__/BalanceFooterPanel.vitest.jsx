@@ -13,25 +13,29 @@ const cfg = { debitField: 'amtSourceDr', creditField: 'amtSourceCr' };
 const fmt = (v) => `€${Number(v).toFixed(2)}`;
 
 describe('BalanceFooterPanel', () => {
-  it('shows balanced badge when debit equals credit', () => {
+  it('renders only the total debit and total credit rows when balanced', () => {
     const lines = [{ amtSourceDr: '100', amtSourceCr: '0' }, { amtSourceDr: '0', amtSourceCr: '100' }];
     render(<BalanceFooterPanel lines={lines} config={cfg} formatAmount={fmt} />);
-    expect(screen.getByTestId('balance-status')).toHaveAttribute('data-balanced', 'true');
     expect(screen.getByTestId('balance-total-debit')).toHaveTextContent('€100.00');
     expect(screen.getByTestId('balance-total-credit')).toHaveTextContent('€100.00');
+    expect(screen.queryByTestId('balance-difference')).toBeNull();
+    expect(screen.queryByTestId('balance-status')).toBeNull();
   });
 
-  it('shows unbalanced badge and difference when totals differ', () => {
+  it('renders only the total debit and total credit rows when unbalanced (no difference/badge shown)', () => {
     const lines = [{ amtSourceDr: '100', amtSourceCr: '0' }, { amtSourceDr: '0', amtSourceCr: '60' }];
     render(<BalanceFooterPanel lines={lines} config={cfg} formatAmount={fmt} />);
-    expect(screen.getByTestId('balance-status')).toHaveAttribute('data-balanced', 'false');
-    expect(screen.getByTestId('balance-difference')).toHaveTextContent('€40.00');
+    expect(screen.getByTestId('balance-total-debit')).toHaveTextContent('€100.00');
+    expect(screen.getByTestId('balance-total-credit')).toHaveTextContent('€60.00');
+    expect(screen.queryByTestId('balance-difference')).toBeNull();
+    expect(screen.queryByTestId('balance-status')).toBeNull();
   });
 
-  it('hides the badge entirely when there are no amounts (empty draft)', () => {
+  it('renders zero totals for an empty draft, with no difference/badge', () => {
     render(<BalanceFooterPanel lines={[]} config={cfg} formatAmount={fmt} />);
-    // No red/green chip on a brand-new empty journal.
+    expect(screen.getByTestId('balance-total-debit')).toHaveTextContent('€0.00');
+    expect(screen.getByTestId('balance-total-credit')).toHaveTextContent('€0.00');
+    expect(screen.queryByTestId('balance-difference')).toBeNull();
     expect(screen.queryByTestId('balance-status')).toBeNull();
-    expect(screen.getByTestId('balance-difference')).toHaveTextContent('€0.00');
   });
 });

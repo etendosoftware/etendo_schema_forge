@@ -16,7 +16,7 @@ const defaultProps = {
     'currency$_identifier': 'EUR',
   },
   base: '/api',
-  headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' },
+  headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
   recordId: 'receipt-1',
   onConfirmed: vi.fn(),
   onClose: vi.fn(),
@@ -24,6 +24,40 @@ const defaultProps = {
 
 function renderModal(overrides = {}) {
   return render(<ConfirmGoodsReceiptModal {...defaultProps} {...overrides} />);
+}
+
+// ETP-4942: ConfirmGoodsReceiptModal has no linkedOrders on defaultProps.data, so
+// hasLinkedOrder is false and the price-list picker becomes mandatory before the
+// Confirm button is enabled. Route fetch by URL substring — same pattern as
+// ConfirmInOutModal.spec.jsx's mockFetchRouter — so the picker's own
+// /price-list/priceList GET resolves independently from the doc-action/invoice
+// call each test actually asserts on. This modal is purchase-side (isSOTrx=false),
+// so the returned price list must have salesPriceList: false to survive
+// PriceListPicker's filter. Because hasLinkedOrder is false here, PriceListPicker's
+// `allowGenericFallback` is also false (the tariff must have real business meaning,
+// not just an arbitrary system default) — so auto-selection only happens via a
+// `defaultPriceListId` match, which is why RESOLVED_PRICE_LIST_ID below must equal
+// the id returned by this router AND be threaded through `data.resolvedPriceListId`
+// on every render in the tests below that need Confirm enabled.
+const RESOLVED_PRICE_LIST_ID = 'pl-1';
+
+function mockFetchRouterFor(actionHandler) {
+  vi.stubGlobal('fetch', vi.fn((url) => {
+    const u = String(url);
+    if (u.includes('/price-list/priceList')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          response: { data: [{ id: RESOLVED_PRICE_LIST_ID, name: 'PL', active: true, salesPriceList: false, default: true }] },
+        }),
+      });
+    }
+    return actionHandler(u);
+  }));
+}
+
+function dataWithResolvedPriceList(overrides = {}) {
+  return { ...defaultProps.data, resolvedPriceListId: RESOLVED_PRICE_LIST_ID, ...overrides };
 }
 
 describe('ConfirmGoodsReceiptModal', () => {
@@ -158,7 +192,7 @@ describe('ConfirmGoodsReceiptModal', () => {
   describe('confirm — switch ON (creates both documentAction and invoice)', () => {
     it('calls documentAction POST then createPurchaseInvoice POST and calls onConfirmed with invoice data', async () => {
       const onConfirmed = vi.fn();
-      vi.stubGlobal('fetch', vi.fn((url) => {
+      mockFetchRouterFor((url) => {
         if (url.includes('documentAction')) {
           return Promise.resolve({ ok: true, json: async () => ({}) });
         }
@@ -169,9 +203,14 @@ describe('ConfirmGoodsReceiptModal', () => {
           });
         }
         return Promise.resolve({ ok: true, json: async () => ({}) });
-      }));
+      });
 
-      renderModal({ onConfirmed });
+      renderModal({ onConfirmed, data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -187,11 +226,16 @@ describe('ConfirmGoodsReceiptModal', () => {
     });
 
     it('sends docAction CO in the documentAction request body', async () => {
-      vi.stubGlobal('fetch', vi.fn(() =>
+      mockFetchRouterFor(() =>
         Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) }),
-      ));
+      );
       const onConfirmed = vi.fn();
-      renderModal({ onConfirmed });
+      renderModal({ onConfirmed, data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -227,15 +271,20 @@ describe('ConfirmGoodsReceiptModal', () => {
 
   describe('error handling', () => {
     it('shows inline error div when documentAction fails', async () => {
-      vi.stubGlobal('fetch', vi.fn(() =>
+      mockFetchRouterFor(() =>
         Promise.resolve({
           ok: false,
           status: 500,
           json: async () => ({ response: { message: 'Server error' } }),
         }),
-      ));
+      );
 
-      renderModal();
+      renderModal({ data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -246,15 +295,20 @@ describe('ConfirmGoodsReceiptModal', () => {
     });
 
     it('shows fallback error message when response body has no message', async () => {
-      vi.stubGlobal('fetch', vi.fn(() =>
+      mockFetchRouterFor(() =>
         Promise.resolve({
           ok: false,
           status: 503,
           json: async () => ({}),
         }),
-      ));
+      );
 
-      renderModal();
+      renderModal({ data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -264,11 +318,16 @@ describe('ConfirmGoodsReceiptModal', () => {
 
     it('does not call onConfirmed when the API fails', async () => {
       const onConfirmed = vi.fn();
-      vi.stubGlobal('fetch', vi.fn(() =>
+      mockFetchRouterFor(() =>
         Promise.resolve({ ok: false, status: 400, json: async () => ({}) }),
-      ));
+      );
 
-      renderModal({ onConfirmed });
+      renderModal({ onConfirmed, data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -278,10 +337,15 @@ describe('ConfirmGoodsReceiptModal', () => {
     });
 
     it('shows error and keeps modal open when fetch rejects (network error)', async () => {
-      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('Network error'))));
+      mockFetchRouterFor(() => Promise.reject(new Error('Network error')));
       const onConfirmed = vi.fn();
 
-      renderModal({ onConfirmed });
+      renderModal({ onConfirmed, data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );
@@ -294,11 +358,16 @@ describe('ConfirmGoodsReceiptModal', () => {
   describe('loading state', () => {
     it('shows processing text while confirm is in flight', async () => {
       let resolveDocAction;
-      vi.stubGlobal('fetch', vi.fn(() =>
+      mockFetchRouterFor(() =>
         new Promise((res) => { resolveDocAction = res; }),
-      ));
+      );
 
-      renderModal();
+      renderModal({ data: dataWithResolvedPriceList() });
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
+        ).not.toBeDisabled();
+      });
       fireEvent.click(
         screen.getByRole('button', { name: 'goodsReceipt.confirmModal.confirmWithInvoice' }),
       );

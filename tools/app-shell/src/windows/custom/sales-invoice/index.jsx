@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
@@ -47,12 +48,18 @@ const LIST_COLUMNS = [
 // here until the wrapper consumes the spec's labelOverrides at runtime.
 const LABEL_OVERRIDES = {
   es_ES: {
-    OutstandingAmt: 'Pendiente de pago',
+    OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de entrega',
   },
   en_US: {
-    OutstandingAmt: 'Pending Payment',
+    OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Delivery Status',
+  },
+  // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
+  // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
+  // other columns keep their current es_AR behaviour on purpose.
+  es_AR: {
+    OutstandingAmt: 'Saldo pendiente',
   },
 };
 
@@ -141,7 +148,7 @@ export default function SalesInvoiceWindow(props) {
   const breadcrumb = 'Sales / Sales Invoice';
   // ETP-4888 point 5 — see LINE_TAX_SIF_TRIGGER_ENABLED above for the decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales', specName: 'sales-invoice',
   });
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -185,6 +192,13 @@ export default function SalesInvoiceWindow(props) {
           {...props}
           draftMode={draftModeOverride}
           bottomSection={InvoiceBottomPanel}
+          /* ETP-5027 — this prop SHADOWS the customComponents.topbarRight
+             declared in artifacts/sales-invoice/decisions.json (which the
+             generated HeaderPage.jsx passes as its own default): the explicit
+             prop here always wins, so the decisions-declared component is
+             never mounted directly — SalesInvoiceTopbar nests it instead.
+             Keep both in sync; a component added on only one side is either
+             invisible or rendered twice. */
           topbarRight={SalesInvoiceTopbar}
           notesField="description"
           onAfterSave={true}
@@ -202,17 +216,23 @@ export default function SalesInvoiceWindow(props) {
   const docStatus = searchParams.get('DocStatus');
 
   const isOverdue = filterParam === 'overdue';
+  const isPending = filterParam === 'pending';
   const isCollectionsDueToday = filterParam === 'collectionsDueToday';
-  const isInvoiceFilter = isOverdue || isCollectionsDueToday;
+  const isInvoiceFilter = isOverdue || isPending || isCollectionsDueToday;
 
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayCalendarISO();
 
+  // ETP-5012: "overdue" must mean due date < today, not just "completed with
+  // an outstanding balance" — that broader set (any pending balance,
+  // regardless of due date) is now "pending", used by the dashboard's totals
+  // card. Otherwise a future-dated invoice was wrongly counted as overdue.
   const initialAdvancedFilter = isInvoiceFilter
     ? {
         rowOperator: 'and',
         conditions: [
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
           { field: 'outstandingAmount', operator: 'greaterThan', value: 0 },
+          ...(isOverdue ? [{ field: 'eTGODueDate', operator: 'lessThan', value: todayISO }] : []),
           ...(isCollectionsDueToday
             ? [{ field: 'eTGODueDate', operator: 'equals', value: todayISO }]
             : []),
@@ -239,7 +259,6 @@ export default function SalesInvoiceWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         hideLink
-        listViewOptions={{ hidePrint: true }}
         bulkActions={SalesInvoiceBulkAction}
         refreshTrigger={refreshKey}
         renderPreview={({ row, onClose, onEdit }) => (

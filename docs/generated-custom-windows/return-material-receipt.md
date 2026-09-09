@@ -89,7 +89,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 - **ETP-4707 test coverage**: `e2e/tests/flows/posting-badge-status.mocked.spec.js` is the first automated (mocked) coverage of this pattern, and exercises **this window directly** (`return-material-receipt` is the representative pick over the sibling `return-to-vendor-shipment`, since both share byte-identical `decisions.json` shape, generator output, and shared rendering components — a second parametrized copy of the sibling would duplicate assertions without covering new code). It asserts the "Contabilizado"/"Sin contabilizar" list badge, the localized "Contabilizar" kebab item, and the accounting-status pill on the detail header. Renderer-level unit coverage for `badge`/`badgeLabels`/`badgeVariants` lives in `tools/app-shell/src/components/contract-ui/__tests__/DataTable.cellRenderers.vitest.jsx`.
 - **ETP-4857**: `tools/app-shell/src/windows/custom/return-material-receipt/index.jsx` wires `BulkDocumentAction` (`entity="returnMaterialReceipt"`, `buildActions={buildInOutActions}`, `labelKey="confirmBulk"`) into `ReturnMaterialReceiptBulkActions`, alongside the pre-existing `CopyLinkButton`. `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/index.test.js` asserts that wiring (props on `BulkDocumentAction`, coexistence with `CopyLinkButton`). `tools/app-shell/src/windows/custom/shared/ReturnWindowShell.jsx` now calls `useBulkActionToast()` on mount (the toast-visibility fix, shared by both return windows), asserted in `tools/app-shell/src/windows/custom/shared/__tests__/ReturnWindowShell.vitest.jsx`. `buildInOutActions`'s DR-only/no-reactivate behavior is unit-tested at its source in `tools/app-shell/src/components/contract-ui/__tests__/BulkDocumentAction.vitest.jsx` (shared by every window that uses it, `goods-shipment` included — not duplicated per window).
 
-## Print button hidden in every status — ETP-4714
+## Print button hidden in every status — ETP-4714 (superseded by ETP-5124, see below)
 
 Per the ticket's corrected scope, this window (unlike its sibling
 `return-to-vendor-shipment`) must hide "Imprimir" in every state, not just Borrador.
@@ -105,6 +105,82 @@ the generic icon") removed that inline button from `ConfirmWithCreditButtonBase.
 printing for every window is now served exclusively by the generic `DetailView.jsx` icon. That
 left the generic icon with no gate at all on this window until the `hidePrintWhen` entry above
 was added — `hidePrintAlways` no longer exists anywhere in this window's custom components.
+
+**Superseded by ETP-5124** — Print now shows once the document is Completado, matching the
+sibling windows. See the section below.
+
+## Print button now conditional, and a dead `HELPERS` bug fixed — ETP-5124
+
+Two independent bugs, closed in the same change:
+
+- **Print visibility.** `window.hidePrintWhen` was still `true` (Print unconditionally hidden,
+  per the now-superseded ETP-4714 entry above). Changed to
+  `{ "documentStatus": { "notEquals": "CO" } }`, so Print now shows only once the document is
+  Completado — the same shape `sales-invoice`, `sales-order`, `purchase-order`,
+  `return-to-vendor-shipment`, and `goods-shipment` already use (see
+  `docs/decisions-reference.md` — "Print Visibility"). `make regen ONLY=return-material-receipt`
+  regenerated `HeaderPage.jsx` with the new prop; `listViewOptions` stays undeclared (unchanged),
+  so the list view's print buttons keep their existing, untouched behavior.
+- **`HELPERS is not defined` ReferenceError.** `useReturnReceiptPdf.js`'s
+  `generateReturnReceiptPdf`/`generateReturnReceiptHtml` — the functions
+  `documentPdfRegistry.js` actually calls for detail-view Print, multi-select print, and
+  list-view email — referenced a module-level `HELPERS` identifier that was never declared or
+  imported; only `RETURN_DOC_HELPERS` was imported, and it was already used correctly by the
+  `useReturnReceiptPdf` hook in the same file. Because `hidePrintWhen: true` kept Print
+  unreachable for this window, the bug was dead code until this ticket's visibility fix would
+  have exposed it. Fixed by replacing `HELPERS` with `RETURN_DOC_HELPERS` in both call sites.
+  The identical bug was found and fixed at the same time in the sibling
+  `return-to-vendor-shipment/useReturnToVendorPdf.js` (`generateReturnToVendorPdf`/
+  `generateReturnToVendorHtml`), where it was live already (that window's Print was never
+  unconditionally hidden).
+
+## Final status reads "Completado", not "Registrado" — ETP-4913
+
+`artifacts/return-material-receipt/decisions.json` declares `entities.header.fields.documentStatus.enumValues`,
+redirecting **only** `CO` to the canonical `statusComplete` key while every other code keeps its
+generator-derived `docStatus*` key — so exactly one rendered label changes.
+
+Why the override is needed even though the Application Dictionary is correct: this window reads
+`M_InOut.DocStatus`, whose AD reference (`131`, "All_Document Status") names `CO`
+"Completed"/"Completado", and `contract.json` carried that name correctly. The corruption happens
+when the i18n key is derived. `extract-labels.js` keys enum labels by **(column name, value
+code)** rather than by AD reference, so `M_InOut.DocStatus/CO` ("Completed") and
+`C_Order.DocStatus/CO` ("Booked") collide on a single global `docStatusCo` key; the
+`ORDER BY rl.name COLLATE "C"` tie-break picks the alphabetically-first English name, so "Booked"
+always won and the locales ended up with `docStatusCo` = "Registrado" / "Booked".
+`statusLabel()` resolves `enumLabels` at step 0, ahead of the correct `statuses.CO.label`
+("Completado"), so the label the user saw was "Registrado".
+
+Every other document window escaped this because it declares its own `LIST_COLUMNS` in
+`windows/custom/<window>/index.jsx` with no `enumLabels` at all, falling through to
+`statuses.CO.label`. The two return-shipment windows render the **generated** table, which does
+carry `enumLabels` — which is why only these two showed the wrong label. The fix covers all four
+surfaces at once (grid cell badge, detail-view status pill, "Todos los estados" pill, advanced
+filter value dropdown), since all of them resolve through `statusLabel()` with the same
+`enumLabels`.
+
+Two alternatives were rejected: renaming the shared `docStatusCo` value in the locale files is
+reverted by the next `extract-labels` run (`mergeLocaleFile` spreads the extracted enum entries
+over `genericLabels`) and would break the order/quotation windows, where "Registrado" is the
+correct AD label; and making the generator key reference-scoped — the actual root fix — would
+rename every `docStatus*` key and force a regeneration of every artifact, which is out of
+proportion for this bug. That root fix stays documented as open in
+`docs/decisions-reference.md`.
+
+Landing this also required a generator fix in `schema_forge_core`
+(`cli/src/resolve-curated.js`): `buildField` copies `enumValues` from decisions first and from
+the raw AD schema second, and the raw copy overwrote unconditionally — so the documented
+"decisions.json `enumValues` overrides the raw ones" behavior had never actually worked for a
+field backed by a real AD List reference. It only appeared to work for fields with no raw
+`enumValues` (the synthetic `YesNo` `processed` status of `goods-movements`, `amortization`,
+`physical-inventory`), which is why the gap went unnoticed. Across the whole repo only these two
+fields were affected by the precedence bug.
+
+Evidence: `artifacts/__tests__/etp-4913-return-shipment-final-status.test.js` asserts the
+declared map, its survival into `contract.json`, and the resolved label against the real
+`es_ES`/`en_US` catalogs ("Completado"/"Completed"), plus that every other code's label is
+unchanged. `schema_forge_core`'s `cli/test/resolve-curated-enum-values-precedence.test.js`
+covers the precedence fix.
 
 ## Theme roles
 

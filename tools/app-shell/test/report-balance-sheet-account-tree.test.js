@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
 // account-report tree as profit-loss. In Etendo Classic both are literally one
@@ -472,7 +473,7 @@ const ROWS = [
 function renderHtml({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
-  const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8'));
+  const template = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')));
   const meta = {
     ...META_BASE,
     labels: LABELS[locale],
@@ -680,8 +681,14 @@ function renderCsv({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
 }
 
 describe('balance-sheet helpers.js', () => {
-  it('declares csvField (the CSV template depends on it)', () => {
-    assert.match(HELPERS_CODE, /function csvField\s*\(/);
+  // ETP-5032 — csvField is no longer declared per report: it moved into the
+  // canonical helper set, because all nine copies quoted the value without
+  // neutralizing spreadsheet formula injection. What the CSV template actually
+  // depends on is the helper being present in the string jsreport receives, so
+  // that is what is asserted; the artifact file must NOT redeclare it (a local
+  // copy would be stripped as canonical, leaving a silently dead function).
+  it('does not redeclare csvField locally', () => {
+    assert.doesNotMatch(HELPERS_CODE, /function csvField\s*\(/);
   });
 
   it('is exposed to jsreport through buildJsreportHelpersString', () => {

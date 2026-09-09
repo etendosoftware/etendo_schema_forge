@@ -25,12 +25,14 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
 import {
   AccountsSidebar,
   AccountsToolbar,
   AccountTypeFilter,
 } from '@/components/financial-accounts';
+import { applyAccountAdvancedFilter, withDerivedFields } from '@/components/financial-accounts/accountAdvancedFilter.js';
 import {
   ACCOUNT_CELL_TYPES,
   resolveCellType,
@@ -62,6 +64,7 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 const COLUMN_CHROME = {
   name: { headClass: 'w-[480px] pl-[40px] pr-2', cellClass: 'w-[480px] p-0' },
   type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
+  currency: { headClass: 'w-[120px] px-2', cellClass: 'w-[120px] px-2 py-2' },
   country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
   currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
   eTGOPendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
@@ -220,9 +223,12 @@ export default function AccountsHeaderTable({
   data,
   meta,
   onDataMutated,
-  // ETP-4656 — ListView's authoritative selection (read-only here). Destructured out of
-  // `props` only so it does not travel into DataTable, where `selectedRows` is the name
-  // of local state and would read as a controlled-selection prop it does not have.
+  // ETP-4656 — ListView's authoritative selection. Destructured out of `props` ONLY so it does
+  // not travel into DataTable, where `selectedRows` is the name of local state and would read as
+  // a controlled-selection prop it does not have. Deliberately unused in the body since
+  // ETP-5111 stopped swapping the toolbar out while rows are selected — do not delete it, or the
+  // prop starts reaching DataTable again.
+  // eslint-disable-next-line no-unused-vars
   selectedRows,
   ...props
 }) {
@@ -232,6 +238,10 @@ export default function AccountsHeaderTable({
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [search, setSearch] = useState('');
+  // Advanced "by conditions" filter (ETP-5113). Ephemeral, like every other list's:
+  // the generic builder emits the condition tree and this component evaluates it in
+  // memory, the same way the type filter and the search box already work here.
+  const [advancedFilter, setAdvancedFilter] = useState(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editAccount, setEditAccount] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
@@ -243,19 +253,25 @@ export default function AccountsHeaderTable({
 
   const reload = () => onDataMutated?.();
 
-  // ETP-4656 — the selection bar ListView renders above this slot REPLACES the toolbar
-  // rather than stacking on top of it (the standardized delete UX). ListView renders that
-  // bar as a sibling and cannot reach inside the slot, so the swap happens here.
-  //
-  // Derived straight from ListView's own state — deliberately NOT mirrored into local
-  // state off `onSelectionChange`. DataTable empties/prunes its internal selection Set
-  // silently from its `clearSelectionTrigger` / `deselectTrigger` effects without calling
-  // `onSelectionChange`, so a local mirror would still read "selected" after a successful
-  // bulk delete or a cancel, and the toolbar would never come back.
-  const selectionActive = (selectedRows?.length ?? 0) > 0;
   const { sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
 
+
+  // Every string these bank-action toasts show ORIGINATES IN THE BACKEND: com.etendoerp.psd2's
+  // AD_MESSAGE catalog, relayed verbatim by the NEO bridge. Its es_ES rows carry the ENGLISH text
+  // with istranslated='N' unless the separate .es_es pack was imported, so Core resolves English
+  // whatever the session locale is — which is why these have to go through the frontend
+  // translation map, exactly like the two sibling entry points onto this same bridge already do
+  // (EditAccountModal.jsx:193 and ImportedStatementsTab.jsx:183). ETP-4891 fixed those two and
+  // missed this one, so the list-row sync icon kept rendering the raw English.
+  //
+  // BANK_CONNECTION_TIMEOUT is NOT backend copy: it is the sentinel useBankConnectionActions.js:131
+  // throws when its AbortController fires. It is a protocol token, so it maps to our own label
+  // rather than being shown to the user verbatim.
+  const bankActionMessage = (raw) => {
+    if (raw === 'BANK_CONNECTION_TIMEOUT') return ui('financeAccountsBankConnectionTimeout');
+    return raw ? translateBackendError(raw, ui) : raw;
+  };
 
   const handleBankConnectionAction = async (action, account) => {
     if (action === 'connect') {
@@ -266,7 +282,7 @@ export default function AccountsHeaderTable({
       try {
         const res = await sync(account.id);
         reload();
-        const msg = res?.message;
+        const msg = bankActionMessage(res?.message);
         if (res?.status === 'ERROR') {
           toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
         } else if (res?.status === 'WARNING') {
@@ -275,7 +291,7 @@ export default function AccountsHeaderTable({
           toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
         }
       } catch (err) {
-        toast.error(err.message || ui('financeAccountsBankConnectionSyncError'));
+        toast.error(bankActionMessage(err.message) || ui('financeAccountsBankConnectionSyncError'));
       }
       return;
     }
@@ -291,9 +307,7 @@ export default function AccountsHeaderTable({
         reload();
         toast.success(ui('financeAccountsBankConnectionReauthDone'));
       } catch (err) {
-        toast.error(err.message === 'BANK_CONNECTION_TIMEOUT'
-          ? ui('financeAccountsBankConnectionTimeout')
-          : err.message);
+        toast.error(bankActionMessage(err.message));
       }
       return;
     }
@@ -364,12 +378,31 @@ export default function AccountsHeaderTable({
   // used to re-order every render unconditionally.
   const isRestingSort = props.sortColumn === RESTING_SORT.column
     && props.sortDirection === RESTING_SORT.direction;
+  // Type + search only. Kept as its own memo because it is ALSO what seeds the advanced
+  // filter's value pickers: seeding them from the fully filtered result would collapse
+  // each picker to the value already chosen (filter Moneda = EUR and EUR becomes the only
+  // option left), making a selection impossible to widen.
+  const scopedAccounts = useMemo(
+    () => filterAccounts(data, typeFilter, search),
+    [data, typeFilter, search],
+  );
+  // What the funnel's value pickers read. They look up `row[col.key]` directly, and
+  // `countryLabel` is a DERIVED key that only exists after `withDerivedFields` — seeding
+  // them with the raw rows left the País picker with zero options, because every row's
+  // `countryLabel` was undefined. Projecting here keeps that knowledge in one place
+  // (the filter spec owns the derivation) instead of teaching the toolbar about it.
+  const filterPickerRows = useMemo(
+    () => scopedAccounts.map(withDerivedFields),
+    [scopedAccounts],
+  );
   const visibleAccounts = useMemo(
     () => {
-      const rows = filterAccounts(data, typeFilter, search);
+      // Order matters only for cost, not for the result: the cheap type/search pass
+      // narrows the array before the condition tree walks it. All three compose with AND.
+      const rows = applyAccountAdvancedFilter(scopedAccounts, advancedFilter);
       return isRestingSort ? sortAccounts(rows) : rows;
     },
-    [data, typeFilter, search, isRestingSort],
+    [scopedAccounts, advancedFilter, isRestingSort],
   );
 
   return (
@@ -385,37 +418,40 @@ export default function AccountsHeaderTable({
     // here — same as the previous hand-rolled page, which loaded every account in one
     // request. Only matters past one batch (75 accounts).
     <div className="flex h-full flex-col overflow-hidden" data-testid="cuentas-card">
-      {/* Fixed: toolbar. Unmounted (not merely hidden) while a selection is active, so
-          `cuentas-toolbar` genuinely leaves the DOM and ListView's selection bar above
-          reads as its replacement. The type filter and the search text are held in this
-          component's state, so they survive the unmount and are still applied when the
-          selection clears. */}
-      {!selectionActive && (
-        <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
-          <AccountsToolbar
-            typeFilter={typeFilter}
-            onTypeFilterChange={setTypeFilter}
-            search={search}
-            onSearchChange={setSearch}
-            onNewAccount={() => setWizardOpen(true)}
-            onMatchingRules={() => navigate('/match-rule')}
-            // The "Ordenar por" control every other list gets from ListView's idle bar. This
-            // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
-            // here the clickable headers would be the only sort affordance. Same component
-            // ListView uses, driven by the same state it forwards through `props`.
-            sortControl={(
-              <ListSortPopover
-                columns={columns}
-                sortColumn={props.sortColumn}
-                sortDirection={props.sortDirection}
-                onSelect={props.onSortSelect}
-                onClear={props.onClearSort}
-                isDefaultSort={props.isDefaultSort}
-                data-testid="ListSortPopover__accthdr" />
-            )}
-            data-testid="AccountsToolbar__accthdr" />
-        </div>
-      )}
+      {/* Fixed: toolbar. ETP-5111 — it now stays mounted while a selection is active. ETP-4656
+          unmounted it so ListView's selection bar read as its replacement, but with the bar
+          reduced to a floating pill (ETP-4972) the swap only took away "Nueva cuenta", the
+          filters and "Reglas de conciliación" for no benefit. */}
+      <div className="shrink-0 border-b border-[hsl(var(--border-subtle))] p-2">
+        <AccountsToolbar
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          search={search}
+          onSearchChange={setSearch}
+          advancedFilter={advancedFilter}
+          onAdvancedFilterChange={setAdvancedFilter}
+          // Seeds the funnel's value pickers. Deliberately the pre-conditions list, and
+          // projected — see the filterPickerRows note above.
+          rows={filterPickerRows}
+          onNewAccount={() => setWizardOpen(true)}
+          onMatchingRules={() => navigate('/match-rule')}
+          onRefresh={reload}
+          // The "Ordenar por" control every other list gets from ListView's idle bar. This
+          // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
+          // here the clickable headers would be the only sort affordance. Same component
+          // ListView uses, driven by the same state it forwards through `props`.
+          sortControl={(
+            <ListSortPopover
+              columns={columns}
+              sortColumn={props.sortColumn}
+              sortDirection={props.sortDirection}
+              onSelect={props.onSortSelect}
+              onClear={props.onClearSort}
+              isDefaultSort={props.isDefaultSort}
+              data-testid="ListSortPopover__accthdr" />
+          )}
+          data-testid="AccountsToolbar__accthdr" />
+      </div>
 
       {/* min-h-0 lets the flex child actually shrink so the inner overflow engages */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -510,12 +546,15 @@ export default function AccountsHeaderTable({
           onClose={() => setDeleteConnectionTarget(null)}
           data-testid="BankConnectionDeleteConfirmModal__accthdr" />
       ) : null}
+      {/* onSuccess, not onDone: the modal only ever calls onSuccess, so the misnamed prop
+          meant a transfer launched from this grid's row kebab left the balances on screen
+          stale — the transfer itself was fine, which is what made it look like nothing had
+          happened. (The modal mounts as open; it takes no `open`.) */}
       {transferSource && (
         <FundsTransferModal
-          open
           sourceAccountId={transferSource.id}
           onClose={() => setTransferSource(null)}
-          onDone={reload}
+          onSuccess={reload}
           data-testid="FundsTransferModal__accthdr" />
       )}
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__accthdr" />

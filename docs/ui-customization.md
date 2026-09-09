@@ -376,7 +376,7 @@ to pick up the real server-side enforcement — see `docs/feedback.md`.
 
 ---
 
-### 9c. Standardized delete UX & `listViewOptions.hideBulkDelete` (ETP-4656)
+### 9c. Standardized delete UX, the unified delete criterion & `listViewOptions.hideBulkDelete` (ETP-4656 · ETP-5111)
 
 `ListView` now renders a generic **"Delete selected"** action in the multi-select
 toolbar (grid checkboxes), wired through the `useBulkRowDelete` hook
@@ -448,32 +448,35 @@ never renders rows that can be picked — so it never sees a selection bar eithe
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
 
-Note that a window doing this swaps two bars, not stacks them: `ListView` renders
-its selection bar as a **sibling above** the slot and cannot reach inside it, so
-the slot must hide its own toolbar while a selection exists. To let it, `ListView`
-now forwards its authoritative **`selectedRows`** in the Table-slot props
-(read-only for the slot; `DataTable` has no such prop, so the spread is inert):
+`ListView` forwards its authoritative **`selectedRows`** in the Table-slot props, read-only for the
+slot. **What you must do with it is destructure it out of the spread**, whether or not you use it:
 
 ```jsx
 function MyHeaderTable({ data, meta, selectedRows, ...props }) {
-  const selectionActive = (selectedRows?.length ?? 0) > 0;
-  return (
-    <>
-      {!selectionActive && <MyToolbar />}
-      <DataTable {...props} data={data} /* selectable stays at its default */ />
-    </>
-  );
+  //                                  ^ keep this, even unused — see below
+  return <DataTable {...props} data={data} /* selectable stays at its default */ />;
 }
 ```
 
-**Do NOT mirror the selection into slot-local state by wrapping
-`onSelectionChange`.** `DataTable` empties and prunes its internal selection `Set`
-silently from its `clearSelectionTrigger` / `deselectTrigger` effects **without**
-calling `onSelectionChange`, so a local mirror still reads "selected" after a
-successful bulk delete or a cancel — and the slot's toolbar never comes back.
-Always derive from the `selectedRows` prop. See
-`artifacts/financial-account/custom/AccountsHeaderTable.jsx` for the canonical
-example — including why the toolbar is unmounted rather than merely hidden.
+`selectedRows` is also the name of `DataTable`'s own internal selection state, so letting it
+through the spread reads as a controlled-selection prop `DataTable` does not have.
+`artifacts/financial-account/custom/AccountsHeaderTable.jsx` — the slot this whole mechanism was
+built for — carries it under an explicit `// eslint-disable-next-line no-unused-vars` with a comment
+saying not to delete it. That is the current state of the art: the prop is a **fence**, not an
+input.
+
+> **Historical, and no longer recommended: the toolbar swap.** A slot used to be expected to
+> *unmount its own toolbar* while a selection existed (`{!selectionActive && <MyToolbar />}`,
+> derived from `selectedRows`), so `ListView`'s selection bar read as its replacement. ETP-4972
+> turned that bar into a viewport-fixed portal to `document.body`, at which point the two were no
+> longer competing for the same space and the swap only cost the user the toolbar's other actions —
+> and ETP-5111 removed it from `AccountsHeaderTable`, its only consumer. **No window does this
+> today.** If you ever do bring it back, the one trap worth knowing is: derive `selectionActive`
+> from the `selectedRows` prop and **never** mirror the selection into slot-local state via
+> `onSelectionChange` — `DataTable` empties and prunes its internal `Set` silently from its
+> `clearSelectionTrigger` / `deselectTrigger` effects **without** calling `onSelectionChange`, so a
+> mirror still reads "selected" after a successful bulk delete or a cancel and the toolbar never
+> comes back. That is the bug that cost this window its bulk delete once already.
 
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
@@ -502,6 +505,88 @@ row):** `useBulkRowDelete` issues one `DELETE` per selected row in parallel
 | Partial failure | single warning — "{succeeded} de {total} registros eliminados. {failed} no pudieron eliminarse." | `bulkDeletePartialFailure` |
 | All rows fail | error — "No se pudo eliminar ninguno de los {count} registros seleccionados." | `bulkDeleteAllFailed` |
 
+**The reason is named only when exactly ONE record is selected (ETP-5085, narrowed by
+ETP-5111).** Counting failures without saying why leaves the user with nothing to act on — reading
+"No se pudo eliminar ninguno de los 1 registros seleccionados" after deliberately picking a single
+undeletable row is the worst case of it. So `runBatchDelete` returns `errors` (the rejection reason
+per failed item, aligned with `failed`) and `toastBatchDeleteOutcome` shows that sentence **instead
+of** the counter message when `total === 1`. For anything larger it never does: the two
+`…WithReason` branches that used to append a shared reason to the partial-failure and all-failed
+counters are gone, and so are their keys.
+
+**Why it was narrowed.** ETP-5111 gave the bulk trash button on the Financial Account detail tabs a
+meaning that depends on the size of the selection — one row means Payment Removal, several rows mean
+a plain delete (see `docs/generated-custom-windows/financial-account.md`, "Unified delete rule").
+Once a multi-row batch can fail for genuinely per-row reasons, a single sentence hoisted out of it
+stops summarising the batch and starts making a claim about rows it may not describe, with no way
+for the user to tell which row it came from. A one-record selection is the only case where the
+sentence is unambiguously about the thing the user picked.
+
+Two guards still gate that single-record sentence, and they are the point of the design:
+
+- **Only a 4xx counts as a reason.** `Promise.allSettled` catches every rejection alike — a dropped
+  connection, a `TypeError` from a bug in `deleteOneFn`, a 500 whose message is by design a log
+  pointer ("Please check logs for details"). A 4xx is the one case where the server answered "no,
+  because …" on purpose. So `deleteOneFn` must reject with an error carrying `status` (as
+  `useCreateMovement.postAction` and, since ETP-5111, `useStatementActions.post` do) for its message
+  to be shown at all. Parsing the message is only half the job; without the status it is discarded.
+- **A message that is only a status code is discarded** — the counter message is better than a
+  code. `OPAQUE_REASON_RE` in `lib/batchDelete.js` screens **two** shapes, not one:
+  `/^(HTTP\s*)?\d{3}\b/` for `HTTP 409` / `409 Conflict`, and `/^\S+\s+\d{3}$/` — one word followed
+  by a three-digit number and nothing else — for the `<word> <status>` shape. That second half was
+  added in ETP-5111 because it is exactly what `useEntity.js`'s `extractErrorMessage` returns as its
+  last resort for a 4xx with a **non-JSON** body (a container error page, say):
+  `` `${translate('error', 'Error')} ${res.status}` `` → literally **`Error 404`**. That string
+  satisfies every other guard — it is a 4xx and it has a message — so without the second pattern the
+  user would read "Error 404" as the explanation, and it is not even translated, since no locale
+  defines an `error` key. ETP-5111 made this reachable app-wide by wiring `errors` through
+  `useBulkRowDelete`, whose `deleteOneFn` calls exactly that helper, so it is screened once here
+  rather than in each caller. A genuine business sentence never has that shape.
+
+A third guard survives in `commonFailureReason` — several distinct reasons collapse to no reason,
+since one sentence cannot summarise them and picking one failure would imply it explains all of
+them — but it can no longer change an outcome, because only a one-record batch reaches a
+reason-bearing branch at all. It is kept for the helper's own coherence, not because anything
+depends on it.
+
+The reason is run through `translateBackendError`, so a backend literal shows in Spanish only if it
+has a `BACKEND_ERROR_MAP` entry + `backendError.*` key — the same contract as every per-row surface.
+**Feeding the reason is opt-in, and a new bulk-delete surface has to do two things or it silently
+falls back to counters:** pass `errors` to `toastBatchDeleteOutcome`, and reject with an error that
+carries `status`. Two hooks do both — `useBatchDeleteDialog` (Financial Accounts' Movimientos and
+Extractos importados tabs) has since ETP-5085, and the generic **`useBulkRowDelete`** since ETP-5111
+(it previously threw a bare `new Error(extractErrorMessage(...))` and omitted `errors`, so every
+`ListView` grid multi-select — Cuentas included — degraded a single-row refusal to the counter
+message and discarded the server's own 409). Callers that build the toast themselves (`DetailView`,
+`contacts`, `AmortizationLinesTable`) pass no `errors` at all and are unaffected either way. So
+ETP-5111's narrowing has one blast radius (`useBatchDeleteDialog`, which could previously show a
+reason for a multi-row batch) while its `useBulkRowDelete` fix *adds* the single-row reason to every
+generic grid that never had it.
+
+**Retired in ETP-5111: `isRowDeletable` (`ListView`) and `disabledReason`
+(`BulkDeleteSelectionBar`).** Both existed to pre-disable a trash button from row eligibility.
+`isRowDeletable` was §9d of this guide — a `(row) => boolean` predicate `ListView` evaluated over
+the current selection, disabling the delete button and switching its tooltip to
+`bulkDeleteBlockedTooltip` when any selected row failed it. `disabledReason` was the hand-rolled
+equivalent for the two Financial Account tabs that mount `BulkDeleteSelectionBar` directly instead
+of going through `ListView`. The prop, its JSDoc, the `blockedDeleteCount` computation, the
+`disabled`/`title` branch on the button and the `bulkDeleteBlockedTooltip` key are all gone.
+
+**The criterion that replaced them — "let them try, and explain the refusal".** The bulk trash
+button is never disabled because of *what* is selected; only because a delete is in flight. A row
+the server will refuse is attempted, comes back as a per-row failure, and is reported by the outcome
+contract above. There is deliberately **no supported way for a window to pre-block the generic trash
+button any more**, and that absence is the feature: `isRowDeletable` was a documented invitation to
+re-fragment this rule one window at a time, and the three delete surfaces of `financial-account` had
+already drifted into three mutually inconsistent criteria (ETP-4871, ETP-4921 + PSD2, ETP-5085)
+before ETP-5111 pulled them back together. A window whose rows are conditionally deletable expresses
+that on its **per-row** affordance — a kebab item that pre-checks and toasts, as
+`MovementRowKebab` + `movementActionEligibility.js` do — or lets the backend's 4xx do the talking.
+Never by graying out a button that covers a heterogeneous selection. A sentinel test in
+`ListView.bulkDelete.vitest.jsx` asserts the rule in the positive (rows with `deletable: false`
+selected → the button stays enabled with its plain `delete` title), so reintroducing the prop breaks
+a test instead of passing in silence.
+
 On a partial failure, `ListView` keeps only the failed rows selected: `DataTable`
 gained a paired `deselectTrigger`/`deselectRowIds` prop (alongside the existing
 all-or-nothing `clearSelectionTrigger`) so only the succeeded row ids drop out
@@ -516,48 +601,246 @@ deliberate — it matches the design doc's (Confluence "Eliminación de Registro
 **New i18n keys** (all under `genericLabels`, both `en_US.json`/`es_ES.json`):
 `deleteBlockedByReferences`, `bulkDeleteConfirmTitle`, `bulkDeleteConfirmMessage`,
 `bulkDeleteSelected`, `bulkDeleteAllSucceeded`, `bulkDeletePartialFailure`,
-`bulkDeleteAllFailed`.
+`bulkDeleteAllFailed`. Three keys from this family were **removed** in ETP-5111 and must not be
+reintroduced: `bulkDeleteAllFailedWithReason` and `bulkDeletePartialFailureWithReason` (the
+multi-row reason variants, see above) and `bulkDeleteBlockedTooltip` (the disabled-button tooltip
+that came with `isRowDeletable`). Note `es_AR.json` never carried any `bulkDelete*` key at all —
+do not assume three-way parity in this family when adding one.
 
 **Real examples:** the generic mechanism applies to every window using the
 standard `ListView` (nothing to declare). `contacts` is the one window that
 currently opts out (see the known gap above).
 
-### 9d. `isRowDeletable` — gating bulk delete for a mixed selection (ETP-4871)
+### 9e. `SelectionToolbar` — the floating bulk-selection toolbar (ETP-4972)
 
-An optional `ListView` prop, `(row) => boolean`, for windows where deletability is a
-**per-row, data-driven condition** rather than a blanket rule — e.g. `financial-account`,
-where an account is only really deletable once it has zero dependent records anywhere
-(every FK into `FIN_Financial_Account` is RESTRICT). Without this prop, `hideBulkDelete`
-(9c above) is all-or-nothing for the whole window; `isRowDeletable` instead lets the grid
-stay bulk-deletable in general while blocking the specific action on a bad selection.
+Every checkbox-selectable list/tab (grid multi-select in `ListView`, and every
+lines table that supports row selection — Sales Order, Physical Inventory,
+Amortization, Assets' Amortization Plan tab, Financial Accounts' Movimientos/
+Extractos tabs, the Periods panel's document bulk-open/close bar, contacts'
+secondary tabs) shares one component for the bar that appears once ≥1 row is
+checked: `tools/app-shell/src/components/contract-ui/SelectionToolbar.jsx`.
+It replaces the pre-ETP-4972 `LinesSelectionBar` (kept only as a one-line
+re-export shim, `LinesSelectionBar.jsx → SelectionToolbar.jsx`, for stragglers
+importing the old filename — do not add new imports of it).
+
+**Architecture — a true viewport-fixed portal, not an anchored one.** The old
+`LinesSelectionBar` was portaled to `document.body` with `position: fixed`,
+but its `top`/`left` came from `getBoundingClientRect()` on a sentinel
+`<div>` placed at the end of the scrollable list (some callers additionally
+tracked it via a `ResizeObserver` on a `barAnchorRef`). On a long list, once
+that sentinel scrolled out of view, the "fixed" bar scrolled out of view with
+it — a "floating" bar that wasn't actually anchored to the viewport.
+`SelectionToolbar` has no ref/rect-measuring code at all: it portals to
+`document.body` and hardcodes real viewport coordinates —
+`position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%)` —
+so it is bottom-center of the screen unconditionally, regardless of list
+length, scroll position, or which container it's logically nested under.
+That bug class cannot recur because there is no measured rect left to go
+stale.
+
+**Additive, not a swap, at the `ListView` idle-bar level.** Before ETP-4972,
+`ListView` rendered the selection bar and the idle filter bar (Filtros,
+ViewToggle, Nuevo, …) as either branch of one ternary occupying the same DOM
+slot — selecting a row replaced the idle bar outright. Since the selection
+bar is now a portal that floats independently of everything else on the
+page, `ListView` renders both as independent siblings: the idle bar **stays
+visible** while rows are selected, and the floating pill appears additively
+on top. (This is unrelated to the slot-level "swap" described in §9c above —
+a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
+selection is active, because that toolbar and the grid live in the same
+slot; see the corrected note there.)
+
+**Composition — children, not a data-driven `actions[]` prop.**
+`SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
+the portal, the true fixed placement, the dark-pill visual chrome (radius,
+shadow, enter/exit slide animation), a 1px divider rendered after every
+top-level child, and a trailing close (`X`) button that calls `onClose`. It
+does **not** impose a generic `actions[]` shape on callers — the selection
+counter, action buttons, and any destructive "Eliminar" affordance are all
+passed as plain `children`, one top-level element per segment (a divider is
+auto-inserted after each):
 
 ```jsx
-<ListView
-  isRowDeletable={(row) => row.deletable !== false}
-  ...
-/>
+<SelectionToolbar
+  visible={selectedRows.length > 0}
+  onClose={clearSelection}
+  closeTitle={ui('close')}
+>
+  <span className="text-sm font-medium">
+    {ui('selected').replace('{count}', selectedRows.length)}
+  </span>
+  <div className="flex items-center gap-2 h-10">
+    {/* action buttons */}
+  </div>
+</SelectionToolbar>
 ```
 
-- **Absent (the default) behaves exactly as before ETP-4871** — every row counts as
-  deletable, so this never regresses any other window's bulk delete. This is a plain prop
-  passed straight to `ListView` (through a generated page's `{...props}` spread, same as
-  `hideCreate`/`hidePrint`), **not** a `listViewOptions` key.
-- When present, `ListView` recomputes on every selection change how many of the
-  **currently selected** rows fail the predicate. If any do, the "Eliminar seleccionados"
-  button disables (`bulkDeleting || blockedDeleteCount > 0`) and shows a `title` tooltip —
-  `ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })` — instead of letting the
-  batch go out and resolving as a confusing partial failure (9c's per-row 409 path still
-  exists as a defense-in-depth backstop for a row that changed state between selection and
-  click, but the button being disabled up front is the primary UX).
-- `bulkDeleteBlockedTooltip` is a **generic**, entity-agnostic i18n key (`ListView` is
-  shared by every window) — "{count} registro(s) seleccionado(s) no se pueden eliminar." —
-  not a `financeAccounts*`-scoped one, even though `financial-account` is its first
-  consumer.
-- This is orthogonal to the per-row kebab delete affordance (`AccountRowMenu`'s "Eliminar
-  cuenta" item, gated the same way but reading `row.deletable` directly) — `isRowDeletable`
-  only concerns `ListView`'s own generic bulk-delete button.
-- **Real examples:** `financial-account` (`windows/custom/financial-account/index.jsx`) is
-  the only current consumer.
+Because the shell no longer provides its own cancel/X affordance for callers
+to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
+hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
+button** — `SelectionToolbar` always renders one as the trailing segment.
+
+**Gotcha — use a plain `<button>`, not the shared shadcn `<Button
+size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
+in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
+selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
+regardless of Tailwind/twMerge class order. Two text-bearing action buttons
+in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
+rendered at visibly different icon/text sizes until both were rewritten as
+plain hand-rolled `<button>` elements with the same explicit classes,
+matching Figma's "Size: md" spec (padding `7px 12px`, gap `4px`) instead of
+inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
+with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
+any new bulk-toolbar action button, rather than `<Button size="sm">`.
+
+**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
+The Figma spec for the two text-bearing buttons above sources its icons
+(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
+draw the plus/check as a badge overlapping the file's corner with a heavier
+stroke — visually different from this app's lucide-react set (`FilePlus`/
+`FileCheck`), which draws the same glyphs contained inside the file body
+with a thinner stroke. This is a **confirmed, deliberate decision, not a
+drift from Figma to fix**: lucide-react's versions were kept for visual
+consistency with every other icon already in this toolbar (`Trash2`, `X`,
+`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
+Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
+shape without re-confirming with design first.
+
+**Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
+usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
+`tools/app-shell/src/components/financial-accounts/BulkDeleteSelectionBar.jsx`
+(Financial Accounts' Movimientos/Extractos tabs), `windows/custom/calendar/
+PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
+contacts/index.jsx`.
+
+#### `BulkDocumentAction`'s `actionMode` — bulk actions that are not DocActions
+
+`BulkDocumentAction.jsx` provides the "Confirmar"/"Procesado masivo" button, its
+modal, the action dropdown, the per-row `Promise.allSettled` loop and the
+ok/failed toast. It used to be **DocAction-only**: the per-row call was always
+`POST …/{id}/action/documentAction` with a `{docAction}` body, so each
+`buildActions` value had to be a DocAction code (`CO`, `RE`, …).
+
+`actionMode` (ETP-5075) opens it to any window whose bulk actions are *generic
+NEO actions* instead:
+
+| Value | Per-row call | Each `buildActions` value is |
+|---|---|---|
+| `'documentAction'` (default) | `POST …/{id}/action/documentAction`, body `{docAction}` | a DocAction code |
+| `'neoAction'` | `POST …/{id}/action/{value}` | an action name (e.g. `post`, `unpost`) |
+
+The default keeps every pre-existing consumer byte-identical. First user:
+`artifacts/matched-purchase-invoices/custom/MatchedInvoiceBulkActions.jsx`, whose
+window has no `documentStatus`/DocAction at all — its bulk actions are the
+accounting `post`/`unpost` served by `DocumentPostingService`, the same endpoint
+its detail kebab uses.
+
+In `'neoAction'` mode the component wraps `useNeoAction.execute` in an adapter
+that **throws** when the result is not successful. This is load-bearing, not
+ceremony: `useNeoAction` *resolves* with `{ success: false }` on failure (unlike
+`useDocumentAction`, which throws — its own javadoc draws the contrast), while
+`handleDone` classifies failures via `Promise.allSettled`'s `'rejected'` status.
+Without the adapter every failed row is silently counted as a success and the
+toast reports "N ok, 0 failed" while nothing happened. If you add a third
+`actionMode`, normalise its error contract the same way.
+
+Pair it with `rowFilter` when a selection can legitimately mix states: returning
+a string from `rowFilter(row, action)` pre-blocks that row with that message
+(shown in the failure list) instead of sending a request the backend will reject
+with an opaque error.
+
+---
+
+### 9f. The two shared delete-confirmation components — `DeleteConfirmDialog` and `LifecycleConfirmModal` (ETP-4500 · ETP-5111)
+
+**Pick by what is at stake, and pick before you write anything:**
+
+| Component | Job | Reach for it when |
+|---|---|---|
+| `components/contract-ui/DeleteConfirmDialog.jsx` | neutral *"¿Estás seguro de que deseas eliminar N registro(s)?"* | the delete has **nothing to enumerate** — one row or a thousand, draft records, or an action that will turn out to be refused |
+| `windows/custom/shared/LifecycleConfirmModal.jsx` | the red **cartel**: names each downstream effect and warns | the action really will undo something — a reconciliation, an accounting entry — and the user should see what, before confirming |
+
+**Picking the enumerating one when there is nothing to enumerate is the exact bug ETP-5111 kept
+re-discovering**, in three different disguises: a fallthrough that described a draft as posted, then
+a cartel shown for a delete that could not proceed at all. The guidance is one line —
+*never let a confirmation promise an effect it will not deliver* — and it is a stronger rule than
+"branch per state", because it also catches the case where every branch is correct and the dialog
+is still the wrong dialog.
+
+#### `DeleteConfirmDialog` (extracted in ETP-5111)
+
+Lifted verbatim out of `useBatchDeleteDialog` — same markup, same i18n keys
+(`bulkDeleteConfirmTitle` / `bulkDeleteConfirmMessage`), same `data-testid`s — so a per-row delete
+and a bulk delete of the same record are not two dialogs that merely resemble each other; they are
+this component, rendered twice. The hook now renders it (output byte-identical), and the Movimientos
+row kebab renders it directly with `count={1}`.
+
+It is deliberately **presentational**: no selection state, no delete call, no outcome toast. The
+caller owns what confirming means. That is what lets the row kebab keep its own per-row success
+message and still show the identical dialog.
+
+**Why the hook is not the reuse vehicle** — worth knowing before you route a single-row action
+through `useBatchDeleteDialog` "because it already has the dialog": it owns the outcome toast, whose
+counter wording would replace *"Movimiento eliminado"* with *"1 registros eliminados
+correctamente."*; it always renders its dialog node, so a long grid pays one hidden Radix `Dialog`
+per row; and it gives the caller no way to **decline** after the user has confirmed, which a surface
+with a client-side eligibility pre-check needs.
+
+#### `LifecycleConfirmModal`
+
+The one confirm dialog for a destructive **lifecycle** action on a record with downstream effects —
+delete, reactivate, unreconcile. Its anatomy is a red title, a subtitle naming exactly which effects
+apply, a bulleted list of those effects, a yellow warning box, and a confirm/cancel footer.
+
+**Callers pass pre-resolved strings, not keys.** Each domain owns its own copy and its own state
+tiering, then hands this component finished text — `title`, `sub`, `warning`, `confirmLabel`, and
+the `itemConciliacion` / `itemTransaccion` / `itemAsiento` pairs (or a ready-made `explicitItems`
+array). The component decides only *which* items to show, from the `reconciled` / `hasTransaction` /
+`posted` booleans. Four consumer families:
+`windows/custom/financial-account/MovementLifecycleConfirmModal.jsx` (Movimientos),
+`windows/custom/shared/PaymentLifecycleConfirmModal.jsx` (Cobros/Pagos, itself used by
+`PaymentHeaderTableBase`), `components/contract-ui/ReconciliationSplitPanel.jsx`, and
+`windows/custom/financial-account/BankConnectionDeleteConfirmModal.jsx`.
+
+**`warning` is optional, and so is the whole body (ETP-5111).** It used to be required in practice:
+the yellow box rendered unconditionally, so a domain with *nothing to warn about* could not say so.
+Three things are now conditional — the items list (`items.length > 0`), the warning box (`warning`
+truthy), and **the padded body wrapper itself** (`items.length > 0 || warning`), because with both
+halves hidden it rendered as ~24px of dead space between the subtitle and the buttons. Each half is
+guarded separately, so a caller with only one of the two still looks right.
+
+This existed because a confirmation can legitimately have no consequences to enumerate: deleting a
+**draft** movement undoes no reconciliation and reverses no journal entry, and the only true thing
+left to say is that the delete is permanent. Before this, `MovementLifecycleConfirmModal` had no way
+to express that and fell through to its posted-state copy, telling the user a nonexistent accounting
+entry would be reversed — see `docs/generated-custom-windows/financial-account.md` ("Unified delete
+rule" and the Movimientos kebab bullet) and the `resolveStateKey` entry in `docs/feedback.md`.
+
+**If you write a new consumer**, in priority order:
+
+1. **First ask whether you want this component at all** — if the action has no effects to name, the
+   answer is `DeleteConfirmDialog`. Routing effect-less cases away is what Movimientos ended up
+   doing, and it is a better fix than making this dialog degrade gracefully.
+2. Pass `warning` only when you have something to warn about.
+3. Resolve your state tiers with an **explicit branch per state**, never a catch-all `return`
+   naming one specific state. That catch-all is what produced the false copy described above, and
+   it stayed invisible for exactly as long as an unrelated caller in another file happened to gate
+   the unreachable case.
+4. Keep the defensive branch even once routing makes it unreachable. Movimientos' `'neither'` tier
+   has no live caller any more and is retained on purpose, because deleting it restores the
+   fallthrough: a future caller arriving with no flags set would be reported as posted rather than
+   getting empty copy. A wrong answer is worse than an empty one, and a coverage report flagging
+   that branch is expected rather than a gap.
+
+> **One cosmetic delta, an improvement rather than a regression.** The items `<div>` carried
+> `marginBottom: 16`, so a caller that produced an *empty* items list still paid 16px of space above
+> its warning box. `PaymentLifecycleConfirmModal` on a **draft** payment is exactly that case
+> (`reconciled`/`hasTransaction`/`posted` all false → `items = []`, with a truthy generic
+> `paymentConfirmWarning`), so its warning box now sits 16px higher than before ETP-5111. No other
+> existing dialog changes at all — the other three consumers always pass a real `warning` and at
+> least one item.
 
 ---
 
@@ -814,7 +1097,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
 - **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the frontend simply had no handler to call; nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before. **Correction (ETP-4745):** the original write-up here claimed "the backend correctly rejected the delete" — that was inaccurate even at ETP-4565 time. `hideDelete` did not reach `ETGO_SF_ENTITY.ISDELETE` until ETP-4745; before that fix a raw API `DELETE` against this same entity (`userRoles` on the `user` window) would have succeeded server-side. The ETP-4565 fix genuinely removed the dead UI affordance, it just didn't (and couldn't, at the time) rely on any real backend rejection.
-- Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
+- Designed for desktop. Tablet/mobile responsive support (a genuinely reflowed/stacked layout) is still out of scope for this iteration — but **ETP-5133** fixed the specific narrow-viewport failure mode: at laptop widths (e.g. 1366×768) with a wide column set, the table now scrolls horizontally within its own bounds instead of overflowing past the detail pane and overlapping the sidebar (and, on windows with a right-side panel, that panel too). See "How horizontal overflow is scoped" below.
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
 
@@ -826,6 +1109,12 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — owns rendering of the table block (header strip + rows + hover-action strip).
 
 **Real example:** `sales-quotation` (pilot — the first window to ship the new layout).
+
+**How horizontal overflow is scoped (ETP-5133):** `InlineLinesPanel`'s columns are a flex row with non-shrinking, fixed-basis widths (`columnFlex()`/`FIXED_BASIS_PX`/`ELASTIC_BASIS_PX` in `tools/app-shell/src/lib/linesColumnWidth.js`), so a window with many/wide columns can be wider than the viewport at laptop widths. Without a scoped scroll boundary, that overflow used to fall through to a distant ancestor (`getDetailContentContainerClassName` in `DetailView.jsx`, which sets `overflow-y-auto`) — per the CSS2.1 overflow computation, `overflow-x: visible` next to `overflow-y: auto` resolves to `overflow-x: auto` on *that* ancestor, so the whole detail-content pane (header form + tab strip + lines grid) became the scroll boundary instead of just the table, visibly overlapping the sidebar (and any right-side panel).
+
+The fix could **not** simply wrap the header row + body rows together in one `overflow-x-auto` div — the header uses `position: sticky; top: 0` to stay pinned while the page scrolls, and that same CSS overflow-interdependence rule means any `overflow-x` wrapper placed between the sticky header and its real scrolling ancestor forces that wrapper's `overflow-y` to `auto` too, which silently breaks the header's stickiness (verified empirically before landing this shape — see the ETP-5133 comments in the component). The header strip and the body rows are therefore **two independently-scrolled wrappers**: the header's own inner div uses `overflow-x-hidden` and is driven programmatically (`scrollLeft`) by the body rows' `overflow-x-auto` wrapper's `onScroll` handler, so columns stay pixel-aligned while the header keeps its own (unaffected) sticky ancestor chain. `pb-6` on the rows wrapper mirrors the same bottom padding `DataTable`'s classic (non-inlineEditable) path already uses around its own `<Table>`, for the same reason: the forced `overflow-y: auto` would otherwise clip a hovered last row's shadow.
+
+**Known gap (not covered by ETP-5133):** the add-line form is rendered by a separate, header-hidden/data-hidden `<DataTable>` instance (see the generated `<Window>LineTable.jsx` — it mirrors `InlineLinesPanel`'s own flex column widths via a `<colgroup>`) that sits as a **sibling** below `InlineLinesPanel`, not inside it. That companion table's wrapper (`DataTable.jsx`, the `linesLayout === 'inlineEditable'` branch) intentionally opts out of any local overflow handling (`[&>div]:!overflow-visible`) to avoid the same sticky-header conflict, which means an active "Add line" row with a wide column set can still overflow past the pane at narrow viewports. This is a distinct, currently-unfixed instance of the same underlying pattern — flag it before extending this area further.
 
 ---
 
@@ -1045,8 +1334,10 @@ Customer/Vendor Accounting, etc.).
    `product`, `product-category`, `business-partner-category`, `tax`, `asset-group`, and `contacts`
    use for their Accounting/Customer-Accounting/Vendor-Accounting tabs. Full property reference
    (`tabOrder`, `label`, `addLineFields`, `requireSavedRecord`, `customPanel`/`customTable`/
-   `customForm`, `customAddModal`, `readOnlyLogic`, and the per-tab `maxDetailLines` cap added in
-   ETP-4565): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   `customForm`, `customAddModal`, `readOnlyLogic`, the per-tab `maxDetailLines` cap added in
+   ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
+   `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
+   `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
@@ -1393,3 +1684,59 @@ artifacts/contacts/generated/web/contacts/
 2. Add the appropriate key to `decisions.json → window.*`
 3. Run `node cli/src/generate-frontend.js {window}` (or full pipeline)
 4. The generated `*Page.jsx` now imports and wires your component automatically
+
+## FK click-through navigation (`fkNavigation.js`)
+
+**Makes a read-only foreign-key value clickable, opening the record it points at — in the
+detail form and the list grid alike.** Added in ETP-5075; first consumer is
+`matched-purchase-invoices`.
+
+This is **not** a `decisions.json` option. It is a registry in the app-shell:
+
+`tools/app-shell/src/components/contract-ui/fkNavigation.js`
+
+```js
+export const FK_NAVIGATION_TARGETS = {
+  C_InvoiceLine_ID: { window: 'purchase-invoice', idField: 'invoiceHeaderId' },
+  M_InOutLine_ID:   { window: 'goods-receipt',    idField: 'receiptHeaderId' },
+};
+```
+
+Keyed by **AD column name**, deliberately — not by `reference`. The generated form
+descriptors carry both `column` and `reference`, but generated *grid* columns carry only
+`column`; keying by column lets one registry drive both surfaces with no change to the
+generators in `schema_forge_core`, i.e. no core release.
+
+Two kinds of entry:
+
+| Entry | When | Target id |
+|---|---|---|
+| `{ window }` | The FK already points at a document header with a window of its own (`C_BPartner_ID` → `business-partner`) | The FK's own value |
+| `{ window, idField }` | The FK points at a **line**, which has no window — navigation only ever reaches a header | `record[idField]`, injected per row by the entity's `NeoHandler` |
+
+For the second kind the parent id is not in the payload (an FK returns the id plus a
+`$_identifier` label and nothing else) and there is no declarative server-side derivation
+to compute one, so the entity needs a `javaQualifier` handler that `put`s it into each GET
+row in `afterHandle`. See `MatchedInvoiceHandler` in `com.etendoerp.go` for the pattern,
+and `docs/generated-custom-windows/matched-purchase-invoices.md` for the worked example.
+
+**Consumed by** (both already wired — nothing to do per window):
+
+- `EntityForm.jsx` → `renderReadOnlyFk()`, the single point every read-only FK passes
+  through (`type: 'selector'` and `type: 'search'` both land there).
+- `DataTable.jsx` → `renderCellValue()`, wrapped at the dispatch point rather than inside
+  each cell renderer, so it works whatever cell type the column resolves to.
+
+**It fails closed, by design.** No registry entry, no resolvable id, or no `navigate`
+handed down ⇒ `resolveFkNavigation()` returns `null` and the field/cell renders exactly as
+before. That is what makes it safe to have in components every window renders. `navigate`
+is passed as a prop (from `DetailView`/`ListView`) rather than pulled from `useNavigate()`,
+so `EntityForm`/`DataTable` stay Router-agnostic and their existing unit tests, which mount
+them without a Router, keep working.
+
+**To make another window's FK navigable:** add one line to the registry. If the FK points
+at a line rather than a header, also add the handler that injects the parent id. Nothing
+else — no `decisions.json` key, no generator change, no regeneration of the window.
+
+> Watch out for `stopPropagation()` in the grid: without it a cell click also triggers the
+> row's own `onNavigate`, which wins and sends the user to *this* window's record instead.

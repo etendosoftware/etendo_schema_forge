@@ -81,7 +81,7 @@
           "enumVariants": {
             "O": "green",
             "N": "neutral",
-            "C": "neutral",
+            "C": "red",
             "P": "red",
             "M": "orange"
           },

@@ -327,3 +327,103 @@ describe('pickRegimeChild — compound/summary tax child resolution (ETP-4888)',
     expect(pickRegimeChild(children, { isEquivalentChargeKey: 'isEquivalentCharge' })?.id).toBe('base');
   });
 });
+
+// ---------------------------------------------------------------------------
+// ETP-5027 — the `targets` document-direction gate.
+//
+// `profile` says which systems the ORG configured; `targets` says which of them
+// the DOCUMENT the field is rendered for can actually be sent to. Real
+// getInvoiceFiscalTargets() output is fed in (rather than hand-built literals)
+// so the two units stay pinned together.
+// ---------------------------------------------------------------------------
+import { getInvoiceFiscalTargets } from '../fiscalTargets.js';
+
+const SALES_SPECS = ['sales-invoice', 'sales-order'];
+const PURCHASE_SPECS = ['purchase-invoice', 'purchase-order'];
+
+describe('selectSifFields — targets gate (ETP-5027)', () => {
+  it('omitting targets keeps the pre-gate, profile-only behaviour (the Tax window has no document)', () => {
+    // No `targets` key at all -> no direction to gate on.
+    expect(pick({ profile: 'tbai', verifactuRecord: null, data: {} })).toHaveLength(1);
+    expect(pick({ profile: 'verifactu', verifactuRecord: { tAXType: '01' }, data: {} })).toHaveLength(1);
+    // Explicit null is the documented equivalent of omitting it.
+    expect(pick({ profile: 'tbai', verifactuRecord: null, data: {}, targets: null })).toHaveLength(1);
+  });
+
+  describe('VERI*FACTU', () => {
+    it.each(SALES_SPECS)('%s keeps the régimen field', (spec) => {
+      const targets = getInvoiceFiscalTargets(spec, 'verifactu');
+      const fields = pick({ profile: 'verifactu', verifactuRecord: { tAXType: '01' }, data: {}, targets });
+      expect(fields.map((f) => f.column)).toEqual(['EM_Etvfac_Vat_Regime']);
+    });
+
+    it.each(PURCHASE_SPECS)('%s returns [] — the key could never be transmitted', (spec) => {
+      const targets = getInvoiceFiscalTargets(spec, 'verifactu');
+      expect(pick({ profile: 'verifactu', verifactuRecord: { tAXType: '01' }, data: {}, targets })).toEqual([]);
+    });
+
+    it.each(PURCHASE_SPECS)('%s returns [] even for an exempt tax (which would otherwise add a 2nd field)', (spec) => {
+      const targets = getInvoiceFiscalTargets(spec, 'verifactu');
+      expect(pick({
+        profile: 'verifactu',
+        verifactuRecord: { tAXType: '01' },
+        data: { taxExempt: 'Y' },
+        targets,
+      })).toEqual([]);
+    });
+
+    it('a purchase document is gated out regardless of TBAI territory', () => {
+      for (const territory of ['ARABA', 'BIZKAIA', 'GIPUZKOA', null]) {
+        const targets = getInvoiceFiscalTargets('purchase-invoice', 'verifactu', territory);
+        expect(pick({ profile: 'verifactu', verifactuRecord: { tAXType: '01' }, data: {}, targets })).toEqual([]);
+      }
+    });
+  });
+
+  describe.each(['tbai', 'sii+tbai'])('TicketBAI — profile %s', (profile) => {
+    it.each(SALES_SPECS)('%s keeps the régimen field for any territory', (spec) => {
+      for (const territory of [null, 'ARABA', 'BIZKAIA', 'GIPUZKOA']) {
+        const targets = getInvoiceFiscalTargets(spec, profile, territory);
+        const fields = pick({ profile, verifactuRecord: null, data: {}, targets });
+        expect(fields.map((f) => f.column)).toEqual(['EM_Tbai_Claveregimeniva']);
+      }
+    });
+
+    // Deliberate ETP-5027 LOOSENING: Batuz/LROE does send purchases in Bizkaia,
+    // so this must be ALLOWED, not merely "not crashing".
+    it.each(PURCHASE_SPECS)('%s SHOWS the field under BIZKAIA', (spec) => {
+      const targets = getInvoiceFiscalTargets(spec, profile, 'BIZKAIA');
+      const fields = pick({ profile, verifactuRecord: null, data: {}, targets });
+      expect(fields.map((f) => f.column)).toEqual(['EM_Tbai_Claveregimeniva']);
+    });
+
+    it.each(PURCHASE_SPECS)('%s returns [] outside BIZKAIA (and when the territory is unknown)', (spec) => {
+      for (const territory of [null, undefined, 'ARABA', 'GIPUZKOA']) {
+        const targets = getInvoiceFiscalTargets(spec, profile, territory);
+        expect(pick({ profile, verifactuRecord: null, data: {}, targets })).toEqual([]);
+      }
+    });
+
+    it('the exención variant is gated too, not just the régimen one', () => {
+      const blocked = getInvoiceFiscalTargets('purchase-invoice', profile, 'GIPUZKOA');
+      const allowed = getInvoiceFiscalTargets('purchase-invoice', profile, 'BIZKAIA');
+      const data = { taxExempt: 'Y' };
+      expect(pick({ profile, verifactuRecord: null, data, targets: blocked })).toEqual([]);
+      expect(pick({ profile, verifactuRecord: null, data, targets: allowed })
+        .map((f) => f.column)).toEqual(['EM_Tbai_Exemptioncause']);
+    });
+  });
+
+  it('SII-only profiles are unaffected by targets — they have no tax-level field either way', () => {
+    for (const spec of [...SALES_SPECS, ...PURCHASE_SPECS]) {
+      const targets = getInvoiceFiscalTargets(spec, 'sii');
+      expect(pick({ profile: 'sii', verifactuRecord: null, data: {}, targets })).toEqual([]);
+    }
+  });
+
+  it('a gate object with the flags explicitly false blocks both systems', () => {
+    const targets = { showSii: true, showTbai: false, showVerifactu: false };
+    expect(pick({ profile: 'tbai', verifactuRecord: null, data: {}, targets })).toEqual([]);
+    expect(pick({ profile: 'verifactu', verifactuRecord: { tAXType: '01' }, data: {}, targets })).toEqual([]);
+  });
+});

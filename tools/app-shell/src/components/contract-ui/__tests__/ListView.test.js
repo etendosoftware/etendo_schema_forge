@@ -47,8 +47,14 @@ describe('ListView — selectionBarSize prop (ETP-3660)', () => {
     assert.match(src, /selectionBarSize\s*=\s*['"]sm['"]/);
   });
 
-  it('passes selectionBarSize as size to selection bar Buttons', () => {
-    assert.match(src, /size=\{selectionBarSize\}/);
+  it('uses selectionBarSize to size the selection bar Buttons\' icons via iconSizeClass', () => {
+    // ETP-4972 — the selection-bar Print/Clone/Delete Buttons became
+    // icon-only (fixed `size="icon"`, `variant="ghost"`); selectionBarSize no
+    // longer passes through as the shadcn Button `size` prop. It still
+    // drives icon sizing via the extracted `iconSizeClass()` helper (covered
+    // by the next test below).
+    assert.match(src, /className=\{iconSizeClass\(selectionBarSize\)\}/);
+    assert.doesNotMatch(src, /size=\{selectionBarSize\}/);
   });
 
   it('uses selectionBarSize to conditionally size icons (sm → h-3.5, else → h-4)', () => {

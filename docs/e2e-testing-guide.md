@@ -42,6 +42,40 @@ available. The default is disabled; `0` and any other value also leave capture o
 
 ---
 
+## Copilot Agent Navigation (`webmcp-agent-chat`)
+
+`e2e/tests/flows/copilot-agent-navigation.mocked.spec.js` covers the browser
+half of the AI Copilot loop: a fabricated AI SDK UI-message stream stands in for
+the BFF, so the spec asserts that a `navigate_to` / `open_form` tool call lands
+in the router and that the three failure messages stay distinct (external URL →
+security error, unresolved name → recoverable, ambiguous name → candidates).
+Whether the model *chooses* to call the tool is not testable here.
+
+Two environment constraints, both fixed when Vite starts:
+
+```bash
+# NOTE: no VITE_MOCK — see below
+VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true}' npx vite --port 3104
+E2E_USE_MOCK=1 BASE_URL=http://localhost:3104 E2E_WEBMCP_AGENT_CHAT_FLAG=on \
+  npx playwright test tests/flows/copilot-agent-navigation.mocked.spec.js --project=mocked
+```
+
+- **The flag must be on at server start.** `webmcp-agent-chat` defaults to
+  `false`, and there is no runtime override — same constraint as
+  `proof-of-concept-menu.mocked.spec.js`. The spec skips itself without
+  `E2E_WEBMCP_AGENT_CHAT_FLAG=on` rather than failing on an absent feature.
+- **The server must NOT run in mock mode.** ⚠️ In mock mode `App.jsx` patches
+  `window.fetch` and sets the API base to `/api`, and `mockFetch.js` claims
+  every URL starting with that prefix. The Copilot's endpoint is `/api/ai/chat`,
+  so the mock answers it **in-page**: the request never reaches the network, no
+  `page.route` can intercept it, and the chat silently does nothing — the input
+  clears, the user message renders, and no POST is ever made. This also means
+  **the agent chat does not work under `make dev-mock` at all**, which is worth
+  remembering before debugging it there.
+
+`login()` only seeds a token and intercepts `/sws/**` by URL, so it works
+unchanged against a non-mock dev server.
+
 ## Etendo GO Contextual Selector Smoke
 
 `e2e/tests/flows/etendogo-contextual-selectors.integration.spec.js` validates the non-MCP Etendo GO integration risk for contextual FK selectors. It is skipped by default because it requires a live Etendo backend, a loaded F&B dataset, and a JWT-capable test user.
@@ -165,6 +199,9 @@ etendo.go.email.provider.baseUrl=http\://127.0.0.1\:8025/send
 etendo.go.email.provider.apiKey=e2e-only-secret
 ```
 
+> **Local setup with Tomcat in Docker?** `127.0.0.1` is wrong there and fails silently — read the
+> subsection below before setting this.
+
 The API key must match `E2E_EMAIL_SINK_API_KEY` in `playwright.config.js`; the adapter sends it as
 `x-api-key` and the sink rejects a mismatch with 401. `config/Openbravo.properties` is gitignored,
 so this stays a local change. Same wiring the ETP-4894 invitation-email spec already needed — see
@@ -172,6 +209,57 @@ so this stays a local change. Same wiring the ETP-4894 invitation-email spec alr
 
 Without it the mail goes to the real provider, the wall stays up with no readable inbox, and
 `passEmailConfirmationWall` fails naming both remedies.
+
+#### ⚠️ Local environment: with Tomcat in Docker, `127.0.0.1` is the WRONG address
+
+The `127.0.0.1` above is only correct when Tomcat runs **on the host**. Playwright starts the sink
+on the host, so from inside a Tomcat container `127.0.0.1:8025` is that container's own loopback —
+nothing is listening there and every send dies with `java.net.ConnectException: Connection refused`.
+
+**How to tell which case you are in.** Tomcat is dockerized when this property is `true` — it is
+set in BOTH files and they must agree:
+
+```properties
+# gradle.properties  AND  config/Openbravo.properties
+docker_com.etendoerp.tomcat=true
+```
+
+`true` (the usual local setup, container `etendo-tomcat-1`) → use the host alias instead:
+
+```properties
+etendo.go.email.provider.baseUrl=http\://host.docker.internal\:8025/send
+etendo.go.email.provider.apiKey=e2e-only-secret
+```
+
+`false` (Tomcat on the host, e.g. a SmartTomcat/IDE launch) → keep `127.0.0.1`.
+
+Verify it rather than assuming — one command, from inside the container, with the sink running:
+
+```bash
+docker exec etendo-tomcat-1 sh -c \
+  'curl -s -o /dev/null -w "%{http_code}\n" --max-time 4 http://host.docker.internal:8025/health'
+# 200 → reachable.  000 → wrong address (or the sink is not running).
+```
+
+**A green onboarding run does NOT prove the sink is wired.** This is the trap: with the address
+wrong, `onboarding-register` still passes, because a failed send makes the backend drop the
+verification token and fall through its own fail-open (see *The escape hatch* below) — the wall
+never comes up, so nothing needs to read a mailbox. Only the specs that actually read the mail
+(`user-invitation.email.integration.spec.js`) fail, and they fail with a bare
+`Timed out waiting for custom to <address>`, which points at the sink and not at Tomcat.
+
+Check the send status directly instead of inferring it from the suite:
+
+```sql
+SELECT created, contract_name, status FROM etgo_email_safety
+WHERE record_type = 'AUDIT' ORDER BY created DESC LIMIT 10;
+```
+
+`SENT` means it left Etendo. `PROVIDER_FAILED` on every row means the provider URL is unreachable —
+with `docker_com.etendoerp.tomcat=true`, suspect this section first. `etgo_invitation.status` tells
+the same story per invitation (`DELIVERY_FAILED` vs `SENT`).
+
+Changing the property needs a Tomcat restart to take effect.
 
 **The escape hatch** is the backend's own fail-open: leave `etendo.go.email.provider.apiKey` or
 `baseUrl` unset (or set `etendo.go.email.provider.enabled=false`) and the send fails, the backend
@@ -227,12 +315,106 @@ balanced close would have to declare a negative balance.
 
 Because it spans four windows, its timeout is 600s (not the 300s the other integration specs use).
 
+### Master-data fixtures — a fresh tenant seeds almost nothing (ETP-5079)
+
+ETP-5079 emptied several GOClient onboarding dataset files, so a freshly onboarded tenant has **no
+products, no business partners, no financial accounts and no account/payment-method links** (the
+tables are still in `OnboardingDatasetDefinition.INCLUDED_TABLES`; their XML is now `<data></data>`).
+An integration spec must therefore provision every piece of master data it needs, through the
+idempotent `ensure*` helpers — never by picking "whatever row happens to be first", and never by
+relying on another spec having run before it. The `integration` project runs `workers: 1` in
+alphabetical file order, which is exactly what let those implicit dependencies hide: `f`-named specs
+were silently seeding the `p`-named ones and vice versa.
+
+| Helper | File | Provides |
+|---|---|---|
+| `ensureProductSetup(page, fixture)` | `tests/helpers/product-helpers.js` | A priced product (`E2E-ALPHA` / `E2E-BETA`) |
+| `ensureVendorSetup(page, { navigateTo })` | `tests/helpers/purchase-helpers.js` | The `E2E Vendor Fixture` contact — flagged both customer and vendor, with an address and PO payment terms/method |
+| `ensureFinancialAccountSetup(page)` | `tests/helpers/financial-account-helpers.js` | A cash account, and through it the `FIN_FINACC_PAYMENTMETHOD` link every payment-method selector needs |
+| `ensureSecondaryWarehouse(page)` | `tests/helpers/warehouse-helpers.js` | A second warehouse (`E2E-WH2`) |
+| `ensureOpenPeriod()` | `tests/helpers/period-helpers.js` | An open `c_periodcontrol` for the doc base types being confirmed |
+
+The financial-account one is the least obvious and the easiest to re-break. The payment-method
+fields on a business partner (`PO_Paymentmethod_ID`, `FIN_Paymentmethod_ID`) and on an invoice
+(`C_Invoice.FIN_Paymentmethod_ID`) are governed by AD validation rules that are `EXISTS` checks over
+the **link** table `FIN_FinAcc_PaymentMethod`, not over the `FIN_PaymentMethod` masters — so with
+zero financial accounts every one of those selectors is empty even though the four payment-method
+masters are seeded. NEO exposes no route to the link table (the `financial-account` spec's
+`paymentMethod` entity is `ISINCLUDED=N`), so the helper creates a type-`C` account instead and
+relies on `FinancialAccountHandler#afterHandle` → `FinancialAccountSupport.assignDefaultPaymentMethods`
+to write the link, then re-probes the selector to verify it actually landed (that hook is
+best-effort and swallows its own failures). `ensureVendorSetup` calls it automatically; call it
+directly from any spec that needs a payment method without needing a vendor.
+
+**`ISPOST=Y` on an `ETGO_SF_ENTITY` row does not mean the entity is routable** — `NeoServlet#findEntity`
+filters on `ISINCLUDED` first, so a non-included entity answers `404 Entity not found in spec`, not
+`405`. Always check `ISINCLUDED` in
+`com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` before writing a `page.request`
+call against a new entity.
+
 The spec asserts on the **backend payloads captured from the app's own requests**
 (`waitForResponse` → `response.data`), never on formatted currency read out of the DOM: the money
 formatting is already covered by `cashCloseMath.test.js`, and re-parsing `1.234,56 €` in an E2E spec
 only buys locale brittleness. The two UI-level assertions about the arithmetic are deliberately
 boolean — `cash-close-unbalanced-note` before declaring, `cash-close-balanced-pill` after — which is
 what proves the live recalculation without pinning a number to a locale.
+
+---
+
+## Organization Save — Two-Entity Write (`E2E_ORGANIZATION_INTEGRATION`)
+
+The "Organización" screen (`/organization`) is the only screen that writes **two entities in
+one save** — `AD_Org` (spec entity `organization`) and `AD_OrgInfo` (spec entity
+`information`), which in Etendo **share the same primary key value**. That combination made it
+the first screen to reproduce the two chained defects fixed under ETP-5112, and both are now
+guarded by a pair of specs:
+
+| Spec | Mode | Covers |
+|---|---|---|
+| `organization-save.mocked.spec.js` | mocked, runs in CI | the client contract: each PATCH carries the `updated` token **its own** GET returned, and the two PATCHes are serialized |
+| `organization-save.integration.spec.js` | live backend, gated | the server half: both PATCHes actually answer `200` |
+
+What they protect:
+
+- **Bug 1 — 400 `missing_updated`.** ETP-5073 made the backend require the record's `updated`
+  optimistic-locking token. Only `useEntity` remembered it, so panels reading with `apiFetch`
+  directly patched without one. Fixed centrally in `@etendosoftware/app-shell-core`
+  (`auth/api.js` harvests the token on every GET).
+- **Bug 1b — the token cache must be keyed by `(entity, id)`, not by `id`.** Because `AD_Org`
+  and `AD_OrgInfo` share the id, an id-only cache let the second GET clobber the first record's
+  token and one PATCH went out with the other record's version. The mocked spec returns two
+  deliberately different tokens under the same id and asserts they are never crossed.
+- **Bug 2 — 500 false concurrency conflict.** With the token fixed, the two PATCHes (then fired
+  with `Promise.all`) landed on two Tomcat threads in the same millisecond, and core's
+  `JsonToDataConverter` parses `updated` through a `private final static SimpleDateFormat`,
+  which is not thread-safe. One write came back 500 with "The record you are saving has already
+  been changed by another user" against a record nobody else had touched. Fixed in
+  `useOrganizationData.js` by awaiting the two PATCHes in sequence.
+
+**The non-overlap test asserts non-overlap, not arrival order.** `Promise.all` also dispatches
+in order, so an order-only assertion would pass against the exact bug. The mocked spec holds the
+first PATCH open for 150ms inside the route handler and asserts the second one *starts* after
+the first one *finished*. Copy that shape for any other screen that writes more than one entity.
+
+Run the mocked spec (no backend needed):
+
+```bash
+cd e2e && npx playwright test tests/flows/organization-save.mocked.spec.js --project=mocked
+```
+
+Run the live one — it **writes to the tenant's own organization record**, so it is skipped
+unless explicitly enabled and is not run by any CI job:
+
+```bash
+cd e2e
+E2E_ORGANIZATION_INTEGRATION=1 E2E_USE_MOCK=0 E2E_PASSWORD=<pass> \
+  npx playwright test tests/flows/organization-save.integration.spec.js --project=integration
+```
+
+It writes only the phone field (optional, free-text, no callout, no uniqueness constraint) with
+a unique timestamp-derived value, and restores the original in a `finally` — so a run leaves the
+tenant as it found it and repeated runs never collide. The restore re-reads the record first:
+the write moved the `updated` token on, and the restoring PATCH needs the current one.
 
 ---
 
@@ -784,6 +966,37 @@ Document-aware components expose status via `data-*` attributes for test asserti
 | `data-doc-status` | Detail view container (`data-testid="detail-view"`) | `DR` (draft), `CO` (completed), `VO` (voided), `CL` (closed) |
 | `data-row-status` | List view rows (`data-testid="row-{id}"`) | Same as above |
 | `data-status` | Status badge (`data-testid="document-status-pill"`) | Same as above |
+
+### Gotcha: opening a record from a list that has a row preview
+
+Two facts make `row.dblclick()` the wrong way to reach a detail view, and both
+produce the same misleading symptom — a `getByTestId('detail-view')` timeout
+that looks like a slow page instead of a wrong click:
+
+1. **Row activation does not navigate on preview-enabled lists.** When a window
+   passes `renderPreview` to `ListView` (purchase-invoice, sales-invoice, …),
+   `buildRowNavigateHandler()` (`components/contract-ui/ListView.jsx`) swaps the
+   navigate handler for "open the row-preview overlay". Double-clicking a row
+   there opens `GenericPreviewModal`, never the detail.
+2. **`GenericPreviewModal` has no Escape handler.** Its only exits are the header
+   close button and a click on its full-viewport backdrop (the modal card's
+   parent element; the card is inset 8px, so a click at `y < 8` always lands on
+   the backdrop). `page.keyboard.press('Escape')` does *not* dismiss it — and
+   while it is up, its `fixed inset-0` backdrop swallows every pointer event
+   aimed at the list underneath.
+
+The reliable route into a record from a list is the row's own quick action:
+hover the row, then click `row-quick-action-edit` **scoped to that row**. That
+button is icon-only — its label lives in `aria-label`/`title` — so a
+`page.locator('button', { hasText: /editar|edit/i })` locator can never match
+it and silently resolves to some other button on the page.
+
+`e2e/tests/helpers/purchase-helpers.js` wraps all of this:
+`dismissPreviewModal(page)`, `openListRow(page, rowLocator)`,
+`openRowByStatus(page, { status })`, and `rowByDocumentStatus(page, status)`
+(which prefers `data-row-status` over translated cell text). Prefer
+`page.getByTestId('row-<id>')` whenever the test already knows the record id —
+"the first Completed row" also matches leftovers from earlier runs.
 
 ## Toast selectors
 

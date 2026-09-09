@@ -126,8 +126,8 @@ kube exec -n "$NAMESPACE" "pod/$RUNNER_POD" -- sh -ceu 'node --version | grep -E
 
 echo "[2/8] Creating a Git bundle with the branch and required base refs..."
 BUNDLE_REFS=("$LOCAL_REF")
-for candidate in "refs/remotes/origin/$BRANCH" "refs/remotes/origin/epic/ETP-3504" \
-  "refs/remotes/origin/develop" "refs/remotes/origin/main"; do
+for candidate in "refs/remotes/origin/$BRANCH" "refs/remotes/origin/develop" \
+  "refs/remotes/origin/main"; do
   git -C "$REPO_DIR" rev-parse --verify --quiet "$candidate" >/dev/null && BUNDLE_REFS+=("$candidate")
 done
 git -C "$REPO_DIR" bundle create "$LOCAL_BUNDLE" "${BUNDLE_REFS[@]}"

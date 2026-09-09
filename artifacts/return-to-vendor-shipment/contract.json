@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-08-25T18:00:27.249Z",
-  "checksum": "e51d1e8571910bcf",
+  "updatedAt": "2026-08-31T12:35:28.419Z",
+  "checksum": "36b470c83755c550",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -271,73 +271,43 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed",
-                "labels": {
-                  "es_ES": "Cerrado"
-                }
+                "name": "docStatusCl"
               },
               {
                 "value": "CO",
-                "name": "Completed",
-                "labels": {
-                  "es_ES": "Completado"
-                }
+                "name": "statusComplete"
               },
               {
                 "value": "DR",
-                "name": "Draft",
-                "labels": {
-                  "es_ES": "Borrador"
-                }
+                "name": "docStatusDr"
               },
               {
                 "value": "NA",
-                "name": "Not Accepted",
-                "labels": {
-                  "es_ES": "No aprobado"
-                }
+                "name": "docStatusNa"
               },
               {
                 "value": "WP",
-                "name": "Not Paid",
-                "labels": {
-                  "es_ES": "Pendiente de Pago"
-                }
+                "name": "docStatusWp"
               },
               {
                 "value": "RE",
-                "name": "Re-Opened",
-                "labels": {
-                  "es_ES": "Reabierto"
-                }
+                "name": "docStatusRe"
               },
               {
                 "value": "TEMP",
-                "name": "Temporal",
-                "labels": {
-                  "es_ES": "Temporal"
-                }
+                "name": "docStatusTemp"
               },
               {
                 "value": "IP",
-                "name": "Under Way",
-                "labels": {
-                  "es_ES": "En curso"
-                }
+                "name": "docStatusIp"
               },
               {
                 "value": "??",
-                "name": "Unknown",
-                "labels": {
-                  "es_ES": "Desconocido"
-                }
+                "name": "docStatus"
               },
               {
                 "value": "VO",
-                "name": "Voided",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "docStatusVo"
               }
             ],
             "defaultValue": "DR",

@@ -5,9 +5,11 @@ import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
 import { cn } from '@/lib/utils';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { StatusBadge, automatchBadgeKind } from './reconciliationBadges.jsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +81,15 @@ function StatementContent({ group, currency }) {
   const opCount = (group.operations ?? []).length;
   const amount = Number(line.amount ?? 0);
   const isRule = group.origin === 'rule';
+  // Every group states its type, using the same pill the left panel shows for the same line. Only
+  // rule groups used to be labelled, so an exact match and a within-tolerance one looked identical
+  // even though the second one posts an accounting entry (ETP-4965 QA round).
+  const badgeKind = automatchBadgeKind(group);
+  // The rule badge keeps its own key because it appends the rule name; the other two are the plain
+  // shared labels ("Con sugerencia" / "Con diferencia").
+  const badgeLabel = isRule && group.ruleName
+    ? `${ui('financeReconcileAutomatchBadgeByRule')} ${group.ruleName}`
+    : undefined;
 
   return (
     <div className="flex flex-col gap-1">
@@ -101,15 +112,10 @@ function StatementContent({ group, currency }) {
           className="flex-none text-sm font-semibold"
           data-testid="MoneyAmount__a89979" />
       </div>
-      {/* Rule badge (rule-origin groups only) */}
-      {isRule && group.ruleName && (
-        <div className="flex">
-          <RuleTypeBadge
-            label={`${ui('financeReconcileAutomatchBadgeByRule')} ${group.ruleName}`}
-            tone="rule"
-            data-testid="RuleTypeBadge__a89979" />
-        </div>
-      )}
+      {/* Type badge: suggested / difference / by rule */}
+      <div className="flex gap-1" data-testid={`automatch-group-kind-${badgeKind}`}>
+        <StatusBadge kind={badgeKind} label={badgeLabel} data-testid="StatusBadge__a89979" />
+      </div>
       {/* Reference + date */}
       {line.referenceNo && (
         <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{line.referenceNo}</span>
@@ -119,6 +125,16 @@ function StatementContent({ group, currency }) {
       )}
     </div>
   );
+}
+
+/**
+ * What the operation cell calls this row. A difference row names the accounting account the leftover
+ * will be posted to; it is always known, because the engine only proposes an amount deviation when
+ * the financial account has one configured.
+ */
+function displayName(op) {
+  if (op.isNew) return op.name || op.glItemId || '—';
+  return op.partnerName || op.documentNo || '—';
 }
 
 function OperationRow({ op, isLast, currency }) {
@@ -136,7 +152,7 @@ function OperationRow({ op, isLast, currency }) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium leading-5 text-[hsl(var(--foreground))]">
-            {isNew ? (op.name || op.glItemId || '—') : (op.partnerName || op.documentNo || '—')}
+            {displayName(op)}
           </span>
           <RuleTypeBadge
             label={isNew ? ui('financeReconcileAutomatchBadgeNew') : (op.documentNo || op.typeLabel || '')}
@@ -145,7 +161,16 @@ function OperationRow({ op, isLast, currency }) {
         </div>
         {isNew && (
           <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
-            {ui('financeReconcileAutomatchOpNew')}
+            {ui(op.isDifference ? 'financeReconcileAutomatchOpDifference' : 'financeReconcileAutomatchOpNew')}
+          </span>
+        )}
+        {/* The movement's own description — what the Movimientos list shows. A payment number on
+            its own identifies nothing to whoever approves the batch. */}
+        {!isNew && op.description && (
+          <span
+            className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+            data-testid="automatch-op-description">
+            {op.description}
           </span>
         )}
       </div>
@@ -164,12 +189,12 @@ function OperationRow({ op, isLast, currency }) {
   );
 }
 
-function GroupRow({ group, checked, onToggle, currency }) {
+function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
   const realOps = group.operations ?? [];
   // Rule-origin groups have no existing transaction — the system will create a payment.
   // For now this is purely visual: show one proposed "New / Create payment" operation with the
   // rule name and the statement-line amount. The actual creation is wired in a later step.
-  const ops = group.origin === 'rule'
+  const baseOps = group.origin === 'rule'
     ? [{
         id: 'new',
         isNew: true,
@@ -177,6 +202,21 @@ function GroupRow({ group, checked, onToggle, currency }) {
         amount: Number(group.statementLine?.amount ?? 0),
       }]
     : realOps;
+
+  // A near match links its operation AND posts the leftover to the account's accounting account.
+  // That second movement was invisible until now: the modal showed only the linked operation, so
+  // the user could not tell a within-tolerance match from an exact one, nor where the difference
+  // would land. Same shape a rule group already uses for its proposed movement.
+  const difference = Number(group.difference ?? 0);
+  const ops = group.nearMatch && Math.abs(difference) > 0
+    ? [...baseOps, {
+        id: 'difference',
+        isNew: true,
+        isDifference: true,
+        name: glItemDifference?.name || '',
+        amount: difference,
+      }]
+    : baseOps;
 
   return (
     <div className="flex flex-row items-stretch overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]">
@@ -189,13 +229,13 @@ function GroupRow({ group, checked, onToggle, currency }) {
           data-testid="SelectBox__a89979" />
       </div>
       {/* Statement line (left half) */}
-      <div className="flex flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
+      <div className="flex min-w-0 flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
         <div className="w-full">
           <StatementContent group={group} currency={currency} data-testid="StatementContent__a89979" />
         </div>
       </div>
       {/* Operations (right half) */}
-      <div className="flex flex-1 flex-col bg-card">
+      <div className="flex min-w-0 flex-1 flex-col bg-card">
         {ops.length === 0 ? (
           <div className="px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
         ) : (
@@ -221,7 +261,11 @@ function GroupRow({ group, checked, onToggle, currency }) {
  * Automatch suggestion modal — two-column layout matching the Figma design:
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
- * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess? }} props
+ * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess?,
+ *   glItemDifference? }} props `glItemDifference` is the account's `{ id, name }` for differences —
+ *   the same object `ReconciliationTab` composes for the panel — used to name the movement a
+ *   near-match group will create. It is always set when such a group is present: the engine does
+ *   not propose an amount deviation for an account with nowhere to post it.
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -232,6 +276,7 @@ export function AutoMatchSuggestionModal({
   open,
   onClose,
   onSuccess,
+  glItemDifference = null,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
@@ -265,7 +310,12 @@ export function AutoMatchSuggestionModal({
     [groups, checked],
   );
 
-  const willCreate = checkedGroups.filter((g) => g.isNew).length;
+  // A near-match group both links its operation AND creates the movement that absorbs the
+  // difference, so it counts on both sides. Counting only the link is what made the footer promise
+  // one movement while the apply created two. A DATE-only near match has a zero difference and
+  // creates nothing — same rule the backend's willCreate KPI applies.
+  const willCreate = checkedGroups.filter(
+    (g) => g.isNew || (g.nearMatch && Math.abs(Number(g.difference ?? 0)) > 0)).length;
   const willLink = checkedGroups.filter((g) => !g.isNew).length;
 
   const handleApply = async () => {
@@ -279,12 +329,29 @@ export function AutoMatchSuggestionModal({
           ...(g.createPayment ? { createPayment: g.createPayment } : {}),
         })),
       };
-      await apply(payload);
-      toast.success(ui('financeReconcileAutomatchToastSuccess', { count: checkedGroups.length }));
+      const response = await apply(payload);
+      const results = response?.results ?? [];
+      const failures = results.filter((r) => r?.error);
+      const failedCount = failures.length;
+      const successCount = results.length - failedCount;
+      // applySuggestions answers 201 even when every group is rejected — the reason travels inside
+      // results[]. Reducing that to two counters is what produced a bare "Error al aplicar la
+      // conciliación" for problems the backend had already explained.
+      if (failedCount === 0) {
+        toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
+      } else if (successCount > 0) {
+        toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
+      } else {
+        // ETP-5121: the backend explains itself in English (e.g. the draft-statement guard);
+        // translateBackendError maps the known sentences to a locale key and passes anything
+        // else through untouched, so an unmapped message still reaches the user.
+        toast.error(translateBackendError(failures[0]?.error?.message, ui)
+          || ui('financeReconcileAutomatchToastError'));
+      }
       onSuccess?.();
       onClose();
     } catch (err) {
-      toast.error(err?.message || ui('financeReconcileAutomatchToastError'));
+      toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileAutomatchToastError'));
     }
   };
 
@@ -327,6 +394,9 @@ export function AutoMatchSuggestionModal({
             { label: ui('financeReconcileAutomatchKpiPending'), value: kpis.pendingLines ?? 0 },
             { label: ui('financeReconcileAutomatchKpiGroups'), value: kpis.groupsFound ?? 0 },
             { label: ui('financeReconcileAutomatchKpiOps'), value: kpis.opsToLink ?? 0 },
+            // "A crear" was translated in all three locales but never rendered, so the movements
+            // the run generates (rule payments + difference postings) had no figure anywhere.
+            { label: ui('financeReconcileAutomatchKpiNew'), value: kpis.willCreate ?? 0 },
           ].map(({ label, value }) => (
             <div key={label} className="flex flex-1 flex-col">
               <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
@@ -382,6 +452,7 @@ export function AutoMatchSuggestionModal({
                   checked={checked.has(group.groupKey)}
                   onToggle={onToggle}
                   currency={currency}
+                  glItemDifference={glItemDifference}
                   data-testid="GroupRow__a89979" />
               ))
             )}

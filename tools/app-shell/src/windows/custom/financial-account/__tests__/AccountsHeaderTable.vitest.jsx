@@ -13,7 +13,8 @@
  * owns: the contract-driven data columns (headers from `gridLabelKey`, cell bodies bound
  * through `cellType` → ACCOUNT_CELL_TYPES), the one hand-appended actions column, the
  * stopPropagation guards that keep the pill / row actions from triggering row navigation, and
- * the ETP-4656 toolbar ↔ selection-bar swap the slot performs off ListView's `selectedRows`.
+ * how the slot reads ListView's `selectedRows` — which since ETP-5111 no longer swaps the
+ * toolbar out (ETP-4656) but leaves it permanently mounted at every selection size.
  *
  * The component lives in the artifact (`artifacts/financial-account/custom/`), which
  * vitest's `include` (`src/**`) does not collect — hence this file sits under the
@@ -107,6 +108,71 @@ vi.mock('@/components/contract-ui', () => ({
   },
 }));
 
+/**
+ * The advanced ("by conditions") funnel (ETP-5113), stubbed at the BUTTON level.
+ *
+ * What this slot owns is the condition-tree state, the rows the value pickers are seeded
+ * from and the client-side evaluation — not the popover choreography, which belongs to
+ * `AdvancedFilterButton` / `AdvancedFilterBuilder` and has its own suites. So the stub keeps
+ * the real testid, exposes the props the slot passes down, and emits a condition tree on
+ * click, which is exactly what the real builder's "Apply" does.
+ *
+ * `AccountsToolbar` imports it relatively (`../contract-ui/AdvancedFilterButton.jsx`); the
+ * aliased path here resolves to the same module.
+ */
+let advancedFilterProps = null;
+const APPLIED_FILTER = {
+  rowOperator: 'and',
+  conditions: [{ field: 'currencyIso', operator: 'equals', value: 'USD' }],
+};
+
+/**
+ * The option list a data-seeded value picker would end up with, mirroring BOTH pickers in the
+ * core AdvancedFilterBuilder — they extract identically: read `row[col.key]` straight off the
+ * seeded rows, SKIP null/undefined/empty, dedupe, keep first-seen order.
+ *   - `DistinctEnumPicker.inMemoryCodes`      (`enumLabel` mode → Tipo, Moneda, País today)
+ *   - `IdentifierMultiPicker.inMemoryOptions` (`identifier` mode → none in this spec today)
+ * One helper therefore covers both columns asserted below, and — the point — it stays correct
+ * across the mode churn this spec went through (País: string → selector → enum). What it
+ * asserts is the SEEDING contract, which is identical for both pickers; it is deliberately
+ * not a proxy for any one mode.
+ *
+ * Replicated here rather than counting rows because the rows are not the contract — the KEY
+ * is. `countryLabel` is a DERIVED key that only exists after `withDerivedFields`, so seeding
+ * the picker with the raw rows produced the right row COUNT and zero options (ETP-5113):
+ * every `row.countryLabel` was undefined and the guard above dropped it. An assertion on
+ * `data-picker-rows` alone passes against that bug; this one cannot.
+ */
+function pickerOptionIds(rows, key) {
+  const seen = [];
+  for (const row of rows ?? []) {
+    const id = row?.[key];
+    if (id == null || id === '') continue;
+    const idStr = String(id);
+    if (!seen.includes(idStr)) seen.push(idStr);
+  }
+  return seen;
+}
+
+vi.mock('@/components/contract-ui/AdvancedFilterButton.jsx', () => ({
+  AdvancedFilterButton: (props) => {
+    advancedFilterProps = props;
+    return (
+      <button
+        type="button"
+        data-testid={props.testId}
+        data-conditions={String(props.value?.conditions?.length ?? 0)}
+        data-picker-rows={(props.rows ?? []).map((r) => r.id).join(',')}
+        data-picker-country-options={pickerOptionIds(props.rows, 'countryLabel').join(',')}
+        data-picker-currency-options={pickerOptionIds(props.rows, 'currencyIso').join(',')}
+        onClick={() => props.onChange?.(APPLIED_FILTER)}
+      >
+        filters
+      </button>
+    );
+  },
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
@@ -156,6 +222,23 @@ const MIXED_ACCOUNTS = [
   { id: 'acc-5', name: 'Caja Antigua', type: 'C', currentBalance: 0, currencyIso: 'EUR', eTGOPendingCount: 0, active: false },
 ];
 
+/**
+ * The three country shapes the País value picker has to cope with, because `CountryCell`
+ * paints `countryName || countryIso` and `withDerivedFields` projects exactly that:
+ *   - acc-c1: enriched `countryName` → the picker must offer the NAME.
+ *   - acc-c2: `countryIso` only (no name resolved) → must offer the ISO CODE, since that is
+ *     what the grid shows for it; filtering on `countryName` alone would disagree.
+ *   - acc-c3: neither (pre-ETP-4896 data) → projects to '' and must NOT surface as an
+ *     option, or the picker would show a blank, unselectable entry.
+ * acc-c4 repeats acc-c1's country so the de-duplication is exercised too.
+ */
+const COUNTRY_ACCOUNTS = [
+  { id: 'acc-c1', name: 'BBVA Principal', type: 'B', currentBalance: 1000, currencyIso: 'EUR', countryName: 'España', countryIso: 'ES', eTGOPendingCount: 0, active: true },
+  { id: 'acc-c2', name: 'Caixa Lisboa',   type: 'B', currentBalance: 200,  currencyIso: 'EUR', countryIso: 'PT', eTGOPendingCount: 0, active: true },
+  { id: 'acc-c3', name: 'Caja Sin Pais',  type: 'C', currentBalance: 50,   currencyIso: 'EUR', eTGOPendingCount: 0, active: true },
+  { id: 'acc-c4', name: 'Santander Dos',  type: 'B', currentBalance: 300,  currencyIso: 'USD', countryName: 'España', countryIso: 'ES', eTGOPendingCount: 0, active: true },
+];
+
 const SUMMARY = {
   totalBalance: 930,
   byCurrency: [
@@ -172,6 +255,7 @@ function renderTable({ data = BASE_ACCOUNTS, meta = { summary: SUMMARY }, ...res
 beforeEach(() => {
   vi.clearAllMocks();
   tableProps = null;
+  advancedFilterProps = null;
 });
 
 describe('AccountsHeaderTable — layout', () => {
@@ -260,18 +344,18 @@ describe('AccountsHeaderTable — layout', () => {
 });
 
 /**
- * ETP-4656 — the selection bar ListView draws above this slot REPLACES the window toolbar
- * instead of stacking on top of it. ListView renders that bar as a sibling and cannot reach
- * inside the slot, so the swap has to happen here, driven by the `selectedRows` prop.
+ * ETP-4656 unmounted this slot's own toolbar while a selection was active, so ListView's
+ * selection bar read as its replacement. ETP-5111 REVERSES that: once the bar became a floating
+ * pill (ETP-4972) the swap no longer replaced anything — it merely took "Nueva cuenta", the
+ * filters, "Reglas de conciliación" and the "Ordenar por" control away from a user who had just
+ * ticked one checkbox.
  *
- * Unmounting (not hiding) is the contract the e2e spec asserts with
- * `getByTestId('cuentas-toolbar')).toHaveCount(0)`, and the swap is driven straight off
- * ListView's state rather than a local mirror of `onSelectionChange` — DataTable empties or
- * prunes its internal selection Set silently from its `clearSelectionTrigger` /
- * `deselectTrigger` effects WITHOUT calling `onSelectionChange`, so a mirror would still read
- * "selected" after a successful bulk delete and the toolbar would never come back.
+ * So the toolbar is now permanently mounted, at every selection size. `selectedRows` is still
+ * destructured in the slot (it must never reach DataTable, where the name means internal
+ * selection state) but no longer gates anything — the structural half of that is pinned in
+ * `artifacts/financial-account/custom/__tests__/AccountsHeaderTable.test.js`.
  */
-describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
+describe('AccountsHeaderTable — toolbar stays mounted across selection changes', () => {
   it('keeps the toolbar mounted while nothing is selected', () => {
     renderTable({ selectedRows: [] });
 
@@ -284,21 +368,30 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
   });
 
-  it('unmounts its own toolbar while a selection is active', () => {
+  it('keeps its own toolbar mounted while a selection is active', () => {
     renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
 
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
-    // Only the toolbar goes; the grid and the KPI sidebar stay.
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    // …alongside everything that was already staying put.
     expect(screen.getByTestId('data-table')).toBeInTheDocument();
     expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
   });
 
-  it('brings the toolbar back when the selection empties', () => {
+  // The actions a user reaches for WITH rows selected are exactly the ones the swap used to hide.
+  it('keeps the toolbar actions reachable while a selection is active', () => {
+    renderTable({ selectedRows: [BASE_ACCOUNTS[0]] });
+
+    expect(screen.getByTestId('cuentas-new-account-button')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-matching-rules-button')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-search-input')).toBeInTheDocument();
+  });
+
+  it('keeps the toolbar mounted across a selection that fills and then empties', () => {
     const { rerender } = render(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[0]]} />,
     );
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
 
     rerender(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
@@ -307,10 +400,10 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
   });
 
-  // The type filter and the search term live in this component's state, so the unmount must
-  // not reset them: the grid stays filtered while the selection bar is up (the user only ever
-  // bulk-deletes what they can see), and the toolbar comes back showing the same term.
-  it('preserves the search term across the toolbar unmount and remount', () => {
+  // The type filter and the search term live in this component's state. They had to survive the
+  // old unmount; they must equally survive never unmounting — the grid stays filtered while rows
+  // are selected (the user only ever bulk-deletes what they can see) and the input keeps its text.
+  it('preserves the search term, and the toolbar itself, across a selection change', () => {
     const { rerender } = render(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
     );
@@ -321,8 +414,9 @@ describe('AccountsHeaderTable — toolbar / selection-bar swap', () => {
     rerender(
       <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[BASE_ACCOUNTS[2]]} />,
     );
-    // Still filtered with the toolbar gone.
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
+    // Still filtered, and now the toolbar showing that filter is still on screen too.
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-search-input')).toHaveValue('visa');
     expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
     expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
 
@@ -339,10 +433,13 @@ describe('AccountsHeaderTable — columns', () => {
   it('takes the data columns from the contract grid definition, in gridOrder', () => {
     renderTable();
 
-    // contract.json → entities.account: name(1), type(2), country(3, ETP-4896),
-    // currentBalance(4) and the stored computed column eTGOPendingCount(5).
-    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 5);
-    expect(dataKeys).toEqual(['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']);
+    // contract.json → entities.account: name(1), type(2), currency(3, ETP-5113),
+    // country(4, ETP-4896), currentBalance(5) and the stored computed column
+    // eTGOPendingCount(6).
+    const dataKeys = tableProps.columns.map((c) => c.key).slice(0, 6);
+    expect(dataKeys).toEqual([
+      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount',
+    ]);
   });
 
   it('appends exactly one synthetic column after the contract ones', () => {
@@ -351,7 +448,7 @@ describe('AccountsHeaderTable — columns', () => {
     // Only `_rowActions` is hand-written: its declarative equivalent
     // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'type', 'country', 'currentBalance', 'eTGOPendingCount', '_rowActions',
+      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount', '_rowActions',
     ]);
   });
 
@@ -363,6 +460,9 @@ describe('AccountsHeaderTable — columns', () => {
     // ListView's ReportDrawer maps on; it used to arrive undefined.
     expect(byKey.name.column).toBe('Name');
     expect(byKey.type.column).toBe('Type');
+    // The Moneda column is declared on the AD FK so its header sorts server-side, while the
+    // cell paints the enriched `currencyIso` — hence the FK column name here, not the row key.
+    expect(byKey.currency.column).toBe('C_Currency_ID');
     expect(byKey.currentBalance.column).toBe('Currentbalance');
   });
 
@@ -375,6 +475,8 @@ describe('AccountsHeaderTable — columns', () => {
     const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
     expect(byKey.name.labels).toEqual({ es_ES: 'financeAccountsColAccount' });
     expect(byKey.type.labels).toEqual({ es_ES: 'financeAccountsColType' });
+    expect(byKey.currency.labels).toEqual({ es_ES: 'financeAccountsColCurrency' });
+    expect(byKey.country.labels).toEqual({ es_ES: 'financeAccountsColCountry' });
     expect(byKey.currentBalance.labels).toEqual({ es_ES: 'financeAccountsColBalance' });
     // The actions column is deliberately unlabelled.
     expect(byKey._rowActions.labels).toEqual({ es_ES: '' });
@@ -473,6 +575,10 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey.name.headClass).toContain('pl-[40px]');
     expect(byKey.name.cellClass).toContain('w-[480px]');
     expect(byKey.type.headClass).toContain('w-[340px]');
+    // ETP-5113 — the Moneda chip only ever holds a 3-letter ISO code.
+    expect(byKey.currency.headClass).toContain('w-[120px]');
+    expect(byKey.currency.cellClass).toContain('w-[120px]');
+    expect(byKey.country.headClass).toContain('w-[160px]');
     expect(byKey.currentBalance.headClass).toContain('w-[200px]');
     expect(byKey.currentBalance.cellClass).toContain('w-[200px]');
     expect(byKey.eTGOPendingCount.headClass).toContain('w-[280px]');
@@ -504,6 +610,66 @@ describe('AccountsHeaderTable — columns', () => {
     expect(screen.getByTestId('cell-type-acc-1')).toHaveTextContent('ES12 1234 0000 0000 0000 0001');
     // BalanceCell — currency-formatted amount.
     expect(screen.getByTestId('cell-currentBalance-acc-1')).toHaveTextContent('1.000,00');
+  });
+});
+
+// ETP-5113 — the "Moneda" column. There is no real <thead> here (the DataTable stub renders
+// cells only), so the header is asserted where it actually comes from: the `labels` map the
+// slot builds off the contract's `gridLabelKey`. The chip itself is the shared `Tag` primitive,
+// which renders a plain <span> and forwards no data-testid, so it is asserted through the
+// cell's text content.
+describe('AccountsHeaderTable — "Moneda" column', () => {
+  it('offers a Moneda header, labelled through i18n for the active locale', () => {
+    renderTable();
+
+    const currency = tableProps.columns.find((c) => c.key === 'currency');
+    expect(currency).toBeDefined();
+    expect(currency.labels).toEqual({ es_ES: 'financeAccountsColCurrency' });
+  });
+
+  it('sits third among the data columns — after Tipo & IBAN, before País', () => {
+    renderTable();
+
+    const dataColumns = tableProps.columns.filter((c) => c.key !== '_rowActions');
+    expect(dataColumns[2].key).toBe('currency');
+    expect(dataColumns[1].key).toBe('type');
+    expect(dataColumns[3].key).toBe('country');
+  });
+
+  it('renders the ISO chip for every row that carries a currency', () => {
+    renderTable();
+
+    expect(screen.getByTestId('cell-currency-acc-1')).toHaveTextContent('EUR');
+    expect(screen.getByTestId('cell-currency-acc-3')).toHaveTextContent('USD');
+  });
+
+  it('renders the chip through the shared Tag primitive, not a bespoke badge', () => {
+    renderTable();
+
+    const chip = screen.getByTestId('cell-currency-acc-1').querySelector('span.tag');
+    expect(chip).not.toBeNull();
+    expect(chip.className).toContain('tag--neutral');
+    expect(chip).toHaveTextContent('EUR');
+  });
+
+  it('renders an em dash for a row served without a currency', () => {
+    renderTable({
+      data: [{
+        id: 'acc-nc', name: 'Sin Moneda', type: 'B', currentBalance: 0,
+        eTGOPendingCount: 0, active: true,
+      }],
+    });
+
+    expect(screen.getByTestId('cell-currency-acc-nc')).toHaveTextContent('—');
+    expect(screen.getByTestId('cell-currency-acc-nc').querySelector('span.tag')).toBeNull();
+  });
+
+  it('sorts server-side on the AD currency column', () => {
+    renderTable();
+
+    const currency = tableProps.columns.find((c) => c.key === 'currency');
+    expect(currency.sortable).toBe(true);
+    expect(currency.column).toBe('C_Currency_ID');
   });
 });
 
@@ -748,6 +914,251 @@ describe('filterAccounts', () => {
   });
 });
 
+// ETP-5113 — the advanced ("by conditions") filter. Ephemeral state in this slot, evaluated
+// client-side by `applyAccountAdvancedFilter`, composing with the type filter and the search
+// box through AND.
+describe('AccountsHeaderTable — advanced filter (ETP-5113)', () => {
+  it('renders the funnel inside its own toolbar, with the window-scoped testid', () => {
+    renderTable();
+
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    expect(toolbar).toContainElement(screen.getByTestId('cuentas-advanced-filter'));
+  });
+
+  it('starts with no conditions', () => {
+    renderTable();
+
+    expect(screen.getByTestId('cuentas-advanced-filter')).toHaveAttribute('data-conditions', '0');
+    expect(advancedFilterProps.value).toBeNull();
+  });
+
+  it('narrows the rendered rows when a condition is applied', () => {
+    renderTable();
+    expect(screen.getByTestId('row-acc-1')).toBeInTheDocument();
+
+    // The stub emits `currencyIso equals USD`, which only the Visa row satisfies.
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+  });
+
+  it('reports the applied condition count back on the trigger', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    expect(screen.getByTestId('cuentas-advanced-filter')).toHaveAttribute('data-conditions', '1');
+  });
+
+  it('feeds the grid the filtered rows, not the whole dataset', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    expect(tableProps.data.map((a) => a.id)).toEqual(['acc-3']);
+  });
+
+  // The seeding invariant: the value pickers are seeded from the type/search-scoped rows, NOT
+  // from the fully filtered result. Seeding from the latter would collapse each picker to the
+  // value already chosen (filter Moneda = EUR and EUR becomes the only option left), making a
+  // selection impossible to widen.
+  it('seeds the value pickers from the type/search-scoped rows', () => {
+    renderTable();
+
+    expect(screen.getByTestId('cuentas-advanced-filter'))
+      .toHaveAttribute('data-picker-rows', 'acc-1,acc-2,acc-3');
+  });
+
+  it('keeps seeding them from the pre-conditions rows after a condition is applied', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    expect(advancedFilterProps.rows.map((a) => a.id)).toEqual(['acc-1', 'acc-2', 'acc-3']);
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+  });
+
+  it('narrows the seeded rows with the search term, so the pickers follow the visible scope', () => {
+    renderTable();
+
+    fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'visa' } });
+
+    expect(advancedFilterProps.rows.map((a) => a.id)).toEqual(['acc-3']);
+  });
+
+  it('composes with the type filter through AND', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('account-type-filter-trigger'));
+    fireEvent.click(screen.getByTestId('account-type-filter-option-c'));
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    // Caja is EUR, so "type = Caja" AND "currency = USD" can only match nothing.
+    expect(screen.queryByTestId('row-acc-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+  });
+
+  it('never leaks the derived countryLabel projection into the rendered rows', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+
+    expect(tableProps.data[0]).toBe(BASE_ACCOUNTS[2]);
+    expect(tableProps.data[0].countryLabel).toBeUndefined();
+  });
+
+  // ETP-5111 inverted this. ETP-4656 unmounted the whole toolbar while a selection was
+  // active, so ListView's selection bar read as its replacement — but once that bar became a
+  // floating pill (ETP-4972) the swap only took away "Nueva cuenta", the filters and "Reglas
+  // de conciliación" for no benefit. Keeping the funnel reachable mid-selection is precisely
+  // the benefit ETP-5111 was after, so it is asserted positively rather than dropped.
+  it('stays reachable while rows are selected', () => {
+    renderTable({ selectedRows: [{ id: 'acc-1' }] });
+
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-advanced-filter')).toBeInTheDocument();
+    // And it is the SAME toolbar, still wired: the pickers are still seeded and the funnel
+    // still reports its state, so the user can narrow the list without clearing the selection.
+    expect(screen.getByTestId('cuentas-advanced-filter'))
+      .toHaveAttribute('data-picker-rows', 'acc-1,acc-2,acc-3');
+  });
+
+  // The condition surviving a selection change is still the property worth pinning; only its
+  // mechanism changed. There is no unmount to survive any more, so this drives the state
+  // transition directly instead — and it now asserts the funnel STAYS mounted throughout,
+  // which is the assertion that would fail if the ETP-4656 wrapper ever came back.
+  it('keeps the applied condition across a selection change', () => {
+    const { rerender } = render(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
+    );
+    fireEvent.click(screen.getByTestId('cuentas-advanced-filter'));
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+
+    // Select a row: the toolbar must remain, and so must the condition.
+    rerender(
+      <AccountsHeaderTable
+        data={BASE_ACCOUNTS}
+        meta={{ summary: SUMMARY }}
+        selectedRows={[BASE_ACCOUNTS[2]]}
+      />,
+    );
+    expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-advanced-filter')).toHaveAttribute('data-conditions', '1');
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+
+    // ...and clearing the selection changes nothing about the filter either.
+    rerender(
+      <AccountsHeaderTable data={BASE_ACCOUNTS} meta={{ summary: SUMMARY }} selectedRows={[]} />,
+    );
+    expect(screen.getByTestId('cuentas-advanced-filter')).toHaveAttribute('data-conditions', '1');
+    expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+  });
+});
+
+// The País "zero options" regression (ETP-5113). Once País had a picker at all, it opened and
+// listed NOTHING but a placeholder dash.
+//
+// The picker — `IdentifierMultiPicker` when this was found, `DistinctEnumPicker` now that País
+// is `enum` — reads `row[col.key]` straight off the rows it is seeded with, and `countryLabel`
+// is a DERIVED key that only exists after `withDerivedFields`. The slot was seeding the
+// toolbar with the RAW `scopedAccounts`, where every `countryLabel` is `undefined`, so the
+// picker's skip-null-or-empty guard dropped every single row. The fix projects the seed rows
+// (`filterPickerRows`), and it is mode-independent: both pickers seed the same way, which is
+// why none of these assertions had to change when País's mode did.
+//
+// Why these assertions and not a row count: the row count was already RIGHT under the bug —
+// all rows were passed, they just lacked the key. `pickerOptionIds` therefore mirrors the
+// picker's own extraction, so a regression shows up as an empty option list.
+describe('AccountsHeaderTable — País value picker options (ETP-5113)', () => {
+  const optionsFor = (attr) => {
+    const raw = screen.getByTestId('cuentas-advanced-filter').getAttribute(attr);
+    return raw === '' ? [] : raw.split(',');
+  };
+
+  it('offers the countries actually present, never an empty list', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    const options = optionsFor('data-picker-country-options');
+    expect(options).not.toEqual([]);
+    expect(options).toContain('España');
+  });
+
+  it('offers the ISO code for the account whose country name was never resolved', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    // Exactly what CountryCell paints for acc-c2, so the filter agrees with the grid.
+    expect(optionsFor('data-picker-country-options')).toContain('PT');
+  });
+
+  it('does not offer a blank option for the account with no country at all', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    const options = optionsFor('data-picker-country-options');
+    expect(options).not.toContain('');
+    expect(options.some((o) => o.trim() === '')).toBe(false);
+  });
+
+  it('de-duplicates the country shared by two accounts, in first-seen order', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    // acc-c1 and acc-c4 are both España; acc-c3 contributes nothing.
+    expect(optionsFor('data-picker-country-options')).toEqual(['España', 'PT']);
+  });
+
+  it('seeds the picker with every scoped row, projected — same count, plus the derived key', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    // The count was never the bug: all four rows were passed before the fix too.
+    expect(advancedFilterProps.rows.map((r) => r.id))
+      .toEqual(['acc-c1', 'acc-c2', 'acc-c3', 'acc-c4']);
+    // What WAS missing: the derived key on each of them.
+    expect(advancedFilterProps.rows.map((r) => r.countryLabel))
+      .toEqual(['España', 'PT', '', 'España']);
+  });
+
+  it('narrows the offered countries with the type filter, following the visible scope', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    // Only the three Banco accounts remain, so the country-less Caja drops out — and the
+    // option list must still be non-empty, which is the property the bug violated.
+    fireEvent.click(screen.getByTestId('account-type-filter-trigger'));
+    fireEvent.click(screen.getByTestId('account-type-filter-option-b'));
+
+    expect(optionsFor('data-picker-country-options')).toEqual(['España', 'PT']);
+    expect(advancedFilterProps.rows.map((r) => r.id))
+      .toEqual(['acc-c1', 'acc-c2', 'acc-c4']);
+  });
+
+  // Moneda was never affected — `currencyIso` is a real row property, so its picker worked
+  // before and after the projection and through every mode change. Asserted so the fix stays
+  // pinned as País-specific and a future "simplification" that drops the projection cannot
+  // point at a working Moneda picker as evidence that the seeding is fine.
+  it('leaves the Moneda picker options unchanged, since currencyIso needs no projection', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    expect(optionsFor('data-picker-currency-options')).toEqual(['EUR', 'USD']);
+    // Same list off the RAW fixture rows: the projection is a no-op for this column.
+    expect(pickerOptionIds(COUNTRY_ACCOUNTS, 'currencyIso')).toEqual(['EUR', 'USD']);
+    // ...whereas it is the whole story for País.
+    expect(pickerOptionIds(COUNTRY_ACCOUNTS, 'countryLabel')).toEqual([]);
+  });
+
+  // The projection must not leak into the grid: the rows the table renders (and the ones the
+  // row-click handler hands back) are still the caller's originals, by identity.
+  it('keeps the projection out of the rendered rows', () => {
+    renderTable({ data: COUNTRY_ACCOUNTS });
+
+    expect(tableProps.data[0]).toBe(COUNTRY_ACCOUNTS[0]);
+    expect(tableProps.data.every((r) => r.countryLabel === undefined)).toBe(true);
+  });
+});
+
 describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
   // This window sets `hideListBar: true` and draws its own toolbar, which silently took
   // ListView's sort popover away — clickable headers were the only sort affordance left. The
@@ -764,7 +1175,9 @@ describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
 
     fireEvent.click(screen.getByTestId('list-sort-toggle'));
 
-    for (const key of ['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']) {
+    for (const key of [
+      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount',
+    ]) {
       expect(screen.getByTestId(`list-sort-option-${key}`), key).toBeInTheDocument();
     }
     expect(screen.queryByTestId('list-sort-option-_rowActions')).not.toBeInTheDocument();
@@ -784,10 +1197,13 @@ describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
     expect(onSort).not.toHaveBeenCalled();
   });
 
-  it('goes away with the toolbar while rows are selected', () => {
+  // ETP-5111 — it used to disappear along with the toolbar while rows were selected. Since the
+  // toolbar no longer unmounts on selection, sorting stays available: ticking a checkbox is not a
+  // reason to lose the only sort affordance this window has (it sets `hideListBar: true`).
+  it('stays available while rows are selected', () => {
     renderTable({ selectedRows: [{ id: 'acc-1' }] });
 
-    expect(screen.queryByTestId('cuentas-toolbar')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    expect(toolbar).toContainElement(screen.getByTestId('list-sort-toggle'));
   });
 });

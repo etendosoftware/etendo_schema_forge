@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+// ETP-5073 / DOC-08: the side menu is the "another window" half of the unsaved-changes guard —
+// every one of these links leaves the current window, which is exactly when an in-progress edit
+// used to be lost silently. GuardedNavLink keeps the anchor semantics (cmd/middle-click still
+// open a new tab, unguarded, because those leave the form untouched) and routes an ordinary
+// click through the navigation gate.
+import { GuardedNavLink } from '@/components/GuardedNavLink.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
   Tooltip,
@@ -124,6 +130,14 @@ function CollapsedGroupPopover({
         <button
           type="button"
           aria-label={tMenu(group)}
+          // Same hook as the EXPANDED group header (line ~296). Without it
+          // `menu-group-<slug>` simply does not exist while the menu is
+          // collapsed, so anything navigating the menu by that selector -- an
+          // e2e spec, a walkthrough `navPath` hop -- silently fails to find a
+          // group that is right there on screen. The slug derivation is
+          // duplicated rather than shared because the two renderers already
+          // duplicate the `menu-item-` one; keep the three in step.
+          data-testid={`menu-group-${group.replace(/\s+/g, '-').toLowerCase()}`}
           onMouseEnter={() => { cancelClose(); setOpen(true); }}
           onMouseLeave={scheduleClose}
           className={cn(
@@ -160,7 +174,7 @@ function CollapsedGroupPopover({
             const currentFull = currentPath + locationSearch;
             const isItemActive = matchesItem(item, currentPath, currentFull);
             return (
-              <NavLink
+              <GuardedNavLink
                 key={item.name}
                 to={`/${itemPath}`}
                 className={cn(
@@ -171,7 +185,7 @@ function CollapsedGroupPopover({
                 )}
                 data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                 {tMenu(item.label)}
-              </NavLink>
+              </GuardedNavLink>
             );
           })}
         </div>
@@ -222,7 +236,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
         </div>
       )}
       <div className="px-2 py-0.5">
-        <NavLink
+        <GuardedNavLink
           to={`/${itemPath}`}
           className={cn(
             'flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors border-l-[3px] border-transparent',
@@ -238,7 +252,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
           <span className={cn('flex-1 text-left truncate', !isActive && 'text-text-primary')}>
             {itemLabel}
           </span>
-        </NavLink>
+        </GuardedNavLink>
       </div>
     </div>
   );
@@ -429,7 +443,7 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
     return (
       <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
         <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-          <NavLink
+          <GuardedNavLink
             to="/artifacts"
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
@@ -437,14 +451,14 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
             )}
             data-testid="NavLink__247c75">
             <FileJson className="h-5 w-5" data-testid="FileJson__247c75" />
-          </NavLink>
+          </GuardedNavLink>
         </TooltipTrigger>
         <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu('Artifacts')}</TooltipContent>
       </Tooltip>
     );
   }
   return (
-    <NavLink
+    <GuardedNavLink
       to="/artifacts"
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors',
@@ -453,7 +467,7 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
       data-testid="NavLink__247c75">
       <FileJson className="h-4 w-4" data-testid="FileJson__247c75" />
       <span>{tMenu('Artifacts')}</span>
-    </NavLink>
+    </GuardedNavLink>
   );
 }
 
@@ -578,10 +592,14 @@ export default function SideMenu({
         {expanded ? (
           <div className="relative flex shrink-0 items-center h-[62px] px-3 gap-2">
             <DropdownMenu data-testid="DropdownMenu__247c75">
+              {/* data-testid="company-switcher" is the stable E2E hook for this button.
+                  aria-label is ui('switchCompany') -> the TRANSLATED string ("Cambiar
+                  empresa"), so it cannot serve as a language-independent selector. */}
               <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__247c75">
                 <button
                   type="button"
                   aria-label={ui('switchCompany')}
+                  data-testid="company-switcher"
                   className="flex flex-1 min-w-0 items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted/60 transition-colors"
                 >
                   <img
@@ -659,10 +677,16 @@ export default function SideMenu({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* data-testid="sidebar-collapse" / "sidebar-expand" are the stable
+                hooks for this pair (same contract as "company-switcher"
+                above). The guided walkthrough's `navPath` clicks
+                "sidebar-expand" to open the menu before clicking a section, so
+                renaming either one breaks a shipped tour, not just a test. */}
             <button
               type="button"
               onClick={onToggle}
               aria-label={ui('collapseMenu')}
+              data-testid="sidebar-collapse"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
               <PanelLeftClose className="h-4 w-4" data-testid="PanelLeftClose__247c75" />
@@ -678,6 +702,7 @@ export default function SideMenu({
                     type="button"
                     onClick={onToggle}
                     aria-label={ui('expandMenu')}
+                    data-testid="sidebar-expand"
                     className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />
@@ -714,7 +739,7 @@ export default function SideMenu({
                   >
                     <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
                       <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-                        <NavLink
+                        <GuardedNavLink
                           to={`/${itemPath}`}
                           className={cn(
                             'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
@@ -727,7 +752,7 @@ export default function SideMenu({
                             weight={isItemActive || isGroupActive ? 'fill' : 'regular'}
                             className="h-5 w-5"
                             data-testid="Icon__247c75" />
-                        </NavLink>
+                        </GuardedNavLink>
                       </TooltipTrigger>
                       <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu(singleItem.label)}</TooltipContent>
                     </Tooltip>
@@ -781,7 +806,7 @@ export default function SideMenu({
               const currentFull = currentPath + location.search;
               const isItemActive = !isFavorites && matchesItem(item, currentPath, currentFull);
               return (
-                <NavLink
+                <GuardedNavLink
                   key={item.name}
                   to={`/${itemPath}`}
                   className={cn(
@@ -803,13 +828,13 @@ export default function SideMenu({
                       ? (item.labels?.[locale] || tMenu(favNameMap[item.path || item.name] || item.label))
                       : tMenu(item.label)}
                   </span>
-                </NavLink>
+                </GuardedNavLink>
               );
             };
             const renderFavoriteOverflowItem = (item) => {
               const itemPath = item.path || item.name;
               return (
-                <NavLink
+                <GuardedNavLink
                   key={item.name}
                   to={`/${itemPath}`}
                   className="relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm text-text-primary hover:bg-muted/50 transition-colors"
@@ -818,7 +843,7 @@ export default function SideMenu({
                   <span className="relative z-10">
                     {item.labels?.[locale] || tMenu(favNameMap[itemPath] || item.label)}
                   </span>
-                </NavLink>
+                </GuardedNavLink>
               );
             };
             const visibleSubItems = isFavorites ? g.items.slice(0, FAVORITES_VISIBLE) : g.items;

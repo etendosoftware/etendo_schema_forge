@@ -6,6 +6,7 @@
 |------|-------------|
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
 | [repo-topology.md](repo-topology.md) | The 3-repo split, the two dev profiles (functional-only vs core), published-package default vs `LOCAL_CORE` local-source mode (React + CLI), GitHub Packages auth |
+| [email-inventory.md](email-inventory.md) | Inventory of every email Etendo sends across both stacks (GO email contracts + Core SMTP), with triggers, key files, and where each format lives |
 | [transactional-email-framework.md](transactional-email-framework.md) | Transactional email framework: contract-driven execution, security boundary, lifecycle, edge cases, and agent checklist |
 | [email-contracts.md](email-contracts.md) | Email contracts guide: descriptor schema, request/response contract, recipient policies, versioning, and initial contract sketches |
 | [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |
@@ -29,6 +30,7 @@
 |------|-------------|
 | [sonarqube-access.md](sonarqube-access.md) | **SonarQube quick access**: bypass RTK with `rtk proxy`, project keys, useful endpoints, local scanner fallback |
 | [xml-regeneration-check.md](xml-regeneration-check.md) | **XML regeneration check**: compare original module XML vs export.database output without DB access |
+| [ci-parity-install.md](ci-parity-install.md) | **CI parity install** (`make ci-parity`): bring the local Etendo checkout to the module/branch set CI installs, then clean DB + install — dry-run by default |
 
 ## Field & Pipeline Reference
 
@@ -38,6 +40,7 @@
 | [field-visibility-types.md](field-visibility-types.md) | Field visibility types (editable, readOnly, system, discarded): behavior across pipeline, NEO Headless, and frontend |
 | [ui-customization.md](ui-customization.md) | **UI customization guide**: all extension points driven by `decisions.json` (statusBar, listKpiCards, customComponents, menuActions, layoutType, etc.) with real examples and decision tree |
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
+| [walkthrough-flows.md](walkthrough-flows.md) | **Guided walkthroughs**: the flow JSON contract (step shape, `advance` modes, route/target resolution), where the engine vs. the flow data lives, failure behaviour, and the checklist for adding a flow |
 | [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which |
 | [pipeline-validator-reference.md](pipeline-validator-reference.md) | **Pipeline completeness validator**: rules F1–F10, artifact classification, CLI flags, exit codes, and troubleshooting |
 | [document-printables.md](document-printables.md) | **Document printables** — the TWO document designs and which button shows each, the criteria a change must meet, the PDF cache and its (missing) invalidation, and the decisions on record. Governing skill: `/document-printables` |
@@ -85,6 +88,8 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | Path | Description |
 |------|-------------|
 | [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
+| [request-policy.md](request-policy.md) | **Request reference**: the single authenticated-`fetch` helper (`useApiFetch` / `apiFetch`), its options (`on401`, `baseUrl`, `token`), 401-to-logout wiring, how to give a test a session, and the two guardrails that keep raw `fetch` out |
+| [unsaved-changes-guard.md](unsaved-changes-guard.md) | **Unsaved-changes reference**: the single dirty-state registry, how to register a form (and give it a saver), the five consumers (unload, locale, navigation, clone, confirm), `GuardedNavLink` / `useGuardedNavigate`, and why react-router's `useBlocker` is not usable here |
 
 ## Feature Flags
 
@@ -108,10 +113,11 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | File | Description |
 |------|-------------|
 | [surveys.md](surveys.md) | **In-app survey system (NPS/CSAT)**: architecture, survey types, anti-fatigue rules, localStorage schema, how to add a new survey or emit a trigger from a window |
+| [copilot-markdown-rendering.md](copilot-markdown-rendering.md) | **Copilot markdown renderer**: the hand-rolled renderer behind the chat bubble, the supported markdown subset and what is deliberately NOT supported, the three-class href policy (external / in-app `<Link>` / degrade to literal text), and why `assertInternalPath` normalizes `\` and TAB/LF/CR before deciding |
 | [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
 | [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
 | [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |
-| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows), ETP-4277 empty numeric field saved as backend default (DataTable/InlineLinesPanel defaultValue substitution), ETP-4543 non-grid line fields invisible under inlineEditable line layout (InlineLinesPanel/DetailView hiddenColumns wiring) |
+| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows), ETP-4277 empty numeric field saved as backend default (DataTable/InlineLinesPanel defaultValue substitution), ETP-4543 non-grid line fields invisible under inlineEditable line layout (InlineLinesPanel/DetailView hiddenColumns wiring), ETP-5234 Copilot markdown link href truncation, the `assertInternalPath` identity-vs-canonicalize open question, and the dropped `MarkdownContent` `data-testid` (E2E selector that cannot exist) |
 
 ## Operations
 

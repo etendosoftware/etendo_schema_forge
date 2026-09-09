@@ -150,7 +150,7 @@ describe('useWarehouseStock', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('storageBin'),
         expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer my-token' }),
+          headers: expect.objectContaining({ Authorization: 'Bearer my-token', 'Accept-Language': 'es_ES' }),
         }),
       );
     });

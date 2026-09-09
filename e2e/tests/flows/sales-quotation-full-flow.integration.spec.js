@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
-import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
+import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
+import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -208,8 +211,15 @@ async function waitForLinesSettled(page, count, message) {
  * Add a product line to the quotation's inline-add row (shared component
  * across every document window — mirrors purchase-helpers.js's
  * addProductLine, adapted to the quotation's "orderedQuantity" field key).
+ *
+ * ETP-5079: prefer `productName` (a `PRODUCT_FIXTURE_*.name`, ensured by
+ * `ensureProductFixtures()`) over `productIndex`. The onboarding dataset no
+ * longer seeds any visible product, so "the product at index N" is nothing at
+ * all on a fresh tenant; and on a long-lived dev tenant it silently binds this
+ * test's assertions to whatever leftover data a previous run created.
+ * `productIndex` is kept only so the signature stays backward compatible.
  */
-async function addLine(page, { productIndex = 0, quantity, isFirst = false } = {}) {
+async function addLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
   if (isFirst) {
     let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
     if (!await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
@@ -235,11 +245,29 @@ async function addLine(page, { productIndex = 0, quantity, isFirst = false } = {
   const searchDrawer = page.getByTestId('product-search-drawer');
   await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
 
-  const productOption = page.locator('[data-testid^="product-search-option-"]').nth(productIndex);
-  if (await productOption.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await productOption.click();
+  // Narrow the drawer to the requested fixture before resolving options. Typing
+  // re-queries the backend; the `hasText` filter below is a second, client-side
+  // guarantee rather than the only one.
+  if (productName) {
+    const searchInput = page.getByTestId('product-search-input');
+    await expect(searchInput).toBeVisible({ timeout: 10_000 });
+    await searchInput.fill(productName);
+  }
+
+  const optionLocator = page.locator('[data-testid^="product-search-option-"]');
+  if (productName) {
+    const namedOption = optionLocator.filter({ hasText: productName }).first();
+    await expect(namedOption,
+      `Product "${productName}" should appear in the search drawer — is ensureProductFixtures() called?`,
+    ).toBeVisible({ timeout: 20_000 });
+    await namedOption.click();
   } else {
-    await page.locator('[data-testid^="product-search-option-"]').first().click();
+    const productOption = optionLocator.nth(productIndex);
+    if (await productOption.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await productOption.click();
+    } else {
+      await optionLocator.first().click();
+    }
   }
   await slow(page);
   await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
@@ -291,6 +319,11 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await login(page, { user, password });
     await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
     await slow(page);
+
+    // ETP-5079: the onboarding dataset no longer seeds any visible product, so
+    // the lines added below have nothing to pick unless the suite provisions
+    // its own fixtures first. See e2e/tests/helpers/product-helpers.js.
+    await ensureProductFixtures(page);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 2: Create a quotation, select a Business Partner, save as draft
@@ -347,7 +380,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // negative line is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { isFirst: true, productIndex: 0 });
+    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -370,7 +403,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // quotation
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { productIndex: 1, quantity: '-2' });
+    await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-2' });
 
     // Row-count-aware wait (mirrors purchase-order-full-flow.integration.spec.js) —
     // waiting for "at least one line row" was satisfied by the STEP 3 baseline
@@ -389,8 +422,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThan(0);
 
     // Known, intermittent, other-team-owned issue: adding a negative-quantity
-    // line for a product other than "Agua" (e.g. "Fernet") can sometimes
-    // render the gross-amount cell blank momentarily on the Quotation stage,
+    // line can sometimes (depending on the product's tax category) render the
+    // gross-amount cell blank momentarily on the Quotation stage,
     // self-correcting a few seconds later without any user action on that
     // row — a suspected client-side sign/tax-factor-resolution race in
     // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduced manually in a
@@ -438,24 +471,24 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4.5: Ensure enough stock on hand for the negative line's ACTUAL
-    // product (read back from the row itself — never assume which product
-    // productIndex: 1 landed on). By the time this quotation becomes a
-    // shipment, confirming it inverts the normal stock-movement direction for
-    // a negative-quantity line, so Etendo's core M_CHECK_STOCK validation
-    // correctly rejects the confirm when on-hand is too low. This suite was
-    // observed draining shared dev-DB stock for whatever product landed at
-    // that index — "Cerveza", then "Queso Sardo" (warehouse "Almacen GO" /
-    // locator "AG-0-0-0") — down toward zero on 2026-08-17 from repeated
-    // runs. Provisioned via a real, audited Physical Inventory count
-    // (ensureStockOnHand) — never a raw SQL UPDATE. minQty=200 is a generous
-    // buffer meant to survive several repeated runs of this suite in a
-    // single day. Doing this now (while still a quotation, well before the
-    // Order → Shipment confirm several steps down) leaves plenty of margin.
+    // product. Still read back from the row itself rather than reusing
+    // PRODUCT_FIXTURE_BETA.name: the cell renders the persisted identifier,
+    // which is what ensureStockOnHand's own product selector has to match. By
+    // the time this quotation becomes a shipment, confirming it inverts the
+    // normal stock-movement direction for a negative-quantity line, so
+    // Etendo's core M_CHECK_STOCK validation correctly rejects the confirm
+    // when on-hand is too low. This suite was observed draining shared dev-DB
+    // stock down toward zero on 2026-08-17 from repeated runs. Provisioned via
+    // a real, audited Physical Inventory count (ensureStockOnHand) — never a
+    // raw SQL UPDATE. minQty=200 is a generous buffer meant to survive several
+    // repeated runs of this suite in a single day. Doing this now (while still
+    // a quotation, well before the Order → Shipment confirm several steps
+    // down) leaves plenty of margin.
     // ═══════════════════════════════════════════════════════════════════════
     const negQuotationProductName = (await negQuotationRow.locator('[data-cell-key="product"]').textContent())?.trim();
     await ensureStockOnHand(page, {
       productName: negQuotationProductName,
-      warehouseName: 'Almacen GO',
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
 
@@ -535,8 +568,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThan(0);
 
     // Known, intermittent, other-team-owned issue: adding a negative-quantity
-    // line for a product other than "Agua" (e.g. "Fernet") can sometimes
-    // render the gross-amount cell blank momentarily on the Sales Order stage,
+    // line can sometimes (depending on the product's tax category) render the
+    // gross-amount cell blank momentarily on the Sales Order stage,
     // self-correcting a few seconds later without any user action on that
     // row — a suspected client-side sign/tax-factor-resolution race in
     // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduced manually in a
@@ -692,8 +725,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     //
     // Same known, intermittent, other-team-owned issue as the Sales Order
     // stage above (suspected client-side sign/tax-factor-resolution race in
-    // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduces with
-    // non-"Agua" products and a negative quantity, self-corrects after a
+    // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduces on some
+    // tax categories with a negative quantity, self-corrects after a
     // delay — not a data-loss bug, and not the ETP-4567/4722 root cause).
     // This check is intentionally non-blocking here.
     // The cell's `data-cell-key` attribute itself can disappear from the DOM
@@ -759,6 +792,377 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
       expect(parseAmount(completedQtyText),
         '[ETP-4567] Invoiced quantity should remain negative after the invoice is completed',
       ).toBeLessThan(0);
+    }
+    await slow(page);
+  });
+
+  /**
+   * ETP-4567 QA follow-up (2026-08-27, finding 2 + explicit QA request for "un
+   * E2E que cubra el flujo con total negativo, solo líneas negativas"). Unlike
+   * the mixed-sign test above (one positive + one negative line, subtotal
+   * still > 0), here BOTH lines are negative so the document total itself goes
+   * fully negative all the way from the quotation through the order. This
+   * exercises two independent fixes together:
+   *
+   *   1. Frontend (this Tester's own commit): the Sales Order confirm modal's
+   *      big grand-total amount used to fall back to a hardcoded '0,00'
+   *      whenever `grandTotal > 0` was false — i.e. always, for a
+   *      fully-negative order — instead of calling
+   *      formatCurrency(currency, grandTotal) unconditionally like the
+   *      working subtotal line a few lines below it already does. See
+   *      artifacts/sales-order/custom/OrderCreateInvoice.jsx:473
+   *      (ConfirmModal) and :675 (CreateDocsModal). The quotation's own
+   *      confirm modals (SendToEvaluationModal, QuotationConfirmModal) do not
+   *      carry this bug — it only lives in OrderCreateInvoice.jsx — so the
+   *      modal check below is deliberately placed at the Sales Order stage.
+   *   2. Backend (developer fix landing in parallel, com.etendoerp.go): a
+   *      fully-negative-total order/shipment previously could not be
+   *      converted — the confirm call threw "No pending lines to
+   *      invoice"/"No hay líneas pendientes de facturar" instead of creating
+   *      the shipment/invoice.
+   *
+   * If fix #2 has not landed on this branch yet, the "no pending lines" guard
+   * below will legitimately fail — that is expected and documented, not a
+   * flaw in this test (see the class-level report for how to distinguish the
+   * two failure causes).
+   */
+  test('Presupuesto → Pedido → Albarán → Factura with ALL-negative lines (fully negative total) converts successfully, and the order confirm modal shows the real negative grand total (ETP-4567)', async ({ page }) => {
+    await ensureOpenPeriod();
+
+    const user = onboardingCreds?.email || process.env.E2E_USER;
+    const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Login, create a quotation, save as draft
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await login(page, { user, password });
+    await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
+    await slow(page);
+
+    // ETP-5079: no product is seeded on a fresh tenant — provision the two
+    // fixtures the negative lines below are built from.
+    await ensureProductFixtures(page);
+
+    await navigateTo(page, 'sales-quotation');
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await slow(page);
+
+    const newButton = page.getByTestId('action-new');
+    await expect(newButton).toBeVisible({ timeout: 15_000 });
+    await newButton.click();
+    await waitForDetailReady(page);
+    await slow(page);
+
+    const bpField = page.getByTestId('field-businessPartner');
+    await expect(bpField).toBeVisible({ timeout: 10_000 });
+    await bpField.click();
+    await slow(page);
+
+    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
+      .filter({ hasNotText: /crear|create/i }).first();
+    await expect(bpOption).toBeVisible({ timeout: 15_000 });
+    await bpOption.click();
+    await slow(page);
+
+    await page.waitForResponse(
+      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
+      { timeout: 10_000 },
+    ).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await slow(page);
+
+    const saveDraftBtn = page.getByTestId('action-save-draft');
+    if (await saveDraftBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      const savePromise = expectSaveResponse(page);
+      await saveDraftBtn.click();
+      await savePromise;
+    } else {
+      const guardarBtn = page.getByRole('button', { name: /guardar|save/i });
+      const savePromise = expectSaveResponse(page);
+      await guardarBtn.click();
+      await savePromise;
+    }
+    await slow(page);
+
+    await expect(page).toHaveURL(/\/sales-quotation\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+    await expect(page.getByTestId('document-status-pill')).toBeVisible({ timeout: 10_000 });
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await waitForDetailReady(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Two NEGATIVE-quantity lines — every line negative, so the document
+    // total itself goes fully negative (unlike the mixed-sign case above).
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '-2' });
+    await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-3' });
+
+    await waitForLinesSettled(page, 2, 'Quotation should have 2 lines, both negative');
+
+    const quotRows = page.locator('[data-testid^="line-row-"]');
+    const quotRowCount = await quotRows.count();
+    for (let i = 0; i < quotRowCount; i++) {
+      const qtyText = await quotRows.nth(i).locator('[data-cell-key="orderedQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every quotation line quantity should be negative (row ${i})`,
+      ).toBeLessThan(0);
+    }
+
+    const quotTotals = await readDocumentTotals(page);
+    expect(quotTotals.subtotal,
+      '[ETP-4567] Quotation subtotal should be fully negative (all lines negative)',
+    ).toBeLessThan(0);
+    expect(quotTotals.total,
+      '[ETP-4567] Quotation total should be fully negative (all lines negative)',
+    ).toBeLessThan(0);
+
+    // Confirming a negative-quantity line eventually inverts the normal
+    // stock-movement direction (Order → Shipment) — ensure enough on-hand
+    // stock for BOTH lines' actual products now, well before that step.
+    for (let i = 0; i < quotRowCount; i++) {
+      const productName = (await quotRows.nth(i).locator('[data-cell-key="product"]').textContent())?.trim();
+      await ensureStockOnHand(page, { productName, warehouseName: DEFAULT_WAREHOUSE_NAME, minQty: 200 });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm (DR → UE) — SendToEvaluationModal
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const confirmBtn = page.getByTestId('action-save');
+    await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
+    await confirmBtn.click();
+    await slow(page);
+
+    const confirmModalBtn = page.getByTestId('action-confirm-modal');
+    await expect(confirmModalBtn).toBeVisible({ timeout: 10_000 });
+    await confirmModalBtn.click();
+    await slow(page);
+
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.reload({ waitUntil: 'networkidle' });
+    await waitForDetailReady(page);
+
+    const uePill = page.getByTestId('document-status-pill');
+    await expect(uePill).toBeVisible({ timeout: 15_000 });
+    await expect(uePill).toContainText(/bajo evaluaci|under eval|en espera/i, { timeout: 10_000 });
+    await slow(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm (UE → "Crear Pedido") — QuotationConfirmModal, then navigate
+    // straight into the new order via "Ver pedido"
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const confirmBtn2 = page.getByTestId('action-save');
+    await expect(confirmBtn2).toBeVisible({ timeout: 10_000 });
+    await confirmBtn2.click();
+    await slow(page);
+
+    const orderOption = page.getByTestId('confirm-option-order');
+    await expect(orderOption).toBeVisible({ timeout: 10_000 });
+    await orderOption.click();
+    await slow(page);
+
+    const confirmModalBtn2 = page.getByTestId('action-confirm-modal');
+    await expect(confirmModalBtn2).toBeVisible({ timeout: 5_000 });
+    await expect(confirmModalBtn2).toBeEnabled();
+    await confirmModalBtn2.click();
+    await slow(page);
+
+    const viewOrderBtn = page.getByRole('button', { name: /ver pedido|view order/i });
+    await expect(viewOrderBtn).toBeVisible({ timeout: 30_000 });
+    await viewOrderBtn.click();
+    await slow(page);
+
+    await expect(page).toHaveURL(/\/sales-order\//, { timeout: 15_000 });
+    await waitForDetailReady(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // On the Sales Order — verify both lines stayed negative, totals fully
+    // negative, then check the confirm modal's grand total BEFORE submitting
+    // (this is the exact spot the frontend bug lives)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
+      'Order should have 2 lines inherited from the quotation',
+    ).toBeVisible({ timeout: 10_000 });
+
+    const orderRows = page.locator('[data-testid^="line-row-"]');
+    const orderRowCount = await orderRows.count();
+    for (let i = 0; i < orderRowCount; i++) {
+      const qtyText = await orderRows.nth(i).locator('[data-cell-key="orderedQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every order line quantity should remain negative (row ${i})`,
+      ).toBeLessThan(0);
+    }
+
+    const orderTotals = await readDocumentTotals(page);
+    expect(orderTotals.subtotal,
+      '[ETP-4567] Order subtotal should remain fully negative',
+    ).toBeLessThan(0);
+    expect(Math.abs(orderTotals.subtotal - quotTotals.subtotal),
+      '[ETP-4567] Order subtotal should match the quotation subtotal (same lines, same prices)',
+    ).toBeLessThanOrEqual(0.05);
+
+    const orderConfirmBtn = page.getByTestId('action-save');
+    await expect(orderConfirmBtn).toBeVisible({ timeout: 10_000 });
+    await orderConfirmBtn.click();
+    await slow(page);
+
+    const orderConfirmModal = page.getByTestId('sales-order-confirm-modal');
+    await expect(orderConfirmModal,
+      'Order confirm modal should appear',
+    ).toBeVisible({ timeout: 10_000 });
+
+    // [ETP-4567 frontend fix] The literal '0,00' fallback text must be gone —
+    // a legitimate formatted amount always carries the currency symbol
+    // (e.g. "-46,50 €"), so an exact-text match on bare '0,00' uniquely
+    // targets the buggy ternary's fallback branch.
+    await expect(orderConfirmModal.getByText('0,00', { exact: true }),
+      '[ETP-4567] Order confirm modal must not fall back to a literal 0,00 for a fully-negative total',
+    ).toHaveCount(0);
+    await expect(orderConfirmModal.getByText(/-\s?\d[\d.,]*\s?€/).first(),
+      '[ETP-4567] Order confirm modal should show the real negative grand-total amount',
+    ).toBeVisible({ timeout: 5_000 });
+
+    await orderConfirmModal.getByText('Crear albarán', { exact: false }).first().click();
+    await slow(page);
+
+    await orderConfirmModal.getByRole('button', { name: /Confirmar \+ albarán/i }).click();
+    await slow(page);
+
+    // [ETP-4567 backend fix] The conversion must actually succeed — a
+    // fully-negative-total order previously threw "No pending lines to
+    // invoice"/"No hay líneas pendientes de facturar" instead of confirming.
+    await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
+      '[ETP-4567] Confirming a fully-negative order must not throw "No pending lines to invoice"',
+    ).toBeHidden({ timeout: 3_000 }).catch(() => {});
+
+    const orderResultTitle = page.getByText(/pedido confirmado|documentos creados/i);
+    await expect(orderResultTitle).toBeVisible({ timeout: 30_000 });
+
+    const viewShipmentBtn = page.getByRole('button', { name: /ver albarán|view shipment/i });
+    await expect(viewShipmentBtn).toBeVisible({ timeout: 10_000 });
+    await viewShipmentBtn.click();
+    await slow(page);
+
+    await expect(page).toHaveURL(/\/goods-shipment\//, { timeout: 15_000 });
+    await waitForDetailReady(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // On the Goods Shipment — both lines should remain negative (movement-
+    // only document, no price/amount fields — checks #2/#3/#4 don't apply)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
+      'Shipment should have 2 lines inherited from the order',
+    ).toBeVisible({ timeout: 10_000 });
+
+    const shipmentRows = page.locator('[data-testid^="line-row-"]');
+    const shipmentRowCount = await shipmentRows.count();
+    for (let i = 0; i < shipmentRowCount; i++) {
+      const qtyText = await shipmentRows.nth(i).locator('[data-cell-key="movementQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every shipment line quantity should remain negative (row ${i})`,
+      ).toBeLessThan(0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm the shipment with "Crear factura" ON
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const shipmentConfirmBtn = page.getByTestId('action-save');
+    await expect(shipmentConfirmBtn).toBeVisible({ timeout: 10_000 });
+    await shipmentConfirmBtn.click();
+    await slow(page);
+
+    const shipmentModal = page.getByTestId('confirm-inout-modal');
+    await expect(shipmentModal).toBeVisible({ timeout: 10_000 });
+    const shipmentInvoiceToggle = shipmentModal.getByTestId('confirm-modal-invoice-toggle');
+    await expect(shipmentInvoiceToggle).toBeVisible({ timeout: 5_000 });
+    if ((await shipmentInvoiceToggle.getAttribute('aria-checked')) !== 'true') {
+      await shipmentInvoiceToggle.click();
+      await slow(page);
+    }
+
+    const shipmentConfirmModalBtn = shipmentModal.getByTestId('confirm-modal-confirm-btn');
+    await expect(shipmentConfirmModalBtn).toBeVisible({ timeout: 5_000 });
+    await shipmentConfirmModalBtn.click();
+
+    await waitForConfirmResponse(page);
+    await page.waitForTimeout(2_000);
+
+    // [ETP-4567 backend fix] Same "no pending lines" guard on the shipment →
+    // invoice conversion.
+    await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
+      '[ETP-4567] Confirming a fully-negative shipment must not throw "No pending lines to invoice"',
+    ).toBeHidden({ timeout: 3_000 }).catch(() => {});
+
+    const viewInvoiceBtn = page.getByRole('button', { name: /ver factura|view invoice/i });
+    await expect(viewInvoiceBtn,
+      '[ETP-4567] Result modal should offer to view the invoice created from a fully-negative shipment',
+    ).toBeVisible({ timeout: 10_000 });
+    await viewInvoiceBtn.click();
+    await slow(page);
+
+    await expect(page).toHaveURL(/\/sales-invoice\//, { timeout: 15_000 });
+    await waitForDetailReady(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // On the Sales Invoice — both lines negative, totals fully negative
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await waitForLinesSettled(page, 2, 'Invoice should have 2 lines inherited from the shipment');
+
+    const invoiceRows = page.locator('[data-testid^="line-row-"]');
+    const invoiceRowCount = await invoiceRows.count();
+    for (let i = 0; i < invoiceRowCount; i++) {
+      const qtyText = await invoiceRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every invoice line quantity should remain negative (row ${i})`,
+      ).toBeLessThan(0);
+    }
+
+    const invoiceTotals = await readDocumentTotals(page);
+    expect(invoiceTotals.subtotal,
+      '[ETP-4567] Invoice subtotal should remain fully negative',
+    ).toBeLessThan(0);
+    expect(Math.abs(invoiceTotals.subtotal - quotTotals.subtotal),
+      '[ETP-4567] Invoice subtotal should match the quotation subtotal (same lines, same prices)',
+    ).toBeLessThanOrEqual(0.05);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm the invoice — the negative sign must survive completion
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const invoiceConfirmBtn = page.getByTestId('action-save');
+    await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
+    await invoiceConfirmBtn.click();
+    await waitForConfirmResponse(page);
+    await page.waitForTimeout(2_000);
+
+    const closeBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
+    if (await closeBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await closeBtn.click();
+      await slow(page);
+    }
+
+    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
+    if (onDetailView) {
+      await waitForDetailReady(page);
+      const statusPill = page.getByTestId('document-status-pill').first();
+      await expect(statusPill,
+        '[ETP-4567] Invoice should show Completed after confirmation, still fully negative',
+      ).toContainText(/completado|registrado|booked|completed/i, { timeout: 15_000 });
+
+      const completedRows = page.locator('[data-testid^="line-row-"]');
+      const completedRowCount = await completedRows.count();
+      for (let i = 0; i < completedRowCount; i++) {
+        const qtyText = await completedRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
+        expect(parseAmount(qtyText),
+          `[ETP-4567] Every invoice line quantity should remain negative after completion (row ${i})`,
+        ).toBeLessThan(0);
+      }
     }
     await slow(page);
   });

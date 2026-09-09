@@ -18,7 +18,12 @@
       "hideStatusFilter": true
     },
     "customListIcons": true,
-    "noHeaderBorder": true
+    "noHeaderBorder": true,
+    "labelOverrides": {
+      "en_US": { "M_Locator_ID": "Warehouse" },
+      "es_ES": { "M_Locator_ID": "Almacén" },
+      "es_AR": { "M_Locator_ID": "Almacén" }
+    }
   },
   "entities": {
     "header": {
@@ -117,7 +122,8 @@
         },
         "movementQuantity": {
           "grid": true,
-          "columnWidth": 160
+          "columnWidth": 160,
+          "min": 1
         },
         "uOM": {
           "visibility": "readOnly",
@@ -125,9 +131,7 @@
         },
         "storageBin": {
           "grid": true,
-          "label": "Warehouse",
-          "displayFromCatalog": true,
-          "reason": "Each warehouse has exactly 1 storage bin; shown as warehouse selector for user clarity"
+          "label": "Warehouse"
         },
         "description": {
           "section": "other"

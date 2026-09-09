@@ -6,6 +6,7 @@ import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
+import { RefreshButton } from '@/components/financial-accounts';
 import { applyConditions } from '../advancedFilterApply';
 import {
   ReconciliationListTable,
@@ -13,6 +14,7 @@ import {
   buildReconciliationSortColumns,
 } from './ReconciliationListTable.jsx';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 
 /**
@@ -34,7 +36,9 @@ import { useClientSort } from '@/hooks/useClientSort';
  * badge whether or not this tab is mounted, and fetching in both places would double the request.
  * Filtering stays local — it is view state, not data.
  */
-export function ReconciliationListTab({ account, reconciliations = [], loading = false }) {
+export function ReconciliationListTab({
+  account, reconciliations = [], loading = false, onRefresh,
+}) {
   const ui = useUI();
   const navigate = useNavigate();
   // Same default as the Movements tab: last 30 days rather than the whole history.
@@ -45,7 +49,12 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
   const columns = useMemo(() => buildReconciliationFilterColumns(ui), [ui]);
 
   const filtered = useMemo(
-    () => applyConditions(applyFilters(reconciliations, dateRange, search), advancedFilter),
+    () => applyConditions(
+      applyFilters(reconciliations, dateRange, search),
+      advancedFilter,
+      undefined,
+      RECONCILIATION_FILTER_COLUMNS,
+    ),
     [reconciliations, dateRange, search, advancedFilter],
   );
 
@@ -94,6 +103,10 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
           onClear={clearSort}
           isDefaultSort={isDefaultSort}
           data-testid="ListSortPopover__f4e9e1" />
+        <RefreshButton
+          onRefresh={onRefresh}
+          label={ui('refresh')}
+          data-testid="RefreshButton__f4e9e1" />
         <input
           type="search"
           placeholder={ui('financeAccountReconciliationsSearch')}
@@ -103,6 +116,11 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
           className="h-10 w-48 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground)_/_0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
+      {/* Same refresh affordance a generated list gets from ListView — only once rows are on
+          screen; the first fetch shows the table's own skeleton instead. */}
+      {loading && reconciliations.length > 0 ? (
+        <ListProgressBar testId="reconciliation-list-progress-bar" data-testid="ListProgressBar__f4e9e1" />
+      ) : null}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <ReconciliationListTable
           reconciliations={sorted}
@@ -121,7 +139,21 @@ export function ReconciliationListTab({ account, reconciliations = [], loading =
  * Filterable column metadata for the advanced "by conditions" builder, mirroring
  * `buildMovementFilterColumns`. Keys are the raw row fields the generic CRUD returns, so
  * `applyConditions` can read them without a derivation step.
+ *
+ * `RECONCILIATION_FILTER_COLUMNS` is the label-free type map handed to
+ * `applyConditions`, which needs the declared type to route `transactionDate`
+ * through the calendar-day operators and the two balances through the numeric
+ * ones (ETP-4956) — same reason as MOVEMENT_FILTER_COLUMNS.
  */
+export const RECONCILIATION_FILTER_COLUMNS = {
+  documentNo: { type: 'string' },
+  transactionDate: { type: 'date' },
+  startingbalance: { type: 'number' },
+  endingBalance: { type: 'number' },
+  documentStatus: { type: 'enum' },
+  posted: { type: 'enum' },
+};
+
 export function buildReconciliationFilterColumns(ui) {
   return [
     { key: 'documentNo', label: ui('financeAccountReconciliationsColDocumentNo'), type: 'string' },
@@ -132,6 +164,12 @@ export function buildReconciliationFilterColumns(ui) {
       key: 'documentStatus',
       label: ui('financeAccountReconciliationsColStatus'),
       type: 'enum',
+      // `required` drops "Is empty" / "Is not empty" (getOperatorsForColumn):
+      // Docstatus is mandatory in AD and every reconciliation carries one of
+      // the three codes, so those operators could only match zero rows.
+      // Deliberately NOT applied to `posted` below, whose 'N'/error codes are
+      // real values and whose empty case is not provable.
+      required: true,
       enumLabels: {
         CO: ui('financeAccountReconciliationsDocStatus_CO'),
         DR: ui('financeAccountReconciliationsDocStatus_DR'),

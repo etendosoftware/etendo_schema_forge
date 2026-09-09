@@ -23,11 +23,17 @@ vi.mock('@/i18n', () => ({
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+// ETP-5181: `warning` has to be stubbed here, not just asserted on — notifySyncResult now routes a
+// WARNING sync result through `toast.warning`, so a mock that omits it turns the whole sync path
+// into a `TypeError: toast.warning is not a function`. `info` is kept so the suite can prove the
+// WARNING branch no longer reaches it.
+const toastWarning = vi.fn();
 const toastInfo = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
     success: (...a) => toastSuccess(...a),
     error: (...a) => toastError(...a),
+    warning: (...a) => toastWarning(...a),
     info: (...a) => toastInfo(...a),
   },
 }));
@@ -54,10 +60,20 @@ vi.mock('@/hooks/useBankConnectionActions', () => ({
 
 // ETP-4530: Tab Contabilidad — mocked so existing suites (which don't exercise this tab) don't
 // need a real AuthProvider/network round-trip just to mount the modal.
+// ETP-4872 — the row shape now carries all 9 account-type-dependent fields (the old 2-field
+// fINAssetAcct/fINTransitoryAcct set is retired); the neutral default resolves every field to
+// null/empty so any suite that never opens the Accounting tab is unaffected.
 const fetchAccountingConfiguration = vi.fn().mockResolvedValue({
   id: null,
-  fINAssetAcct: null,
-  fINTransitoryAcct: null,
+  fINBankrevaluationgainAcct: null,
+  fINBankrevaluationlossAcct: null,
+  fINBankfeeAcct: null,
+  inTransitPaymentAccountIN: null,
+  depositAccount: null,
+  clearedPaymentAccount: null,
+  fINOutIntransitAcct: null,
+  withdrawalAccount: null,
+  clearedPaymentAccountOUT: null,
   ledgerConfigured: true,
   catalogs: { accounts: [] },
 });
@@ -135,10 +151,51 @@ function renderModal(props = {}) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Bank connection panel fixtures — shared by the ETP-5104 (import range) and
+// ETP-5181 (provider max fetch interval) suites, both of which drive the same
+// two date boxes on the same connected account.
+// ---------------------------------------------------------------------------
+
+// Mirrors the fetchStatus fixture installed by the outer beforeEach; restated here so the
+// "before" values a test asserts against are visible next to the assertions themselves.
+const BASE_STATUS = {
+  connected: true,
+  providerName: 'BBVA',
+  importFromDate: '2026-01-01',
+  importToDate: '2026-02-01',
+  statementGrouping: '1BD',
+};
+
+/**
+ * Types a date into one of the two import boxes.
+ *
+ * They are DateFields: a masked TEXT input, not `<input type="date">`. The box shows the
+ * locale format and only emits an ISO `yyyy-mm-dd` through onChange on BLUR, so a date is
+ * entered by typing its 8 digits (the mask inserts the separators itself) and then tabbing out
+ * to commit. `digits` is therefore ddmmyyyy, in locale order — not ISO.
+ */
+async function typeImportDate(user, testId, digits) {
+  const input = screen.getByTestId(testId);
+  await user.clear(input);
+  await user.type(input, digits);
+  // Blur commits the typed text; without it the parent form never sees the new value.
+  await user.tab();
+  return input;
+}
+
+async function openConnectedModal(props = {}) {
+  const result = renderModal({ account: CONNECTED_ACCOUNT, ...props });
+  // The panel (and with it the import boxes) only renders once the status fetch resolves.
+  await screen.findByTestId('bank-connection-edit-sync');
+  return result;
+}
+
 describe('EditAccountModal', () => {
   beforeEach(() => {
     toastSuccess.mockClear();
     toastError.mockClear();
+    toastWarning.mockClear();
     toastInfo.mockClear();
     updateAccount.mockReset();
     fetchDefaults.mockReset();
@@ -172,8 +229,15 @@ describe('EditAccountModal', () => {
     fetchAccountingConfiguration.mockReset();
     fetchAccountingConfiguration.mockResolvedValue({
       id: null,
-      fINAssetAcct: null,
-      fINTransitoryAcct: null,
+      fINBankrevaluationgainAcct: null,
+      fINBankrevaluationlossAcct: null,
+      fINBankfeeAcct: null,
+      inTransitPaymentAccountIN: null,
+      depositAccount: null,
+      clearedPaymentAccount: null,
+      fINOutIntransitAcct: null,
+      withdrawalAccount: null,
+      clearedPaymentAccountOUT: null,
       ledgerConfigured: true,
       catalogs: { accounts: [] },
     });
@@ -298,12 +362,18 @@ describe('EditAccountModal', () => {
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
     });
 
+    // ETP-5181: this case always described itself as "a warning toast" while asserting
+    // `toast.info` — a neutral notice for something the user has to act on (most often "your
+    // import range reaches further back than this provider serves"). notifySyncResult now calls
+    // `toast.warning`, and `info` is asserted absent so a revert is caught rather than tolerated.
     it('shows a warning toast when sync returns WARNING', async () => {
       const user = userEvent.setup();
       sync.mockResolvedValue({ status: 'WARNING', message: 'partial' });
       renderModal({ account: CONNECTED_ACCOUNT });
       await user.click(await screen.findByTestId('bank-connection-edit-sync'));
-      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('partial'));
+      await waitFor(() => expect(toastWarning).toHaveBeenCalledWith('partial'));
+      expect(toastInfo).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalled();
     });
 
     it('shows an error toast when sync returns ERROR', async () => {
@@ -329,9 +399,12 @@ describe('EditAccountModal', () => {
       });
       renderModal({ account: CONNECTED_ACCOUNT });
       await user.click(await screen.findByTestId('bank-connection-edit-sync'));
-      await waitFor(() => expect(toastInfo).toHaveBeenCalledWith(
+      // ETP-5181 moved the WARNING branch from toast.info to toast.warning; the translation
+      // wiring this case guards is unchanged.
+      await waitFor(() => expect(toastWarning).toHaveBeenCalledWith(
         'No se encontraron movimientos nuevos para la cuenta: Cuenta pais españa.',
       ));
+      expect(toastInfo).not.toHaveBeenCalled();
     });
 
     it('maps a BANK_CONNECTION_TIMEOUT sync failure to the timeout label', async () => {
@@ -1082,48 +1155,261 @@ describe('EditAccountModal', () => {
     );
   });
 
-  // ── ETP-4530: assetAcctMissing gating ─────────────────────────────────────
-  // assetAcctMissing = dirty && !assetAcct — required-field validation that only activates
-  // once the user has actually touched (made dirty) the Contabilidad tab, so an unrelated
-  // edit (name, bank connection, reconciliation) on an account that never configured accounting is not
-  // silently blocked by a mandatory field belonging to a tab the user never opened.
-  describe('assetAcctMissing gating (ETP-4530)', () => {
-    it('does not block Save for an unrelated change when Cuenta bancaria was never touched', async () => {
+  // ── ETP-4872: AccountingConfigurationSection field layout ─────────────────
+  // The old 2-field fINAssetAcct/fINTransitoryAcct set is replaced by 9 account-type-dependent
+  // fields grouped into up to 3 sub-sections. Banco gets all 3 (General, Payment IN, Payment
+  // OUT — 9 fields); Caja/Tarjeta omit "General" ENTIRELY (not just hide it) — 6 fields, 2
+  // sub-sections. No field is required (Global Constraints, ETP-4872 plan).
+  describe('AccountingConfigurationSection field layout (ETP-4872)', () => {
+    const GENERAL_FIELDS = ['fINBankrevaluationgainAcct', 'fINBankrevaluationlossAcct', 'fINBankfeeAcct'];
+    const PAYMENT_IN_FIELDS = ['inTransitPaymentAccountIN', 'depositAccount', 'clearedPaymentAccount'];
+    const PAYMENT_OUT_FIELDS = ['fINOutIntransitAcct', 'withdrawalAccount', 'clearedPaymentAccountOUT'];
+    const ALL_9_FIELDS = [...GENERAL_FIELDS, ...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS];
+
+    async function openAccountingTab(user) {
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      return screen.findByTestId('accounting-configuration-section');
+    }
+
+    it('renders 9 fields in 3 sub-sections for a Bank account', async () => {
       const user = userEvent.setup();
-      // Default mock already resolves fINAssetAcct: null — the account never configured
-      // accounting, and the Contabilidad tab is never opened in this test.
-      renderModal();
+      renderModal({ account: BANK_ACCOUNT });
+      const section = await openAccountingTab(user);
 
-      const nameInput = screen.getByTestId('edit-account-name');
-      await user.clear(nameInput);
-      await user.type(nameInput, 'BBVA Renamed');
+      // Every field's search-select input is present (all start empty — see default mock).
+      ALL_9_FIELDS.forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(9);
 
-      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+      // All 3 sub-section headings render, "General" included.
+      expect(within(section).getByText('financeAccountsEditTabGeneral')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
     });
 
-    it('blocks Save once Cuenta bancaria is cleared after visiting the Contabilidad tab', async () => {
+    it('renders 6 fields in 2 sub-sections for a Cash account, omitting General entirely', async () => {
+      const user = userEvent.setup();
+      renderModal({
+        account: { id: 'acc-cash-acct', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false },
+      });
+      const section = await openAccountingTab(user);
+
+      [...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS].forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      GENERAL_FIELDS.forEach((key) => {
+        expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+
+      // "General" is omitted, not merely hidden — the heading itself is absent.
+      expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
+    });
+
+    it('renders 6 fields in 2 sub-sections for a Card account, omitting General entirely', async () => {
+      const user = userEvent.setup();
+      renderModal({
+        account: { id: 'acc-card-acct', name: 'Tarjeta', type: 'CA', currencyId: '102', bankConnected: false },
+      });
+      const section = await openAccountingTab(user);
+
+      [...PAYMENT_IN_FIELDS, ...PAYMENT_OUT_FIELDS].forEach((key) => {
+        expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
+      });
+      GENERAL_FIELDS.forEach((key) => {
+        expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
+      });
+      expect(within(section).getAllByRole('combobox')).toHaveLength(6);
+      expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
+      expect(within(section).getByText('financeAccountsAccountingSectionPaymentOut')).toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-4872: dirty-check / snapshot over the 9-field state map ───────────
+  // Mirrors the old single-field `assetAcct !== snapshot.assetAcct` pattern, now over a map
+  // keyed by all 9 field names — each key must be tracked independently against its own
+  // snapshot slice, not collapsed into one shared dirty flag.
+  describe('Accounting dirty-check tracks the 9-field state map (ETP-4872)', () => {
+    it('tracks dirty state independently per field and clears only once every changed field is reverted', async () => {
       const user = userEvent.setup();
       fetchAccountingConfiguration.mockResolvedValueOnce({
         id: 'row-1',
-        fINAssetAcct: 'AST1',
-        'fINAssetAcct$_identifier': 'Bank Asset 1',
-        fINTransitoryAcct: null,
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: 'FEE1',
+        'fINBankfeeAcct$_identifier': 'Fee 1',
+        inTransitPaymentAccountIN: null,
+        depositAccount: 'DEP1',
+        'depositAccount$_identifier': 'Deposit 1',
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
         ledgerConfigured: true,
-        catalogs: { accounts: [{ id: 'AST1', name: 'Bank Asset 1' }] },
+        catalogs: {
+          accounts: [
+            { id: 'FEE1', name: 'Fee 1' },
+            { id: 'FEE2', name: 'Fee 2' },
+            { id: 'DEP1', name: 'Deposit 1' },
+            { id: 'DEP2', name: 'Deposit 2' },
+          ],
+        },
       });
       renderModal();
 
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      expect(screen.getByTestId('field-fINAssetAcct-chip')).toBeInTheDocument();
 
-      // Clear the required selection via the chip's X (clear) control.
-      await user.click(screen.getByLabelText('clear'));
-
-      await waitFor(() =>
-        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
-      );
+      // Nothing changed yet — Save is disabled (nothing dirty anywhere in the form).
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      // Change depositAccount away from its snapshot value. Clearing via the chip's X
+      // reopens the dropdown immediately (CreatableSearchSelect's handleClear), so the
+      // desired option can be picked straight away.
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Also change fINBankfeeAcct — a second, independent key in the same map.
+      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert depositAccount back to its original snapshot value — the OTHER field
+      // (fINBankfeeAcct) is still dirty, so Save must stay enabled: the two keys are not
+      // collapsed into one shared dirty flag.
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert fINBankfeeAcct too — every key in the map now matches its snapshot again,
+      // so Save disables.
+      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
+    });
+  });
+
+  // ── ETP-4872 QA regression: accounting field state across a mid-edit Type switch ──
+  // AccountingConfigurationSection renders only the subset of ACCOUNTING_FIELDS that applies to
+  // `accountType`, but `accounting.values` (the state map in useAccountingConfiguration) is keyed
+  // on ALL 9 fields regardless of type, and nothing resets/filters it when `fields.type` changes —
+  // the hook's fetch effect is keyed on `[open, accountId]` only (EditAccountModal.jsx ~L840-876).
+  // persistAccountEdits then builds its save payload by iterating the FULL ACCOUNTING_FIELDS list
+  // unconditionally (~L223-229), reading straight from that unfiltered map.
+  describe('Accounting field state across a mid-edit Type switch (ETP-4872 regression)', () => {
+    const SWITCHABLE_BANK_ACCOUNT = {
+      id: 'acc-switchable',
+      name: 'Switchable',
+      type: 'B',
+      currencyId: '102',
+      bankConnected: false,
+      hasTransactions: false, // Type stays editable (ETP-4581) — no bank link/transactions.
+    };
+
+    it('BUG-1: still sends the now-hidden Banco-only field value after switching Type to Cash pre-Save', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: { accounts: [{ id: 'FEE1', name: 'Fee 1' }] },
+      });
+      saveAccountingConfiguration.mockResolvedValue({ id: 'row-switch' });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      // Fill the Banco-only "General" field while the account is still type Banco.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(screen.getByTestId('field-fINBankfeeAcct'));
+      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Switch back to General and change Type to Cash BEFORE saving. The Accounting tab's
+      // "General" sub-section (and fINBankfeeAcct with it) is now unmounted — Cash renders only
+      // 6 fields across 2 sub-sections, no "General" group at all.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(saveAccountingConfiguration).toHaveBeenCalledTimes(1));
+      const [, payload] = saveAccountingConfiguration.mock.calls[0];
+      // Expected (correct) behavior: a value that belongs only to the account type the user is
+      // no longer saving as must not be silently carried over onto the Cash row. Current
+      // implementation FAILS this assertion — payload.fINBankfeeAcct still comes back 'FEE1'
+      // because persistAccountEdits reads straight from the unfiltered `accounting.values` map,
+      // with no re-derivation keyed on the (possibly just-changed) account type.
+      expect(payload.fINBankfeeAcct).toBeNull();
+    });
+
+    it('keeps the accounting dirty-check accurate across a round-trip Type switch', async () => {
+      const user = userEvent.setup();
+      fetchAccountingConfiguration.mockResolvedValueOnce({
+        id: 'row-switch-2',
+        fINBankrevaluationgainAcct: null,
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: 'DEP1',
+        'depositAccount$_identifier': 'Deposit 1',
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
+        ledgerConfigured: true,
+        catalogs: {
+          accounts: [
+            { id: 'DEP1', name: 'Deposit 1' },
+            { id: 'DEP2', name: 'Deposit 2' },
+          ],
+        },
+      });
+      renderModal({ account: SWITCHABLE_BANK_ACCOUNT });
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      // Flip Type to Cash (depositAccount is common to both Banco and Cash's "Payment IN" group,
+      // so it stays rendered either way) with no accounting change yet.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+
+      // Change depositAccount while the account is (momentarily) type Cash.
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+
+      // Revert Type back to Banco — typeDirty clears, isolating accounting.dirty as the only
+      // remaining source of Save being enabled.
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      await user.click(screen.getByTestId('edit-account-type'));
+      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeBank' }));
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
+
+      // Revert depositAccount to its snapshot too — every key in the 9-field map matches its
+      // snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
+      // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
+      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
 
@@ -1228,8 +1514,10 @@ describe('EditAccountModal', () => {
       // Cash used to land on Contabilidad. ETP-4795 gave General real content for cash (the GL
       // Item Difference selector), and landing on Contabilidad put the required, empty "Cuenta
       // bancaria" field in the user's face with Save disabled — which reads as an error the modal
-      // is reporting rather than a starting point. The missing-asset-account summary already
-      // surfaces that on General without hijacking the tab (ETP-4530 / BUG-1, below).
+      // is reporting rather than a starting point. ETP-4872 has since retired that requiredness
+      // entirely (no accounting field is required anymore — see "Save is never blocked by the
+      // Contabilidad tab regardless of tab", below), so this concern no longer applies to any
+      // account type, but General remains the sensible landing tab regardless.
       const { rerender } = renderModal();
       expect(getTab('financeAccountsEditTabGeneral')).toHaveAttribute('aria-selected', 'true');
 
@@ -1249,55 +1537,70 @@ describe('EditAccountModal', () => {
     });
   });
 
-  // ── ETP-4530 / BUG-1 regression ───────────────────────────────────────────
-  // The Cuenta bancaria requirement is validated on the Contabilidad tab, but Save is
-  // disabled regardless of the active tab. Before this fix the reason was invisible while
-  // looking at General; a summary line now surfaces it there (and only there, to avoid a
-  // duplicate message with the field-level error on the Contabilidad tab itself).
-  describe('BUG-1 regression — accounting error summary across tabs (ETP-4530)', () => {
-    it('shows the summary on General, hides it on Contabilidad, and clears once filled in', async () => {
+  // ── ETP-4872 — Save is never blocked by the Contabilidad tab ──────────────
+  // Replaces the old "BUG-1 regression — accounting error summary across tabs (ETP-4530)"
+  // block: that regression tested the cross-tab `edit-account-accounting-error-summary`
+  // banner driven by the now-retired required `fINAssetAcct` field. Neither the banner nor
+  // any per-field required error exists anymore (Global Constraints, ETP-4872 plan — no field
+  // in the new 9-field set is required), so this block instead pins the broader guarantee the
+  // old one was protecting: an accounting field, however filled or cleared, must never be able
+  // to disable Save — on the Contabilidad tab itself, or after switching away from it.
+  describe('Save is never blocked by the Contabilidad tab regardless of tab (ETP-4872)', () => {
+    it('shows neither a field-level nor a summary accounting error, on either tab', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.click(getTab('financeAccountsEditTabAccounting'));
+      await screen.findByTestId('accounting-configuration-section');
+
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+
+      await user.click(getTab('financeAccountsEditTabGeneral'));
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+    });
+
+    it('never disables Save no matter which accounting fields are filled or cleared, on any tab', async () => {
       const user = userEvent.setup();
       fetchAccountingConfiguration.mockResolvedValueOnce({
         id: 'row-1',
-        fINAssetAcct: 'AST1',
-        'fINAssetAcct$_identifier': 'Bank Asset 1',
-        fINTransitoryAcct: null,
+        fINBankrevaluationgainAcct: 'GAIN1',
+        'fINBankrevaluationgainAcct$_identifier': 'Gain 1',
+        fINBankrevaluationlossAcct: null,
+        fINBankfeeAcct: null,
+        inTransitPaymentAccountIN: null,
+        depositAccount: null,
+        clearedPaymentAccount: null,
+        fINOutIntransitAcct: null,
+        withdrawalAccount: null,
+        clearedPaymentAccountOUT: null,
         ledgerConfigured: true,
-        catalogs: {
-          accounts: [
-            { id: 'AST1', name: 'Bank Asset 1' },
-            { id: 'AST2', name: 'Bank Asset 2' },
-          ],
-        },
+        catalogs: { accounts: [{ id: 'GAIN1', name: 'Gain 1' }] },
       });
       renderModal();
 
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
 
-      // Clear the required field — assetAcctMissing becomes true.
-      await user.click(screen.getByLabelText('clear'));
+      // Clear the only pre-filled field — under the old (retired) required-fINAssetAcct
+      // behavior this exact action would have disabled Save. It must not anymore, for ANY
+      // field, since none is required.
+      await user.click(within(screen.getByTestId('field-fINBankrevaluationgainAcct-chip')).getByLabelText('clear'));
+
       await waitFor(() =>
-        expect(screen.getByTestId('edit-account-asset-acct-error')).toBeInTheDocument(),
+        expect(screen.getByTestId('field-fINBankrevaluationgainAcct')).toBeInTheDocument(),
       );
-      // (b) No duplicate summary line while still on the Contabilidad tab itself.
+      expect(screen.queryByTestId('edit-account-asset-acct-error')).not.toBeInTheDocument();
       expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+      // Clearing the field made the tab dirty — Save enables purely on dirtiness, never on
+      // a required-field check.
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
-      // (a) Switching to General surfaces the summary line instead.
+      // Switching tabs away from Contabilidad must not surface a hidden summary/error either.
       await user.click(getTab('financeAccountsEditTabGeneral'));
-      expect(screen.getByTestId('edit-account-accounting-error-summary')).toHaveTextContent(
-        'financeAccountsAccountingBankAssetRequiredSummary',
-      );
-
-      // (c) Filling the field back in makes the summary disappear.
-      await user.click(getTab('financeAccountsEditTabAccounting'));
-      await user.click(screen.getByTestId('field-fINAssetAcct'));
-      await user.click(await screen.findByTestId('option-fINAssetAcct-AST2'));
-
-      await user.click(getTab('financeAccountsEditTabGeneral'));
-      await waitFor(() =>
-        expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument(),
-      );
+      expect(screen.queryByTestId('edit-account-accounting-error-summary')).not.toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
     });
   });
 
@@ -1822,6 +2125,467 @@ describe('EditAccountModal', () => {
       await user.type(bic, 'bbvaesmm');
 
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+    });
+  });
+
+  // ETP-5104 — "Sincronizar ahora" persists the pending form BEFORE it syncs (the bridge reads the
+  // import range from the DB, so an unsaved range was silently ignored and then overwritten by the
+  // post-sync refresh), and an inverted "Importar desde" > "Importar hasta" range is refused up
+  // front instead of failing deep inside the PSD2 module. The whole feature only exists for a
+  // bank-linked account, so every test here runs against CONNECTED_ACCOUNT.
+  describe('ETP-5104 — import date range', () => {
+    // BASE_STATUS, typeImportDate and openConnectedModal are declared at module scope so the
+    // ETP-5181 suite below can drive the same two boxes without a second copy of the fixture.
+
+    // What the two boxes display for the stored fixture, per the locale the modal runs under in
+    // this suite (es_ES -> dd/mm/yyyy, see formatCalendarDate in @/lib/dateOnly.js).
+    const DISPLAYED_FROM = '01/01/2026';
+    const DISPLAYED_TO = '01/02/2026';
+
+    // CP-1. The bug: the bridge reads the range from the DB, so syncing with an unsaved "Importar
+    // desde" imported the PREVIOUSLY stored range. Ordering is the point — saving after the sync
+    // would persist the right value but still have run the import against the stale one.
+    it('CP-1: persists the edited "Importar desde" before calling sync, with no explicit save', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledTimes(1);
+      expect(saveImportSettings).toHaveBeenCalledWith({
+        financialAccountId: 'acc-9',
+        // The NEW value, not the '2026-01-01' the status fetch delivered.
+        importFromDate: '2026-01-15',
+        importToDate: '2026-02-01',
+        statementGrouping: '1BD',
+      });
+      // Real ordering, not merely "both ran": vi records a global invocation sequence number per
+      // call, so this fails if the save is moved after the sync.
+      expect(saveImportSettings.mock.invocationCallOrder[0])
+        .toBeLessThan(sync.mock.invocationCallOrder[0]);
+    });
+
+    // CP-2. The second symptom of the same bug: runSync's refresh() rewrites both `form` and
+    // `initial` from the server, so before the save-first fix whatever the user had typed was
+    // overwritten in place ("los campos se restablecen"). With the save landing first the refresh
+    // reads back the user's own values and is a no-op for them.
+    it('CP-2: keeps the user values in both boxes after the sync refresh reads them back', async () => {
+      const user = userEvent.setup();
+      fetchStatus
+        .mockResolvedValueOnce(BASE_STATUS)
+        // What the bridge returns once the edit has actually been persisted.
+        .mockResolvedValueOnce({ ...BASE_STATUS, importFromDate: '2026-01-15' });
+      await openConnectedModal();
+
+      const fromInput = await typeImportDate(
+        user, 'field-date-bank-connection-import-from', '15012026',
+      );
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(fetchStatus).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(fromInput).toHaveValue('15/01/2026'));
+      // The pre-edit value must not have come back.
+      expect(fromInput).not.toHaveValue(DISPLAYED_FROM);
+      // The untouched box is unaffected either way.
+      expect(screen.getByTestId('field-date-bank-connection-import-to')).toHaveValue(DISPLAYED_TO);
+    });
+
+    // CP-3. An inverted range is a form error, exactly like the amount-tolerance one: it is shown
+    // inline and it blocks Save (`saveBlocked` feeds `canSave`), so nothing is ever written.
+    it('CP-3: shows the range error and disables Guardar cambios when desde is later than hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      // Save is enabled for a valid edit — proves the disabled state below comes from the range,
+      // not from the form simply being pristine.
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+
+      // 01/03/2026 is after the stored "hasta" (01/02/2026).
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+
+      expect(await screen.findByTestId('bank-connection-import-range-error')).toHaveTextContent(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      );
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    // CP-4. The guard runs BEFORE the save-then-sync chain: an inverted range must not reach the
+    // bridge (its OBException comes back re-wrapped as an untranslated PSD2 error carrying the
+    // Salt Edge connection id) and must not be persisted on the way there either.
+    it('CP-4: refuses the sync on an inverted range without saving or calling the bridge', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(
+        'financeAccountsBankConnectionImportRangeInvalid',
+      ));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      // The status is not re-read either — nothing ran.
+      expect(fetchStatus).toHaveBeenCalledTimes(1);
+    });
+
+    // Regression: the save-before-sync step is gated on `dirty`. A pristine form must still sync,
+    // and must not fire a pointless empty write (persistAccountEdits would send nothing, but
+    // saveImportSettings would still be called if the gate were dropped).
+    it('regression: a pristine form still syncs and never fires an empty save', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const onSaved = vi.fn();
+      await openConnectedModal({ onClose, onSaved });
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).not.toHaveBeenCalled();
+      expect(updateAccount).not.toHaveBeenCalled();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(toastSuccess).toHaveBeenCalled();
+      // Syncing is not saving: the modal stays open so the user can keep editing.
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Regression: the save leg failing must abort the sync outright — syncing anyway would run the
+    // import against the stale stored range, which is the very bug this feature fixes.
+    it('regression: aborts the sync when the pre-sync save fails, reporting it exactly once', async () => {
+      const user = userEvent.setup();
+      const err = new Error('boom');
+      err.status = 500;
+      saveImportSettings.mockRejectedValueOnce(err);
+      const onClose = vi.fn();
+      await openConnectedModal({ onClose });
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '15012026');
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledTimes(1));
+      expect(sync).not.toHaveBeenCalled();
+      // Reported ONCE, in the save path's own wording. The `handled` flag exists precisely to stop
+      // runSync's catch from toasting the same failure a second time as a raw err.message.
+      await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+      expect(toastError).toHaveBeenCalledWith('boom');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The panel-level error is driven by the same predicate as the Save gate, so it must clear as
+    // soon as the range becomes valid again — otherwise the user is stuck looking at a stale error
+    // with Save mysteriously enabled.
+    it('clears the range error once the range is valid again', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01032026');
+      await screen.findByTestId('bank-connection-import-range-error');
+
+      // Push "hasta" past the new "desde" instead of undoing the edit.
+      await typeImportDate(user, 'field-date-bank-connection-import-to', '31032026');
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull());
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+
+    // A half-filled range is legal ("no bound"), so clearing a box must never block Save or the
+    // sync — blocking on a half-typed form would be worse than the bug being guarded.
+    it('treats a single-ended range as valid', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      const toInput = screen.getByTestId('field-date-bank-connection-import-to');
+      await user.clear(toInput);
+      await user.tab();
+
+      await waitFor(() => expect(toInput).toHaveValue(''));
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      expect(saveImportSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ importFromDate: '2026-01-01', importToDate: '' }),
+      );
+    });
+
+    // Equal bounds are a one-day range, not an inversion — the check is `>`, not `>=`.
+    it('accepts an identical desde and hasta', async () => {
+      const user = userEvent.setup();
+      await openConnectedModal();
+
+      await typeImportDate(user, 'field-date-bank-connection-import-from', '01022026');
+
+      expect(screen.getByTestId('field-date-bank-connection-import-from'))
+        .toHaveValue(DISPLAYED_TO);
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+    });
+  });
+
+  // ETP-5181 — "Importar desde" may reach further back than the bank will serve. PSD2 providers
+  // publish a `max_fetch_interval` (90 days under the regulation's baseline) which the bridge
+  // exposes on GET status as `maxFetchInterval`; the panel turns that into an ADVISORY under the
+  // date grid. Advisory, not a blocker: the range is applied as a local filter over whatever the
+  // provider returns, so an over-long range loses nothing inside the window that IS available —
+  // the point is only to stop the user expecting history the bank will never hand over.
+  describe('ETP-5181 — provider max fetch interval', () => {
+    const WARNING_TESTID = 'bank-connection-import-fetch-interval-warning';
+    const WARNING_KEY = 'financeAccountsBankConnectionImportBeyondFetchInterval';
+    const LIMIT = 90;
+
+    /**
+     * `days` before today as `yyyy-MM-dd`, in the LOCAL calendar.
+     *
+     * A deliberate independent re-implementation of `calendarISODaysAgo` rather than an import of
+     * it: reusing the helper under test as its own oracle would let a timezone bug in it cancel
+     * itself out here. Built with the local-time `Date` constructor for the same reason the
+     * source is — `getTime() - days * 86400000` lands on the wrong calendar day across a DST
+     * change, and `toISOString()` frames the day in UTC.
+     *
+     * Everything is computed off the real clock (no fake timers, which would fight userEvent's
+     * own timer handling), so these fixtures stay correct at any month or year boundary.
+     */
+    function isoDaysAgo(days) {
+      const now = new Date();
+      const then = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${then.getFullYear()}-${pad(then.getMonth() + 1)}-${pad(then.getDate())}`;
+    }
+
+    /** The ddmmyyyy digit string the masked DateField expects for a `yyyy-MM-dd` value. */
+    function digitsOf(iso) {
+      const [year, month, day] = iso.split('-');
+      return `${day}${month}${year}`;
+    }
+
+    const WITHIN_LIMIT = isoDaysAgo(30);
+    const BEYOND_LIMIT = isoDaysAgo(120);
+    const EXACTLY_AT_LIMIT = isoDaysAgo(LIMIT);
+    const ONE_DAY_PAST_LIMIT = isoDaysAgo(LIMIT + 1);
+
+    /**
+     * A GET status payload with an OPEN upper bound.
+     *
+     * `importToDate: ''` is load-bearing: every fixture here puts "desde" months in the past,
+     * which against BASE_STATUS's stored 2026-02-01 "hasta" would also trip the ETP-5104
+     * inverted-range guard — disabling Save and rendering a second paragraph, masking exactly
+     * what these cases assert. A half-open range is legal (see "treats a single-ended range as
+     * valid" above).
+     */
+    function statusWith(overrides) {
+      return { ...BASE_STATUS, importToDate: '', ...overrides };
+    }
+
+    const FROM_BOX = 'field-date-bank-connection-import-from';
+
+    // The "al abrir" half of the requirement: an account already SAVED with an out-of-range date
+    // must advise the moment the panel renders, with no interaction at all. The predicate reads
+    // `form`, which GET status hydrates on open — this fails if it is ever moved onto a
+    // change-handler.
+    it('advises on open when the stored "Importar desde" predates the provider limit', async () => {
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      expect(await screen.findByTestId(WARNING_TESTID)).toBeInTheDocument();
+      // Advisory only — the blocking range error must NOT be showing.
+      expect(screen.queryByTestId('bank-connection-import-range-error')).toBeNull();
+    });
+
+    // The "al editar" half: the predicate is derived from `form`, not from `initial`, so it has to
+    // track every committed keystroke of the date box too.
+    it('advises once an in-range date is edited to one beyond the provider limit', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: WITHIN_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+      expect(screen.queryByTestId(WARNING_TESTID)).toBeNull();
+
+      await typeImportDate(user, FROM_BOX, digitsOf(BEYOND_LIMIT));
+
+      expect(await screen.findByTestId(WARNING_TESTID)).toBeInTheDocument();
+    });
+
+    // A stale advisory left on screen after the date came back inside the window would read as an
+    // unfixable complaint, so the paragraph has to unmount, not merely stop being accurate.
+    it('clears the advisory once the date comes back inside the window', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+      expect(await screen.findByTestId(WARNING_TESTID)).toBeInTheDocument();
+
+      await typeImportDate(user, FROM_BOX, digitsOf(WITHIN_LIMIT));
+
+      await waitFor(() => expect(screen.queryByTestId(WARNING_TESTID)).toBeNull());
+    });
+
+    it('stays silent for a date inside the provider window', async () => {
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: WITHIN_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      expect(screen.queryByTestId(WARNING_TESTID)).toBeNull();
+    });
+
+    // A provider that never published a limit must produce no advice rather than a guessed 90 —
+    // the bridge omits the key entirely for exactly this reason (a JSON null would be
+    // indistinguishable from a real zero).
+    it('stays silent when the status payload publishes no limit at all', async () => {
+      fetchStatus.mockResolvedValue(statusWith({ importFromDate: BEYOND_LIMIT }));
+      await openConnectedModal();
+
+      expect(screen.queryByTestId(WARNING_TESTID)).toBeNull();
+    });
+
+    // Guards the `> 0` test: a zero limit would otherwise make `earliest` equal today and advise
+    // against every date in the past.
+    it('stays silent for a non-positive published limit', async () => {
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: 0 }),
+      );
+      await openConnectedModal();
+
+      expect(screen.queryByTestId(WARNING_TESTID)).toBeNull();
+    });
+
+    // Boundary, lower half. The comparison is strict `<`, matching the backend's own
+    // `daysDiff > maxInterval` (integer division, whole days): the day exactly `limit` days back
+    // IS served, so advising there would contradict the sync's own warning by one day.
+    it('stays silent on the exact boundary day (today − limit)', async () => {
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: EXACTLY_AT_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      expect(screen.queryByTestId(WARNING_TESTID)).toBeNull();
+    });
+
+    // Boundary, upper half. One day further back is the first date the provider will not serve.
+    it('advises one day past the boundary (today − limit − 1)', async () => {
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: ONE_DAY_PAST_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      expect(await screen.findByTestId(WARNING_TESTID)).toBeInTheDocument();
+    });
+
+    // The acceptance criterion in one case: advise, but allow saving. The date must reach
+    // saveImportSettings byte-for-byte as typed — a "helpful" clamp to the earliest served day
+    // would silently discard the user's intent and is what this pins against.
+    it('advises without blocking the save, and persists the date exactly as typed', async () => {
+      const user = userEvent.setup();
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: WITHIN_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      await typeImportDate(user, FROM_BOX, digitsOf(BEYOND_LIMIT));
+      expect(await screen.findByTestId(WARNING_TESTID)).toBeInTheDocument();
+
+      const save = screen.getByTestId('edit-account-save');
+      expect(save).toBeEnabled();
+      await user.click(save);
+
+      await waitFor(() => expect(saveImportSettings).toHaveBeenCalledWith({
+        financialAccountId: 'acc-9',
+        importFromDate: BEYOND_LIMIT,
+        importToDate: '',
+        statementGrouping: '1BD',
+      }));
+    });
+
+    // The advisory is useless if it does not say HOW far back the bank goes, so the limit has to
+    // reach the label as an interpolation param. uiMock is switched to an echo that renders the
+    // key plus its params, which asserts the wiring without hardcoding an English sentence into
+    // this suite (the locale text itself is covered by locales/__tests__).
+    it('passes the provider limit to the label as the {days} param', async () => {
+      uiMock.mockImplementation((key, params) => (params
+        ? `${key}:${Object.entries(params).map(([k, v]) => `${k}=${v}`).join(',')}`
+        : key));
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      expect(await screen.findByTestId(WARNING_TESTID))
+        .toHaveTextContent(`${WARNING_KEY}:days=90`);
+      expect(uiMock).toHaveBeenCalledWith(WARNING_KEY, { days: LIMIT });
+    });
+
+    // CP-1. The synchronization's own answer for the same situation comes back as status WARNING
+    // carrying the PSD2 module's English AD_MESSAGE. It must reach the user as a WARNING toast
+    // (not the neutral `info` it used to be) and in Spanish — that AD_MESSAGE has no real es_ES
+    // translation, so backendErrors.js maps it to a frontend key.
+    it('CP-1: routes the max-fetch-interval sync WARNING to toast.warning, translated', async () => {
+      const user = userEvent.setup();
+      uiMock.mockImplementation((key, params) => (
+        key === 'backendError.psd2ImportDateBeyondMaxInterval'
+          ? `La fecha de inicio solicitada supera el intervalo máximo de ${params.days} días de este proveedor.`
+          : key));
+      sync.mockResolvedValue({
+        status: 'WARNING',
+        message: 'The requested start date exceeds the maximum fetch interval of 90 days'
+          + ' supported by this provider. Only transactions within the last 90 days may be'
+          + ' available.',
+      });
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal();
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(toastWarning).toHaveBeenCalledWith(
+        'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este proveedor.',
+      ));
+      // The two branches this must NOT fall into: the neutral notice it used to be, and the
+      // "everything went fine" success it never was.
+      expect(toastInfo).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+    });
+
+    // CP-2. A WARNING is not a failure: the import DID run, so the panel must refresh from the
+    // bridge and notify the parent list exactly as it does on OK. Downgrading the toast must not
+    // have turned the warning path into an early return.
+    it('CP-2: still refreshes the status and notifies onSaved after a WARNING sync', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      const onClose = vi.fn();
+      sync.mockResolvedValue({
+        status: 'WARNING',
+        message: 'The requested start date exceeds the maximum fetch interval of 90 days'
+          + ' supported by this provider. Only transactions within the last 90 days may be'
+          + ' available.',
+      });
+      fetchStatus.mockResolvedValue(
+        statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+      );
+      await openConnectedModal({ onSaved, onClose });
+
+      await user.click(screen.getByTestId('bank-connection-edit-sync'));
+
+      await waitFor(() => expect(sync).toHaveBeenCalledWith('acc-9'));
+      // Two status reads: the one on open plus runSync's post-sync refresh().
+      await waitFor(() => expect(fetchStatus).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      // Syncing is not saving — the modal stays open, same as the OK path.
+      expect(onClose).not.toHaveBeenCalled();
     });
   });
 

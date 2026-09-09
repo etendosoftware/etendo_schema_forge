@@ -1,17 +1,21 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
+import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { toast } from 'sonner';
-import { useUI, getStoredLocale } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { formatCalendarMonthYear, parseCalendarDate } from '@/lib/dateOnly.js';
 import { Tag } from '@/components/ui/tag';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast.js';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status / documents.periodStatus enumVariants — kept in sync manually
 // since this is a custom component, not generator-driven output.
-const PERIOD_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'neutral', P: 'red', M: 'orange' };
+const PERIOD_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'red', P: 'red', M: 'orange' };
 const DOCUMENT_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'red', P: 'red' };
 
 // openClose is not a simple toggle — it's a required 3-state choice (Open/Closed/Permanently
@@ -47,29 +51,19 @@ function yearCriteria(yearId) {
   return `criteria=${encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: yearId }]))}`;
 }
 
-// This panel's raw fetch()/postAction calls sent no Accept-Language header at all, unlike
-// useEntity.js's buildHeaders() (used by the rest of the app) — added here for parity and
-// because NeoAuthenticator.java's applyRequestLanguage() does read it and call
-// OBContext.getOBContext().setLanguage(...) for the request. BUT this was verified live (not
-// assumed) to NOT actually be sufficient on its own: with the header correctly sent as es_ES
-// (confirmed via captured network requests), periodControl/documents — served through NEO's
-// generic DefaultJsonDataService (classic Openbravo datasource) — still returned English
-// $_identifier values. The logged-in test user's own ad_user.default_ad_language is en_US in
-// this DB, which is the more likely actual authority for that datasource's identifier
-// resolution, not the per-request OBContext language. So $_identifier can't be relied on for
-// localization here — see PERIOD_STATUS_LABEL_KEYS / DOCUMENT_STATUS_LABEL_KEYS /
-// DOCUMENT_CATEGORY_LABEL_KEYS below for the actual fix (client-side enumLabels, same
-// convention DataTable.cellRenderers.jsx's renderEnumCell already uses everywhere else). The
-// header is still sent since it's correct for other things (e.g. AD_Message translations) and
-// doesn't hurt. `getStoredLocale()` (from @/i18n, app-shell-core's useLocaleState.js) is the
-// canonical "read the active locale outside of React" helper already published for exactly
-// this use case — reused here instead of duplicating useEntity.js's own localStorage read.
-function buildLocaleHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    'Accept-Language': getStoredLocale(),
-  };
-}
+// This panel's requests previously sent no Accept-Language header at all via a hand-rolled raw
+// fetch()/postAction. `apiFetch` (from `@/auth/useApiFetch.js`) sends `Accept-Language` (and
+// `Authorization`) on every request automatically now, so no manual header-building is needed
+// here anymore. This was verified live (not assumed) to NOT be sufficient on its own for
+// translation, though: with the header correctly sent as es_ES (confirmed via captured network
+// requests), periodControl/documents — served through NEO's generic DefaultJsonDataService
+// (classic Openbravo datasource) — still returned English $_identifier values. The logged-in
+// test user's own ad_user.default_ad_language is en_US in this DB, which is the more likely
+// actual authority for that datasource's identifier resolution, not the per-request OBContext
+// language. So $_identifier can't be relied on for localization here — see
+// PERIOD_STATUS_LABEL_KEYS / DOCUMENT_STATUS_LABEL_KEYS / DOCUMENT_CATEGORY_LABEL_KEYS below for
+// the actual fix (client-side enumLabels, same convention DataTable.cellRenderers.jsx's
+// renderEnumCell already uses everywhere else).
 
 // The actual fix for the untranslated labels: client-side enumLabels dictionaries resolved via
 // ui()/tMenu (dictionary.genericLabels), exactly like DataTable.cellRenderers.jsx's
@@ -139,8 +133,23 @@ const DOCUMENT_CATEGORY_LABEL_KEYS = {
   WRE: 'calendarDocCategoryWorkRequirement',
 };
 
-async function fetchJson(url, token) {
-  const res = await fetch(url, { headers: buildLocaleHeaders(token) });
+const PERIOD_NAME_RE = /^([A-Z][a-z]{2})-(\d{2})$/;
+const PERIOD_MONTHS = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+};
+
+function formatPeriodName(period, locale) {
+  const startDate = parseCalendarDate(period.startingDate);
+  if (startDate) return formatCalendarMonthYear(startDate, locale);
+  const match = String(period.name ?? '').match(PERIOD_NAME_RE);
+  if (!match) return period.name;
+  const month = PERIOD_MONTHS[match[1]];
+  return formatCalendarMonthYear(new Date(2000 + Number(match[2]), month, 1), locale);
+}
+
+async function fetchJson(apiFetch, path) {
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   const body = await res.json();
   // periodControl's LIST goes through NEO's generic DefaultJsonDataService (classic Openbravo
@@ -150,10 +159,9 @@ async function fetchJson(url, token) {
   return body?.response?.data ?? (Array.isArray(body) ? body : []);
 }
 
-async function postAction(url, token, fieldValues) {
-  const res = await fetch(url, {
+async function postAction(apiFetch, path, fieldValues) {
+  const res = await apiFetch(path, {
     method: 'POST',
-    headers: { ...buildLocaleHeaders(token), 'Content-Type': 'application/json' },
     // Matches useEntity.js's handleProcess body shape exactly — the backend reads the chosen
     // value via context.getRequestBody().optJSONObject("fieldValues").optString("openClose").
     body: JSON.stringify({ fieldValues }),
@@ -162,8 +170,10 @@ async function postAction(url, token, fieldValues) {
   return res.json();
 }
 
-export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) {
+export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
+  const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array (same convention as AccountingPanel):
   // `undefined` = loading, `null` = the request failed, an array = loaded (possibly empty).
   const [periods, setPeriods] = useState(undefined);
@@ -192,31 +202,63 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   const loadPeriods = useCallback(async () => {
     if (!parentId) return;
     try {
-      const data = await fetchJson(`${apiBaseUrl}/periodControl?${yearCriteria(parentId)}`, token);
+      const data = await fetchJson(apiFetch, `/periodControl?${yearCriteria(parentId)}&_sortBy=startingDate asc`);
       setPeriods(data);
     } catch {
       setPeriods(null);
     }
-  }, [parentId, apiBaseUrl, token]);
+  }, [parentId, apiFetch]);
 
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
     loadPeriods();
-  }, [parentId, apiBaseUrl, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parentId, loadPeriods]);
+
+  // "Create Periods" runs in a completely different React subtree — the generated `YearPage`
+  // from the `fiscal-calendar` spec (this panel lives on the `open-close-period-control` spec,
+  // stitched in via `secondaryTabs`, see the window's own doc for the 3-specs-one-window shape).
+  // useEntity.js's handleProcess dispatches a generic `neo:processSuccess` window CustomEvent on
+  // any successful process — the same cross-component signal AmortizationLinesTable.jsx and
+  // AssetsAmortizationPanel.jsx already listen for to refresh a sibling panel after a header-level
+  // process. Filtered on `recordId` only (not `entity`), matching AmortizationLinesTable's
+  // convention: this panel only cares whether the event's record is its own year, regardless of
+  // which spec/entity actually fired the process.
+  useEffect(() => {
+    if (!parentId) return undefined;
+    function onProcessSuccess(e) {
+      if (String(e?.detail?.recordId) !== String(parentId)) return;
+      loadPeriods();
+    }
+    window.addEventListener('neo:processSuccess', onProcessSuccess);
+    return () => window.removeEventListener('neo:processSuccess', onProcessSuccess);
+  }, [parentId, loadPeriods]);
 
   // Fetches (or re-fetches) one period's documents — used both by toggleExpand (first expand)
   // and, silently, to refresh a document row's status right after a document action succeeds.
   // Reused rather than duplicated so "initial load" and "post-action refresh" can never drift.
   const loadDocumentsForPeriod = useCallback(async (periodId) => {
     try {
-      const docs = await fetchJson(`${apiBaseUrl}/documents?parentId=${periodId}`, token);
+      const docs = await fetchJson(apiFetch, `/documents?parentId=${periodId}`);
       setDocumentsByPeriod((prev) => ({ ...prev, [periodId]: docs }));
       setDocumentsError((prev) => ({ ...prev, [periodId]: false }));
     } catch {
       setDocumentsError((prev) => ({ ...prev, [periodId]: true }));
     }
-  }, [apiBaseUrl, token]);
+  }, [apiFetch]);
+
+  const invalidateDocumentsForPeriod = useCallback((periodId) => {
+    setDocumentsByPeriod((previous) => {
+      const next = { ...previous };
+      delete next[periodId];
+      return next;
+    });
+    setDocumentsError((previous) => {
+      const next = { ...previous };
+      delete next[periodId];
+      return next;
+    });
+  }, []);
 
   const toggleExpand = useCallback(async (periodId) => {
     // Selection only ever applies to the currently expanded period's rows — collapsing or
@@ -241,13 +283,13 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     });
   }, []);
 
-  const runAction = useCallback(async (key, url, fieldValues, onSuccess) => {
+  const runAction = useCallback(async (key, path, fieldValues, onSuccess) => {
     setPendingActions((prev) => {
       if (prev[key]) return prev;
       return { ...prev, [key]: true };
     });
     try {
-      await postAction(url, token, fieldValues);
+      await postAction(apiFetch, path, fieldValues);
       // Targeted refetch of just the affected data (never a full page reload) so the status
       // badge reflects the new value immediately, instead of staying stale until a manual F5.
       await onSuccess?.();
@@ -256,7 +298,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     } finally {
       setPendingActions((prev) => ({ ...prev, [key]: false }));
     }
-  }, [token, ui]);
+  }, [apiFetch, ui]);
 
   // Opens the shared ProcessParamDialog instead of firing the request directly — the actual
   // POST happens in handleDialogConfirm once the user picks Open/Closed/Permanently closed.
@@ -290,7 +332,7 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     setPendingActions((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
     try {
       const outcomes = await Promise.allSettled(
-        ids.map((id) => postAction(`${apiBaseUrl}/documents/${id}/action/openClose`, token, fieldValues))
+        ids.map((id) => postAction(apiFetch, `/documents/${id}/action/openClose`, fieldValues))
       );
       const failed = outcomes.filter((o) => o.status === 'rejected');
       const ok = ids.length - failed.length;
@@ -302,14 +344,32 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
     } finally {
       setPendingActions((prev) => ({ ...prev, [key]: false }));
     }
-  }, [apiBaseUrl, token, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
+  }, [apiFetch, showBulkResult, loadDocumentsForPeriod, loadPeriods]);
 
   const handleDialogConfirm = useCallback((paramValues) => {
     if (!dialogTarget) return;
     const { kind, id, ids, periodId } = dialogTarget;
     setDialogTarget(null);
     if (kind === 'period') {
-      runAction(`period-${id}`, `${apiBaseUrl}/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
+      // The period-level action opens/closes EVERY C_PeriodControl row for this period in one
+      // DB transaction (AD Process 167 — "Opens/Closes all PeriodControl for a C_Period"), so if
+      // this period is currently expanded its stale documentsByPeriod[id] must be refreshed too,
+      // same as the document-level and bulk-document-level branches just below.
+      runAction(
+        `period-${id}`,
+        `/periodControl/${id}/action/openClose`,
+        paramValues,
+        async () => {
+          if (expandedId === id) {
+            await Promise.all([loadPeriods(), loadDocumentsForPeriod(id)]);
+          } else {
+            // A previously expanded period may retain cached document rows after it is collapsed.
+            // Its process changes every child status, so force the next expansion to fetch again.
+            invalidateDocumentsForPeriod(id);
+            await loadPeriods();
+          }
+        }
+      );
     } else if (kind === 'bulk-documents') {
       runBulkDocumentAction(ids, periodId, paramValues);
     } else {
@@ -319,12 +379,12 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
       // documents list AND the periods list must be refreshed, not just the former.
       runAction(
         `document-${id}`,
-        `${apiBaseUrl}/documents/${id}/action/openClose`,
+        `/documents/${id}/action/openClose`,
         paramValues,
         () => Promise.all([loadDocumentsForPeriod(periodId), loadPeriods()])
       );
     }
-  }, [dialogTarget, apiBaseUrl, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod]);
+  }, [dialogTarget, runAction, runBulkDocumentAction, loadPeriods, loadDocumentsForPeriod, invalidateDocumentsForPeriod, expandedId]);
 
   const dialogProcess = (dialogTarget?.kind === 'document' || dialogTarget?.kind === 'bulk-documents')
     ? DOCUMENT_OPEN_CLOSE_PROCESS
@@ -334,10 +394,9 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   // DOM subtree — reordering the array carries them along with no separate logic needed) to the
   // top of the rendered list, so scrolling or other periods never push it out of view. A stable
   // partition — expanded entry first, everything else keeping its exact existing relative
-  // order — not a new sort: `periodControl`'s LIST fetch above has no explicit `_sortBy`/sort
-  // param today, so introducing one here would risk silently changing the non-expanded periods'
-  // order instead of merely reordering around the pinned one. Only one period can ever be
-  // expanded at a time (`expandedId`), so at most one entry ever moves.
+  // order. The request explicitly sorts periods by startingDate ascending, so the non-expanded
+  // entries retain chronological order. Only one period can ever be expanded at a time
+  // (`expandedId`), so at most one entry ever moves.
   const orderedPeriods = useMemo(() => {
     if (!Array.isArray(periods) || !expandedId) return periods;
     const expanded = periods.find((p) => p.id === expandedId);
@@ -353,70 +412,113 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
   }
 
   return (
-    <div data-testid="periods-expandable-panel">
-      {orderedPeriods.map((period) => {
+    <div className="overflow-x-auto" data-testid="periods-expandable-panel">
+      <Table data-testid="Table__711967">
+        <TableHeader data-testid="TableHeader__711967">
+          <TableRow data-testid="TableRow__711967">
+            <TableHead className="w-10" data-testid="TableHead__711967" />
+            <TableHead data-testid="TableHead__711967">{ui('calendarPeriod')}</TableHead>
+            <TableHead className="w-44" data-testid="TableHead__711967">{ui('calendarStatus')}</TableHead>
+            <TableHead className="w-44 text-right" data-testid="TableHead__711967">{ui('calendarActions')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody data-testid="TableBody__711967">
+          {orderedPeriods.map((period) => {
         const periodPending = !!pendingActions[`period-${period.id}`];
         const isExpanded = expandedId === period.id;
         return (
-          <div key={period.id} className="border-b">
-            {/* This wrapper (row + bulk bar, when visible) is the sticky unit — kept together
-                so they scroll-pin as one block. It only needs `sticky` while THIS period is
-                expanded (only the expanded/pinned period, always rendered first per the
-                array-reordering fix above, has a long document list worth pinning against —
-                collapsed rows never need it and must never compete for the same top-0 slot).
-                `bg-card` prevents the scrolling document rows from showing through underneath. */}
-            <div className={isExpanded ? 'sticky top-0 z-10 bg-card' : undefined}>
-              <div className="flex items-center gap-2 py-2 px-3">
-                <button
+          <Fragment key={period.id}>
+            <TableRow
+              className={isExpanded ? 'cursor-pointer bg-primary/5 ring-1 ring-focus-ring hover:bg-primary/10' : 'cursor-pointer hover:bg-muted/50'}
+              onClick={() => toggleExpand(period.id)}
+              data-testid="TableRow__711967">
+              <TableCell data-testid="TableCell__711967" onClick={(e) => e.stopPropagation()}>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   data-testid={`period-row-expand-${period.id}`}
                   onClick={() => toggleExpand(period.id)}
                   aria-label={ui('expandPeriod')}
                 >
                   {isExpanded ? <ChevronDown size={16} data-testid="ChevronDown__711967" /> : <ChevronRight size={16} data-testid="ChevronRight__711967" />}
-                </button>
-                <span className="flex-1" data-testid={`period-name-${period.id}`}>{period.name}</span>
-                <span data-testid={`period-status-${period.id}`}>
-                  <Tag
-                    variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
-                    label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
-                    data-testid="Tag__711967" />
-                </span>
-                <button
+                </Button>
+              </TableCell>
+              <TableCell className="font-medium" data-testid={`period-name-${period.id}`}>
+                {formatPeriodName(period, locale)}
+                {period.periodType === 'A' && (
+                  <span className="ml-2 inline-block align-middle" data-testid={`period-adjustment-badge-${period.id}`}>
+                    <Tag
+                      variant="neutral"
+                      label={ui('calendarAdjustmentPeriod')}
+                      data-testid="Tag__711967" />
+                  </span>
+                )}
+              </TableCell>
+              <TableCell data-testid={`period-status-${period.id}`}>
+                <Tag
+                  variant={PERIOD_STATUS_VARIANTS[period.status] ?? 'neutral'}
+                  label={ui(PERIOD_STATUS_LABEL_KEYS[period.status] ?? period.status)}
+                  data-testid="Tag__711967" />
+              </TableCell>
+              <TableCell className="text-right" data-testid="TableCell__711967" onClick={(e) => e.stopPropagation()}>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   data-testid={`period-openclose-${period.id}`}
                   onClick={() => openClosePeriod(period.id)}
                   disabled={periodPending}
                 >
                   {ui('openClosePeriod')}
-                </button>
-              </div>
-              {isExpanded && selectedDocIds.size > 0 && (
-                <div
-                  className="flex items-center justify-between gap-2 py-1.5 px-3"
-                  data-testid={`document-bulk-bar-${period.id}`}
-                >
-                  <span role="status" className="text-sm font-semibold" data-testid="document-selection-count">
-                    {ui('selected').replace('{count}', String(selectedDocIds.size))}
-                  </span>
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
-                    data-testid={`document-bulk-openclose-${period.id}`}
-                    onClick={() => openCloseSelectedDocuments(period.id)}
-                    disabled={!!pendingActions[`bulk-${period.id}`]}
-                  >
-                    {ui('bulkOpenCloseDocuments')} ({selectedDocIds.size})
-                  </Button>
-                </div>
-              )}
-            </div>
+                </Button>
+              </TableCell>
+            </TableRow>
+            {/* ETP-4972 — this bar was an in-flow row, never migrated to the
+                floating SelectionToolbar used everywhere else a checkbox
+                list has a bulk action. Keeps a visible text label (unlike
+                Print/Clone/kebab elsewhere): Ale (design) confirmed
+                icon-only is fine only for universally-recognized actions —
+                this same checklist icon means something different in
+                BulkDocumentAction.jsx (Confirmar/Procesado masivo), so on
+                its own it isn't reliably meaningful. No "(count)" suffix —
+                the pill's own counter segment already shows it.
+                A floating, portaled toolbar (createPortal to document.body,
+                true position: fixed) renders no table markup itself — it is
+                rendered here as a plain sibling, not wrapped in a TableRow/
+                TableCell, exactly as it was before this file's Table
+                conversion (ETP-4948, "Loading, error, and double-submit UX"). */}
             {isExpanded && (
-              <div className="pl-8" data-testid={`period-documents-${period.id}`}>
+              <SelectionToolbar
+                visible={selectedDocIds.size > 0}
+                onClose={() => setSelectedDocIds(new Set())}
+                closeTitle={ui('close')}
+                data-testid={`document-bulk-bar-${period.id}`}
+              >
+                <span role="status" className="text-sm font-medium" data-testid="document-selection-count">
+                  {ui('selected').replace('{count}', String(selectedDocIds.size))}
+                </span>
+                <button
+                  type="button"
+                  title={ui('bulkOpenCloseDocuments')}
+                  data-testid={`document-bulk-openclose-${period.id}`}
+                  onClick={() => openCloseSelectedDocuments(period.id)}
+                  disabled={!!pendingActions[`bulk-${period.id}`]}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+                >
+                  <ListChecks className="h-3.5 w-3.5" data-testid="ListChecks__periodsBulkBar" />
+                  {ui('bulkOpenCloseDocuments')}
+                </button>
+              </SelectionToolbar>
+            )}
+            {isExpanded && (
+              <TableRow data-testid={`period-documents-${period.id}`}>
+                <TableCell colSpan={4} className="bg-muted/20 p-0" data-testid="TableCell__711967">
+                  <div className="divide-y">
                 {documentsError[period.id] && (
                   <div
                     data-testid={`period-documents-error-${period.id}`}
-                    className="text-sm text-destructive py-1.5"
+                    className="px-4 py-3 text-sm text-destructive"
                   >
                     {ui('documentsLoadError')}
                   </div>
@@ -424,35 +526,54 @@ export default function PeriodsExpandablePanel({ parentId, token, apiBaseUrl }) 
                 {(documentsByPeriod[period.id] || []).map((doc) => {
                   const docPending = !!pendingActions[`document-${doc.id}`];
                   return (
-                    <div key={doc.id} className="flex items-center gap-2 py-1.5">
+                    // ETP-5030 — the document row had no selection feedback at all, so a
+                    // persistent `bg-primary/5` tint is applied while selected. ETP-4948's Table
+                    // conversion (this file) later wrapped these rows in a `TableCell` with its own
+                    // `bg-muted/20` ancestor background and added a `hover:bg-muted/50` affordance
+                    // matching the period row above — so the tint no longer has "nothing to
+                    // compete with" as the original comment said. A `:hover` pseudo-class variant
+                    // actually compiles to higher CSS specificity than a plain utility class, so
+                    // concatenating both classes unconditionally would let the hover tint repaint
+                    // over the selection tint on mouseover. Selection state must stay authoritative,
+                    // so the hover class is applied only when the row is NOT selected.
+                    <div
+                      key={doc.id}
+                      className={`flex items-center gap-3 px-4 py-2${selectedDocIds.has(doc.id) ? ' bg-primary/5' : ' hover:bg-muted/50'}`}
+                    >
                       <Checkbox
                         checked={selectedDocIds.has(doc.id)}
                         onChange={() => toggleDocSelection(doc.id)}
                         data-testid={`document-select-${doc.id}`}
                       />
-                      <span className="flex-1">{ui(DOCUMENT_CATEGORY_LABEL_KEYS[doc.documentCategory] ?? doc.documentCategory)}</span>
+                      <span className="flex-1 text-sm">{ui(DOCUMENT_CATEGORY_LABEL_KEYS[doc.documentCategory] ?? doc.documentCategory)}</span>
                       <span data-testid={`document-status-${doc.id}`}>
                         <Tag
                           variant={DOCUMENT_STATUS_VARIANTS[doc.periodStatus] ?? 'neutral'}
                           label={ui(DOCUMENT_STATUS_LABEL_KEYS[doc.periodStatus] ?? doc.periodStatus)}
                           data-testid="Tag__711967" />
                       </span>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         data-testid={`document-openclose-${doc.id}`}
                         onClick={() => openCloseDocument(doc.id, period.id)}
                         disabled={docPending}
                       >
                         {ui('openCloseDocument')}
-                      </button>
+                      </Button>
                     </div>
                   );
                 })}
-              </div>
+                  </div>
+                </TableCell>
+              </TableRow>
             )}
-          </div>
+          </Fragment>
         );
-      })}
+          })}
+        </TableBody>
+      </Table>
       <ProcessParamDialog
         open={!!dialogTarget}
         onOpenChange={(next) => { if (!next) setDialogTarget(null); }}

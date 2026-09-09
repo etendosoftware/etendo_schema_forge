@@ -45,8 +45,11 @@ describe('useNeoAction', () => {
       expect.objectContaining({
         method: 'POST',
         body: '{}',
+        // ETP-5022 — the request now goes through useApiFetch, which reads the bearer
+        // token from AuthContext/the ambient session rather than the `token` prop, so
+        // there is no Authorization header to assert here without mounting a provider.
         headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
+          'Accept-Language': 'es_ES',
           'Content-Type': 'application/json',
         }),
       }),

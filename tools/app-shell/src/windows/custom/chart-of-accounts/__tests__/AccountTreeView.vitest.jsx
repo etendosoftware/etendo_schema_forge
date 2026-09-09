@@ -376,6 +376,20 @@ describe('AccountTreeView', () => {
       expect(screen.getAllByText('2000')).toHaveLength(1);
     });
 
+    it('"Expandir" (expand all) reveals every nested level, not just the first two', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByText('expand'));
+
+      // Every intermediate folder down the full A → A.A → A.A.I → 200 → 2000 chain
+      // must be expanded, not just the root "A" and its immediate child "A.A".
+      expect(screen.getByTestId('account-tree-row-group-A|A.A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-20000000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+    });
+
     it('collapsing an intermediate folder hides deeper levels', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
@@ -384,6 +398,185 @@ describe('AccountTreeView', () => {
       // A.A.I is now visible but collapsed — its descendants (200, 2000, leaves) are hidden.
       expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I')).toBeInTheDocument();
       expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Tree-native filter (code/name/type/active) ─────────────────────────────
+
+  describe('tree-native filter', () => {
+    it('filters leaves by code or name and auto-expands their ancestors', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+
+      // The match (20000001, "Investigación aplicada.") is visible without any
+      // manual expand click — every ancestor folder auto-expanded.
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      // The non-matching sibling leaf is hidden.
+      expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+
+    it('hides branches with no matching descendant at any depth', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'no-such-account' },
+      });
+
+      expect(screen.queryByTestId('account-tree-row-group-A')).not.toBeInTheDocument();
+      expect(screen.getByText('noResultsFound')).toBeInTheDocument();
+    });
+
+    it('filters by account type independently of the text filter', () => {
+      render(<AccountTreeView {...defaultProps} data={DATA} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-type'), {
+        target: { value: 'E' },
+      });
+
+      // "Purchases US" (accountType 'E') matches; the two 'R' (Revenue) leaves
+      // under 4000 do not, so that whole branch disappears.
+      expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
+    });
+
+    it('clearing the filter reverts to the manual expand/collapse state, not the auto-expanded one', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      // No manual expansion at all — tree is fully collapsed.
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: '' },
+      });
+
+      // Back to fully collapsed — the filter's auto-expand must not leak into
+      // the persisted manual `expanded` state.
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+    });
+  });
+
+  // ── Deactivate/activate toggle (ETP-4884 item 5) ────────────────────────────
+
+  describe('active/inactive toggle', () => {
+    function mockFetchPatch({ ok = true } = {}) {
+      globalThis.fetch = vi.fn(async () => ({ ok, status: ok ? 200 : 500, text: async () => '' }));
+    }
+
+    beforeEach(() => {
+      mockFetchPatch();
+    });
+
+    it('renders checked for an active leaf and unchecked for an inactive one', () => {
+      const data = [
+        { ...DATA[0], active: true },
+        { ...DATA[1], active: false },
+      ];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    // ETP-4884 bugfix — NEO can return `active` as the raw AD string 'Y'/'N'
+    // rather than a JS boolean. A strict `=== true` check rendered a genuinely
+    // active account ('Y') as OFF; the toggle must accept 'Y'/'N' too.
+    it('renders checked for an active leaf and unchecked for an inactive one when active is a string', () => {
+      const data = [
+        { ...DATA[0], active: 'Y' },
+        { ...DATA[1], active: 'N' },
+      ];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('PATCHes elementValue/{id} with { active: checked } on toggle', async () => {
+      const data = [{ ...DATA[0], active: true }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${defaultProps.apiBaseUrl}/elementValue/acc-40000001`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ active: false }),
+        }),
+      ));
+    });
+
+    it('rolls back the toggle and shows an error toast when the PATCH fails', async () => {
+      mockFetchPatch({ ok: false });
+      const data = [{ ...DATA[0], active: true }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
+
+      await waitFor(() => expect(screen.getByTestId('account-tree-active-toggle-acc-40000001'))
+        .toHaveAttribute('aria-checked', 'true'));
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('disables the toggle for a protected 0000-suffixed placeholder leaf', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+
+      expect(screen.getByTestId('account-tree-active-toggle-acc-20000000')).toBeDisabled();
+    });
+
+    it('never renders a toggle on a virtual folder row', () => {
+      render(<AccountTreeView {...defaultProps} data={DATA} />);
+      expect(screen.queryByTestId('account-tree-active-toggle-group-4000')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Shared table/button styling (ETP-4884 item 3, token-alignment slice) ──
+
+  describe('shared table/button styling', () => {
+    it('renders column headers in the standard sentence-case style, not an uppercase shaded band', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const codeHeader = screen.getByText('accountTreeCode');
+
+      expect(codeHeader.className).toContain('text-sm');
+      expect(codeHeader.className).not.toContain('uppercase');
+      expect(codeHeader.className).not.toContain('tracking-wide');
+    });
+
+    it('uses the standard muted/50 hover on tree rows, not a full-opacity hover', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const row = screen.getByTestId('account-tree-row-group-4000');
+
+      expect(row.className).toContain('hover:bg-[hsl(var(--muted))]/50');
+    });
+
+    it('uses the standard plain muted selected-row color, not the info-blue tint', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-row-group-4000'));
+      const row = screen.getByTestId('account-tree-row-group-4000');
+
+      expect(row.className).toContain('bg-[hsl(var(--muted))]');
+      expect(row.className).not.toContain('--status-info-bg');
+    });
+
+    it('renders "+ New Sub-account" using the shared Button component (rounded-md), not a hand-rolled pill', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const trigger = screen.getByText('+ newSubAccount');
+
+      expect(trigger.className).toContain('rounded-md');
+      expect(trigger.className).not.toContain('rounded-full');
     });
   });
 
@@ -472,7 +665,7 @@ describe('AccountTreeView', () => {
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
-        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}` } }),
+        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}`, 'Accept-Language': 'es_ES' } }),
       ));
     });
 

@@ -135,6 +135,21 @@ The Flyway `flyway_schema_history` analogue, but for a **multi-tenant System-own
 - Runner uses a **strict date watermark** (see Phase 1): it applies only fixes whose filename timestamp is greater than the newest PROCESSED fix's timestamp (or the baseline), and never looks back. Trade-off: out-of-order merges below the watermark are not picked up (deliberate — chosen over fix-id-presence gating for a simpler resume). The watermark is computed in-memory from the catalog + the tenant's ledger rows, not a raw `MAX(applied_utc)` (it keys off each PROCESSED fix's own filename timestamp).
 - The catalog of migrations lives as `.sql` files in git; the table stores ONLY application state, never the SQL.
 - Table ownership: lives in `com.etendoerp.go` (ETGO_ prefix, ships with `export.database`). AD window **Data-Fix History** (sys-admin-only, read-only tab) exposes it.
+
+### Retirement (`retired.json`, ETP-4877)
+An applied-and-superseded fix can be permanently retired WITHOUT editing its immutable `.sql`
+file. Add an entry to `cli/src/data-fixes/retired.json` naming the `fixId` and a `checksum`
+(sha256 hex of the live file's exact bytes — compute it, never guess). The runner
+(`loadRetiredList` → `verifyRetiredList` → `loadCatalogWithRetirement`, called by every CLI entry
+point instead of the bare `loadCatalog()`) consults this BEFORE evaluating any fix: a retired fix
+is skipped entirely — **never `@check`, never `@apply`, for any tenant, past or future** — no
+ledger row is written for it on any run after retirement. Every retirement re-verifies the live
+file's checksum first; a mismatch (file touched despite the immutability rule, or a different fix
+reusing the filename) makes the WHOLE RUN throw immediately rather than silently honoring the
+wrong file. `--fix <retired-id>` refuses outright, and retired fixes are excluded from
+`--list-clients`'s pending-candidates filter. Worked example:
+`R16-tenant-roles-and-webhook-access` (superseded by ETP-4852's system-level templates, retired by
+ETP-4877). Full detail: `docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 6.
 </data_fixes_framework>
 
 <the_gaps>

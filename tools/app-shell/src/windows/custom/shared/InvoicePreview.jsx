@@ -102,11 +102,11 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
-  const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
+  const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
-    invoice?.id, specName, profile, apiBaseUrl, orgId,
+    invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
   );
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
@@ -147,7 +147,11 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         )}
         {fiscalTargets.showTbai && (
           <InfoRow
-            label={ui('invoicePreview.fiscalStatus.tbai')}
+            // ETP-5027: a purchase invoice's TBAI is always Batuz specifically
+            // (fiscalTargets.js only ever grants it for the Bizkaia territory —
+            // ETP-5087), so the label must say "Estado Batuz", never the generic
+            // "Estado TicketBAI" sales invoices show.
+            label={ui(specName === 'purchase-invoice' ? 'invoicePreview.fiscalStatus.tbaiPurchase' : 'invoicePreview.fiscalStatus.tbai')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
@@ -176,7 +180,14 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         onAddPayment={onAddPayment}
         specName={specName}
         data-testid="PaymentsCard__cf88e6" />
-      {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
+      {specName !== 'purchase-invoice' && (
+        <EmailsCard
+          onSend={onSend}
+          documentId={invoice?.id}
+          apiBaseUrl={apiBaseUrl}
+          refreshSignal={emailsRefreshSignal}
+          data-testid="EmailsCard__cf88e6" />
+      )}
       <RelatedDocumentsCard
         documentId={invoice?.id}
         token={token}
@@ -195,6 +206,9 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   const modalRef = useRef(null);
   const p = useInvoicePreview({ invoice, token, apiBaseUrl, specName, onInvoiceUpdated });
   const ratePrecision = useCurrencyPrecision();
+  // ETP-5069 — see OrderPreview.jsx: bumped on a successful send so the
+  // email-history card refetches instead of showing its pre-send state.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   // ETP-4789 (reject-cycle fix): see OrderPreview.jsx — the cached attachment
   // (GET /preview-file) resolves ahead of the jsreport regeneration behind
   // p.pdfUrl; capturing it here lets Download gate on whichever resolves first.
@@ -318,12 +332,14 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           token={token}
           orgId={p.orgId}
           profile={p.profile}
+          territory={p.territory}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}
           exchangeRate={exchangeRate}
           orgGrandTotal={orgGrandTotal}
           ratePrecision={ratePrecision}
+          emailsRefreshSignal={emailsRefreshSignal}
           data-testid="InvoiceGeneralTab__cf88e6" />
       ),
     },
@@ -410,8 +426,10 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           windowName={specName}
           token={token}
           pdfBlobUrl={p.pdfUrl}
+          pdfBlobLoading={p.pdfLoading}
           isClosing={p.sendModalClosing}
           onClose={p.closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__cf88e6" />
       )}
     </>

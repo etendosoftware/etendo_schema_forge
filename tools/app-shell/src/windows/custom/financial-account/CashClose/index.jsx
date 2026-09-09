@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import {
   useCashClosePending,
   useConfirmCashClose,
@@ -132,6 +133,11 @@ export function CashCloseTab({ account, onCloseSuccess }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden" data-testid="cash-close-tab">
+      {/* The header's refresh button reloads this whole tab; the bar is its indicator. Only once
+          movements are on screen — the first fetch shows the panel's own loading state. */}
+      {loading && movements.length > 0 ? (
+        <ListProgressBar testId="cash-close-progress-bar" data-testid="ListProgressBar__ccfd67" />
+      ) : null}
       {/* One continuous surface: no outer padding and no gap between the columns — they are
           separated by the movements panel's own right hairline, not by a gutter. */}
       <div className="flex flex-1 overflow-hidden bg-card">

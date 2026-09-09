@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildHeaders } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_DEBOUNCE_MS = 250;
@@ -30,6 +30,7 @@ export function useDistinctValues(entity, field, {
   apiBaseUrl,
 } = {}) {
   const { token } = useAuth();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [values, setValues] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -54,8 +55,8 @@ export function useDistinctValues(entity, field, {
     params.set('_startRow', String(startRow));
     params.set('_endRow', String(endRow));
     if (search) params.set('_distinctSearch', search);
-    return `${apiBaseUrl}/${encodeURIComponent(entity)}?${params.toString()}`;
-  }, [apiBaseUrl, entity, field]);
+    return `/${encodeURIComponent(entity)}?${params.toString()}`;
+  }, [entity, field]);
 
   const fetchPage = useCallback(async (startRow, search, append) => {
     if (!token || !entity || !field || !apiBaseUrl) return;
@@ -65,10 +66,7 @@ export function useDistinctValues(entity, field, {
     setError(null);
     try {
       const endRow = startRow + pageSize - 1;
-      const res = await fetch(buildUrl(startRow, endRow, search), {
-        headers: buildHeaders(token),
-        credentials: 'include',
-      });
+      const res = await apiFetch(buildUrl(startRow, endRow, search));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (reqId !== requestIdRef.current) return; // superseded
@@ -97,7 +95,7 @@ export function useDistinctValues(entity, field, {
     } finally {
       if (reqId === requestIdRef.current) setBusy(false);
     }
-  }, [token, entity, field, pageSize, buildUrl]);
+  }, [token, entity, field, pageSize, buildUrl, apiFetch]);
 
   // Reset + fetch page 1 whenever the query key changes.
   useEffect(() => {

@@ -115,7 +115,19 @@
           "grid": true,
           "gridOrder": 4,
           "searchable": true,
-          "form": false
+          "form": false,
+          "enumValues": [
+            { "value": "CL", "name": "docStatusCl" },
+            { "value": "CO", "name": "statusComplete" },
+            { "value": "DR", "name": "docStatusDr" },
+            { "value": "NA", "name": "docStatusNa" },
+            { "value": "WP", "name": "docStatusWp" },
+            { "value": "RE", "name": "docStatusRe" },
+            { "value": "TEMP", "name": "docStatusTemp" },
+            { "value": "IP", "name": "docStatusIp" },
+            { "value": "??", "name": "docStatus" },
+            { "value": "VO", "name": "docStatusVo" }
+          ]
         },
         "warehouse": {
           "grid": true,

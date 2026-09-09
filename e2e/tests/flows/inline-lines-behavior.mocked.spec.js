@@ -76,6 +76,12 @@ const COMPLETED_HEADER = {
  * @param {function} opts.onHeaderRequest  - called with { method, body } on every header write
  * @param {number} opts.patchStatus        - HTTP status to return for PATCH (default 200)
  */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installMocks(page, {
   header = DRAFT_HEADER,
   lines = [LINE_A, LINE_B],
@@ -104,11 +110,11 @@ async function installMocks(page, {
       });
       return;
     }
-    return route.continue();
+    return route.fallback();
   });
 
   await page.route(`**/sws/neo/sales-quotation/header/${header.id}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -117,7 +123,7 @@ async function installMocks(page, {
   });
 
   await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -126,7 +132,7 @@ async function installMocks(page, {
   });
 
   // Consolidated PATCH + DELETE handler. Multiple `page.route()` with the same
-  // pattern don't chain — `route.continue()` sends the request to the real backend
+  // pattern don't chain — `route.fallback()` sends the request to the real backend
   // (the dev server), not to the next handler. So we branch by method inside one.
   await page.route('**/sws/neo/sales-quotation/quotationLine/**', async (route) => {
     const req = route.request();
@@ -157,7 +163,7 @@ async function installMocks(page, {
       await route.fulfill({ status: 204 });
       return;
     }
-    return route.continue();
+    return route.fallback();
   });
 }
 
@@ -301,11 +307,18 @@ test.describe('Tanda 1 — core behaviors', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Tanda 2 — selection and totals', () => {
-  // Bulk delete (LinesSelectionBar) intentionally not E2E'd here. Its portal is
+  // Bulk delete (now the shared `SelectionToolbar` shell, ETP-4972) intentionally
+  // not E2E'd here. The original reason this note gave — its portal being
   // anchored to AddLineButton's viewport rect, which sits below the screenshot
-  // fold under Playwright headless layout — the bar materialises in the DOM but
-  // can't be deterministically asserted. Coverage lives in:
-  //   - LinesSelectionBar.test.js                   (portal, animations, props)
+  // fold under Playwright headless layout — no longer applies: SelectionToolbar
+  // has no rect-anchoring at all, it's hardcoded fixed to the viewport's
+  // bottom-center regardless of scroll/layout. That fix (ETP-4972) shipped
+  // without adding a real-browser regression test for the actual production bug
+  // it fixed (a long, scrolled list keeping the bar visible) — this remains a
+  // real coverage gap, not a deliberate exclusion; a follow-up spec here or in
+  // a sibling file should assert that. Existing coverage lives in:
+  //   - SelectionToolbar.test.js / SelectionToolbar.vitest.jsx (portal,
+  //     positioning, animations, props — jsdom-level, not real-browser)
   //   - InlineLinesPanel.test.js                    (onSelectionChange emit)
   //   - inline-lines-quotation.mocked.spec.js       (single-row trash → DELETE,
   //                                                  same handler as bulk delete)

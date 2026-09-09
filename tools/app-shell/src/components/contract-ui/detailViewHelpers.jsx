@@ -3,14 +3,20 @@
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
+import {Trash2} from 'lucide-react';
+import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
+import SelectionToolbar from './SelectionToolbar.jsx';
 import {computeBalance} from '@/lib/balanceTotals';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
+import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
+import { BlockingBpBanner } from './BlockingBpBanner.jsx';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -95,6 +101,32 @@ export function runAddLineAction(st, { handleCustomModalAddClick, handleSecondar
   return run.catch((err) => {
     console.error(`Add line action failed for tab '${st.key}':`, err);
   });
+}
+
+/**
+ * Resolve a secondary tab's "add" button text (ETP-5021).
+ *
+ * `addLineLabelKey`, when set, is a full i18n key that REPLACES the generic
+ * "Añadir {label}" (`addEntity`) composition entirely — needed when a tab's
+ * add action must match a standardized CTA used elsewhere in the app (verb +
+ * "+" prefix + casing) rather than the generic tab-name-derived phrasing.
+ * E.g. `locationAddress` sets `addLineLabelKey: "addAddress"` so its button
+ * reads the same "+ Añadir dirección" as the document-header
+ * PartnerAddressPicker, instead of the generic "Añadir Dirección".
+ * Falls back to `st.labelKey` (label-only override) or `tMenu(st.label)`.
+ *
+ * The result feeds `AddLineButton`, which always renders its own leading
+ * Plus icon (`add-line-button.jsx`) — unlike `PartnerAddressPicker`'s plain-text
+ * `createLabel`, which has no icon and needs the literal "+" baked into the
+ * string. A key like `addAddress` ("+ Añadir dirección") is shared between both
+ * call sites, so its leading "+" is stripped here to avoid a double plus sign
+ * on the icon button; the generic `addEntity` composition never carries one.
+ */
+export function resolveAddLineLabel(st, ui, tMenu) {
+  const label = st.addLineLabelKey
+    ? ui(st.addLineLabelKey)
+    : ui('addEntity', { label: (st.labelKey && ui(st.labelKey)) || tMenu(st.label) });
+  return label.replace(/^\+\s*/, '');
 }
 
 export function deriveTaxRateFromGross(gross, lineConfig, selectedLine) {
@@ -352,6 +384,12 @@ export function SecondaryPanelTab(props) {
 }
 
 export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
+  // ETP-4836 — the subtitle + "add" CTA only make sense when the tab actually
+  // supports manual row creation (st.addLineFields configured). Tabs whose rows
+  // are entirely backend-managed (e.g. invoices' Exchange Rates, auto-created by
+  // AbstractInvoiceHeaderHandler) still get the "no records" illustration instead
+  // of a blank area, just without an action that would do nothing.
+  const canAdd = Boolean(onAddLineClick);
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} data-testid="secondary-tab-empty-state">
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
@@ -362,11 +400,15 @@ export function secondaryTabEmptyState({ ui, onAddLineClick, addLineLabel }) {
           <line x1="8" y1="17" x2="13" y2="17" />
         </svg>
       </div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noRecordsYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
-      <button type="button" onClick={onAddLineClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
-        + {addLineLabel}
-      </button>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: canAdd ? 4 : 0 }}>{ui('noRecordsYet')}</span>
+      {canAdd && (
+        <>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('createNewRecord')}</span>
+          <button type="button" onClick={onAddLineClick} data-testid="secondary-tab-empty-state-add" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: 'hsl(var(--foreground))', color: 'hsl(var(--background))', border: 'none', cursor: 'pointer' }}>
+            + {addLineLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -398,6 +440,18 @@ export function resolveCanAddLines(addLineGuard, data, requiredHeaderFields, chi
 
 export function getDocumentIds(recordId) {
   return recordId ? [recordId] : [];
+}
+
+// ETP-5052: display-only merge exposing whether the master record currently has
+// child lines to HEADER field `readOnlyLogicJs` expressions (e.g. `"!!record.hasLines"`
+// on Physical Inventory's `warehouse`), so a header field can lock once count/detail
+// lines exist and unlock again once the last one is removed. `children` is guarded
+// (not every window's `hook.children` is an array — header-only windows have none).
+// NEVER feed the returned object into a save/PUT payload: `handleSave` (useEntity.js)
+// builds the request from `editing` state directly, never from this merge, so the
+// synthetic `hasLines` key never reaches the backend.
+export function buildHeaderFormData(data, children) {
+  return { ...data, hasLines: Array.isArray(children) && children.length > 0 };
 }
 
 export function resolveSidebarContent(sidebarContent, data) {
@@ -482,11 +536,110 @@ export function getDeleteChildButtonLabel(deletingChildren, ui) {
   return deletingChildren ? ui('loading') : ui('delete');
 }
 
-export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine) {
+/**
+ * Bulk-action toolbar for classic (non-inlineEditable) lines tables: delete +
+ * detail-process buttons for the currently selected rows.
+ *
+ * ETP-4972 — was the standalone `LinesBulkActionBar.jsx`, an inline
+ * `sticky top-0` bar (removed). Now rendered inside a viewport-fixed
+ * `SelectionToolbar`, reusing the primary tab's `selectionBarVisible`/
+ * `selectionBarClosing` lifecycle: this bar and the inlineEditable
+ * LinesSelectionBar/SelectionToolbar path are mutually exclusive by
+ * `linesLayout` (see isBulkDeleteBarVisible vs shouldShowInlineDeleteSelectionBar),
+ * so they never compete for the same state.
+ *
+ * The process-button styling uses the pill's own theme-invariant
+ * `--floating-toolbar-fg` token instead of `border-primary`/`text-primary`:
+ * `--primary` collapses to nearly the same dark navy as the pill background
+ * in light theme, which made those buttons unreadable.
+ */
+export function renderDetailBulkActionBar({
+  visible, closing, linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
+  detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess, executeDetailProcessImpl,
+  detailProcessDeps, tMenu, deletingChildren, setDeletingChildren, confirmDelete, apiBaseUrl, token,
+  hook, selectedLine, setSelectedLine, setSelectedChildRows,
+}) {
+  return (
+    <SelectionToolbar
+      visible={visible}
+      closing={closing}
+      onClose={() => setSelectedChildRows([])}
+      closeTitle={ui('close')}
+      data-testid="SelectionToolbar__7c75ad">
+      <span className="text-sm font-medium">{ui('selected', {count: selectedChildRows.length})}</span>
+      <div className="flex items-center gap-2">
+        {detailProcesses.map(p => (
+          <button
+            key={p.name}
+            disabled={executingDetailProcess}
+            onClick={() => {
+              if (p.params?.some(param => !param.hidden)) {
+                setDetailParamDialogProcess({...p, _rows: [...selectedChildRows]});
+              } else {
+                executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--floating-toolbar-fg)/0.3)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+            data-testid="Button__detail-process"
+          >
+            {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
+          </button>
+        ))}
+        {/* ETP-4972 — icon-only, no visible label: applied Figma instance has
+            this button's Button Text property set to false. */}
+        {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
+          <button
+            disabled={deletingChildren}
+            title={getDeleteChildButtonLabel(deletingChildren, ui)}
+            aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
+            onClick={async () => {
+              if (!(await confirmDelete())) return;
+              setDeletingChildren(true);
+              try {
+                const {succeeded, failed} = await deleteSelectedChildRows({
+                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
+                });
+                for (const row of succeeded) {
+                  hook.handleDeleteChild(row.id);
+                  if (selectedLine?.id === row.id) setSelectedLine(null);
+                }
+                setSelectedChildRows([]);
+                toastBatchDeleteOutcome(ui, {succeeded, failed, total: selectedChildRows.length});
+              } catch (err) {
+                toast.error(err.message || ui('networkError'));
+              } finally {
+                setDeletingChildren(false);
+              }
+            }}
+            className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            data-testid="detail-bulk-delete-button"
+          >
+            <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
+          </button>
+        )}
+      </div>
+    </SelectionToolbar>
+  );
+}
+
+/**
+ * @param {Function} [guard] ETP-5073 / DOC-08: wraps the switch so an in-progress line edit is
+ *   not discarded silently. Receives the switch as a callback and decides when (or whether) to
+ *   run it. Optional: without it the switch happens immediately, which is the pre-ticket
+ *   behaviour and keeps every existing caller working unchanged.
+ */
+export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLine, guard) {
   return DetailForm && linesLayout !== 'inlineEditable' ? (row) => {
-    const line = {...row};
-    roundAmounts(line);
-    setSelectedLine(line);
+    const openLine = () => {
+      const line = {...row};
+      roundAmounts(line);
+      setSelectedLine(line);
+    };
+    if (guard) {
+      guard(openLine);
+    } else {
+      openLine();
+    }
   } : undefined;
 }
 
@@ -556,16 +709,26 @@ function computeLinesEntryKey(detailTabOrder, detailTabIndex, secondaryEntries) 
  * `Others` is appended later via pushOthers.
  */
 export function buildInitialTabs(p) {
-  const secondaryEntries = p.secondaryTabs.map((st, i) => {
-    const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
-    const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
-    const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
-    return {
-      tab: { key: st.key, label, count: childCount },
-      weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
-      insertionIndex: i,
-    };
-  });
+  const secondaryEntries = p.secondaryTabs
+    .map((st, i) => {
+      // ETP-5116 — a capability-gated secondary tab (e.g. Accounting behind
+      // showAccountingFields) is filtered OUT of this derived, render-facing tab
+      // list only — `p.secondaryTabs` itself is left untouched so index-based
+      // (secondaryHooks[i]) and key-based (secondaryTabs.find) lookups elsewhere
+      // in DetailView keep working. A filtered-out tab never appears in the nav
+      // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
+      // for it (see the `openSecondaryTab` effect in DetailView.jsx).
+      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
+      const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
+      const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
+      return {
+        tab: { key: st.key, label, count: childCount },
+        weight: st.tabOrder ?? SECONDARY_DEFAULT_WEIGHT,
+        insertionIndex: i,
+      };
+    })
+    .filter(Boolean);
 
   const entries = [...secondaryEntries];
 
@@ -782,8 +945,33 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
   );
 }
 
-export function resolveHeaderContent(headerContent, data) {
-  return typeof headerContent === 'function' ? headerContent(data) : headerContent;
+// ETP-5024: `bpBanner`, when passed, renders the persistent credit-limit/BP-on-hold
+// inline warning (BlockingBpBanner.jsx) above the resolved header content. Optional
+// so every call site that has nothing to report (no BP-related callout/process
+// wiring in scope) keeps behaving exactly as before.
+//
+// `currencyCode` is derived from `data['currency$_identifier']` here. A REVIEW pass
+// (ETP-5024) found the original "the header endpoint always returns
+// currency$_identifier, no session-level fallback needed" assumption WRONG for the
+// credit-limit callout's actual firing point: it fires while creating a NEW,
+// unsaved document, where `data` is `hook.editing` (DetailView.jsx) — never a
+// header GET response — so `currency$_identifier` genuinely isn't there yet. Rather
+// than thread DetailView.jsx's `sessionCurrencyCode` through this call (DetailView.jsx
+// is a governed God Component — `.claude/hooks/check-detailview-growth.mjs` blocks it
+// from growing, and this branch is already over its line budget), BlockingBpBanner
+// itself calls `useCurrency()` as the session-level fallback — see that component.
+export function resolveHeaderContent(headerContent, data, bpBanner) {
+  const resolvedHeader = typeof headerContent === 'function' ? headerContent(data) : headerContent;
+  if (!bpBanner) return resolvedHeader;
+  return (
+    <>
+      <BlockingBpBanner
+        {...bpBanner}
+        currencyCode={data?.['currency$_identifier'] ?? null}
+        data-testid="BlockingBpBanner__dfc406" />
+      {resolvedHeader}
+    </>
+  );
 }
 
 export function isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) {
@@ -1099,6 +1287,69 @@ export async function maybeSaveBeforeConfirm({ isDirty, handleSave }) {
   const saved = await handleSave?.({ silent: true });
   return !!saved?.id;
 }
+
+/**
+ * ETP-5147: unconditional (no per-window opt-in) "save before opening line UI" gate for an
+ * ALREADY-SAVED record (the `isNew` branch of each caller already saves unconditionally to
+ * mint the id needed for navigation, so this only guards the `else` path). Shared by the
+ * three line-creation triggers — the primary "Añadir línea" button (`handleAddLineClick`),
+ * a secondary tab's inline add row (`handleSecondaryAddLineToggle`), and a secondary tab's
+ * custom add modal (`handleCustomModalAddClick`) — all of which previously opened the line
+ * UI directly on an already-saved record with no save call, so a header edit made just
+ * before adding a line (e.g. changing the currency) was silently discarded: the line got
+ * created against the stale, previously-persisted header. No-op when there is nothing
+ * pending (`isDirtyHeader`, the header hook's own dirty signal — not any secondary-entity
+ * hook — the same one that drives the header Save button). On save failure, `handleSave`
+ * has already surfaced the error (toast / field errors) — this returns false so the caller
+ * aborts instead of opening the line UI on stale data.
+ *
+ * @returns {Promise<boolean>} true → proceed to open the line UI; false → abort silently.
+ */
+export async function maybeSaveBeforeAddLine({ isDirtyHeader, handleSave }) {
+  if (!isDirtyHeader) return true;
+  const saved = await handleSave?.({ silent: true });
+  return !!saved?.id;
+}
+
+/**
+ * ETP-5147: the already-saved-record branch of `handleAddLineClick` (the primary
+ * "Añadir línea" button). Gates on {@link maybeSaveBeforeAddLine}, then reuses the
+ * existing flush-in-flight-row-or-toggle logic via the two caller-supplied callbacks
+ * so DetailView.jsx keeps owning its own `addingLine`/`editingChild` state.
+ */
+export async function runPrimaryAddLineFlow({ isDirtyHeader, handleSave, addingLine, primaryAddRowRef, onReopen, onToggle }) {
+  if (!(await maybeSaveBeforeAddLine({ isDirtyHeader, handleSave }))) return;
+  if (addingLine && primaryAddRowRef.current?.flush) {
+    await primaryAddRowRef.current.flush({ closeAfterSave: false });
+    onReopen();
+    return;
+  }
+  onToggle();
+}
+
+/**
+ * ETP-5147: shared body of `handleSecondaryAddLineToggle` and `handleCustomModalAddClick` —
+ * both resolve the target tab, save-and-navigate unconditionally when creating a brand-new
+ * record whose tab `requireSavedRecord`, and otherwise gate on {@link maybeSaveBeforeAddLine}
+ * before running the caller's `onOpen` (inline add row vs. custom modal).
+ */
+export async function runSecondaryAddLineFlow({ tabKey, secondaryTabs, isNew, isDirtyHeader, hook, navigate, windowName, onOpen }) {
+  const targetTab = secondaryTabs.find(st => st.key === tabKey);
+  if (!targetTab) return;
+  if (isNew && targetTab.requireSavedRecord) {
+    const saved = await hook.handleSave();
+    if (!saved?.id) return;
+    hook.primeSaved?.(saved);
+    navigate(`/${windowName}/${saved.id}`, {
+      replace: true,
+      state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
+    });
+    return;
+  }
+  if (!(await maybeSaveBeforeAddLine({ isDirtyHeader, handleSave: hook.handleSave }))) return;
+  onOpen();
+}
+
 /**
  * ETP-4830 / ETP-5002 — keeps the `'new'` route's `editing` state honest.
  *

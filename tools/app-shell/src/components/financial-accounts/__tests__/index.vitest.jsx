@@ -10,6 +10,9 @@ describe('financial-accounts barrel exports', () => {
     expect(featureExports.AccountRowMenu).toBeDefined();
     expect(featureExports.AccountsToolbar).toBeDefined();
     expect(featureExports.AccountsSidebar).toBeDefined();
+    // Shared by the four financial-account toolbars that draw themselves instead of
+    // using ListView's idle bar, so they import it through this barrel.
+    expect(featureExports.RefreshButton).toBeDefined();
   });
 
   // ETP-4658 retired the hand-rolled AccountsTable host (table + header + row): the

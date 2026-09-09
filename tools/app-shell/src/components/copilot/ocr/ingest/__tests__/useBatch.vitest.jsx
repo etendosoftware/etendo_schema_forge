@@ -66,7 +66,7 @@ describe('useBatch — runBatch', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('sends a POST with { operations } body and Authorization header', async () => {
+  it('sends a POST with { operations } body', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -81,11 +81,11 @@ describe('useBatch — runBatch', () => {
       await result.current.runBatch(ops);
     });
 
+    // Auth/Content-Type headers are now `useApiFetch`'s responsibility, covered
+    // by its own tests — this hook only owns the method + body it sends.
     const [url, opts] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/sws/neo/batch');
     expect(opts.method).toBe('POST');
-    expect(opts.headers.Authorization).toBe('Bearer my-token');
-    expect(opts.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(opts.body)).toEqual({ operations: ops });
   });
 

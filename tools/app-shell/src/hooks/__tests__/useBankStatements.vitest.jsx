@@ -3,6 +3,14 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ token: 'test-token' }),
 }));
+// ETP-5022 — the hook gets its request function from `useApiFetch`, which reads the session
+// with the core's `useAuthOptional`. Mocking only `@/auth/AuthContext.jsx` no longer reaches
+// it, so the core module is mocked too (spread from the original, since useApiFetch also
+// imports createApiFetch and getAmbientToken from there).
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
 
 import { useBankStatements } from '../useBankStatements.js';
 
@@ -47,7 +55,10 @@ describe('useBankStatements', () => {
     const [url, init] = globalThis.fetch.mock.calls[0];
     expect(url).toBe('/etendo/sws/neo/bank-statements?FIN_Financial_Account_ID=acc-1');
     expect(init.headers.Authorization).toBe('Bearer test-token');
-    expect(init.headers['Content-Type']).toBe('application/json');
+    // ETP-5022 — a bodyless GET no longer declares a body type: the shared helper sends
+    // Content-Type only when the request actually has a body.
+    expect(init.headers['Content-Type']).toBeUndefined();
+    expect(init.headers['Accept-Language']).toBeDefined();
   });
 
   it('URL-encodes the accountId so special characters survive transport', async () => {

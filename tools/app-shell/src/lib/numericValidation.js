@@ -46,6 +46,23 @@ export function getNumericFieldError(field, value) {
 }
 
 /**
+ * Clamp a numeric value to a field's declared `max`. Unlike getNumericFieldError,
+ * this does not report a violation — it silently corrects the value. A no-op when
+ * `field.max` is not declared, when the value is empty, or when it is already <= max.
+ *
+ * @param {{ max?: number }} field - the field config.
+ * @param {*} value - the current value.
+ * @returns {*} the clamped value (as a string) or the original value unchanged.
+ */
+export function clampNumericFieldMax(field, value) {
+  if (field?.max == null) return value;
+  if (value === '' || value == null) return value;
+  const num = Number(value);
+  if (Number.isNaN(num)) return value;
+  return num > field.max ? String(field.max) : value;
+}
+
+/**
  * Stable sonner toast `id` for a numeric-field violation, shared by both call
  * sites that can report the SAME field's error almost simultaneously: the
  * on-blur toast in EntityForm and the save-gate toast in useEntity.js. When a

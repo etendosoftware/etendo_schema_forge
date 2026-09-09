@@ -9,6 +9,7 @@ import {
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
   resolveProductCode,
+  resolveDocumentCurrencyCode,
   useDocumentPdf,
 } from './documentPdf.js';
 import { computeDocumentQrDataUrl } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
@@ -77,6 +78,7 @@ export async function buildInvoiceData(invoiceId, base, token) {
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation, header.bpAddress),
     documentNo: header.documentNo || '',
+    currencyCode: resolveDocumentCurrencyCode(header),
     invoiceDate: header.invoiceDate || header.dateInvoiced || '',
     customerName: header.businessPartner$_identifier || header.businessPartner || '—',
     paymentMethod: header.paymentMethod$_identifier || null,

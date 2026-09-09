@@ -6,9 +6,11 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { isEtendoTrue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 import { selectSifFields, pickRegimeChild } from './TaxSifField.jsx';
 import TaxSifModal from './TaxSifModal.jsx';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // Column the invoice-lines "tax" field maps to (C_Tax_ID) — same column the generated
 // LinesTable.jsx declares for both sales-invoice and purchase-invoice.
 const TAX_SELECTOR_COLUMN = 'C_Tax_ID';
@@ -41,8 +43,8 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  * clamps `limit`.
  *
  * @param {object} args
- * @param {string} args.apiBaseUrl the calling window's own NEO base
- * @param {string} args.token NEO bearer token
+ * @param {(path: string, options?: object) => Promise<Response>} args.apiFetch the calling
+ *   window's `useApiFetch(apiBaseUrl)` instance
  * @param {object} args.selectorContext `buildLineSelectorContext()` output — required
  *   selector params (parentId, isSOTrx/IsSOTrx, priceList, DateInvoiced, etc.)
  * @param {string|null} args.currency optional `currency` param, merged in when present
@@ -55,18 +57,18 @@ const TAX_SELECTOR_MAX_PAGES = 20;
  *   returned instead of discarding everything — degrading to a partial check rather
  *   than rendering no badges at all (ETP-4888 QA finding).
  */
-async function fetchAllTaxPages({ apiBaseUrl, token, selectorContext, currency, isCancelled }) {
+async function fetchAllTaxPages({ apiFetch, selectorContext, currency, isCancelled }) {
   const allItems = [];
   let offset = 0;
   let page = 0;
   for (;;) {
-    const url = buildUrlWithParams(`${apiBaseUrl}/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
+    const url = buildUrlWithParams(`/lines/selectors/${TAX_SELECTOR_COLUMN}`, {
       limit: TAX_SELECTOR_PAGE_LIMIT,
       offset,
       ...selectorContext,
       ...(currency ? { currency } : {}),
     });
-    const taxResponse = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const taxResponse = await apiFetch(url);
     const data = taxResponse.ok ? await taxResponse.json() : null;
     // Teardown (unmount / deps changed) is NOT a failed page: bail without touching
     // state, since nothing is waiting for it any more.
@@ -144,14 +146,22 @@ export function resolveEffectiveTaxRow(taxRow, taxById) {
  * the pre-ETP-4888-followup behavior (checks `taxRow` as given) for any other caller.
  *
  * @param {object|null|undefined} taxRow enriched tax record/selector item
- * @param {object} ctx `{ profile, verifactuRecord, ui, taxById }` — `taxById` optional,
- *   the same shape `selectSifFields` takes plus the full catalog for compound resolution
+ * `targets` (ETP-5027) applies the DOCUMENT-DIRECTION gate: a tax is never "missing"
+ * a key the document it sits on could not transmit anyway. VERI*FACTU never sends
+ * purchases, and TicketBAI only sends them under BIZKAIA — see
+ * `getInvoiceFiscalTargets()`. Without it, a purchase invoice on a VERI*FACTU (or
+ * non-Bizkaia TBAI) org showed a ⚠ badge demanding a key that can never be sent.
+ *
+ * @param {object|null|undefined} taxRow enriched tax record/selector item
+ * @param {object} ctx `{ profile, verifactuRecord, ui, taxById, targets }` — `taxById`
+ *   and `targets` optional, the same shape `selectSifFields` takes plus the full
+ *   catalog for compound resolution
  * @returns {boolean} true when at least one applicable field's value is blank
  */
-export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui, taxById } = {}) {
+export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui, taxById, targets = null } = {}) {
   if (!taxRow) return false;
   const effective = taxById ? resolveEffectiveTaxRow(taxRow, taxById) : taxRow;
-  const fields = selectSifFields({ profile, verifactuRecord, data: effective, ui });
+  const fields = selectSifFields({ profile, verifactuRecord, data: effective, ui, targets });
   if (fields.length === 0) return false;
   return fields.some((field) => {
     const value = effective[field.column];
@@ -200,13 +210,31 @@ export function isTaxSifMissing(taxRow, { profile, verifactuRecord, ui, taxById 
  * @param {string|null} [args.windowCategory] window category (`'sales'` | `'purchases'`) —
  *   forwarded to `buildLineSelectorContext`, which derives `isSOTrx`/`IsSOTrx` from it
  *   the same way `DetailView.jsx` does. Sales windows resolve to `Y`, purchase windows to `N`.
+ * @param {string|null} [args.specName] the calling window's kebab-case spec
+ *   (`sales-invoice` | `purchase-invoice` | `sales-order` | `purchase-order`). Drives the
+ *   ETP-5027 document-direction gate via `getInvoiceFiscalTargets()`. Defaults to the last
+ *   segment of `apiBaseUrl` (the same derivation `useSifFieldPatcher.js` uses), so callers
+ *   whose base already names their spec need not pass it.
  * @returns {{ cellBadges: object, modal: import('react').ReactNode }}
  */
-export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null }) {
+export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, recordId = null, windowCategory = null, specName = null }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, verifactuRecord, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  // ETP-5027 — which fiscal systems this DOCUMENT can actually be sent to, on top of
+  // which ones the ORG has configured (`profile`). TicketBAI reaches purchase documents
+  // only under BIZKAIA (Batuz/LROE) and VERI*FACTU never reaches them at all, so without
+  // this gate a purchase line showed a ⚠ badge (and opened a modal) for a key that could
+  // never be transmitted. `etsgSifTerritory` comes off the tbai-config header record
+  // (`artifacts/tbai-config/contract.json`).
+  const resolvedSpecName = specName || apiBaseUrl?.split('/').filter(Boolean).pop() || null;
+  const territory = tbaiRecord?.etsgSifTerritory ?? null;
+  const targets = useMemo(
+    () => getInvoiceFiscalTargets(resolvedSpecName, profile, territory),
+    [resolvedSpecName, profile, territory],
+  );
   const [taxById, setTaxById] = useState({});
   const [modalTaxId, setModalTaxId] = useState(null);
 
@@ -220,9 +248,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     let cancelled = false;
 
     async function loadTaxCatalog() {
-      const headerResponse = await fetch(`${apiBaseUrl}/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headerResponse = await apiFetch(`/header/${recordId}`);
       const headerJson = headerResponse.ok ? await headerResponse.json() : null;
       // NEO envelopes single-record GETs as { response: { data: [ {...} ], status } } —
       // same unwrapping useFiscalConfig.js's fetchRecord() already does. Reading the
@@ -242,8 +268,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       // Pages through the full catalog instead of trusting a single request — see
       // TAX_SELECTOR_PAGE_LIMIT's comment above and fetchAllTaxPages()'s own doc.
       const allItems = await fetchAllTaxPages({
-        apiBaseUrl,
-        token,
+        apiFetch,
         selectorContext,
         currency,
         isCancelled: () => cancelled,
@@ -254,7 +279,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
 
     loadTaxCatalog().catch(() => {});
     return () => { cancelled = true; };
-  }, [apiBaseUrl, token, enabled, recordId, windowCategory]);
+  }, [apiBaseUrl, token, apiFetch, enabled, recordId, windowCategory]);
 
   // ETP-4888 design-polish round — renders the trigger inline next to the "tax"
   // column's own value (InlineLinesPanel's `cellBadges` slot) instead of the
@@ -266,7 +291,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     if (!enabled) return {};
     return {
       tax: (row) => {
-        if (!isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui, taxById })) return null;
+        if (!isTaxSifMissing(taxById[row?.tax], { profile, verifactuRecord, ui, taxById, targets })) return null;
         return (
           <button
             type="button"
@@ -281,13 +306,14 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
         );
       },
     };
-  }, [enabled, taxById, profile, verifactuRecord, ui]);
+  }, [enabled, taxById, profile, verifactuRecord, ui, targets]);
 
   const modal = modalTaxId ? (
     <TaxSifModal
       taxId={modalTaxId}
       apiBaseUrl={apiBaseUrl}
       token={token}
+      targets={targets}
       onClose={() => setModalTaxId(null)}
       onSaved={(updatedTax) => {
         setTaxById((prev) => ({

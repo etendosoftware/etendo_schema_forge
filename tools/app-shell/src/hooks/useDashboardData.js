@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { kpisConfig, actions } from '@generated/dashboard/generated/config';
 import { useAuth } from '@/auth/AuthContext';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { createDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { useDashboardWidgetAccess } from '@/hooks/useDashboardWidgetAccess.js';
 import { useDashboardDateRange } from '@/components/dashboard/DashboardDateRangeContext';
 
 /* ------------------------------------------------------------------
@@ -14,29 +16,22 @@ const FETCH_TIMEOUT_MS = 10000;
  * Low-level helpers
  * ----------------------------------------------------------------*/
 
-/** Detect the Etendo context path for building API URLs. */
-function getApiBase() {
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-  if (webIdx === -1) return import.meta.env.VITE_API_BASE || '';
-  return path.substring(0, webIdx);
-}
-
 /**
  * Fetch a dashboard widget endpoint.
  * All widget endpoints live under /sws/neo/dashboard/{entity}.
+ *
+ * 401 is treated as "unavailable" rather than an expired session — a single failed
+ * widget must not log the whole dashboard out — so it is passed through via
+ * `on401: 'ignore'` and falls into the same !res.ok handling as any other failure.
  */
-async function fetchWidget(apiBase, token, entity, range) {
+async function fetchWidget(apiFetch, entity, range) {
   const qs = range ? `?range=${encodeURIComponent(range)}` : '';
-  const url = `${apiBase}/sws/neo/dashboard/${entity}${qs}`;
+  const path = `/sws/neo/dashboard/${entity}${qs}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: ctrl.signal,
-    });
+    const res = await apiFetch(path, { signal: ctrl.signal, on401: 'ignore' });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -168,6 +163,7 @@ const PENDING_TASK_RULES = [
   { match: (l, t) => l.startsWith('/goods-receipt') || t.includes('pending reception'),   singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
   { match: (l, t) => l.startsWith('/goods-shipment') || t.includes('pending delivery'),   singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
   { match: (l, t) => t.includes('collection') && t.includes('due today'),                 singular: 'collectionsDueToday',    plural: 'collectionsDueToday_plural'    },
+  { match: (l, t) => t.includes('payment') && t.includes('overdue'),                      singular: 'paymentsOverdue',        plural: 'paymentsOverdue_plural'        },
   { match: (l, t) => t.includes('payment') && t.includes('due today'),                    singular: 'paymentsDueToday',       plural: 'paymentsDueToday_plural'       },
   { match: (l, t) => l === '/physical-inventory' || t.includes('low stock alert'),        singular: 'lowStockAlert',          plural: 'lowStockAlerts'                },
 ];
@@ -276,6 +272,8 @@ function mapPendingAmounts(handlerData) {
   // Handler returns data as object (not array) or as first element of array
   const obj = Array.isArray(handlerData) ? handlerData[0] : handlerData;
   if (!obj) return null;
+  // ETP-5012: toCollect/toPay are TOTAL pending balances (any due date), so
+  // their default drill-down is 'pending', not the now-stricter 'overdue'.
   return {
     toCollect: {
       count: obj.toCollect?.count ?? 0,
@@ -283,7 +281,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toCollect?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'sales-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
     toPay: {
@@ -292,7 +290,7 @@ function mapPendingAmounts(handlerData) {
       navigation: obj.toPay?.navigation || createDashboardNavigation({
         type: 'list',
         window: 'purchase-invoice',
-        filter: 'overdue',
+        filter: 'pending',
       }),
     },
   };
@@ -342,7 +340,13 @@ export function useDashboardData() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch();
+
+  // ETP-5088 — role-derived widget visibility. A widget this role cannot see is not merely
+  // hidden: its request is never issued (`skipUnlessVisible` below), so a restricted role costs
+  // fewer round trips instead of fetching data it will not be shown.
+  const access = useDashboardWidgetAccess();
+  const { isWidgetVisible, filterFeed, pendingAmountsVisibility } = access;
 
   const fetchData = useCallback(async () => {
     if (!token) {
@@ -351,6 +355,10 @@ export function useDashboardData() {
       return;
     }
 
+    // Resolves to the widget's fetch when visible, and to a `null` result — indistinguishable
+    // from an unavailable widget downstream — when it is not.
+    const skipUnlessVisible = (visible, run) => (visible ? run() : Promise.resolve(null));
+
     setLoading(true);
     try {
       const [
@@ -358,15 +366,19 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        fetchWidget(apiBase, token, 'kpis', range),
-        fetchWidget(apiBase, token, 'trends', range),
-        fetchWidget(apiBase, token, 'pending-tasks', range),
-        fetchWidget(apiBase, token, 'activity', range),
-        fetchWidget(apiBase, token, 'recent-invoices', range),
-        fetchWidget(apiBase, token, 'best-products', range),
-        fetchWidget(apiBase, token, 'best-sellers', range),
-        fetchWidget(apiBase, token, 'pending-amounts', range),
-        fetchWidget(apiBase, token, 'top-clients', range),
+        // ETP-5011: the Financial Summary widget is always a calendar-year figure
+        // and does not follow the date-range selector, so `kpis` is fetched without `range`.
+        skipUnlessVisible(isWidgetVisible('kpis'), () => fetchWidget(apiFetch, 'kpis', null)),
+        skipUnlessVisible(isWidgetVisible('trends'), () => fetchWidget(apiFetch, 'trends', range)),
+        // Feed widgets are always fetched and then filtered PER ITEM below — each entry carries
+        // its own target window, so the widget stays and only unreachable rows drop out.
+        fetchWidget(apiFetch, 'pending-tasks', range),
+        fetchWidget(apiFetch, 'activity', range),
+        skipUnlessVisible(isWidgetVisible('recentInvoices'), () => fetchWidget(apiFetch, 'recent-invoices', range)),
+        skipUnlessVisible(isWidgetVisible('bestProducts'), () => fetchWidget(apiFetch, 'best-products', range)),
+        skipUnlessVisible(isWidgetVisible('bestSellers'), () => fetchWidget(apiFetch, 'best-sellers', range)),
+        skipUnlessVisible(pendingAmountsVisibility.visible, () => fetchWidget(apiFetch, 'pending-amounts', range)),
+        skipUnlessVisible(isWidgetVisible('topClients'), () => fetchWidget(apiFetch, 'top-clients', range)),
       ]);
 
       const kpisData    = kpisRes.status    === 'fulfilled' ? kpisRes.value    : null;
@@ -411,8 +423,17 @@ export function useDashboardData() {
         revenueTrend: mappedTrends ?? empty.revenueTrend,
         expenseTrend: mappedTrends?.expenseValues ?? [],
         topClients: mapTopClients(topClientsData) ?? [],
-        pendingTasks: mapPendingTasks(pendingData),
-        recentMessages: mapActivity(activityData) || [],
+        // ETP-5088 — PER_ITEM gating. Every pending task carries the window it navigates to
+        // (`WidgetPendingTasksHandler` sets it on each task it builds), so an unresolvable task
+        // is dropped: fail closed.
+        pendingTasks: filterFeed(mapPendingTasks(pendingData)),
+        // The activity feed is filtered server-side too: `WidgetActivityHandler` resolves each
+        // entry's window from its document type + `issotrx` and now emits `navigation`, dropping
+        // what the role cannot open. `dropUnresolved: false` is therefore about COMPATIBILITY,
+        // not permissiveness — against an Etendo GO older than ETP-5088 the entries carry no
+        // `navigation`, and dropping them would empty the feed for everyone instead of filtering
+        // it. Tighten to the default (fail closed) once the minimum supported GO version emits it.
+        recentMessages: filterFeed(mapActivity(activityData) || [], { dropUnresolved: false }),
         recentInvoices: mapRecentInvoices(invoicesData) ?? [],
         bestProducts: mapBestProducts(bestProductsData) ?? [],
         bestSellers: mapBestSellers(bestSellersData) ?? [],
@@ -424,7 +445,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false);
     }
-  }, [token, apiBase, range]);
+  }, [token, apiFetch, range, isWidgetVisible, filterFeed, pendingAmountsVisibility]);
 
   useEffect(() => {
     fetchData();

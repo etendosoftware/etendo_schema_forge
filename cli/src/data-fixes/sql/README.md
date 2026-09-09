@@ -66,7 +66,11 @@ physical-inventory correction first).
 2. **Two-layer idempotency.** `@check` decides whether to run at all; `@apply`
    is ALSO defensively guarded (`WHERE NOT EXISTS`) so partial/concurrent state
    is safe.
-3. **Applied fixes are immutable.** Never rename or edit an applied `.sql`.
+3. **Applied fixes are immutable.** Never rename or edit an applied `.sql`. A fix that becomes
+   superseded (e.g. by a later fix covering the same ground more completely) is never edited or
+   deleted either — it is **retired** instead via `../retired.json` (`fixId` + sha256 checksum of
+   the file's live bytes), which makes the runner skip it entirely on every future run. See
+   `../../../.claude/agents/tenant-fixer.md` § Retirement for the mechanism.
 
 ## Apply-time placeholders
 

@@ -9,15 +9,19 @@ import {
   buildMovementSortColumns,
 } from './MovementsTable';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { useUI } from '@/i18n';
 import { NewTransactionModal } from './NewTransactionModal.jsx';
 import { FundsTransferModal } from './FundsTransferModal.jsx';
-import { applyAdvancedFilter } from './movementAdvancedFilter';
+import { applyAdvancedFilter, withDerivedFields } from './movementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { useDeleteMovement } from '@/hooks/useCreateMovement';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
+import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
+import { resolveMovementDeleteBlock, movementHasUndoableState } from './movementActionEligibility.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 // ---------------------------------------------------------------------------
@@ -96,11 +100,19 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, autoOpenNewMovement = false },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false },
   ref,
 ) {
   const [filters, setFilters] = useState({
-    dateRange: { presetId: 'last30' },
+    // A `?txnAny=<id>` deep-link (ETP-5013 follow-up — the Journal Entries report's
+    // "Financial Account Transaction" drill-down) targets ONE specific movement,
+    // which is very often older than the 30-day default: the row simply would
+    // not be in `movements` at all, so the highlight/expand below silently did
+    // nothing and the user landed on an empty-looking list. Opening that one
+    // case unbounded guarantees the targeted movement is loaded. Plain `?txn=`
+    // (the four in-app callers) always points at a recent movement and keeps
+    // the 30-day default, so their view is unchanged.
+    dateRange: txnUnbounded ? null : { presetId: 'last30' },
     type: null,
     search: '',
   });
@@ -132,15 +144,25 @@ export const MovementsTab = forwardRef(function MovementsTab(
   // ETP-4656 (Gap 2) — bulk "Delete selected" for the movements grid, wired onto
   // the checkbox selection that already existed here. Reuses the same
   // POST .../financial-account-transactions?action=delete call the per-row kebab's
-  // "Eliminar" already makes (useDeleteMovement — a Draft is removed directly, a
-  // Processed one is reactivated + removed server-side); not every movement is
-  // deletable (payment-linked ones aren't, see MovementRowKebab's canDelete), so
-  // attempting to delete one of those surfaces as a normal per-row failure in the
-  // 3-outcome toast rather than being pre-filtered out of the selection.
+  // "Eliminar" already makes (useDeleteMovement).
+  //
+  // ETP-5111 — the delete SEMANTICS now depend on the size of the selection, for parity with
+  // Classic's own toolbar: exactly ONE selected row means Payment Removal (the backend
+  // reactivates and then removes, so a processed/posted movement can be deleted), while TWO
+  // or more mean a plain delete per row, which the DB trigger
+  // (APRM_FIN_FINACC_TRAN_CHECK_TRG) refuses for any row that is still processed. The flag is
+  // captured in a ref at click time because `deleteOneFn` is held by `useBatchDeleteDialog`
+  // across the confirm dialog and would otherwise read a stale closure over `selectedIds`.
+  //
+  // The trash button itself is NEVER pre-disabled by row eligibility (the unified delete rule):
+  // a row the backend refuses — payment-linked, funds-transfer leg, or processed inside a
+  // multi-row batch — surfaces as an ordinary per-row failure in the 3-outcome toast, and the
+  // reason is spelled out only when a single row was selected.
   const { deleteMovement } = useDeleteMovement();
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const paymentRemovalRef = useRef(true);
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
-    deleteOneFn: (id) => deleteMovement({ id }),
+    deleteOneFn: (id) => deleteMovement({ id, paymentRemoval: paymentRemovalRef.current }),
     onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) onReload?.();
       if (failed.length === 0) {
@@ -149,12 +171,54 @@ export const MovementsTab = forwardRef(function MovementsTab(
         setSelectedIds(new Set(failed));
       }
     },
+    // ETP-5111 — a ONE-row selection is deleted through Payment Removal, which desconcilia and
+    // descontabiliza, so it must carry the same warning the row kebab shows for that very record
+    // instead of the neutral count dialog. `movementHasUndoableState` is the shared predicate, so
+    // the two surfaces cannot disagree again. A multi-row selection keeps the count dialog: it is
+    // a plain per-row delete, and the cartel enumerates consequences a plain delete never has.
+    renderDialog: ({ open, count, items, deleting, onConfirm, onClose }) => {
+      const single = count === 1 ? movements.find((m) => m.id === items[0]) : null;
+      const showCartel = Boolean(single)
+        && !resolveMovementDeleteBlock(single)
+        && movementHasUndoableState(single);
+      if (!open) return null;
+      return showCartel ? (
+        <MovementLifecycleConfirmModal
+          action="delete"
+          reconciled={single.paymentStatus === 'RPPC'}
+          posted={single.posted === 'Y'}
+          onConfirm={onConfirm}
+          onClose={onClose}
+          data-testid="MovementLifecycleConfirmModal__bulk-delete" />
+      ) : (
+        <DeleteConfirmDialog
+          open
+          count={count}
+          deleting={deleting}
+          onConfirm={onConfirm}
+          onClose={onClose}
+          data-testid="DeleteConfirmDialog__bulk-delete" />
+      );
+    },
   });
+  const requestDelete = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    // 1 → Payment Removal · N → plain delete.
+    paymentRemovalRef.current = ids.length === 1;
+    requestBatchDelete(ids);
+  }, [selectedIds, requestBatchDelete]);
 
   const filteredMovements = useMemo(
     () => applyAdvancedFilter(applyFilters(movements, filters), advancedFilter),
     [movements, filters, advancedFilter],
   );
+
+  // Rows handed to the toolbar's advanced-filter builder must carry the SAME
+  // derived fields the filter columns expose. `statusFamily` exists only inside
+  // the evaluator's projection, so the builder's enum picker used to seed its
+  // in-memory option list from a field no row had — leaving the Status dropdown
+  // to fall back to the declared enumLabels alone (ETP-4956).
+  const filterSourceRows = useMemo(() => movements.map(withDerivedFields), [movements]);
 
   // Sorting lives HERE, not in the table: the "Ordenar por" popover belongs in the toolbar,
   // which is the table's sibling. Same split as ListView/DataTable. Client-side because this
@@ -206,16 +270,16 @@ export const MovementsTab = forwardRef(function MovementsTab(
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {selectedIds.size > 0 && (
-        <div className="border-b border-[hsl(var(--border-subtle))] px-2 py-2">
-          <BulkDeleteSelectionBar
-            count={selectedIds.size}
-            deleting={bulkDeleting}
-            onCancel={clearSelection}
-            onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-            data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
-        </div>
-      )}
+      {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
+          viewport-fixed pill via SelectionToolbar; it no longer occupies a
+          slot in this flow (the wrapping div here used to reserve space for
+          the old in-flow bar). */}
+      <BulkDeleteSelectionBar
+        count={selectedIds.size}
+        deleting={bulkDeleting}
+        onCancel={clearSelection}
+        onDelete={requestDelete}
+        data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
@@ -223,7 +287,8 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onAdvancedFilterChange={setAdvancedFilter}
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
-        rows={movements}
+        onRefresh={onReload}
+        rows={filterSourceRows}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}
@@ -240,6 +305,12 @@ export const MovementsTab = forwardRef(function MovementsTab(
         totals={dateScopedTotals}
         loading={loading}
         data-testid="AccountSummaryStrip__c1f76a" />
+      {/* Same affordance a generated list gets from ListView: the rows stay put and dim while
+          refreshing, and this says why. Only when rows are already on screen — on the first
+          fetch the table's own skeleton is the indicator. */}
+      {loading && movements.length > 0 ? (
+        <ListProgressBar testId="movements-progress-bar" data-testid="ListProgressBar__c1f76a" />
+      ) : null}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <MovementsTable
           movements={sortedMovements}
@@ -253,6 +324,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onSort={toggleSort}
           onReload={onReload}
           onEdit={setEditMovement}
+          accountCurrencyId={account?.currencyId}
           data-testid="MovementsTable__c1f76a" />
       </div>
       {batchDeleteDialog}

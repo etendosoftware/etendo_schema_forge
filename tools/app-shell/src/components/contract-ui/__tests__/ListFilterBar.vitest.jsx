@@ -1,5 +1,8 @@
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+// Not mocked: the real fixed-order catalog, so the expected order is derived
+// from the same source the component sorts with (ETP-4913).
+import { STATUS_ORDER } from '@/lib/statusBadge.js';
 
 // Mock i18n hooks
 vi.mock('@/i18n', () => ({
@@ -942,6 +945,38 @@ describe('ListFilterBar merged codes from backend distinct values', () => {
     // and compareStatusCodes places 'false' (Draft bucket) before 'true'
     // (Completed bucket) in the fixed business-flow order.
     expect(codes).toEqual(['false', 'true']);
+  });
+
+  it('orders a full warehouse docstatus set by document flow (ETP-4913)', async () => {
+    // The 10 active values of AD reference 131 "All_Document Status" (M_InOut /
+    // C_Invoice), delivered in the alphabetical-by-code order the backend's
+    // `order by <code> asc` produces. Before ETP-4913 extended STATUS_ORDER,
+    // the codes it did not know (??, NA, RE, TEMP, WP) were alphabetized into a
+    // tail — the illogical order reported in the ticket.
+    const backendCodes = ['??', 'CL', 'CO', 'DR', 'IP', 'NA', 'RE', 'TEMP', 'VO', 'WP'];
+    distinctValuesOverride.current = {
+      values: backendCodes.map((id) => ({ id })),
+      loading: false,
+      loadingMore: false,
+      hasMore: false,
+      search: '',
+      setSearch: () => {},
+      loadMore: () => {},
+    };
+    render(
+      <ListFilterBar columns={STATUS_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-status'));
+    await Promise.resolve();
+
+    // Derived from STATUS_ORDER rather than hand-written, so a catalog change
+    // cannot silently disagree with a stale literal here. The pill and the
+    // advanced filter's value picker sort with the very same comparator.
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes).toEqual(STATUS_ORDER.filter((c) => backendCodes.includes(c)));
+    expect(codes).toEqual(['TEMP', 'DR', 'IP', 'WP', 'CO', 'RE', 'CL', 'NA', 'VO', '??']);
   });
 
   it('mergedStatusCodes deduplicates a backend code that also appears in-memory', async () => {

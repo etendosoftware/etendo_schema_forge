@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function ImportLinesModal({
   invoiceId,
@@ -28,6 +29,7 @@ export default function ImportLinesModal({
 }) {
   if (!linesEndpoint) throw new Error('ImportLinesModal: linesEndpoint prop is required');
   const ui = useUI();
+  const apiFetch = useApiFetch(base);
   const [documents, setDocuments] = useState([]);
   const [sharedContext, setSharedContext] = useState({});
   const [loading, setLoading] = useState(true);
@@ -162,8 +164,8 @@ export default function ImportLinesModal({
         for (const line of lines) {
           const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
           const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
-          const res = await fetch(`${base}/${linesEndpoint}`, {
-            method: 'POST', headers, body: JSON.stringify(lineBody),
+          const res = await apiFetch(`/${linesEndpoint}`, {
+            method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
           });
           if (!res.ok) errors++;
           else importedDocIds.add(doc.id);

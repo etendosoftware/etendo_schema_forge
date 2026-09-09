@@ -24,6 +24,14 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   }),
 }));
 
+// ETP-5022 — the logout path runs through `useLogout`, which now reads the session with the
+// core's `useAuthOptional` (so it does not throw without an AuthProvider). The rest of the
+// core auth module is kept intact, since other modules in this render tree import from it.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ logout: logoutMock, ...authOverrides }),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
@@ -69,65 +77,67 @@ describe('UserAvatarButton', () => {
     localeOverrides = {};
   });
 
-  it('shows the Change Password menu item when a platform token exists and the auth method is password', () => {
+  // ETP-5115. Six tests used to live here, all about a "Change Password" item this menu no longer
+  // owns, and four of them pinned the very defect this change removes: whether to offer the item at
+  // all was decided by reading `sf_platform_auth_method` out of localStorage, so an SSO account was
+  // shown nothing — not a disabled control with a reason, simply no entry. Two of those six were
+  // "hides the item when ..." assertions, which would now pass vacuously against a menu that has no
+  // such item for anybody: green, and testing nothing. Replaced rather than deleted so the guess
+  // cannot quietly come back.
+  //
+  // The password form itself, and the sign-out that follows a successful change, moved to the
+  // account settings screen and are covered there.
+
+  it('always offers the Account entry, whatever the session stashed in localStorage', () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);
 
-    expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
+    expect(screen.getByTestId('menu-account')).toBeInTheDocument();
   });
 
-  it('shows the Change Password menu item when the auth method key is absent (legacy sessions)', () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
-
-    render(<UserAvatarButton />);
-
-    expect(screen.getByTestId('menu-change-password')).toBeInTheDocument();
-  });
-
-  it('hides the Change Password menu item for SSO sessions', () => {
+  it('offers the Account entry to an SSO session, which used to be shown nothing', () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     localStorage.setItem('sf_platform_auth_method', 'sso');
 
     render(<UserAvatarButton />);
 
-    expect(screen.queryByTestId('menu-change-password')).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-account')).toBeInTheDocument();
   });
 
-  it('hides the Change Password menu item when no platform token exists', () => {
-    localStorage.setItem('sf_platform_auth_method', 'password');
-
+  it('offers the Account entry with no platform token stashed at all', () => {
     render(<UserAvatarButton />);
 
-    expect(screen.queryByTestId('menu-change-password')).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-account')).toBeInTheDocument();
   });
 
-  it('opens the change password dialog when the menu item is selected', async () => {
+  it('navigates to the account screen when the Account entry is selected', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    localStorage.setItem('sf_platform_auth_method', 'password');
 
     render(<UserAvatarButton />);
+    await user.click(screen.getByTestId('menu-account'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/account');
+  });
+
+  it('no longer hosts the change password dialog itself', async () => {
+    const user = userEvent.setup();
+
+    render(<UserAvatarButton />);
+    await user.click(screen.getByTestId('menu-account'));
 
     expect(screen.queryByTestId('change-password-dialog')).not.toBeInTheDocument();
-    await user.click(screen.getByTestId('menu-change-password'));
-    expect(screen.getByTestId('change-password-dialog')).toBeInTheDocument();
   });
 
-  it('sets both one-shot onboarding flags and logs out after a successful password change', async () => {
-    const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    localStorage.setItem('sf_platform_auth_method', 'password');
-
+  it('keeps the logout label readable on hover instead of red on red', () => {
     render(<UserAvatarButton />);
 
-    await user.click(screen.getByTestId('menu-change-password'));
-    await user.click(screen.getByTestId('change-password-success'));
-
-    expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
-    expect(localStorage.getItem('sf_onboarding_notice')).toBe('password-changed');
-    expect(logoutMock).toHaveBeenCalledTimes(1);
+    // bg-destructive at full strength sits behind text-destructive: in light mode the label
+    // disappeared on hover. Dark mode was already using a 20% tint and read fine.
+    const logoutItem = screen.getByTestId('user-menu-logout');
+    expect(logoutItem.className).not.toMatch(/focus:bg-destructive(?![/-])/);
+    expect(logoutItem.className).toMatch(/focus:bg-destructive\/10/);
   });
 
   it('switches the locale when a language option is clicked', async () => {

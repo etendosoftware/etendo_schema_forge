@@ -10,7 +10,8 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection, buildCsvAndDownload, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection, buildCsvAndDownload, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
+import { mapVfStatus } from '../shared/useFiscalStatus.js';
 import {
   VF_SPEC,
   VF_ACEPTADAS_ENTITY,
@@ -32,15 +33,6 @@ const VF_CORRECT_EXPORT_COLS = [
   { label: 'Error Code',     get: r => r.codeError ?? '' },
   { label: 'Error Reason',   get: r => r.errorReason ?? '' },
 ];
-
-// Map raw DB status codes → StatusPill-compatible keys
-const VF_STATUS_MAP = {
-  AC: 'accepted',
-  AE: 'partiallyAccepted',
-  ER: 'rejected',
-  IN: 'invalid',
-};
-const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
 
 // Extract human-readable invoice number from a row.
 // NEO includes $documentNo / $_identifier companion fields for FK columns.
@@ -253,7 +245,7 @@ export default function VerifactuMonitorSection({
                 const typeLabel    = parseTypeLabel(row);
                 const mappedStatus = mapVfStatus(row.verifactuSendingStatus ?? activeTab);
                 return (
-                  <tr key={row.id ?? i}>
+                  <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
                     <td><Checkbox
                       checked={selectedIds.has(row.id)}
                       onChange={() => handleToggleRow(row.id)}

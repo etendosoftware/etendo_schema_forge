@@ -23,6 +23,43 @@ const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/report-jou
 const CONTRACT = JSON.parse(readFileSync(resolve(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const SQL = CONTRACT.sql.query;
 
+// ── Part 0: contract shape — "Options" section is excluded from the printed
+// filter summary (ETP-5128) ─────────────────────────────────────────────────
+//
+// The generic filter-summary logic (filterAndTransformParams, tested against
+// its own inline fixtures in schema_forge_core's cli/test/report-filters.test.js)
+// only reads whatever `excludeFromSummary` is declared on a contract's
+// sections. This report's OWN contract shape is what makes that generic
+// behavior apply here: the "Options" section (the 6 showXEntries/
+// showEntryDescription toggles asserted below) must carry the flag, or the
+// printed header goes back to showing 5-6 "Mostrar ...: Sí" lines as filter
+// noise even though these are operational rendering toggles, not something
+// the user "filtered by".
+describe('report-journal-entries — contract "Options" section is excluded from the printed filter summary (ETP-5128)', () => {
+  const OPTIONS_TOGGLE_NAMES = [
+    'showRegularEntries',
+    'showPlClosingEntries',
+    'showClosingEntries',
+    'showOpeningEntries',
+    'showDivideUpEntries',
+    'showEntryDescription',
+  ];
+
+  it('declares an "opciones" section with excludeFromSummary: true', () => {
+    const section = (CONTRACT.sections || []).find((s) => s.id === 'opciones');
+    assert.ok(section, 'contract must declare an "opciones" section');
+    assert.equal(section.excludeFromSummary, true);
+  });
+
+  it('all 6 show* toggle parameters belong to the "opciones" section', () => {
+    for (const name of OPTIONS_TOGGLE_NAMES) {
+      const param = (CONTRACT.parameters || []).find((p) => p.name === name);
+      assert.ok(param, `contract must declare parameter "${name}"`);
+      assert.equal(param.section, 'opciones', `"${name}" must belong to the "opciones" section`);
+    }
+  });
+});
+
 // ── Part 1: SQL filter clause ───────────────────────────────────────────────
 
 /** Extract balanced-paren substring starting at `openIdx` (which must be '('). */
@@ -189,7 +226,17 @@ function renderHtmlLike(templateFile, showEntryDescription) {
   const hb = Handlebars.create();
   const helpersCode = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
   registerReportHelpers(hb, helpersCode);
-  const templateSrc = readFileSync(resolve(ARTIFACT_DIR, templateFile), 'utf8');
+  // ETP-5013 added `{{> document-branding}}` to template.hbs's .report-header —
+  // NOT a native Handlebars partial (see report-api.js's own comment on
+  // expandReportPartials), so it must be string-expanded before compiling or
+  // Handlebars throws "The partial document-branding could not be found".
+  // template-csv.hbs never got the partial, so it needs no expansion.
+  let templateSrc = readFileSync(resolve(ARTIFACT_DIR, templateFile), 'utf8');
+  if (templateFile === 'template.hbs') {
+    const brandingPartial = readFileSync(
+      resolve(import.meta.dirname, '../../../templates/reports/document-branding.hbs'), 'utf8');
+    templateSrc = templateSrc.replace(/\{\{>\s*document-branding\s*\}\}/g, brandingPartial);
+  }
   const template = hb.compile(templateSrc);
   return template({
     css: '',

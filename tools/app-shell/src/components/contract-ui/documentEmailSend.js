@@ -1,5 +1,6 @@
 import { uploadAndMarkMainAttachment } from '../copilot/ocr/listAttachments.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }
@@ -30,6 +31,11 @@ export function buildEmailContractCommand(contractName, documentId, options = {}
     recordId: documentId,
     intent: 'send-document',
   };
+  // ETP-5003 — without this the backend falls back to Spanish for every recipient, whatever
+  // locale the operator is working in.
+  if (options.language) {
+    command.language = options.language;
+  }
   // ETP-4717 — opt-in, mirrors recipientEdits: only present when the operator
   // actually changed subject/message away from their auto-derived defaults,
   // so an untouched send stays byte-identical with the legacy payload shape.
@@ -126,6 +132,8 @@ export async function cacheDocumentPreviewFile({
 async function resolvePreviewBlob(pdfBlob, pdfBlobUrl) {
   if (pdfBlob) return pdfBlob;
   if (!pdfBlobUrl) return null;
+  // raw-fetch-ok: a blob: URL created by the preview, NOT an API endpoint — it takes no
+  // auth headers and no base URL (ETP-5022).
   const res = await fetch(pdfBlobUrl);
   if (!res.ok) {
     throw new Error(`Preview PDF fetch failed (${res.status})`);
@@ -143,6 +151,7 @@ export async function sendDocumentEmail({
   pdfBlobUrl,
   recipientEdits,
   messageEdits,
+  language,
 }) {
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
@@ -154,13 +163,11 @@ export async function sendDocumentEmail({
     pdfBlob,
     pdfBlobUrl,
   });
-  const res = await fetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
+  const res = await apiFetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits })),
+    baseUrl: '',
+    token,
+    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits, messageEdits, language })),
   });
   return readEmailContractResponse(res);
 }
