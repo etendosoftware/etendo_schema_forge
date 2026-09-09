@@ -20215,6 +20215,8 @@
     "backendError.invalidAccountBpAndGroup": "An accounting account required to post this document could not be found. Check the accounting configuration of the accounting schema, the product and the business partner category. (Document of {bp}, category {group})",
     "backendError.invalidAccountBpOnly": "An accounting account required to post this document could not be found. Check the accounting configuration of the accounting schema, the product and the business partner category. (Document of {bp})",
     "backendError.invoiceLineAlreadyInvoiced": "Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.",
+    "backendError.insufficientStockLine": "The entered quantity ({requested}) exceeds the available stock of {product} in {warehouse} ({available} units).",
+    "backendError.insufficientStockProcess": "This movement cannot be processed: the line(s) of {products} exceed the available source-warehouse stock: {details}",
     "backendError.matchRuleNameRequired": "Name is required",
     "backendError.matchRuleNameTooLong": "Name is too long",
     "backendError.matchRuleTextConditionInvalid": "The condition must be Contains, Starts with or Regex",
