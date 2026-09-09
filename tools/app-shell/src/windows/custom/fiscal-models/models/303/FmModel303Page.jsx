@@ -445,10 +445,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // and their button pre-checks — because the backend silently defaulted a missing/blank
   // declaration type to "N" instead of rejecting it (Fiscal303BoxesHandler.resolveDeclType).
   const missingRequiredFields = getMissingRequiredFields(decl?.year, decl?.period, identChecks);
+  // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the toast
+  // helper below and the inline banner — a single non-nested template literal per field
+  // (javascript:S4624 flags nesting one template literal's `${}` inside another's).
+  const missingFieldNames = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
 
   function missingRequiredFieldsToast(actionKey, fallback) {
-    const fields = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
-    toast.error(t(actionKey, { fields }) ?? fallback.replace('{fields}', fields));
+    toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
 
   // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
@@ -665,9 +668,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           gap: 8,
         }}>
           <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__missingRequired" />
-          {t('fm.validation.missing_required_banner', {
-            fields: missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', '),
-          }) ?? `Hay campos obligatorios sin completar: ${missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ')}.`}
+          {t('fm.validation.missing_required_banner', { fields: missingFieldNames })
+            ?? `Hay campos obligatorios sin completar: ${missingFieldNames}.`}
         </div>
       )}
       {/* ── KPI bar ──────────────────────────────────────────────── */}

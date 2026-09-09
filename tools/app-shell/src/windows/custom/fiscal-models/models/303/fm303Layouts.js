@@ -503,6 +503,20 @@ export function matchesVisibility(svw, identification) {
   return svw.in ? svw.in.includes(val) : val === svw.equals;
 }
 
+// Section-level gate for getMissingRequiredFields below — split out purely to keep that
+// function's cognitive complexity down (javascript:S3776); no behavior change.
+function isSectionVisible(section, identification) {
+  return !section.sectionVisibleWhen || matchesVisibility(section.sectionVisibleWhen, identification);
+}
+
+// Field-level gate for getMissingRequiredFields below — same reasoning as isSectionVisible.
+function isRequiredFieldMissing(f, identification) {
+  if (!f.required) return false;
+  if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) return false;
+  const val = identification?.[f.id];
+  return val === undefined || val === null || val === '';
+}
+
 /**
  * Returns the currently-visible `identificacion`-family fields (across `identificacion` and
  * `datos_bancarios`/meta sections) marked `required: true` in the resolved layout whose value is
@@ -521,12 +535,9 @@ export function getMissingRequiredFields(year, period, identification) {
   const missing = [];
   for (const section of layout.sections) {
     if (!Array.isArray(section.fields)) continue;
-    if (section.sectionVisibleWhen && !matchesVisibility(section.sectionVisibleWhen, identification)) continue;
+    if (!isSectionVisible(section, identification)) continue;
     for (const f of section.fields) {
-      if (!f.required) continue;
-      if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) continue;
-      const val = identification?.[f.id];
-      if (val === undefined || val === null || val === '') missing.push(f);
+      if (isRequiredFieldMissing(f, identification)) missing.push(f);
     }
   }
   return missing;
