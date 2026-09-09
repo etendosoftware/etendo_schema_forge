@@ -9,16 +9,28 @@
  */
 import {
   FIRST_STEPS,
-  FIRST_STEPS_TOTAL,
-  TOGGLEABLE_STEP_IDS,
+  PLAN_PRODUCTIVE,
   areAllStepsDone,
   countCompletedSteps,
   findExpandedStepId,
+  firstStepsTotal,
+  isProductivePlan,
   isStepDone,
+  toggleableStepIds,
+  visibleFirstSteps,
 } from '../firstStepsConfig.js';
 
 const ALL_TOGGLEABLE = ['company-data', 'fiscal-config', 'products', 'contacts',
   'invoice-sequence', 'team'];
+/** What a free/trial tenant can tick: the same list minus the two `productiveOnly` steps. */
+const TRIAL_TOGGLEABLE = ['company-data', 'products', 'contacts', 'team'];
+const FREE = 'free';
+
+/**
+ * Every plan-aware helper takes the plan LAST and defaults to productive when it is absent, so
+ * the calls below that pass no plan are asserting the full 7-step behaviour on purpose — that
+ * default is the documented fail-open direction, not an oversight.
+ */
 
 describe('firstStepsConfig — catalogue shape', () => {
   it('exposes seven steps, in the order the page renders them', () => {
@@ -38,9 +50,10 @@ describe('firstStepsConfig — catalogue shape', () => {
     ]);
   });
 
-  it('derives FIRST_STEPS_TOTAL from the array rather than hardcoding 7', () => {
-    expect(FIRST_STEPS_TOTAL).toBe(7);
-    expect(FIRST_STEPS_TOTAL).toBe(FIRST_STEPS.length);
+  it('derives the total from the array rather than hardcoding it', () => {
+    expect(firstStepsTotal(PLAN_PRODUCTIVE)).toBe(7);
+    expect(firstStepsTotal(PLAN_PRODUCTIVE)).toBe(FIRST_STEPS.length);
+    expect(firstStepsTotal(FREE)).toBe(5);
   });
 
   it('gives every step the full descriptor the page reads', () => {
@@ -51,6 +64,7 @@ describe('firstStepsConfig — catalogue shape', () => {
       // `descKey`/`minutes`/`to`/`action` are nullable by design (always-done rows have none).
       expect(['string', 'object']).toContain(typeof step.descKey); // string | null
       expect(typeof step.alwaysDone).toBe('boolean');
+      expect(typeof step.productiveOnly).toBe('boolean');
     }
   });
 
@@ -74,7 +88,7 @@ describe('firstStepsConfig — catalogue shape', () => {
   });
 });
 
-describe('firstStepsConfig — TOGGLEABLE_STEP_IDS is the write allowlist', () => {
+describe('firstStepsConfig — toggleableStepIds is the write allowlist', () => {
   /**
    * REGRESSION GUARD. This array is handed to `useFirstSteps` as `allowedIds` and is the
    * ONLY thing that keeps a non-writable id off `POST /sws/go/onboarding/first-steps`.
@@ -83,7 +97,13 @@ describe('firstStepsConfig — TOGGLEABLE_STEP_IDS is the write allowlist', () =
    * what was sent — adding a step here means adding it there too.
    */
   it('is exactly the six user-writable ids, in catalogue order', () => {
-    expect(TOGGLEABLE_STEP_IDS).toEqual(ALL_TOGGLEABLE);
+    expect(toggleableStepIds(PLAN_PRODUCTIVE)).toEqual(ALL_TOGGLEABLE);
+  });
+
+  it('narrows to the four a trial tenant can reach', () => {
+    // The two productiveOnly steps are not on screen for a trial, so they must not be
+    // writable either — `useFirstSteps` uses this as its `allowedIds`.
+    expect(toggleableStepIds(FREE)).toEqual(TRIAL_TOGGLEABLE);
   });
 
   it('never contains create-account, the one step that is done by definition', () => {
@@ -92,14 +112,110 @@ describe('firstStepsConfig — TOGGLEABLE_STEP_IDS is the write allowlist', () =
     // toggleable is a behaviour change, not a refactor.
     const step = FIRST_STEPS.find((s) => s.id === 'create-account');
     expect(step.alwaysDone, 'create-account must stay alwaysDone').toBe(true);
-    expect(TOGGLEABLE_STEP_IDS, 'create-account must not be writable').not.toContain('create-account');
+    for (const plan of [PLAN_PRODUCTIVE, FREE, undefined]) {
+      expect(toggleableStepIds(plan), 'create-account must not be writable')
+        .not.toContain('create-account');
+    }
   });
 
   it('holds every non-alwaysDone step and nothing else', () => {
-    expect(TOGGLEABLE_STEP_IDS).toEqual(
+    expect(toggleableStepIds(PLAN_PRODUCTIVE)).toEqual(
       FIRST_STEPS.filter((step) => !step.alwaysDone).map((step) => step.id),
     );
-    expect(TOGGLEABLE_STEP_IDS).toHaveLength(FIRST_STEPS_TOTAL - 1);
+    expect(toggleableStepIds(PLAN_PRODUCTIVE))
+      .toHaveLength(firstStepsTotal(PLAN_PRODUCTIVE) - 1);
+  });
+});
+
+describe('the plan gate — a trial sees a shorter checklist', () => {
+  const TRIAL_VISIBLE = ['create-account', 'company-data', 'products', 'contacts', 'team'];
+
+  it('hides exactly invoice numbering and the fiscal configuration on a free plan', () => {
+    expect(visibleFirstSteps(FREE).map((s) => s.id)).toEqual(TRIAL_VISIBLE);
+  });
+
+  it('keeps the catalogue order when it filters', () => {
+    // Not just the right set — the right sequence. A filter that reordered would move the
+    // team invitations off the end, and the page renders this array as-is.
+    const productiveOrder = visibleFirstSteps(PLAN_PRODUCTIVE).map((s) => s.id);
+    const trialOrder = visibleFirstSteps(FREE).map((s) => s.id);
+    expect(trialOrder).toEqual(productiveOrder.filter((id) => trialOrder.includes(id)));
+  });
+
+  it('shows every step once the tenant is productive', () => {
+    expect(visibleFirstSteps(PLAN_PRODUCTIVE)).toEqual(FIRST_STEPS);
+  });
+
+  it('marks exactly the two steps that a trial cannot act on', () => {
+    // Stated against the flag rather than the filtered list, so adding a third
+    // productiveOnly step has to be a deliberate edit here too.
+    const gated = FIRST_STEPS.filter((step) => step.productiveOnly).map((step) => step.id);
+    expect(gated).toEqual(['fiscal-config', 'invoice-sequence']);
+  });
+
+  describe('an unknown plan fails OPEN', () => {
+    /**
+     * THE DIRECTION THAT MATTERS. `useTenantPlan` answers `null` whenever it cannot know —
+     * no platform token, a failed `/sws/go/environments`, or a client id with no matching
+     * row. Reading that as "free" would silently strip invoice numbering and the fiscal
+     * setup from a tenant that paid for them, with nothing on screen to explain it. Showing
+     * a trial two extra rows is the cheaper mistake, and it is also what every tenant saw
+     * before this gate existed.
+     */
+    it.each([[undefined], [null]])('treats %s as productive', (plan) => {
+      expect(isProductivePlan(plan)).toBe(true);
+      expect(visibleFirstSteps(plan)).toEqual(FIRST_STEPS);
+      expect(firstStepsTotal(plan)).toBe(7);
+      expect(toggleableStepIds(plan)).toEqual(ALL_TOGGLEABLE);
+    });
+
+    it('treats any other unrecognized value as NOT productive', () => {
+      // Only a genuinely absent plan opens the gate. A value that arrived and is not
+      // "productive" is a free tenant, however it is spelled.
+      for (const plan of [FREE, 'demo', 'trial', '']) {
+        expect(isProductivePlan(plan), plan).toBe(false);
+      }
+    });
+  });
+
+  describe('the counters follow the visible list', () => {
+    it('counts 1/5 on a fresh trial and 1/7 on a fresh productive tenant', () => {
+      expect(countCompletedSteps([], FREE)).toBe(1);
+      expect(firstStepsTotal(FREE)).toBe(5);
+      expect(countCompletedSteps([], PLAN_PRODUCTIVE)).toBe(1);
+      expect(firstStepsTotal(PLAN_PRODUCTIVE)).toBe(7);
+    });
+
+    it('reaches all-set on a trial without the two hidden steps', () => {
+      // The whole point of the gate: a trial tenant must be able to finish the checklist.
+      // Before it, the two productiveOnly rows made 7/7 unreachable in a trial.
+      expect(areAllStepsDone(TRIAL_TOGGLEABLE, FREE)).toBe(true);
+      expect(areAllStepsDone(TRIAL_TOGGLEABLE, PLAN_PRODUCTIVE)).toBe(false);
+    });
+
+    it('does not count a hidden step that is already completed', () => {
+      // Reachable for real: a tenant completes everything while productive, and a later
+      // /environments hiccup reports free. Counting the hidden rows would render 7/5.
+      expect(countCompletedSteps(ALL_TOGGLEABLE, FREE)).toBe(5);
+      expect(countCompletedSteps(ALL_TOGGLEABLE, FREE))
+        .toBeLessThanOrEqual(firstStepsTotal(FREE));
+    });
+
+    it('never opens a hidden step by default', () => {
+      // `findExpandedStepId` drives which row the page opens on. Returning a gated id would
+      // name a row that is not rendered, and the page would open nothing at all.
+      expect(findExpandedStepId(['company-data'], FREE)).toBe('products');
+      expect(findExpandedStepId(['company-data', 'products'], FREE)).toBe('contacts');
+      expect(findExpandedStepId(['company-data', 'products', 'contacts'], FREE)).toBe('team');
+      expect(findExpandedStepId(TRIAL_TOGGLEABLE, FREE)).toBe(null);
+    });
+
+    it('picks up the two new rows the moment the tenant goes productive', () => {
+      // Same stored `completed`, different plan: the trial is finished, the productive
+      // tenant is sent to the first of the two steps that just appeared.
+      expect(findExpandedStepId(TRIAL_TOGGLEABLE, FREE)).toBe(null);
+      expect(findExpandedStepId(TRIAL_TOGGLEABLE, PLAN_PRODUCTIVE)).toBe('fiscal-config');
+    });
   });
 });
 
@@ -159,7 +275,8 @@ describe('countCompletedSteps', () => {
   });
 
   it('never exceeds the total', () => {
-    expect(countCompletedSteps([...ALL_TOGGLEABLE, 'create-account', 'ghost'])).toBe(FIRST_STEPS_TOTAL);
+    expect(countCompletedSteps([...ALL_TOGGLEABLE, 'create-account', 'ghost']))
+      .toBe(firstStepsTotal(PLAN_PRODUCTIVE));
   });
 });
 

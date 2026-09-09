@@ -6,10 +6,7 @@ import { cn } from '@/lib/utils.js';
 import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import {
-  FIRST_STEPS,
-  FIRST_STEPS_TOTAL,
   areAllStepsDone,
-  countCompletedSteps,
   findExpandedStepId,
   isStepDone,
   isStepExpandable,
@@ -169,7 +166,11 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
 export default function FirstStepsPage() {
   const ui = useUI();
   const navigate = useGuardedNavigate();
-  const { completed, loading, toggleStep } = useFirstStepsState();
+  // `steps`, `completedCount` and `total` come from the provider rather than from the
+  // catalogue directly: a trial tenant is shown a shorter list (see "Plan-dependent steps" in
+  // firstStepsConfig.js), and the page, the sidebar badge and the progress bar must all be
+  // counting the same rows.
+  const { completed, loading, toggleStep, plan, steps, completedCount, total } = useFirstStepsState();
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
@@ -183,21 +184,20 @@ export default function FirstStepsPage() {
     breadcrumb: ui('firstStepsPageTitle'),
   });
 
-  const doneCount = countCompletedSteps(completed);
-  const allSet = areAllStepsDone(completed);
+  const allSet = areAllStepsDone(completed, plan);
 
   // `null` means "nothing opened by hand yet", which is what lets the default follow the
   // loading state: the first incomplete row opens once the real completion state arrives,
   // instead of latching onto the empty state the page rendered with. Once the user clicks a
   // row, their choice wins for the rest of the visit — including closing every row.
   const [openedStepId, setOpenedStepId] = useState(null);
-  const expandedStepId = openedStepId === null ? findExpandedStepId(completed) : openedStepId;
+  const expandedStepId = openedStepId === null ? findExpandedStepId(completed, plan) : openedStepId;
   const handleOpen = useCallback((id) => {
     setOpenedStepId((current) => {
-      const effective = current === null ? findExpandedStepId(completed) : current;
+      const effective = current === null ? findExpandedStepId(completed, plan) : current;
       return effective === id ? '' : id;
     });
-  }, [completed]);
+  }, [completed, plan]);
 
   return (
     <div className="flex flex-col h-full" data-testid="first-steps-page">
@@ -216,13 +216,13 @@ export default function FirstStepsPage() {
                 className="shrink-0 ml-4 font-medium text-muted-foreground"
                 data-testid="first-steps-progress"
               >
-                {doneCount}/{FIRST_STEPS_TOTAL} {ui('firstStepsCompleted')}
+                {completedCount}/{total} {ui('firstStepsCompleted')}
               </span>
             </div>
             <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full rounded-full bg-foreground transition-all"
-                style={{ width: `${(doneCount / FIRST_STEPS_TOTAL) * 100}%` }}
+                style={{ width: `${total ? (completedCount / total) * 100 : 0}%` }}
                 data-testid="first-steps-progress-bar"
               />
             </div>
@@ -243,7 +243,7 @@ export default function FirstStepsPage() {
           )}
 
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden divide-y">
-            {FIRST_STEPS.map((step) => (
+            {steps.map((step) => (
               <StepRow
                 key={step.id}
                 step={step}

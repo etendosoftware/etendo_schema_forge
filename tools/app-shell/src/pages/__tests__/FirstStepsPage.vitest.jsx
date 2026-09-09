@@ -46,15 +46,41 @@ vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
 }));
 
 import FirstStepsPage from '../FirstStepsPage.jsx';
-import { TOGGLEABLE_STEP_IDS, findExpandedStepId } from '@/pages/first-steps/firstStepsConfig.js';
+import {
+  PLAN_PRODUCTIVE,
+  countCompletedSteps,
+  findExpandedStepId,
+  firstStepsTotal,
+  toggleableStepIds,
+  visibleFirstSteps,
+} from '@/pages/first-steps/firstStepsConfig.js';
 
-const ALL_DONE = [...TOGGLEABLE_STEP_IDS];
+const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
 
-/** Installs the mocked hook return value. `toggleStep` resolves `true` unless told otherwise. */
-function setHook({ completed = [], loading = false, error = null, toggleResult = true } = {}) {
+/**
+ * Installs the mocked context value. `toggleStep` resolves `true` unless told otherwise.
+ *
+ * The plan-derived fields are computed the same way `FirstStepsProvider` computes them rather
+ * than being passed in loose, so a change to the gate shows up here as a behaviour difference
+ * instead of a stale fixture that keeps asserting the old list. Defaults to productive, which
+ * is the full 7-step checklist every test below expects unless it says otherwise.
+ */
+function setHook({ completed = [], loading = false, error = null, toggleResult = true,
+  plan = PLAN_PRODUCTIVE } = {}) {
   const toggleStep = vi.fn(async () => toggleResult);
   const markSeen = vi.fn(async () => true);
-  hookState.value = { completed, seen: false, loading, error, toggleStep, markSeen };
+  hookState.value = {
+    completed,
+    seen: false,
+    loading,
+    error,
+    toggleStep,
+    markSeen,
+    plan,
+    steps: visibleFirstSteps(plan),
+    completedCount: countCompletedSteps(completed, plan),
+    total: firstStepsTotal(plan),
+  };
   return { toggleStep, markSeen };
 }
 
@@ -126,9 +152,58 @@ describe('FirstStepsPage — progress counter', () => {
   });
 });
 
+describe('FirstStepsPage — a trial tenant sees the shorter checklist', () => {
+  const TRIAL_DONE = ['company-data', 'products', 'contacts', 'team'];
+
+  it('renders five rows and neither of the two gated ones', () => {
+    setHook({ plan: 'free' });
+    render(<FirstStepsPage />);
+    for (const id of ['create-account', 'company-data', 'products', 'contacts', 'team']) {
+      expect(screen.getByTestId(`first-steps-step-${id}`)).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId('first-steps-step-invoice-sequence')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-step-fiscal-config')).not.toBeInTheDocument();
+  });
+
+  it('shows the progress out of five', () => {
+    setHook({ completed: ['company-data'], plan: 'free' });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('2/5');
+  });
+
+  it('opens the first incomplete row the trial can actually reach', () => {
+    // Skipping `fiscal-config` is the point: it is next in catalogue order but not rendered,
+    // so naming it would leave the page with nothing open.
+    setHook({ completed: ['company-data'], plan: 'free' });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-toggle-products')).toBeInTheDocument();
+  });
+
+  it('reaches the all-set state without the gated steps', () => {
+    // Before the gate a trial tenant could never finish the checklist — the two rows it had
+    // no way to act on kept it at 5/7 forever.
+    setHook({ completed: TRIAL_DONE, plan: 'free' });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('5/5');
+    expect(screen.getByTestId('first-steps-heading')).toHaveTextContent('firstStepsAllSetTitle');
+    expect(screen.getByTestId('first-steps-create-invoice')).toBeInTheDocument();
+  });
+
+  it('is NOT all-set with the same completed ids on a productive tenant', () => {
+    // The mirror of the test above, on the same stored state: going productive re-opens the
+    // checklist rather than carrying the trial's "done" over.
+    setHook({ completed: TRIAL_DONE, plan: PLAN_PRODUCTIVE });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('5/7');
+    expect(screen.getByTestId('first-steps-heading')).toHaveTextContent('firstStepsPrepareAccount');
+    expect(screen.queryByTestId('first-steps-create-invoice')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-toggle-fiscal-config')).toBeInTheDocument();
+  });
+});
+
 describe('FirstStepsPage — one row open at a time, but any row openable', () => {
   /** The expanded row is the one that renders its action controls / checkbox. */
-  const expandedIds = () => TOGGLEABLE_STEP_IDS
+  const expandedIds = () => ALL_DONE
     .filter((id) => screen.queryByTestId(`first-steps-toggle-${id}`) !== null);
 
   it('expands only the first incomplete toggleable step on a fresh account', () => {
@@ -228,14 +303,14 @@ describe('FirstStepsPage — always-done steps are read-only', () => {
     setHook({ completed: [] });
     render(<FirstStepsPage />);
 
-    for (const id of TOGGLEABLE_STEP_IDS) {
+    for (const id of ALL_DONE) {
       expect(screen.queryByTestId(`first-steps-done-${id}`)).not.toBeInTheDocument();
     }
     // Per the design, the empty status circle belongs to the expanded row alone — a collapsed
     // pending row carries only its time estimate, so "not done" reads as "no green check".
     const expandedId = findExpandedStepId([]);
     expect(screen.getByTestId(`first-steps-pending-${expandedId}`)).toBeInTheDocument();
-    for (const id of TOGGLEABLE_STEP_IDS.filter((entry) => entry !== expandedId)) {
+    for (const id of ALL_DONE.filter((entry) => entry !== expandedId)) {
       expect(screen.queryByTestId(`first-steps-pending-${id}`)).not.toBeInTheDocument();
       expect(screen.getByTestId(`first-steps-collapsed-time-${id}`)).toBeInTheDocument();
     }

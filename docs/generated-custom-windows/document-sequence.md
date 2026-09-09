@@ -29,13 +29,17 @@ Users should be able to:
   so there is no detail tab strip and no lines
 - **List behavior:** sorted by name (`listSortBy: "name asc"`); the grid shows Name, Prefix,
   Suffix, Next Assigned Number, Starting No. and Restart every year. **The list is scoped** —
-  see below; a tenant has 242 sequences and the window shows eleven of them
+  see below; a tenant has 242 sequences and the window shows seven of them
 - **Reachability:** also linked from `/first-steps` — the checklist's numbering step navigates
   here rather than editing the values inline (see the "Why the step navigates" note below).
   It is **step 6 of 7**, after the product and contact imports and before the team
   invitations: a tenant picks its invoice series once its master data is in, and inviting the
   team is the last thing it does. The position is the array order in `firstStepsConfig.js` —
-  nothing renders a step number, so reordering that array is the whole change
+  nothing renders a step number, so reordering that array is the whole change.
+  **The step is hidden while the tenant is on the free/trial plan** (`productiveOnly`), because
+  a series a tenant abandons after 14 days numbers nothing — the window itself stays reachable
+  from the Configuración menu either way. See `onboarding-flow.md` § "Which steps a tenant is
+  shown (plan gate)"
 
 ## Field mapping
 
@@ -65,7 +69,7 @@ touch, so a 242-row list would have been no shorter a path to the invoice series
 Classic window was.
 
 `DocumentSequenceHandler.applyListScope` narrows a list GET to the caller's own client and to
-these eleven, by name:
+these seven, by name:
 
 | | |
 |---|---|
@@ -75,15 +79,57 @@ these eleven, by name:
 | `MM Shipment` | goods shipment |
 | `Standard Order` | sales order |
 | `Purchase Order` | purchase order |
-| `DocumentNo_C_Invoice` | table-level invoice fallback |
 | `Secuencia TICKETBAI` | TicketBAI chaining counter |
-| `DocumentNo_M_InOut` | table-level goods movement in/out |
-| `DocumentNo_M_Movement` | table-level internal movement |
-| `DocumentNo_A_Asset` | table-level asset |
 
 The allowlist is a **product decision** and lives in `VISIBLE_SEQUENCE_NAMES`; adding a sequence
-to the product means adding its name there. Every one of the eleven was verified to exist, by
-this exact name, in a provisioned client.
+to the product means adding its name there. Every one of the seven was verified to exist, by
+this exact name, **exactly once per organization**, in a provisioned client.
+
+### Why no `DocumentNo_*` sequence is listed
+
+An earlier revision also exposed four table-level fallback counters —
+`DocumentNo_C_Invoice`, `DocumentNo_M_InOut`, `DocumentNo_M_Movement` and
+`DocumentNo_A_Asset`. They were removed for two independent reasons.
+
+**They are duplicated in the data.** Provisioning creates each of them twice: 6912 surplus
+`AD_Sequence` rows across 72 of 94 clients, 96 duplicated groups out of 242 sequences in a
+freshly provisioned tenant. (Rows differing only by organization are NOT this — per-org
+numbering is legitimate. Only rows sharing client *and* org are duplicates.) The cause is two
+creation passes ~30s apart: the initial client setup writes them, then
+`EtendoGoJwtServlet.generateOnboardingSequences` runs Etendo's classic *Create Sequences* over
+the same client.
+
+Numbering survives it by accident. `ad_sequence_doc` increments **every** row matching the name
+(`WHERE Name = ... AND ad_client_id = ...`, no org, no id) and then reads one back with a
+non-`STRICT` `SELECT INTO`, so PL/pgSQL takes an arbitrary row rather than raising. Both copies
+hold the same value, so either answer is correct — until someone edits ONE of them, at which
+point they diverge, the function still returns an arbitrary one, and PostgreSQL relocates an
+updated row, so a prefix would apply intermittently. 140 groups have already diverged.
+
+**And for purchase invoices there is nothing to configure anyway.** `DocumentNo_C_Invoice` is
+what numbers a purchase invoice — verified on the instance: the doctype contributes no sequence,
+so the Java layer (`UtilitySequence`, implemented by `com.etendoerp.sequences`; *not*
+`ad_sequence_doctype`, which returns NULL and does no fallback) falls back to
+`ad_sequence_doc('DocumentNo_' || tableName, client)`. In one client `DocumentNo_C_Invoice.currentnext`
+is `10000024` and the highest such invoice is `10000023` — an exact match.
+
+But `AP Invoice` carries `IsDocNoControlled='N'` and no sequence in **76 of 76 doctypes across
+all 75 clients**, while every other invoice doctype (reversed, corrective, rectificativa, and
+`AR Invoice`) has both. That is stock Openbravo semantics for "the number comes from outside" —
+a purchase invoice is numbered by the supplier. The fallback counter only supplies a *proposed*
+number so the field is not empty, so a prefix there would be configuring a series that is not
+the tenant's to define.
+
+**What it costs.** The doctypes without a sequence of their own are no longer reachable here:
+`AP Invoice` and `AP CreditMemo`, `MM Receipt`, plus asset and internal-movement numbering. One
+fallback row is SHARED by every doctype lacking a sequence, so that entry point changed all of
+them at once.
+
+**Before putting any of these names back**, the duplication has to be fixed at the source — one
+row per (client, org, name) with `currentnext = max(...)` so no number is re-issued, plus a
+preventive change so `generateOnboardingSequences` does not re-create what the client setup
+already wrote. It is not urgent: no product capability is blocked, since the one series a tenant
+might want to prefix is the one Etendo does not consider configurable.
 
 **Injected as criteria, not filtered out of the response.** The pre-hook shares its `NeoContext`
 with the default CRUD that runs after it, so appending clauses to the request's `criteria`
@@ -141,45 +187,45 @@ two code paths writing the same rows. See
 
 ## Gap assessment
 
-- **Purchase invoices ship without a sequence of their own.** Verified against the instance: all
-  73 provisioned `ARI` (sales invoice) document types have a `DocNoSequence_ID`; **none** of the
-  73 `API` (purchase invoice) ones do. Etendo falls back to the table-level
-  `DocumentNo_C_Invoice` sequence, which is SHARED by every invoice document type lacking one.
-  So a tenant that edits `DocumentNo_C_Invoice` here to set a purchase prefix changes numbering
-  for every other doctype on that fallback. This window does not create or assign sequences —
-  that is Etendo's "Create Sequences" process — so the gap is exposed, not closed.
+- **Purchase invoices have no configurable series, by Etendo's design.** `AP Invoice` is
+  `IsDocNoControlled='N'` with no sequence in 76 of 76 doctypes across all 75 clients, so its
+  number comes from the shared `DocumentNo_C_Invoice` fallback and is meant to be the supplier's
+  number, not one the tenant defines. See "Why no `DocumentNo_*` sequence is listed" above. One
+  loose end, **unverified**: `documentNo` is `readOnly` with `grid: false, form: false` in
+  `artifacts/purchase-invoice/decisions.json`, so it is hidden from the UI entirely and the
+  supplier's number cannot be typed. `orderReference` is editable there and may be serving that
+  role in practice — worth checking before assuming a gap.
 - **No guard against renumbering a sequence already in use.** Lowering `CurrentNext` on a
   sequence whose numbers are already on issued documents re-issues them. The removed onboarding
   endpoint had a `409` guard for exactly this; the generic CRUD path has none. Worth a follow-up
   ticket rather than a silent assumption.
-- **Four of the eleven appear TWICE per tenant.** `DocumentNo_C_Invoice`,
-  `DocumentNo_M_InOut`, `DocumentNo_M_Movement` and `DocumentNo_A_Asset` each have two active
-  rows in the same client, both at organization `*`, same `startno`, different `currentnext`
-  (e.g. `10000001` and `10000009`) — Etendo created the table-level sequence more than once. Both
-  are shown rather than one being guessed at, because which one is live is a data question and
-  picking the wrong one would mean the user edits a row that changes nothing. Worth a data-fix
-  ticket; not something this window should decide.
+- **Every `DocumentNo_*` sequence is duplicated per tenant**, which is why none of them is
+  listed any more — see "Why no `DocumentNo_*` sequence is listed" above for the measurements,
+  the cause and the pending data-fix. The seven names the window does show have exactly one row
+  per organization.
 - No callouts. `rules-raw.json` reports 4 validation rules and 9 display-logic rows on the AD tab
   and no callout rows.
 
 ## Manual verification
 
 1. Open `/document-sequence` from the Configuración menu and confirm the list shows **only the
-   eleven allowlisted sequences** (with four of them appearing twice — see Gap assessment), NOT
-   the tenant's full 242, sorted by name and with Prefix, Suffix and the two number columns.
-2. Type something into the list's own filter and confirm it narrows further rather than
+   seven allowlisted sequences**, each exactly ONCE, NOT the tenant's full 242 — sorted by name
+   and with Prefix, Suffix and the two number columns.
+2. Confirm no row whose name starts with `DocumentNo_` appears. A duplicate pair in that list is
+   the regression this window was changed to avoid; see the section on it above.
+3. Type something into the list's own filter and confirm it narrows further rather than
    revealing sequences outside the allowlist.
-3. Open a sequence and confirm the form exposes Increment By, Auto Numbering, Description, Mask
+4. Open a sequence and confirm the form exposes Increment By, Auto Numbering, Description, Mask
    and Value Format in addition to the grid fields.
-4. Confirm `Document Type`, `Current Next (System)`, `Used for Record ID`, `Table` and `Column`
+5. Confirm `Document Type`, `Current Next (System)`, `Used for Record ID`, `Table` and `Column`
    do **not** appear anywhere in the UI.
-5. On a Spanish tenant, set the prefix to `fv-` and confirm the save is refused with the
+6. On a Spanish tenant, set the prefix to `fv-` and confirm the save is refused with the
    lowercase/accents message, translated.
-6. Repeat with `FI-` (reserved letter), `FV_` (character set) and a 21-character prefix, and
+7. Repeat with `FI-` (reserved letter), `FV_` (character set) and a 21-character prefix, and
    confirm each reports its own message rather than a generic one.
-7. Set the prefix to `FV-` and confirm it saves.
-8. Clear the prefix entirely and confirm that saves too.
-9. Open `/first-steps`, expand "Personaliza tus facturas" and confirm **Configurar** navigates
+8. Set the prefix to `FV-` and confirm it saves.
+9. Clear the prefix entirely and confirm that saves too.
+10. Open `/first-steps`, expand "Personaliza tus facturas" and confirm **Configurar** navigates
    here.
 
 ## Automated evidence

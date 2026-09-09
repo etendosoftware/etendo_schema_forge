@@ -115,9 +115,19 @@ vi.mock('@/pages/first-steps/useFirstSteps.js', () => ({
   useFirstSteps: () => hook.value,
 }));
 
+// The provider resolves the tenant plan to size the badge denominator. Mocked here so the
+// badge's own behaviour is what is under test rather than a `/sws/go/environments` request;
+// the plan-dependent denominator itself is covered in FirstStepsContext.vitest.jsx.
+const tenantPlan = vi.hoisted(() => ({ plan: 'productive', loading: false }));
+vi.mock('@/hooks/useTenantPlan.js', () => ({
+  useTenantPlan: () => tenantPlan,
+}));
+
 import SideMenu from '../SideMenu.jsx';
 import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
-import { FIRST_STEPS_TOTAL } from '@/pages/first-steps/firstStepsConfig.js';
+import { PLAN_PRODUCTIVE, firstStepsTotal } from '@/pages/first-steps/firstStepsConfig.js';
+
+const PRODUCTIVE_TOTAL = firstStepsTotal(PLAN_PRODUCTIVE);
 
 const MENU_GROUPS = [
   { group: 'First Steps', icon: 'ClipboardText', section: 'General', items: [{ name: 'first-steps', label: 'First Steps' }] },
@@ -139,19 +149,52 @@ function renderMenu({ expanded = true, withProvider = true } = {}) {
   return render(withProvider ? <FirstStepsProvider>{menu}</FirstStepsProvider> : menu);
 }
 
-beforeEach(() => setState());
+beforeEach(() => {
+  setState();
+  tenantPlan.plan = PLAN_PRODUCTIVE;
+  tenantPlan.loading = false;
+});
+
+describe('First Steps sidebar badge — the denominator follows the plan', () => {
+  it('reads x/5 on a trial, not x/7', () => {
+    // The badge must agree with the page. It renders `progress.total`, which the provider
+    // sizes from the plan — a hardcoded 7 here would read as two steps permanently missing.
+    tenantPlan.plan = 'free';
+    setState({ completed: ['company-data'] });
+    renderMenu();
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent('2/5');
+  });
+
+  it('shows 5/5 once a trial has ticked everything it can reach', () => {
+    tenantPlan.plan = 'free';
+    setState({ completed: ['company-data', 'products', 'contacts', 'team'] });
+    renderMenu();
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent('5/5');
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
+  });
+
+  it('renders no badge while the plan is still being resolved', () => {
+    // Same reason the loading state hides it: a badge that flashed 1/7 and then became 1/5
+    // reads as progress lost.
+    tenantPlan.plan = null;
+    tenantPlan.loading = true;
+    setState({ completed: ['company-data'] });
+    renderMenu();
+    expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
+  });
+});
 
 describe('First Steps sidebar badge — expanded', () => {
   it('shows 1/7 on a fresh account, next to a link that still works', () => {
     renderMenu();
-    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`1/${FIRST_STEPS_TOTAL}`);
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`1/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toHaveAttribute('href', '/first-steps');
   });
 
   it('follows the state as steps are completed', () => {
     setState({ completed: ['company-data', 'invoice-sequence'] });
     renderMenu();
-    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`3/${FIRST_STEPS_TOTAL}`);
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`3/${PRODUCTIVE_TOTAL}`);
   });
 
   it('keeps the entry — and the badge — once everything is done', () => {
@@ -159,7 +202,7 @@ describe('First Steps sidebar badge — expanded', () => {
     // that is the only way back in to un-tick a step.
     setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
     renderMenu();
-    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${FIRST_STEPS_TOTAL}`);
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 

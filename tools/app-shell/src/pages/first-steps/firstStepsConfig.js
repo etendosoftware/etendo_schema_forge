@@ -29,6 +29,8 @@
  *   - `importSpec` the window whose import descriptor the inline importer drives. Only
  *                  meaningful for `action: 'import'`.
  *   - `alwaysDone` see below.
+ *   - `productiveOnly` the step is hidden while the tenant is on the free/trial plan. See
+ *                  "Plan-dependent steps" below.
  *
  * `action` is the extension point for what a step actually DOES:
  *   - `'navigate'`  nothing but the "Configure" button that routes to `to`;
@@ -45,9 +47,27 @@
  * are the one thing on this list a user genuinely comes back to change.
  *
  * `alwaysDone` steps are rendered as completed, are NOT toggleable and are never persisted,
- * yet they DO count toward the progress figures — which is why the counter starts at 1/7 and
- * not 0/7. Both numbers are derived from this array; never hardcode them.
+ * yet they DO count toward the progress figures — which is why the counter starts at 1/5 on a
+ * trial and 1/7 on a productive tenant. Both numbers are derived from this array; never
+ * hardcode them.
+ *
+ * ## Plan-dependent steps
+ *
+ * A trial tenant is shown a SHORTER list. Invoice numbering and the fiscal configuration are
+ * marked `productiveOnly` because neither is worth doing in a trial: a document series a tenant
+ * abandons in 14 days numbers nothing, and the fiscal setup is what the productive environment
+ * is created with. They appear when the tenant goes productive, which is also when the whole
+ * checklist is offered again.
+ *
+ * Every plan-aware helper here takes the plan as its LAST argument and an unknown plan
+ * (`undefined`, a session with no platform token, a failed `/environments` call) is treated as
+ * productive — it shows everything. That direction is deliberate: hiding invoice numbering from
+ * a tenant that paid for it is a worse failure than showing two extra rows to a trial, and it
+ * is also the behaviour every tenant had before the gate existed.
  */
+
+/** The plan value that unlocks `productiveOnly` steps. Mirrors TenantPlanService.PLAN_PRODUCTIVE. */
+export const PLAN_PRODUCTIVE = 'productive';
 export const FIRST_STEPS = [
   {
     id: 'create-account',
@@ -59,6 +79,7 @@ export const FIRST_STEPS = [
     to: null,
     importSpec: null,
     keepActionWhenDone: false,
+    productiveOnly: false,
     alwaysDone: true,
   },
   {
@@ -71,6 +92,7 @@ export const FIRST_STEPS = [
     to: '/organization',
     importSpec: null,
     keepActionWhenDone: true,
+    productiveOnly: false,
     alwaysDone: false,
   },
   {
@@ -83,6 +105,7 @@ export const FIRST_STEPS = [
     to: '/fiscal-config',
     importSpec: null,
     keepActionWhenDone: false,
+    productiveOnly: true,
     alwaysDone: false,
   },
   {
@@ -95,6 +118,7 @@ export const FIRST_STEPS = [
     to: null,
     importSpec: 'product',
     keepActionWhenDone: false,
+    productiveOnly: false,
     alwaysDone: false,
   },
   {
@@ -107,6 +131,7 @@ export const FIRST_STEPS = [
     to: null,
     importSpec: 'contacts',
     keepActionWhenDone: false,
+    productiveOnly: false,
     alwaysDone: false,
   },
   {
@@ -119,6 +144,7 @@ export const FIRST_STEPS = [
     to: '/document-sequence',
     importSpec: null,
     keepActionWhenDone: false,
+    productiveOnly: true,
     alwaysDone: false,
   },
   {
@@ -131,48 +157,79 @@ export const FIRST_STEPS = [
     to: '/roles',
     importSpec: null,
     keepActionWhenDone: false,
+    productiveOnly: false,
     alwaysDone: false,
   },
 ];
 
-/** Total number of steps shown in the progress counter (`x/TOTAL`). Derived, never hardcoded. */
-export const FIRST_STEPS_TOTAL = FIRST_STEPS.length;
+/**
+ * True when `plan` unlocks the `productiveOnly` steps. An unknown plan counts as productive —
+ * see "Plan-dependent steps" in the header for why the gate fails open.
+ */
+export function isProductivePlan(plan) {
+  return plan == null || plan === PLAN_PRODUCTIVE;
+}
 
 /**
- * The ids the user can actually toggle, and therefore the only ids that may be sent to
- * `POST /sws/go/onboarding/first-steps` — the server allowlist is exactly this set.
- *
- * `FirstStepsProvider` hands this to `useFirstSteps` as its write allowlist, which is what
- * keeps `create-account` off the wire without the hook having to import this module.
+ * The steps the tenant actually sees, in render order. This — not `FIRST_STEPS` — is what a
+ * component should iterate: `FIRST_STEPS` is the full catalogue and includes rows a trial
+ * tenant must not be offered.
  */
-export const TOGGLEABLE_STEP_IDS = FIRST_STEPS
-  .filter((step) => !step.alwaysDone)
-  .map((step) => step.id);
+export function visibleFirstSteps(plan) {
+  return isProductivePlan(plan) ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
+}
+
+/** Number of steps in the progress counter (`x/TOTAL`) for this plan. Derived, never hardcoded. */
+export function firstStepsTotal(plan) {
+  return visibleFirstSteps(plan).length;
+}
+
+/**
+ * The ids the user can actually toggle on this plan, and therefore the only ids that may be
+ * sent to `POST /sws/go/onboarding/first-steps`.
+ *
+ * The SERVER allowlist is the full toggleable set, not this one — it has no notion of a plan
+ * and a tenant that goes productive must be able to persist the two steps that just appeared.
+ * This narrower list is what `FirstStepsProvider` hands to `useFirstSteps`, so a step the
+ * current plan does not show can never be written by accident.
+ */
+export function toggleableStepIds(plan) {
+  return visibleFirstSteps(plan)
+    .filter((step) => !step.alwaysDone)
+    .map((step) => step.id);
+}
 
 /** True when the step renders as completed — always-done, or user-completed. */
 export function isStepDone(step, completed) {
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
-/** How many of the steps read as complete, always-done ones included. */
-export function countCompletedSteps(completed) {
-  return FIRST_STEPS.filter((step) => isStepDone(step, completed)).length;
+/**
+ * How many of the VISIBLE steps read as complete, always-done ones included.
+ *
+ * Scoped to the visible list on purpose: a tenant that completed a `productiveOnly` step and
+ * then had its plan read back as free would otherwise count a row that is not on screen, and
+ * the badge would claim 6/5.
+ */
+export function countCompletedSteps(completed, plan) {
+  return visibleFirstSteps(plan).filter((step) => isStepDone(step, completed)).length;
 }
 
-/** True once every step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed) {
-  return countCompletedSteps(completed) === FIRST_STEPS_TOTAL;
+/** True once every visible step reads as complete — the "all set" final state. */
+export function areAllStepsDone(completed, plan) {
+  return countCompletedSteps(completed, plan) === firstStepsTotal(plan);
 }
 
 /**
- * The row the page opens on: the first toggleable step that is still incomplete. This is only
- * the DEFAULT — the user can open any row at any time and complete the steps in whatever
- * order suits them, so this must never be read as "the step that is unlocked".
+ * The row the page opens on: the first toggleable, visible step that is still incomplete. This
+ * is only the DEFAULT — the user can open any row at any time and complete the steps in
+ * whatever order suits them, so this must never be read as "the step that is unlocked".
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed) {
-  const next = FIRST_STEPS.find((step) => !step.alwaysDone && !isStepDone(step, completed));
+export function findExpandedStepId(completed, plan) {
+  const next = visibleFirstSteps(plan)
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed));
   return next ? next.id : null;
 }
 
