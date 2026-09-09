@@ -275,6 +275,36 @@ describe('ImportedStatementsTab', () => {
     ));
   });
 
+  // ETP-5181 — a WARNING sync result is something the user has to act on (most often "your import
+  // range reaches further back than this provider serves"), so it must not read as the neutral
+  // notice `toast.info` renders. Same change as EditAccountModal's notifySyncResult; this handler
+  // is its duplicate and drifted apart from it before.
+  it('routes a WARNING sync result to toast.warning, translated, and still reloads', async () => {
+    uiMock.mockImplementation((key, params) => (
+      key === 'backendError.psd2ImportDateBeyondMaxInterval'
+        ? `La fecha de inicio solicitada supera el intervalo máximo de ${params.days} días de este proveedor.`
+        : key));
+    bankSync.mockResolvedValue({
+      status: 'WARNING',
+      message: 'The requested start date exceeds the maximum fetch interval of 90 days'
+        + ' supported by this provider. Only transactions within the last 90 days may be'
+        + ' available.',
+    });
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', bankConnected: true }} />);
+
+    await user.click(screen.getByTestId('toolbar-sync'));
+
+    await waitFor(() => expect(toastWarning).toHaveBeenCalledWith(
+      'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este proveedor.',
+    ));
+    expect(toastInfo).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+    // A WARNING is not a failure: the import ran, so the grid must still be reloaded.
+    await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+  });
+
   it('exposes the filtered headers and current selection via ref (for the export button)', async () => {
     const ref = { current: null };
     render(<ImportedStatementsTab ref={ref} account={ACCOUNT} />);

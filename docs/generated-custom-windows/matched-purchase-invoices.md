@@ -40,19 +40,51 @@ Spec/artifact name: `matched-purchase-invoices` (kebab-case of the AD window nam
 | Product | Producto | Text | Read-only |
 | Quantity | Cantidad | Numeric | Read-only |
 | Transaction Date | Fecha de transacción | Date | Read-only |
-| Processed | Procesada | Badge (Yes/No) | Read-only |
-| Posted | Contabilizado | Badge (green/orange) | Read-only, grid only (not rendered inline in the form — `form: false`). Also rendered as a **status pill** in the detail top bar, next to Cancel, via `window.statusPills` — same declarative mechanism `goods-receipt` uses. Gated by `visibleWhenCapability: "showAccountingFields"` — only shown to roles with accounting visibility. Same `posted` field/badge config as `purchase-invoice`/`goods-receipt` (added after the initial 6-field scope). |
+| Processed | Procesada | Badge (Yes/No) | Read-only, form only (`grid: false`) — kept off the grid but still read by the kebab's `post` menu action (`visibleWhenFieldTrue: "processed"`). |
+| Posted | Contabilizado | Status badge / pill | Read-only, grid only (not rendered inline in the form — `form: false`). Also rendered as a **status pill** in the detail top bar, next to Cancel, via `window.statusPills` — same declarative mechanism `goods-receipt` uses. Gated by `visibleWhenCapability: "showAccountingFields"` — only shown to roles with accounting visibility. Same `posted` field/badge config as `purchase-invoice`/`goods-receipt` (added after the initial 6-field scope). **Not a boolean** — see below. |
+
+### `Posted` is a 17-state domain, not a boolean (ETP-5075)
+
+`M_MatchInv.Posted` is declared `"type": "boolean"` in `decisions.json`, but that is only a
+DISPLAY-type override — AD reference 234 holds 17 codes, and only `Y`/`N` mean
+posted/not-posted. Every other code is the REASON a posting attempt failed:
+
+| Code | Meaning | Shown as |
+|---|---|---|
+| `Y` | Posted | green "Contabilizado" |
+| `N` | Not posted | orange "Sin contabilizar" |
+| `i` | Invalid account | red "Cuenta inválida" |
+| `E` / `C` | Posting error / error, no cost | red |
+| `p` | Period closed | red |
+| `b` / `c` / `NC` / `AD` / `DT` / `NO` / `L` | Not balanced, no rate, cost not calculated, no accounting date, no document type, no related PO, document locked | red |
+| `T` / `D` / `d` / `y` | Table disabled, document disabled, disabled for background, ready to post | grey |
+
+Those states are the majority of real data, not an edge case (in one dev tenant: `p` 1672,
+`E` 481, `i` 211 against `Y` 947). Both renderers used to apply their own hardcoded
+`'Y'`/`'N'` allowlist and disagreed: the grid printed a bare `—` while the detail pill
+claimed "Sin contabilizar", so a record whose posting had FAILED read as one that was never
+attempted. `tools/app-shell/src/lib/postedStatus.js` is now the single registry both use —
+keyed by AD column name, failing closed, `Y`/`N` untouched so the other windows are
+unaffected.
+
+**Real case that surfaced this:** a match whose invoice price differs from the receipt cost
+(e.g. 15.00 invoiced vs 19.80 received) needs the *Invoice Price Variance* account, which
+core's `DocMatchInv` only requests when that difference is non-zero. With that account
+unconfigured the record lands on `Posted = 'i'` while every zero-difference match in the
+same tenant posts fine. The UI now names the state; configuring the account is tenant
+setup, not a window concern.
 
 Not to be confused with **Accounting Status** (`etblkpAccountingstatus`, the field behind Classic's "Accounting Status: Pending Refresh" banner) — a 17-value enum, not a boolean, and not declared here (stays `discarded`, matching `purchase-invoice`/`goods-receipt`, which don't declare it either).
 
-⚠️ **Known imprecision, accepted as-is.** `M_MatchInv.Posted` is not actually a plain Y/N
-boolean at the DB level — live data shows `Y`, `T`, `E`, `D`, `p`, `i` (the same "Posted
-status" domain behind `etblkpAccountingstatus`'s 17 values: Period Closed, Invalid Account,
-Error, …). Declaring it `type: "boolean"` (matching `purchase-invoice`/`goods-receipt`
-verbatim, human-confirmed) means every non-`Y` state renders as the orange "Sin
-contabilizar" pill, not its real name. Accepted for consistency with the other Purchases
-windows; a precise fix would render the enum's display text instead, breaking that
-consistency.
+> **Superseded (ETP-5075 follow-up).** This guide previously documented the boolean
+> collapse as an accepted imprecision — every non-`Y` state rendering as the orange "Sin
+> contabilizar" pill. It is no longer accepted: the reviewer read "Sin contabilizar" on a
+> record whose posting had actually failed, went to check the business partner the error
+> message named, and found it correctly configured. The state table above is the current
+> behaviour. `type: "boolean"` is still declared (it keeps the grid badge, the pill and the
+> advanced filter working, and is what `purchase-invoice`/`goods-receipt` declare too) —
+> the domain is resolved at render time instead, so consistency across the Purchases
+> windows is preserved rather than broken.
 
 **Field pushed to NEO separately from the initial window push** (ETP-5075 follow-up) —
 `push-to-neo.js` must run again any time a field's `visibility` changes in `decisions.json`
