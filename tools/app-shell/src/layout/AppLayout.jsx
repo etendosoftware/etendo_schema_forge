@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
 import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
@@ -18,7 +18,14 @@ import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
 import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
 import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu.jsx';
 import { useLogout } from '@/auth/useLogout.js';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
@@ -36,6 +43,23 @@ const reportWalkthroughFinish = (info) => handleWalkthroughFinish(info, WALKTHRO
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
 
+function readSessionValue(key) {
+  try {
+    return globalThis.localStorage?.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function readSessionRoleList() {
+  try {
+    const parsed = JSON.parse(readSessionValue('sf_auth_rolelist') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 // ETP-4514: `allowedIds` is a real, resolved `Set` only once SFListMenu has
 // answered — `undefined` (in flight) and `null` (unauthenticated or fetch
 // failure, deliberately fail-open per useRoleMenu.js) must NOT trigger this,
@@ -43,13 +67,103 @@ const EXPANDED_W = 240;
 function NoAccessScreen() {
   const ui = useUI();
   const logout = useLogout();
+  // ETP-5202 follow-up — this screen used to offer logout and nothing else, which turns
+  // "your role grants no windows in THIS tenant" into a dead end for the whole account: no way
+  // to reach another company, no way back to your own. Accepting an invitation makes it easy to
+  // land here, since an invited user has no role assigned until an admin does it (ETP-4830).
+  //
+  // Switching company does NOT weaken ETP-4514's "no menu/windows reachable" criterion: it is a
+  // platform-level action authorised by the account's own token, not by the role that grants
+  // nothing here, and every window of THIS tenant stays just as unreachable. The sidebar itself
+  // stays out, precisely because it does lead to AD windows.
+  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
+
+  // "No access" has two causes that look identical from here — `allowedIds` is an empty Set
+  // either way — but they need DIFFERENT things from an administrator, so the screen must not
+  // guess. The role list the session was opened with tells them apart: no role at all (the
+  // invited-user case: you belong to the company, nobody has assigned you a role yet) versus a
+  // role that grants no window. Telling the first user "your role has no permissions" would send
+  // them to ask for the wrong thing.
+  const roleList = readSessionRoleList();
+  const hasRole = roleList.length > 0;
+  const companyName = readSessionValue('sf_auth_client_name') || ui('yourCompany');
+  // One entry per client: the backend returns an environment per organization, so a client with
+  // several orgs would otherwise be listed several times over. The current one is kept in the
+  // list (disabled) rather than filtered out, so the menu also answers "where am I?".
+  const companies = [...new Map(
+    environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
+  ).values()];
+  const canSwitch = companies.some((env) => env.clientId !== currentClientId);
+
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="NoAccessScreen__488148"
     >
-      <p className="text-base font-medium text-foreground">{ui('noAccessTitle')}</p>
-      <p className="text-sm text-muted-foreground">{ui('noAccessMessage')}</p>
+      <p className="text-base font-medium text-foreground" data-testid="no-access-title">
+        {hasRole ? ui('noAccessRoleTitle') : ui('noAccessNoRoleTitle')}
+      </p>
+      <p className="max-w-md text-sm text-muted-foreground" data-testid="no-access-message">
+        {/* replaceAll, not replace: the no-role copy names the company TWICE, and
+            String.replace(string, …) only ever substitutes the first occurrence — which left a
+            literal {companyName} on screen. */}
+        {(hasRole ? ui('noAccessRoleMessage') : ui('noAccessNoRoleMessage'))
+          .replaceAll('{companyName}', companyName)}
+      </p>
+
+      {/* Absent for an account that owns a single environment, or one that cannot list them at
+          all (no platform token) — there is nowhere else to go, and an empty list would only
+          suggest otherwise. */}
+      {canSwitch && (
+        <div className="mt-6 w-full max-w-xs text-left" data-testid="no-access-company-switch">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {ui('switchCompany')}
+          </p>
+          {/* A dropdown rather than a row of buttons: an account can belong to many companies,
+              and a list that grows without bound would push the way out of the screen. The
+              trigger doubles as the answer to "which one am I in?", which the blocking screen
+              otherwise never says. */}
+          <DropdownMenu data-testid="DropdownMenu__488148">
+            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__488148">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                disabled={switching !== null}
+                data-testid="no-access-company-trigger"
+              >
+                {switching !== null
+                  ? <Loader2 className="h-4 w-4 mr-2 shrink-0 animate-spin" data-testid="Loader2__488148" />
+                  : <Building2 className="h-4 w-4 mr-2 shrink-0" data-testid="Building2__488148" />}
+                <span className="flex-1 truncate text-left">{companyName}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" data-testid="ChevronDown__488148" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56" data-testid="DropdownMenuContent__488148">
+              {companies.map((env) => {
+                const isCurrent = env.clientId === currentClientId;
+                return (
+                  <DropdownMenuItem
+                    key={env.clientId}
+                    disabled={isCurrent || switching !== null}
+                    onSelect={() => { if (!isCurrent) switchTo(env); }}
+                    data-testid={`no-access-company-${env.clientId}`}
+                  >
+                    <Building2 className="h-4 w-4 mr-2 shrink-0" data-testid="Building2__488148" />
+                    <span className="flex-1 truncate">
+                      {env.clientName || env.orgName || ui('yourCompany')}
+                    </span>
+                    {switching === env.clientId && (
+                      <Loader2 className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin" data-testid="Loader2__488148" />
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
       <Button
         type="button"
         variant="outline"

@@ -1,8 +1,16 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, configure } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import enUS from '@/locales/en_US.json';
 import InviteAcceptancePage from '../InviteAcceptancePage.jsx';
+
+/**
+ * The invitation flows chain several awaited steps (resolve → identity check → accept), and RTL's
+ * 1s default is measured against a machine running the whole suite in parallel — not against this
+ * file alone. A step that legitimately takes longer under load is a slow test, not a failing one.
+ */
+configure({ asyncUtilTimeout: 5000 });
+
 
 /**
  * ETP-5202 — the "somebody else is signed in on this browser" guard.

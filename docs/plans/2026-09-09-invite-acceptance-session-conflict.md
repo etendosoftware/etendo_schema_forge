@@ -306,6 +306,35 @@ which the effect never reaches.
 
 ---
 
+### Follow-up found by manual testing: the no-access screen was a dead end
+
+Accepting an invitation and entering the new tenant lands on `AppLayout`'s `NoAccessScreen`
+whenever the role grants no window — which is the normal state for an invited user, since nobody
+has assigned them a role yet (ETP-4830). That screen offered logout and nothing else, so the whole
+account was stuck: no way to another company, no way back to your own.
+
+Note this is NOT the `roleList: []` case the phase-2 guard blocks. Here a role EXISTS, it simply
+grants no window, which is only knowable after entering, once `SFListMenu` answers and
+`useRoleMenu` returns an empty `Set`. Prevention cannot cover it; an exit can.
+
+What shipped, all in `AppLayout.jsx`:
+
+- A company dropdown on the blocking screen (the trigger names the tenant you are in — something
+  the screen never said), listing one entry per client, the current one disabled. Absent entirely
+  when there is nowhere else to go.
+- This does not weaken ETP-4514's "no menu/windows reachable" criterion: switching company is a
+  platform-level action authorised by the account's own token, not by the role that grants nothing
+  here, and every window of this tenant stays unreachable. The sidebar deliberately stays out —
+  that one does lead to AD windows.
+- The message now distinguishes the two causes of an empty `allowedIds`, read from
+  `sf_auth_rolelist`: no role assigned at all ("you are part of X, ask an administrator to assign
+  you a role") versus a role that grants no window ("ask an administrator to review your role's
+  permissions"). They need different things from an administrator, so a single generic message
+  sends half the users to ask for the wrong thing.
+
+Still open: `/account` remains unreachable from this screen — it lives inside the blocked
+`Outlet`, so offering it means exempting that route from the guard rather than adding a button.
+
 ## 6. Files expected to change
 
 | File | Change |
