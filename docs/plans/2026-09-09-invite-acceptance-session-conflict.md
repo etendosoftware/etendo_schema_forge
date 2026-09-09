@@ -1,6 +1,6 @@
 # ETP-5202 — Accepting an invitation must not leave a foreign session open
 
-**Status:** proposed
+**Status:** implemented (phases 1 and 2)
 **Jira:** ETP-5202 (resolved under the ETP-5216 umbrella, branch `feature/ETP-5216`)
 **Scope:** `tools/app-shell` only — no core package change, no backend change, no version bump.
 
@@ -253,7 +253,7 @@ flowchart TB
    ships). The dialog names both people, so the strings take `{currentUser}` / `{invitedEmail}`
    placeholders.
 
-#### Deferred: skipping the re-login in Case 1
+#### Shipped, after manual testing: skipping the re-login in Case 1
 
 Found while implementing phase 1, deliberately left out of it. In Case 1 the guard lets the user
 through without a prompt, but the `existing_account` branch still renders `LoginStep` and asks for
@@ -264,7 +264,10 @@ account email matches. No security is weakened: the backend re-validates and ans
 `INVITATION_ACCOUNT_MISMATCH` regardless.
 
 Left out of phase 1 because it changes what the acceptance surface renders in a case the phase-1
-tests already pin, and the ticket is closed without it. Worth doing next to the phase 2 work.
+tests already pin. Manual testing then hit it immediately — *"cuando me llega una invitación a otro
+tenant, me pidió loguearme de vuelta, no debería"* — so it shipped with phase 2. The skip only
+applies when a `sf_platform_token` exists to accept with, and a 401 from `/accept` drops back to
+the login step rather than dead-ending on an error.
 
 ### Phase 2 — reaching the inviting tenant after accepting (separate commit)
 
@@ -290,6 +293,16 @@ a worse bug than the one being fixed.
 
 So: check `roleList` is non-empty before writing the session. If empty, show "your access has not
 been configured yet, ask an administrator to assign you a role" and do not enter.
+
+**What shipped.** `switchTo` returns a boolean and refuses a response whose `roleList` is an
+explicitly empty array — a MISSING `roleList` deliberately does not block, since
+`buildEnvironmentSessionStorage` already treats it as optional and an older backend must not be
+locked out. `enterByClientName` propagates that answer. On the invitation page, `action-go-to-app`
+enters the inviting tenant and `action-stay-in-current` (shown whenever `sf_auth_token` and
+`sf_auth_client_name` are both present) keeps the current one; a failure surfaces
+`invite-enter-error` and always leaves a route into the app. The "stay" option is derived from
+storage rather than from the guard effect, so it is offered on the already-accepted screen too,
+which the effect never reaches.
 
 ---
 
