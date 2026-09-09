@@ -23,7 +23,7 @@ export default function OnboardingPage() {
     localeCodes: ['es_ES', 'en_US'],
     countryCodes: ['ES'],
     sectorCodes: ['technology', 'services', 'commerce', 'manufacturing'],
-    businessTypeValues: ['company', 'freelancer', 'advisory'],
+    businessTypeValues: ['company', 'freelancer'],
     defaultForm: {
       currency: 'EUR',
       language: 'es_ES',

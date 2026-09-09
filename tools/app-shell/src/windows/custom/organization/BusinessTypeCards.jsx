@@ -1,4 +1,4 @@
-import { Building2, User, Briefcase, Check } from 'lucide-react';
+import { Building2, User, Check } from 'lucide-react';
 import { useUI } from '@/i18n';
 
 /**
@@ -25,7 +25,6 @@ import { useUI } from '@/i18n';
 const OPTIONS = [
   { value: 'CO', labelKey: 'orgBusinessTypeCompany', descKey: 'orgBusinessTypeCompanyDesc', Icon: Building2 },
   { value: 'FL', labelKey: 'orgBusinessTypeFreelancer', descKey: 'orgBusinessTypeFreelancerDesc', Icon: User },
-  { value: 'AD', labelKey: 'orgBusinessTypeAdvisory', descKey: 'orgBusinessTypeAdvisoryDesc', Icon: Briefcase },
 ];
 
 export default function BusinessTypeCards({ value, onChange, readOnly = false }) {
