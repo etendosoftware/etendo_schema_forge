@@ -97,6 +97,49 @@ const LINE_CSV_COLUMNS = [
 ].join('|');
 
 /**
+ * Reads the deep-link params (tab / autoMatch / txn / txnAny / newMovement / edit) into state and
+ * clears them from the URL. Reacts to `searchParams` changes — not just mount — because navigating
+ * within the SAME account (e.g. from the reconciled-txns modal to the Movements tab) updates the
+ * URL without remounting the window.
+ *
+ * Lives outside `FinancialAccountDetail` purely to keep its cognitive complexity under the Sonar
+ * limit (javascript:S3776): the six independent params are cheap on their own but expensive inside
+ * an already long component. Behaviour is unchanged — the `setX` functions are `useState` setters,
+ * so they are referentially stable and the effect still re-runs only on `searchParams`.
+ *
+ * @param {URLSearchParams} searchParams
+ * @param {Function} setSearchParams
+ * @param {object} setters the six state setters this applies the params to
+ */
+function useDeepLinkParams(searchParams, setSearchParams, setters) {
+  const {
+    setActiveTab, setHighlightTxnId, setTxnUnbounded,
+    setAutoMatchArmed, setAutoOpenNewMovement, setEditOpen,
+  } = setters;
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const txn = searchParams.get('txn');
+    const txnAny = searchParams.get('txnAny');
+    const autoMatch = searchParams.get('autoMatch');
+    const newMovement = searchParams.get('newMovement');
+    const edit = searchParams.get('edit');
+    if (!tab && !txn && !txnAny && !autoMatch && !newMovement && !edit) return;
+
+    if (tab) setActiveTab(tab);
+    if (txn || txnAny) setHighlightTxnId(txn || txnAny);
+    if (txnAny) setTxnUnbounded(true);
+    if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchArmed(true);
+    if (newMovement === 'true') setAutoOpenNewMovement(true);
+    if (edit === 'true') setEditOpen(true);
+    setSearchParams({}, { replace: true });
+    // The setters are `useState` setters: React guarantees they are stable, so listing them keeps
+    // the linter honest without making this effect re-run on every render.
+  }, [searchParams, setSearchParams, setActiveTab, setHighlightTxnId, setTxnUnbounded,
+    setAutoMatchArmed, setAutoOpenNewMovement, setEditOpen]);
+}
+
+/**
  * Financial Account detail view (single account: Movimientos / Extractos /
  * Conciliación). Rendered for /financial-account/{recordId} by the wrapper at the
  * bottom of this file.
@@ -149,25 +192,10 @@ export function FinancialAccountDetail({ recordId }) {
     setAutoMatchArmed(tab === 'reconciliation');
   }, []);
 
-  // Apply deep-link params (tab / autoMatch / txn / txnAny / newMovement / edit) and clear them. Reacts to searchParams changes
-  // — not just mount — because navigating within the SAME account (e.g. from the reconciled-txns
-  // modal to the Movements tab) updates the URL without remounting this window.
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    const txn = searchParams.get('txn');
-    const txnAny = searchParams.get('txnAny');
-    const autoMatch = searchParams.get('autoMatch');
-    const newMovement = searchParams.get('newMovement');
-    const edit = searchParams.get('edit');
-    if (!tab && !txn && !txnAny && !autoMatch && !newMovement && !edit) return;
-    if (tab) setActiveTab(tab);
-    if (txn || txnAny) setHighlightTxnId(txn || txnAny);
-    if (txnAny) setTxnUnbounded(true);
-    if (autoMatch === 'true' || tab === 'reconciliation') setAutoMatchArmed(true);
-    if (newMovement === 'true') setAutoOpenNewMovement(true);
-    if (edit === 'true') setEditOpen(true);
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
+  useDeepLinkParams(searchParams, setSearchParams, {
+    setActiveTab, setHighlightTxnId, setTxnUnbounded,
+    setAutoMatchArmed, setAutoOpenNewMovement, setEditOpen,
+  });
   const { account, loading: accountLoading, error: accountError, reload: reloadAccount } = useFinancialAccount(recordId);
   // ETP-4795: cash accounts close their drawer instead of matching bank-statement lines, so both
   // the Reconciliation tab body and the automatch engine branch on this.
