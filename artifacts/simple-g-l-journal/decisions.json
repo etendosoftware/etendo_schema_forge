@@ -233,8 +233,8 @@
           "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default."
         },
         "description": {
-          "visibility": "editable",
-          "grid": true
+          "visibility": "discarded",
+          "reason": "ETP-5210 (revised scope) — line description column removed entirely from the grid and the line editor; header description (gLJournal.description) is unaffected and still covers journal-level notes. Frees the column width for accountingCombination (Account) to absorb via the existing flex-grow mechanism (linesColumnWidth.js)."
         },
         "foreignCurrencyDebit": {
           "visibility": "editable",

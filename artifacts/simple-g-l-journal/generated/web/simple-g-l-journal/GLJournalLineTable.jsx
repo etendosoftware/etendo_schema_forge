@@ -5,7 +5,6 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'lineNo', column: 'Line', type: 'number', label: 'LineNo', required: true },
   { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, minWidth: 280 },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'amount', labels: {"en_US":"Debit","es_ES":"Débito"}, label: 'Debit', required: true },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'amount', labels: {"en_US":"Credit","es_ES":"Crédito"}, label: 'Credit', required: true },
   { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [

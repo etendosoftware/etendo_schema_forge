@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.23.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-08-31T11:36:23.257Z",
-  "contractChecksum": "30ee0a47aac69f20",
+  "updatedAt": "2026-09-09T19:37:17.173Z",
+  "contractChecksum": "c423de6afac97532",
   "apiPrediction": {
     "specName": "simple-g-l-journal",
     "baseUrl": "/sws/neo/simple-g-l-journal",
@@ -361,10 +361,6 @@
           "accountingCombination": {
             "readOnlyLogic": "@Processed@='Y' | @Multi_Gl@='Y'"
           },
-          "description": {
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@DESCRIPTION1@"
-          },
           "foreignCurrencyDebit": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -479,5 +475,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "64cd88b425c63815"
+  "checksum": "7650347cf31d78e7"
 }

@@ -10,7 +10,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 
 - Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency, Opening, and Multi-Ledger. (Document Date is hidden — see below.)
 - **Single date:** the form exposes only **Accounting Date**. Document Date is hidden (`system`); the backend derives `DateDoc` from the accounting date via its AD default (`to_date(@HeaderDateAcct@)`), so the user never maintains two dates.
-- Add one or more journal lines under a header, each with an account, an optional description, a debit amount, and a credit amount. A new line's `Description` is **pre-filled with the header description**: the line `Description` carries the AD default `@DESCRIPTION1@` (the tab auxiliary input `DESCRIPTION1` = the parent journal's description), NEO Headless resolves it in its defaults pipeline, and the inline add-row fetches the line `/defaults` on open (HandleDefaults) and seeds the empty field. The user can still edit it per line.
+- Add one or more journal lines under a header, each with an account, a debit amount, and a credit amount. **Lines no longer carry their own Description field** (ETP-5210, revised scope — see "Line description column removed" below); the journal's header `Description` remains the single place to annotate the entry.
 - Optionally flag a line as **Open Items**, which reveals per-line accounting dimensions (Business Partner, Product, Project, Cost Center, Asset) in the line editor.
 - See a live **balance footer** below the lines: total debit and total credit (see ETP-4917 note below — the difference amount and the balanced ✓/✗ badge were trimmed from the display).
 - Be prevented from saving the document while the entry is unbalanced (the Save button is disabled with an explanatory tooltip).
@@ -22,7 +22,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - **Visibility:** visible from the **Finance** menu as **Manual Journals** (es: **Asientos Manuales**), wired via `menus["Manual Journals"]` in both locales.
 - **Implementation type:** fully generated window (no custom components). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST and routes document-completion (CO) through `FIN_AddPaymentFromJournal`.
 - **Window shape:** master-detail. The header entity is `gLJournal` (table `GL_Journal`) and the line entity is `gLJournalLine` (table `GL_JournalLine`). The two Classic auxiliary tabs — `Fact_Acct` (posting result) and `C_Conversion_Rate_Document` (document rates) — are **dropped** (`exclude: true`) for V1.
-- **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows the five core columns; existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
+- **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows the four core columns (ETP-5210 dropped Description — see "Line description column removed" below); existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
 - An **Attachments** tab is available in the detail tab strip.
 
 ## Header fields
@@ -50,36 +50,57 @@ The header form shows **exactly 6 editable fields**, in this order: Accounting D
 
 ## Line entry
 
-**Lines grid columns (exactly five):** `lineNo` (LineNo, read-only), `accountingCombination` (Account), `description`, `foreignCurrencyDebit` (Debit), `foreignCurrencyCredit` (Credit). No dimension columns appear in the grid.
+**Lines grid columns (exactly four):** `lineNo` (LineNo, read-only), `accountingCombination` (Account), `foreignCurrencyDebit` (Debit), `foreignCurrencyCredit` (Credit). No dimension columns appear in the grid. `description` was a fifth grid column through ETP-5210's first pass but is now fully discarded — see "Line description column removed" below.
 
 The side-panel line editor additionally exposes the **Open Items** checkbox and, when it is ticked, the five per-line dimensions.
 
 | Field (curated) | Column | Grid? | Visibility | Notes |
 |---|---|---|---|---|
 | `lineNo` | Line | grid | readOnly | Auto-sequenced line number, displayed read-only (label **LineNo**). |
-| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup). |
-| `description` | Description | grid | editable | Pre-filled with the parent journal's description: AD default `@DESCRIPTION1@` resolves in the NEO `/defaults` response and the inline add-row seeds it on open (HandleDefaults). Editable per line. |
+| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup, `columnWidth: 280`). |
 | `foreignCurrencyDebit` | AmtSourceDr | grid | editable, amount, required | **Debit** — feeds the balance footer Σ debit. |
 | `foreignCurrencyCredit` | AmtSourceCr | grid | editable, amount, required | **Credit** — feeds the balance footer Σ credit. |
 | `openItems` | Open_Items | form-only | editable | **Open Items** checkbox in the side panel; toggling it reveals the dimensions below. |
 | `businessPartner`, `product`, `project`, `costCenter`, `asset` | C_Bpartner_ID, M_Product_ID, C_Project_ID, C_Costcenter_ID, A_Asset_ID | form-only | editable | Per-line dimensions, **only visible when Open Items is ticked** — each carries `displayLogic: (record) => record['openItems'] === true` so `EntityForm` shows/hides them against the editing record. |
+| `description` | Description | — | discarded | **ETP-5210 (revised scope).** Line-level description column removed entirely — no grid column, no line-editor field. The header `description` (see Header fields above) remains the only place to annotate the journal; it is unaffected by this change. |
 | `gLItems` | Account_ID | — | discarded | Multi-G/L account selector — only relevant under Multi-General Ledger, out of scope for the simplified single-ledger journal. |
 | `activity`, `salesCampaign`, `salesRegion`, `stDimension`, `ndDimension` | C_Activity_ID, C_Campaign_ID, C_Salesregion_ID, User1_ID, User2_ID | — | discarded | Extra accounting dimensions not requested for the simplified line editor. |
 | `debit` / `credit` | AmtAcctDr / AmtAcctCr | — | system | Posting-derived accounted amounts, hidden from the user. |
 | `rate` | CurrencyRate | — | system | Line currency rate, derived. |
 | `financialAccount`, `paymentMethod`, `paymentDate`, `relatedPayment`, `aPRMAddPayment`, `gLItem` | FIN_Financial_Account_ID, FIN_Paymentmethod_ID, Paymentdate, FIN_Payment_ID, EM_Aprm_Addpayment, C_Glitem_ID | — | discarded | Payment-integration fields dropped for V1 (spec §2). `EM_*` also caught by `discardPatterns`. |
 
-### Account column widened past Description (ETP-5210)
+### Line description column removed; Account absorbs the freed space (ETP-5210)
 
-`accountingCombination` and `description` neither set an explicit grid width, so both fell back to
-the type-based defaults in `tools/app-shell/src/lib/linesColumnWidth.js`: `accountingCombination`
-(a `foreignKey`/selector) defaulted to 192px while `description` (a plain `string`) defaulted to
-224px elastic — leaving the Account column narrower than Description, backwards from the intended
-emphasis. Fixed by adding `"columnWidth": 280` to `accountingCombination` in `decisions.json`
-(the same `columnWidth` mechanism already used by `physical-inventory`'s `etgoQtydiff`), which the
-generator carries through `contract.json` and renders as `minWidth: 280` in the generated
-`GLJournalLineTable.jsx` columns array — comfortably above Description's 224px default. `description`
-itself is unchanged.
+This ticket shipped in two steps as its scope was revised mid-flight:
+
+1. **First pass — widen Account past Description.** `accountingCombination` and `description`
+   neither set an explicit grid width, so both fell back to the type-based defaults in
+   `tools/app-shell/src/lib/linesColumnWidth.js`: `accountingCombination` (a `foreignKey`/selector)
+   defaulted to 192px while `description` (a plain `string`) defaulted to 224px elastic — leaving
+   the Account column narrower than Description, backwards from the intended emphasis. Fixed by
+   adding `"columnWidth": 280` to `accountingCombination` in `decisions.json` (the same
+   `columnWidth` mechanism already used by `physical-inventory`'s `etgoQtydiff`), which the
+   generator carries through `contract.json` and renders as `minWidth: 280` in the generated
+   `GLJournalLineTable.jsx` columns array. At this point `description` itself was left unchanged,
+   still a grid column, just narrower than Account.
+2. **Revised scope — discard Description entirely.** The ticket's scope was then widened: rather
+   than just narrowing the Description column, it is removed from the lines entity altogether.
+   `lines.fields.description` in `decisions.json` is now `visibility: "discarded"` — gone from
+   both the grid and the line editor. The header's own `description` field (see Header fields
+   above) is untouched and still covers journal-level notes; only the per-line column disappears.
+   Safety-checked before discarding: the raw AD column (`GL_JournalLine.Description`) is
+   `ismandatory = false`, and its only behavior — the `fromConfig`/`@DESCRIPTION1@` pre-fill from
+   the header description — has no other consumer, so dropping it has no side effects.
+
+With `description` gone, `accountingCombination`'s `columnWidth: 280` (kept, untouched by this
+second step) is now the *only* column with a `minWidth` set on this grid — per
+`linesColumnWidth.js`'s `columnFlex()`, a column with `minWidth` always gets `flex: 1 1 <minWidth>px`
+(grow enabled) regardless of any explicit `grow` flag. None of the other three lines columns
+(`lineNo`, `foreignCurrencyDebit`, `foreignCurrencyCredit`) set `grow`, so `accountingCombination`
+is the sole growing column in the row and absorbs all space freed by Description's removal — no
+generator change was needed for this to happen; it falls out of the existing flex mechanism.
+Verified directly in the regenerated `GLJournalLineTable.jsx`: the columns array has no
+`description` entry and no other column carries a `grow` key.
 
 ## Balance rule (core behavior)
 
@@ -99,7 +120,7 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 - **Multi-currency document rates** (`C_Conversion_Rate_Document`) and the **posting result view** (`Fact_Acct`) are dropped for V1.
 - **Payment integration** on lines (`FIN_*`, add-payment, payment date/id) is dropped for V1. The **Open Items** checkbox is kept — but in this slice it only gates the visibility of the per-line accounting dimensions; it does not wire up payment creation.
 - The balance footer enforces debit = credit at the UI level; it does not assert that NEO's generic CRUD performs any additional server-side accounting validation beyond persisting the rows.
-- **Line description pre-fill (shipped).** The backend resolves `@DESCRIPTION1@` to the header description in the line `/defaults` response (via `NeoAuxiliaryInputResolver`), and the inline add-row fetches `/{detailEntity}/defaults?parentId=…` on open and seeds the empty `Description` (HandleDefaults — generic, on by default, opt out per entity with `handlesDefaults: false` or per field with `skipDefault: true`).
+- **Line description pre-fill — removed (ETP-5210, superseded).** This bullet used to describe a shipped feature: the backend resolving `@DESCRIPTION1@` to the header description in the line `/defaults` response and the inline add-row seeding the empty per-line `Description` on open. That per-line field no longer exists — `lines.fields.description` is now `visibility: "discarded"` (see "Line description column removed" above) — so there is nothing left for the pre-fill to seed on this window. The header's own `description` field is unaffected.
 
 ## Manual verification
 
@@ -110,7 +131,7 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 5. Confirm no Post/Complete action is offered and no posting status field is shown (posting deferred; `Posted` is hidden).
 6. Open a line in the side panel, tick **Open Items**, and confirm the five dimension fields (Business Partner, Product, Project, Cost Center, Asset) appear; untick it and confirm they hide again.
 7. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
-8. Confirm the **Account** column in the lines grid renders visibly wider than the **Description** column (ETP-5210 — `columnWidth: 280` on `accountingCombination` vs. `description`'s 224px type default).
+8. Confirm the lines grid shows exactly four columns — LineNo, Account, Debit, Credit — with **no Description column** (ETP-5210, revised scope), and that **Account** visibly fills the space Description used to occupy (it is the sole growing column via its `columnWidth: 280`).
 
 **TODO(QA) — ETP-4917 impact on this checklist:** steps 2–4 assert on the balance footer's now-removed **Difference** value and balanced ✓/✗ badge (`data-testid="balance-difference"`/`"balance-status"` no longer render — see "Balance rule" above), and step 5's "no Post/Complete action is offered … `Posted` is hidden" no longer matches current behavior (draftMode/CO completion, Post/Unpost menu actions, and the `posted` status pill all ship today — see "Posting & completion status correction" below). Please rewrite steps 2–5 against current behavior, and add coverage for: (a) the header date field rendering as **Fecha**/**Date**, (b) both status chips (accounting `posted` pill + `documentStatus` lifecycle chip) appearing independently and reflecting Draft/Complete + Posted/Not-posted correctly, and (c) the list/grid being filterable by Fecha, Periodo, Descripción, Moneda, and both status chips. **Also stale:** step 6's "side panel" wording — this window's lines actually render through `InlineLinesPanel` (`linesLayout` defaults to `inlineEditable`, see "Interaction model" above); Open Items/Asset are set via the add-row form, and the other four dimensions toggle through the row's "Add dimensions" hover action, not a side panel.
 
