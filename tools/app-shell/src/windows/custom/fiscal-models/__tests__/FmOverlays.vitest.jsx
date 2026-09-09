@@ -715,10 +715,14 @@ describe('NewDeclModal', () => {
   });
 
   describe('existingDeclarations', () => {
-    // The duplicate-declaration banner was removed entirely — an already-declared
-    // period is now communicated purely through the disabled button + dot,
-    // never through a message. See the dedicated "no banner" test below.
-    it('marks a period with an existing declaration for the selected model+year and disables it', () => {
+    // ETP-5187 — an already-declared period is now communicated purely as an
+    // informational marker (dot + hint) and remains fully selectable: a 2nd
+    // declaration for the same model+year+period is the rectificativa flow
+    // (the backend auto-assigns a free DECL_TYPE slot; the actual warning/gate
+    // for "mark this as rectificativa" lives on the created declaration's own
+    // detail page, not here). No banner, no disabling, no auto-jump. See the
+    // dedicated "no banner" test below.
+    it('marks a period with an existing declaration for the selected model+year but keeps it selectable', () => {
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -731,16 +735,22 @@ describe('NewDeclModal', () => {
       const t1 = getPeriodBtn(container, 'T1');
       expect(t1.className).toContain('fm-newdecl-period-btn--existing');
       expect(t1.querySelector('.fm-newdecl-period-btn__dot')).toBeTruthy();
-      // Real DOM `disabled` attribute — a screen reader / keyboard user cannot
-      // select an already-declared period, not just a visual/CSS cue.
-      expect(t1.hasAttribute('disabled')).toBe(true);
-      expect(t1.disabled).toBe(true);
+      // Updated behavior (ETP-5187): the period is NOT disabled — a real DOM
+      // `disabled` attribute would block the rectificativa flow entirely.
+      expect(t1.hasAttribute('disabled')).toBe(false);
+      expect(t1.disabled).toBe(false);
+      // The hint (mocked i18n echoes the key literally) surfaces on hover via title.
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_existing_hint');
+      // Still fully clickable/selectable, unlike the old disabled behavior.
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
 
-      // T2 has no existing declaration: no dot, not disabled, and remains
+      // T2 has no existing declaration: no dot, no hint title, and remains
       // selectable; T1 keeps carrying the existing-indicator regardless of the
       // current selection (existence is per-period, not tied to selection).
       const t2 = getPeriodBtn(container, 'T2');
       expect(t2.className).not.toContain('fm-newdecl-period-btn--existing');
+      expect(t2.getAttribute('title')).toBeNull();
       expect(t2.hasAttribute('disabled')).toBe(false);
       fireEvent.click(t2);
       expect(t2.getAttribute('aria-pressed')).toBe('true');
@@ -760,13 +770,12 @@ describe('NewDeclModal', () => {
       }
     });
 
-    it('clicking a disabled (already-declared) period button does not change the selection', () => {
+    it('clicking an already-declared period selects it — the rectificativa flow is never blocked', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
-      // T3 (not the default T1) is already declared, so the initial selection
-      // stays on T1 — this isolates "clicking a disabled button" from the
-      // separate auto-jump-away-from-a-disabled-default behavior tested below.
+      // T3 (not the default T1) is already declared; the initial selection
+      // stays on T1 until T3 is explicitly clicked.
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -778,21 +787,21 @@ describe('NewDeclModal', () => {
       expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('true');
 
       const t3 = getPeriodBtn(container, 'T3');
-      expect(t3.hasAttribute('disabled')).toBe(true);
+      expect(t3.hasAttribute('disabled')).toBe(false);
       fireEvent.click(t3);
-      // Native disabled-button behavior: the click never reaches onClick, so
-      // the selection is unchanged.
-      expect(t3.getAttribute('aria-pressed')).toBe('false');
-      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('true');
+      // Updated behavior (ETP-5187): the click DOES reach onClick — selecting an
+      // already-declared period is exactly the rectificativa use case.
+      expect(t3.getAttribute('aria-pressed')).toBe('true');
+      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('opens with the default selection skipped away from an already-declared period', () => {
+    it('keeps the default period selected even when it already has a declaration (no auto-jump away)', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
       // T1 (the modal's default period) is already declared for model 303 —
-      // the auto-jump effect should move the initial selection to T2 instead
-      // of opening on a disabled default.
+      // updated behavior (ETP-5187): there is no auto-jump-away effect anymore,
+      // so the default selection stays put, just carrying the existing-marker.
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -801,17 +810,21 @@ describe('NewDeclModal', () => {
           existingDeclarations={[{ model: '303', year: defaultYear, period: 'T1' }]}
         />
       );
-      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('false');
-      expect(getPeriodBtn(container, 'T2').getAttribute('aria-pressed')).toBe('true');
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
+      expect(t1.className).toContain('fm-newdecl-period-btn--existing');
+      expect(t1.querySelector('.fm-newdecl-period-btn__dot')).toBeTruthy();
+      expect(getPeriodBtn(container, 'T2').getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('disables the Crear button and shows no message when every period of the current frequency is already declared', () => {
+    it('never disables the Crear button, even when every period of the current frequency is already declared', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
+      const onConfirm = vi.fn();
       const { container } = render(
         <NewDeclModal
-          onConfirm={vi.fn()}
+          onConfirm={onConfirm}
           onClose={vi.fn()}
           activeModels={{ '303': true, '349': true }}
           existingDeclarations={['T1', 'T2', 'T3', 'T4'].map(period => (
@@ -820,12 +833,20 @@ describe('NewDeclModal', () => {
         />
       );
       const createBtn = getCreateBtn(container);
-      expect(createBtn.hasAttribute('disabled')).toBe(true);
-      expect(createBtn.disabled).toBe(true);
-      expect(createBtn.className).not.toContain('fm-btn--save-pill--active');
-      // Still no explanatory message for this case — the CTA just goes inert.
+      // Updated behavior (ETP-5187): "allPeriodsTaken" no longer gates the CTA —
+      // every period being already declared just means every one of them is a
+      // rectificativa candidate; the button stays active and clicking it still
+      // creates the (draft) declaration.
+      expect(createBtn.hasAttribute('disabled')).toBe(false);
+      expect(createBtn.disabled).toBe(false);
+      expect(createBtn.className).toContain('fm-btn--save-pill--active');
       expect(container.textContent).not.toContain('fm.new_decl.duplicate_warning');
       expect(container.textContent).not.toContain('fm.new_decl.no_active_models');
+
+      fireEvent.click(createBtn);
+      expect(onConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ model: '303', status: 'draft' })
+      );
     });
 
     it('never renders a duplicate-declaration banner, even when a period is already declared', () => {
