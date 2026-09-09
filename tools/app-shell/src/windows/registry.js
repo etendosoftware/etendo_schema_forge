@@ -95,6 +95,17 @@ const windowLoaders = {
  * convention as the `capability` axis: an item with `accessWindowId` is hidden
  * unless `windowAccess[item.accessWindowId]` is a defined access tier.
  *
+ * Admin/client-admin is exempt from this axis (ETP-5240 follow-up): none of
+ * these 3 permission-anchor windows backs an active `ETGO_SF_SPEC` row, so
+ * `SFWindowAccessMap`'s admin bypass (`resolveActiveEtendoGoWindowIds()`)
+ * never marks them in `windowAccess` even for admin/client-admin — the map's
+ * admin enumeration is narrower than "literally every window". Gating on it
+ * unconditionally hid these items from admin/client-admin too, which the
+ * actual content gate (`NeoAccessHelper.hasWindowAccess()`, Java) never did —
+ * it bypasses unconditionally for admin regardless of spec. Reusing
+ * `capabilities.isAdminOrClientAdmin` (already threaded through this function)
+ * keeps the proactive sidebar check consistent with that reactive gate.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
@@ -115,7 +126,7 @@ export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null
       ...group,
       items: group.items.filter(item => {
         if (item.capability && capabilities?.[item.capability] !== true) return false;
-        if (item.accessWindowId && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
+        if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
         if (!allowedIds) return true;
         const ids = itemIds(item);
         return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
