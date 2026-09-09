@@ -1711,3 +1711,91 @@ reader no way to tell which half is current.**
 behind even when every line of logic is correct and every test is green, because no gate reads
 prose. Grep by ticket tag before delivery, and give the rationale comments the same scrutiny as the
 diff — they are the artefact most likely to be wrong and the one a future reader trusts most.
+
+---
+
+## [2026-09-08] ETP-5230 — a role's User Level can silently revoke an organization access the UI still shows it has
+
+**Component:** `com.etendoerp.go` — `schemaforge/{ReconciliationHandler,PaymentRegistrationService,AddPaymentService,CashCloseHandler}.java`
+
+**Symptom.** On a freshly onboarded tenant, every invited user with a fixed GO role (Finance, Sales, …)
+got HTTP 400 on **every** reconciliation and **every** payment; only the tenant owner could perform
+them. Reported from `go.experimental.etendo.cloud` with three verbatim payloads, all of this shape:
+
+```
+Organization 0 of object (ADSequence(D6A6995B1B5E48BDBE76DA3FC95E262D) (name: Reconciliation))
+is not present in OrganizationList [8CF2FCD6E86746918C5449635CBB030F]
+```
+
+The tell that it was not a reconciliation bug: the error names an `AD_Sequence`, not a document, and
+the flows that "worked" (bank statements, movements) also number documents.
+
+**Root cause — two facts, neither a bug alone.**
+
+1. `OBContext#setWritableOrganizations` (`src/org/openbravo/dal/core/OBContext.java:622`) does
+   `if (localUserLevel.equals("O")) writableOrganizations.remove("0")`. Every GO fixed role and every
+   per-user personal role is created with `UserLevel = "  O"`
+   (`SystemRoleTemplates.java:56`). The role **does** hold `AD_Role_OrgAccess` to `*` and the UI shows
+   it — core removes it silently when computing the session. The owner role ships `" CO"`
+   (`GOClient/AD_ROLE.xml:14`) and keeps it. That one field is the entire difference.
+2. The APRM numbering path bumps the sequence **through the DAL**
+   (`Fin_UtilityLegacy#incrementSeqIfUpdateNext`), so the write is security-checked on flush and
+   rejected — the record being written is the sequence row, whose org is `0`. All 143 sequences in the
+   onboarding dataset live at org `*`, which is valid, standard configuration.
+
+Bank statements and movements are unaffected because they number through the **SQL** path (the
+`AD_SEQUENCE_DOC` PL function), which performs no org check. Two numbering mechanisms in core, only
+one of them checked — that asymmetry is the whole bug.
+
+**Fix.** `schemaforge/StarOrgWriteScope.java` grants org `*` write access for the duration of one
+document-number expression, flushes the counter while the grant is open, and restores the org lists in
+a `finally` — core's own `InitialOrgSetup` idiom (`InitialOrgSetup.java:352`, cleanup at
+`ad_forms/InitialOrgSetup.java:79-80`). Applied at 5 call sites. Documented in the module's
+`docs/neo-headless.md` §7.
+
+Three traps, all verified in the source and all recorded in the helper's javadoc:
+
+- **`OBContext.setAdminMode(false)` does not work here, and fails silently.**
+  `doOrgClientAccessCheck` reads the *innermost* admin frame, and core pushes its own
+  `setAdminMode(true)` inside `APRM_MatchingUtility#addNewDraftReconciliation`. An outer frame is
+  never the one consulted. The grant has to change the writable-organization **set**.
+- **The check fires on flush, not on save**, so the flush must be inside the scope. At the cash-close
+  site nothing flushes in the enclosing method at all.
+- The cleanup needs **both** `removeWritableOrganization` (the "additional" set) and a forced
+  recompute; removing from only one set leaves `"0"` writable for the rest of the request.
+
+**Verification — the part that mattered most.** The first local run was green, but nobody had ever
+seen it red *locally*, so green proved nothing. Reverting the fix via patch, recompiling, and
+reproducing both 400s first turned it into a controlled experiment:
+
+| | reconcile | invoice payment |
+|---|---|---|
+| fix reverted | 400 `Reconciliation` | 400 `AR Receipt` |
+| fix applied | doc `1000021` | payment `1000002` |
+| sequence at org `*` | → 1000023 | → 1000003 |
+
+Both written by a `[  O]` role, sequence counter and document created in the same second. The
+sequence ids in the local errors matched the ids read out of the onboarding dataset during the
+investigation, independently confirming the dataset analysis.
+
+**Out of scope, recorded as a follow-up.** Etendo Classic and ~15 other core APRM call sites stay
+broken for any Organization-level role; only a core fix closes them. Written up in
+`docs/etendo-ad/document-sequence-star-org-write-core-proposal.md`.
+
+**Lessons.**
+
+- **A green result proves nothing until you have seen it red in the same environment.** Ask "have I
+  ever observed this failing here?" before accepting a passing test as evidence. The reporter caught
+  this, not the agent.
+- **An error naming an infrastructure record (`AD_Sequence`, `AD_Role`, a counter) is rarely a bug in
+  the feature that surfaced it.** Read what the message says is being *written* before reading the
+  handler.
+- **Two mechanisms for the same job will diverge, and the unchecked one hides the bug in the checked
+  one.** The SQL and DAL numbering paths disagreeing about whether bumping a counter is a
+  security-relevant write is why five flows failed and a dozen similar ones did not.
+- **A silently revoked permission is worse than a missing one.** The role showed `*` in the UI the
+  whole time. When a permission looks present but does not apply, suspect a derived field
+  (`UserLevel`) over the visible grant.
+- **Back up before you destroy, and verify the backup.** `git diff > file` in this repo produces
+  RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
+  `rtk proxy git diff`, and validate with `git apply --check` before relying on it.
