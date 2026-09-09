@@ -41,33 +41,67 @@
 -- R34's original authoring) and resolves to a real leaf/subaccount (`elementlevel = 'S'`) on
 -- effectively every tenant's own copy of that chart — live-verified on this environment's GOClient
 -- and SantoEmpresa clients; R34's own live P&L check apparently missed this whole `999*` family.
--- This fix resolves `99904000`'s OWN NATURAL `C_ValidCombination` for each row's own
--- `(ad_client_id, c_acctschema_id)` — scoped through `C_AcctSchema_Element`
+-- Level 1 (schema default) resolves `99904000`'s OWN NATURAL `C_ValidCombination` for that row's
+-- own `(ad_client_id, c_acctschema_id)` — scoped through `C_AcctSchema_Element`
 -- (`elementtype = 'AC'`) so an unwired "orphan" element sharing the same account code is never
 -- picked (confirmed live: GOClient itself carries a SECOND, unrelated `c_elementvalue` row for
 -- `99904000` under an unwired "GOOrg Account Tree" element, distinct from the wired "Arbol de
 -- cuentas GO" element — joining through `C_AcctSchema_Element` is what keeps this deterministic).
--- A tenant whose chart genuinely lacks `99904000` is simply not matched by this fix (see
--- idempotency below) — R34 itself, unedited, remains that tenant's only source (its
--- `P_Expense_Acct` fallback), which this fix deliberately leaves alone.
+-- A tenant whose chart genuinely lacks `99904000` is simply not matched at Level 1 (see idempotency
+-- below) — R34 itself, unedited, remains that tenant's only source (its `P_Expense_Acct` fallback),
+-- which this fix deliberately leaves alone.
 --
--- Natural-combination filter (ETP-5222 review fix, Alex/W1)
--- ------------------------------------------------------------
--- `C_ValidCombination` can hold non-natural, dimension-specific rows for the same
--- `(account, schema)` pair (e.g. a product- or business-partner-specific combination). The
--- account/schema join alone can therefore match more than one row, and Postgres picks one
--- ARBITRARILY on a plain join — silent nondeterminism, not an error. Every resolution below (both
--- `@check` and each `@apply` level) requires every OTHER `C_ValidCombination` dimension column
--- NULL — `m_product_id`, `c_bpartner_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`,
--- `c_salesregion_id`, `c_project_id`, `c_campaign_id`, `c_activity_id`, `user1_id`, `user2_id` —
--- plus a defensive `ORDER BY vc.c_validcombination_id LIMIT 1`, mirroring
--- `GlItemProvisioningSupport#resolveNaturalCombination` (`modules/com.etendoerp.go/src/com/
--- etendoerp/go/schemaforge/handlers/GlItemProvisioningSupport.java:258-279`) — the DAL/Criteria
--- precedent for this exact operation elsewhere in this codebase, translated from its
--- `Restrictions.isNull(...)` list into plain `AND vc.<col> IS NULL` predicates since this is native
--- SQL, not HQL/Criteria. Live-reverified after adding this filter: the resolved combination id for
--- GOClient/SantoEmpresa is UNCHANGED (no non-natural row for 99904000 exists on this environment
--- today) — this is a forward-looking correctness fix, not a bugfix for current data.
+-- Cascade design (ETP-5222 follow-up, 2026-09-09) — Levels 2/3 COALESCE from Level 1, not a
+-- second/third independent re-derivation
+-- ------------------------------------------------------------------------------------------
+-- The file's FIRST shipped version (see git history) had Levels 2 (product-category) and 3
+-- (product) each INDEPENDENTLY re-run the full `C_AcctSchema_Element`/`C_ElementValue`/
+-- `C_ValidCombination` natural-combination resolution a second and third time, duplicating the
+-- same dimension-filtered JOIN chain three times in one file. This diverged from the ORIGINAL plan
+-- (`santo_ETP-5222-analysis-and-plan.md`, "Layer B — one-time backfill"): "`COALESCE`-backfill
+-- ... from the now-populated schema default" was always the intended shape for the row-level
+-- layers — Level 1 (`C_AcctSchema_Default`) is the single source of truth; product/category rows
+-- are meant to INHERIT whatever the schema default holds, not re-derive 99904000 on their own.
+--
+-- Levels 2 and 3 are now a plain `COALESCE`/copy of `C_AcctSchema_Default.P_InvoicePriceVariance_Acct`
+-- for their own `(ad_client_id, c_acctschema_id)` — no `C_AcctSchema_Element`/`C_ElementValue`/
+-- `C_ValidCombination` joins of their own at all. This is not just a size/duplication cleanup: it
+-- also means Levels 2/3 now correctly cascade from WHATEVER Level 1 holds, including a genuine
+-- schema-level manual override (an operator-set value on `C_AcctSchema_Default` that is neither
+-- NULL nor its own `P_Expense_Acct`, hence never touched by Level 1's own guard) — matching how
+-- Etendo's account-default cascade is designed to work everywhere else (schema default is the
+-- fallback parent for product/category-level accounts), rather than silently bypassing a
+-- schema-level override to independently chase account 99904000 on every row regardless of what
+-- the schema's own default says.
+--
+-- Ordering/visibility (verified against the actual runner, not assumed): `cli/src/data-fixes/
+-- run.js`'s `applyFix()` runs an entire fix's `@apply` body as ONE `client.query(applySql)` call
+-- inside a single already-open `BEGIN ... COMMIT` transaction (see `applyFix`, the `client.connect()`
+-- / `BEGIN` / `runBody(client, applySql)` / `COMMIT` sequence). `@apply`'s three `UPDATE` statements
+-- below execute sequentially on that SAME connection inside that SAME transaction — ordinary SQL
+-- semantics guarantee a later statement in the same transaction always sees an earlier statement's
+-- own (even uncommitted) writes, on any isolation level, since it is the transaction's own work.
+-- Level 1's `UPDATE c_acctschema_default` therefore always completes, in-transaction, before
+-- Levels 2/3 read `c_acctschema_default.p_invoicepricevariance_acct` — whether Level 1 needed to
+-- change the row this run or left it already-correct, Levels 2/3 see its POST-Level-1 value. This
+-- is the same guarantee the file's original (still-unchanged) Level 1 logic already relied upon
+-- implicitly; the cascade below just makes Levels 2/3 depend on it explicitly instead of
+-- re-deriving independently. `@check`, by contrast, runs OUTSIDE any apply transaction (via
+-- `pool.query`, before `@apply` even begins) and reads the PRE-fix state — Level 2/3's `@check`
+-- clauses below therefore intentionally do NOT gate on "would Level 1 change this," only on
+-- "does this row differ from `C_AcctSchema_Default`'s CURRENT value" — that is sufficient for
+-- overall correctness because Level 1's own (unchanged) `@check` clause independently detects
+-- "the schema default itself is wrong" via its own full derivation and fires the overall `@check`
+-- in that case regardless of what Levels 2/3's clauses see; once `@check` returns >=1 row, `@apply`
+-- always runs all three levels together, so Levels 2/3 correctly pick up whatever Level 1 just
+-- fixed even in the run where their OWN clause didn't independently detect the need.
+--
+-- The `d.p_invoicepricevariance_acct IS NOT NULL` guard on Levels 2/3 (both `@check` and `@apply`)
+-- is load-bearing, not decorative: without it, a tenant whose chart genuinely lacks 99904000 (so
+-- `C_AcctSchema_Default.p_invoicepricevariance_acct` stays NULL after Level 1 no-ops) would have
+-- Levels 2/3 blindly copy that NULL onto product/category rows, ERASING R34's existing
+-- `P_Expense_Acct`-derived fallback value there — a real regression this guard prevents. With the
+-- guard, a schema lacking 99904000 leaves Levels 2/3 exactly as untouched as Level 1 itself.
 --
 -- Why a new file, not an edit to R34
 -- -----------------------------------
@@ -97,23 +131,24 @@
 --
 -- Idempotency
 -- -----------
--- Three independent UPDATEs, one per table/level, each resolving 99904000's NATURAL combination
--- (see filter above) for the row's OWN `(ad_client_id, c_acctschema_id)` via a correlated scalar
--- subquery — a tenant whose chart lacks 99904000 entirely simply resolves to NULL, so the whole
--- statement is a no-op for that tenant (correctly leaves R34's `P_Expense_Acct` fallback, or a
--- still-NULL column, untouched). Where 99904000 DOES resolve, the row-level guard is
+-- Level 1 resolves 99904000's NATURAL combination (see filter below) for the row's OWN
+-- `(ad_client_id, c_acctschema_id)` via a correlated scalar subquery — a tenant whose chart lacks
+-- 99904000 entirely simply resolves to NULL there, so Level 1 is a no-op for that tenant (correctly
+-- leaves R34's `P_Expense_Acct` fallback, or a still-NULL column, untouched). Levels 2/3 copy
+-- Level 1's OWN (post-apply) value, guarded by `IS NOT NULL` (no fallback of their own beyond what
+-- Level 1 provides). Where 99904000 DOES resolve, each level's row-level guard is
 -- `(P_InvoicePriceVariance_Acct IS NULL OR P_InvoicePriceVariance_Acct = <own row's> P_Expense_Acct)
--- AND <resolved 99904000 combination> IS DISTINCT FROM P_InvoicePriceVariance_Acct` — matches a
--- fresh NULL (R34 never ran / found no `P_Expense_Acct` either), matches R34's
--- `P_Expense_Acct`-derived value (correction case), and explicitly SKIPS any row that already holds
--- something else — including the 99904000 combination itself (this fix's own prior run, idempotent
--- re-run) AND a genuine manual override an operator set to a different account on purpose (e.g. the
--- "Fernet" row above, which points at 99905000, not 99904000: neither NULL nor equal to its own
--- `P_Expense_Acct`, so the `IS NULL OR = P_Expense_Acct` guard already excludes it — this fix
--- deliberately does NOT reconcile 99905000-pointing rows to 99904000; that is a separate, not-yet-
--- requested cleanup). Both `@check` and each `@apply` `WHERE` carry the identical guard, so a
--- partial or concurrent apply, or a straight re-run after a first successful apply, is safe and
--- touches zero rows the second time.
+-- AND <target value> IS DISTINCT FROM P_InvoicePriceVariance_Acct` — matches a fresh NULL (R34
+-- never ran / found no `P_Expense_Acct` either), matches R34's `P_Expense_Acct`-derived value
+-- (correction case), and explicitly SKIPS any row that already holds something else — including
+-- the 99904000 combination itself (this fix's own prior run, idempotent re-run) AND a genuine
+-- manual override an operator set to a different account on purpose (e.g. the "Fernet" row above,
+-- which points at 99905000, not 99904000: neither NULL nor equal to its own `P_Expense_Acct`, so
+-- the `IS NULL OR = P_Expense_Acct` guard already excludes it — this fix deliberately does NOT
+-- reconcile 99905000-pointing rows to 99904000; that is a separate, not-yet-requested cleanup).
+-- Both `@check` and each `@apply` `WHERE` carry the identical guard, so a partial or concurrent
+-- apply, or a straight re-run after a first successful apply, is safe and touches zero rows the
+-- second time.
 --
 -- Chaining with R34
 -- -----------------
@@ -125,10 +160,12 @@
 -- runner already enforces for every fix in the catalog.
 
 -- @check
--- Fires when at least one of the three levels still needs correcting to 99904000 — i.e. 99904000's
--- NATURAL combination (see filter above) resolves for this row's own schema AND the current value
--- is either NULL or R34's old P_Expense_Acct-derived value (never a genuine manual override on some
--- other account).
+-- Fires when at least one of the three levels still needs correcting — Level 1 via its own full
+-- natural-combination resolution (see filter below); Levels 2/3 via a plain comparison against
+-- `C_AcctSchema_Default`'s CURRENT value (see "Ordering/visibility" above for why this is
+-- sufficient: Level 1's own clause already catches the case where the schema default itself needs
+-- fixing, so Levels 2/3 only need to catch the case where the schema default is ALREADY correct/set
+-- but the row itself has not caught up yet).
 SELECT 1
 FROM c_acctschema_default d
 JOIN c_acctschema_element ae
@@ -147,35 +184,21 @@ WHERE d.ad_client_id = :client_id
 UNION ALL
 SELECT 1
 FROM m_product_category_acct pca
-JOIN c_acctschema_element ae
-  ON ae.c_acctschema_id = pca.c_acctschema_id AND ae.ad_client_id = pca.ad_client_id AND ae.elementtype = 'AC'
-JOIN c_elementvalue ev ON ev.c_element_id = ae.c_element_id AND ev.value = '99904000'
+JOIN c_acctschema_default d
+  ON d.c_acctschema_id = pca.c_acctschema_id AND d.ad_client_id = pca.ad_client_id
 WHERE pca.ad_client_id = :client_id
+  AND d.p_invoicepricevariance_acct IS NOT NULL
   AND (pca.p_invoicepricevariance_acct IS NULL OR pca.p_invoicepricevariance_acct = pca.p_expense_acct)
-  AND (SELECT vc.c_validcombination_id FROM c_validcombination vc
-       WHERE vc.account_id = ev.c_elementvalue_id AND vc.c_acctschema_id = ae.c_acctschema_id
-         AND vc.ad_client_id = ae.ad_client_id
-         AND vc.m_product_id IS NULL AND vc.c_bpartner_id IS NULL AND vc.ad_orgtrx_id IS NULL
-         AND vc.c_locfrom_id IS NULL AND vc.c_locto_id IS NULL AND vc.c_salesregion_id IS NULL
-         AND vc.c_project_id IS NULL AND vc.c_campaign_id IS NULL AND vc.c_activity_id IS NULL
-         AND vc.user1_id IS NULL AND vc.user2_id IS NULL
-       ORDER BY vc.c_validcombination_id LIMIT 1) IS DISTINCT FROM pca.p_invoicepricevariance_acct
+  AND d.p_invoicepricevariance_acct IS DISTINCT FROM pca.p_invoicepricevariance_acct
 UNION ALL
 SELECT 1
 FROM m_product_acct pa
-JOIN c_acctschema_element ae
-  ON ae.c_acctschema_id = pa.c_acctschema_id AND ae.ad_client_id = pa.ad_client_id AND ae.elementtype = 'AC'
-JOIN c_elementvalue ev ON ev.c_element_id = ae.c_element_id AND ev.value = '99904000'
+JOIN c_acctschema_default d
+  ON d.c_acctschema_id = pa.c_acctschema_id AND d.ad_client_id = pa.ad_client_id
 WHERE pa.ad_client_id = :client_id
+  AND d.p_invoicepricevariance_acct IS NOT NULL
   AND (pa.p_invoicepricevariance_acct IS NULL OR pa.p_invoicepricevariance_acct = pa.p_expense_acct)
-  AND (SELECT vc.c_validcombination_id FROM c_validcombination vc
-       WHERE vc.account_id = ev.c_elementvalue_id AND vc.c_acctschema_id = ae.c_acctschema_id
-         AND vc.ad_client_id = ae.ad_client_id
-         AND vc.m_product_id IS NULL AND vc.c_bpartner_id IS NULL AND vc.ad_orgtrx_id IS NULL
-         AND vc.c_locfrom_id IS NULL AND vc.c_locto_id IS NULL AND vc.c_salesregion_id IS NULL
-         AND vc.c_project_id IS NULL AND vc.c_campaign_id IS NULL AND vc.c_activity_id IS NULL
-         AND vc.user1_id IS NULL AND vc.user2_id IS NULL
-       ORDER BY vc.c_validcombination_id LIMIT 1) IS DISTINCT FROM pa.p_invoicepricevariance_acct
+  AND d.p_invoicepricevariance_acct IS DISTINCT FROM pa.p_invoicepricevariance_acct
 LIMIT 1;
 
 -- @apply
@@ -183,6 +206,8 @@ LIMIT 1;
 -- copies from (see R34's own "preventive twin" note — the Java-side
 -- OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault already applies this same
 -- 99904000-first priority for BRAND NEW clients going forward; this fix is the existing-tenant twin).
+-- UNCHANGED from this file's first version: still the full natural-combination resolution, since
+-- Level 1 has no parent to cascade from — it IS the source Levels 2/3 now cascade from below.
 UPDATE c_acctschema_default d
 SET p_invoicepricevariance_acct = resolved.ipv_99904000_id,
     updated = now(), updatedby = '0'
@@ -210,58 +235,32 @@ WHERE d.c_acctschema_default_id = resolved.c_acctschema_default_id
 
 -- Level 2 — product category. Reached only when a transaction line carries no specific product
 -- (never true for DocMatchInv, but a real fallback path for other document types via
--- ProductInfo#getAccountDefault's COALESCE chain).
+-- ProductInfo#getAccountDefault's COALESCE chain). NOW a plain COALESCE/copy from Level 1's own
+-- (post-apply) c_acctschema_default row — see "Cascade design" above for why this replaced an
+-- independent re-derivation, and "Ordering/visibility" for why reading c_acctschema_default here is
+-- guaranteed to see Level 1's own write from earlier in this SAME @apply/transaction.
 UPDATE m_product_category_acct pca
-SET p_invoicepricevariance_acct = resolved.ipv_99904000_id,
+SET p_invoicepricevariance_acct = d.p_invoicepricevariance_acct,
     updated = now(), updatedby = '0'
-FROM (
-  SELECT p2.m_product_category_acct_id,
-    (SELECT vc.c_validcombination_id FROM c_validcombination vc
-     WHERE vc.account_id = ev.c_elementvalue_id AND vc.c_acctschema_id = ae.c_acctschema_id
-       AND vc.ad_client_id = ae.ad_client_id
-       AND vc.m_product_id IS NULL AND vc.c_bpartner_id IS NULL AND vc.ad_orgtrx_id IS NULL
-       AND vc.c_locfrom_id IS NULL AND vc.c_locto_id IS NULL AND vc.c_salesregion_id IS NULL
-       AND vc.c_project_id IS NULL AND vc.c_campaign_id IS NULL AND vc.c_activity_id IS NULL
-       AND vc.user1_id IS NULL AND vc.user2_id IS NULL
-     ORDER BY vc.c_validcombination_id LIMIT 1) AS ipv_99904000_id
-  FROM m_product_category_acct p2
-  JOIN c_acctschema_element ae
-    ON ae.c_acctschema_id = p2.c_acctschema_id AND ae.ad_client_id = p2.ad_client_id
-       AND ae.elementtype = 'AC'
-  JOIN c_elementvalue ev ON ev.c_element_id = ae.c_element_id AND ev.value = '99904000'
-  WHERE p2.ad_client_id = :client_id
-) resolved
-WHERE pca.m_product_category_acct_id = resolved.m_product_category_acct_id
+FROM c_acctschema_default d
+WHERE d.c_acctschema_id = pca.c_acctschema_id AND d.ad_client_id = pca.ad_client_id
   AND pca.ad_client_id = :client_id
+  AND d.p_invoicepricevariance_acct IS NOT NULL
   AND (pca.p_invoicepricevariance_acct IS NULL OR pca.p_invoicepricevariance_acct = pca.p_expense_acct)
-  AND resolved.ipv_99904000_id IS DISTINCT FROM pca.p_invoicepricevariance_acct;
+  AND d.p_invoicepricevariance_acct IS DISTINCT FROM pca.p_invoicepricevariance_acct;
 
 -- Level 3 — product. THIS is the level `DocMatchInv`/`ProductInfo#getAccount` actually reads for any
 -- line that carries a product (i.e. every real purchase-invoice-match line) — the one that matters
 -- for posting. Idempotent even against a row already set to a different account by other means (see
 -- the "Fernet" example in the header comment above): its P_InvoicePriceVariance_Acct is neither NULL
--- nor equal to its own P_Expense_Acct, so the guard skips it untouched.
+-- nor equal to its own P_Expense_Acct, so the guard skips it untouched. Same COALESCE-from-Level-1
+-- cascade as Level 2 above.
 UPDATE m_product_acct pa
-SET p_invoicepricevariance_acct = resolved.ipv_99904000_id,
+SET p_invoicepricevariance_acct = d.p_invoicepricevariance_acct,
     updated = now(), updatedby = '0'
-FROM (
-  SELECT p2.m_product_acct_id,
-    (SELECT vc.c_validcombination_id FROM c_validcombination vc
-     WHERE vc.account_id = ev.c_elementvalue_id AND vc.c_acctschema_id = ae.c_acctschema_id
-       AND vc.ad_client_id = ae.ad_client_id
-       AND vc.m_product_id IS NULL AND vc.c_bpartner_id IS NULL AND vc.ad_orgtrx_id IS NULL
-       AND vc.c_locfrom_id IS NULL AND vc.c_locto_id IS NULL AND vc.c_salesregion_id IS NULL
-       AND vc.c_project_id IS NULL AND vc.c_campaign_id IS NULL AND vc.c_activity_id IS NULL
-       AND vc.user1_id IS NULL AND vc.user2_id IS NULL
-     ORDER BY vc.c_validcombination_id LIMIT 1) AS ipv_99904000_id
-  FROM m_product_acct p2
-  JOIN c_acctschema_element ae
-    ON ae.c_acctschema_id = p2.c_acctschema_id AND ae.ad_client_id = p2.ad_client_id
-       AND ae.elementtype = 'AC'
-  JOIN c_elementvalue ev ON ev.c_element_id = ae.c_element_id AND ev.value = '99904000'
-  WHERE p2.ad_client_id = :client_id
-) resolved
-WHERE pa.m_product_acct_id = resolved.m_product_acct_id
+FROM c_acctschema_default d
+WHERE d.c_acctschema_id = pa.c_acctschema_id AND d.ad_client_id = pa.ad_client_id
   AND pa.ad_client_id = :client_id
+  AND d.p_invoicepricevariance_acct IS NOT NULL
   AND (pa.p_invoicepricevariance_acct IS NULL OR pa.p_invoicepricevariance_acct = pa.p_expense_acct)
-  AND resolved.ipv_99904000_id IS DISTINCT FROM pa.p_invoicepricevariance_acct;
+  AND d.p_invoicepricevariance_acct IS DISTINCT FROM pa.p_invoicepricevariance_acct;
