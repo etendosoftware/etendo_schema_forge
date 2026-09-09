@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -264,9 +265,9 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
             <button
               key={o.id}
               onClick={() => { onSelect(o); onClose(); }}
-              className={['w-full text-left px-4 py-2 text-sm truncate', idx === focusIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50'].join(' ')}
+              className={['w-full text-left px-4 py-2 text-sm', idx === focusIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50'].join(' ')}
             >
-              {o.name}
+              <TruncatedText text={o.name} data-testid="TruncatedText__SelectorPopup" />
             </button>
           ))}
           <div ref={sentinelRef} className="py-1 flex justify-center">
@@ -695,7 +696,10 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
                         onChange={() => toggleItem(o)}
                         className="w-4 h-4 accent-primary shrink-0"
                       />
-                      <span className="text-sm truncate">{o.name}</span>
+                      <TruncatedText
+                        text={o.name}
+                        className="text-sm min-w-0"
+                        data-testid="TruncatedText__PopupMultiSelector" />
                     </label>
                   );
                 })
