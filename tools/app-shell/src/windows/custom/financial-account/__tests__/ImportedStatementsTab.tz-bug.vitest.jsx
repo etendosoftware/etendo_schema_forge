@@ -1,11 +1,11 @@
 // Regression test for ETP-4850: date off-by-one bug under negative-UTC-offset
 // timezones.
 //
-// ImportedStatementsTab's `filteredStatements` useMemo does
-// `new Date(s.importDate)` and compares it against `from`/`to` bounds coming
-// from `getDateBounds(dateRange)` (tools/app-shell/src/lib/dateRangeBounds.js).
-// `importDate` is a date-only string (e.g. "2026-08-10") — parsed by the Date
-// constructor as UTC midnight — while `from`/`to` are built with
+// ImportedStatementsTab's `filteredStatements` useMemo parses `s.importDate`
+// and compares it against `from`/`to` bounds coming from
+// `getDateBounds(dateRange)` (tools/app-shell/src/lib/dateRangeBounds.js).
+// `importDate` is a date-only string (e.g. "2026-08-10") — which the plain Date
+// constructor reads as UTC midnight — while `from`/`to` are built with
 // `setHours(0,0,0,0)` / `setHours(23,59,59,999)`, i.e. LOCAL-time day
 // boundaries. Under a negative-offset timezone (e.g.
 // America/Argentina/Buenos_Aires, UTC-3), "2026-08-10" (= Aug 10 00:00 UTC =
@@ -19,20 +19,24 @@
 // TZ is forced to America/Argentina/Buenos_Aires (verified empirically:
 // process.env.TZ takes effect per-call in this project's Node/Vitest setup)
 // to make the bug reproducible regardless of the CI machine's default
-// timezone. The filter range under test uses explicit `{ from, to }` Date
-// bounds rather than a relative preset, so the assertion itself is unaffected
-// by "today".
+// timezone.
 //
-// "Now" is pinned via vi.setSystemTime to 2026-08-15 12:00 local (a midday
-// instant, so the pin is not itself near a day boundary). This is NOT
-// cosmetic: the pre-condition below leans on the component's DEFAULT range,
-// which is the relative "last30" preset (today - 29 days, see
-// lib/dateRangeBounds.js presetBounds). With a real clock that pre-condition
-// silently expired 30 days after the fixture's date and the test began failing
-// on 2026-09-09 for a reason that had nothing to do with the bug it guards —
-// from that day on, Aug 10 fell outside "last30". Pinning the clock is what
-// makes the whole file, pre-condition included, actually independent of when
-// it runs.
+// The fixture's `importDate` is DERIVED from `todayCalendarISO()` inside the
+// test body — after the TZ is pinned — and the explicit `{ from, to }` filter
+// range is built for that same local calendar day. It is not hardcoded because
+// a fixed date is a calendar bomb: the tab opens on the `last30` preset, whose
+// `from` bound is `today - 29 days`, so any pinned date silently drops out of
+// the default window ~30 days after it is written. That is exactly what
+// happened to the original "2026-08-10" fixture — the test started failing on
+// its own pre-filter sanity assertion and never reached the ETP-4850
+// assertions it exists to protect. Deriving from today keeps the fixture inside
+// the default window forever.
+//
+// The range is built with the local-time constructor from the ISO components
+// (`new Date(y, m - 1, d)`) rather than via `parseCalendarDate`, so the test
+// never depends on the very helper whose behavior it is validating. The date
+// stays a date-only `yyyy-MM-dd` string — that shape IS the bug's trigger, so
+// it must not be widened into a full timestamp.
 
 // --- Mocks (before imports) ---
 
@@ -69,18 +73,31 @@ vi.mock('@/hooks/useBankStatements', () => ({
   }),
 }));
 
+// The single local calendar day (yyyy-MM-dd) the stubbed toolbar filters for.
+// Set by the test after the TZ is pinned — same indirection as statementsRef
+// above, because a vi.mock factory cannot close over a per-test value directly.
+const filterDayRef = { value: null };
+
 // Minimal toolbar stub: exposes a single button that fires an explicit
-// { from, to } Date-range change (bypassing the preset system, which is
-// relative to "today" and would add an unrelated variable to this test).
+// { from, to } Date-range change for filterDayRef's day (bypassing the preset
+// system, which is relative to "today" and would add an unrelated variable to
+// the assertion under test). The bounds are built with the local-time Date
+// constructor from the ISO components, deliberately NOT with parseCalendarDate
+// — the test must not lean on the helper it is validating.
+function localDay(iso) {
+  const [year, month, day] = iso.split('-');
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
 vi.mock('../StatementsToolbar', () => ({
   StatementsToolbar: ({ onDateRangeChange }) => (
     <div data-testid="stub-toolbar">
       <button
         type="button"
-        data-testid="toolbar-daterange-aug10"
+        data-testid="toolbar-daterange-single-day"
         onClick={() => onDateRangeChange({
-          from: new Date(2026, 7, 10), // Aug 10, 2026 (local) — month is 0-based
-          to: new Date(2026, 7, 10),
+          from: localDay(filterDayRef.value),
+          to: localDay(filterDayRef.value),
         })}
       />
     </div>
@@ -107,19 +124,21 @@ vi.mock('../ManualStatementModal', () => ({ ManualStatementModal: () => null }))
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
 
 // --- Fixtures ---
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'EUR' };
 
-// A statement genuinely imported on August 10, 2026 — the date-only format
-// NEO returns for Date-type fields (matches the format used across the rest
-// of this codebase's fixtures for equivalent fields, e.g. invoiceDate).
-const STATEMENT_AUG_10 = {
-  id: 's1', documentNo: 'BS-001', fileName: 'agosto.c43', name: 'Agosto',
-  importDate: '2026-08-10', status: 'PENDING',
-};
+// A statement imported on the host's current local calendar day, carried as the
+// date-only string NEO returns for Date-type fields (the same shape the rest of
+// this codebase's fixtures use for equivalent fields, e.g. invoiceDate). Built
+// inside the test, never at module load, so it reads the pinned TZ.
+const statementImportedOn = (importDate) => ({
+  id: 's1', documentNo: 'BS-001', fileName: 'extracto.c43', name: 'Extracto',
+  importDate, status: 'PENDING',
+});
 
 // --- Tests ---
 
@@ -134,30 +153,25 @@ describe('ImportedStatementsTab — ETP-4850 date off-by-one bug', () => {
     process.env.TZ = originalTz;
   });
 
-  beforeEach(() => {
-    // See the header note: the default range is the relative "last30" preset,
-    // so an unpinned clock makes the pre-condition below expire on its own.
-    vi.setSystemTime(new Date(2026, 7, 15, 12, 0, 0));
-    statementsRef.value = [STATEMENT_AUG_10];
-  });
+  it('includes a statement imported today when filtering for that exact day', async () => {
+    // Resolved here, with the TZ already pinned: the fixture's date and the
+    // filter's day are the same local calendar day by construction.
+    const importDate = todayCalendarISO();
+    statementsRef.value = [statementImportedOn(importDate)];
+    filterDayRef.value = importDate;
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('includes a statement imported on 2026-08-10 when filtering for that exact day', async () => {
     const user = userEvent.setup();
     render(<ImportedStatementsTab account={ACCOUNT} />);
 
-    // Before filtering, the default "last30" window (Jul 17 – Aug 15, from the
-    // pinned "now") already includes it — this just confirms the fixture
-    // reaches the table before we narrow the range.
+    // Before filtering, the default "last30" window includes it — this just
+    // confirms the fixture reaches the table before we narrow the range. Today
+    // can never fall outside last30, which is why the date is derived.
     expect(screen.getByTestId('stub-table')).toHaveAttribute('data-len', '1');
 
-    await user.click(screen.getByTestId('toolbar-daterange-aug10'));
+    await user.click(screen.getByTestId('toolbar-daterange-single-day'));
 
-    // Correct expected behavior: a statement literally dated Aug 10 must be
-    // included when filtering the range [Aug 10, Aug 10].
+    // Correct expected behavior: a statement literally dated today must be
+    // included when filtering the single-day range [today, today].
     expect(screen.getByTestId('stub-table')).toHaveAttribute('data-len', '1');
     expect(screen.getByTestId('row-s1')).toBeInTheDocument();
   });
