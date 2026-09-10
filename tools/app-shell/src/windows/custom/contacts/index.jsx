@@ -23,6 +23,30 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
 
+/*
+ * LATENT TRAP — read this before adding a tab for `customer`, `vendorCreditor` or `employee`
+ * (found while diagnosing ETP-5263; deliberately NOT worked around, because today it is
+ * unreachable).
+ *
+ * `artifacts/contacts/decisions.json` maps FIVE entity names onto the same `C_BPartner` row:
+ * `businessPartner`, `customer`, `vendorCreditor`, `employee` and the accounting satellites. The
+ * optimistic-locking version cache (`app-shell-core/lib/recordVersions.js`) is keyed by
+ * (record id, ENTITY), so those five names are five independent buckets for ONE database row —
+ * and a write through one of them refreshes only its own bucket. Worse, `getRecordVersion`
+ * resolves an exact entity match first (step 1) and only falls back to the `null` bucket
+ * (step 2) when there is no exact match, so a STALE exact bucket wins over a bucket that holds a
+ * fresher token. Saving through two aliases in one sitting would therefore send the second write
+ * with a token the first one already consumed → 409 `stale_record` the user cannot explain.
+ * The per-record write serialisation in `auth/api.js` does not cover it either: it keys by the
+ * same (entity, id) pair, so two aliases of one row are not serialised against each other.
+ *
+ * It cannot happen today because the generated `BusinessPartnerPage` renders only the
+ * `contact` / `bankAccount` / `locationAddress` / `customerAccounting` / `vendorAccounting` tabs
+ * and every header write goes out through `/businessPartner`. The moment a tab writes the same
+ * row through a second alias, this becomes reachable — and the fix belongs in the cache key
+ * (teaching it which entity names are aliases of one table), not in the panel.
+ */
+
 const isPerson = (r) => r.etgoIsperson === true || r.etgoIsperson === 'Y';
 
 // Overrides the generated BusinessPartnerPage's subsetFilters (Todos/Clientes/Proveedores)
