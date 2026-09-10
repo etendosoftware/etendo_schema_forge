@@ -165,6 +165,30 @@ describe('InlineLinesPanel — balanceFooter column-width alignment (ETP-5210)',
   });
 });
 
+describe('InlineLinesPanel — lineFormActive suppresses its own footer (ETP-5210)', () => {
+  // Regression guard for the totals-row-ordering bug: when the sibling
+  // add-row DataTable is active, InlineLinesPanel must NOT also render the
+  // totals row (it would otherwise render ABOVE the add-row form instead of
+  // below it — see DataTable's own `renderBalanceFooterRow` call in its
+  // hidden add-row-only companion mode for where the row moves to instead).
+  it('renders no totals row when lineFormActive is true, even with balanceFooter set', () => {
+    renderPanel({ balanceFooter: BALANCE_FOOTER, lineFormActive: true });
+    expect(screen.queryByTestId('balance-footer-row')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('balance-footer-debit')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('balance-footer-credit')).not.toBeInTheDocument();
+  });
+
+  it('still renders its own totals row when lineFormActive is false (default, pre-existing case)', () => {
+    renderPanel({ balanceFooter: BALANCE_FOOTER, lineFormActive: false });
+    expect(screen.getByTestId('balance-footer-row')).toBeInTheDocument();
+  });
+
+  it('still renders its own totals row when lineFormActive is omitted (backwards compatibility)', () => {
+    renderPanel({ balanceFooter: BALANCE_FOOTER });
+    expect(screen.getByTestId('balance-footer-row')).toBeInTheDocument();
+  });
+});
+
 describe('InlineLinesPanel — balanceFooter font-weight regression (ETP-5210)', () => {
   it('renders the totals row in bold (600), guarding against cellStyle silently winning back to 400', () => {
     renderPanel({ balanceFooter: BALANCE_FOOTER });
