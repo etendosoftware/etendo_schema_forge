@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
@@ -17,6 +17,7 @@ import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
+import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -251,7 +252,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
    * one render behind — exactly the mistake that made the equivalent contacts bug (ETP-5263)
    * intermittent.
    *
-   * `manualDataSavePending` records that a newer edit arrived while a PUT was open, and
+   * The write queue records that a newer edit arrived while a PUT was open, and
    * `manualDataLatest` holds the value it produced: the timer closure captures
    * identChecks/manualOverrides at SCHEDULE time, so replaying that closure would resend a stale
    * snapshot. A queued save is never dropped for being late — this endpoint has NO
@@ -259,12 +260,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
    * lost edit here produces no 409 and no error of any kind, just silently missing data. It IS
    * dropped when it becomes ineligible; see `isManualDataEligible`.
    */
-  const manualDataSaveInFlight = useRef(false);
-  const manualDataSavePending = useRef(false);
   const manualDataLatest = useRef(null);
-  /** Guards the queued replay: after unmount there is nothing left to autosave for. */
-  const isManualDataMounted = useRef(true);
-  useEffect(() => () => { isManualDataMounted.current = false; }, []);
   /**
    * Mirror of the effect's own preconditions (`!isSubmitted && token && apiBaseUrl`), kept in a
    * ref for the same reason `manualDataLatest` is: a queued replay fires from a `finally` long
@@ -286,39 +282,41 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
    * while one is in flight is queued and replayed when it settles, reading `manualDataLatest`
    * again so the replay carries the newest value rather than the one current when it was queued.
    */
-  async function flushManualData() {
+  /**
+   * Sends the manual data. Single-flight and the queued replay belong to the write queue below
+   * (ETP-5255); the eligibility gate stays here because it is this panel's own rule.
+   */
+  const writeManualData = useCallback(async ({ value }) => {
     // Re-checked on EVERY entry, so it gates the queued replay and not just the arming of the
-    // timer. A save that has become ineligible is DROPPED — the pending flag is cleared rather
-    // than carried forward: once the declaration is submitted its content is a filed record, and a
-    // late autosave silently mutating it is worse than losing an unsaved tweak made seconds before
-    // filing. This is the one place in this flow where dropping beats queueing.
-    if (!isManualDataEligible.current) {
-      manualDataSavePending.current = false;
-      return;
-    }
-    if (manualDataSaveInFlight.current) {
-      manualDataSavePending.current = true;
-      return;
-    }
+    // timer. A save that has become ineligible is DROPPED — returning `false` discards anything
+    // queued behind it rather than carrying it forward: once the declaration is submitted its
+    // content is a filed record, and a late autosave silently mutating it is worse than losing an
+    // unsaved tweak made seconds before filing. This is the one place in this flow where dropping
+    // beats queueing.
+    if (!isManualDataEligible.current) return false;
+    if (!value) return false;
+    await persistManualData(value.id, value.manualData, {
+      token: value.token,
+      apiBaseUrl: value.apiBaseUrl,
+    });
+    return true;
+  }, []);
+
+  /**
+   * Serialises per DECLARATION (ETP-5255).
+   *
+   * This panel was already correct before the shared queue existed, but only because it autosaves
+   * the whole record at once — so its single in-flight flag WAS a per-record key, by accident of
+   * shape rather than by design. The other three panels that hand-rolled this guarded per field or
+   * per input and let two writes to one record overlap. Using the same queue here is what stops
+   * this file from drifting back into a fourth private copy.
+   */
+  const { persist: persistManualDataQueued } = useRecordWriteQueue({ write: writeManualData });
+
+  function flushManualData() {
     const snapshot = manualDataLatest.current;
     if (!snapshot) return;
-    manualDataSaveInFlight.current = true;
-    try {
-      await persistManualData(snapshot.id, snapshot.manualData, {
-        token: snapshot.token,
-        apiBaseUrl: snapshot.apiBaseUrl,
-      });
-    } finally {
-      // Cleared on EVERY path — success, `{ ok: false }`, or an unexpected throw. A flag left set
-      // would stop the panel autosaving for the rest of the session with nothing on screen to say
-      // so, which is a worse failure than the duplicate write this guard removes.
-      manualDataSaveInFlight.current = false;
-      const hadPending = manualDataSavePending.current;
-      manualDataSavePending.current = false;
-      // Sequential by construction: this runs only after the previous PUT has settled, so the
-      // replay can never overlap it.
-      if (hadPending && isManualDataMounted.current) flushManualData();
-    }
+    persistManualDataQueued(snapshot.id, 'manualData', snapshot).catch(() => {});
   }
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —

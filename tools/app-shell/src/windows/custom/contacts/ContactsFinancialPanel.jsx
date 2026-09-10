@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import BillingPreferencesForm from './BillingPreferencesForm';
@@ -7,6 +7,7 @@ import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 /**
  * Credit-limit field: a number input plus -/+ steppers, with ONE commit path (ETP-5263).
  *
@@ -110,13 +111,6 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
    * difference that was already persisted — and issued a duplicate write.
    */
   const persistedRef = useRef({});
-  /** Fields with a PATCH currently in flight. The single-flight guard, latency-independent. */
-  const inFlightRef = useRef({});
-  /**
-   * Fields whose value changed again while their save was in flight. Flushed once that save
-   * succeeds, so a mid-flight edit is delayed, never dropped.
-   */
-  const queuedRef = useRef({});
 
   useEffect(() => {
     const fromServer = {
@@ -144,65 +138,47 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
   ), [editing]);
 
   /**
-   * Saves one credit/tax field, at most once at a time (ETP-5263).
-   *
-   * Three properties this has to hold, in order of how they broke:
-   *
-   * 1. **Single-flight.** A second trigger for a field whose PATCH is still open must not issue a
-   *    second request: both would carry the same `updated` token (the first response has not
-   *    refreshed the version cache yet) and the server would refuse the second as a 409
-   *    `stale_record`. The guard is the in-flight flag, not a longer debounce — a slow network
-   *    must not be able to produce two overlapping writes at ANY latency.
-   * 2. **No lost edit.** The second trigger is remembered in `queuedRef` and replayed once the
-   *    first save succeeds, so an edit made mid-flight still reaches the server. Silently
-   *    dropping it would trade a visible error for invisible data loss.
-   * 3. **Compare against what was persisted**, not against the `data` prop — see
-   *    `persistedRef`.
+   * Sends one credit/tax field. Single-flight and the mid-flight queue are the write queue's job
+   * (ETP-5255); what stays here is normalising the value, rolling back a refusal, and adopting
+   * what the server actually stored.
    */
-  async function persistCreditTaxField(fieldKey) {
-    if (!data?.id || !apiBaseUrl || !token) return;
-    if (creditTaxReadOnly[fieldKey]) return;
-
-    // A save is already open for this field: record that there is (possibly) newer input to send
-    // and return. The `finally` block below flushes it.
-    if (inFlightRef.current[fieldKey]) {
-      queuedRef.current[fieldKey] = true;
-      return;
-    }
-
-    const currentValue = draftRef.current[fieldKey] ?? '';
+  const writeCreditTaxField = useCallback(async ({ recordId, fieldKey, value }) => {
     const originalValue = persistedRef.current[fieldKey] ?? '';
-    if (String(currentValue ?? '') === String(originalValue ?? '')) return;
-
-    inFlightRef.current[fieldKey] = true;
+    // Re-checked HERE and not only where the write is requested, because a coalesced replay runs
+    // later: a blur that arrived mid-flight is queued with the value it saw, and by the time the
+    // open PATCH has settled that value may be exactly what the server now holds — the success
+    // path below adopts it into the draft. Comparing only at request time turned that into a
+    // second, redundant PATCH.
+    if (String(value ?? '') === String(originalValue ?? '')) return true;
     setSavingField(fieldKey);
     try {
       const normalizedValue = fieldKey === 'creditLimit'
-        ? (currentValue === '' || currentValue == null ? null : Number(currentValue))
-        : (currentValue === '' ? null : currentValue);
+        ? (value === '' || value == null ? null : Number(value))
+        : (value === '' ? null : value);
       const payload = { [fieldKey]: normalizedValue };
-      const res = await apiFetch(`/businessPartner/${data.id}`, {
+      const res = await apiFetch(`/businessPartner/${recordId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         // Back to the last value the server confirmed, so what the user sees is what is stored.
-        // Any queued follow-up is dropped with it: the field has been reset to a known state, and
-        // chaining another write onto a refused one would only replay the same rejected token.
-        queuedRef.current[fieldKey] = false;
+        // Returning `false` drops any queued follow-up with it: the field has been reset to a
+        // known state, and chaining another write onto a refused one would only replay the same
+        // rejected token.
         setCreditTaxDraft(prev => ({ ...prev, [fieldKey]: originalValue }));
         draftRef.current = { ...draftRef.current, [fieldKey]: originalValue };
-        return;
+        return false;
       }
 
       const responseData = await res.json().catch(() => null);
       const saved = responseData?.response?.data?.[0] ?? responseData;
       const finalValue = saved?.[fieldKey] ?? payload[fieldKey];
       persistedRef.current = { ...persistedRef.current, [fieldKey]: finalValue ?? '' };
-      // Only adopt the server's value when the user has not typed something newer meanwhile;
-      // otherwise their pending input would be overwritten by the value it supersedes.
-      if (!queuedRef.current[fieldKey]) {
+      // Only adopt the server's value when the draft has not moved on meanwhile; otherwise the
+      // user's pending input would be overwritten by the value it supersedes. The queue replays
+      // that newer draft right after this returns.
+      if (String(draftRef.current[fieldKey] ?? '') === String(value ?? '')) {
         const nextDraft = { ...draftRef.current, [fieldKey]: finalValue ?? '' };
         draftRef.current = nextDraft;
         setCreditTaxDraft(nextDraft);
@@ -210,19 +186,32 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       if (saved && typeof onChange === 'function') {
         onChange(fieldKey, finalValue);
       }
+      return true;
     } finally {
-      inFlightRef.current[fieldKey] = false;
       setSavingField(null);
-      if (queuedRef.current[fieldKey]) {
-        queuedRef.current[fieldKey] = false;
-        // Sequential by construction: this runs after the previous PATCH settled, so the version
-        // cache already holds the token that write returned. The early-return above makes it a
-        // no-op when the queued trigger turned out to carry no new value.
-        // `.catch` because there is no call site left to surface a rejection to (a 401 throws out
-        // of `apiFetch`), and an unhandled rejection here would be reported as an app error.
-        persistCreditTaxField(fieldKey).catch(() => {});
-      }
     }
+  }, [apiFetch, onChange]);
+
+  /**
+   * Serialises per BUSINESS PARTNER, not per field (ETP-5255).
+   *
+   * The in-flight map used to be keyed by field name, which is the wrong unit: `updated` is a
+   * per-record token, and every field here PATCHes the same `/businessPartner/{id}`. That was
+   * correct only by accident — exactly one field persists today, so the map never held two keys.
+   * The second field to be wired up would have reintroduced the duplicate write with nothing to
+   * catch it. Keying on the record makes it structural instead of incidental.
+   */
+  const { persist } = useRecordWriteQueue({ write: writeCreditTaxField });
+
+  function persistCreditTaxField(fieldKey) {
+    if (!data?.id || !apiBaseUrl || !token) return;
+    if (creditTaxReadOnly[fieldKey]) return;
+
+    const currentValue = draftRef.current[fieldKey] ?? '';
+    const originalValue = persistedRef.current[fieldKey] ?? '';
+    if (String(currentValue ?? '') === String(originalValue ?? '')) return;
+
+    persist(data.id, fieldKey, currentValue);
   }
 
   function handleCreditTaxChange(fieldKey, value) {

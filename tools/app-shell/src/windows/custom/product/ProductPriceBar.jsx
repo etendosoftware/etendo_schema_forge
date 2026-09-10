@@ -10,6 +10,7 @@ import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.js
 import { useUI } from '@/i18n';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
   for (const [key, value] of Object.entries(option)) {
@@ -67,11 +68,23 @@ function getCurrencySymbol(iso) {
 function PriceStepper({ value, prefix, disabled, onCommit }) {
   const [local, setLocal] = useState(String(value ?? ''));
   const debounceRef = useRef(null);
+  const lastCommittedRef = useRef(String(value ?? ''));
 
-  useEffect(() => { setLocal(String(value ?? '')); }, [value]);
+  useEffect(() => {
+    const next = String(value ?? '');
+    setLocal(next);
+    lastCommittedRef.current = next;
+  }, [value]);
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const num = local === '' || local == null ? 0 : Number(local);
+
+  function commit(next) {
+    const normalized = String(next ?? '');
+    if (normalized === lastCommittedRef.current) return;
+    lastCommittedRef.current = normalized;
+    onCommit(next);
+  }
 
   function step(delta) {
     if (disabled) return;
@@ -80,7 +93,7 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
     setLocal(String(next));
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      onCommit(next);
+      commit(next);
       debounceRef.current = null;
     }, 400);
   }
@@ -94,7 +107,13 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
         value={local}
         disabled={disabled}
         onChange={e => setLocal(e.target.value)}
-        onBlur={() => onCommit(local === '' ? 0 : Number(local))}
+        onBlur={() => {
+          if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+            debounceRef.current = null;
+          }
+          commit(local === '' ? 0 : Number(local));
+        }}
         className="flex-1 px-3 text-sm text-[hsl(var(--foreground))] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <button
@@ -292,26 +311,45 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       .filter(o => o.id)
   ), [availableOptions]);
 
-  const patchField = useCallback(async (row, field, value) => {
-    const current = String(row[field] ?? '');
-    if (String(value) === current) return;
-    setSavingId(row.id);
-    // Optimistic local update.
-    setPriceRows(prev => (prev ?? []).map(r => (r.id === row.id ? { ...r, [field]: value } : r)));
+  const writePrice = useCallback(async ({ recordId, fieldKey, value }) => {
+    setSavingId(recordId);
     try {
-      const res = await apiFetch(`/price/${row.id}`, {
+      const res = await apiFetch(`/price/${recordId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ [field]: String(value) }),
+        body: JSON.stringify({ [fieldKey]: String(value) }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
       toast.success(ui('pricingUpdated'));
     } catch (err) {
       toast.error(err?.message || ui('priceUnableToSave'));
       await refreshPrices();
+      // Discards anything queued behind this write — `refreshPrices` has just re-read the row from
+      // the server, and a replay would carry the token that was already refused.
+      return false;
     } finally {
       setSavingId(null);
     }
   }, [apiFetch, ui, refreshPrices]);
+
+  /**
+   * Serialises per PRICE ROW, not per input (ETP-5255).
+   *
+   * Each `PriceStepper` already refuses to re-commit its own last value, but there are TWO of
+   * them on every row — `standardPrice` and `listPrice` — and both write to
+   * `PATCH /price/{row.id}`. A per-input guard cannot see its sibling, so stepping one and then
+   * the other inside the 400 ms debounce sent two writes carrying the same `updated` token and
+   * the second came back a 409. The token is per record, so the queue's key has to be too.
+   */
+  const { persist } = useRecordWriteQueue({ write: writePrice });
+
+  const patchField = useCallback((row, field, value) => {
+    const current = String(row[field] ?? '');
+    if (String(value) === current) return;
+    // Optimistic local update, applied synchronously so it also serves as the comparison baseline
+    // for the next commit — `row` is rebuilt from `priceRows` on the following render.
+    setPriceRows(prev => (prev ?? []).map(r => (r.id === row.id ? { ...r, [field]: value } : r)));
+    persist(row.id, field, value);
+  }, [persist]);
 
   const handleDelete = useCallback(async (row) => {
     setSavingId(row.id);
