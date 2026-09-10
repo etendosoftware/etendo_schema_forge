@@ -19,7 +19,8 @@
     },
     "hidePrint": true,
     "listViewOptions": {
-      "hidePrint": true
+      "hidePrint": true,
+      "hideLink": true
     }
   },
   "discardPatterns": ["EM_*"],
