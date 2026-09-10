@@ -64,6 +64,18 @@ The `/upgrade` route is the worked example — it is registered
 **unconditionally**, and only the menu entry pointing at it is flag-gated.
 Hiding the route would imply the flag was protecting something, which it is not.
 
+`/portal/:token` (ETP-5267, the Business Partner self-service portal) is the
+same pattern taken to its conclusion. It too is registered unconditionally, but
+its flag — `bp-portal-link` — is declared and evaluated **only** in
+`com.etendoerp.go`: no key for it exists in `flag-keys.js`, and nothing in the
+browser reads it. The flag gates whether the sales-invoice email *carries a
+portal link*, which is a decision made entirely server-side while the email is
+built; giving the browser a key would create a second evaluator with nothing to
+evaluate, and a flag whose two ends read from different control planes has no
+single truth (ETP-4966). What protects the portal's data is the opaque token in
+the URL, validated on every request. See
+`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5.
+
 ## Adding a flag
 
 1. Declare the key and its safe default in `lib/flags/flag-keys.js`:

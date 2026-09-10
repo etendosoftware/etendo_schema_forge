@@ -24603,7 +24603,25 @@
     "walkthroughProductStepPriceAddTitle": "Add a tariff",
     "walkthroughProductStepPriceAddBody": "A price always belongs to a tariff. Sales and purchase tariffs are separate -- the toggle on the left switches between them.",
     "walkthroughProductStepPriceSetTitle": "Set the price",
-    "walkthroughProductStepPriceSetBody": "Enter the unit price and the list price, then pick the tariff under Name: the row is saved the moment you pick it. The list price is the one before discounts; the unit price is what is actually charged."
+    "walkthroughProductStepPriceSetBody": "Enter the unit price and the list price, then pick the tariff under Name: the row is saved the moment you pick it. The list price is the one before discounts; the unit price is what is actually charged.",
+    "portalPageTitle": "Customer portal",
+    "portalGreeting": "Hello, {name}",
+    "portalIntro": "These are the invoices {tenantName} has issued to you.",
+    "portalIntroGeneric": "These are the invoices issued to you.",
+    "portalLoading": "Loading your invoices...",
+    "portalInvoicesTitle": "Your invoices",
+    "portalOutstandingTitle": "Outstanding balance",
+    "portalOutstandingHint": "Total still unpaid across your invoices",
+    "portalInvoiceCountTitle": "Invoices issued",
+    "portalEmptyTitle": "No invoices yet",
+    "portalEmptyDescription": "Invoices issued to you will appear here.",
+    "portalInvalidLinkTitle": "This link is no longer valid",
+    "portalInvalidLinkDescription": "Ask for a new link from whoever sent you the invoice.",
+    "portalLoadErrorTitle": "We could not load your invoices",
+    "portalLoadErrorDescription": "Check your connection and try again.",
+    "portalDownloadFailed": "The invoice PDF could not be downloaded. Please try again.",
+    "portalDownloadInvoice": "Download invoice {documentNo}",
+    "portalInvoicePartiallyPaid": "Partially paid"
   },
   "menus": {
     "Currency": {
