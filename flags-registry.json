@@ -324,9 +324,10 @@
           "acctProcessMonitorApi",
           "useAcctProcessMonitor",
           "SFAcctProcessMonitor",
-          "acctprocessmonitor"
+          "acctprocessmonitor",
+          "acctProcess"
         ],
-        "$symbolsComment": "The page/hook/api/handler names are listed alongside the key because the shared toggle points reference the feature by those identifiers rather than by the flag key: runtime-routes.jsx registers AcctProcessMonitorPage, menu.json carries the acct-process-monitor item name, and NeoPseudoSpecDispatcher routes the lowercase acctprocessmonitor pseudo-spec to SFAcctProcessMonitor. A grep for the key alone would miss every one of them."
+        "$symbolsComment": "The page/hook/api/handler names are listed alongside the key because the shared toggle points reference the feature by those identifiers rather than by the flag key: runtime-routes.jsx registers AcctProcessMonitorPage, menu.json carries the acct-process-monitor item name, and NeoPseudoSpecDispatcher routes the lowercase acctprocessmonitor pseudo-spec to SFAcctProcessMonitor. A grep for the key alone would miss every one of them. `acctProcess` is the i18n prefix: all 43 genericLabels keys this feature adds to en_US, es_ES and es_AR start with it, and none of them contains the flag key, so without this symbol retiring the flag would leave every one of them orphaned in three locale files."
       },
       "paths": {
         "frontend": [
@@ -340,16 +341,6 @@
       },
       "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, flag-keys.js, lib/flags/index.js and NeoPseudoSpecDispatcher.java are shared toggle points, not owned paths: each holds a single registration/gating line naming one of the symbols above, and no feature logic. Retiring the flag is deleting the owned paths plus removing what a grep for those symbols finds.",
       "deferredItems": [
-        {
-          "id": "unit-and-e2e-coverage",
-          "kind": "open",
-          "note": "DEV delivered the implementation only; tests are the test-generator agent's separate task in this same ticket and had not been written when this entry was created. Needs: a vitest spec for the page's loading/error/denied/notInstalled/content branches and the trigger-refusal reasons, a spec for the SideMenu item-level flag gate, and a mocked Playwright flow. Backend needs a JUnit test for the admin gate and for the one-shot-request construction. Since the ETP-5269 scope change, the backend test must also cover the client-scoping branch: a non-System caller schedules a bundle carrying their OWN client id, a System-context caller is refused with systemClientNotScopable, and the history/in-progress queries exclude another tenant's manual runs while still including System runs.",
-          "refs": [
-            "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
-            "tools/app-shell/src/pages/acct-process-monitor/useAcctProcessMonitor.js",
-            "com.etendoerp.go src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitor.java"
-          ]
-        },
         {
           "id": "manual-trigger-runtime-verification",
           "kind": "open",
@@ -366,28 +357,42 @@
         "unit": [
           {
             "root": "frontend",
-            "path": "tools/app-shell/src/pages/__tests__/AcctProcessMonitorPage.vitest.jsx",
-            "expected": true,
-            "note": "Not yet written — owned by the test-generator agent's task for ETP-5269."
+            "path": "tools/app-shell/src/pages/__tests__/AcctProcessMonitorPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/useAcctProcessMonitor.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/RunStatusPill.vitest.jsx"
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
-            "expected": true,
-            "note": "Existing spec; needs a case for the new item-level flag gate."
+            "note": "Shared spec; carries the item-level flag-gate cases for this feature."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitorTest.java",
+            "note": "EXISTS on feature/ETP-5269 in the com.etendoerp.go worktree. The scorer resolves roots.backend to etendo_core/modules/com.etendoerp.go, which is the MAIN checkout and currently sits on a different branch, so it reports this file missing. Left scoring as-is on purpose: marking it expected:true would suppress a real 5 pts on every future run to paper over a local path artifact that disappears once the branches are co-located."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoPseudoSpecDispatcherTest.java",
+            "note": "Shared dispatcher spec; carries the acctprocessmonitor routing case."
           }
         ],
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/acct-process-monitor.mocked.spec.js",
-            "expected": true,
-            "note": "Not yet written — owned by the test-generator agent's task for ETP-5269."
+            "path": "e2e/tests/flows/acct-process-monitor.mocked.spec.js"
           }
         ]
       },
       "$scopeChangeComment": "2026-09-10, human decision: a manual run must post ONLY the triggering client's accounting, not the instance-wide System scope the automatic cadence uses. Implemented by building the one-shot bundle from the CALLING session's client instead of the recurring row's stored ob_context; AcctServerProcess.doExecute already branches to a single-client path when the context client is not '0', so no change to core was needed. This closed the system-scope-of-a-tenant-triggered-run item, which is why it no longer appears above.",
-      "$defectFoundComment": "Reading AcctServerProcess for the scope change surfaced a defect in the first implementation: it used Channel.DIRECT, and AcctServerProcess sets isDirect from the channel and then loads its table/org/date parameters from AD_PINSTANCE_PARA. A scheduled one-shot has no pinstance, and those generated finders return \"\" rather than null, so strOrg would have been silently overwritten from \"0\" to \"\" and the run would have reported success while posting nothing. Now Channel.BACKGROUND, which keeps isDirect false and takes the same path as the automatic run. Trade-off accepted: a BACKGROUND one-shot interrupted between INSERT and firing is re-fired once after a restart (DIRECT rows are marked SYR and skipped) — harmless, since AcctServer only posts still-unposted documents."
+      "$defectFoundComment": "Reading AcctServerProcess for the scope change surfaced a defect in the first implementation: it used Channel.DIRECT, and AcctServerProcess sets isDirect from the channel and then loads its table/org/date parameters from AD_PINSTANCE_PARA. A scheduled one-shot has no pinstance, and those generated finders return \"\" rather than null, so strOrg would have been silently overwritten from \"0\" to \"\" and the run would have reported success while posting nothing. Now Channel.BACKGROUND, which keeps isDirect false and takes the same path as the automatic run. Trade-off accepted: a BACKGROUND one-shot interrupted between INSERT and firing is re-fired once after a restart (DIRECT rows are marked SYR and skipped) — harmless, since AcctServer only posts still-unposted documents.",
+      "$coverageComment": "The unit-and-e2e-coverage deferred item was CLOSED on 2026-09-10: it was written while DEV had shipped implementation only, and the branch now carries the frontend vitest specs and the two JUnit suites listed in testSpecs below. It was charging 3 pts of debt that no longer existed."
     }
   ]
 }

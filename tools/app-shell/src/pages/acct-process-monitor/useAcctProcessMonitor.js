@@ -15,8 +15,16 @@ import {
 /** How many history rows to show. Well under the backend's own 100 cap. */
 export const HISTORY_LIMIT = 20;
 
-/** Poll cadence while a run is in progress. Idle pages do not poll at all. */
+/** Poll cadence while a run is in progress or awaited. Idle pages do not poll at all. */
 const RUNNING_POLL_MS = 5000;
+
+/**
+ * How long to keep polling after a successful trigger while waiting for the run to become
+ * observable. Generous on purpose: the accounting run itself takes well under a second, but the
+ * gap being covered is scheduler latency plus one poll interval, and giving up early would put the
+ * page back in the state this deadline exists to prevent — idle, with nothing having appeared.
+ */
+const AWAIT_RUN_MS = 60000;
 
 /**
  * The full `AD_PROCESS_RUN.STATUS` code set, from `org.openbravo.scheduling.Process`. Mapped to a
@@ -74,6 +82,13 @@ export function useAcctProcessMonitor() {
   const [state, setState] = useState(EMPTY_STATE);
   const [triggering, setTriggering] = useState(false);
   const [triggerOutcome, setTriggerOutcome] = useState(null);
+  // Timestamp after which we stop waiting for a triggered run to show up; null when not waiting.
+  const [awaitingUntil, setAwaitingUntil] = useState(null);
+  // The newest run id at the moment of the trigger — the baseline "a new run appeared" is measured
+  // against. A ref, not state: it must be readable synchronously inside `trigger`.
+  const awaitedAfterRunId = useRef(null);
+  // Mirrors the newest run id for that synchronous read, since `state` is a render-time snapshot.
+  const latestRunIdRef = useRef(null);
   // Guards against a poll or a late in-flight response overwriting state after unmount.
   const mounted = useRef(true);
 
@@ -127,30 +142,69 @@ export function useAcctProcessMonitor() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Only poll while the backend says something is actually running. An idle monitor page costs
-  // nothing, and the poll stops on its own as soon as the run leaves PRC.
   const running = Boolean(state.data?.running);
+
+  // Poll while EITHER the backend reports a run in progress, OR we have just started one and are
+  // still waiting for it to become observable.
+  //
+  // `running` alone is not enough, and this is the bug that shipped: the trigger refuses outright
+  // when a run is already in progress, so `running` is false in every SUCCESSFUL trigger response.
+  // Worse, `ProcessMonitor` writes the AD_PROCESS_RUN row on the scheduler's own thread, so the
+  // triggering response frequently predates the row entirely. Keyed on `running` alone the poll
+  // never started, and the page kept promising "it will appear in the history shortly" while
+  // nothing ever arrived without a manual refresh.
+  const awaitingRun = awaitingUntil !== null && Date.now() < awaitingUntil;
+  const shouldPoll = running || awaitingRun;
   useEffect(() => {
-    if (!running) return undefined;
+    if (!shouldPoll) return undefined;
     const id = setInterval(() => { load({ silent: true }); }, RUNNING_POLL_MS);
     return () => clearInterval(id);
-  }, [running, load]);
+  }, [shouldPoll, load]);
+
+  // Stop waiting as soon as the run becomes observable — a new newest-run id, or the backend
+  // reporting PRC. After that `running` alone governs, so the poll ends when the run finishes.
+  // The deadline is the backstop for the outcomes that never produce either signal: a run that
+  // starts AND finishes between two polls, or a job the scheduler silently dropped.
+  const latestRunId = state.data?.lastRun?.id ?? null;
+  useEffect(() => { latestRunIdRef.current = latestRunId; }, [latestRunId]);
+  useEffect(() => {
+    if (awaitingUntil === null) return undefined;
+    if (running || (latestRunId !== null && latestRunId !== awaitedAfterRunId.current)) {
+      setAwaitingUntil(null);
+      return undefined;
+    }
+    // Re-evaluate once the deadline passes, so a page left open stops polling on its own.
+    const remaining = awaitingUntil - Date.now();
+    if (remaining <= 0) {
+      setAwaitingUntil(null);
+      return undefined;
+    }
+    const id = setTimeout(() => { if (mounted.current) setAwaitingUntil(null); }, remaining);
+    return () => clearTimeout(id);
+  }, [awaitingUntil, running, latestRunId]);
 
   const trigger = useCallback(async () => {
     setTriggering(true);
     setTriggerOutcome(null);
+    // Remember which run was newest BEFORE the trigger, so "a new run appeared" is a comparison
+    // rather than a guess. Captured here, not in the effect, which would race the response.
+    awaitedAfterRunId.current = latestRunIdRef.current;
     try {
       const payload = await triggerAcctProcessRun(HISTORY_LIMIT);
       applyPayload(payload);
       if (mounted.current) {
         // `started: false` on a 200 is a legitimate refusal (already running, scheduler in
         // standby, …). Surface the reason rather than implying the run began.
-        setTriggerOutcome(payload?.triggered || { started: false, reason: 'scheduleFailed' });
+        const outcome = payload?.triggered || { started: false, reason: 'scheduleFailed' };
+        setTriggerOutcome(outcome);
+        // Only a run we actually started is worth waiting for. A refusal has nothing coming.
+        setAwaitingUntil(outcome.started ? Date.now() + AWAIT_RUN_MS : null);
       }
     } catch (err) {
       applyError(err);
       if (mounted.current) {
         setTriggerOutcome({ started: false, reason: 'scheduleFailed' });
+        setAwaitingUntil(null);
       }
     } finally {
       if (mounted.current) setTriggering(false);
@@ -160,6 +214,10 @@ export function useAcctProcessMonitor() {
   return {
     ...state,
     running,
+    // True from a successful trigger until the run becomes observable or the deadline lapses. The
+    // page uses it to keep the button disabled and the spinner up across that gap — otherwise the
+    // UI would look idle while a run it just started was still on its way.
+    awaitingRun,
     triggering,
     triggerOutcome,
     trigger,

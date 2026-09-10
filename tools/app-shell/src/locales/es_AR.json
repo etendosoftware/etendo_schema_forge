@@ -16626,6 +16626,7 @@
     "acctProcessManualRunHint": "Ejecutarlo ahora procesa solo la contabilidad pendiente de esta empresa, y es adicional a la programación automática, que no se modifica.",
     "acctProcessNotScheduledHint": "Este proceso no tiene programación automática en esta instancia, por lo que no puede lanzarse desde aquí.",
     "acctProcessRunningNow": "Hay una ejecución en curso...",
+    "acctProcessStartingNow": "Iniciando la ejecución...",
     "acctProcessTriggerStarted": "Ejecución iniciada. Aparecerá en el historial en unos instantes.",
     "acctProcessTriggerAlreadyRunning": "Ya hay una ejecución en curso. Espera a que termine antes de iniciar otra.",
     "acctProcessTriggerNotScheduled": "El proceso no tiene programación automática, por lo que no puede lanzarse desde aquí.",

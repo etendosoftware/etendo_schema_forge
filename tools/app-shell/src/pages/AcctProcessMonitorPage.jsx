@@ -42,13 +42,26 @@ import RunStatusPill from './acct-process-monitor/RunStatusPill.jsx';
  * feature flag and `capability` key are visual gating only.
  */
 
+/*
+ * The three local components below take `data-testid` rather than a custom `testId` prop, and
+ * every call site passes one explicitly.
+ *
+ * That is deliberate and load-bearing, not styling. `scripts/add-data-testid.cjs` appends a
+ * `data-testid="<Component>__<hash-of-file-path>"` to any JSX element that lacks one — the hash is
+ * per FILE, so every element in this file would get the SAME value — and it skips an element that
+ * already carries one. A local component whose props were `{ testId }` therefore ended up with two
+ * attributes: the meaningful `testId` it used, and a codemod-generated `data-testid` it silently
+ * dropped on the floor. Naming the prop `data-testid` and forwarding it collapses those into one
+ * attribute the codemod leaves alone.
+ */
+
 /** Renders the loading / error / no-access shells, extracted to keep the three shapes identical. */
-function StatusCard({ testId, className, children }) {
+function StatusCard({ 'data-testid': dataTestId, className, children }) {
   return (
-    <Card data-testid={testId}>
+    <Card data-testid={dataTestId}>
       <CardContent
         className={`flex flex-col items-center justify-center text-center ${className}`}
-        data-testid="CardContent__17e70d">
+        data-testid="AcctProcessMonitorPage__statusShellBody">
         {children}
       </CardContent>
     </Card>
@@ -56,15 +69,17 @@ function StatusCard({ testId, className, children }) {
 }
 
 /** A server wall-clock instant, or an em dash when the run has not reached that point yet. */
-function Timestamp({ value }) {
+function Timestamp({ value, 'data-testid': dataTestId }) {
   const parsed = parseRunTimestamp(value);
-  if (!parsed) return <span className="text-muted-foreground">{'—'}</span>;
-  return <span>{parsed.toLocaleString()}</span>;
+  if (!parsed) {
+    return <span className="text-muted-foreground" data-testid={dataTestId}>{'—'}</span>;
+  }
+  return <span data-testid={dataTestId}>{parsed.toLocaleString()}</span>;
 }
 
-function SummaryTile({ label, children, testId }) {
+function SummaryTile({ label, children, 'data-testid': dataTestId }) {
   return (
-    <div className="flex flex-col gap-1" data-testid={testId}>
+    <div className="flex flex-col gap-1" data-testid={dataTestId}>
       <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
       <span className="text-sm font-medium text-foreground">{children}</span>
     </div>
@@ -81,6 +96,7 @@ export default function AcctProcessMonitorPage() {
     notInstalled,
     data,
     running,
+    awaitingRun,
     triggering,
     triggerOutcome,
     trigger,
@@ -98,8 +114,8 @@ export default function AcctProcessMonitorPage() {
         if (loading) {
           return (
             <div className="space-y-3" data-testid="AcctProcessMonitorPage__loading">
-              <Skeleton className="h-32 w-full" data-testid="Skeleton__17e70d" />
-              <Skeleton className="h-64 w-full" data-testid="Skeleton__17e70d" />
+              <Skeleton className="h-32 w-full" data-testid="AcctProcessMonitorPage__statusSkeleton" />
+              <Skeleton className="h-64 w-full" data-testid="AcctProcessMonitorPage__historySkeleton" />
             </div>
           );
         }
@@ -107,9 +123,8 @@ export default function AcctProcessMonitorPage() {
         if (error) {
           return (
             <StatusCard
-              testId="AcctProcessMonitorPage__error"
-              className="gap-3 py-12"
-              data-testid="StatusCard__17e70d">
+              data-testid="AcctProcessMonitorPage__error"
+              className="gap-3 py-12">
               <p className="text-sm text-muted-foreground">{ui('acctProcessLoadError')}</p>
               <Button
                 variant="outline"
@@ -125,9 +140,8 @@ export default function AcctProcessMonitorPage() {
         if (denied) {
           return (
             <StatusCard
-              testId="AcctProcessMonitorPage__noAccess"
-              className="gap-2 py-16"
-              data-testid="StatusCard__17e70d">
+              data-testid="AcctProcessMonitorPage__noAccess"
+              className="gap-2 py-16">
               <ShieldAlert
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="ShieldAlert__17e70d" />
@@ -142,9 +156,8 @@ export default function AcctProcessMonitorPage() {
         if (notInstalled) {
           return (
             <StatusCard
-              testId="AcctProcessMonitorPage__notInstalled"
-              className="gap-2 py-16"
-              data-testid="StatusCard__17e70d">
+              data-testid="AcctProcessMonitorPage__notInstalled"
+              className="gap-2 py-16">
               <TriangleAlert
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="TriangleAlert__17e70d" />
@@ -164,7 +177,7 @@ export default function AcctProcessMonitorPage() {
         return (
           <div className="space-y-6" data-testid="AcctProcessMonitorPage__content">
             <Card data-testid="AcctProcessMonitorPage__statusCard">
-              <CardContent className="flex flex-col gap-6 py-6" data-testid="CardContent__17e70d">
+              <CardContent className="flex flex-col gap-6 py-6" data-testid="AcctProcessMonitorPage__statusCardBody">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1">
                     <h2 className="text-lg font-medium text-foreground">
@@ -187,9 +200,11 @@ export default function AcctProcessMonitorPage() {
                     </Button>
                     <Button
                       onClick={trigger}
-                      // Off while a trigger is in flight AND while the backend still reports a run
-                      // in progress, so a second click cannot stack a duplicate one-shot request.
-                      disabled={triggering || running || !data?.scheduled}
+                      // Off while the request is in flight, while the backend reports a run in
+                      // progress, AND across the gap where a run we just started is not observable
+                      // yet (`awaitingRun`) — without that last one the button re-enabled a moment
+                      // after the click and invited a duplicate one-shot.
+                      disabled={triggering || running || awaitingRun || !data?.scheduled}
                       data-testid="AcctProcessMonitorPage__runNow"
                     >
                       {triggering
@@ -203,24 +218,21 @@ export default function AcctProcessMonitorPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <SummaryTile
                     label={ui('acctProcessLastStatus')}
-                    testId="AcctProcessMonitorPage__lastStatus"
-                    data-testid="SummaryTile__17e70d">
+                    data-testid="AcctProcessMonitorPage__lastStatus">
                     {lastRun
-                      ? <RunStatusPill status={lastRun.status} data-testid="RunStatusPill__17e70d" />
+                      ? <RunStatusPill status={lastRun.status} data-testid="AcctProcessMonitorPage__lastStatusPill" />
                       : <span className="text-muted-foreground">{ui('acctProcessNeverRun')}</span>}
                   </SummaryTile>
                   <SummaryTile
                     label={ui('acctProcessLastRun')}
-                    testId="AcctProcessMonitorPage__lastRun"
-                    data-testid="SummaryTile__17e70d">
-                    <Timestamp value={lastRun?.startTime} data-testid="Timestamp__17e70d" />
+                    data-testid="AcctProcessMonitorPage__lastRun">
+                    <Timestamp value={lastRun?.startTime} data-testid="AcctProcessMonitorPage__lastRunTime" />
                   </SummaryTile>
                   <SummaryTile
                     label={ui('acctProcessNextRun')}
-                    testId="AcctProcessMonitorPage__nextRun"
-                    data-testid="SummaryTile__17e70d">
+                    data-testid="AcctProcessMonitorPage__nextRun">
                     {data?.scheduled
-                      ? <Timestamp value={data?.nextRunTime} data-testid="Timestamp__17e70d" />
+                      ? <Timestamp value={data?.nextRunTime} data-testid="AcctProcessMonitorPage__nextRunTime" />
                       : (
                         <span className="text-muted-foreground">
                           {ui('acctProcessNotScheduled')}
@@ -235,13 +247,16 @@ export default function AcctProcessMonitorPage() {
                     : ui('acctProcessNotScheduledHint')}
                 </p>
 
-                {running && (
+                {(running || awaitingRun) && (
                   <p
                     className="text-sm text-muted-foreground flex items-center gap-2"
                     data-testid="AcctProcessMonitorPage__running"
                   >
                     <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__17e70d" />
-                    {ui('acctProcessRunningNow')}
+                    {/* `awaitingRun` without `running` is the window between handing the job to
+                        Quartz and the run row existing. Saying "starting" there is honest; saying
+                        nothing would make the page look idle right after a click. */}
+                    {running ? ui('acctProcessRunningNow') : ui('acctProcessStartingNow')}
                   </p>
                 )}
 
@@ -257,7 +272,7 @@ export default function AcctProcessMonitorPage() {
               </CardContent>
             </Card>
             <Card data-testid="AcctProcessMonitorPage__historyCard">
-              <CardContent className="py-6 space-y-4" data-testid="CardContent__17e70d">
+              <CardContent className="py-6 space-y-4" data-testid="AcctProcessMonitorPage__historyCardBody">
                 <h3 className="text-sm font-medium text-foreground">
                   {ui('acctProcessHistoryTitle')}
                 </h3>
@@ -284,10 +299,10 @@ export default function AcctProcessMonitorPage() {
                         {history.map((run) => (
                           <TableRow key={run.id} data-testid={`AcctProcessMonitorPage__row-${run.id}`}>
                             <TableCell data-testid="TableCell__17e70d">
-                              <RunStatusPill status={run.status} data-testid="RunStatusPill__17e70d" />
+                              <RunStatusPill status={run.status} data-testid={`AcctProcessMonitorPage__statusPill-${run.id}`} />
                             </TableCell>
-                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.startTime} data-testid="Timestamp__17e70d" /></TableCell>
-                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.endTime} data-testid="Timestamp__17e70d" /></TableCell>
+                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.startTime} data-testid={`AcctProcessMonitorPage__start-${run.id}`} /></TableCell>
+                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.endTime} data-testid={`AcctProcessMonitorPage__end-${run.id}`} /></TableCell>
                             <TableCell data-testid="TableCell__17e70d">
                               {run.duration || <span className="text-muted-foreground">{'—'}</span>}
                             </TableCell>

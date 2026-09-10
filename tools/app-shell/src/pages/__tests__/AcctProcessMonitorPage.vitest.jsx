@@ -70,7 +70,7 @@ vi.mock('@/components/ui/table', () => ({
 
 // ── Import under test ────────────────────────────────────────────────────────
 
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AcctProcessMonitorPage from '../AcctProcessMonitorPage.jsx';
 
@@ -251,7 +251,7 @@ describe('AcctProcessMonitorPage', () => {
       render(<AcctProcessMonitorPage />);
       expect(screen.getByTestId('AcctProcessMonitorPage__lastStatus').textContent)
         .toBe('acctProcessLastStatusacctProcessNeverRun');
-      expect(screen.queryByTestId('RunStatusPill__17e70d')).toBeNull();
+      expect(screen.queryByTestId('AcctProcessMonitorPage__lastStatusPill')).toBeNull();
     });
   });
 
@@ -374,13 +374,13 @@ describe('AcctProcessMonitorPage', () => {
 
     it('renders each row status as a human label, never the raw code', () => {
       render(<AcctProcessMonitorPage />);
-      const success = within(screen.getByTestId('AcctProcessMonitorPage__row-run-1'));
-      expect(success.getByTestId('RunStatusPill__17e70d').textContent)
-        .toBe('acctProcessStatusSuccess');
-      const failed = within(screen.getByTestId('AcctProcessMonitorPage__row-run-2'));
-      expect(failed.getByTestId('RunStatusPill__17e70d')).toHaveAttribute('data-status', 'ERR');
-      expect(failed.getByTestId('RunStatusPill__17e70d').textContent)
-        .toBe('acctProcessStatusError');
+      // Per-row testids. Every pill used to share one codemod-generated id, which made this
+      // query ambiguous the moment a second row existed.
+      const success = screen.getByTestId('AcctProcessMonitorPage__statusPill-run-1');
+      expect(success.textContent).toBe('acctProcessStatusSuccess');
+      const failed = screen.getByTestId('AcctProcessMonitorPage__statusPill-run-2');
+      expect(failed).toHaveAttribute('data-status', 'ERR');
+      expect(failed.textContent).toBe('acctProcessStatusError');
     });
 
     it('labels each row manual or automatic', () => {

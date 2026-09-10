@@ -584,11 +584,16 @@ export default function SideMenu({
   // flag-gated, so the common case costs one lookup and nothing else.
   const flagGatedItems = { 'acct-process-monitor': showAcctProcessMonitor };
 
+  // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
+  // from menuGroups, so returning early for that group let a favourited flag-gated item stay
+  // visible with the flag off — the one hole through which a gated entry could still be reached.
+  const isFlagVisible = item => flagGatedItems[item.name] !== false;
+
   const resolvedMenuGroups = menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
-      if (g.group === 'Favorites') return { ...g, items: favorites };
-      return { ...g, items: (g.items || []).filter(i => flagGatedItems[i.name] !== false) };
+      const items = g.group === 'Favorites' ? favorites : (g.items || []);
+      return { ...g, items: items.filter(isFlagVisible) };
     });
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);

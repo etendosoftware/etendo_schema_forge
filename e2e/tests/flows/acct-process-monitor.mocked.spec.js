@@ -10,8 +10,10 @@ import { login } from '../helpers/auth.js';
  *      route is registered unconditionally (same precedent as `/upgrade`) and
  *      `SFAcctProcessMonitor` enforces admin access itself. Both halves are asserted: the entry
  *      appears for an admin with the flag on, and is absent with it off.
- *   2. **Trigger → history refresh.** `?Action=trigger` returns the refreshed history in the SAME
- *      round trip, so the run the admin just started is on screen without a second poll.
+ *   2. **Trigger → convergence.** The triggering response canNOT contain the new run: the
+ *      backend hands the job to Quartz and returns, and the AD_PROCESS_RUN row is written later
+ *      on the scheduler's own thread. The page must therefore POLL until the run appears. The
+ *      mock models exactly that, so the spec fails if the poll regresses.
  *   3. **The log is never rendered.** `AD_PROCESS_RUN.LOG` is a CLOB of raw process output. The
  *      backend omits it; the fixtures below deliberately send one anyway, so this spec fails if a
  *      future change ever surfaces it in the DOM.
@@ -97,25 +99,46 @@ function envelope(payload) {
  */
 async function installMonitorMock(page, { readOverrides = {}, triggered } = {}) {
   const requests = [];
+  // Whether a manual run has been triggered yet. The mock is STATEFUL because the real backend is
+  // asynchronous, and a stateless mock can only fake one of the two instants.
+  let triggeredAt = null;
+
   await page.route('**/sws/neo/acctprocessmonitor**', async (route) => {
     const url = route.request().url();
     requests.push(url);
-    const isTrigger = url.includes('Action=trigger');
-    if (isTrigger) {
+
+    if (url.includes('Action=trigger')) {
+      const outcome = triggered ?? { started: true, reason: 'started' };
+      if (outcome.started) triggeredAt = Date.now();
+      // WHAT THE REAL BACKEND RETURNS, which is NOT what this mock used to claim:
+      //   running: FALSE — triggerManualRun refuses outright when a run is already in progress,
+      //     so a SUCCESSFUL trigger response necessarily reports nothing running; and
+      //   history WITHOUT the new run — ProcessMonitor writes the AD_PROCESS_RUN row on the
+      //     scheduler's thread, so the response that carries `started: true` predates the row.
+      // The previous fixture returned running:true and the new run already present. Both were
+      // fiction, and asserting them hid a real bug: the hook keyed its poll off `running`, so
+      // nothing ever appeared without a manual refresh. Do not "simplify" this back.
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: envelope(statusPayload([TRIGGERED_RUN, ...EXISTING_RUNS], {
-          running: true,
-          triggered: triggered ?? { started: true, reason: 'started' },
+        body: envelope(statusPayload(EXISTING_RUNS, {
+          running: false,
+          triggered: outcome,
         })),
       });
       return;
     }
+
+    // A plain read. Once a run has been triggered, it becomes observable — as it does in reality,
+    // a moment later — so only a client that POLLS after the trigger ever sees it.
+    const runs = triggeredAt ? [TRIGGERED_RUN, ...EXISTING_RUNS] : EXISTING_RUNS;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: envelope(statusPayload(EXISTING_RUNS, readOverrides)),
+      body: envelope(statusPayload(runs, {
+        running: Boolean(triggeredAt),
+        ...readOverrides,
+      })),
     });
   });
   return requests;
@@ -188,7 +211,7 @@ test.describe('Accounting process monitor — page', () => {
     await expect(pill).toHaveAttribute('data-tone', 'success');
   });
 
-  test('Run now sends Action=trigger and the freshly created run appears in the history', async ({ page }) => {
+  test('Run now converges on the new run by polling, with no manual refresh', async ({ page }) => {
     await openMonitor(page);
     await expect(page.getByTestId(`AcctProcessMonitorPage__row-${TRIGGERED_RUN.id}`)).toHaveCount(0);
 
@@ -198,19 +221,36 @@ test.describe('Accounting process monitor — page', () => {
     await page.getByTestId('AcctProcessMonitorPage__runNow').click();
     await triggerRequest;
 
-    await expect(page.getByTestId('AcctProcessMonitorPage__triggerOutcome')).toBeVisible();
     await expect(page.getByTestId('AcctProcessMonitorPage__triggerOutcome'))
       .toHaveAttribute('data-reason', 'started');
-    await expect(page.getByTestId(`AcctProcessMonitorPage__row-${TRIGGERED_RUN.id}`)).toBeVisible();
+
+    // The triggering response itself does NOT contain the new run — the mock reflects the real
+    // backend, where the AD_PROCESS_RUN row is written asynchronously after the response. The row
+    // can only arrive via the poll the successful trigger starts. THIS is the assertion that
+    // fails if the poll regresses to being keyed off `running` alone, which is exactly the bug
+    // the old always-true fixture concealed. Timeout exceeds one 5s poll interval.
+    await expect(page.getByTestId(`AcctProcessMonitorPage__row-${TRIGGERED_RUN.id}`))
+      .toBeVisible({ timeout: 20_000 });
   });
 
-  test('Run now locks itself while the backend reports the run in progress', async ({ page }) => {
+  test('Run now stays disabled across the gap before the run is observable', async ({ page }) => {
+    await openMonitor(page);
+    await page.getByTestId('AcctProcessMonitorPage__runNow').click();
+
+    // Immediately after the trigger the backend reports running:false and no new run, so nothing
+    // in the payload says "busy". The button must still be locked — otherwise a second click
+    // stacks a duplicate one-shot request in precisely the window where it is easiest to do.
+    await expect(page.getByTestId('AcctProcessMonitorPage__runNow')).toBeDisabled();
+    await expect(page.getByTestId('AcctProcessMonitorPage__running')).toBeVisible();
+  });
+
+  test('Run now stays locked once the backend reports the run in progress', async ({ page }) => {
     await openMonitor(page);
 
     await page.getByTestId('AcctProcessMonitorPage__runNow').click();
 
-    // The post-trigger payload carries running:true, which is what keeps a second click from
-    // stacking a duplicate one-shot request.
+    // Once the poll observes the run, the backend reports running:true and the lock is held by
+    // that rather than by the post-trigger grace window.
     await expect(page.getByTestId('AcctProcessMonitorPage__running')).toBeVisible();
     await expect(page.getByTestId('AcctProcessMonitorPage__runNow')).toBeDisabled();
   });
@@ -235,7 +275,11 @@ test.describe('Accounting process monitor — page', () => {
     await expect(page.locator('body')).not.toContainText(LOG_SENTINEL);
 
     await page.getByTestId('AcctProcessMonitorPage__runNow').click();
-    await expect(page.getByTestId(`AcctProcessMonitorPage__row-${TRIGGERED_RUN.id}`)).toBeVisible();
+    // Wait for the run to arrive VIA THE POLL — the triggering response does not carry it (see
+    // installMonitorMock). Without this the assertion below would pass trivially, by checking a
+    // page that had not yet rendered the new row at all.
+    await expect(page.getByTestId(`AcctProcessMonitorPage__row-${TRIGGERED_RUN.id}`))
+      .toBeVisible({ timeout: 20_000 });
 
     await expect(page.locator('body')).not.toContainText(LOG_SENTINEL);
     // No log column, and no per-row drill-down that could reveal one.
