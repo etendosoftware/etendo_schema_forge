@@ -94,7 +94,7 @@ describe('OrganizationPage', () => {
 
   it('marks the matching business type card as selected (check-dot visible) when etgoBusinessType is already set', async () => {
     globalThis.fetch = makeFetchMock([
-      [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', etgoBusinessType: 'AD' })],
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', etgoBusinessType: 'FL' })],
       [`/organization/information/${ORG_ID}`, () => jsonResponse({})],
     ]);
 
@@ -106,8 +106,8 @@ describe('OrganizationPage', () => {
     // `loading` settles, one render after `name` is already on screen — wait on the
     // card's own settled aria-pressed rather than assuming it's there once `name` renders,
     // so this doesn't race under heavy parallel test load.
-    await waitFor(() => expect(screen.getByTestId('BusinessTypeCards__option-AD')).toHaveAttribute('aria-pressed', 'true'));
-    expect(screen.getByTestId('BusinessTypeCards__check-AD')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('BusinessTypeCards__option-FL')).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByTestId('BusinessTypeCards__check-FL')).toBeInTheDocument();
     expect(screen.getByTestId('BusinessTypeCards__option-CO')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('BusinessTypeCards__check-CO')).not.toBeInTheDocument();
 
@@ -118,9 +118,9 @@ describe('OrganizationPage', () => {
     // Real --eg-yellow* CSS custom properties, defined in
     // schema_forge_core/packages/app-shell-core/src/styles.css since the review round 4
     // token move — no more inline hex literals in this component's className.
-    expect(screen.getByTestId('BusinessTypeCards__option-AD').className).toContain('bg-[var(--eg-yellow-soft)]');
-    expect(screen.getByTestId('BusinessTypeCards__option-AD').className).toContain('border-[var(--eg-yellow-line)]');
-    expect(screen.getByTestId('BusinessTypeCards__dot-AD').className).toContain('bg-[var(--eg-yellow)]');
+    expect(screen.getByTestId('BusinessTypeCards__option-FL').className).toContain('bg-[var(--eg-yellow-soft)]');
+    expect(screen.getByTestId('BusinessTypeCards__option-FL').className).toContain('border-[var(--eg-yellow-line)]');
+    expect(screen.getByTestId('BusinessTypeCards__dot-FL').className).toContain('bg-[var(--eg-yellow)]');
     expect(screen.getByTestId('BusinessTypeCards__option-CO').className).not.toContain('bg-[var(--eg-yellow-soft)]');
   });
 
@@ -135,10 +135,8 @@ describe('OrganizationPage', () => {
 
     expect(screen.getByTestId('BusinessTypeCards__option-CO')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('BusinessTypeCards__option-FL')).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByTestId('BusinessTypeCards__option-AD')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('BusinessTypeCards__check-CO')).not.toBeInTheDocument();
     expect(screen.queryByTestId('BusinessTypeCards__check-FL')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('BusinessTypeCards__check-AD')).not.toBeInTheDocument();
   });
 
   describe('deriveCountryFromIdentifier heuristic — País pill', () => {
