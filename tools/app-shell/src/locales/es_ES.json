@@ -20547,7 +20547,7 @@
     "backendError.cannotDeactivateOwnAccount": "No puede desactivar su propia cuenta de usuario.",
     "backendError.cannotDeactivateLastAdmin": "No se puede desactivar al último administrador activo de este cliente.",
     "backendError.cannotDeleteOwnAccount": "No puede eliminar su propia cuenta de usuario.",
-    "backendError.cannotDeleteOwner": "Este usuario es el propietario del inquilino y no puede eliminarse.",
+    "backendError.cannotDeleteOwner": "Este usuario es el propietario de la empresa y no puede eliminarse.",
     "backendError.cannotDeleteLastAdmin": "No se puede eliminar al último administrador activo de este cliente.",
     "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",
     "uomTypeArea": "Área",
