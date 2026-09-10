@@ -93,36 +93,42 @@ describe('OrderCreateInvoice', () => {
   // surfaces this exact message, never sent Accept-Language. The backend
   // (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext)
   // silently falls back to AD_User.AD_Language when that header is absent.
-  describe('Confirm-modal request headers carry Accept-Language (ETP-5024)', () => {
-    it('imports the shared buildHeaders() helper instead of hand-rolling headers', () => {
-      assert.match(src, /import \{ buildHeaders \} from '@\/auth\/api\.js';/);
+  //
+  // ETP-4576: the fix survives, by a different route. `buildHeaders` and the `headers` value
+  // are gone from this file — every request now goes through `apiFetch` (useApiFetch), which
+  // sends Accept-Language on every call and resolves the credential from the active scheme
+  // (cookie session or legacy bearer). What these tests pin is unchanged in substance: the
+  // documentAction/CO POST must travel through the shared helper, never a hand-rolled header.
+  describe('Confirm-modal requests go through the shared helper (ETP-5024 / ETP-4576)', () => {
+    it('imports the shared useApiFetch hook instead of hand-rolling headers', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js';/);
     });
 
-    it('OrderCreateInvoice builds its headers via buildHeaders(token)', () => {
+    it('OrderCreateInvoice takes its request helper from useApiFetch', () => {
       const fnBody = src.slice(
         src.indexOf('export default function OrderCreateInvoice'),
         src.indexOf('export function ConfirmModal'),
       );
-      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+      assert.match(fnBody, /const apiFetch = useApiFetch\(/);
     });
 
-    it('ManageDocsLauncher builds its headers via buildHeaders(token)', () => {
+    it('ManageDocsLauncher takes its request helper from useApiFetch', () => {
       const fnBody = src.slice(src.indexOf('export function ManageDocsLauncher'));
-      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+      assert.match(fnBody, /const apiFetch = useApiFetch\(/);
     });
 
     it('no header object in this file is hand-rolled with only Authorization/Content-Type (would silently drop Accept-Language)', () => {
       assert.doesNotMatch(src, /Authorization: `Bearer \$\{token\}`/);
     });
 
-    it('the documentAction/CO POST that surfaces the on-hold refusal reuses this same headers value', () => {
+    it('the documentAction/CO POST that surfaces the on-hold refusal goes through apiFetch', () => {
       const confirmModalSrc = src.slice(
         src.indexOf('export function ConfirmModal'),
         src.indexOf('export function CreateDocsModal'),
       );
       assert.match(
         confirmModalSrc,
-        /fetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', headers, body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
+        /apiFetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
       );
     });
   });
