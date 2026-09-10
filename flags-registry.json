@@ -343,7 +343,7 @@
         {
           "id": "unit-and-e2e-coverage",
           "kind": "open",
-          "note": "DEV delivered the implementation only; tests are the test-generator agent's separate task in this same ticket and had not been written when this entry was created. Needs: a vitest spec for the page's loading/error/denied/notInstalled/content branches and the trigger-refusal reasons, a spec for the SideMenu item-level flag gate, and a mocked Playwright flow. Backend needs a JUnit test for the admin gate and for the one-shot-request construction.",
+          "note": "DEV delivered the implementation only; tests are the test-generator agent's separate task in this same ticket and had not been written when this entry was created. Needs: a vitest spec for the page's loading/error/denied/notInstalled/content branches and the trigger-refusal reasons, a spec for the SideMenu item-level flag gate, and a mocked Playwright flow. Backend needs a JUnit test for the admin gate and for the one-shot-request construction. Since the ETP-5269 scope change, the backend test must also cover the client-scoping branch: a non-System caller schedules a bundle carrying their OWN client id, a System-context caller is refused with systemClientNotScopable, and the history/in-progress queries exclude another tenant's manual runs while still including System runs.",
           "refs": [
             "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
             "tools/app-shell/src/pages/acct-process-monitor/useAcctProcessMonitor.js",
@@ -353,20 +353,12 @@
         {
           "id": "manual-trigger-runtime-verification",
           "kind": "open",
-          "note": "The trigger mechanism is verified from core source and from existing DB evidence (OBScheduler.schedule(ProcessBundle) inserts a fresh request with null timing, TriggerProvider maps that to IMMEDIATE, ProcessMonitor writes the AD_PROCESS_RUN row for any Quartz job regardless of channel), but no manual run has been executed against a deployed build yet — the Java was compile-checked only. QA must press the button on a real instance and confirm a new AD_PROCESS_RUN row appears AND that AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 is byte-for-byte unchanged apart from its scheduler-owned next_fire_time.",
+          "note": "The trigger mechanism is verified from core source and from existing DB evidence (OBScheduler.schedule(ProcessBundle) inserts a fresh request with null timing, TriggerProvider maps that to IMMEDIATE, ProcessMonitor writes the AD_PROCESS_RUN row for any Quartz job regardless of channel, and AcctServerProcess.doExecute processes a single client when the bundle context's client is not '0'), but no manual run has been executed against a deployed build yet — the Java was compile-checked only. QA must press the button on a real instance and confirm: a new AD_PROCESS_RUN row appears tagged with the CALLER's ad_client_id; only that client's documents were posted; AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 is unchanged apart from its scheduler-owned next_fire_time; and the run did NOT take the pinstance-dependent isDirect path (strOrg must stay '0').",
           "refs": [
             "org.openbravo.scheduling.OBScheduler#schedule(ProcessBundle)",
             "org.openbravo.scheduling.trigger.TriggerProvider#getTimingOption",
-            "org.openbravo.scheduling.ProcessMonitor#jobToBeExecuted"
-          ]
-        },
-        {
-          "id": "system-scope-of-a-tenant-triggered-run",
-          "kind": "open",
-          "note": "The accounting request on the reference instance is a System row (AD_Client_ID '0', user 100), and the manual run deliberately reuses its stored ob_context so a manual run does exactly what the automatic one does. Consequence: a client-admin of one tenant starts a run whose scope is the same System-wide scope the 5-minute schedule already has. That grants no capability the schedule does not already exercise unattended — it only makes it happen sooner — but whether a per-tenant admin should be able to advance a System-wide job is a product decision that has not been taken. Raised for the human, deliberately NOT self-accepted.",
-          "refs": [
-            "SFAcctProcessMonitor#triggerManualRun",
-            "AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 (ad_client_id '0')"
+            "org.openbravo.scheduling.ProcessMonitor#jobToBeExecuted",
+            "org.openbravo.erpCommon.ad_process.AcctServerProcess#doExecute — the client-scope branch"
           ]
         }
       ],
@@ -393,7 +385,9 @@
             "note": "Not yet written — owned by the test-generator agent's task for ETP-5269."
           }
         ]
-      }
+      },
+      "$scopeChangeComment": "2026-09-10, human decision: a manual run must post ONLY the triggering client's accounting, not the instance-wide System scope the automatic cadence uses. Implemented by building the one-shot bundle from the CALLING session's client instead of the recurring row's stored ob_context; AcctServerProcess.doExecute already branches to a single-client path when the context client is not '0', so no change to core was needed. This closed the system-scope-of-a-tenant-triggered-run item, which is why it no longer appears above.",
+      "$defectFoundComment": "Reading AcctServerProcess for the scope change surfaced a defect in the first implementation: it used Channel.DIRECT, and AcctServerProcess sets isDirect from the channel and then loads its table/org/date parameters from AD_PINSTANCE_PARA. A scheduled one-shot has no pinstance, and those generated finders return \"\" rather than null, so strOrg would have been silently overwritten from \"0\" to \"\" and the run would have reported success while posting nothing. Now Channel.BACKGROUND, which keeps isDirect false and takes the same path as the automatic run. Trade-off accepted: a BACKGROUND one-shot interrupted between INSERT and firing is re-fired once after a restart (DIRECT rows are marked SYR and skipped) — harmless, since AcctServer only posts still-unposted documents."
     }
   ]
 }

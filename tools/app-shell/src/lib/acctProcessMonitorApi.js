@@ -49,10 +49,15 @@ export async function fetchAcctProcessStatus(limit) {
  * recurring every-5-minutes schedule is never touched. See `SFAcctProcessMonitor`'s class javadoc
  * in `com.etendoerp.go` for why that mechanism was chosen.
  *
+ * **The run is scoped to the caller's own company.** Unlike the automatic cadence — which runs in
+ * the System context and therefore posts every tenant — a manual run posts only the calling
+ * client's pending accounting. The backend derives that client from the session, so there is no
+ * client parameter here to get wrong or to tamper with.
+ *
  * **The trigger can legitimately refuse.** A successful HTTP response still carries
  * `triggered.started === false` when the backend declined — `triggered.reason` is then one of
- * `alreadyRunning`, `notScheduled`, `schedulerUnavailable` or `scheduleFailed`. Callers must
- * surface that as a message, never assume a 200 means the run began.
+ * `alreadyRunning`, `notScheduled`, `schedulerUnavailable`, `systemClientNotScopable` or
+ * `scheduleFailed`. Callers must surface that as a message, never assume a 200 means the run began.
  *
  * `Action=trigger` is required explicitly: a bare GET to this endpoint only reads. That keeps an
  * accidental, prefetched or retried request from firing the process.

@@ -29,6 +29,11 @@ import RunStatusPill from './acct-process-monitor/RunStatusPill.jsx';
  * "Run now" replaces the schedule will keep pressing it. The next-automatic-run time therefore
  * sits next to the button, with an explicit hint.
  *
+ * **A manual run covers THIS company only.** The automatic cadence runs as System and posts every
+ * tenant; a manual run posts only the caller's own client. The hint says so, because "run the
+ * accounting process" would otherwise read as instance-wide — which is what it used to be before
+ * the ETP-5269 scope change.
+ *
  * **No logs, by design.** `AD_PROCESS_RUN.LOG` is a CLOB of raw process output; the backend never
  * puts it on the wire and there is no drill-down here. Status, timings and duration only. Do not
  * add a log column or a row-expand — see `SFAcctProcessMonitor`'s class javadoc.
@@ -317,6 +322,9 @@ function triggerMessageKey({ started, reason }) {
     case 'alreadyRunning': return 'acctProcessTriggerAlreadyRunning';
     case 'notScheduled': return 'acctProcessTriggerNotScheduled';
     case 'schedulerUnavailable': return 'acctProcessTriggerSchedulerUnavailable';
+    // The caller's session is in the System context, which spans every tenant and so has no single
+    // company whose accounting the run could be limited to. Refused rather than silently widened.
+    case 'systemClientNotScopable': return 'acctProcessTriggerSystemClient';
     default: return 'acctProcessTriggerFailed';
   }
 }
