@@ -834,12 +834,15 @@ describe('useSurveyEngine', () => {
       expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
     });
 
-    it('does not load the remote config when there is no token', () => {
+    it('does not load the remote config when there is no token — inverted: the cookie carries the session', () => {
       useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice', token: null }));
 
       renderHook(() => useSurveyEngine());
 
-      expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(loadRemoteSurveyConfig).toHaveBeenCalled();
     });
   });
 });

@@ -9,8 +9,13 @@ import { useAccountMutations } from '../useAccountMutations.js';
 // `useApiFetch` shim (it imports auth via core's own relative path, which the `@/auth`
 // alias does not intercept), so every Authorization assertion silently saw `undefined`
 // until this was swapped for a real AuthProvider seeded with a token.
+// ETP-4576: `credentialMode` defaults to `auto`, which turns the mount-only session
+// restore ON, so every AuthProvider issues a GET /sws/go/session of its own. The
+// subject here is the hook request itself, not the restore, so the provider opts out
+// through the documented `restoreSession={null}` escape hatch and the fetch count
+// stays the hook one. Without it the restore lands as an extra call before the asserts.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>{children}</AuthProvider>
 );
 
 const ENTITY_URL = '/etendo/sws/neo/financial-account/account';

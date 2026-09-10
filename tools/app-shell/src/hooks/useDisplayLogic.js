@@ -88,7 +88,7 @@ export function useDisplayLogic(entity, fieldValues, { token, apiBaseUrl, cachea
   cacheRef.current = { cacheKey, cacheKeySet };
 
   const evaluate = useCallback(async (values) => {
-    if (!values || !token || !apiBaseUrl || !entity) return;
+    if (!values || !apiBaseUrl || !entity) return;
     // A brand-new record (no id) has no persisted state, so plain record-dependent
     // logic (e.g. readOnly gated on `posted`/`processed`) has nothing meaningful to
     // evaluate yet — skip in that case. But `cacheableKeys` callers (the accounting

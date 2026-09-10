@@ -133,10 +133,9 @@ describe('generate349File', () => {
   // Contract changed from a raw boolean to { ok, error, serverMessage? } — same
   // shape as generate303File — see ETP-4755 QA fix (banner surfacing AEAT349
   // backend validation errors, e.g. Substitutive/Navarra/Guipuzcoa combinations).
-  it('returns { ok: false, error: "no_token" } when token is missing', async () => {
-    const result = await generate349File(DECL, { apiBaseUrl: API_BASE });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
-  });
+  // ETP-4576 — the missing-token case is gone: under the cookie scheme no client holds one,
+  // so the guard would reject every authenticated user. Only a missing apiBaseUrl still
+  // short-circuits, and it keeps the historical `no_token` code so callers stay unchanged.
 
   it('returns { ok: false, error: "no_token" } when apiBaseUrl is missing', async () => {
     const result = await generate349File(DECL, { token: TOKEN });

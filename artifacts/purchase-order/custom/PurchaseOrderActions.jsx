@@ -12,6 +12,7 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -58,10 +59,13 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const isCompleted = status === 'CO';
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -92,9 +96,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     (async () => {
       try {
         const [receiptRes, linesRes, invoiceRes] = await Promise.all([
-          fetch(`${base}/goods-receipt/goodsReceipt?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`, { headers }),
-          fetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`, { headers }),
+          apiFetch(`${base}/goods-receipt/goodsReceipt?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`),
+          apiFetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`),
         ]);
         if (cancelled) return;
 
@@ -109,7 +113,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, headers, apiBaseUrl]);
+  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl]);
 
   // ETP-5063 — a confirm that created neither a receipt nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -156,7 +160,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
       recordId={recordId}
       data={data}
       apiBaseUrl={apiBaseUrl}
-      headers={headers}
       onClose={() => setShowClone(false)}
       onCloned={(newId) => {
         setShowClone(false);
@@ -228,7 +231,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           orderId={recordId}
           data={data}
           apiBaseUrl={apiBaseUrl}
-          headers={headers}
           onSave={onSave}
           onClose={() => setShowConfirm(false)}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
@@ -240,7 +242,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           orderId={recordId}
           data={data}
           base={base}
-          headers={headers}
           currency={currency}
           derived={derived}
           onClose={() => setShowActions(false)}
@@ -271,7 +272,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, onSave }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch('');
   const ui      = useUI();
   const [createReceipt,  setCreateReceipt]  = useState(false);
   const [createInvoice,  setCreateInvoice]  = useState(false);
@@ -291,8 +294,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${orderUrl}/${orderId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${orderUrl}/${orderId}`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -307,7 +310,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId, orderUrl, apiBaseUrl, headers]);
+  }, [orderId, orderUrl, apiBaseUrl, apiFetch]);
 
   // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
   // header edit the user made before clicking Confirm) must win over the
@@ -367,9 +370,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
       try {
-        const processRes = await fetch(
+        const processRes = await apiFetch(
           `${orderUrl}/${orderId}/action/documentAction`,
-          { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
@@ -395,8 +398,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     let currentReceipt = null;
     if (createReceipt && !receiptResult) {
       try {
-        const res = await fetch(`${orderUrl}/${orderId}/action/createGoodsReceipt`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${orderUrl}/${orderId}/action/createGoodsReceipt`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
@@ -419,8 +422,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     let currentInvoice = null;
     if (createInvoice && !invoiceResult) {
       try {
-        const res = await fetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
@@ -631,7 +634,9 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) 
 
 // ── CreateDocsModal (CO orders — create docs without re-confirming) ────────────
 
-export function CreateDocsModal({ orderId, data, base, headers, currency, derived, onClose, onCreated }) {
+export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const {
     needsReceipt, needsInvoice,
@@ -670,8 +675,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       const result = {};
 
       if (createReceipt) {
-        const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createGoodsReceipt`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${base}/purchase-order/header/${orderId}/action/createGoodsReceipt`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
@@ -683,8 +688,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       }
 
       if (createInvoice) {
-        const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${base}/purchase-order/header/${orderId}/action/createPurchaseInvoice`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
@@ -844,10 +849,9 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const [fetched, setFetched] = useState(null);
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     if (!orderId) return;
@@ -855,9 +859,9 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     (async () => {
       try {
         const [receiptRes, linesRes, invoiceRes] = await Promise.all([
-          fetch(`${base}/goods-receipt/goodsReceipt?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
-          fetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`, { headers }),
+          apiFetch(`${base}/goods-receipt/goodsReceipt?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
+          apiFetch(`${base}/purchase-invoice/header?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`),
         ]);
         if (cancelled) return;
         const receipts   = receiptRes.ok ? ((await receiptRes.json())?.response?.data ?? []) : [];
@@ -869,7 +873,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       }
     })();
     return () => { cancelled = true; };
-  }, [orderId, base, headers, apiBaseUrl]);
+  }, [orderId, base, apiFetch, apiBaseUrl]);
 
   if (!fetched) {
     return createPortal(
@@ -924,7 +928,6 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       orderId={orderId}
       data={data}
       base={base}
-      headers={headers}
       currency={data?.['currency$_identifier'] || ''}
       derived={derived}
       onClose={onClose}

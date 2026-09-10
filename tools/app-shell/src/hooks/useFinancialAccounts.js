@@ -40,7 +40,6 @@ export function useFinancialAccounts() {
   const apiFetch = useApiFetch(apiBase);
 
   const load = useCallback(async () => {
-    if (!token) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
     setLoading(true);

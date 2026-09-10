@@ -74,7 +74,7 @@ export default function OcrInlineUploader({
     const newId = result.recordId;
     const sourceFile = fileAtExtractRef.current;
     (async () => {
-      if (sourceFile && docType.tabId && token) {
+      if (sourceFile && docType.tabId) {
         const res = await attachFile({
           token,
           tabId: docType.tabId,

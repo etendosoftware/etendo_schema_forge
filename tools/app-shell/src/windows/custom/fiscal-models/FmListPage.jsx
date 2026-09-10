@@ -18,7 +18,7 @@ import { apiFetch } from '@/auth/api.js';
 // bound to the session, taking the explicit `token` it already receives as an
 // override rather than a React hook it has no component body to call from.
 async function computeBoxes303Real(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) throw new Error('missing credentials');
+  if (!apiBaseUrl) throw new Error('missing credentials');
   const base = apiBaseUrl.replace(/\/[^/]+$/, '');
   const params = new URLSearchParams({ year: decl.year, period: decl.period });
   const res = await apiFetch(`${base}/fiscal303/boxes?${params}`, { baseUrl: '', token });
@@ -431,7 +431,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const [decls, setDecls] = useState(propDecls ?? []);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${base}/fiscal303/declarations`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -453,7 +453,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const declIdsKey = useMemo(() => decls.map(d => d.id).join(','), [decls]);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl || !decls.length) return;
+    if (!apiBaseUrl || !decls.length) return;
     let cancelled = false;
     Promise.all(decls.map(d =>
       fetchDeclarationIncidents(d.id, { token, apiBaseUrl, model: d.model })
@@ -470,10 +470,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   }, [declIdsKey, token, apiBaseUrl]);
 
   const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!token || !apiBaseUrl);
+  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -524,7 +524,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled: Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMap349 } = useFiscalAutoCompute(draftDecls349, {
@@ -533,21 +533,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     token,
     apiBaseUrl,
     pollIntervalMs:  180_000,
-    enabled:         Boolean(token && apiBaseUrl),
+    enabled: Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther303 } = useFiscalAutoCompute(otherDecls303, {
     computeFn: computeBoxes303Real,
     token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled: Boolean(apiBaseUrl),
   });
 
   const { computedMap: computedMapOther349 } = useFiscalAutoCompute(otherDecls349, {
     computeFn: computeOperators349Real,
     token,
     apiBaseUrl,
-    enabled:   Boolean(token && apiBaseUrl),
+    enabled: Boolean(apiBaseUrl),
   });
 
   useEffect(() => {
@@ -585,7 +585,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   }, [showSortMenu]);
 
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
-    if (token && apiBaseUrl) {
+    if (apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       apiFetch(`${base}/fiscal303/declarations`, {
         method: 'POST',
@@ -926,7 +926,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onSave={(newActive) => {
             setActiveModels(newActive);
             setShowCatalog(false);
-            if (token && apiBaseUrl) {
+            if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               apiFetch(`${base}/fiscal-models-catalog`, {
                 method: 'PUT',

@@ -22,7 +22,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );
 
-  await page.route('**/sws/go/register', async route => {
+  await page.route('**/sws/go/session/register', async route => {
     if (registerBehavior === 'fail') {
       return route.fulfill({
         status: 400,
@@ -44,10 +44,16 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
-  await page.route('**/sws/go/login', async route => {
+  // ETP-4576 — the account endpoints moved onto the session: POST /sws/go/session logs in and
+  // POST /sws/go/session/environment enters one. The pattern covers both, and anything else
+  // (notably the GET that restores the session) falls through to the shared stub.
+  await page.route('**/sws/go/session{/**,}', async route => {
     const method = route.request().method();
     const url = route.request().url();
-    if (method === 'GET' && url.includes('userId=')) {
+    // Registration has its own stub above, and this pattern also matches it — Playwright is
+    // LIFO, so without this it would answer the register call with the login error.
+    if (url.includes('/session/register')) return route.fallback();
+    if (method === 'POST' && url.includes('/session/environment')) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -356,7 +362,7 @@ test.describe('Onboarding — Login & password recovery flow', () => {
 
     // Set up listeners before clicking
     const loginPromise = page.waitForRequest(
-      req => req.url().includes('/sws/go/login') && req.method() === 'POST',
+      req => req.url().endsWith('/sws/go/session') && req.method() === 'POST',
       { timeout: 10_000 }
     );
     const envPromise = page.waitForRequest(

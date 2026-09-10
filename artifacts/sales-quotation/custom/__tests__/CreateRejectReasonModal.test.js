@@ -37,7 +37,7 @@ describe('CreateRejectReasonModal', () => {
     it('POSTs to the createRejectReason action endpoint', () => {
       assert.match(
         src,
-        /fetch\(\s*`\$\{apiBaseUrl\}\/quotation\/\$\{quotationId\}\/action\/createRejectReason`/,
+        /apiFetch\(\s*`\$\{apiBaseUrl\}\/quotation\/\$\{quotationId\}\/action\/createRejectReason`/,
       );
     });
 

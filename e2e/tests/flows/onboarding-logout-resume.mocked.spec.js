@@ -24,8 +24,10 @@ async function installOnboardingMocks(page, { failDraftSave = false, holdProvisi
   // is what keeps the resume flow reaching setup-progress — an unconfirmed one is gated there.
   await page.route('**/sws/go/me', route =>
     json(route, { ...ACCOUNT, emailVerified: true, emailVerificationPending: false }));
-  await page.route('**/sws/go/register', route => json(route, { token: PLATFORM_TOKEN, account: ACCOUNT }));
-  await page.route('**/sws/go/login', route => {
+  await page.route('**/sws/go/session/register', route => json(route, { token: PLATFORM_TOKEN, account: ACCOUNT }));
+  // ETP-4576 — logging in creates a SESSION; the endpoint moved with it. Non-POST falls
+  // through so the GET that restores the session keeps reaching the shared stub.
+  await page.route('**/sws/go/session', route => {
     if (route.request().method() === 'POST') return json(route, { token: PLATFORM_TOKEN, account: ACCOUNT });
     return route.fallback();
   });

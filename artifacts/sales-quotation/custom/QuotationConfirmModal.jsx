@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -26,10 +27,13 @@ export default function QuotationConfirmModal({
   const [lineCount, setLineCount] = useState(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   const [freshData, setFreshData] = useState(null);
 
@@ -39,8 +43,8 @@ export default function QuotationConfirmModal({
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${entityUrl}/${quotationId}`, { headers }),
-          fetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${entityUrl}/${quotationId}`),
+          apiFetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -55,7 +59,7 @@ export default function QuotationConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [quotationId, entityUrl, apiBaseUrl, headers]);
+  }, [quotationId, entityUrl, apiBaseUrl, apiFetch]);
 
   // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
   // header edit the user made before clicking Confirm) must win over the
@@ -120,9 +124,9 @@ export default function QuotationConfirmModal({
       }
 
       if (selected === 'order') {
-        const res = await fetch(
+        const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/Convertquotation`,
-          { method: 'POST', headers, body: JSON.stringify({ fieldValues: {} }) },
+          { method: 'POST', body: JSON.stringify({ fieldValues: {} }) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -138,9 +142,9 @@ export default function QuotationConfirmModal({
 
         // Fetch created order by quotation link
         const criteria = JSON.stringify([{ fieldName: 'quotation', operator: 'equals', value: quotationId }]);
-        const orderRes = await fetch(
+        const orderRes = await apiFetch(
           `${baseNeoUrl}/sales-order/header?${new URLSearchParams({ criteria, _limit: '5' })}`,
-          { headers },
+          {},
         );
         if (orderRes.ok) {
           const orderJson = await orderRes.json();
@@ -152,9 +156,9 @@ export default function QuotationConfirmModal({
             let finalStatus = order.documentStatus;
             if (order.documentStatus === 'CO') {
               try {
-                const reactRes = await fetch(
+                const reactRes = await apiFetch(
                   `${baseNeoUrl}/sales-order/header/${order.id}/action/DocAction`,
-                  { method: 'POST', headers, body: JSON.stringify({ docAction: 'RE' }) },
+                  { method: 'POST', body: JSON.stringify({ docAction: 'RE' }) },
                 );
                 if (reactRes.ok) finalStatus = 'DR';
               } catch { /* best-effort */ }
@@ -173,9 +177,9 @@ export default function QuotationConfirmModal({
         setCreatedDoc({ type: 'order', id: null, documentNo: '?', total: '', status: 'Draft' });
 
       } else {
-        const res = await fetch(
+        const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);

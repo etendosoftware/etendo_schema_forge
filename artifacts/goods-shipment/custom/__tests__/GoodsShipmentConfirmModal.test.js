@@ -39,9 +39,9 @@ describe('GoodsShipmentConfirmModal', () => {
     });
   });
 
-  it('passes recordId, base, headers through from props', () => {
+  it('passes recordId and base through from props, but never a credential', () => {
     assert.match(src, /base=\{base\}/);
-    assert.match(src, /headers=\{headers\}/);
+    assert.doesNotMatch(src, /headers=\{headers\}/);  // ETP-4576: the child owns its credential now
     assert.match(src, /recordId=\{recordId\}/);
   });
 

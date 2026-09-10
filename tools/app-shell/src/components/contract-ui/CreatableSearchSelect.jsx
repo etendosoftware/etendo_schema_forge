@@ -421,7 +421,7 @@ export function CreatableSearchSelect({
       if (valueRef.current) onChangeRef.current('', '');
       return;
     }
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
 
     const cacheKey = `${parentValue ?? ''}:${refreshKey}:${selectorContextKey}`;
     if (loadedForRef.current === cacheKey) return;
@@ -480,7 +480,7 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!serverSearch) return;
     if (!value || displayValue) return;
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
     let cancelled = false;
     apiFetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), { baseUrl: '' })
       .then(res => (res.ok ? res.json() : null))
@@ -502,7 +502,7 @@ export function CreatableSearchSelect({
   // fetchPage). Cleared on unmount so no stale timer fires a setState after the component
   // is gone (the debounce timer; this function itself has no timer of its own).
   const triggerServerSearch = useCallback((searchQuery, offset = 0) => {
-    if (!serverSearch || !selectorUrl || !token) return;
+    if (!serverSearch || !selectorUrl) return;
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
     // focus/open); offset>0 (scroll-triggered "load more") is tagged with whatever generation

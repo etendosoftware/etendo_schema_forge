@@ -9,6 +9,13 @@ vi.mock('@/i18n', () => ({
   useUI: () => key => key,
   getStoredLocale: () => 'es_ES',
 }));
+// ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
+// `isAuthenticated` off the auth context rather than a token it can read. Nothing here renders
+// an AuthProvider, so the context is mocked instead of wrapping every case.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ isAuthenticated: true, csrfToken: null, session: null }),
+}));
+
 vi.mock('@/auth/api.js', () => ({
   authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
   buildHeaders: (t) => ({ 'Content-Type': 'application/json', 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }), detectBaseUrl: () => 'http://tomcat.example/etendo' }));
@@ -266,12 +273,15 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
   });
 
-  it('reports the unavailable branch when there is no platform token to look up with', async () => {
+  // ETP-4576 — there is no "no platform token" branch left: under the cookie scheme no client
+  // holds one, so reporting the page as unavailable on that basis hid the upgrade from every
+  // authenticated user. The lookup runs and the branch follows what the backend answers.
+  it('reports the checkout branch even when no token is held', async () => {
     globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'checkout' }]));
   });
 
   it('tracks leaving for free onboarding instead of the checkout', async () => {
@@ -298,7 +308,11 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
   });
 
-  it('tracks an expired session instead of a submission', async () => {
+  // ETP-4576 — an absent local token is no longer "session expired": under the cookie scheme
+  // no client holds one, so that check refused the submission for every authenticated user.
+  // Whether the session is still valid is the backend's answer (401), not a local guess, so
+  // what this now pins down is that the submission is no longer blocked before it is sent.
+  it('submits even when no token is held locally', async () => {
     const user = userEvent.setup();
     globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
@@ -307,9 +321,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
-    await screen.findByTestId('upgrade-error');
-    expect(trackedEvents('upgrade_session_expired')).toEqual([{}]);
-    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+    await waitFor(() => expect(trackedEvents('upgrade_checkout_submitted')).not.toEqual([]));
+    expect(trackedEvents('upgrade_session_expired')).toEqual([]);
   });
 
   it('tracks the submission with the chosen upgrade action, before the redirect', async () => {

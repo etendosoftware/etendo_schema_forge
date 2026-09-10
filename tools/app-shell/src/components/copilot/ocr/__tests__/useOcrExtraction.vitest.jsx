@@ -44,7 +44,10 @@ describe('useOcrExtraction', () => {
     expect(error.message).toBe('No file provided');
   });
 
-  it('extract rejects when token is missing', async () => {
+  // ETP-4576 — extraction no longer throws for a missing token: under the cookie scheme the
+  // client holds none, so that throw fired for every authenticated user. It now runs and fails
+  // (or not) on the response, like any other request.
+  it('extract runs when no token is held, failing only on the response', async () => {
     const { result } = renderHook(() =>
       useOcrExtraction({ ...defaultParams, token: '' }),
     );
@@ -57,7 +60,7 @@ describe('useOcrExtraction', () => {
         error = e;
       }
     });
-    expect(error.message).toBe('Missing auth token');
+    expect(error?.message).not.toBe('Missing auth token');
   });
 
   it('transitions through uploading -> extracting -> done on success', async () => {

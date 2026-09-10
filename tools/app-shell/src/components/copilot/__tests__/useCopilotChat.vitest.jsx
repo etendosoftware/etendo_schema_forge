@@ -138,12 +138,15 @@ describe('useCopilotChat', () => {
       expect(result.current.state.isLoadingAssistants).toBe(false);
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { getAssistants } = await import('../copilotApi.js');
       getAssistants.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => { await result.current.actions.loadBootstrap(); });
-      expect(getAssistants).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(getAssistants).toHaveBeenCalled();
     });
 
     it('sets error on failure', async () => {
@@ -533,14 +536,17 @@ describe('useCopilotChat', () => {
       expect(result.current.state.conversations.find((c) => c.conversation_id === 'c1')).toBeUndefined();
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { permanentDeleteConversation } = await import('../copilotApi.js');
       permanentDeleteConversation.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => {
         await result.current.actions.permanentDelete('c1');
       });
-      expect(permanentDeleteConversation).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(permanentDeleteConversation).toHaveBeenCalled();
     });
   });
 
@@ -684,14 +690,17 @@ describe('useCopilotChat', () => {
       expect(conv.title).toBe('Fallback Title');
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { generateTitle } = await import('../copilotApi.js');
       generateTitle.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => {
         await result.current.actions.generateTitle('c1');
       });
-      expect(generateTitle).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(generateTitle).toHaveBeenCalled();
     });
 
     it('does nothing when id is falsy', async () => {
@@ -935,14 +944,17 @@ describe('useCopilotChat', () => {
       expect(result.current.state.error).toBe('Restore failed');
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { restoreConversation: apiRestore } = await import('../copilotApi.js');
       apiRestore.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => {
         await result.current.actions.restoreConversation('c1');
       });
-      expect(apiRestore).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(apiRestore).toHaveBeenCalled();
     });
 
     it('does nothing when id is falsy', async () => {
@@ -974,14 +986,17 @@ describe('useCopilotChat', () => {
       expect(result.current.state.error).toBe('Rename fail');
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { renameConversation } = await import('../copilotApi.js');
       renameConversation.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => {
         await result.current.actions.renameConversation('c1', 'Title');
       });
-      expect(renameConversation).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(renameConversation).toHaveBeenCalled();
     });
 
     it('does nothing when id is null', async () => {
@@ -1146,14 +1161,17 @@ describe('useCopilotChat', () => {
       expect(mockUpload).not.toHaveBeenCalled();
     });
 
-    it('does nothing when token is null', async () => {
+    it('does nothing when token is null — inverted: the cookie carries the session', async () => {
       const { uploadFile: mockUpload } = await import('../copilotApi.js');
       mockUpload.mockClear();
       const { result } = renderHook(() => useCopilotChat({ token: null }));
       await act(async () => {
         await result.current.actions.uploadFile(new File(['d'], 'f.txt'));
       });
-      expect(mockUpload).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(mockUpload).toHaveBeenCalled();
     });
 
     it('handles upload response with fileId key', async () => {

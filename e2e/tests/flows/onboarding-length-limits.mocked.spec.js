@@ -37,7 +37,7 @@ async function installMocks(page, { registerBehavior = 'success', onboardingResu
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );
 
-  await page.route('**/sws/go/register', async route => {
+  await page.route('**/sws/go/session/register', async route => {
     if (registerBehavior === 'field-too-long') {
       // The envelope a non-browser client gets when it bypasses maxLength.
       return route.fulfill({

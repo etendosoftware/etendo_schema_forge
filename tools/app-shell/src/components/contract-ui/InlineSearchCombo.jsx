@@ -109,7 +109,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // CreatableSearchSelect.jsx's triggerServerSearch scroll path, ETP-4975). Sends explicit
   // `limit`/`offset` so the backend's own default page size never silently caps the list.
   const fetchServerResults = useCallback((q, offset = 0) => {
-    if (!selectorUrl || !token) { setServerResults(null); return; }
+    if (!selectorUrl) { setServerResults(null); return; }
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     clearTimeout(fetchTimer.current);
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via

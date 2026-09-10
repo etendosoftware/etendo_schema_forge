@@ -53,7 +53,7 @@ export default function AssignTemplateRolesControl(props) {
   const isAdminRoleHolder = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
 
   useEffect(() => {
-    if (!hasPersistedUser || !token || !apiBaseUrl) {
+    if (!hasPersistedUser || !apiBaseUrl) {
       setLoading(false);
       return undefined;
     }

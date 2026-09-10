@@ -82,6 +82,9 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   },
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
+  // ETP-4576 — OnboardingFlow reads GET /sws/go/session on mount for the CSRF proof, so a
+  // factory mock that omits it makes the whole flow throw before rendering.
+  fetchSession: vi.fn(() => Promise.reject(new Error('no session'))),
   fetchAccount: vi.fn(),
   fetchEnvironments: vi.fn().mockResolvedValue([]),
   fetchOnboardingDraft: vi.fn().mockResolvedValue(null),
@@ -110,7 +113,11 @@ vi.mock('../onboarding/onboardingReadiness.js', () => ({
 vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   applyProgressMessage: (prev, message) =>
     prev.map((step) => (step.name === message.step ? { ...step, status: message.status } : step)),
-  buildEnvironmentSessionStorage: () => ({}),
+  // ETP-4576 — the seven sf_auth_* handoff keys and their writer are gone from the core:
+  // the __Host- session cookie survives the full-page redirect on its own, so there is no
+  // channel to hand off. OnboardingFlow now only remembers which environment was last used.
+  rememberEnvironment: () => {},
+  LAST_ENVIRONMENT_KEY: 'sf_last_environment',
   initialSetupSteps: () => [
     { name: 'setup', status: 'pending' },
     { name: 'client', status: 'pending' },
@@ -120,15 +127,6 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
-  ENVIRONMENT_SESSION_KEYS: [
-    'sf_auth_token',
-    'sf_auth_user',
-    'sf_auth_client_id',
-    'sf_auth_client_name',
-    'sf_auth_rolelist',
-    'sf_auth_selected_role',
-    'sf_auth_selected_org',
-  ],
 }));
 
 vi.mock('../../lib/observability.js', () => ({
@@ -162,6 +160,7 @@ import {
   fetchAccount,
   fetchEnvironments,
   fetchOnboardingDraft,
+  fetchSession,
   loginAccount,
   loginEnvironment,
   loginWithSsoProvider,
@@ -180,6 +179,11 @@ describe('OnboardingPage', () => {
     vi.clearAllMocks();
     localeSwitchMock.locale = 'en_US';
     localeSwitchMock.setLocale.mockReset();
+    // ETP-4576 — the flow asks the server whether a session exists, so "no session" is the
+    // baseline here and a case that needs one declares it. Reset explicitly: mockResolvedValue
+    // survives clearAllMocks, so a case that authenticated would otherwise leak into the next.
+    fetchSession.mockReset();
+    fetchSession.mockRejectedValue(new Error('no session'));
     fetchAccount.mockReset();
     fetchEnvironments.mockReset();
     fetchEnvironments.mockResolvedValue([]);
@@ -207,91 +211,103 @@ describe('OnboardingPage', () => {
   // form is only reached by clicking the switch link exposed on the login view.
   // Register-oriented tests use this helper to land on the register view before
   // interacting with its fields.
-  const renderAtRegister = () => {
+  // ETP-4576 — the flow's bootstrap reads GET /sws/go/session before choosing a view, so the
+  // first render is always the spinner. Every test that inspects the rendered view has to let
+  // that settle first; this is the one place that knows it.
+  const renderOnboarding = async () => {
     const utils = render(<OnboardingPage />);
-    fireEvent.click(screen.getByTestId('action-switch-to-register'));
+    await waitFor(() => expect(screen.queryByTestId('Loader2__79cf84')).toBeNull());
     return utils;
   };
 
-  it('renders without crashing', () => {
-    const { container } = render(<OnboardingPage />);
+  // ETP-4576 — awaits the switch link instead of clicking in the same tick. The flow's
+  // bootstrap is asynchronous now: it reads GET /sws/go/session before deciding which view
+  // to show, so the first render is the spinner and the login view only lands a tick later.
+  const renderAtRegister = async () => {
+    const utils = render(<OnboardingPage />);
+    fireEvent.click(await screen.findByTestId('action-switch-to-register'));
+    return utils;
+  };
+
+  it('renders without crashing', async () => {
+    const { container } = await renderOnboarding();
     expect(container).toBeTruthy();
   });
 
-  it('shows the register view after switching from the default login view', () => {
+  it('shows the register view after switching from the default login view', async () => {
     // No platform token means the flow lands on the login view (core 0.3.4
     // default); the register view is reached via the switch link.
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
   });
 
-  it('shows register view when switching to register', () => {
+  it('shows register view when switching to register', async () => {
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
     expect(screen.getByText('onboardingRegisterSubtitle')).toBeInTheDocument();
   });
 
-  it('lands on the login view (consuming the one-shot flag) instead of register', () => {
+  it('lands on the login view (consuming the one-shot flag) instead of register', async () => {
     localStorage.removeItem('sf_platform_token');
     localStorage.setItem('sf_onboarding_initial_view', 'login');
-    render(<OnboardingPage />);
+    await renderOnboarding();
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     // Flag is consumed so a later visit returns to the default register view.
     expect(localStorage.getItem('sf_onboarding_initial_view')).toBeNull();
   });
 
-  it('shows the password-changed notice on the login view and consumes the one-shot flag', () => {
+  it('shows the password-changed notice on the login view and consumes the one-shot flag', async () => {
     localStorage.removeItem('sf_platform_token');
     localStorage.setItem('sf_onboarding_initial_view', 'login');
     localStorage.setItem('sf_onboarding_notice', 'password-changed');
-    render(<OnboardingPage />);
+    await renderOnboarding();
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     expect(screen.getByTestId('login-notice')).toHaveTextContent('onboardingPasswordChangedNotice');
     // Flag is consumed so a later visit does not show the notice again.
     expect(localStorage.getItem('sf_onboarding_notice')).toBeNull();
   });
 
-  it('does not render the login notice when the notice flag is absent', () => {
+  it('does not render the login notice when the notice flag is absent', async () => {
     localStorage.removeItem('sf_platform_token');
     localStorage.setItem('sf_onboarding_initial_view', 'login');
-    render(<OnboardingPage />);
+    await renderOnboarding();
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     expect(screen.queryByTestId('login-notice')).not.toBeInTheDocument();
   });
 
-  it('renders register form fields', () => {
+  it('renders register form fields', async () => {
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
     // Form has name, email, password fields
     expect(screen.getByText('onboardingNameLabel')).toBeInTheDocument();
     expect(screen.getByText('onboardingEmailLabel')).toBeInTheDocument();
     expect(screen.getByText('onboardingPasswordLabel')).toBeInTheDocument();
   });
 
-  it('shows the create account button', () => {
+  it('shows the create account button', async () => {
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
     expect(screen.getByText('onboardingCreateAccountAction')).toBeInTheDocument();
   });
 
-  it('renders the brand name', () => {
+  it('renders the brand name', async () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
     expect(screen.getByText('onboardingBrandName')).toBeInTheDocument();
   });
 
-  it('shows switch to login prompt', () => {
+  it('shows switch to login prompt', async () => {
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
     expect(screen.getByText('onboardingSwitchToLoginPrompt')).toBeInTheDocument();
     expect(screen.getByText('onboardingSwitchToLoginAction')).toBeInTheDocument();
   });
 
-  it('switches between auth modes and toggles password visibility', () => {
+  it('switches between auth modes and toggles password visibility', async () => {
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     // The flow lands on the login view by default (core 0.3.4).
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
@@ -311,25 +327,28 @@ describe('OnboardingPage', () => {
     expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
   });
 
-  it('returns to the login view when the stored platform token is invalid', async () => {
-    localStorage.setItem('sf_platform_token', 'stale-platform-token');
-    fetchAccount.mockRejectedValue(new Error('expired'));
+  // ETP-4576 — there is no stored token to be invalid any more: the flow asks the server
+  // whether a session exists. What survives is the fallback — a session the backend does not
+  // recognise lands on the login view. Purging the legacy keys moved into the core's
+  // purgeLegacyAuthStorage, which owns that list and is covered by its own tests.
+  it('returns to the login view when the server recognises no session', async () => {
+    fetchSession.mockRejectedValue(new Error('no session'));
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
-    // A rejected token verification clears the stored token and falls back to
-    // the default login view (core 0.3.4 login-first default).
     expect(await screen.findByText('onboardingLoginTitle')).toBeInTheDocument();
-    expect(localStorage.removeItem).toHaveBeenCalledWith('sf_platform_token');
   });
 
   it('falls back to create view when environment loading fails', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockRejectedValue(new Error('network down'));
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     expect(await screen.findByText(/onboardingGreeting/)).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
@@ -343,7 +362,7 @@ describe('OnboardingPage', () => {
     localeSwitchMock.locale = 'es_ES';
     localStorage.removeItem('sf_platform_token');
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     // The default (no-token) view is the login step ...
     expect(await screen.findByText('onboardingLoginTitle')).toBeInTheDocument();
@@ -358,7 +377,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -392,7 +411,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -411,7 +430,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -426,7 +445,7 @@ describe('OnboardingPage', () => {
     registerAccount.mockResolvedValue({});
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.change(screen.getByLabelText(/onboardingNameLabel/), {
       target: { value: 'Secret Register Name' },
@@ -457,7 +476,7 @@ describe('OnboardingPage', () => {
     registerAccount.mockRejectedValue({ code: 'SOME_UNMAPPED_CODE' });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -482,7 +501,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -496,10 +515,13 @@ describe('OnboardingPage', () => {
 
   it('tracks onboarding setup step navigation', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     const continueButton = await screen.findByText('onboardingContinueAction');
     fireEvent.click(continueButton);
@@ -516,12 +538,15 @@ describe('OnboardingPage', () => {
 
   it('keeps the logout action keyboard-accessible in a narrow environment view without account data', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({});
     fetchEnvironments.mockResolvedValue([{ id: 'demo', name: 'Demo environment' }]);
     loginEnvironment.mockResolvedValue({});
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     const logout = await screen.findByRole('button', { name: 'logout' });
     expect(logout).toBeVisible();
@@ -537,10 +562,13 @@ describe('OnboardingPage', () => {
 
   it('tracks setup step back and keeps company-form edits out of tracking payloads', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
       target: { value: 'Private Setup Name' },
@@ -574,7 +602,7 @@ describe('OnboardingPage', () => {
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     // LoginStep now enforces required email/password before it even calls
     // trackOnboarding (client-side validation added in core 0.3.20) — fill both
@@ -616,7 +644,7 @@ describe('OnboardingPage', () => {
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'secret-login@example.com' },
@@ -650,7 +678,7 @@ describe('OnboardingPage', () => {
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     // Required-field validation (core 0.3.20) blocks submit until both are filled.
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
@@ -674,7 +702,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    renderAtRegister();
+    await renderAtRegister();
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -691,7 +719,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     await waitFor(() => {
       expect(renderSsoProviderButton).toHaveBeenCalled();
@@ -719,7 +747,7 @@ describe('OnboardingPage', () => {
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     // Required-field validation (core 0.3.20) blocks submit until both are filled.
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
@@ -755,7 +783,7 @@ describe('OnboardingPage', () => {
     });
 
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'exception@example.com' },
@@ -778,7 +806,7 @@ describe('OnboardingPage', () => {
 
     // The flow lands on the login view by default (core 0.3.4).
     localStorage.removeItem('sf_platform_token');
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
       target: { value: 'reset@example.com' },
@@ -796,7 +824,7 @@ describe('OnboardingPage', () => {
     confirmPasswordReset.mockResolvedValue({ success: true });
     window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
       target: { value: 'new-secret' },
@@ -813,7 +841,8 @@ describe('OnboardingPage', () => {
         confirmPassword: 'new-secret',
       });
     });
-    expect(localStorage.removeItem).toHaveBeenCalledWith('sf_platform_token');
+    // ETP-4576 — nothing writes sf_platform_token any more, so the reset has nothing to clear
+    // here; purging what a pre-cookie session may have left is the core's purgeLegacyAuthStorage.
     expect(screen.getByText('onboardingResetPasswordSuccess')).toBeInTheDocument();
   });
 
@@ -821,7 +850,7 @@ describe('OnboardingPage', () => {
     confirmPasswordReset.mockRejectedValue({ userMessage: 'Invalid or expired reset link' });
     window.history.replaceState(null, '', '/onboarding?resetToken=used-token');
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
       target: { value: 'new-secret' },
@@ -836,10 +865,13 @@ describe('OnboardingPage', () => {
 
   it('tracks setup back navigation from company step', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('back'));
@@ -856,13 +888,16 @@ describe('OnboardingPage', () => {
 
   it('tracks onboarding run success without company or fiscal values', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
       onMessage({ type: 'result', success: true });
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.change(await screen.findByLabelText(/onboardingCompanyNameLabel/), {
@@ -897,6 +932,9 @@ describe('OnboardingPage', () => {
 
   it('renders onboarding progress messages while tracking run start', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
@@ -904,7 +942,7 @@ describe('OnboardingPage', () => {
       return new Promise(() => {});
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -923,6 +961,9 @@ describe('OnboardingPage', () => {
 
   it('shows the rotating status line and the dataset milestone while the dataset step runs', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
@@ -930,7 +971,7 @@ describe('OnboardingPage', () => {
       return new Promise(() => {});
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -950,6 +991,9 @@ describe('OnboardingPage', () => {
 
   it('keeps the progress bar monotonic when an untracked step runs after a tracked one', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     let emit;
@@ -959,7 +1003,7 @@ describe('OnboardingPage', () => {
       return new Promise(() => {});
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -996,13 +1040,16 @@ describe('OnboardingPage', () => {
 
   it('tracks onboarding run failures', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
       onMessage({ type: 'result', success: false, message: 'failed' });
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -1020,11 +1067,14 @@ describe('OnboardingPage', () => {
 
   it('tracks onboarding run exceptions', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockRejectedValue({ code: 'onboardingGenericError' });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -1043,6 +1093,9 @@ describe('OnboardingPage', () => {
 
   it('tracks environment entry success without environment identifiers', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     Object.defineProperty(window, 'caches', {
       configurable: true,
       value: {
@@ -1054,8 +1107,13 @@ describe('OnboardingPage', () => {
     fetchEnvironments.mockResolvedValue([
       { clientId: 'client-secret', clientName: 'Secret Client', orgName: 'Org', adminUser: 'admin' },
     ]);
-    loginEnvironment.mockResolvedValue({ token: 'environment-token' });
+    // ETP-4576 — entering an environment updates the backend-managed session and reports
+    // status; it no longer mints a token for the client to hold.
+    loginEnvironment.mockResolvedValue({ status: 'success' });
 
+    // Plain render, not the helper: entering an environment ends in a full-page navigation
+    // (window.location.href), which jsdom does not perform — so the flow stays on the
+    // spinner on purpose and there is nothing for the helper to wait for.
     render(<OnboardingPage />);
 
     await waitFor(() => {
@@ -1084,13 +1142,16 @@ describe('OnboardingPage', () => {
 
   it('tracks environment entry failures when login returns no token', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([
       { clientId: 'client-secret', clientName: 'Secret Client', orgName: 'Org', adminUser: 'admin' },
     ]);
     loginEnvironment.mockResolvedValue({});
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_environment_enter_failed', {
@@ -1106,13 +1167,16 @@ describe('OnboardingPage', () => {
 
   it('tracks environment entry exceptions', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([
       { clientId: 'client-secret', clientName: 'Secret Client', orgName: 'Org', adminUser: 'admin' },
     ]);
     loginEnvironment.mockRejectedValue({ userMessage: 'Environment login exploded' });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     await waitFor(() => {
       expect(track).toHaveBeenCalledWith('onboarding_environment_enter_failed', {
@@ -1157,13 +1221,16 @@ describe('OnboardingPage', () => {
       return realSetTimeout(callback, delay, ...args);
     });
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
       onMessage({ type: 'result', success: true });
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -1193,6 +1260,9 @@ describe('OnboardingPage', () => {
       return realSetTimeout(callback, delay, ...args);
     });
     localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments
       .mockResolvedValueOnce([])
@@ -1202,13 +1272,15 @@ describe('OnboardingPage', () => {
     runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
       onMessage({ type: 'result', success: true });
     });
-    loginEnvironment.mockResolvedValue({ token: 'environment-token' });
+    // ETP-4576 — entering an environment updates the backend-managed session and reports
+    // status; it no longer mints a token for the client to hold.
+    loginEnvironment.mockResolvedValue({ status: 'success' });
     checkSalesInvoiceReadiness.mockResolvedValue({
       ready: false,
       failures: [{ key: 'readinessReason' }],
     });
 
-    render(<OnboardingPage />);
+    await renderOnboarding();
 
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -1238,6 +1310,9 @@ describe('OnboardingPage', () => {
   describe('draft recovery', () => {
     it('restores a saved draft on step 2 and shows the restored notice', async () => {
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue({
@@ -1245,7 +1320,7 @@ describe('OnboardingPage', () => {
         form: { clientName: 'Acme SL', fiscalIdValue: 'B123', fullName: 'Ana' },
       });
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Step 2 (company step) is rendered directly with the draft values merged in.
       const companyInput = await screen.findByLabelText(/onboardingCompanyNameLabel/);
@@ -1254,18 +1329,23 @@ describe('OnboardingPage', () => {
       expect(screen.getByTestId('draft-restored-notice')).toHaveTextContent(
         'onboardingDraftRestoredNotice',
       );
+      // ETP-4576 — a read: no proof and no credential in the argument list, the session
+      // cookie carries it and the locale rides in the headers the shared builder makes.
       expect(fetchOnboardingDraft).toHaveBeenCalledWith(
-        expect.any(Function), '', 'platform-token',
+        expect.any(Function), '',
       );
     });
 
     it('starts a fresh wizard on step 1 without notice when no draft exists', async () => {
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue(null);
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Step 1 (profile step) is the entry point.
       expect(await screen.findByLabelText(/onboardingFullNameLabel/)).toBeInTheDocument();
@@ -1276,11 +1356,14 @@ describe('OnboardingPage', () => {
     it('falls back to a fresh wizard when the draft fetch fails', async () => {
       const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockRejectedValue(new Error('draft endpoint down'));
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       expect(await screen.findByLabelText(/onboardingFullNameLabel/)).toBeInTheDocument();
       expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
@@ -1299,18 +1382,23 @@ describe('OnboardingPage', () => {
         return realSetTimeout(callback, delay, ...args);
       });
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue(null);
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Step 1 alone is pristine — moving to step 2 makes the draft saveable.
       fireEvent.click(await screen.findByText('onboardingContinueAction'));
 
       await waitFor(() => {
         expect(saveOnboardingDraft).toHaveBeenCalledWith(
-          expect.any(Function), '', 'platform-token',
+          // ETP-4576 — third argument is the CSRF proof now, not the platform token: the
+          // draft endpoint is an unsafe method and the credential travels with the session.
+          expect.any(Function), '', 'csrf-test',
           expect.objectContaining({ step: 2 }),
         );
       });
@@ -1321,7 +1409,9 @@ describe('OnboardingPage', () => {
 
       await waitFor(() => {
         expect(saveOnboardingDraft).toHaveBeenCalledWith(
-          expect.any(Function), '', 'platform-token',
+          // ETP-4576 — third argument is the CSRF proof now, not the platform token: the
+          // draft endpoint is an unsafe method and the credential travels with the session.
+          expect.any(Function), '', 'csrf-test',
           expect.objectContaining({
             step: 2,
             form: expect.objectContaining({ clientName: 'Acme SL' }),
@@ -1341,12 +1431,15 @@ describe('OnboardingPage', () => {
         return realSetTimeout(callback, delay, ...args);
       });
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue(null);
       saveOnboardingDraft.mockRejectedValueOnce(new Error('draft save down'));
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Moving to step 2 triggers the first (failing) autosave.
       fireEvent.click(await screen.findByText('onboardingContinueAction'));
@@ -1366,7 +1459,9 @@ describe('OnboardingPage', () => {
 
       await waitFor(() => {
         expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
-          expect.any(Function), '', 'platform-token',
+          // ETP-4576 — third argument is the CSRF proof now, not the platform token: the
+          // draft endpoint is an unsafe method and the credential travels with the session.
+          expect.any(Function), '', 'csrf-test',
           expect.objectContaining({
             step: 2,
             form: expect.objectContaining({ clientName: 'Acme SL' }),
@@ -1385,11 +1480,14 @@ describe('OnboardingPage', () => {
         return realSetTimeout(callback, delay, ...args);
       });
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue(null);
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // ETP-4584 persists Profile changes so a user can resume before Company.
       fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
@@ -1401,7 +1499,9 @@ describe('OnboardingPage', () => {
       });
       await waitFor(() => {
         expect(saveOnboardingDraft).toHaveBeenCalledWith(
-          expect.any(Function), '', 'platform-token',
+          // ETP-4576 — third argument is the CSRF proof now, not the platform token: the
+          // draft endpoint is an unsafe method and the credential travels with the session.
+          expect.any(Function), '', 'csrf-test',
           expect.objectContaining({
             step: 1,
             form: expect.objectContaining({ fullName: 'Ana' }),
@@ -1417,7 +1517,7 @@ describe('OnboardingPage', () => {
       });
 
       localStorage.removeItem('sf_platform_token');
-      renderAtRegister();
+      await renderAtRegister();
 
       fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
@@ -1437,11 +1537,14 @@ describe('OnboardingPage', () => {
         return realSetTimeout(callback, delay, ...args);
       });
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       fetchOnboardingDraft.mockResolvedValue(null);
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Logging out updates the in-memory token as well as localStorage.
       await screen.findByLabelText(/onboardingFullNameLabel/);
@@ -1463,6 +1566,9 @@ describe('OnboardingPage', () => {
         return realSetTimeout(callback, delay, ...args);
       });
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       // A complete restored form (fullName matches the account so the backfill
@@ -1483,7 +1589,7 @@ describe('OnboardingPage', () => {
         },
       });
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       // Restored on step 2 with the company name already filled.
       await waitFor(() => {
@@ -1503,7 +1609,7 @@ describe('OnboardingPage', () => {
     it('shows the SSO failure message when the credential login returns no token', async () => {
       loginWithSsoProvider.mockResolvedValue({});
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
       const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
@@ -1518,7 +1624,7 @@ describe('OnboardingPage', () => {
     it('shows the SSO failure message from the rejection user message', async () => {
       loginWithSsoProvider.mockRejectedValue({ userMessage: 'SSO exploded' });
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
       const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
@@ -1532,7 +1638,7 @@ describe('OnboardingPage', () => {
 
     it('surfaces SSO provider button errors via the onError callback', async () => {
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
       const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
@@ -1548,7 +1654,7 @@ describe('OnboardingPage', () => {
       requestPasswordReset.mockRejectedValue({ userMessage: 'Reset request failed' });
       // The flow lands on the login view by default (core 0.3.4).
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
       fireEvent.submit(screen.getByTestId('action-forgot-password-submit').closest('form'));
@@ -1556,10 +1662,10 @@ describe('OnboardingPage', () => {
       expect(await screen.findByText('Reset request failed')).toBeInTheDocument();
     });
 
-    it('returns to the login view from the forgot-password view', () => {
+    it('returns to the login view from the forgot-password view', async () => {
       // The flow lands on the login view by default (core 0.3.4).
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
       fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
@@ -1572,7 +1678,7 @@ describe('OnboardingPage', () => {
 
     it('blocks a reset submit when the two passwords do not match', async () => {
       window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
         target: { value: 'first-secret' },
@@ -1586,9 +1692,9 @@ describe('OnboardingPage', () => {
       expect(confirmPasswordReset).not.toHaveBeenCalled();
     });
 
-    it('toggles reset password visibility on the reset view', () => {
+    it('toggles reset password visibility on the reset view', async () => {
       window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       const newPassword = screen.getByLabelText(/onboardingNewPasswordLabel/);
       expect(newPassword).toHaveAttribute('type', 'password');
@@ -1602,7 +1708,7 @@ describe('OnboardingPage', () => {
     it('returns to login from the reset success screen', async () => {
       confirmPasswordReset.mockResolvedValue({ success: true });
       window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
         target: { value: 'new-secret' },
@@ -1619,9 +1725,9 @@ describe('OnboardingPage', () => {
       expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
     });
 
-    it('updates the register password field on input', () => {
+    it('updates the register password field on input', async () => {
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       const password = screen.getByLabelText(/onboardingPasswordLabel/);
       fireEvent.change(password, { target: { value: 'typed-secret' } });
@@ -1631,13 +1737,16 @@ describe('OnboardingPage', () => {
     it('surfaces SSO provider rendering failures via the Promise.all catch', async () => {
       renderSsoProviderButton.mockRejectedValueOnce({ userMessage: 'SSO render failed' });
       localStorage.removeItem('sf_platform_token');
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       expect(await screen.findByText('SSO render failed')).toBeInTheDocument();
     });
 
     it('renders the finalize setup progress state', async () => {
       localStorage.setItem('sf_platform_token', 'platform-token');
+    // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
+    // server. Declaring the session here is what puts these cases past the login view.
+    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
       fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
       fetchEnvironments.mockResolvedValue([]);
       let emit;
@@ -1646,7 +1755,7 @@ describe('OnboardingPage', () => {
         return new Promise(() => {});
       });
 
-      render(<OnboardingPage />);
+      await renderOnboarding();
 
       fireEvent.click(await screen.findByText('onboardingContinueAction'));
       fireEvent.click(await screen.findByText('onboardingStartAction'));
@@ -1686,17 +1795,17 @@ describe('OnboardingPage', () => {
       return input;
     };
 
-    it('disables the create account button while the password is empty', () => {
+    it('disables the create account button while the password is empty', async () => {
       localStorage.removeItem('sf_platform_token');
-      renderAtRegister();
+      await renderAtRegister();
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
       // No requirements list until the user starts typing.
       expect(screen.queryByTestId('register-password-requirements')).not.toBeInTheDocument();
     });
 
-    it('shows the checklist and keeps submit disabled for a weak password', () => {
+    it('shows the checklist and keeps submit disabled for a weak password', async () => {
       localStorage.removeItem('sf_platform_token');
-      const { container } = renderAtRegister();
+      const { container } = await renderAtRegister();
       typePassword(container, '123');
       expect(screen.getByTestId('register-password-requirements')).toBeInTheDocument();
       expect(screen.getByTestId('register-password-rule-minLength')).toHaveAttribute('data-met', 'false');
@@ -1704,9 +1813,9 @@ describe('OnboardingPage', () => {
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
     });
 
-    it('marks every rule met and enables submit for a strong password', () => {
+    it('marks every rule met and enables submit for a strong password', async () => {
       localStorage.removeItem('sf_platform_token');
-      const { container } = renderAtRegister();
+      const { container } = await renderAtRegister();
       typeEmail(container, 'ada@example.com');
       typePassword(container, 'Str0ng!Pass');
       ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
@@ -1715,9 +1824,9 @@ describe('OnboardingPage', () => {
       expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
     });
 
-    it('keeps submit disabled for a strong password when the email is malformed', () => {
+    it('keeps submit disabled for a strong password when the email is malformed', async () => {
       localStorage.removeItem('sf_platform_token');
-      const { container } = renderAtRegister();
+      const { container } = await renderAtRegister();
       typePassword(container, 'Str0ng!Pass');
       ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
         expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');

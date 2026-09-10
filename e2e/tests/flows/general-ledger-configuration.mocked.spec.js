@@ -120,10 +120,20 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
   test.beforeEach(async ({ page }) => {
     post = { last: null };
     await login(page);
-    // Seed a selected org before boot so the save boundary is reachable.
-    await page.addInitScript((org) => {
-      localStorage.setItem('sf_auth_selected_org', JSON.stringify(org));
-    }, SEED_ORG);
+    // ETP-4576 — the selected org comes from the restored session now, not from a localStorage
+    // seed nothing reads any more. Registered after login() so it wins (Playwright is LIFO), and
+    // only for GET, so the account endpoints on the same path keep falling through.
+    await page.route('**/sws/go/session', (route) => (route.request().method() === 'GET'
+      ? route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: { name: 'admin', email: 'admin@e2e.test' },
+          environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: SEED_ORG.id },
+          roleList: [{ id: 'e2e-mock-role', name: 'Administrator', orgList: [SEED_ORG] }],
+        }),
+      })
+      : route.fallback()));
     await installAggregateMock(page, post);
     await page.goto('/general-ledger-configuration');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

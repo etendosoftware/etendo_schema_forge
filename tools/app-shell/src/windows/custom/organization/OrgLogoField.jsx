@@ -59,7 +59,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
   const apiFetch = useApiFetch(imageBase);
 
   useEffect(() => {
-    if (!imageId || !token) {
+    if (!imageId) {
       setBlobUrl(null);
       return;
     }

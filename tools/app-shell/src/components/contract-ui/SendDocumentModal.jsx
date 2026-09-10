@@ -269,7 +269,7 @@ function renderPdfPreviewNode({ node, pdfBlobUrl, pdfBlobLoading, documentId, to
     return;
   }
 
-  if (documentId && token) {
+  if (documentId) {
     renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfLoading, setPdfError);
   }
 }
@@ -367,7 +367,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   const [ownPdfUrl, setOwnPdfUrl] = useState(null);
   const [ownPdfLoading, setOwnPdfLoading] = useState(false);
   useEffect(() => {
-    if (pdfBlobUrl || pdfBlob || !documentId || !token) return undefined;
+    if (pdfBlobUrl || pdfBlob || !documentId) return undefined;
     if (!hasClientPdf(windowName)) return undefined;
     let cancelled = false;
     let url = null;
@@ -401,7 +401,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
 
   // Fetch trusted contact data to seed the server-resolved recipient proposal.
   useEffect(() => {
-    if (!bPartnerId || !apiBaseUrl || !token) return;
+    if (!bPartnerId || !apiBaseUrl) return;
     let cancelled = false;
     setEmailLoading(true);
     loadBusinessPartnerEmail({

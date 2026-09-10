@@ -7,11 +7,9 @@ describe('persistDeclarationStatus', () => {
   beforeEach(() => { vi.spyOn(global, 'fetch'); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('returns { ok: false, error: "no_token" } when token is absent', async () => {
-    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', { apiBaseUrl: OPTS.apiBaseUrl });
-    expect(result).toEqual({ ok: false, error: 'no_token' });
-    expect(fetch).not.toHaveBeenCalled();
-  });
+  // ETP-4576 — the absent-token case is gone: under the cookie scheme no client holds one, so
+  // the guard would reject every authenticated user. A missing apiBaseUrl still short-circuits
+  // and keeps the historical `no_token` code so callers stay unchanged.
 
   it('returns { ok: false, error: "no_token" } when apiBaseUrl is absent', async () => {
     const result = await persistDeclarationStatus('303-2026-T2', 'submitted', { token: OPTS.token });

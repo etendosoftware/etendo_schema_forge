@@ -26,7 +26,7 @@ export function useWindowFilterPresets(windowName) {
   );
 
   const refresh = useCallback(() => {
-    if (!windowName || !token) return;
+    if (!windowName) return;
     setLoading(true);
     apiFetch(path())
       .then((res) => (res.ok ? res.json() : {}))
@@ -43,7 +43,7 @@ export function useWindowFilterPresets(windowName) {
 
   const savePreset = useCallback(
     async (presetName, payload) => {
-      if (!windowName || !token || !presetName) return;
+      if (!windowName || !presetName) return;
       const url = `${path()}/${encodeURIComponent(presetName)}`;
       await apiFetch(url, {
         method: 'PUT',
@@ -56,7 +56,7 @@ export function useWindowFilterPresets(windowName) {
 
   const deletePreset = useCallback(
     async (presetName) => {
-      if (!windowName || !token || !presetName) return;
+      if (!windowName || !presetName) return;
       const url = `${path()}/${encodeURIComponent(presetName)}`;
       await apiFetch(url, { method: 'DELETE' });
       setPresets((prev) => {

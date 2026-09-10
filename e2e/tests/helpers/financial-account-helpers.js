@@ -65,8 +65,9 @@
  * Same reasoning as `ensureProductSetup()` (product-helpers.js) and
  * `ensureSecondaryWarehouse()` (warehouse-helpers.js). Everything below talks to
  * `/sws/neo/**` through `page.request` (Playwright's APIRequestContext),
- * authenticated with the bearer token `login(page)` already put in
- * `localStorage['sf_auth_token']`.
+ * authenticated with whatever credential `login(page)` established — see
+ * `apiAuthHeaders()` in auth.js, which serves the cookie session and the legacy
+ * bearer alike (ETP-4576).
  *
  * Endpoints used — every one verified routable in
  * `com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml`, none guessed:
@@ -136,6 +137,8 @@
  *     locator can never match both.
  */
 
+import { apiAuthHeaders } from './auth.js';
+
 const FINANCIAL_ACCOUNT_SPEC = '/sws/neo/financial-account';
 const ACCOUNT_ENTITY = `${FINANCIAL_ACCOUNT_SPEC}/account`;
 
@@ -170,15 +173,12 @@ export const CASH_ACCOUNT_FIXTURE = {
   type: 'C',
 };
 
+// ETP-4576: the credential comes from apiAuthHeaders, not from localStorage. Under the cookie
+// session there is no bearer in localStorage at all, so reading `sf_auth_token` here threw on
+// every run. apiAuthHeaders returns whichever credential this run actually uses (the cookie
+// CSRF proof or the legacy bearer) plus the Origin the backend's CSRF gate requires.
 async function getAuthHeaders(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureFinancialAccountSetup could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureFinancialAccountSetup(page).',
-    );
-  }
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return { ...(await apiAuthHeaders(page)), 'Content-Type': 'application/json' };
 }
 
 /** NEO wraps CRUD read/create responses in `{ response: { data: [...] } }`. */

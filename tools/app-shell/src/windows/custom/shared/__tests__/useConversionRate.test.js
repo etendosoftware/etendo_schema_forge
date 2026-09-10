@@ -22,7 +22,9 @@ describe('useConversionRate (ETP-4504)', () => {
   });
 
   it('short-circuits (no fetch) when currencies match or a required input is missing', () => {
-    assert.match(src, /if \(!fromCode \|\| !toCode \|\| fromCode === toCode \|\| !apiBaseUrl \|\| !token\)/);
+    // ETP-4576 — the `!token` conjunct is gone: under the cookie scheme the client holds
+    // no token, so it was permanently true and skipped the lookup for every user.
+    assert.match(src, /if \(!fromCode \|\| !toCode \|\| fromCode === toCode \|\| !apiBaseUrl\)/);
     assert.match(src, /if \(!date\)/);
   });
 

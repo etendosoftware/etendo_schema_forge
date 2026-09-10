@@ -20,6 +20,7 @@ vi.mock('@/components/ui/custom-icons', () => ({
 }));
 
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import userEvent from '@testing-library/user-event';
 import { ImageField } from '../ImageField.jsx';
 
@@ -51,6 +52,10 @@ function fileInput(container) {
 const BLOB_URL = 'blob:mock-image';
 
 describe('ImageField — behaviour', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tk' }));
+
   let createObjectURL;
   let revokeObjectURL;
 
@@ -93,13 +98,16 @@ describe('ImageField — behaviour', () => {
       ));
     });
 
-    it('does not fetch when there is no imageId or no token', () => {
+    // ETP-4576 — only the imageId half of this still holds. Without one there is nothing to
+    // request; without a token there is, because under the cookie scheme no client ever holds
+    // one and gating on it hid every image from every authenticated user.
+    it('does not fetch without an imageId, but does fetch without a token', () => {
       const { unmount } = render(<ImageField token="tk" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
       expect(globalThis.fetch).not.toHaveBeenCalled();
       unmount();
 
       render(<ImageField imageId="IMG-1" apiBaseUrl="/sws/neo" onChange={vi.fn()} />);
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalled();
     });
 
     it('keeps the placeholder when the image request fails', async () => {

@@ -56,6 +56,7 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
 }));
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReturnWindowShell from '../ReturnWindowShell.jsx';
 
@@ -66,6 +67,10 @@ function PageComponent(props) {
 }
 
 describe('ReturnWindowShell', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tkn' }));
+
   beforeEach(() => {
     vi.clearAllMocks();
     rowDeleteConfig = null;

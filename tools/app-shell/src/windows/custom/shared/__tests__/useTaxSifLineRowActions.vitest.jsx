@@ -13,6 +13,7 @@
 
 // Mocks must come before imports (Vitest hoisting)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 
 const useFiscalConfigMock = vi.fn();
 const useAuthMock = vi.fn();
@@ -109,6 +110,10 @@ beforeEach(() => {
 });
 
 describe('isTaxSifMissing — pure completeness check', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   const ctx = { profile: 'tbai', verifactuRecord: null, ui: (k) => k };
 
   it('returns false for a null/undefined taxRow', () => {
@@ -257,11 +262,14 @@ describe('useTaxSifLineRowActions — fetch gating', () => {
     expect(result.current.modal).toBeNull();
   });
 
-  it('does not fetch when apiBaseUrl, token, or recordId is missing', () => {
+  it('does not fetch when apiBaseUrl, token, or recordId is missing — inverted: the cookie carries the session', () => {
     renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: '', token: TOKEN, enabled: true, recordId: RECORD_ID }));
     renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: '', enabled: true, recordId: RECORD_ID }));
     renderHook(() => useTaxSifLineRowActions({ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: null }));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   it('a failed header fetch (ok:false) is swallowed — no crash, cellBadges.tax stays absent for the row', async () => {

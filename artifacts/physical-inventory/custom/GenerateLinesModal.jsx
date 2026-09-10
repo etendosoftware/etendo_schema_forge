@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { SquareCheckbox } from '@/windows/custom/shared/SquareCheckbox';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Codes match the backend AD process param `QtyRange` — do NOT change them.
 const QTY_OPTIONS = [
@@ -28,17 +29,19 @@ export default function GenerateLinesModal({ recordId, apiBaseUrl, token, onClos
   const [submitting, setSubmitting] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
-    fetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`, { headers })
+    apiFetch(`${base}/product/product/selectors/M_Product_Category_ID?_startRow=0&_endRow=500`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((j) => setCategories(j?.items || []))
       .catch(() => {});
-  }, [base, headers]);
+  }, [base, apiFetch]);
 
   const handleGenerate = async () => {
     if (submitting) return;
@@ -54,9 +57,9 @@ export default function GenerateLinesModal({ recordId, apiBaseUrl, token, onClos
       if (categoryId) {
         payload.M_Product_Category_ID = categoryId;
       }
-      const res = await fetch(`${apiBaseUrl}/inventory/${recordId}/action/generateLines`, {
+      const res = await apiFetch(`${apiBaseUrl}/inventory/${recordId}/action/generateLines`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify(payload),
       });
       if (!res.ok) {

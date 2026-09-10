@@ -230,10 +230,6 @@ export default function UpgradePage() {
   useEffect(() => {
     let cancelled = false;
     const token = getCheckoutToken();
-    if (!token) {
-      setAccountState('unavailable');
-      return undefined;
-    }
 
     fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
       .then(list => {
@@ -276,7 +272,7 @@ export default function UpgradePage() {
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token || !tenantName) {
+    if (!requestId || !tenantName) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
@@ -331,11 +327,6 @@ export default function UpgradePage() {
 
   const runUpgrade = async () => {
     const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
-      return;
-    }
 
     setPhase('running');
     // Duration is measured from here to the terminal event in the resume

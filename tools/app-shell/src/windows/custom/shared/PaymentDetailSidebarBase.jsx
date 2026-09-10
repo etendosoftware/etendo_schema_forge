@@ -293,7 +293,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   }, [data?.id]);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
     const linesEntity = isIn ? 'finPaymentScheduleDetail' : 'lines';
     let cancelled = false;

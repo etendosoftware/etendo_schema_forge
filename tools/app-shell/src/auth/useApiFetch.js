@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  createApiFetch, getAmbientToken, useAuthOptional,
+  createApiFetch, getSessionCsrfToken, useAuthOptional,
 } from '@etendosoftware/app-shell-core/auth';
 import { useLogout } from '@/auth/useLogout.js';
 
@@ -23,7 +23,11 @@ import { useLogout } from '@/auth/useLogout.js';
  */
 export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
-  const token = auth?.token ?? null;
+  // ETP-4576 — the CSRF proof, never the credential. createApiFetch puts this argument into
+  // `X-Go-CSRF` on unsafe methods: handing it `auth.token` (or the ambient bearer) sent the
+  // credential out in the proof's header under the bearer scheme, and under the cookie one
+  // put a value that is not the proof where the backend expects it — a 403 on every write.
+  const csrfToken = auth?.csrfToken ?? null;
   const logout = useLogout();
   // Depend on WHETHER there is a session, never on the context object's identity: a provider
   // (or a test double) that hands back a fresh object each render would otherwise produce a
@@ -31,9 +35,14 @@ export function useApiFetch(baseUrl) {
   // re-fire forever.
   const hasSession = auth != null;
 
+  // Falls back to the published store rather than trusting the context alone: a provider
+  // that holds no `csrfToken` (it is populated by the session restore, and a host can mount
+  // one before that settles) would otherwise hand back null and send an unsafe request with
+  // no proof at all — a 403 on the write while every read still succeeds. The context value
+  // still wins when it has one, so a fresher provider value is not lost.
   return useMemo(() => createApiFetch(
     baseUrl,
-    hasSession ? () => token : getAmbientToken,
+    hasSession ? () => csrfToken ?? getSessionCsrfToken() : getSessionCsrfToken,
     logout,
-  ), [baseUrl, hasSession, token, logout]);
+  ), [baseUrl, hasSession, csrfToken, logout]);
 }

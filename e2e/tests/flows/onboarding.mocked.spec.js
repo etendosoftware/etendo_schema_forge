@@ -42,7 +42,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/go/register', async route => {
+  await page.route('**/sws/go/session/register', async route => {
     const body = route.request().postDataJSON();
     expect(body).toMatchObject({
       name: 'QA Onboarding User',
@@ -101,12 +101,14 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
-  await page.route('**/sws/go/login?userId=USER_1', async route => {
+  await page.route('**/sws/go/session/environment', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
+      // ETP-4576 — entering an environment updates the backend-managed session and reports
+      // `status`; it no longer mints a token for the client to hold.
       body: JSON.stringify({
-        token: 'env-token',
+        status: 'success',
         roleList: [{
           id: 'ROLE_1',
           name: 'Admin',

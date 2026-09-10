@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Confirmation modal for Sales Order.
@@ -34,10 +35,13 @@ export default function OrderConfirmModal({
   const [needsReload,    setNeedsReload]    = useState(false);
 
   const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
 
   // Fetch fresh record + line count on mount
@@ -46,8 +50,8 @@ export default function OrderConfirmModal({
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${orderUrl}/${orderId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${orderUrl}/${orderId}`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -62,7 +66,7 @@ export default function OrderConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId, orderUrl, apiBaseUrl, headers]);
+  }, [orderId, orderUrl, apiBaseUrl, apiFetch]);
 
   const d              = freshData || data || {};
   const documentNo     = d.documentNo || '';
@@ -93,9 +97,9 @@ export default function OrderConfirmModal({
     try {
       // Step 1: Confirm the order (always)
       if (!orderProcessed) {
-        const processRes = await fetch(
+        const processRes = await apiFetch(
           `${orderUrl}/${orderId}/action/DocAction`,
-          { method: 'POST', headers, body: JSON.stringify({ action: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ action: 'CO' }) },
         );
         if (!processRes.ok) {
           const err = await processRes.json().catch(() => null);
@@ -122,9 +126,9 @@ export default function OrderConfirmModal({
 
       // Step 2: Create shipment if checked
       if (createShipment) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${orderUrl}/${orderId}/action/createShipment`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -145,9 +149,9 @@ export default function OrderConfirmModal({
       // Step 3: Create invoice if checked.
       // Uses order quantities (ordered - already invoiced), independent of the shipment above.
       if (createInvoice) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${orderUrl}/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);

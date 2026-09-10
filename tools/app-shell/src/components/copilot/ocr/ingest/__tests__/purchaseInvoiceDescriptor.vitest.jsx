@@ -205,8 +205,10 @@ describe('purchaseInvoiceDescriptor', () => {
   });
 
   describe('resolveTaxesForLines', () => {
-    it('returns empty for no token', async () => {
-      expect(await resolveTaxesForLines({ token: null, lines: [{}] })).toEqual([]);
+    // ETP-4576 — a missing token is not a reason to skip the lookup: under the cookie scheme
+    // no client holds one, so this returned empty for every authenticated user.
+    it('still resolves when no token is held', async () => {
+      expect(await resolveTaxesForLines({ lines: [{}] })).not.toEqual([]);
     });
 
     it('returns empty for empty lines', async () => {

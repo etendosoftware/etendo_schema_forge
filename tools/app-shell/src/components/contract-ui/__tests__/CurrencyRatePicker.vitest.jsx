@@ -453,7 +453,9 @@ describe('CurrencyRatePicker', () => {
     expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
   });
 
-  it('does not fetch options when the component token prop is missing', () => {
+  // ETP-4576 — inverted: the picker must still load its options with no token prop, since
+  // under the cookie scheme nothing hands it one.
+  it('still fetches options when the component token prop is missing', () => {
     render(
       <CurrencyRatePicker
         field={FIELD}
@@ -470,7 +472,7 @@ describe('CurrencyRatePicker', () => {
     // /sws/neo/session call still fires — only the component's own currencyOptions
     // fetch must be gated on the token PROP.
     const calledUrls = globalThis.fetch.mock.calls.map((c) => String(c[0]));
-    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(false);
+    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(true);
   });
 
   it('shows a required marker when the field is required', () => {

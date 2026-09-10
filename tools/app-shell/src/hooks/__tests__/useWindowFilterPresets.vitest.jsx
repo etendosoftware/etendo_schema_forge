@@ -49,11 +49,16 @@ describe('useWindowFilterPresets', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', async () => {
+  // ETP-4576 — inverted: under the cookie scheme the client holds no token, so the presets
+  // must still be requested. Gating on one made the whole feature silently disappear.
+  it('still fetches when no token is held', async () => {
     mockToken = '';
+    // The request actually goes out now, so the mock has to answer like the others do —
+    // before, the token guard short-circuited and nothing ever awaited this.
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     const { result } = renderHook(() => useWindowFilterPresets('w'));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   it('falls back to {} when the response is not ok', async () => {

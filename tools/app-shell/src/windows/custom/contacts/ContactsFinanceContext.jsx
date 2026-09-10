@@ -26,7 +26,7 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
   const apiFetch = useApiFetch(apiBaseUrl);
 
   useEffect(() => {
-    if (!recordId || !token || !apiBaseUrl) {
+    if (!recordId || !apiBaseUrl) {
       setStats(null);
       setTrend(null);
       return;
