@@ -368,8 +368,18 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
       {visibleColumns.map((col, idx) => {
         const isDebit = col.key === balanceFooter.debitField;
         const isCredit = col.key === balanceFooter.creditField;
-        const testId = isDebit ? 'balance-footer-debit' : isCredit ? 'balance-footer-credit' : undefined;
-        const cellContent = isDebit ? balanceFooter.debitTotal : isCredit ? balanceFooter.creditTotal : '';
+        let testId;
+        let cellContent;
+        if (isDebit) {
+          testId = 'balance-footer-debit';
+          cellContent = balanceFooter.debitTotal;
+        } else if (isCredit) {
+          testId = 'balance-footer-credit';
+          cellContent = balanceFooter.creditTotal;
+        } else {
+          testId = undefined;
+          cellContent = '';
+        }
         return (
           <div
             key={col.key}
