@@ -24,6 +24,7 @@ import { useLogout } from '@/auth/useLogout.js';
 export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
   const token = auth?.token ?? null;
+  const apiSessionScope = auth?.apiSessionScope ?? null;
   const logout = useLogout();
   // Depend on WHETHER there is a session, never on the context object's identity: a provider
   // (or a test double) that hands back a fresh object each render would otherwise produce a
@@ -35,5 +36,6 @@ export function useApiFetch(baseUrl) {
     baseUrl,
     hasSession ? () => token : getAmbientToken,
     logout,
-  ), [baseUrl, hasSession, token, logout]);
+    apiSessionScope,
+  ), [baseUrl, hasSession, token, logout, apiSessionScope]);
 }
