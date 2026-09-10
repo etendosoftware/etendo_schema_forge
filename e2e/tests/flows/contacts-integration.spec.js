@@ -220,6 +220,59 @@ async function fillNifField(page, value) {
   await taxIdInput.fill(value);
 }
 
+/**
+ * Fill the Dirección tab of the "Nuevo contacto" modal — the section rendered by
+ * AddressSection.jsx, shared by the company and Persona flows below.
+ *
+ * Also the ETP-5103 checkpoints for this popup: País opens preselected with
+ * Spain (CP-1) and stays changeable through the picker (CP-2), and "Primera
+ * línea" is mandatory, so Guardar cannot enable until it is filled (CP-3/CP-4).
+ *
+ * The `\*?` in both label regexes is required: since ETP-5103 the label renders
+ * a mandatory asterisk inside the same element and Playwright matches getByText
+ * against the full textContent. Do not "clean up" the `\*?`.
+ */
+async function fillNewContactAddress(page, addressLine) {
+  const primeraLabel = page.getByText(/^primera l[ií]nea\s*\*?$/i);
+  await primeraLabel.locator('xpath=following::input[1]').fill(addressLine);
+
+  // Unlike the Contacts window's own address modal (LocationEditorModal.jsx),
+  // this picker button carries no aria-haspopup — it is just the button in the field.
+  const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button');
+
+  // CP-1. The catalog is paged through in full before the default can resolve,
+  // so give it room on a real backend.
+  await expect(paisButton).toHaveText(/espa[nñ]a|spain/i, { timeout: 20_000 });
+
+  // CP-2 — the preselection does not lock the field. The option MUST be scoped
+  // to the picker overlay: now that the FIELD button also reads "España", an
+  // unscoped locator resolves to it instead of the option row, and since the
+  // field sits behind the overlay the click burns its timeout on intercepted
+  // pointer events (the same failure ETP-5103 already fixed for the other modal
+  // above).
+  //
+  // Two guards, because each alone is ambiguous. `div.fixed.inset-0` is not
+  // enough: EntityCreationModal's own overlay carries that exact class pair
+  // (z-50, EntityCreationModal.jsx:565) and, being an ANCESTOR of the picker,
+  // it satisfies a `has: <search box>` filter too — both resolve, and `.first()`
+  // takes the outer one, which is where the field button lives. `z-[60]` alone
+  // is not enough either: other full-screen overlays share that tier
+  // (RowQuickActions, InvoicePaymentHistoryModal). Only the intersection —
+  // the z-[60] overlay that CONTAINS the country search box — is the picker.
+  await paisButton.click();
+  const countryPicker = page
+    .locator('div[class*="z-[60]"]')
+    .filter({ has: page.getByPlaceholder(/buscar pa[ií]s/i) });
+  const countrySearch = countryPicker.getByPlaceholder(/buscar pa[ií]s/i);
+  await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+  await countrySearch.fill(COUNTRY_SEARCH_TERM);
+
+  const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+    .or(countryPicker.getByRole('button', { name: /^spain$/i }));
+  await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+  await countryOption.first().click();
+}
+
 
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
@@ -850,25 +903,13 @@ test.describe('Contacts Integration — Full journey', () => {
     // NIF (see fillNifField's own doc comment for the anchoring rationale)
     await fillNifField(page, TAX_ID);
 
-    // País — opens a search dialog (Dirección tab, active by default).
-    // Unlike the Contacts window's own address modal, country IS required here
-    // (see CreateContactModal.jsx requiredFields), so AddressSection renders a
-    // "*" marker inside the same <label> — "País*", not an exact "País" — hence
-    // no end anchor on the regex. Also: this modal uses its own AddressSection.jsx
-    // (distinct from the Contacts window's LocationModalField.jsx), whose picker
-    // button has no aria-haspopup attribute — just the plain button in the field.
-    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
-    await paisButton.click();
-    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
-    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
-    await countrySearch.fill('Espa');
-    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-      .or(page.getByRole('button', { name: /^spain$/i }));
-    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
-    await countryOption.first().click();
+    // Dirección tab (active by default) — Primera línea and País are both
+    // mandatory here, so Guardar cannot enable until this runs.
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeDisabled();
+    await fillNewContactAddress(page, `E2E Address ${ts}`);
 
     // Guardar contacto
-    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
     await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
     const createBpResponse = page.waitForResponse(
       (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
@@ -965,19 +1006,12 @@ test.describe('Contacts Integration — Full journey', () => {
     // NIF (see fillNifField's own doc comment for the anchoring rationale)
     await fillNifField(page, TAX_ID);
 
-    // País
-    const paisButton = page.getByText(/^pa[ií]s/i).locator('..').locator('button');
-    await paisButton.click();
-    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
-    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
-    await countrySearch.fill('Espa');
-    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-      .or(page.getByRole('button', { name: /^spain$/i }));
-    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
-    await countryOption.first().click();
+    // Dirección tab — same mandatory pair as the company flow above.
+    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
+    await expect(saveContactBtn).toBeDisabled();
+    await fillNewContactAddress(page, `E2E Address ${ts}`);
 
     // Guardar contacto
-    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
     await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
     const createBpResponse = page.waitForResponse(
       (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
