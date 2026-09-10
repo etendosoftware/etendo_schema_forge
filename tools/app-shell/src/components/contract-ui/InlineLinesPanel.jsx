@@ -320,6 +320,63 @@ function renderDimensionsSubRow({
 }
 
 /**
+ * ETP-5210 — renders the debit/credit totals as a row pixel-aligned with the
+ * grid's own columns, replacing the old standalone "Total debe"/"Total haber"
+ * summary block (BalanceFooterPanel) for the inlineEditable layout. Mirrors
+ * the EXACT leading/trailing chrome and per-column `flex` the header row above
+ * uses (chevron placeholder, checkbox-column placeholder, `columnFlex(col,
+ * idx)` per visible column, the reserved action-strip slot, the right
+ * spacer) so the same `columns`/width source of truth drives both — no
+ * parallel width calculation that could drift from the grid. Every column
+ * renders blank except the one matching `balanceFooter.debitField` /
+ * `creditField`, which shows the (already formatted — see
+ * `buildBalanceFooterGridTotals` in detailViewHelpers.jsx) sum, right-aligned
+ * like every other amount cell in the grid.
+ */
+function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle }) {
+  if (!balanceFooter) return null;
+  return (
+    <div
+      data-testid="balance-footer-row"
+      className="flex items-stretch border-t font-semibold"
+      // ETP-5210 — cellStyle's own `fontWeight: TOKENS.cellFontWeight` (400,
+      // normal) is spread AFTER the className, so as an inline style it would
+      // otherwise silently win over the `font-semibold` class (inline style
+      // beats a class at equal specificity) and the totals row would render
+      // in normal weight despite the class intent. Re-assert 600 last so the
+      // row actually reads bold, matching every other accounting totals row.
+      style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle, fontWeight: 600 }}
+    >
+      {hasDimensionsPanel && (
+        <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+      )}
+      <div style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+      {visibleColumns.map((col, idx) => {
+        const isDebit = col.key === balanceFooter.debitField;
+        const isCredit = col.key === balanceFooter.creditField;
+        return (
+          <div
+            key={col.key}
+            data-testid={isDebit ? 'balance-footer-debit' : isCredit ? 'balance-footer-credit' : undefined}
+            className="flex items-center tabular-nums"
+            style={{
+              padding: `0 ${TOKENS.cellPaddingX}px`,
+              flex: columnFlex(col, idx),
+              justifyContent: (isDebit || isCredit) ? 'flex-end' : 'flex-start',
+              minWidth: 0,
+            }}
+          >
+            {isDebit ? balanceFooter.debitTotal : isCredit ? balanceFooter.creditTotal : ''}
+          </div>
+        );
+      })}
+      {reserveActionSlot && <div style={{ flex: '0 0 160px' }} aria-hidden="true" />}
+      <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+    </div>
+  );
+}
+
+/**
  * Renders a single body cell for a line row — extracted out of the row-map callback
  * (Sonar S3776: nesting this inside both the row `.map` and the column `.map` pushed
  * cognitive complexity past the threshold). Handles the two cell shapes: a suppressed
@@ -785,6 +842,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // this prop at all — every existing caller today) renders byte-for-byte the
   // same as before this slot existed.
   cellBadges = {},
+  // ETP-5210 — optional aligned totals row for double-entry windows
+  // (decisions.json window.balanceFooter). Shape: { debitField, creditField,
+  // debitTotal, creditTotal } — debitTotal/creditTotal are ALREADY formatted
+  // strings (DetailView.jsx's buildBalanceFooterGridTotals reuses the shared
+  // formatCurrency + the same balanceState that gates Save/Complete, so this
+  // component stays a dumb renderer with no currency-formatting logic of its
+  // own). debitField/creditField are matched against `columns[].key` so the
+  // sums land under the actual Débito/Crédito columns, wherever they are and
+  // however wide they are, instead of a separate summary block. Purely
+  // additive — every existing caller omits it and renders identically.
+  balanceFooter = null,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1351,6 +1419,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           </React.Fragment>
         );
       })}
+      {renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle })}
       </div>
     </div>
   );

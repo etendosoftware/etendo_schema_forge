@@ -1258,9 +1258,15 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 ---
 
-### 15. `window.balanceFooter` — debit/credit balance footer
+### 15. `window.balanceFooter` — debit/credit balance totals
 
-**What it does:** replaces the product/discount/tax totals panel with a `BalanceFooterPanel` for double-entry windows. It shows **Σ debit**, **Σ credit**, the **difference**, and a **balanced ✓ / unbalanced ✗** badge, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft; the badge stays hidden until the lines carry amounts.
+**What it does:** replaces the product/discount/tax totals panel with debit/credit totals (**Σ debit**, **Σ credit**) for double-entry windows, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft.
+
+**Where the totals render depends on `linesLayout` (ETP-5210):**
+- `linesLayout: "inlineEditable"` (the common case) — `InlineLinesPanel` renders the totals as a row **inside the lines grid itself**, pixel-aligned under the actual `debitField`/`creditField` columns (via the grid's own `columnFlex()` — no parallel width math, no drift). Every other column gets a blank cell. No Difference amount, no balanced ✓/✗ badge — display-only totals, trimmed since ETP-4917.
+- classic (`DataTable`) `linesLayout` — no window uses this combination yet. `renderTotalsBlock()` falls back to the older standalone `BalanceFooterPanel`, rendered **below** the grid (not column-aligned), which still shows only Σ debit/Σ credit for the same ETP-4917 reason.
+
+Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1279,10 +1285,11 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
 - `cli/src/generate-contract.js` — copied into `frontendContract.window.balanceFooter`.
 - `cli/src/generate-frontend.js` — emits `balanceFooter={...}` on `<DetailView>` when present.
-- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — renders `BalanceFooterPanel` instead of `DocumentTotalsPanel` and gates the Save buttons via `blockSaveForBalance`.
-- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + rendering.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
+- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
 
-**Real example:** `simple-g-l-journal` (Manual Journals — the first window to ship the balance footer).
+**Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
 ---
 
