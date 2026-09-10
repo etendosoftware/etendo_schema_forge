@@ -122,12 +122,21 @@ beforeEach(() => {
     me: jsonResponse(IDENTITY),
     invoices: jsonResponse(INVOICES),
     pdf: blobResponse(new Blob(['%PDF-1.4'], { type: 'application/pdf' })),
+    // 404 by default: the fixture identity carries no `hasLogo`, so the page never asks for this
+    // unless a test opts in. A default 200 would make the logo appear in every assertion.
+    logo: jsonResponse({}, { status: 404 }),
   };
   apiFetchMock.mockImplementation(async (path) => {
+    // Routed on the path with any query string stripped: `/invoices` carries `?limit&offset`
+    // since paging landed, and `/logo` is requested only when `/me` reports `hasLogo`. Matching
+    // the raw string would silently fall through to the throw below on any new parameter — which
+    // reaches the page as a load failure, i.e. a fixture gap wearing a source bug's clothes.
+    const route = path.split('?')[0];
     let answer;
-    if (path.endsWith('/me')) answer = responses.me;
-    else if (path.endsWith('/invoices')) answer = responses.invoices;
-    else if (path.endsWith('/pdf')) answer = responses.pdf;
+    if (route.endsWith('/me')) answer = responses.me;
+    else if (route.endsWith('/invoices')) answer = responses.invoices;
+    else if (route.endsWith('/pdf')) answer = responses.pdf;
+    else if (route.endsWith('/logo')) answer = responses.logo;
     else throw new Error(`unexpected portal path: ${path}`);
 
     if (answer === NETWORK_FAILURE) throw new TypeError('Failed to fetch');
