@@ -996,18 +996,24 @@ export function useEntity(entity, childEntity, {
         setRegisteredFieldsKey(prev => (prev === next ? prev : next));
     }, []);
 
-    // True when editing has diverged from the last-saved selected state.
-    // For new records (selected === null): dirty as soon as any non-id field has a value.
-    const isDirtyHeader = useMemo(() => {
+    // ETP-4839 follow-up: the field-level keys behind isDirtyHeader below, generalized
+    // from a boolean to a list so a caller (DetailView's completed-document save gate)
+    // can tell WHICH fields are dirty, not just whether any are. Same divergence rule
+    // as before, unchanged: for new records (selected === null), dirty as soon as any
+    // non-id field has a value; otherwise, dirty when editing[key] !== selected[key].
+    const dirtyHeaderFieldKeys = useMemo(() => {
         if (!selected) {
-            return Object.keys(editing || {}).some(
+            return Object.keys(editing || {}).filter(
                 k => k !== 'id' && editing[k] != null && editing[k] !== ''
             );
         }
-        return Object.entries(editing || {}).some(
-            ([key, val]) => key !== 'id' && val !== selected[key]
-        );
+        return Object.entries(editing || {})
+            .filter(([key, val]) => key !== 'id' && val !== selected[key])
+            .map(([key]) => key);
     }, [editing, selected]);
+
+    // True when editing has diverged from the last-saved selected state.
+    const isDirtyHeader = useMemo(() => dirtyHeaderFieldKeys.length > 0, [dirtyHeaderFieldKeys]);
 
     /**
      * The list query minus its row window: the sort plus every filter layer, composed exactly
@@ -2031,7 +2037,7 @@ export function useEntity(entity, childEntity, {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
         runningProcess,
         blockingCondition, completionSignal,
-        isDirtyHeader,
+        isDirtyHeader, dirtyHeaderFieldKeys,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

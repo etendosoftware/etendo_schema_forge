@@ -46,7 +46,10 @@ const draftMode = {
   "enabled": true,
   "processField": "documentAction",
   "processValue": "CO",
-  "label": "Confirm"
+  "label": "Confirm",
+  "keepSaveWhenCompletedFields": [
+    "orderReference"
+  ]
 };
 // @sf-generated-end draftMode:header
 

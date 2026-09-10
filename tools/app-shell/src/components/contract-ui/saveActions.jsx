@@ -17,7 +17,10 @@ import { toast } from 'sonner';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 
 /**
- * The required-field gate shared by every primary persist button.
+ * The required-field gate shared by every primary persist button. ETP-4839 layers a
+ * second, independent gate on top (see `buildCompletedFieldsGate` below): both share
+ * the exact same `{ blocked, title, missingAttr }` shape so every consumer of
+ * `saveGate` (GateTooltip + the Button's `disabled`) keeps working unchanged.
  *
  * `blocked` feeds `disabled`, `title` explains WHY in the user's language, and
  * `missingAttr` exposes the reason to E2E as a locale-independent data attribute
@@ -26,19 +29,58 @@ import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
  * label and finally the field key, so a missing translation degrades to something
  * readable rather than blank.
  */
-export function buildSaveGate({ isValid, missingRequiredFields = [], labelFor, ui }) {
+export function buildSaveGate({
+  isValid, missingRequiredFields = [], labelFor, ui,
+  draftMode, isDraftModeCompleted = false, dirtyFieldKeys = [], gateFields = [],
+}) {
   // Fails OPEN, deliberately: block only when we actually know WHICH fields are
   // missing. A caller that reports no validity at all (`isValid === undefined` —
   // a mocked hook, or any consumer predating ETP-4933) must never end up with a
   // permanently disabled button and an empty explanation.
-  if (isValid || missingRequiredFields.length === 0) {
-    return { blocked: false, title: undefined, missingAttr: undefined };
+  if (!(isValid || missingRequiredFields.length === 0)) {
+    const names = missingRequiredFields.map(f => labelFor?.(f.column) || f.label || f.key);
+    return {
+      blocked: true,
+      title: ui('saveMissingRequired', { fields: names.join(', ') }),
+      missingAttr: missingRequiredFields.map(f => f.key).join(','),
+    };
   }
-  const names = missingRequiredFields.map(f => labelFor?.(f.column) || f.label || f.key);
+  return buildCompletedFieldsGate({ draftMode, isDraftModeCompleted, dirtyFieldKeys, gateFields, labelFor, ui });
+}
+
+/**
+ * ETP-4839 — `window.draftMode.keepSaveWhenCompletedFields` (string[]): once the
+ * document is completed, Save is allowed to persist ONLY the header fields named in
+ * this list (e.g. purchase-invoice's `orderReference`/"N° documento"). "Confirm" is
+ * NEVER re-exposed for a completed document, regardless of this list — that stays
+ * `onlySaveButton`'s job in `renderDraftModeSaveActions`, unconditionally, for every
+ * window (unifying the earlier per-window `completedStatuses` idempotency exception).
+ *
+ * Fails CLOSED here, unlike the required-field gate above: if the user has ANY dirty
+ * header field outside the allowed list, Save is blocked entirely — never a silent
+ * partial save of just the allowed fields, never a silent save of everything. This was
+ * an explicit human decision (safety over convenience): an unreviewed edit must never
+ * slip through disguised as an allowed one.
+ *
+ * No-op (never blocks) unless the caller passes `isDraftModeCompleted: true` AND a
+ * non-empty `keepSaveWhenCompletedFields` — so every window without the feature, and
+ * every non-completed document, is completely unaffected.
+ */
+function buildCompletedFieldsGate({ draftMode, isDraftModeCompleted, dirtyFieldKeys, gateFields, labelFor, ui }) {
+  const allowedWhenCompleted = draftMode?.keepSaveWhenCompletedFields;
+  const gateActive = isDraftModeCompleted && Array.isArray(allowedWhenCompleted) && allowedWhenCompleted.length > 0;
+  const notBlocked = { blocked: false, title: undefined, missingAttr: undefined };
+  if (!gateActive) return notBlocked;
+  const disallowedDirty = (dirtyFieldKeys || []).filter(key => !allowedWhenCompleted.includes(key));
+  if (disallowedDirty.length === 0) return notBlocked;
+  const names = disallowedDirty.map((key) => {
+    const descriptor = (gateFields || []).find(f => f?.key === key);
+    return (descriptor && labelFor?.(descriptor.column)) || descriptor?.label || key;
+  });
   return {
     blocked: true,
-    title: ui('saveMissingRequired', { fields: names.join(', ') }),
-    missingAttr: missingRequiredFields.map(f => f.key).join(','),
+    title: ui('saveBlockedFieldsNotAllowedWhenCompleted', { fields: names.join(', ') }),
+    missingAttr: disallowedDirty.join(','),
   };
 }
 
@@ -106,6 +148,7 @@ function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
   draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal, saveGate = {},
+  onlySaveButton = false,
 }) {
   return (
     <>
@@ -122,10 +165,20 @@ function renderDraftModeSaveActions({
         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
-      <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-        {ui(draftMode.label) || draftMode.label || ui('process')}
-      </Button></GateTooltip>
+      {/* ETP-4839: `draftMode.keepSaveWhenCompletedFields` keeps Save visible once
+         the document is completed (isDraftModeCompleted, see DetailView.jsx) while
+         the process/"Confirm" button below stays hidden UNCONDITIONALLY — its
+         handler always sends `processField`, which some backends are not idempotent
+         against on an already-completed document. `onlySaveButton` is the
+         render-time signal for that state; Save's own enabled/disabled state is a
+         separate concern handled by `saveGate` (see buildCompletedFieldsGate). Does
+         not change behaviour on any window without a non-empty array configured. */}
+      {!onlySaveButton && (
+        <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
+          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+          {ui(draftMode.label) || draftMode.label || ui('process')}
+        </Button></GateTooltip>
+      )}
     </>
   );
 }

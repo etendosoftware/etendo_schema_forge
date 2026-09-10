@@ -870,6 +870,9 @@ function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField)
       )
   );
 }
+// ETP-4839 — extracted out of DetailView's body so this stays off its S3776 score.
+function shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode) { return !isDraftModeCompleted || (Array.isArray(draftMode?.keepSaveWhenCompletedFields) && draftMode.keepSaveWhenCompletedFields.length > 0); }
+function onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode) { return isDraftModeCompleted && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode); }
 
 export function getDetailContentContainerClassName({
   linesLayout,
@@ -1447,14 +1450,6 @@ export function DetailView({
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
   const tField = useLabel(labelOverrides ?? api?.labelOverrides);
   const ui = useUI();
-  // ETP-4933: the required-field gate every primary persist button honours. Declared
-  // HERE, among the other hooks, and NOT next to saveActionParams where it is consumed:
-  // an early `return` for the record-loading state sits between the two, so a useMemo
-  // below it runs on some renders and not others — "Rendered fewer hooks than expected".
-  const saveGate = useMemo(
-    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
-    [hook.isValid, hook.missingRequiredFields, tField, ui],
-  );
   // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
   const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
@@ -1557,6 +1552,11 @@ export function DetailView({
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
   const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
+  // ETP-4933/ETP-4839: gate for every persist button — must stay before the loading-state early return below (hook order).
+  const saveGate = useMemo(
+    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui, draftMode, isDraftModeCompleted, dirtyFieldKeys: hook.dirtyHeaderFieldKeys, gateFields }),
+    [hook.isValid, hook.missingRequiredFields, tField, ui, draftMode, isDraftModeCompleted, hook.dirtyHeaderFieldKeys, gateFields],
+  );
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
@@ -2835,7 +2835,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction,
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2948,7 +2948,7 @@ export function DetailView({
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
-              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && !windowReadOnly && processes
@@ -3034,7 +3034,7 @@ export function DetailView({
                   );
                 })}
 
-              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
                  Both live in this one flex row, so source order is visual order, and the
