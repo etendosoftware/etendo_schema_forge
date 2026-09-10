@@ -1268,6 +1268,8 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
 
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
+
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
 **`decisions.json`:**
@@ -1288,6 +1290,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
 
 **Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 

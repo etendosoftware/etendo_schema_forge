@@ -1858,6 +1858,10 @@ function renderFooterRow({
  *  - onDeleteRow: (row) => void — when provided, renders a per-row delete button (trash icon)
  *      that appears on row hover and on keyboard focus. Invoked with the row object; click
  *      propagation is stopped so it does not trigger row selection or navigation.
+ *  - balanceFooter: object | null — presence (not shape) suppresses this table's own generic
+ *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
+ *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
+ *      balanceFooter row) so the two do not stack (ETP-5210).
  */
 export function DataTable({
   entity,
@@ -1888,6 +1892,16 @@ export function DataTable({
   token,
   apiBaseUrl,
   showFooterTotals = true,
+  // ETP-5210 — when a window has opted into the specialized balanceFooter
+  // totals row (InlineLinesPanel's grid-aligned debit/credit totals), this
+  // same balanceFooter object is also spread into the hidden, add-row-only
+  // DataTable instance rendered alongside it (see GLJournalLineTable). That
+  // instance must NOT also render its own generic per-amount-column footer
+  // totals — doing so produced two stacked totals rows (one €-formatted and
+  // aligned, one unformatted) whenever "Añadir línea" was active. A truthy
+  // balanceFooter always suppresses the generic footer, regardless of the
+  // showFooterTotals prop's own value.
+  balanceFooter = null,
   selectorContext,
   onDataMutated,
   labelOverrides,
@@ -2320,7 +2334,7 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
             hasDimensionsPanel,
           })}
