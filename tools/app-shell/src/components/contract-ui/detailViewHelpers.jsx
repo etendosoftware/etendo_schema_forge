@@ -1103,6 +1103,42 @@ export function shouldShowDetailFormSidebar(linesLayout, DetailForm, selectedLin
   return linesLayout !== 'inlineEditable' && DetailForm && (selectedLine || isClosingLine);
 }
 
+/**
+ * Secondary-tab twin of `shouldShowDetailFormSidebar` — decides whether a child
+ * tab renders its `st.Form` as a `w-[48rem]` side panel next to the tab's table.
+ *
+ * ETP-5245 — the `linesLayout !== 'inlineEditable'` term is the point of this
+ * helper. The rule "an inline-editable tab edits in the row, never in a side
+ * form" was enforced in ONE place only: `resolveSecondaryRowClickHandler`
+ * (DetailView.jsx), the row-click ENTRY point. The panel's own render guard and
+ * the empty-state's `detailSidebarOpen` twin both checked `st.Form && !st.Panel`
+ * plus a selection, so anything else that leaves a line selected brought the
+ * panel back — including `closingSecondaryLine`, which is window-global, NOT
+ * scoped to the tab being rendered. That panel is 768px wide: on Producto >
+ * Costo it squeezed the grid to ~500px, wrapped the headers onto two lines and
+ * forced a horizontal scrollbar, while duplicating fields the row already edits
+ * in place. Guarding the render site (rather than adding another entry-point
+ * check) makes the panel impossible for an inline-editable tab whatever sets
+ * the selection.
+ *
+ * Nothing is lost for an inline-editable tab: saving is the per-cell autosave
+ * (`onUpdateRow`), and deleting is the row's own hover trash plus the bulk
+ * SelectionToolbar — both already gated on `linesLayout === 'inlineEditable'`.
+ * A non-inline tab keeps the panel, its Save/Discard and its Delete button.
+ *
+ * @param {object} deps
+ * @param {string} deps.linesLayout Layout of the window's line tables.
+ * @param {object} deps.st Secondary tab definition (`Form`, `Panel`, `key`).
+ * @param {object|null} deps.selectedSecondaryLine Currently open line, if any.
+ * @param {boolean} deps.closingSecondaryLine True while the panel slides out.
+ * @returns {boolean}
+ */
+export function shouldShowSecondaryDetailSidebar({ linesLayout, st, selectedSecondaryLine, closingSecondaryLine }) {
+  if (linesLayout === 'inlineEditable') return false;
+  if (!st?.Form || st?.Panel) return false;
+  return selectedSecondaryLine?._tabKey === st.key || Boolean(closingSecondaryLine);
+}
+
 export function isInitialChildrenLoading(hook) {
   return hook.childrenLoading && hook.children.length === 0;
 }
