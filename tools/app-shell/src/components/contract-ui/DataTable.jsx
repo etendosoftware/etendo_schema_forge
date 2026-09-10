@@ -13,7 +13,7 @@ import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
+import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { resolveFkNavigation } from './fkNavigation.js';
@@ -2345,6 +2345,22 @@ export function DataTable({
           {ui('inlineAddHint')}
         </p>
       )}
+      {/* ETP-5210 follow-up — this DataTable instance is InlineLinesPanel's
+          hidden add-row-only companion table (hideHeader + hideDataRows, see
+          the generated *LineTable wrapper's `addRow?.active` branch). While
+          that add-row form is showing, InlineLinesPanel suppresses its own
+          balanceFooter row (its `lineFormActive` prop, set from the very same
+          addRow.active value in DetailView.jsx) so it renders here instead —
+          always AFTER the add-row form (this element sits below it), never
+          between the saved lines and it. Reuses InlineLinesPanel's exact
+          renderer + cell typography so the two never drift in alignment. */}
+      {hideDataRows && addRow?.active && balanceFooter && renderBalanceFooterRow({
+        balanceFooter,
+        visibleColumns,
+        hasDimensionsPanel,
+        reserveActionSlot: ilpHasNoAmountCol,
+        cellStyle: buildLineCellStyle(),
+      })}
     </div>
   );
 }

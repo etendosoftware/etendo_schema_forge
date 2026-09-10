@@ -59,6 +59,20 @@ export const CHEVRON_COLUMN_WIDTH = 44;
 // leading `cellPaddingX`.
 const DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX;
 
+// Exported alongside `renderBalanceFooterRow` — DataTable's add-row-only companion
+// table (ETP-5210 follow-up) calls that renderer directly to render the aligned
+// totals row after the add-row form, and must use the EXACT same cell typography
+// this component uses for its own rows, or the two footer renders (this panel's
+// and DataTable's) would visibly drift in font size/weight/color.
+export function buildLineCellStyle() {
+  return {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: TOKENS.cellFontSize,
+    fontWeight: TOKENS.cellFontWeight,
+    color: TOKENS.textPrimary,
+  };
+}
+
 const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
 
 // Maps formatSignedDelta's tone key to the semantic theme role — mirrors TONE_CLASS
@@ -333,7 +347,7 @@ function renderDimensionsSubRow({
  * `buildBalanceFooterGridTotals` in detailViewHelpers.jsx) sum, right-aligned
  * like every other amount cell in the grid.
  */
-function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle }) {
+export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle }) {
   if (!balanceFooter) return null;
   return (
     <div
@@ -853,6 +867,21 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // however wide they are, instead of a separate summary block. Purely
   // additive — every existing caller omits it and renders identically.
   balanceFooter = null,
+  // ETP-5210 follow-up — true while the generated *LineTable wrapper's sibling
+  // DataTable is rendering the add-row form (see GLJournalLineTable.jsx:
+  // `props.addRow?.active` branch). That wrapper explicitly strips its OWN
+  // `addRow` prop before spreading the rest onto this component (`addRow=
+  // {undefined}`), so `props.addRow` can never tell this component apart from
+  // the non-add-row render — this is a SEPARATE, un-stripped prop passed
+  // straight through DetailView.jsx's <DetailTable> call (same source value as
+  // addRow.active there), specifically so it survives that spread. When true,
+  // this panel suppresses its own balanceFooter row — the sibling DataTable
+  // (which DOES still receive the real addRow) renders the aligned totals row
+  // itself, positioned after the add-row form instead of before it. Defaults
+  // to false so every caller that doesn't support add-row-vs-footer ordering
+  // (or has no balanceFooter at all) renders exactly as before this prop
+  // existed.
+  lineFormActive = false,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1234,12 +1263,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     fontWeight: TOKENS.headerFontWeight,
     color: TOKENS.textPrimary,
   };
-  const cellStyle = {
-    fontFamily: 'Inter, system-ui, sans-serif',
-    fontSize: TOKENS.cellFontSize,
-    fontWeight: TOKENS.cellFontWeight,
-    color: TOKENS.textPrimary,
-  };
+  const cellStyle = buildLineCellStyle();
 
   return (
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
@@ -1419,7 +1443,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           </React.Fragment>
         );
       })}
-      {renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle })}
+      {/* ETP-5210 follow-up — when an add-row form is active elsewhere (see
+          `lineFormActive` above), the sibling DataTable renders this same row
+          after the add-row form instead, so it never sits between the saved
+          lines and the form. */}
+      {!lineFormActive && renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle })}
       </div>
     </div>
   );
