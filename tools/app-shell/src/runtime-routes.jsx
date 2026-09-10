@@ -61,9 +61,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
       ) },
     // Registered UNCONDITIONALLY, and public: the Business Partner who opens this link has no
     // Etendo account and no session — the token in the path is the whole credential, validated
-    // server-side on every request. The `bp-portal-link` flag gates whether the invoice email
-    // CARRIES a link, never whether the surface exists; it is a rollout control, and a
-    // frontend flag would be visual gating, not authorization (docs/feature-flags.md, which
+    // server-side on every request. Whether an invoice email CARRIES a link is a server-side
+    // decision (a per-sender AD_Preference), never a question about whether this surface exists;
+    // a frontend flag would be visual gating, not authorization (docs/feature-flags.md, which
     // registers `/upgrade` the same way and for the same reason). Nothing here reads a flag.
     { path: 'portal/:token', public: true, element: portalElement },
     // Tokenless `/portal` lands on the same page, which renders the generic

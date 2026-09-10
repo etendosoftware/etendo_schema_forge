@@ -2,7 +2,7 @@
 
 Status: **approved for MVP, ready for DEV** · Created 2026-09-10 ·
 Jira: **[ETP-5267](https://etendoproject.atlassian.net/browse/ETP-5267)** (epic ETP-3504 Etendo Next) ·
-Flag: **`bp-portal-link`** (backend-only, see §2.5)
+Gating: **always on**, one per-sender `AD_Preference` (no feature flag, see §2.5)
 
 ## 0. Goal
 
@@ -20,7 +20,7 @@ outstanding balance, read-only, with no account to register or password to manag
 | Link trigger | **Embedded in the `sales-invoice-send` email** | Reuses the existing document-email pipeline (`SalesInvoiceSendEmailContract.java`, `DalInvoiceEmailDocumentResolver.java`); the BP never has to request access. |
 | Link lifetime | **Stable and reusable (bookmarkable)**, revocable | Matches Holded's UX; security relies on entropy + revocation, not expiry. |
 | Revocation | **Manual only** (action from the Business Partner window), for MVP | Minimum viable kill-switch for a leaked link. Automatic revocation triggers (BP deactivated, email changed, etc.) deferred. |
-| Feature flag | **Gates only the link injection into the email.** The portal surface and its endpoints are unconditional | See §2.5 — this is the documented flag pattern, not a compromise. |
+| Gating | **Always on.** One per-sender `AD_Preference` decides whether the invoice email carries the link; the portal surface and its endpoints are unconditional | See §2.5 — no feature flag: a permanent per-sender condition is backend business logic, which was never a flag's job. |
 
 ## 2. Architecture
 
@@ -42,30 +42,38 @@ already-deployed shell — which is what gives us "portal per tenant" for free �
 `formatCurrency`, `parseCalendarDate`, i18n, and `useApiFetch` (passed the portal token instead of a
 NEO session token, per the existing `token` option documented in `docs/request-policy.md`).
 
-## 2.5 Gating — one flag plus one permanent business rule
+## 2.5 Gating — one permanent business rule, decided by the sender
 
 **Nothing gates the portal itself.** The `/portal/:token` route, the three `/sws/portal/*`
-endpoints, the table and the revoke action all ship unconditionally. What is gated is only whether
-`sales-invoice-send` **carries the link**, and that is decided by two independent conditions that
-must BOTH be true:
+endpoints, the `etgo_portal_access` table and the revoke action all ship unconditionally. What
+protects the portal's data is the opaque token in the URL, validated server-side on every request
+(§5) — never route registration, and never a flag: a frontend flag would be visual gating, not
+authorization (`docs/feature-flags.md` rule 3).
 
-| Layer | Question it answers | Mechanism | Lifetime |
-|---|---|---|---|
-| **1 — Feature flag** `bp-portal-link` | Is this capability enabled in this *environment* at all? | Backend feature flag (below) | **Temporary** — retires at TTL |
-| **2 — Business rule** | Is *this sender* configured to send portal links? | `AD_Preference`, read from `OBContext` (below) | **Permanent** — survives flag retirement |
+**The functionality is always on.** There is no environment switch to open first. Exactly one
+condition decides whether `sales-invoice-send` **carries the link**, and it is a permanent business
+rule about the sender:
 
-Layer 2 is the answer to "depende del usuario logueado" (decided 2026-09-10). It is deliberately
-**not** a flag: `PropertiesFeatureProvider` ignores the evaluation context
+| Question it answers | Mechanism | Lifetime |
+|---|---|---|
+| Is *this sender* configured to send portal links? | `ETGO_BPPortalLinkEnabled` in `AD_Preference`, read from `OBContext` (below) | **Permanent** — it is business logic, not a rollout control |
+
+This is the answer to "depende del usuario logueado" (decided 2026-09-10). It is deliberately
+**not** a feature flag, and the flag machinery could not have expressed it anyway:
+`PropertiesFeatureProvider` ignores the evaluation context
 (*"environment-level rollout, not per-user targeting"*), and per-user flag targeting needs the
 hosted control plane, which is blocked by the open `targeting-key-divergence` precondition. A
-permanent per-user capability was never a flag's job in the first place — see the `feature-debt`
-retirement rule.
+permanent per-sender capability was never a flag's job in the first place — see the `feature-debt`
+retirement rule, which says exactly this.
 
-**Order of evaluation, and why it matters:** check the flag first, the preference second. The flag
-is a cheap in-memory read; the preference is a DB lookup per send. Checking the flag first means a
-flag-off environment does zero extra queries on the invoice-send path.
+> **An environment flag was built and then retired the same day (2026-09-10).** The first
+> implementation ANDed a `bp-portal-link` feature flag in front of the preference. That left the
+> feature off until *two* separate things were configured, and because the flag was resolved by the
+> config-backed provider, flipping it meant a property edit plus a restart. It was redundant rather
+> than protective: an unset preference already means no link, so the safe default was the
+> preference's all along. The flag is gone; the preference is the single gate.
 
-### Layer 2 — the per-sender preference
+### The per-sender preference
 
 Precedent to copy: `NeoFavoritesService` (`src/com/etendoerp/go/schemaforge/NeoFavoritesService.java`)
 — the same per-user `AD_Preference` read/write pattern.
@@ -80,51 +88,29 @@ Preferences.getPreferenceValue(PREF_KEY, false,          // isListProperty = fal
   `AD_Preference.Attribute`. `TenantPlanService` documents getting this backwards as the failure
   mode: with `Property` instead, *"every paid tenant would read"* wrong. Same trap here.
 - **Not set ⇒ no link.** `PropertyNotFoundException` is the normal "not configured" answer, not an
-  error — catch it and return false, as `NeoFavoritesService` does. Opt-in by default, matching the
-  flag's own `false` default.
+  error — catch it and return false, as `NeoFavoritesService` does. The capability is opt-in, and
+  that default is precisely what makes a second gate unnecessary.
 - **Per-tenant control comes free from the same mechanism.** Openbravo resolves preferences
   most-specific-first (user → role → org → client → system), so the preference set at **client**
   level enables a whole tenant and at **user** level enables one person. This fully answers the
   per-tenant question raised earlier — no separate mechanism is needed, and there is no per-tenant
   gap left open.
+- **Changing it is data, not a deploy.** An `AD_Preference` row is edited in the running instance,
+  so enabling or disabling one sender (or a whole tenant) takes effect immediately. For a link
+  that is already out, the lever is per-BP revocation (§1), not the gate — the gate only decides
+  whether NEW links go out.
 
-### Layer 1 — the feature flag
+### Nothing in the browser evaluates the gate
 
-This is deliberately the pattern `docs/feature-flags.md` already documents as correct: the
-`/upgrade` route is registered **unconditionally** and only the menu entry pointing at it is gated,
-because "hiding the route would imply the flag was protecting something, which it is not". Same
-reasoning here — the flag is a rollout control, never a security boundary (rule 3: *frontend flags
-are visual gating only, never authorization*). What protects the endpoints is the token, per §5.
-
-### Backend-only flag, deliberately
-
-The flag is declared and evaluated **exclusively in `com.etendoerp.go`**. Nothing in the browser
-reads it, and no frontend key is declared in `flag-keys.js`.
-
-| | |
-|---|---|
-| Key | `bp-portal-link` — constant on `GoFeatureFlags` |
-| Property | `etendo.go.flags.bp-portal-link` |
-| Env var | `ETGO_FLAG_BP_PORTAL_LINK` |
-| Default | absent ⇒ **`false`** |
-
-Two reasons this must not become a two-sided flag:
-
-1. **The decision point is entirely server-side.** The link is injected while building the email in
-   Java. The browser has no gating decision to make, so giving it a key to read would create a
-   second evaluator with nothing to evaluate.
-2. **ETP-4966's lesson, which the module doc states outright:** *"a flag whose two ends read from
-   different control planes has no single truth… An unset backend key is indistinguishable from a
-   disabled feature — which is how a charged account got a free environment."* A backend-only flag
-   is immune to that class by construction, and it also sidesteps the still-open targeting-key
-   divergence (registry item `targeting-key-divergence`, a standing precondition for any
-   targeting-aware flag). This will be the **first backend flag declared since `tenant-upgrade`
-   retired** — the flag table in `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`
-   currently reads `*(none)*` and must gain this row.
+The decision point is entirely server-side: the link is injected while building the email in Java.
+No key exists in `flag-keys.js`, and `PortalPage` reads no flag. Route registration follows the
+pattern `docs/feature-flags.md` already documents as correct for `/upgrade` — registered
+**unconditionally**, because hiding a route would imply something was protecting it, which nothing
+here is. What protects the endpoints is the token, per §5.
 
 ### Why "always live" is not an exposure
 
-Token minting happens inside the link-injection block (§4 step 2), i.e. behind both gates. So until
+Token minting happens inside the link-injection block (§4 step 2), i.e. behind the gate. So until
 someone is actually sending links, **no `etgo_portal_access` row is ever created** — the always-live
 endpoints have nothing to validate against and answer the same generic "link no longer valid" to
 everything. There is no reachable data and no token to guess (256-bit, §3). The endpoints are live;
@@ -132,20 +118,6 @@ the surface is empty.
 
 This is what makes the unconditional deployment safe, and it is a claim the tests must assert
 (§7) rather than a claim this document merely makes.
-
-### What each gate can and cannot do
-
-| | `bp-portal-link` (flag) | `AD_Preference` (business rule) |
-|---|---|---|
-| Granularity | whole environment | user, role, org **or** client (tenant) |
-| Set where | JVM property / `Openbravo.properties` / env var | `AD_Preference` row, per Etendo conventions |
-| Needs a redeploy to change | yes (config-backed provider) | no |
-| Retires | yes, at TTL | never — it is the permanent rule |
-
-Consequence worth stating: because the flag is config-backed, **flipping it is a deploy, not a
-toggle**. Day-to-day enablement is therefore expected to happen through the preference (no
-redeploy), with the flag acting purely as the environment-wide master switch that stays off in
-production until the MVP is validated.
 
 ## 3. Data model
 
@@ -173,11 +145,11 @@ reuses the same link — never rotates on its own.
 ## 4. Data flow
 
 1. Internal user sends a Sales Invoice (existing "Send" action / kebab).
-2. `SalesInvoiceSendEmailContract` / `DalInvoiceEmailDocumentResolver` is extended, **behind both
-   gates of §2.5** (flag first, then the sender's preference): find-or-create the active
-   `etgo_portal_access` row for `(ad_client_id, c_bpartner_id)`, add the portal URL
-   (`https://<tenant-domain>/portal/<token>`) to the email template context. Either gate closed ⇒
-   the whole block is skipped, so no row is minted and the email is byte-identical to today's.
+2. `SalesInvoiceSendEmailContract` / `DalInvoiceEmailDocumentResolver` is extended, **behind the
+   gate of §2.5** (the sender's preference): find-or-create the active `etgo_portal_access` row for
+   `(ad_client_id, c_bpartner_id)`, add the portal URL
+   (`https://<tenant-domain>/portal/<token>`) to the email template context. Gate closed ⇒ the
+   whole block is skipped, so no row is minted and the email is byte-identical to today's.
 3. BP opens the link → lands on `PortalPage` (public route in their tenant's app-shell).
 4. `PortalPage` calls `GET /sws/portal/me` with the token (path segment on first load; header on
    every call after) to validate and greet.
@@ -215,15 +187,16 @@ reuses the same link — never rotates on its own.
 - Token lifecycle: find-or-create is idempotent (same BP, second invoice send reuses the same row);
   revoke then re-send mints a new row/token; revoked token is rejected identically to an unknown one.
 - `sales-invoice-send` email contains exactly one portal link, stable across sends to the same BP.
-- **Both gates, all four combinations** (§2.5). The link appears only with flag ON *and* preference
-  ON. In the other three, assert the email is byte-identical to today's **and that no
-  `etgo_portal_access` row was minted** — check the row count, not just the email body, because
-  minting on a gated-off send is the failure mode that leaks the feature early.
+- **The gate, both cases** (§2.5) — with one gate there are two, not four. The link appears with
+  the sender's preference set. With it unset, assert the email is byte-identical to today's **and
+  that no `etgo_portal_access` row was minted** — check the row count, not just the email body,
+  because minting on a gated-off send is the failure mode that leaks the feature early.
 - **Preference resolution levels:** set at user level enables that user only; set at client level
   enables every sender in the tenant; unset (`PropertyNotFoundException`) sends no link and must not
   surface as an error.
-- **The endpoints never read either gate** — same token, same answer, flag on or off. Assert it
-  explicitly: it is the claim that makes deploying the surface unconditionally safe.
+- **The endpoints never read the gate** — same token, same answer, whether or not the sender's
+  preference is set. Assert it explicitly: it is the claim that makes deploying the surface
+  unconditionally safe.
 - Frontend: RTL by `data-testid` per project convention — invalid token, empty list, PDF download.
 - E2E (Playwright, mocked): full portal journey per `docs/e2e-testing-guide.md`.
 
@@ -241,11 +214,12 @@ reuses the same link — never rotates on its own.
 this checkout (verified 2026-09-10) — it gets its own branch and its own PR.
 
 - `com.etendoerp.go`: new table, new servlet package (`portal/`), `SalesInvoiceSendEmailContract`
-  edit, `GoFeatureFlags` flag constant.
+  edit. **No `GoFeatureFlags` change** — the class declares no flag, as before this task.
 - `etendo_schema_forge` (this repo): new public route + `PortalPage` and subcomponents in
-  `tools/app-shell/src`; `flags-registry.json` entry.
-- Docs: this file; `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` flag table row
-  (currently `*(none)*`); `docs/email-inventory.md` for the `sales-invoice-send` contract change.
-  No `docs/generated-custom-windows/` guide is needed — this is not a generated window.
+  `tools/app-shell/src`; `flags-registry.json` entry (the feature is tracked there whether or not it
+  carries a flag).
+- Docs: this file; `docs/email-inventory.md` for the `sales-invoice-send` contract change.
+  `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` is untouched: its flag table stays
+  `*(none)*`. No `docs/generated-custom-windows/` guide is needed — this is not a generated window.
 
 Jira: **ETP-5267** under epic ETP-3504. Branches `feature/ETP-5267` exist in both repos.
